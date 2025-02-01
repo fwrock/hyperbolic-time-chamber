@@ -10,6 +10,23 @@ import org.apache.pekko.event.Logging
 
 sealed trait Command
 
+/** Base class for all events.
+  *
+  * @param lamportTick
+  *   the Lamport clock tick
+  * @param data
+  *   the data of the event
+  * @param tick
+  *   the tick when the event was created
+  * @param actorRef
+  *   the actor that sent the event, shard region actor
+  * @param actorRefId
+  *   the id of the actor that sent the event, shard region actor id
+  * @param eventType
+  *   the type of the event
+  * @tparam D
+  *   the type of the data of the event
+  */
 abstract class BaseEvent[D <: BaseEventData](
   lamportTick: Tick = 0,
   data: D = null,
