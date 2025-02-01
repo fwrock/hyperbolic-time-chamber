@@ -78,14 +78,13 @@ abstract class Movable[T <: MovableState](
     linkEnter()
   }
 
-  private def handleLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  private def handleLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit =
     EventTypeEnum.valueOf(event.eventType) match {
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event)
       case _ =>
         logEvent("Event not handled")
     }
-  }
 
   protected def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
 
