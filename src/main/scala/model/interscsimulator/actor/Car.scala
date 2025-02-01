@@ -60,7 +60,7 @@ class Car(
         (item._1, item._2) match
           case (node, link) =>
             sendMessageTo(
-              entityId = node.actorId,
+              actorId = node.actorId,
               actorRef = node.actorRef,
               RequestSignalStateData(
                 targetLinkId = link.actorId
