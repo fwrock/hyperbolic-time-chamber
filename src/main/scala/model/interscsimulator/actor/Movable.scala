@@ -40,7 +40,7 @@ abstract class Movable[T <: MovableState](
       path = mutable.Queue()
     )
     sendMessageTo(
-      entityId = state.origin,
+      actorId = state.origin,
       actorRef = dependencies(state.origin),
       data,
       EventTypeEnum.RequestRoute.toString
@@ -78,14 +78,13 @@ abstract class Movable[T <: MovableState](
     linkEnter()
   }
 
-  private def handleLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  private def handleLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit =
     EventTypeEnum.valueOf(event.eventType) match {
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event)
       case _ =>
         logEvent("Event not handled")
     }
-  }
 
   protected def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
 
@@ -100,7 +99,7 @@ abstract class Movable[T <: MovableState](
             linkEnter()
           case (node, link) =>
             sendMessageTo(
-              entityId = link.actorId,
+              actorId = link.actorId,
               actorRef = link.actorRef,
               data = EnterLinkData(
                 actorId = getActorId,
@@ -124,7 +123,7 @@ abstract class Movable[T <: MovableState](
             logEvent("No link to leave")
           case (node, link) =>
             sendMessageTo(
-              entityId = link.actorId,
+              actorId = link.actorId,
               actorRef = link.actorRef,
               data = LeaveLinkData(
                 actorId = getActorId,

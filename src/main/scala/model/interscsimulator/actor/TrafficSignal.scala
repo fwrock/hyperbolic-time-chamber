@@ -13,8 +13,6 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventT
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.interscsimulator.entity.state.model.Phase
-import org.interscity.htc.model.interscsimulator.util.DataKeyConstants
-import org.interscity.htc.model.interscsimulator.util.DataKeyConstants.{ NEXT_TICK, NODES, SIGNAL_STATE }
 
 import scala.collection.mutable
 
