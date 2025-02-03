@@ -7,5 +7,6 @@ import org.interscity.htc.core.types.CoreTypes.Tick
 
 case class SignalState(
   var state: TrafficSignalPhaseStateEnum,
-  var remainingTime: Tick
+  var remainingTime: Tick,
+  var nextTick: Tick,
 )
