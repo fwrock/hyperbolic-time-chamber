@@ -6,15 +6,16 @@ import model.interscsimulator.entity.state.LinkState
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, EventTypeEnum }
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ EnterLink, ForwardRoute, RequestRoute }
-import org.interscity.htc.model.interscsimulator.entity.state.model.{ LinkRegister, RoutePathItem }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ActorTypeEnum, EventTypeEnum}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{EnterLink, ForwardRoute, RequestRoute}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{LinkRegister, RoutePathItem}
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, RequestRouteData }
+import model.interscsimulator.entity.event.data.{EnterLinkData, ForwardRouteData, RequestRouteData}
 
-import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.model.interscsimulator.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
 
 class Link(
   override protected val actorId: String = null,
@@ -34,6 +35,29 @@ class Link(
       if (state.currentSpeed > 0) state.length / state.currentSpeed else Double.MaxValue
     state.length * state.congestionFactor + speedFactor
   }
+
+  override def onStart(): Unit = {
+    super.onStart()
+    sendConnections(state.to, dependencies(state.to))
+    sendConnections(state.from, dependencies(state.from))
+  }
+
+  private def sendConnections(actorId: String, actorRef: ActorRef): Unit =
+    sendMessageTo(
+      actorId,
+      actorRef,
+      LinkConnectionsData(
+        to = Identify(
+          actorRef = dependencies(state.to),
+          id = state.to
+        ),
+        from = Identify(
+          actorRef = dependencies(state.from),
+          id = state.from
+        )
+      ),
+      EventTypeEnum.RequestRoute.toString
+    )
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {

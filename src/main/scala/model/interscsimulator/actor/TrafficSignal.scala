@@ -4,15 +4,15 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ FinishEvent, ScheduleEvent, SpontaneousEvent }
+import core.entity.event.{FinishEvent, ScheduleEvent, SpontaneousEvent}
 import model.interscsimulator.entity.state.TrafficSignalState
 
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
-import org.interscity.htc.model.interscsimulator.entity.state.model.Phase
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{EventTypeEnum, TrafficSignalPhaseStateEnum}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{Phase, SignalState}
 
 import scala.collection.mutable
 
@@ -44,32 +44,42 @@ class TrafficSignal(
 
         state.signalStates.get(phase.origin).foreach {
           signalState =>
+            signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
             if (signalState.state != newState) {
-              notifyNodes(newState, state.nodes, nextTickTime)
+              notifyNodes(SignalState(
+                state = newState,
+                remainingTime = signalState.remainingTime,
+                nextTick = nextTickTime,
+              ), state.nodes, phase.origin, nextTickTime)
               changedOrigins.add(phase.origin)
             }
             signalState.state = newState
-            signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
         }
+        /*
         if (changedOrigins.nonEmpty) {
           state.nodes.foreach {
             node =>
-              notifyNodes(newState, state.nodes.filterNot(changedOrigins.contains), nextTickTime)
+              notifyNodes(SignalState(
+                state = newState,
+                remainingTime = signalState.remainingTime,
+                nextTick = nextTickTime,
+              ), state.nodes.filterNot(changedOrigins.contains), phase.origin, nextTickTime)
           }
-        }
+        }*/
         onFinishSpontaneous(Some(nextTickTime))
     }
 
   private def notifyNodes(
-    signalState: TrafficSignalPhaseStateEnum,
-    nodes: List[String],
-    nextTick: Tick
+                           signalState: SignalState,
+                           nodes: List[String],
+                           phaseOrigin: String,
+                           nextTick: Tick
   ): Unit =
     nodes.foreach {
       node =>
         val data = TrafficSignalChangeStatusData(
           signalState = signalState,
-          nodes = nodes,
+          phaseOrigin = phaseOrigin,
           nextTick = nextTick
         )
         sendMessageTo(node, dependencies(node), data, TrafficSignalChangeStatus.toString)
