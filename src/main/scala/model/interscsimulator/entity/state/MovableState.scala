@@ -17,6 +17,7 @@ case class MovableState(
   var destination: String,
   var bestCost: Double = Double.MaxValue,
   var status: MovableStatusEnum = RouteWaiting,
+  var reachedDestination: Boolean = false,
   actorType: ActorTypeEnum,
   size: Double
 ) extends BaseState(startTick = startTick)
