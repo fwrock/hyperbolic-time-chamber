@@ -8,8 +8,8 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 
 import scala.collection.mutable
 
-case class MovableState(
-  startTick: Long,
+class MovableState(
+  val startTick: Long,
   var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
   var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
   var currentNode: String = null,
@@ -18,6 +18,6 @@ case class MovableState(
   var bestCost: Double = Double.MaxValue,
   var status: MovableStatusEnum = RouteWaiting,
   var reachedDestination: Boolean = false,
-  actorType: ActorTypeEnum,
-  size: Double
+  val actorType: ActorTypeEnum,
+  val size: Double
 ) extends BaseState(startTick = startTick)

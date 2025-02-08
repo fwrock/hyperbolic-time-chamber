@@ -12,5 +12,7 @@ final case class RequestRouteData(
   requesterId: String,
   targetNodeId: String,
   currentCost: Double,
-  path: mutable.Queue[(RoutePathItem, RoutePathItem)]
+  originNodeId: String,
+  path: mutable.Queue[(RoutePathItem, RoutePathItem)],
+  label: String = "default"
 ) extends BaseEventData

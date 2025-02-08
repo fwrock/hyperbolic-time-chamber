@@ -4,7 +4,7 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.NodeState
 import model.interscsimulator.entity.state.enumeration.EventTypeEnum
 
@@ -15,9 +15,9 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkConnectionsData
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{ForwardRouteData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
   override protected val actorId: String = null,
@@ -36,10 +36,11 @@ class Node(
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {
-      case e: ActorInteractionEvent[RequestRouteData] => handleRequestRoute(e)
-      case e: ActorInteractionEvent[ForwardRouteData] => handleForwardRoute(e)
+      case e: ActorInteractionEvent[RequestRouteData]       => handleRequestRoute(e)
+      case e: ActorInteractionEvent[ForwardRouteData]       => handleForwardRoute(e)
       case e: ActorInteractionEvent[RequestSignalStateData] => handleRequestSignalState(e)
-      case e: ActorInteractionEvent[TrafficSignalChangeStatusData] => handleReceiveSignalChangeStatus(e)
+      case e: ActorInteractionEvent[TrafficSignalChangeStatusData] =>
+        handleReceiveSignalChangeStatus(e)
       case e: ActorInteractionEvent[LinkConnectionsData] => handleLinkConnections(e)
       case _ =>
         logEvent("Event not handled")
@@ -67,6 +68,7 @@ class Node(
       requesterId = event.data.requesterId,
       currentCost = event.data.currentCost,
       targetNodeId = event.data.targetNodeId,
+      originNodeId = event.data.originNodeId,
       path = updatedPath
     )
 
@@ -79,7 +81,10 @@ class Node(
     val path = event.data.path
     val updatedPath = path :+ (null, RoutePathItem(actorRef = self, actorId = getActorId))
     val data = ReceiveRouteData(
-      path = updatedPath
+      path = updatedPath,
+      label = event.data.label,
+      origin = event.data.originNodeId,
+      destination = event.data.targetNodeId
     )
     sendMessageTo(
       event.data.requesterId,
@@ -99,7 +104,7 @@ class Node(
 
   private def handleRequestSignalState(
     event: ActorInteractionEvent[RequestSignalStateData]
-  ): Unit = {
+  ): Unit =
     state.connections.get(event.data.targetLinkId) match
       case Some(identify) =>
         state.signals.get(identify.id) match
@@ -124,9 +129,9 @@ class Node(
               EventTypeEnum.ReceiveSignalState.toString
             )
       case None => ???
-  }
 
-  private def handleReceiveSignalChangeStatus(event: ActorInteractionEvent[TrafficSignalChangeStatusData]): Unit = {
+  private def handleReceiveSignalChangeStatus(
+    event: ActorInteractionEvent[TrafficSignalChangeStatusData]
+  ): Unit =
     state.signals.put(event.data.phaseOrigin, event.data.signalState)
-  }
 }
