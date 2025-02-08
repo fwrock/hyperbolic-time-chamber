@@ -9,8 +9,8 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 
 import scala.collection.mutable
 
-class CarState(
-  startTick: Tick,
+case class CarState(
+  override val startTick: Tick,
   name: String,
   origin: String,
   destination: String = null,
@@ -21,9 +21,9 @@ class CarState(
   var lastNode: String,
   digitalRails: Boolean = false,
   var distance: Double = 0,
-  actorType: ActorTypeEnum,
+  override val actorType: ActorTypeEnum,
   actorSize: Double,
-  status: MovableStatusEnum = Start
+  override var status: MovableStatusEnum = Start
 ) extends MovableState(
       startTick = startTick,
       bestRoute = bestRoute,
