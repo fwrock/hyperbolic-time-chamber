@@ -188,8 +188,15 @@ abstract class BaseActor[T <: BaseState](
     * @param event
     *   The destruction event
     */
-  private def destruct(event: DestructEvent): Unit =
+  private def destruct(event: DestructEvent): Unit = {
+    onDestruct(event)
     context.stop(self)
+  }
+
+    /** Finishes the actor. This method is called when the actor finishes processing messages. It calls
+        * the onDestruct method.
+        */
+  protected def onDestruct(event: DestructEvent): Unit = {}
 
   /** Finishes the spontaneous event. This method is called when the actor finishes processing the
     * spontaneous event. This method allows the actor to schedule a new tick in the time manager.
