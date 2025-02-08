@@ -17,8 +17,8 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventT
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 abstract class Movable[T <: MovableState](
-  override protected val actorId: String = null,
-  private val timeManager: ActorRef = null,
+  override protected val actorId: String,
+  private val timeManager: ActorRef,
   private val data: String = null,
   override protected val dependencies: mutable.Map[String, ActorRef] =
     mutable.Map[String, ActorRef]()
@@ -91,7 +91,7 @@ abstract class Movable[T <: MovableState](
 
   protected def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
 
-  private def onFinish(nodeId: String): Unit =
+  protected def onFinish(nodeId: String): Unit =
     if (state.destination == nodeId) {
       state.reachedDestination = true
       state.status = Finished
@@ -151,7 +151,7 @@ abstract class Movable[T <: MovableState](
       case None =>
         logEvent("No link to leave")
 
-  private def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  protected def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
     state.bestRoute match
       case Some(path) =>
         Some(path.dequeue)
