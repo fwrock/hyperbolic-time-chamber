@@ -8,12 +8,18 @@ import core.entity.event.control.execution.{ RunSimulationEvent, StartSimulation
 
 import org.apache.pekko.actor.{ ActorRef, Props }
 import core.util.SimulationUtil.loadSimulationConfig
-
 import core.entity.configuration.Simulation
 
+import scala.collection.mutable
 import scala.compiletime.uninitialized
 
-class SimulationManager extends BaseActor[DefaultState](actorId = "simulation-manager") {
+class SimulationManager
+    extends BaseActor[DefaultState](
+      actorId = "simulation-manager",
+      timeManager = null,
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   private var timeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
