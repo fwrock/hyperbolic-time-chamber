@@ -14,7 +14,7 @@ case class BusStationState(
   name: String,
   origin: String,
   destination: String = null,
-  busStops: List[String],
+  busStops: Map[String, String],
   interval: Tick,
   buses: mutable.Queue[BusInformation],
   goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(RoutePathItem, RoutePathItem)]]] =

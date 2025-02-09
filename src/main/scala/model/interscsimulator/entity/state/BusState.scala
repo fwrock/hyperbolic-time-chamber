@@ -5,35 +5,41 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.ActorTypeEnum.Bus
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ RouteWaiting, Start }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
-import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusNodeState, RoutePathItem }
 
 import scala.collection.mutable
 
-case class BusState(
+class BusState(
   override val startTick: Long,
-  capacity: Int,
-  var busStops: List[String] = List(),
-  people: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef](),
-  override var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  override var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  val label: String,
+  val capacity: Int,
+  var distance: Double = 0.0,
+  var countUnloadPassenger: Int = 0,
+  var countUnloadReceived: Int = 0,
+  var busStops: Map[String, String],
+  val numberOfPorts: Int,
+  val nodeState: BusNodeState = BusNodeState(),
+  val people: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef](),
+  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
+  var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
   var currentPathPosition: Int = 0,
   override val origin: String,
   override val destination: String,
-  override var bestCost: Double = Double.MaxValue,
-  override var status: MovableStatusEnum = Start,
-  override var reachedDestination: Boolean = false,
+  var bestCost: Double = Double.MaxValue,
+  var status: MovableStatusEnum = Start,
+  var reachedDestination: Boolean = false,
   override val actorType: ActorTypeEnum = Bus,
   override val size: Double
 ) extends MovableState(
       startTick = startTick,
-      bestRoute = bestRoute,
-      currentPath = currentPath,
-      currentNode = null,
+      movableBestRoute = bestRoute,
+      movableCurrentPath = currentPath,
+      movableCurrentNode = null,
       origin = origin,
       destination = destination,
-      bestCost = bestCost,
-      status = status,
-      reachedDestination = reachedDestination,
+      movableBestCost = bestCost,
+      movableStatus = status,
+      movableReachedDestination = reachedDestination,
       actorType = actorType,
       size = size
     )

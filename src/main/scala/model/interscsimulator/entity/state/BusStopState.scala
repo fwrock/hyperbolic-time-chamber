@@ -9,7 +9,7 @@ import org.interscity.htc.core.entity.actor.Identify
 import scala.collection.mutable
 
 case class BusStopState(
-                         nodeId: String,
-                         label: String,
-                         people: mutable.Map[String, mutable.Seq[Identify]] = mutable.Map.empty,
+  nodeId: String,
+  label: String,
+  people: mutable.Map[String, mutable.Seq[Identify]] = mutable.Map.empty
 ) extends BaseState

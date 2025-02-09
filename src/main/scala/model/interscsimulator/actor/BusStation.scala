@@ -39,11 +39,15 @@ class BusStation(
         requestReturningRoute()
       case Working =>
         if (state.buses.nonEmpty) {
-          val actorRef = createBus(state.buses.dequeue())
+          val bus = state.buses.dequeue()
+          val actorRef = createBus(bus)
+          dependencies(bus.actorId) = actorRef
           onFinishSpontaneous(Some(currentTick + state.interval))
         } else {
           state.status = WorkingWithOutBus
         }
+      case _ =>
+        logEvent(s"Event current status not handled ${state.status}")
     }
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
@@ -66,7 +70,9 @@ class BusStation(
     }
     if (isCalculateRoutingComplete) {
       state.status = Ready
-      val actorRef = createBus(state.buses.dequeue())
+      val bus = state.buses.dequeue()
+      val actorRef = createBus(bus)
+      dependencies(bus.actorId) = actorRef
       state.status = Working
       onFinishSpontaneous(Some(currentTick + state.interval))
     }
@@ -86,7 +92,9 @@ class BusStation(
           size = bus.size,
           origin = state.origin,
           destination = state.destination,
-          bestRoute = Some(calcBusBestRoute())
+          bestRoute = Some(calcBusBestRoute()),
+          numberOfPorts = bus.numberOfPorts,
+          label = bus.label
         )
       ),
       dependencies
@@ -102,7 +110,7 @@ class BusStation(
     route: mutable.Map[SubRoutePair, mutable.Queue[(RoutePathItem, RoutePathItem)]]
   ): mutable.Queue[(RoutePathItem, RoutePathItem)] = {
     val totalRoute = mutable.Queue[(RoutePathItem, RoutePathItem)]()
-    for (pair <- state.busStops.sliding(2)) {
+    for (pair <- state.busStops.keys.sliding(2)) {
       val pathPart = route(SubRoutePair(pair.head, pair.last))
       totalRoute ++= pathPart
     }
@@ -121,11 +129,11 @@ class BusStation(
       case None    => false
 
   private def requestGoingRoute(): Unit =
-    for (pair <- state.busStops.sliding(2))
+    for (pair <- state.busStops.keys.sliding(2))
       requestRoute(pair.head, pair.last, "going-route")
 
   private def requestReturningRoute(): Unit = {
-    val reversedBusStops = state.busStops.reverse
+    val reversedBusStops = state.busStops.keys.toList.reverse
     for (pair <- reversedBusStops.sliding(2))
       requestRoute(pair.head, pair.last, "returning-route")
   }

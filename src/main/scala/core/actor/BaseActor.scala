@@ -217,6 +217,9 @@ abstract class BaseActor[T <: BaseState](
   protected def selfSpontaneous(): Unit =
     self ! SpontaneousEvent(currentTick, self)
 
+  protected def scheduleEvent(tick: Tick): Unit =
+    timeManager ! ScheduleEvent(tick = tick, actorRef = self)
+
   /** Gets the time manager actor reference.
     * @return
     *   The time manager actor reference
