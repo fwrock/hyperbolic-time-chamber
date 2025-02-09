@@ -41,6 +41,8 @@ class Bus(
         linkEnter()
       case Moving =>
         requestSignalState()
+        requestLoadPassenger()
+        requestUnloadPeopleData()
       case WaitingSignal | WaitingLoadPassenger | WaitingUnloadPassenger =>
         if (isEndNodeState && nodeStateMaxTime == event.tick) {
           state.movableStatus = Moving
