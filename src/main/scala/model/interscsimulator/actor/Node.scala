@@ -4,7 +4,7 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.NodeState
 import model.interscsimulator.entity.state.enumeration.EventTypeEnum
 
@@ -18,9 +18,9 @@ import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkConn
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{ForwardRouteData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
   override protected val actorId: String = null,
@@ -39,11 +39,11 @@ class Node(
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {
-      case e: ActorInteractionEvent[RegisterBusStopData]    => handleRegisterBusStop(e)
+      case e: ActorInteractionEvent[RegisterBusStopData]       => handleRegisterBusStop(e)
       case e: ActorInteractionEvent[RegisterSubwayStationData] => handleRegisterSubwayStation(e)
-      case e: ActorInteractionEvent[RequestRouteData]       => handleRequestRoute(e)
-      case e: ActorInteractionEvent[ForwardRouteData]       => handleForwardRoute(e)
-      case e: ActorInteractionEvent[RequestSignalStateData] => handleRequestSignalState(e)
+      case e: ActorInteractionEvent[RequestRouteData]          => handleRequestRoute(e)
+      case e: ActorInteractionEvent[ForwardRouteData]          => handleForwardRoute(e)
+      case e: ActorInteractionEvent[RequestSignalStateData]    => handleRequestSignalState(e)
       case e: ActorInteractionEvent[TrafficSignalChangeStatusData] =>
         handleReceiveSignalChangeStatus(e)
       case e: ActorInteractionEvent[LinkConnectionsData] => handleLinkConnections(e)
@@ -54,7 +54,9 @@ class Node(
   private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
     state.busStops.put(event.data.label, Identify(event.actorRefId, event.actorRef))
 
-  private def handleRegisterSubwayStation(event: ActorInteractionEvent[RegisterSubwayStationData]): Unit =
+  private def handleRegisterSubwayStation(
+    event: ActorInteractionEvent[RegisterSubwayStationData]
+  ): Unit =
     event.data.lines.foreach {
       line =>
         state.subwayStations.put(line, Identify(event.actorRefId, event.actorRef))
