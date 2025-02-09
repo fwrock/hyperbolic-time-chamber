@@ -10,13 +10,13 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 import scala.collection.mutable
 
 case class SubwayState(
-                        startTick: Tick = 0,
-                        capacity: Int,
-                        numberOfPorts: Int,
-                        velocity: Double,
-                        stopTime: Tick,
-                        passengers: mutable.Map[String, ActorRef] = mutable.Map.empty,
-                        var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-                        var bestCost: Double = Double.MaxValue,
-                        line: String
+  startTick: Tick = 0,
+  capacity: Int,
+  numberOfPorts: Int,
+  velocity: Double,
+  stopTime: Tick,
+  passengers: mutable.Map[String, ActorRef] = mutable.Map.empty,
+  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
+  var bestCost: Double = Double.MaxValue,
+  line: String
 ) extends BaseState(startTick = startTick)

@@ -5,5 +5,5 @@ import core.types.CoreTypes.Tick
 
 case class SubwayLineInformation(
   interval: Tick,
-  var nextTick: Tick = -1,
+  var nextTick: Tick = -1
 )
