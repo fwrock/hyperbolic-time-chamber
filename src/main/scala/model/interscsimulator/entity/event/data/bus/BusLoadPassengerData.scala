@@ -6,6 +6,6 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 
 import scala.collection.mutable
 
-case class BusLoadPeopleData (
+case class BusLoadPassengerData(
   people: mutable.Seq[Identify]
-                             ) extends BaseEventData
+) extends BaseEventData

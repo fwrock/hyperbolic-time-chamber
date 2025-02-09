@@ -12,27 +12,24 @@ import scala.collection.mutable
 case class CarState(
   override val startTick: Tick,
   name: String,
-  origin: String,
-  destination: String = null,
-  bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  bestCost: Double = Double.MaxValue,
-  currentNode: String,
-  currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  override val origin: String,
+  override val destination: String = null,
+  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
+  var bestCost: Double = Double.MaxValue,
+  var currentNode: String,
+  var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
   var lastNode: String,
-  digitalRails: Boolean = false,
+  var digitalRails: Boolean = false,
   var distance: Double = 0,
   override val actorType: ActorTypeEnum,
-  actorSize: Double,
-  override var status: MovableStatusEnum = Start
+  override val size: Double,
+  var status: MovableStatusEnum = Start
 ) extends MovableState(
       startTick = startTick,
-      bestRoute = bestRoute,
-      currentNode = currentNode,
-      currentPath = currentPath,
-      bestCost = bestCost,
-      status = status,
+      movableBestCost = bestCost,
+      movableStatus = status,
       origin = origin,
       destination = destination,
       actorType = actorType,
-      size = actorSize
+      size = size
     )
