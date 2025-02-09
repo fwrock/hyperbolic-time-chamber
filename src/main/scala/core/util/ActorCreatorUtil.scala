@@ -69,4 +69,33 @@ object ActorCreatorUtil {
     )
   }
 
+  def createShardedActor[T <: BaseActor[_]](
+    system: ActorSystem,
+    actorClass: Class[T],
+    entityId: String,
+    constructorParams: AnyRef*
+  ): ActorRef = {
+    val constructor = actorClass.getConstructor(classOf[String])
+    val actorInstance =
+      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
+
+    val sharding = ClusterSharding(system)
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case cmd: Command => (entityId, cmd)
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case cmd: Command => (entityId.hashCode % 10).toString
+    }
+
+    sharding.start(
+      typeName = s"${actorClass.getName}",
+      entityProps = Props(actorInstance),
+      settings = ClusterShardingSettings(system),
+      extractEntityId = extractEntityId,
+      extractShardId = extractShardId
+    )
+  }
+
 }

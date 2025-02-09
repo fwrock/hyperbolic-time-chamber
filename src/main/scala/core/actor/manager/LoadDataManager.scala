@@ -20,7 +20,12 @@ import scala.compiletime.uninitialized
 class LoadDataManager(
   timeManager: ActorRef,
   simulationManager: ActorRef
-) extends BaseActor[DefaultState](timeManager = timeManager, actorId = "load-data-manager") {
+) extends BaseActor[DefaultState](
+      timeManager = timeManager,
+      actorId = "load-data-manager",
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   private var loadDataAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized

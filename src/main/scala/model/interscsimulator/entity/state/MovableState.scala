@@ -8,16 +8,53 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 
 import scala.collection.mutable
 
-case class MovableState(
-  startTick: Long,
-  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
-  var currentNode: String = null,
-  var origin: String,
-  var destination: String,
-  var bestCost: Double = Double.MaxValue,
-  var status: MovableStatusEnum = RouteWaiting,
-  var reachedDestination: Boolean = false,
-  actorType: ActorTypeEnum,
-  size: Double
-) extends BaseState(startTick = startTick)
+abstract class MovableState(
+  val startTick: Long,
+  var movableBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
+  var movableCurrentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  var movableCurrentNode: String = null,
+  val origin: String,
+  val destination: String,
+  var movableBestCost: Double = Double.MaxValue,
+  var movableStatus: MovableStatusEnum = RouteWaiting,
+  var movableReachedDestination: Boolean = false,
+  val actorType: ActorTypeEnum,
+  val size: Double
+) extends BaseState(startTick = startTick) {
+
+  def getStatus: MovableStatusEnum = movableStatus
+
+  def updateStatus(newStatus: MovableStatusEnum): Unit = movableStatus = newStatus
+
+  def getBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = movableBestRoute
+
+  def updateBestRoute(newBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]]): Unit =
+    movableBestRoute = newBestRoute
+
+  def getCurrentPath: Option[(RoutePathItem, RoutePathItem)] = movableCurrentPath
+
+  def updateCurrentPath(newCurrentPath: Option[(RoutePathItem, RoutePathItem)]): Unit =
+    movableCurrentPath = newCurrentPath
+
+  def getCurrentNode: String = movableCurrentNode
+
+  def updateCurrentNode(newCurrentNode: String): Unit = movableCurrentNode = newCurrentNode
+
+  def getBestCost: Double = movableBestCost
+
+  def updateBestCost(newBestCost: Double): Unit = movableBestCost = newBestCost
+
+  def getReachedDestination: Boolean = movableReachedDestination
+
+  def updateReachedDestination(newReachedDestination: Boolean): Unit = movableReachedDestination =
+    newReachedDestination
+
+  def getOrigin: String = origin
+
+  def getDestination: String = destination
+
+  def getActorType: ActorTypeEnum = actorType
+
+  def getSize: Double = size
+
+}

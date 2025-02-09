@@ -32,9 +32,9 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   The state of the actor
   */
 abstract class BaseActor[T <: BaseState](
-  protected val actorId: String = null,
+  protected val actorId: String,
   private val timeManager: ActorRef = null,
-  private val data: String = null,
+  private val data: String,
   protected val dependencies: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
 )(implicit m: Manifest[T])
     extends Actor
@@ -188,12 +188,20 @@ abstract class BaseActor[T <: BaseState](
     * @param event
     *   The destruction event
     */
-  private def destruct(event: DestructEvent): Unit =
+  private def destruct(event: DestructEvent): Unit = {
+    onDestruct(event)
     context.stop(self)
+  }
+
+  /** Finishes the actor. This method is called when the actor finishes processing messages. It
+    * calls the onDestruct method.
+    */
+  protected def onDestruct(event: DestructEvent): Unit = {}
 
   /** Finishes the spontaneous event. This method is called when the actor finishes processing the
     * spontaneous event. This method allows the actor to schedule a new tick in the time manager.
     * @param scheduleTick
+    *   The tick to schedule a new event
     */
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None
@@ -205,6 +213,12 @@ abstract class BaseActor[T <: BaseState](
         tick => ScheduleEvent(tick = tick, actorRef = self)
       )
     )
+
+  protected def selfSpontaneous(): Unit =
+    self ! SpontaneousEvent(currentTick, self)
+
+  protected def scheduleEvent(tick: Tick): Unit =
+    timeManager ! ScheduleEvent(tick = tick, actorRef = self)
 
   /** Gets the time manager actor reference.
     * @return

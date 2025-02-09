@@ -11,10 +11,11 @@ import org.interscity.htc.model.interscsimulator.util.SpeedUtil
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.interscity.htc.model.interscsimulator.entity.event.data.RequestRouteData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Stopped, WaitingSignal, WaitingSignalState }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
@@ -32,7 +33,7 @@ class Car(
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     super.actSpontaneous(event)
-    state.status match {
+    state.movableStatus match {
       case Moving =>
         requestSignalState()
       case WaitingSignal =>
@@ -53,8 +54,26 @@ class Car(
     }
   }
 
+  override def requestRoute(): Unit = {
+    state.movableStatus = RouteWaiting
+    val data = RequestRouteData(
+      requester = self,
+      requesterId = actorId,
+      currentCost = 0,
+      targetNodeId = state.destination,
+      originNodeId = state.origin,
+      path = mutable.Queue()
+    )
+    sendMessageTo(
+      actorId = state.origin,
+      actorRef = dependencies(state.origin),
+      data,
+      EventTypeEnum.RequestRoute.toString
+    )
+  }
+
   private def requestSignalState(): Unit = {
-    state.status = WaitingSignalState
+    state.movableStatus = WaitingSignalState
     viewNextPath match
       case Some(item) =>
         (item._1, item._2) match
@@ -72,14 +91,14 @@ class Car(
 
   private def handleSignalState(event: ActorInteractionEvent[SignalStateData]): Unit =
     if (event.data.phase == Red) {
-      state.status = WaitingSignal
+      state.movableStatus = WaitingSignal
       onFinishSpontaneous(Some(event.data.nextTick))
     } else {
       linkLeaving()
     }
 
   override def linkLeaving(): Unit = {
-    state.status = Ready
+    state.movableStatus = Ready
     super.linkLeaving()
   }
 
@@ -96,7 +115,7 @@ class Car(
       freeSpeed = event.data.linkFreeSpeed,
       lanes = event.data.linkLanes
     )
-    state.status = Moving
+    state.movableStatus = Moving
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 }

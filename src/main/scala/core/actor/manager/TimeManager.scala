@@ -16,7 +16,12 @@ import scala.collection.mutable
 class TimeManager(
   val simulationDuration: Tick,
   val parentManager: Option[ActorRef]
-) extends BaseActor[DefaultState](timeManager = null, actorId = "time-manager") {
+) extends BaseActor[DefaultState](
+      timeManager = null,
+      actorId = "time-manager",
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   private var startTime: Long = 0
   private var localTickOffset: Tick = 0
