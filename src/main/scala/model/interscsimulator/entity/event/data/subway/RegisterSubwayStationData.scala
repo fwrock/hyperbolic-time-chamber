@@ -4,5 +4,5 @@ package model.interscsimulator.entity.event.data.subway
 import core.entity.event.data.BaseEventData
 
 case class RegisterSubwayStationData(
-  line: String
+  lines: Seq[String]
 ) extends BaseEventData

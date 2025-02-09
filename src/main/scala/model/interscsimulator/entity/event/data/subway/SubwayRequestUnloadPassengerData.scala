@@ -5,7 +5,7 @@ import core.entity.event.data.BaseEventData
 
 import org.apache.pekko.actor.ActorRef
 
-case class SubwayRequestUnloadPassengerData (
+case class SubwayRequestUnloadPassengerData(
   nodeId: String,
   nodeRef: ActorRef
-                                            ) extends BaseEventData
+) extends BaseEventData
