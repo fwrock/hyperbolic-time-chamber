@@ -5,10 +5,13 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.SpontaneousEvent
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActor
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
 import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
@@ -28,6 +31,15 @@ class SubwayStation(
       dependencies = dependencies
     ) {
 
+  override def onStart(): Unit =
+    sendMessageTo(
+      state.nodeId,
+      dependencies(state.nodeId),
+      RegisterSubwayStationData(
+        lines = state.lines.keys.toSeq
+      )
+    )
+
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.status match
       case Start =>
@@ -37,6 +49,49 @@ class SubwayStation(
         createSubwayFrom(filterLinesByNextTick())
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
+
+  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
+    event match {
+      case e: ActorInteractionEvent[RegisterSubwayPassengerData] => handleRegisterPassenger(e)
+      case e: ActorInteractionEvent[SubwayRequestPassengerData]  => handleSubwayRequestPassenger(e)
+      case _                                                     => logEvent("Event not handled")
+    }
+
+  private def handleRegisterPassenger(
+    event: ActorInteractionEvent[RegisterSubwayPassengerData]
+  ): Unit = {
+    val person = Identify(event.actorRefId, event.actorRef)
+    state.people.get(event.data.line) match {
+      case Some(people) =>
+        state.people.put(event.data.line, people :+ person)
+      case None =>
+        state.people.put(event.data.line, mutable.Seq(person))
+    }
+  }
+
+  private def handleSubwayRequestPassenger(
+    event: ActorInteractionEvent[SubwayRequestPassengerData]
+  ): Unit =
+    state.people.get(event.data.line) match {
+      case Some(people) =>
+        val peopleToLoad = people.take(event.data.availableSpace)
+        state.people.put(event.data.line, people.drop(event.data.availableSpace))
+        sendLoadPeopleToSubway(peopleToLoad, event)
+      case None =>
+        sendLoadPeopleToSubway(mutable.Seq(), event)
+    }
+
+  private def sendLoadPeopleToSubway(
+    peopleToLoad: mutable.Seq[Identify],
+    event: ActorInteractionEvent[SubwayRequestPassengerData]
+  ): Unit =
+    sendMessageTo(
+      actorId = event.actorRefId,
+      actorRef = event.actorRef,
+      data = SubwayLoadPassengerData(
+        people = peopleToLoad
+      )
+    )
 
   private def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
     state.lines.filter {
@@ -48,7 +103,7 @@ class SubwayStation(
       line =>
         state.subways.get(line) match
           case Some(subways) =>
-            if (subways.nonEmpty) {
+            if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
               dependencies(subway.actorId) = actorRef

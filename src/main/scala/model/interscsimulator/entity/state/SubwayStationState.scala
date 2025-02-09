@@ -3,6 +3,7 @@ package model.interscsimulator.entity.state
 
 import core.types.CoreTypes.Tick
 
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.Start
@@ -19,5 +20,6 @@ case class SubwayStationState(
   lines: mutable.Map[String, SubwayLineInformation],
   subways: mutable.Map[String, mutable.Queue[SubwayInformation]],
   linesRoute: mutable.Map[String, mutable.Queue[(String, String)]],
+  people: mutable.Map[String, mutable.Seq[Identify]] = mutable.Map.empty,
   var status: SubwayStationStateEnum = Start
 ) extends BaseState(startTick = startTick)
