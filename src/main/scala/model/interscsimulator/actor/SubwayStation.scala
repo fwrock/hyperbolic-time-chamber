@@ -2,16 +2,16 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import core.actor.BaseActor
-import model.interscsimulator.entity.state.{SubwayState, SubwayStationState}
+import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.SpontaneousEvent
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActor
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ActorCreatorUtil, JsonUtil}
+import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{Start, Working}
-import org.interscity.htc.model.interscsimulator.entity.state.model.{RoutePathItem, SubwayInformation, SubwayLineInformation}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
 
 import scala.collection.mutable
 
@@ -39,23 +39,25 @@ class SubwayStation(
         logEvent(s"Event current status not handled ${state.status}")
 
   private def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
-    state.lines.filter { case (_, line) => line.nextTick <= currentTick }
-
-  private def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Unit = {
-    lines.keys.foreach { line =>
-     state.subways.get(line) match
-        case Some(subways) =>
-          if (subways.nonEmpty) {
-            val subway = subways.dequeue()
-            val actorRef = createSubway(subway)
-            dependencies(subway.actorId) = actorRef
-            lines(line).nextTick = currentTick + lines(line).interval
-            onFinishSpontaneous(Some(lines(line).nextTick))
-          }
-        case None =>
-          logEvent(s"Subway not found for line $line")
+    state.lines.filter {
+      case (_, line) => line.nextTick <= currentTick
     }
-  }
+
+  private def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Unit =
+    lines.keys.foreach {
+      line =>
+        state.subways.get(line) match
+          case Some(subways) =>
+            if (subways.nonEmpty) {
+              val subway = subways.dequeue()
+              val actorRef = createSubway(subway)
+              dependencies(subway.actorId) = actorRef
+              lines(line).nextTick = currentTick + lines(line).interval
+              onFinishSpontaneous(Some(lines(line).nextTick))
+            }
+          case None =>
+            logEvent(s"Subway not found for line $line")
+    }
 
   private def createSubway(subway: SubwayInformation): ActorRef =
     createShardedActor(
