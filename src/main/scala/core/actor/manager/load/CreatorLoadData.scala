@@ -17,7 +17,12 @@ import scala.collection.mutable
 class CreatorLoadData(
   loadDataManager: ActorRef,
   timeManager: ActorRef
-) extends BaseActor[DefaultState](timeManager = timeManager, actorId = "creator-load-data") {
+) extends BaseActor[DefaultState](
+      timeManager = timeManager,
+      actorId = "creator-load-data",
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   private val actors: mutable.ListBuffer[ActorSimulation] = mutable.ListBuffer()
 

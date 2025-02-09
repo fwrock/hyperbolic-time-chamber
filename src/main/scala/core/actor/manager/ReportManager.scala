@@ -6,8 +6,15 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.state.DefaultState
 
+import scala.collection.mutable
+
 class ReportManager(timeManager: ActorRef)
-    extends BaseActor[DefaultState](timeManager = timeManager) {
+    extends BaseActor[DefaultState](
+      timeManager = timeManager,
+      actorId = "report-manager",
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   override def handleEvent: Receive = {
     case _ =>

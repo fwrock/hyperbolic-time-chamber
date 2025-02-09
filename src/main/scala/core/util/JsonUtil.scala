@@ -38,4 +38,9 @@ object JsonUtil {
     mapper.readValue(json, clazz)
   }
 
+  def jsonToObject[T](json: String, clazz: Class[T]): T = {
+    val mapper = new ObjectMapper()
+    mapper.registerModule(DefaultScalaModule)
+    mapper.readValue(json, clazz)
+  }
 }

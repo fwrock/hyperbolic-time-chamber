@@ -12,7 +12,12 @@ import java.io.{ BufferedWriter, FileWriter }
 import scala.collection.mutable
 
 class CsvReportManager(timeManager: ActorRef)
-    extends BaseActor[DefaultState](timeManager = timeManager) {
+    extends BaseActor[DefaultState](
+      timeManager = timeManager,
+      actorId = "csv-report-manager",
+      data = null,
+      dependencies = mutable.Map.empty
+    ) {
 
   override def handleEvent: Receive = {
     case eventReport: BaseEvent[_] =>

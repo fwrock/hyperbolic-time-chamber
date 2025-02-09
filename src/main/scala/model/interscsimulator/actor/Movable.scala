@@ -5,20 +5,20 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 abstract class Movable[T <: MovableState](
-  override protected val actorId: String = null,
-  private val timeManager: ActorRef = null,
+  override protected val actorId: String,
+  private val timeManager: ActorRef,
   private val data: String = null,
   override protected val dependencies: mutable.Map[String, ActorRef] =
     mutable.Map[String, ActorRef]()
@@ -30,31 +30,16 @@ abstract class Movable[T <: MovableState](
       dependencies = dependencies
     ) {
 
-  private def requestRoute(): Unit = {
-    state.status = RouteWaiting
-    val data = RequestRouteData(
-      requester = self,
-      requesterId = actorId,
-      currentCost = 0,
-      targetNodeId = state.destination,
-      path = mutable.Queue()
-    )
-    sendMessageTo(
-      actorId = state.origin,
-      actorRef = dependencies(state.origin),
-      data,
-      EventTypeEnum.RequestRoute.toString
-    )
-  }
+  protected def requestRoute(): Unit = {}
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    state.status match
+    state.movableStatus match
       case Start =>
         requestRoute()
       case Ready =>
         linkEnter()
       case _ =>
-        logEvent(s"Event current status not handled ${state.status}")
+        logEvent(s"Event current status not handled ${state.movableStatus}")
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {
@@ -67,14 +52,14 @@ abstract class Movable[T <: MovableState](
 
   private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit = {
     val updatedCost = event.data.updatedCost
-    if (updatedCost < state.bestCost) {
-      state.bestCost = updatedCost
-      state.bestRoute = Some(event.data.path)
+    if (updatedCost < state.movableBestCost) {
+      state.movableBestCost = updatedCost
+      state.movableBestRoute = Some(event.data.path)
     }
   }
 
   private def handleReceiveRoute(): Unit = {
-    state.status = Ready
+    state.movableStatus = Ready
     linkEnter()
   }
 
@@ -90,21 +75,21 @@ abstract class Movable[T <: MovableState](
 
   protected def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
 
-  private def onFinish(nodeId: String): Unit =
+  protected def onFinish(nodeId: String): Unit =
     if (state.destination == nodeId) {
-      state.reachedDestination = true
-      state.status = Finished
+      state.movableReachedDestination = true
+      state.movableStatus = Finished
     } else {
-      state.status = Finished
+      state.movableStatus = Finished
     }
     onFinishSpontaneous()
 
   protected def linkEnter(): Unit =
-    state.currentPath match
+    state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (from, null) =>
-            state.currentPath = getNextPath
+            state.movableCurrentPath = getNextPath
             linkEnter()
           case (node, link) =>
             sendMessageTo(
@@ -123,11 +108,11 @@ abstract class Movable[T <: MovableState](
           case _ =>
             logEvent("Path item not handled")
       case None =>
-        state.currentPath = getNextPath
+        state.movableCurrentPath = getNextPath
         linkEnter()
 
   protected def linkLeaving(): Unit =
-    state.currentPath match
+    state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (from, null) =>
@@ -144,14 +129,14 @@ abstract class Movable[T <: MovableState](
               ),
               EventTypeEnum.LeaveLink.toString
             )
-            state.currentPath = None
+            state.movableCurrentPath = None
           case _ =>
             logEvent("Path item not handled")
       case None =>
         logEvent("No link to leave")
 
-  private def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
-    state.bestRoute match
+  protected def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+    state.movableBestRoute match
       case Some(path) =>
         Some(path.dequeue)
       case None =>
@@ -159,7 +144,7 @@ abstract class Movable[T <: MovableState](
         None
 
   protected def viewNextPath: Option[(RoutePathItem, RoutePathItem)] =
-    state.bestRoute match
+    state.movableBestRoute match
       case Some(path) =>
         Some(path.head)
       case None =>
