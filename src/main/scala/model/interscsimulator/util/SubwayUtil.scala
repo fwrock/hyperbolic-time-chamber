@@ -7,8 +7,8 @@ object SubwayUtil {
 
   def timeToNextStation(
     distance: Double,
-    speed: Double
-  ): Tick = Math.ceil((distance / speed) * 3600).toLong
+    velocity: Double
+  ): Tick = Math.ceil((distance / velocity) * 3600).toLong
 
   def numberOfPassengerToBoarding(
     numberOfPorts: Int,
