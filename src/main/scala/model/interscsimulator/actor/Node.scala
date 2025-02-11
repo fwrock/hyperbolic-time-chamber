@@ -16,6 +16,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.bus.RegisterBusStopData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkConnectionsData
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
@@ -38,10 +39,11 @@ class Node(
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {
-      case e: ActorInteractionEvent[RegisterBusStopData]    => handleRegisterBusStop(e)
-      case e: ActorInteractionEvent[RequestRouteData]       => handleRequestRoute(e)
-      case e: ActorInteractionEvent[ForwardRouteData]       => handleForwardRoute(e)
-      case e: ActorInteractionEvent[RequestSignalStateData] => handleRequestSignalState(e)
+      case e: ActorInteractionEvent[RegisterBusStopData]       => handleRegisterBusStop(e)
+      case e: ActorInteractionEvent[RegisterSubwayStationData] => handleRegisterSubwayStation(e)
+      case e: ActorInteractionEvent[RequestRouteData]          => handleRequestRoute(e)
+      case e: ActorInteractionEvent[ForwardRouteData]          => handleForwardRoute(e)
+      case e: ActorInteractionEvent[RequestSignalStateData]    => handleRequestSignalState(e)
       case e: ActorInteractionEvent[TrafficSignalChangeStatusData] =>
         handleReceiveSignalChangeStatus(e)
       case e: ActorInteractionEvent[LinkConnectionsData] => handleLinkConnections(e)
@@ -51,6 +53,14 @@ class Node(
 
   private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
     state.busStops.put(event.data.label, Identify(event.actorRefId, event.actorRef))
+
+  private def handleRegisterSubwayStation(
+    event: ActorInteractionEvent[RegisterSubwayStationData]
+  ): Unit =
+    event.data.lines.foreach {
+      line =>
+        state.subwayStations.put(line, Identify(event.actorRefId, event.actorRef))
+    }
 
   private def handleLinkConnections(event: ActorInteractionEvent[LinkConnectionsData]): Unit =
     if (event.data.to.id == getActorId) {
