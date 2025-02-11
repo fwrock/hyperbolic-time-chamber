@@ -128,11 +128,22 @@ class SubwayStation(
           velocity = subway.velocity,
           stopTime = subway.stopTime,
           line = subway.line,
-          bestRoute = Some(convertLineRouteToPath(subway.line))
+          bestRoute = Some(convertLineRouteToPath(subway.line)),
+          subwayStations = convertLineToSubwayStations(subway.line),
+          origin = state.nodeId,
+          destination = convertLineToSubwayStations(subway.line).values.last,
         )
       ),
       dependencies
     )
+
+  private def convertLineToSubwayStations(line: String): mutable.Map[String, String] = {
+    val lineRoute = state.linesRoute(line)
+    val subwayStations = mutable.Map[String, String]()
+    for (i <- lineRoute.indices)
+      subwayStations.put(lineRoute(i)._1.stationId, lineRoute(i)._1.nodeId)
+    subwayStations
+  }
 
   private def convertLineRouteToPath(
     line: String
@@ -143,8 +154,8 @@ class SubwayStation(
       route.enqueue(
         (
           RoutePathItem(
-            actorId = lineRoute(i)._1,
-            actorRef = dependencies(lineRoute(i)._1)
+            actorId = lineRoute(i)._1.nodeId,
+            actorRef = dependencies(lineRoute(i)._1.nodeId)
           ),
           RoutePathItem(
             actorId = lineRoute(i)._2,
