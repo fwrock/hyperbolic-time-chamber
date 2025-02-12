@@ -131,7 +131,7 @@ class SubwayStation(
           bestRoute = Some(convertLineRouteToPath(subway.line)),
           subwayStations = convertLineToSubwayStations(subway.line),
           origin = state.nodeId,
-          destination = convertLineToSubwayStations(subway.line).values.last,
+          destination = convertLineToSubwayStations(subway.line).values.last
         )
       ),
       dependencies
