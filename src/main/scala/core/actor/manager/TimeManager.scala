@@ -2,14 +2,16 @@ package org.interscity.htc
 package core.actor.manager
 
 import core.actor.BaseActor
-import core.entity.event.{ FinishEvent, ScheduleEvent, SpontaneousEvent }
+import core.entity.event.{FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
-
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
+
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.RoundRobinPool
 
 import scala.collection.mutable
 
@@ -34,8 +36,38 @@ class TimeManager(
   private val registeredActors = mutable.Set[ActorRef]()
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
   private val runningEvents = mutable.Set[ActorRef]()
+  private var timeManagersPool: ActorRef = null
 
   private val localTimeManagers: mutable.Map[ActorRef, Tick] = mutable.Map()
+
+  override def onStart(): Unit =
+    if (parentManager.isEmpty) {
+      createTimeManagersPool()
+    } else {
+        parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
+    }
+
+  private def createTimeManagersPool(): Unit = {
+    timeManagersPool = context.actorOf(
+      ClusterRouterPool(
+        RoundRobinPool(5),
+        ClusterRouterPoolSettings(
+          totalInstances = 100,
+          maxInstancesPerNode = 10,
+          allowLocalRoutees = true,
+          useRoles = Set("time-manager")
+        )
+      ).props(
+        Props(
+          new TimeManager(
+            simulationDuration = simulationDuration,
+            parentManager = Some(self)
+          )
+        )
+      ),
+      "time-manager-router"
+    )
+  }
 
   override def handleEvent: Receive = {
     case start: StartSimulationEvent       => startSimulation(start)
@@ -48,8 +80,14 @@ class TimeManager(
     case StopSimulationEvent               => stopSimulation()
     case UpdateGlobalTimeEvent(tick)       => syncWithGlobalTime(tick)
     case acknowledge: AcknowledgeTickEvent => handleAcknowledgeTick(acknowledge)
+    case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
+      registerTimeManager(timeManagerRegisterEvent.actorRef)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick)
+  }
+
+  private def registerTimeManager(timeManager: ActorRef): Unit = {
+    localTimeManagers.put(timeManager, 0)
   }
 
   private def registerActor(event: RegisterActorEvent): Unit = {

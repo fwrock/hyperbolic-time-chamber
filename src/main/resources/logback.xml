@@ -1,0 +1,28 @@
+<configuration>
+    <!-- Define o appender de arquivo -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <!-- Define o nome do arquivo de log -->
+        <file>logs/app-log.log</file>
+        <!-- Configuração de rotação do arquivo (tamanho máximo 10MB) -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/app-log.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory> <!-- Mantém 30 dias de logs -->
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Define o appender para console -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Define o nível de log geral da aplicação -->
+    <root level="DEBUG">
+        <appender-ref ref="FILE" />
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>
