@@ -8,5 +8,6 @@ import org.apache.pekko.actor.ActorRef
 case class FinishEvent(
   actorRef: ActorRef,
   end: Tick,
-  scheduleEvent: Option[ScheduleEvent] = None
+  scheduleEvent: Option[ScheduleEvent] = None,
+  timeManager: ActorRef = null
 ) extends BaseEvent(tick = end, actorRef = actorRef)

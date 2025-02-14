@@ -1,20 +1,21 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
-import core.actor.BaseActor
+import core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
 import core.entity.state.DefaultState
-import core.entity.event.control.execution.{ RunSimulationEvent, StartSimulationEvent }
+import core.entity.event.control.execution.{PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.util.SimulationUtil.loadSimulationConfig
 import core.entity.configuration.Simulation
+
+import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class SimulationManager
-    extends BaseActor[DefaultState](
+    extends BaseManager[DefaultState](
       actorId = "simulation-manager",
       timeManager = null,
       data = null,
@@ -22,12 +23,14 @@ class SimulationManager
     ) {
 
   private var timeManager: ActorRef = uninitialized
+  private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
 
   override def handleEvent: Receive = {
-    case event: RunSimulationEvent  => runSimulation(event)
-    case event: FinishLoadDataEvent => startSimulation()
+    case event: PrepareSimulationEvent   => prepareSimulation(event)
+    case event: FinishLoadDataEvent      => startSimulation()
+    case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
   }
 
   private def startSimulation(): Unit = {
@@ -35,30 +38,50 @@ class SimulationManager
     timeManager ! StartSimulationEvent()
   }
 
-  private def runSimulation(event: RunSimulationEvent): Unit = {
-    logEvent("Run simulation")
-    configuration = loadSimulationConfig(event.configuration)
-    timeManager = context.system.actorOf(
-      Props(
-        new TimeManager(
-          simulationDuration = configuration.duration,
-          None
-        )
+  private def selfProxy: ActorRef =
+    context.system.actorOf(
+      ClusterSingletonProxy.props(
+        singletonManagerPath = "/user/simulation-manager",
+        settings = ClusterSingletonProxySettings(context.system)
       ),
-      "time-manager"
     )
-    loadManager = context.actorOf(
-      Props(
-        new LoadDataManager(
-          timeManager = timeManager,
-          simulationManager = self
-        )
-      ),
-      "load-manager"
-    )
-    loadManager ! LoadDataEvent(
+
+
+  private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
+    poolTimeManager = event.actorRef
+    loadManager = createSingletonLoadManager()
+
+    createSingletonProxy("load-manager") ! LoadDataEvent(
       actorRef = self,
       actorsDataSources = configuration.actorsDataSources
     )
   }
+
+  private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
+    logEvent("Run simulation")
+    configuration = loadSimulationConfig(event.configuration)
+
+    timeManager = createSingletonTimeManager()
+  }
+
+  private def createSingletonTimeManager(): ActorRef =
+    createSingletonManager(
+      manager = new TimeManager(
+        simulationDuration = configuration.duration,
+        simulationManager = selfProxy,
+        parentManager = Some(poolTimeManager)
+      ),
+      name = "time-manager",
+      terminateMessage = StopSimulationEvent()
+    )
+
+  private def createSingletonLoadManager(): ActorRef =
+    createSingletonManager(
+      manager = new LoadDataManager(
+        timeManager = poolTimeManager,
+        simulationManager = selfProxy
+      ),
+      name = "load-manager",
+      terminateMessage = StopSimulationEvent()
+    )
 }

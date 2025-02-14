@@ -3,6 +3,6 @@ package core.entity.event.control.execution
 
 import core.entity.event.BaseEvent
 
-case class RunSimulationEvent(
+case class PrepareSimulationEvent(
   configuration: String = null
 ) extends BaseEvent
