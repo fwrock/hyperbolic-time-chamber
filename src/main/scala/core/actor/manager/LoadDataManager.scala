@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.actor.BaseActor
 import core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent }
 import core.enumeration.DataSourceType
 
@@ -20,7 +19,7 @@ import scala.compiletime.uninitialized
 class LoadDataManager(
   timeManager: ActorRef,
   simulationManager: ActorRef
-) extends BaseActor[DefaultState](
+) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager",
       data = null,

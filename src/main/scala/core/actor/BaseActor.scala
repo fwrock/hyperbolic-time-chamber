@@ -44,6 +44,7 @@ abstract class BaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
+  private var currentTimeManager: ActorRef = uninitialized
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
@@ -126,6 +127,7 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
+    currentTimeManager = event.actorRef
     actSpontaneous(event)
   }
 
@@ -135,7 +137,11 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def sendAcknowledgeTick(): Unit =
     if (timeManager != null && timeManager != self) {
-      timeManager ! AcknowledgeTickEvent(tick = currentTick, actorRef = self)
+      timeManager ! AcknowledgeTickEvent(
+        tick = currentTick,
+        actorRef = self,
+        timeManager = currentTimeManager
+      )
     }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
@@ -211,11 +217,12 @@ abstract class BaseActor[T <: BaseState](
       actorRef = self,
       scheduleEvent = scheduleTick.map(
         tick => ScheduleEvent(tick = tick, actorRef = self)
-      )
+      ),
+      timeManager = currentTimeManager
     )
 
   protected def selfSpontaneous(): Unit =
-    self ! SpontaneousEvent(currentTick, self)
+    self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(tick = tick, actorRef = self)

@@ -6,5 +6,8 @@ import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.ActorRef
 
-case class AcknowledgeTickEvent(tick: Tick, actorRef: ActorRef)
-    extends BaseEvent(tick = tick, actorRef = actorRef)
+case class AcknowledgeTickEvent(
+  tick: Tick,
+  actorRef: ActorRef,
+  timeManager: ActorRef
+) extends BaseEvent(tick = tick, actorRef = actorRef)

@@ -1,18 +1,17 @@
 package org.interscity.htc
 package core.actor.manager.report
 
-import core.actor.BaseActor
 import core.entity.event.BaseEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.actor.typed.Props
+import org.interscity.htc.core.actor.manager.BaseManager
 import org.interscity.htc.core.entity.state.DefaultState
 
-import java.io.{ BufferedWriter, FileWriter }
+import java.io.{BufferedWriter, FileWriter}
 import scala.collection.mutable
 
 class CsvReportManager(timeManager: ActorRef)
-    extends BaseActor[DefaultState](
+    extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "csv-report-manager",
       data = null,
