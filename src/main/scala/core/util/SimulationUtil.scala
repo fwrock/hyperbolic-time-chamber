@@ -8,8 +8,8 @@ import core.exception.SimulationEnvConfigFoundException
 object SimulationUtil {
 
   def loadSimulationConfig(configuration: String = null): Simulation = {
-    print("Loading simulation configuration... ")
-    print(configuration)
+    println("Loading simulation configuration... ")
+    println(configuration)
     if (configuration != null) {
       fromJson[Simulation](readJsonFile(configuration))
     } else {

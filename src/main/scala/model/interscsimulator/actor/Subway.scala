@@ -2,12 +2,12 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.state.SubwayState
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, Stopped, WaitingLoadPassenger}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStation
@@ -83,7 +83,7 @@ class Subway(
         logEvent("No path to load passenger")
   }
 
-  private def requestUnloadPeopleData(): Unit = {
+  private def requestUnloadPeopleData(): Unit =
     state.currentPath match
       case Some((node, _)) =>
         val busStop = retrieveSubwayStationFromNodeId(node.actorId)
@@ -104,7 +104,6 @@ class Subway(
             logEvent("No has bus stop to unload passenger")
       case None =>
         logEvent("No path to unload passenger")
-  }
 
   private def retrieveSubwayStationFromNodeId(value: String): Option[String] =
     state.subwayStations.find {
@@ -118,7 +117,9 @@ class Subway(
     onFinishNodeState()
   }
 
-  private def handleUnloadPassenger(event: ActorInteractionEvent[SubwayUnloadPassengerData]): Unit = {
+  private def handleUnloadPassenger(
+    event: ActorInteractionEvent[SubwayUnloadPassengerData]
+  ): Unit = {
     state.countUnloadReceived += 1
     state.countUnloadPassenger += (if (event.data.isArrival) 1 else 0)
     if (state.countUnloadReceived == state.passengers.size) {
