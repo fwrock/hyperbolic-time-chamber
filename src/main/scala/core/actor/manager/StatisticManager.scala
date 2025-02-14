@@ -1,15 +1,13 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.actor.BaseActor
-
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.state.DefaultState
 
 import scala.collection.mutable
 
 class StatisticManager(timeManager: ActorRef)
-    extends BaseActor[DefaultState](
+    extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "statistic-manager",
       data = null,
