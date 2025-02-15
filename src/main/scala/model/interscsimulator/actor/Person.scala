@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.actor
 
-import model.interscsimulator.entity.state.CarState
+import model.interscsimulator.entity.state.PersonState
 
 import org.apache.pekko.actor.ActorRef
 
@@ -13,7 +13,7 @@ class Person(
   private val data: String = null,
   override protected val dependencies: mutable.Map[String, ActorRef] =
     mutable.Map[String, ActorRef]()
-) extends Movable[CarState](
+) extends Movable[PersonState](
       actorId = actorId,
       timeManager = timeManager,
       data = data,

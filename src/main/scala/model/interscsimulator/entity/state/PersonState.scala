@@ -3,13 +3,13 @@ package model.interscsimulator.entity.state
 
 import core.types.CoreTypes.Tick
 
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.Start
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
 
-case class CarState(
+case class PersonState(
   override val startTick: Tick,
   name: String,
   override val origin: String,
