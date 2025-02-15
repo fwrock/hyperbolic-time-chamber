@@ -1,15 +1,15 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
+import core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
 import core.entity.state.DefaultState
-import core.entity.event.control.execution.{PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent}
+import core.entity.event.control.execution.{ PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent }
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 import core.util.SimulationUtil.loadSimulationConfig
 import core.entity.configuration.Simulation
 
-import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -43,9 +43,8 @@ class SimulationManager
       ClusterSingletonProxy.props(
         singletonManagerPath = "/user/simulation-manager",
         settings = ClusterSingletonProxySettings(context.system)
-      ),
+      )
     )
-
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
