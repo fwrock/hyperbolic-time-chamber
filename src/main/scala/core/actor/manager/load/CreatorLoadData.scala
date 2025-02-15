@@ -9,9 +9,11 @@ import core.entity.event.control.load.{ CreateActorsEvent, StartCreationEvent }
 import core.exception.{ CyclicDependencyException, NotFoundDependencyReferenceException }
 import core.util.ActorCreatorUtil
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createShardedActor }
+import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardedActor }
 
-import java.util.UUID
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple, SingletonDistributed }
+
 import scala.collection.mutable
 
 class CreatorLoadData(
@@ -71,20 +73,81 @@ class CreatorLoadData(
             )
         }
 
-        val actorRef = createShardedActor(
-          system = context.system,
-          actorClassName = actor.typeActor,
-          entityId = actor.id,
-          getTimeManager,
-          actor.data.content,
-          dependencies
-        )
+        val actorRef = newActor(actor = actor, dependencies = dependencies)
 
         actorRefs(actor.name) = actorRef
     }
 
     actorRefs.toMap
   }
+
+  private def newActor(
+    actor: ActorSimulation,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
+    actor.creationType match {
+      case Simple =>
+        createSimpleActor(actor, dependencies)
+      case SingletonDistributed =>
+        createSingletonDistributedActor(actor, dependencies)
+      case LoadBalancedDistributed =>
+        createLoadBalanceDistributedActor(actor, dependencies)
+      case PoolDistributed =>
+        createPoolDistributedActor(actor, dependencies)
+    }
+
+  private def createSimpleActor(
+    actor: ActorSimulation,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
+    createActor(
+      system = context.system,
+      actorClassName = actor.typeActor,
+      actor.id,
+      getTimeManager,
+      actor.data.content,
+      dependencies
+    )
+
+  private def createSingletonDistributedActor(
+    actor: ActorSimulation,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
+    createShardedActor(
+      system = context.system,
+      actorClassName = actor.typeActor,
+      entityId = actor.id,
+      getTimeManager,
+      actor.data.content,
+      dependencies
+    )
+
+  private def createLoadBalanceDistributedActor(
+    actor: ActorSimulation,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
+    createShardedActor(
+      system = context.system,
+      actorClassName = actor.typeActor,
+      entityId = actor.id,
+      getTimeManager,
+      actor.data.content,
+      dependencies
+    )
+
+  private def createPoolDistributedActor(
+    actor: ActorSimulation,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
+    createPoolActor(
+      system = context.system,
+      actorClassName = actor.typeActor,
+      entityId = actor.id,
+      poolConfiguration = actor.poolConfiguration,
+      getTimeManager,
+      actor.data.content,
+      dependencies
+    )
 
   private def handleCreateActors(event: CreateActorsEvent): Unit =
     event.actors.foreach {
