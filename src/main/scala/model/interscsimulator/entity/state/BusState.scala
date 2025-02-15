@@ -9,17 +9,17 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusNodeSta
 
 import scala.collection.mutable
 
-class BusState(
+case class BusState(
   override val startTick: Long,
-  val label: String,
-  val capacity: Int,
+  label: String,
+  capacity: Int,
   var distance: Double = 0.0,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
   var busStops: Map[String, String],
-  val numberOfPorts: Int,
-  val nodeState: BusNodeState = BusNodeState(),
-  val people: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef](),
+  numberOfPorts: Int,
+  nodeState: BusNodeState = BusNodeState(),
+  people: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef](),
   var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
   var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
   var currentPathPosition: Int = 0,
