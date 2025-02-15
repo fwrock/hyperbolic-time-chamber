@@ -7,7 +7,7 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.actor.manager.BaseManager
 import org.interscity.htc.core.entity.state.DefaultState
 
-import java.io.{BufferedWriter, FileWriter}
+import java.io.{ BufferedWriter, FileWriter }
 import scala.collection.mutable
 
 class CsvReportManager(timeManager: ActorRef)

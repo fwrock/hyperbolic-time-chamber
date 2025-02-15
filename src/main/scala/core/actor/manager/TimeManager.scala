@@ -68,7 +68,9 @@ class TimeManager(
       ),
       "time-manager-router"
     )
-    createSingletonProxy("simulation-manager") ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+    createSingletonProxy("simulation-manager") ! TimeManagerRegisterEvent(actorRef =
+      timeManagersPool
+    )
   }
 
   override def handleEvent: Receive = {
