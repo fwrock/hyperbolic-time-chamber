@@ -3,6 +3,8 @@ package system.database.cassandra.connection
 
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.connectors.cassandra.javadsl.CassandraSessionRegistry
 
 import java.net.InetSocketAddress
 
@@ -27,4 +29,6 @@ object CassandraConnection {
     }.toMap
   }
 
+  def createSession(connectionName: String, system: ActorSystem) =
+    CassandraSessionRegistry.get(system).sessionFor(s"databases.cassandra.$connectionName")
 }
