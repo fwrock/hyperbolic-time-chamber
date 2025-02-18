@@ -1,0 +1,25 @@
+{
+  "name": "HTC-Simulator: Supermarket",
+  "description": "Simulates a supermarket with clients and cashiers",
+  "startRealTime": "2025-18-02T07:00:00Z",
+  "timeUnit": "seconds",
+  "timeStep": 1,
+  "duration": 60000,
+  "startTick": 0,
+  "actorsDataSources": [
+    {
+      "type": "org.interscity.htc.model.supermarket.actor.Cashier",
+      "dataSource": {
+        "type": "json",
+        "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket/sources/Cashier.json"
+      }
+    },
+    {
+      "type": "org.interscity.htc.model.supermarket.actor.Client",
+      "dataSource": {
+        "type": "json",
+        "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket/sources/Client.json"
+      }
+    }
+  ]
+}

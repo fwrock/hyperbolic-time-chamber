@@ -1,0 +1,16 @@
+[
+  {
+    "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+    "name": "Cashier",
+    "type": "org.interscity.htc.model.supermarket.actor.Cashier",
+    "data": {
+      "type": "org.interscity.htc.model.supermarket.entity.state.CashierState",
+      "content": {
+        "startTick": 0
+      }
+    },
+    "dependencies": {
+
+    }
+  }
+]
