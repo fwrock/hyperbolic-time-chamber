@@ -95,9 +95,11 @@ class CreatorLoadData(
       createActorStrategy(actor, "", dependencies)
     }
 
-  private def createActorStrategy(actor: ActorSimulation,
-                                    suffix: String,
-                          dependencies: Map[String, ActorRef]): ActorRef = {
+  private def createActorStrategy(
+    actor: ActorSimulation,
+    suffix: String,
+    dependencies: Map[String, ActorRef]
+  ): ActorRef =
     actor.creationType match {
       case Simple =>
         createSimpleActor(actor, suffix, dependencies)
@@ -108,7 +110,6 @@ class CreatorLoadData(
       case PoolDistributed =>
         createPoolDistributedActor(actor, suffix, dependencies)
     }
-  }
 
   private def createSimpleActor(
     actor: ActorSimulation,
