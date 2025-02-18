@@ -1,7 +1,7 @@
 package org.interscity.htc
 package system.database.cassandra.actor
 
-import system.actor.BaseSystem
+import system.actor.BaseActorSystem
 
 import org.apache.pekko.stream.scaladsl.Sink
 import org.interscity.htc.system.database.cassandra.connection.CassandraConnection
@@ -9,7 +9,7 @@ import org.interscity.htc.system.database.cassandra.entity.event.{ CreateEntityE
 
 class CassandraEntityManager(
   connectionName: String
-) extends BaseSystem {
+) extends BaseActorSystem {
 
   private val connection = CassandraConnection.createSession(connectionName, context.system)
 
