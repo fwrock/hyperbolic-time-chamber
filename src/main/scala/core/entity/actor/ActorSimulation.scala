@@ -10,6 +10,7 @@ case class ActorSimulation(
   name: String,
   typeActor: String,
   creationType: CreationTypeEnum = Simple,
+  count: Int = 1,
   poolConfiguration: PoolDistributedConfiguration = PoolDistributedConfiguration(),
   data: ActorDataSimulation,
   dependencies: Map[String, String] = null

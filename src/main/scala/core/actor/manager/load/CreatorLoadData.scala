@@ -85,25 +85,40 @@ class CreatorLoadData(
     actor: ActorSimulation,
     dependencies: Map[String, ActorRef]
   ): ActorRef =
+    if (actor.count > 1) {
+      (1 to actor.count).foreach {
+        index =>
+          createActorStrategy(actor, s"-$index", dependencies)
+      }
+      null
+    } else {
+      createActorStrategy(actor, "", dependencies)
+    }
+
+  private def createActorStrategy(actor: ActorSimulation,
+                                    suffix: String,
+                          dependencies: Map[String, ActorRef]): ActorRef = {
     actor.creationType match {
       case Simple =>
-        createSimpleActor(actor, dependencies)
+        createSimpleActor(actor, suffix, dependencies)
       case SingletonDistributed =>
-        createSingletonDistributedActor(actor, dependencies)
+        createSingletonDistributedActor(actor, suffix, dependencies)
       case LoadBalancedDistributed =>
-        createLoadBalanceDistributedActor(actor, dependencies)
+        createLoadBalanceDistributedActor(actor, suffix, dependencies)
       case PoolDistributed =>
-        createPoolDistributedActor(actor, dependencies)
+        createPoolDistributedActor(actor, suffix, dependencies)
     }
+  }
 
   private def createSimpleActor(
     actor: ActorSimulation,
+    suffix: String,
     dependencies: Map[String, ActorRef]
   ): ActorRef =
     createActor(
       system = context.system,
       actorClassName = actor.typeActor,
-      actor.id,
+      s"${actor.id}$suffix",
       getTimeManager,
       actor.data.content,
       dependencies
@@ -111,12 +126,13 @@ class CreatorLoadData(
 
   private def createSingletonDistributedActor(
     actor: ActorSimulation,
+    suffix: String,
     dependencies: Map[String, ActorRef]
   ): ActorRef =
     createShardedActor(
       system = context.system,
       actorClassName = actor.typeActor,
-      entityId = actor.id,
+      entityId = s"${actor.id}$suffix",
       getTimeManager,
       actor.data.content,
       dependencies
@@ -124,12 +140,13 @@ class CreatorLoadData(
 
   private def createLoadBalanceDistributedActor(
     actor: ActorSimulation,
+    suffix: String,
     dependencies: Map[String, ActorRef]
   ): ActorRef =
     createShardedActor(
       system = context.system,
       actorClassName = actor.typeActor,
-      entityId = actor.id,
+      entityId = s"${actor.id}$suffix",
       getTimeManager,
       actor.data.content,
       dependencies
@@ -137,12 +154,13 @@ class CreatorLoadData(
 
   private def createPoolDistributedActor(
     actor: ActorSimulation,
+    suffix: String,
     dependencies: Map[String, ActorRef]
   ): ActorRef =
     createPoolActor(
       system = context.system,
       actorClassName = actor.typeActor,
-      entityId = actor.id,
+      entityId = s"${actor.id}$suffix",
       poolConfiguration = actor.poolConfiguration,
       getTimeManager,
       actor.data.content,
