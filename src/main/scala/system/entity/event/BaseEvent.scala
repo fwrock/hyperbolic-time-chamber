@@ -8,13 +8,13 @@ import org.apache.pekko.actor.ActorRef
 sealed trait Command
 
 /** Base class for all events.
- *
- * @param actorRef
- * the actor that sent the event, shard region actor
- * @param actorRefId
- * the id of the actor that sent the event, shard region actor id
- * @param eventType
- * the type of the event
+  *
+  * @param actorRef
+  *   the actor that sent the event, shard region actor
+  * @param actorRefId
+  *   the id of the actor that sent the event, shard region actor id
+  * @param eventType
+  *   the type of the event
   */
 abstract class BaseEvent(
   actorRef: ActorRef = null,
