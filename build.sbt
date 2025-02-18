@@ -13,7 +13,10 @@ val pekkoHttpVersion = "1.1.0"
 val logbackVersion = "1.5.16"
 val jacksonModuleVersion = "2.18.2"
 val jacksonDatabindVersion = "2.18.2"
+
 val cassandraConnectorsVersion = "1.1.0"
+
+val kafkaConnectorsVersion = "1.1.0"
 
 lazy val root = (project in file("."))
   .settings(
@@ -29,6 +32,9 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
+
+      // Brokers
+      "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
 
       //Databases
       "org.apache.pekko" %% "pekko-connectors-cassandra" % cassandraConnectorsVersion,
