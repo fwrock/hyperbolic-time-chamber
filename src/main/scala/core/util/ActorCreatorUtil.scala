@@ -15,32 +15,24 @@ import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 object ActorCreatorUtil {
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
-    val constructor = actorClass.getConstructors.head
-    val instance = constructor.newInstance(args*).asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val props = Props(actorClass, args: _*)
     system.actorOf(props)
   }
 
   def createActor[T](system: ActorSystem, actorClass: Class[T]): ActorRef = {
-    val constructor = actorClass.getConstructors.head
-    val instance = constructor.newInstance().asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val props = Props(actorClass)
     system.actorOf(props)
   }
 
   def createActor(system: ActorSystem, actorClassName: String, args: AnyRef*): ActorRef = {
-    val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructors.head
-    val instance = constructor.newInstance(args*).asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val clazz = Class.forName(actorClassName).asInstanceOf[Class[BaseActor[?]]]
+    val props = Props(clazz, args: _*)
     system.actorOf(props)
   }
 
   def createActor(system: ActorSystem, actorClassName: String): ActorRef = {
-    val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructors.head
-    val instance = constructor.newInstance().asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val clazz = Class.forName(actorClassName).asInstanceOf[Class[BaseActor[?]]]
+    val props = Props(clazz)
     system.actorOf(props)
   }
 
@@ -51,10 +43,6 @@ object ActorCreatorUtil {
     constructorParams: AnyRef*
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructor(classOf[String])
-    val actorInstance =
-      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
-
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
@@ -67,7 +55,7 @@ object ActorCreatorUtil {
 
     sharding.start(
       typeName = s"$actorClassName",
-      entityProps = Props(actorInstance),
+      entityProps = Props(clazz, constructorParams: _*),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractEntityId,
       extractShardId = extractShardId
@@ -80,10 +68,6 @@ object ActorCreatorUtil {
     entityId: String,
     constructorParams: AnyRef*
   ): ActorRef = {
-    val constructor = actorClass.getConstructor(classOf[String])
-    val actorInstance =
-      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
-
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
@@ -96,7 +80,7 @@ object ActorCreatorUtil {
 
     sharding.start(
       typeName = s"${actorClass.getName}",
-      entityProps = Props(actorInstance),
+      entityProps = Props(actorClass, constructorParams: _*),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractEntityId,
       extractShardId = extractShardId
@@ -114,20 +98,21 @@ object ActorCreatorUtil {
     val actorInstance =
       constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
 
-    createSingleton(system, actorInstance, entityId, DestructEvent(tick = 0, actorRef = null))
+    createSingleton(system, clazz, entityId, DestructEvent(tick = 0, actorRef = null), constructorParams)
 
     createSingletonProxy(system, entityId)
   }
 
-  private def createSingleton(
+  private def createSingleton[T](
     system: ActorSystem,
-    actor: BaseActor[_],
+    actorClass: Class[T],
     name: String,
-    terminateMessage: Any
+    terminateMessage: Any,
+    constructorParams: AnyRef*,
   ): ActorRef =
     system.actorOf(
       ClusterSingletonManager.props(
-        singletonProps = Props(actor),
+        singletonProps = Props(actorClass, constructorParams: _*),
         terminationMessage = terminateMessage,
         settings = ClusterSingletonManagerSettings(system)
       ),
@@ -159,15 +144,17 @@ object ActorCreatorUtil {
       system = system,
       entityId = entityId,
       poolConfiguration = poolConfiguration,
-      actor = actorInstance
+      actorClass = clazz,
+      constructorParams
     )
   }
 
-  private def createPoolManagerActor(
+  private def createPoolManagerActor[T](
     system: ActorSystem,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    actor: BaseActor[_]
+    actorClass: Class[T],
+    constructorParams: AnyRef*
   ): ActorRef =
     system.actorOf(
       ClusterRouterPool(
@@ -180,7 +167,8 @@ object ActorCreatorUtil {
         )
       ).props(
         Props(
-          actor
+          actorClass,
+          constructorParams: _*
         )
       ),
       name = entityId
