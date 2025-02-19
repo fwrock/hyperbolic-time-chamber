@@ -14,8 +14,9 @@ import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingle
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
-class SimulationManager
-    extends BaseManager[DefaultState](
+class SimulationManager(
+  val simulationPath: String = null
+) extends BaseManager[DefaultState](
       actorId = "simulation-manager",
       timeManager = null,
       data = null,
@@ -26,6 +27,7 @@ class SimulationManager
   private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
+  private var selfProxy: ActorRef = null
 
   override def handleEvent: Receive = {
     case event: PrepareSimulationEvent   => prepareSimulation(event)
@@ -33,18 +35,32 @@ class SimulationManager
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
   }
 
+  override def onStart(): Unit = {
+    getSelfProxy ! PrepareSimulationEvent(
+      configuration = simulationPath
+    )
+  }
+
   private def startSimulation(): Unit = {
     logEvent("Start simulation")
     timeManager ! StartSimulationEvent()
   }
 
-  private def selfProxy: ActorRef =
-    context.system.actorOf(
-      ClusterSingletonProxy.props(
-        singletonManagerPath = "/user/simulation-manager",
-        settings = ClusterSingletonProxySettings(context.system)
+  private def getSelfProxy: ActorRef =
+    if (selfProxy == null) {
+      selfProxy = context.system.actorOf(
+        ClusterSingletonProxy.props(
+          singletonManagerPath = "/user/simulation-manager",
+          settings = ClusterSingletonProxySettings(context.system)
+        ),
+        name = "simulation-manager-proxy"
       )
-    )
+      selfProxy
+    } else {
+      selfProxy
+    }
+
+
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
@@ -67,7 +83,7 @@ class SimulationManager
     createSingletonManager(
       manager = new TimeManager(
         simulationDuration = configuration.duration,
-        simulationManager = selfProxy,
+        simulationManager = getSelfProxy,
         parentManager = Some(poolTimeManager)
       ),
       name = "time-manager",
