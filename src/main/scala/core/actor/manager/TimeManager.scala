@@ -68,7 +68,7 @@ class TimeManager(
       ),
       "time-manager-router"
     )
-    createSingletonProxy("simulation-manager") ! TimeManagerRegisterEvent(actorRef =
+    simulationManager ! TimeManagerRegisterEvent(actorRef =
       timeManagersPool
     )
   }
@@ -307,4 +307,13 @@ class TimeManager(
   }
 
   private def isRunning: Boolean = !isPaused && !isStopped
+}
+
+object TimeManager {
+  def props(
+    simulationDuration: Tick,
+    simulationManager: ActorRef,
+    parentManager: Option[ActorRef]
+  ): Props =
+    Props(new TimeManager(simulationDuration, simulationManager, parentManager))
 }

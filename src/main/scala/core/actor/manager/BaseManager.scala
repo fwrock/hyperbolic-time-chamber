@@ -23,13 +23,13 @@ abstract class BaseManager[T <: BaseState](
     ) {
 
   protected def createSingletonManager(
-    manager: BaseActor[_],
+    manager: Props,
     name: String,
     terminateMessage: Any
   ): ActorRef =
     context.system.actorOf(
       ClusterSingletonManager.props(
-        singletonProps = Props(manager),
+        singletonProps = manager,
         terminationMessage = terminateMessage,
         settings = ClusterSingletonManagerSettings(context.system)
       ),

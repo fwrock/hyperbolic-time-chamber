@@ -5,7 +5,7 @@ import core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
 import core.entity.state.DefaultState
 import core.entity.event.control.execution.{ PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent }
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 import core.entity.configuration.Simulation
 
@@ -35,11 +35,10 @@ class SimulationManager(
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
   }
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     getSelfProxy ! PrepareSimulationEvent(
       configuration = simulationPath
     )
-  }
 
   private def startSimulation(): Unit = {
     logEvent("Start simulation")
@@ -60,8 +59,6 @@ class SimulationManager(
       selfProxy
     }
 
-
-
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
     loadManager = createSingletonLoadManager()
@@ -81,10 +78,10 @@ class SimulationManager(
 
   private def createSingletonTimeManager(): ActorRef =
     createSingletonManager(
-      manager = new TimeManager(
+      manager = TimeManager.props(
         simulationDuration = configuration.duration,
         simulationManager = getSelfProxy,
-        parentManager = Some(poolTimeManager)
+        parentManager = None
       ),
       name = "time-manager",
       terminateMessage = StopSimulationEvent()
@@ -92,7 +89,7 @@ class SimulationManager(
 
   private def createSingletonLoadManager(): ActorRef =
     createSingletonManager(
-      manager = new LoadDataManager(
+      manager = LoadDataManager.props(
         timeManager = poolTimeManager,
         simulationManager = selfProxy
       ),

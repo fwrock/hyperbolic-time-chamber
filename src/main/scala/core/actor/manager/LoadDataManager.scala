@@ -10,7 +10,6 @@ import core.actor.manager.load.CreatorLoadData
 import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil
-
 import core.util.ActorCreatorUtil.createActor
 
 import scala.collection.mutable
@@ -44,6 +43,7 @@ class LoadDataManager(
     )
     event.actorsDataSources.foreach {
       actorDataSource =>
+        logEvent(s"Load data source ${actorDataSource}")
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
@@ -78,4 +78,12 @@ class LoadDataManager(
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && loadDataAmount == loaders.size
+}
+
+object LoadDataManager {
+  def props(
+    timeManager: ActorRef,
+    simulationManager: ActorRef
+  ): Props =
+    Props(new LoadDataManager(timeManager, simulationManager))
 }
