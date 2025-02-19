@@ -7,7 +7,7 @@ import core.exception.SimulationEnvConfigFoundException
 
 object SimulationUtil {
 
-  def loadSimulationConfig(configuration: String = null): Simulation = {
+  def loadSimulationConfig(configuration: String = null): Simulation =
     if (configuration != null) {
       val content = readJsonFile(configuration)
       println(s"Configuration loaded:\n$content")
@@ -19,5 +19,4 @@ object SimulationUtil {
         case None       => throw new SimulationEnvConfigFoundException(envConfig)
       }
     }
-  }
 }

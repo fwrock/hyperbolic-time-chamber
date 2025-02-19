@@ -17,9 +17,11 @@ def main(): Unit = {
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(
-      singletonProps = Props(new SimulationManager(
-        simulationPath = configuration
-      )),
+      singletonProps = Props(
+        SimulationManager(
+          simulationPath = configuration
+        )
+      ),
       terminationMessage = StopSimulationEvent(),
       settings = ClusterSingletonManagerSettings(system)
     ),
