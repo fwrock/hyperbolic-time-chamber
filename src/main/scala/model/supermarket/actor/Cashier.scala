@@ -30,6 +30,7 @@ class Cashier(
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
+    logEvent(s"Cashier spontaneous event=${event}")
     state.status match {
       case Free =>
         if (state.queue.nonEmpty) {

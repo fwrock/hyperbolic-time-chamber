@@ -100,15 +100,19 @@ class TimeManager(
   }
 
   private def startSimulation(start: StartSimulationEvent): Unit = {
-    start.logEvent(context, self)
+    logEvent(s"TimeManager started: $start")
+
     startTime = start.data.startTime
     initialTick = start.startTick
     localTickOffset = initialTick
     isPaused = false
     isStopped = false
-    self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     if (parentManager.isEmpty) {
-      notifyLocalManagers(SpontaneousEvent(tick = localTickOffset, actorRef = self))
+      logEvent(s"TimeManager started at tick $localTickOffset with parent $self")
+      notifyLocalManagers(start)
+    } else {
+      logEvent(s"TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self")
+      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     }
   }
 
@@ -239,7 +243,7 @@ class TimeManager(
       actor =>
         sendSpontaneousEvent(tick, actor)
     }
-    
+
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
     identity.actorRef ! EntityEnvelopeEvent[DefaultBaseEventData](
       identity.id,

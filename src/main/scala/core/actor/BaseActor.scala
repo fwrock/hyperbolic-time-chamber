@@ -187,7 +187,9 @@ abstract class BaseActor[T <: BaseState](
     case event: SpontaneousEvent         => handleSpontaneous(event)
     case event: ActorInteractionEvent[_] => handleInteractWith(event)
     case event: DestructEvent            => destruct(event)
-    case event                           => handleEvent(event)
+    case event                           =>
+      logEvent(s"Event not handled ${event}")
+      handleEvent(event)
   }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
