@@ -5,7 +5,7 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import core.entity.actor.{ActorSimulation, Identify}
-import core.entity.event.control.load.{CreateActorsEvent, StartCreationEvent}
+import core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, StartCreationEvent}
 import core.exception.{CyclicDependencyException, NotFoundDependencyReferenceException}
 import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
@@ -37,8 +37,6 @@ class CreatorLoadData(
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logEvent("Start creation")
 
-    logEvent(s"$actors")
-
     val actorsMap = actors
       .map(
         actor => actor.id -> actor
@@ -54,8 +52,6 @@ class CreatorLoadData(
         }
     }
 
-    logEvent(s"dependency graph: $dependencyGraph")
-
     val sortedActors = topologicalSort(
       actors
         .map(
@@ -64,8 +60,6 @@ class CreatorLoadData(
         .toList,
       dependencyGraph
     )
-
-    logEvent(s"sorted actors: $sortedActors")
 
     val actorRefs = mutable.Map[String, ActorRef]()
 
@@ -96,6 +90,8 @@ class CreatorLoadData(
     }
 
     actorRefs.toMap
+
+    loadDataManager ! FinishCreationEvent(actorRef = self)
   }
 
   private def newActor(

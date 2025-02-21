@@ -1,13 +1,13 @@
 package org.interscity.htc
 package core.util
 
-import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
+import org.apache.pekko.actor.{ActorRef, ActorSystem, Props}
 import core.actor.BaseActor
-import core.entity.event.Command
+import core.entity.event.{Command, EntityEnvelopeEvent}
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
@@ -75,12 +75,23 @@ object ActorCreatorUtil {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
+    /*
     val extractEntityId: ShardRegion.ExtractEntityId = {
       case cmd: Command => (entityId, cmd)
     }
 
     val extractShardId: ShardRegion.ExtractShardId = {
       case cmd: Command => (entityId.hashCode % 10).toString
+    }
+
+     */
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case EntityEnvelopeEvent(entityId, _) => (entityId, entityId)
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case EntityEnvelopeEvent(entityId, _) => (entityId.hashCode % 10).toString
     }
 
     sharding.start(

@@ -74,7 +74,7 @@ class LoadDataManager(
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     creatorRef ! DestructEvent(actorRef = self)
-    simulationManager ! event
+    simulationManager ! FinishLoadDataEvent(actorRef = self)
   }
 
   private def isAllDataLoaded: Boolean =
