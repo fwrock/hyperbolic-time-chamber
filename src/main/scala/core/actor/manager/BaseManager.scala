@@ -36,12 +36,12 @@ abstract class BaseManager[T <: BaseState](
       name = name
     )
 
-  protected def createSingletonProxy(name: String): ActorRef =
+  protected def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
     context.system.actorOf(
       ClusterSingletonProxy.props(
         singletonManagerPath = s"/user/$name",
         settings = ClusterSingletonProxySettings(context.system)
       ),
-      name = s"${name}-proxy"
+      name = s"$name$suffix-proxy"
     )
 }

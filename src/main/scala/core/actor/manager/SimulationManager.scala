@@ -91,6 +91,7 @@ class SimulationManager(
     createSingletonManager(
       manager = LoadDataManager.props(
         timeManager = poolTimeManager,
+        poolTimeManager = poolTimeManager,
         simulationManager = selfProxy
       ),
       name = "load-manager",

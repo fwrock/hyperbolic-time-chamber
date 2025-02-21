@@ -6,15 +6,15 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActor
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.util.ActorCreatorUtil.{createShardedActor, createShardedActorSeveralArgs}
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
-import org.interscity.htc.model.interscsimulator.entity.event.data.{ ReceiveRouteData, RequestRouteData }
-import org.interscity.htc.model.interscsimulator.entity.state.{ BusState, BusStationState }
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
+import org.interscity.htc.core.util.{ActorCreatorUtil, JsonUtil}
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.interscsimulator.entity.state.{BusState, BusStationState}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum.{Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.RequestRoute
-import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.interscsimulator.entity.state.model.{BusInformation, RoutePathItem, SubRoutePair}
 
 import scala.collection.mutable
 
@@ -79,7 +79,7 @@ class BusStation(
   }
 
   private def createBus(bus: BusInformation): ActorRef =
-    createShardedActor(
+    createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Bus],
       entityId = bus.actorId,

@@ -16,8 +16,9 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class LoadDataManager(
-  timeManager: ActorRef,
-  simulationManager: ActorRef
+  val timeManager: ActorRef,
+  val poolTimeManager: ActorRef,
+  val simulationManager: ActorRef
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager",
@@ -39,7 +40,7 @@ class LoadDataManager(
     logEvent("Load data")
     loadDataAmount = event.actorsDataSources.size
     creatorRef = context.actorOf(
-      Props(new CreatorLoadData(loadDataManager = self, timeManager = getTimeManager))
+      Props(new CreatorLoadData(loadDataManager = self, timeManager = poolTimeManager))
     )
     event.actorsDataSources.foreach {
       actorDataSource =>
@@ -47,7 +48,7 @@ class LoadDataManager(
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
-          getTimeManager
+          poolTimeManager
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
@@ -83,7 +84,14 @@ class LoadDataManager(
 object LoadDataManager {
   def props(
     timeManager: ActorRef,
+    poolTimeManager: ActorRef,
     simulationManager: ActorRef
   ): Props =
-    Props(new LoadDataManager(timeManager, simulationManager))
+    Props(
+      new LoadDataManager(
+        timeManager = timeManager,
+        poolTimeManager = poolTimeManager,
+        simulationManager = simulationManager
+      )
+    )
 }

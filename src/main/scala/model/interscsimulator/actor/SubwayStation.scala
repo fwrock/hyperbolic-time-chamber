@@ -2,19 +2,19 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import core.actor.BaseActor
-import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
+import model.interscsimulator.entity.state.{SubwayState, SubwayStationState}
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActor
+import org.interscity.htc.core.util.ActorCreatorUtil.{createShardedActor, createShardedActorSeveralArgs}
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
+import org.interscity.htc.core.util.{ActorCreatorUtil, JsonUtil}
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
-import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{Start, Working}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{RoutePathItem, SubwayInformation, SubwayLineInformation}
 
 import scala.collection.mutable
 
@@ -115,7 +115,7 @@ class SubwayStation(
     }
 
   private def createSubway(subway: SubwayInformation): ActorRef =
-    createShardedActor(
+    createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Subway],
       entityId = subway.actorId,

@@ -4,7 +4,6 @@ package core.actor
 import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
-
 import core.entity.state.BaseState
 import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import core.entity.control.LamportClock
@@ -34,7 +33,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 abstract class BaseActor[T <: BaseState](
   protected val actorId: String,
   private val timeManager: ActorRef = null,
-  private val data: String,
+  private val data: Any = null,
   protected val dependencies: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
 )(implicit m: Manifest[T])
     extends Actor
@@ -56,7 +55,7 @@ abstract class BaseActor[T <: BaseState](
       timeManager ! RegisterActorEvent(startTick = startTick, actorRef = self)
     }
     if (data != null) {
-      state = JsonUtil.fromJson[T](data)
+      state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
     }
     onStart()

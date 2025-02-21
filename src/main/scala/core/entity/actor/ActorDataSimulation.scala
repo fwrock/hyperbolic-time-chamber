@@ -3,5 +3,5 @@ package core.entity.actor
 
 case class ActorDataSimulation(
   dataType: String,
-  content: String
+  content: Any
 )
