@@ -4,21 +4,22 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.actor.ActorSimulation
-import core.entity.event.control.load.{ CreateActorsEvent, StartCreationEvent }
-import core.exception.{ CyclicDependencyException, NotFoundDependencyReferenceException }
-import core.util.ActorCreatorUtil
+import core.entity.actor.{ActorSimulation, Identify}
+import core.entity.event.control.load.{CreateActorsEvent, StartCreationEvent}
+import core.exception.{CyclicDependencyException, NotFoundDependencyReferenceException}
+import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardedActor, createSingletonActor }
+import core.util.ActorCreatorUtil.{createActor, createPoolActor, createShardedActor, createSingletonActor}
 
+import org.interscity.htc.core.entity.event.control.execution.RegisterActorEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple, SingletonDistributed }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed, Simple, SingletonDistributed}
 
 import scala.collection.mutable
 
 class CreatorLoadData(
   loadDataManager: ActorRef,
-  timeManager: ActorRef
+  timeManager: ActorRef,
 ) extends BaseActor[DefaultState](
       timeManager = timeManager,
       actorId = "creator-load-data",
@@ -81,6 +82,15 @@ class CreatorLoadData(
         }.to(mutable.Map)
 
         val actorRef = newActor(actor = actor, dependencies = dependencies)
+
+        timeManager ! RegisterActorEvent(
+          startTick = JsonUtil.convertValue[DefaultState](actor.data.content).getStartTick,
+          actorRef = actorRef,
+          identify = Identify(
+            actor.id,
+            actorRef
+          )
+        )
 
         actorRefs(actor.id) = actorRef
     }
