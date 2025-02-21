@@ -15,7 +15,7 @@ import scala.collection.mutable
 class Client(
   override protected val actorId: String,
   private val timeManager: ActorRef,
-  private val data: String,
+  private val data: Any,
   override protected val dependencies: mutable.Map[String, ActorRef] =
     mutable.Map[String, ActorRef]()
 ) extends BaseActor[ClientState](

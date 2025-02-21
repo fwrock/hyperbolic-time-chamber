@@ -54,23 +54,22 @@ class TimeManager(
         ClusterRouterPoolSettings(
           totalInstances = 100,
           maxInstancesPerNode = 10,
-          allowLocalRoutees = true,
-          useRoles = Set("time-manager")
+          allowLocalRoutees = true
+          // useRoles = Set("time-manager")
         )
       ).props(
         Props(
           new TimeManager(
             simulationDuration = simulationDuration,
             simulationManager = simulationManager,
-            parentManager = Some(createSingletonProxy("time-manager"))
+            parentManager = Some(createSingletonProxy(s"time-manager", s"-${System.nanoTime()}"))
           )
         )
       ),
       "time-manager-router"
     )
-    simulationManager ! TimeManagerRegisterEvent(actorRef =
-      timeManagersPool
-    )
+    logEvent(s"TimeManager pool created: $timeManagersPool")
+    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
   }
 
   override def handleEvent: Receive = {

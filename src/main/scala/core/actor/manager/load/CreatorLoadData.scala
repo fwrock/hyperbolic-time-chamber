@@ -9,7 +9,7 @@ import core.entity.event.control.load.{ CreateActorsEvent, StartCreationEvent }
 import core.exception.{ CyclicDependencyException, NotFoundDependencyReferenceException }
 import core.util.ActorCreatorUtil
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardedActor }
+import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardedActor, createSingletonActor }
 
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple, SingletonDistributed }
@@ -35,9 +35,12 @@ class CreatorLoadData(
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logEvent("Start creation")
+
+    logEvent(s"$actors")
+
     val actorsMap = actors
       .map(
-        actor => retrieveActorIdentifier(actor) -> actor
+        actor => actor.id -> actor
       )
       .toMap
     val dependencyGraph = mutable.Map[String, List[String]]().withDefaultValue(List.empty)
@@ -45,19 +48,23 @@ class CreatorLoadData(
     actors.foreach {
       actor =>
         actor.dependencies.foreach {
-          case (dep, _) =>
-            dependencyGraph(dep) = dependencyGraph(dep) :+ actor.name
+          case (_, dep) =>
+            dependencyGraph(dep) = dependencyGraph(dep) :+ actor.id
         }
     }
+
+    logEvent(s"dependency graph: $dependencyGraph")
 
     val sortedActors = topologicalSort(
       actors
         .map(
-          actor => retrieveActorIdentifier(actor)
+          actor => actor.id
         )
         .toList,
       dependencyGraph
     )
+
+    logEvent(s"sorted actors: $sortedActors")
 
     val actorRefs = mutable.Map[String, ActorRef]()
 
@@ -71,11 +78,11 @@ class CreatorLoadData(
               refName,
               throw new NotFoundDependencyReferenceException(s"The reference $refName not found")
             )
-        }
+        }.to(mutable.Map)
 
         val actorRef = newActor(actor = actor, dependencies = dependencies)
 
-        actorRefs(actor.name) = actorRef
+        actorRefs(actor.id) = actorRef
     }
 
     actorRefs.toMap
@@ -83,11 +90,12 @@ class CreatorLoadData(
 
   private def newActor(
     actor: ActorSimulation,
-    dependencies: Map[String, ActorRef]
+    dependencies: mutable.Map[String, ActorRef]
   ): ActorRef =
     actor.creationType match {
       case Simple =>
-        createSimpleActor(actor, dependencies)
+        logEvent(s"TimeManager pool created: $getTimeManager")
+        createLoadBalanceDistributedActor(actor, dependencies)
       case SingletonDistributed =>
         createSingletonDistributedActor(actor, dependencies)
       case LoadBalancedDistributed =>
@@ -98,46 +106,46 @@ class CreatorLoadData(
 
   private def createSimpleActor(
     actor: ActorSimulation,
-    dependencies: Map[String, ActorRef]
+    dependencies: mutable.Map[String, ActorRef]
   ): ActorRef =
     createActor(
       system = context.system,
       actorClassName = actor.typeActor,
       actor.id,
       getTimeManager,
-      actor.data.content,
+      actor.data.content.asInstanceOf[AnyRef],
       dependencies
     )
 
   private def createSingletonDistributedActor(
     actor: ActorSimulation,
-    dependencies: Map[String, ActorRef]
+    dependencies: mutable.Map[String, ActorRef]
   ): ActorRef =
-    createShardedActor(
+    createSingletonActor(
       system = context.system,
       actorClassName = actor.typeActor,
       entityId = actor.id,
       getTimeManager,
-      actor.data.content,
+      actor.data.content.asInstanceOf[AnyRef],
       dependencies
     )
 
   private def createLoadBalanceDistributedActor(
     actor: ActorSimulation,
-    dependencies: Map[String, ActorRef]
+    dependencies: mutable.Map[String, ActorRef]
   ): ActorRef =
     createShardedActor(
       system = context.system,
       actorClassName = actor.typeActor,
       entityId = actor.id,
-      getTimeManager,
-      actor.data.content,
-      dependencies
+      timeManager = getTimeManager,
+      data = actor.data.content,
+      dependencies = dependencies
     )
 
   private def createPoolDistributedActor(
     actor: ActorSimulation,
-    dependencies: Map[String, ActorRef]
+    dependencies: mutable.Map[String, ActorRef]
   ): ActorRef =
     createPoolActor(
       system = context.system,
@@ -145,7 +153,7 @@ class CreatorLoadData(
       entityId = actor.id,
       poolConfiguration = actor.poolConfiguration,
       getTimeManager,
-      actor.data.content,
+      actor.data.content.asInstanceOf[AnyRef],
       dependencies
     )
 
@@ -193,7 +201,4 @@ class CreatorLoadData(
 
     sorted.toList
   }
-
-  private def retrieveActorIdentifier(actor: ActorSimulation): String =
-    if (actor.id != null) actor.id else actor.name
 }

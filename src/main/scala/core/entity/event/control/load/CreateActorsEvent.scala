@@ -6,5 +6,5 @@ import core.entity.actor.ActorSimulation
 import core.entity.event.BaseEvent
 
 case class CreateActorsEvent(
-  actors: List[ActorSimulation]
+  actors: Seq[ActorSimulation]
 ) extends BaseEvent()

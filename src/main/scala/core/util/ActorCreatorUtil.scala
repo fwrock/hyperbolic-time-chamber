@@ -12,6 +12,8 @@ import org.apache.pekko.routing.RoundRobinPool
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 
+import scala.collection.mutable
+
 object ActorCreatorUtil {
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
@@ -36,7 +38,7 @@ object ActorCreatorUtil {
     system.actorOf(props)
   }
 
-  def createShardedActor(
+  def createShardedActorSeveralArgs(
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
@@ -62,7 +64,35 @@ object ActorCreatorUtil {
     )
   }
 
-  def createShardedActor[T <: BaseActor[_]](
+  def createShardedActor(
+    system: ActorSystem,
+    actorClassName: String,
+    entityId: String,
+    timeManager: ActorRef,
+    data: Any = null,
+    dependencies: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
+  ): ActorRef = {
+    val clazz = Class.forName(actorClassName)
+    val sharding = ClusterSharding(system)
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case cmd: Command => (entityId, cmd)
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case cmd: Command => (entityId.hashCode % 10).toString
+    }
+
+    sharding.start(
+      typeName = s"$actorClassName",
+      entityProps = Props(clazz, entityId, timeManager, data, dependencies),
+      settings = ClusterShardingSettings(system),
+      extractEntityId = extractEntityId,
+      extractShardId = extractShardId
+    )
+  }
+
+  def createShardedActorSeveralArgs[T <: BaseActor[_]](
     system: ActorSystem,
     actorClass: Class[T],
     entityId: String,
@@ -98,7 +128,13 @@ object ActorCreatorUtil {
     val actorInstance =
       constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
 
-    createSingleton(system, clazz, entityId, DestructEvent(tick = 0, actorRef = null), constructorParams)
+    createSingleton(
+      system,
+      clazz,
+      entityId,
+      DestructEvent(tick = 0, actorRef = null),
+      constructorParams
+    )
 
     createSingletonProxy(system, entityId)
   }
@@ -108,7 +144,7 @@ object ActorCreatorUtil {
     actorClass: Class[T],
     name: String,
     terminateMessage: Any,
-    constructorParams: AnyRef*,
+    constructorParams: AnyRef*
   ): ActorRef =
     system.actorOf(
       ClusterSingletonManager.props(

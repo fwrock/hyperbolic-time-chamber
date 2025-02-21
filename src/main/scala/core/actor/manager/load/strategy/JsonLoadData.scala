@@ -30,11 +30,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
-    val actors = JsonUtil.fromJson[List[ActorSimulation]](content)
+    val actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
-    actors.foreach {
-      actor => creatorRef ! CreateActorsEvent(List(actor))
-    }
+    creatorRef ! CreateActorsEvent(actors)
 
     log.info(s"Data loaded from JSON")
 
