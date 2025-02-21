@@ -25,15 +25,16 @@ object JsonUtil {
   def convertValue[T](content: Any)(implicit m: Manifest[T]): T =
     mapper.convertValue(content, m.runtimeClass).asInstanceOf[T]
 
+  def convertValue(content: Any, className: String): Any = {
+    val clazz = Class.forName(className)
+    mapper.convertValue(content, clazz)
+  }
+
   def toJson[T](data: T): String = {
-    mapper.registerModule(DefaultScalaModule)
-    mapper.registerModule(new JavaTimeModule())
     mapper.writeValueAsString(data)
   }
 
   def fromJson[T](data: String)(implicit m: Manifest[T]): T = {
-    mapper.registerModule(DefaultScalaModule)
-    mapper.registerModule(new JavaTimeModule())
     val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
     mapper.readValue[T](data, javaType)
   }
@@ -42,12 +43,6 @@ object JsonUtil {
     val typeReference = new TypeReference[T] {}
     mapper.readValue[T](data, typeReference)
   }
-
-//  def fromJsonList[T](data: String)(implicit m: Manifest[T]): List[T] = {
-//    import scala.collection.JavaConverters.asScalaBufferConverter
-//    val javaType = TypeFactory.defaultInstance().constructCollectionType(classOf[java.util.List[_]], m.runtimeClass)
-//    mapper.readValue(data, javaType).asInstanceOf[java.util.List[T]].asScala.toList
-//  }
 
   def fromJsonList[T](data: String)(implicit m: Manifest[T]): Seq[T] = {
     import scala.jdk.CollectionConverters._
@@ -58,15 +53,11 @@ object JsonUtil {
   }
 
   def fromJsonClassName[T](json: String, className: String): T = {
-    mapper.registerModule(DefaultScalaModule)
-    mapper.registerModule(new JavaTimeModule())
     val clazz = Class.forName(className).asInstanceOf[Class[T]]
     mapper.readValue(json, clazz)
   }
 
   def jsonToObject[T](json: String, clazz: Class[T]): T = {
-    mapper.registerModule(DefaultScalaModule)
-    mapper.registerModule(new JavaTimeModule())
     mapper.readValue(json, clazz)
   }
 }

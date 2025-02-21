@@ -52,10 +52,10 @@ abstract class BaseActor[T <: BaseState](
   override def preStart(): Unit = {
     super.preStart()
     logEvent(s"Starting actor $self")
-    if (timeManager != null && !timeManager.equals(self)) {
+    /*if (timeManager != null && !timeManager.equals(self)) {
       log.info(s"Registering actor ($self) with time manager at tick $startTick")
       timeManager ! RegisterActorEvent(startTick = startTick, actorRef = self, identify = Identify(actorId, self))
-    }
+    }*/
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
