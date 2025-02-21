@@ -1,15 +1,16 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef }
-import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
+import org.apache.pekko.actor.{Actor, ActorLogging, ActorRef}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
 import org.apache.pekko.cluster.sharding.ShardRegion
+import org.interscity.htc.core.entity.actor.Identify
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -50,9 +51,10 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
+    logEvent(s"Starting actor $self")
     if (timeManager != null && !timeManager.equals(self)) {
-      log.info(s"Registering actor with time manager at tick $startTick")
-      timeManager ! RegisterActorEvent(startTick = startTick, actorRef = self)
+      log.info(s"Registering actor ($self) with time manager at tick $startTick")
+      timeManager ! RegisterActorEvent(startTick = startTick, actorRef = self, identify = Identify(actorId, self))
     }
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
@@ -220,8 +222,9 @@ abstract class BaseActor[T <: BaseState](
     timeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
+      identify = Identify(actorId, self),
       scheduleEvent = scheduleTick.map(
-        tick => ScheduleEvent(tick = tick, actorRef = self)
+        tick => ScheduleEvent(tick = tick, actorRef = self, identify = Identify(actorId, self))
       ),
       timeManager = currentTimeManager
     )
@@ -230,7 +233,7 @@ abstract class BaseActor[T <: BaseState](
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   protected def scheduleEvent(tick: Tick): Unit =
-    timeManager ! ScheduleEvent(tick = tick, actorRef = self)
+    timeManager ! ScheduleEvent(tick = tick, actorRef = self, identify = Identify(actorId, self))
 
   /** Gets the time manager actor reference.
     * @return

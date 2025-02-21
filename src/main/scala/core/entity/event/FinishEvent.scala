@@ -4,10 +4,12 @@ package core.entity.event
 import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Identify
 
 case class FinishEvent(
-  actorRef: ActorRef,
-  end: Tick,
-  scheduleEvent: Option[ScheduleEvent] = None,
-  timeManager: ActorRef = null
+                        actorRef: ActorRef,
+                        identify: Identify,
+                        end: Tick,
+                        scheduleEvent: Option[ScheduleEvent] = None,
+                        timeManager: ActorRef = null
 ) extends BaseEvent(tick = end, actorRef = actorRef)

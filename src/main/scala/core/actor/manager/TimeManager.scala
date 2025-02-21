@@ -1,16 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{ FinishEvent, ScheduleEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent }
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
 import scala.collection.mutable
 
@@ -35,7 +37,7 @@ class TimeManager(
   private var tickAcknowledge: Long = 0
   private val registeredActors = mutable.Set[ActorRef]()
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
-  private val runningEvents = mutable.Set[ActorRef]()
+  private val runningEvents = mutable.Set[Identify]()
   private var timeManagersPool: ActorRef = _
 
   private val localTimeManagers: mutable.Map[ActorRef, Tick] = mutable.Map()
@@ -50,10 +52,10 @@ class TimeManager(
   private def createTimeManagersPool(): Unit = {
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
-        RoundRobinPool(5),
+        RoundRobinPool(1),
         ClusterRouterPoolSettings(
-          totalInstances = 100,
-          maxInstancesPerNode = 10,
+          totalInstances = 2,
+          maxInstancesPerNode = 1,
           allowLocalRoutees = true
           // useRoles = Set("time-manager")
         )
@@ -94,7 +96,7 @@ class TimeManager(
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorRef)
-    scheduleApply(ScheduleEvent(tick = event.startTick, actorRef = event.actorRef))
+    scheduleApply(ScheduleEvent(tick = event.startTick, actorRef = event.actorRef, identify = event.identify))
   }
 
   private def startSimulation(start: StartSimulationEvent): Unit = {
@@ -173,18 +175,18 @@ class TimeManager(
     schedule.logEvent(context, schedule.actorRef)
     scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
-        scheduled.actorsRef.add(schedule.actorRef)
+        scheduled.actorsRef.add(schedule.identify)
       case None =>
         scheduledActors.put(
           schedule.tick,
-          ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.actorRef))
+          ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.identify))
         )
   }
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       finish.logEvent(context, self)
-      runningEvents.remove(finish.actorRef)
+      runningEvents.remove(finish.identify)
       finish.scheduleEvent.foreach(scheduleApply)
     } else {
       finish.timeManager ! finish
@@ -232,11 +234,20 @@ class TimeManager(
         sendSpontaneousEvent(tick, runningEvents)
         logEvent(s"No scheduled actors for tick $tick")
 
-  private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[ActorRef]): Unit =
+  private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
       actor =>
-        actor ! SpontaneousEvent(tick = tick, actorRef = self)
+        sendSpontaneousEvent(tick, actor)
     }
+    
+  private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
+    identity.actorRef ! EntityEnvelopeEvent[DefaultBaseEventData](
+      identity.id,
+      SpontaneousEvent(
+        tick = tick,
+        actorRef = self
+      )
+    )
 
   private def handleAcknowledgeTick(acknowledge: AcknowledgeTickEvent): Unit =
     if (acknowledge.timeManager == self) {
