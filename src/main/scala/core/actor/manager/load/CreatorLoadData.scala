@@ -61,7 +61,7 @@ class CreatorLoadData(
       dependencyGraph
     )
 
-    val actorRefs = mutable.Map[String, ActorRef]()
+    val actorRefs = mutable.Map[String, Identify]()
 
     sortedActors.foreach {
       name =>
@@ -82,11 +82,16 @@ class CreatorLoadData(
           actorRef = actorRef,
           identify = Identify(
             actor.id,
+            actor.typeActor,
             actorRef
           )
         )
 
-        actorRefs(actor.id) = actorRef
+        actorRefs(actor.id) = Identify(
+          actor.id,
+          actor.typeActor,
+          actorRef
+        )
     }
 
     actorRefs.toMap
@@ -96,7 +101,7 @@ class CreatorLoadData(
 
   private def newActor(
     actor: ActorSimulation,
-    dependencies: mutable.Map[String, ActorRef]
+    dependencies: mutable.Map[String, Identify]
   ): ActorRef =
     actor.creationType match {
       case Simple =>
@@ -109,23 +114,10 @@ class CreatorLoadData(
       case PoolDistributed =>
         createPoolDistributedActor(actor, dependencies)
     }
-
-  private def createSimpleActor(
-    actor: ActorSimulation,
-    dependencies: mutable.Map[String, ActorRef]
-  ): ActorRef =
-    createActor(
-      system = context.system,
-      actorClassName = actor.typeActor,
-      actor.id,
-      getTimeManager,
-      actor.data.content.asInstanceOf[AnyRef],
-      dependencies
-    )
-
+  
   private def createSingletonDistributedActor(
     actor: ActorSimulation,
-    dependencies: mutable.Map[String, ActorRef]
+    dependencies: mutable.Map[String, Identify]
   ): ActorRef =
     createSingletonActor(
       system = context.system,
@@ -138,7 +130,7 @@ class CreatorLoadData(
 
   private def createLoadBalanceDistributedActor(
     actor: ActorSimulation,
-    dependencies: mutable.Map[String, ActorRef]
+    dependencies: mutable.Map[String, Identify]
   ): ActorRef =
     createShardedActor(
       system = context.system,
@@ -151,7 +143,7 @@ class CreatorLoadData(
 
   private def createPoolDistributedActor(
     actor: ActorSimulation,
-    dependencies: mutable.Map[String, ActorRef]
+    dependencies: mutable.Map[String, Identify]
   ): ActorRef =
     createPoolActor(
       system = context.system,

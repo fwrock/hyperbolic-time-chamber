@@ -5,14 +5,15 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
@@ -20,8 +21,8 @@ abstract class Movable[T <: MovableState](
   override protected val actorId: String,
   private val timeManager: ActorRef,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = actorId,
@@ -93,18 +94,17 @@ abstract class Movable[T <: MovableState](
             linkEnter()
           case (node, link) =>
             sendMessageTo(
-              actorId = link.actorId,
-              actorRef = link.actorRef,
+             link,
               data = EnterLinkData(
                 actorId = getActorId,
-                actorRef = self,
+                actorRef = getSelfShard,
                 actorType = state.actorType,
                 actorSize = state.size
               ),
               EventTypeEnum.EnterLink.toString
             )
           case (node, null) =>
-            onFinish(node.actorId)
+            onFinish(node.id)
           case _ =>
             logEvent("Path item not handled")
       case None =>
@@ -119,8 +119,7 @@ abstract class Movable[T <: MovableState](
             logEvent("No link to leave")
           case (node, link) =>
             sendMessageTo(
-              actorId = link.actorId,
-              actorRef = link.actorRef,
+              link,
               data = LeaveLinkData(
                 actorId = getActorId,
                 actorRef = self,
@@ -135,7 +134,7 @@ abstract class Movable[T <: MovableState](
       case None =>
         logEvent("No link to leave")
 
-  protected def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  protected def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.dequeue)
@@ -143,7 +142,7 @@ abstract class Movable[T <: MovableState](
         logEvent("No path to follow")
         None
 
-  protected def viewNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  protected def viewNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.head)

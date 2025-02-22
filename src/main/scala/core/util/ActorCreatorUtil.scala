@@ -9,7 +9,7 @@ import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSet
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
+import org.interscity.htc.core.entity.actor.{Identify, PoolDistributedConfiguration}
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 
 import scala.collection.mutable
@@ -70,7 +70,7 @@ object ActorCreatorUtil {
     entityId: String,
     timeManager: ActorRef,
     data: Any = null,
-    dependencies: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
+    dependencies: mutable.Map[String, Identify] = mutable.Map[String, Identify]()
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
@@ -85,14 +85,14 @@ object ActorCreatorUtil {
     }
 
      */
-
     val extractEntityId: ShardRegion.ExtractEntityId = {
-      case EntityEnvelopeEvent(entityId, _) => (entityId, entityId)
+      case msg@EntityEnvelopeEvent(id, _) => (id, msg)
     }
 
     val extractShardId: ShardRegion.ExtractShardId = {
-      case EntityEnvelopeEvent(entityId, _) => (entityId.hashCode % 10).toString
+      case EntityEnvelopeEvent(id, _) => (id.hashCode % 10).toString
     }
+
 
     sharding.start(
       typeName = s"$actorClassName",

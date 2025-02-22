@@ -2,18 +2,19 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
 import org.interscity.htc.model.interscsimulator.entity.state.BusState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
-import org.interscity.htc.model.interscsimulator.util.{ BusUtil, SpeedUtil }
+import org.interscity.htc.model.interscsimulator.util.{BusUtil, SpeedUtil}
 import org.interscity.htc.model.interscsimulator.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 
@@ -23,8 +24,8 @@ class Bus(
   override protected val actorId: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends Movable[BusState](
       actorId = actorId,
       timeManager = timeManager,
@@ -87,7 +88,7 @@ class Bus(
       )
       scheduleEvent(nextTickTime)
       for (person <- event.data.people)
-        state.people.put(person.id, person.actorRef)
+        state.people.put(person.id, person)
       state.nodeState.timeToLoadedPassengers = nextTickTime
       onFinishNodeState()
     } else {
@@ -119,7 +120,7 @@ class Bus(
     }
   }
 
-  override def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  override def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         if state.currentPathPosition < path.size then
@@ -139,10 +140,9 @@ class Bus(
         (item._1, item._2) match
           case (node, link) =>
             sendMessageTo(
-              actorId = node.actorId,
-              actorRef = node.actorRef,
+              node,
               RequestSignalStateData(
-                targetLinkId = link.actorId
+                targetLinkId = link.id
               ),
               EventTypeEnum.RequestSignalState.toString
             )
@@ -153,12 +153,11 @@ class Bus(
     state.movableStatus = WaitingLoadPassenger
     state.currentPath match
       case Some((node, _)) =>
-        val busStop = retrieveBusStopFromNodeId(node.actorId)
+        val busStop = retrieveBusStopFromNodeId(node.id)
         busStop match
           case Some(busStopId) =>
             sendMessageTo(
-              actorId = busStopId,
-              actorRef = dependencies(busStopId),
+              dependencies(busStopId),
               data = BusRequestPassengerData(
                 label = state.label,
                 availableSpace = state.capacity - state.people.size
@@ -174,16 +173,15 @@ class Bus(
     state.movableStatus = WaitingUnloadPassenger
     state.currentPath match
       case Some((node, _)) =>
-        val busStop = retrieveBusStopFromNodeId(node.actorId)
+        val busStop = retrieveBusStopFromNodeId(node.id)
         busStop match
           case Some(busStopId) =>
             state.people.foreach {
               person =>
                 sendMessageTo(
-                  actorId = person._1,
-                  actorRef = person._2,
+                  person._2,
                   data = BusRequestUnloadPassengerData(
-                    nodeId = node.actorId,
+                    nodeId = node.id,
                     nodeRef = node.actorRef
                   )
                 )
