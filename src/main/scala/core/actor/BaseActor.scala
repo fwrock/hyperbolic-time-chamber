@@ -223,7 +223,8 @@ abstract class BaseActor[T <: BaseState](
     *   The tick to schedule a new event
     */
   protected def onFinishSpontaneous(
-    scheduleTick: Option[Tick] = None
+    scheduleTick: Option[Tick] = None,
+    destruct: Boolean = false,
   ): Unit =
     timeManager ! FinishEvent(
       end = currentTick,
@@ -237,7 +238,8 @@ abstract class BaseActor[T <: BaseState](
             identify = Identify(actorId, getClass.getName, self)
           )
       ),
-      timeManager = currentTimeManager
+      timeManager = currentTimeManager,
+      destruct = destruct,
     )
 
   protected def selfSpontaneous(): Unit =

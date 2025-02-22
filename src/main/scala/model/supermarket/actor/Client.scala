@@ -32,6 +32,8 @@ class Client(
         state.status = Waiting
         enterQueue()
         onFinishSpontaneous()
+      case Waiting =>
+        sendAcknowledgeTick()
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
     }
@@ -59,7 +61,7 @@ class Client(
     event: ActorInteractionEvent[FinishClientServiceData]
   ): Unit = {
     state.status = Finished
-    selfDestruct()
+    onFinishSpontaneous(destruct = true)
   }
 
 }

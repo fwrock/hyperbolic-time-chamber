@@ -103,7 +103,6 @@ class TimeManager(
 
   private def startSimulation(start: StartSimulationEvent): Unit = {
     logEvent(s"TimeManager started: $start")
-
     startTime = start.data.startTime
     initialTick = start.startTick
     localTickOffset = initialTick
@@ -177,7 +176,7 @@ class TimeManager(
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
     if (schedule.tick < localTickOffset) {
-      log.warning(s"Schedule event for past tick ${schedule.tick}")
+      log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
     }
     schedule.logEvent(context, schedule.actorRef)
@@ -196,6 +195,10 @@ class TimeManager(
       finish.logEvent(context, self)
       runningEvents.remove(finish.identify)
       finish.scheduleEvent.foreach(scheduleApply)
+      if (finish.destruct) {
+          registeredActors.remove(finish.identify.actorRef)
+
+      }
     } else {
       finish.timeManager ! finish
     }
@@ -220,7 +223,7 @@ class TimeManager(
     }
 
   private def notifyManagers(): Unit =
-    if (parentManager.isDefined) {
+    if (parentManager.isDefined && (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size)) {
       parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, actorRef = self)
     } else {
       notifyLocalManagers(UpdateGlobalTimeEvent(tick = localTickOffset))
@@ -240,7 +243,6 @@ class TimeManager(
         scheduledActors.remove(tick)
       case None =>
         sendSpontaneousEvent(tick, runningEvents)
-        logEvent(s"No scheduled actors for tick $tick")
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
@@ -305,6 +307,12 @@ class TimeManager(
       actor =>
         actor ! DestructEvent(tick = localTickOffset, actorRef = self)
     }
+
+  private def sendDestructEvent(finishEvent: FinishEvent): Unit =
+    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent[DefaultBaseEventData](
+      finishEvent.identify.id,
+      DestructEvent(tick = localTickOffset, actorRef = self)
+    )
 
   private def printState(): Unit = {
     log.info(s"runningEvents: ${runningEvents.size}")
