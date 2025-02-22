@@ -69,7 +69,7 @@ class CreatorLoadData(
 
         val dependencies = actor.dependencies.map {
           case (label, refName) =>
-            label -> actorRefs.getOrElse(
+            refName -> actorRefs.getOrElse(
               refName,
               throw new NotFoundDependencyReferenceException(s"The reference $refName not found")
             )

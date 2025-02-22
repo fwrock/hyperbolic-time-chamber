@@ -11,5 +11,6 @@ case class FinishEvent(
   identify: Identify,
   end: Tick,
   scheduleEvent: Option[ScheduleEvent] = None,
-  timeManager: ActorRef = null
+  timeManager: ActorRef = null,
+  destruct: Boolean = false,
 ) extends BaseEvent(tick = end, actorRef = actorRef)
