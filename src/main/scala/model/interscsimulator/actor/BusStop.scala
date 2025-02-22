@@ -16,8 +16,8 @@ class BusStop(
   override protected val actorId: String,
   private val timeManager: ActorRef,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends BaseActor[BusStopState](
       actorId = actorId,
       timeManager = timeManager,
@@ -27,7 +27,6 @@ class BusStop(
 
   override def onStart(): Unit =
     sendMessageTo(
-      state.nodeId,
       dependencies(state.nodeId),
       RegisterBusStopData(
         label = state.label
@@ -59,15 +58,14 @@ class BusStop(
     event: ActorInteractionEvent[BusRequestPassengerData]
   ): Unit =
     sendMessageTo(
-      actorId = event.actorRefId,
-      actorRef = event.actorRef,
+      event.toIdentity(),
       data = BusLoadPassengerData(
         people = peopleToLoad
       )
     )
 
   private def handleRegisterPassenger(event: ActorInteractionEvent[RegisterPassengerData]): Unit = {
-    val person = Identify(event.actorRefId, event.actorRef)
+    val person = event.toIdentity()
     state.people.get(event.data.label) match {
       case Some(people) =>
         state.people.put(event.data.label, people :+ person)

@@ -4,6 +4,7 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
@@ -22,8 +23,8 @@ class BusStation(
   override protected val actorId: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends BaseActor[BusStationState](
       actorId = actorId,
       timeManager = timeManager,
@@ -41,7 +42,12 @@ class BusStation(
         if (state.buses.nonEmpty) {
           val bus = state.buses.dequeue()
           val actorRef = createBus(bus)
-          dependencies(bus.actorId) = actorRef
+          val className = classOf[Bus].getName
+          dependencies(bus.actorId) = Identify(
+            id = actorId,
+            classType = className,
+            actorRef = getShardRef(className)
+          )
           onFinishSpontaneous(Some(currentTick + state.interval))
         } else {
           state.status = WorkingWithOutBus
@@ -72,7 +78,12 @@ class BusStation(
       state.status = Ready
       val bus = state.buses.dequeue()
       val actorRef = createBus(bus)
-      dependencies(bus.actorId) = actorRef
+      val className = classOf[Bus].getName
+      dependencies(bus.actorId) = Identify(
+        id = actorId,
+        classType = className,
+        actorRef = getShardRef(className)
+      )
       state.status = Working
       onFinishSpontaneous(Some(currentTick + state.interval))
     }
@@ -100,16 +111,16 @@ class BusStation(
       dependencies
     )
 
-  private def calcBusBestRoute(): mutable.Queue[(RoutePathItem, RoutePathItem)] = {
-    val bestRoute = mutable.Queue[(RoutePathItem, RoutePathItem)]()
+  private def calcBusBestRoute(): mutable.Queue[(Identify, Identify)] = {
+    val bestRoute = mutable.Queue[(Identify, Identify)]()
     bestRoute ++= getTotalRoute(state.goingRoute.get)
     bestRoute ++= getTotalRoute(state.returningRoute.get)
   }
 
   private def getTotalRoute(
-    route: mutable.Map[SubRoutePair, mutable.Queue[(RoutePathItem, RoutePathItem)]]
-  ): mutable.Queue[(RoutePathItem, RoutePathItem)] = {
-    val totalRoute = mutable.Queue[(RoutePathItem, RoutePathItem)]()
+    route: mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]
+  ): mutable.Queue[(Identify, Identify)] = {
+    val totalRoute = mutable.Queue[(Identify, Identify)]()
     for (pair <- state.busStops.keys.sliding(2)) {
       val pathPart = route(SubRoutePair(pair.head, pair.last))
       totalRoute ++= pathPart
@@ -122,7 +133,7 @@ class BusStation(
       isCalculateRoutingComplete(state.returningRoute)
 
   private def isCalculateRoutingComplete(
-    route: Option[mutable.Map[SubRoutePair, mutable.Queue[(RoutePathItem, RoutePathItem)]]]
+    route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]]
   ): Boolean =
     route match
       case Some(r) => r.keys.size == state.busStops.sliding(2, 2).size
@@ -140,7 +151,8 @@ class BusStation(
 
   private def requestRoute(origin: String, destination: String, label: String): Unit = {
     val data = RequestRouteData(
-      requester = self,
+      requester = getSelfShard,
+      requesterClassType = getShardName,
       requesterId = actorId,
       currentCost = 0,
       targetNodeId = destination,
@@ -149,8 +161,7 @@ class BusStation(
       label = label
     )
     sendMessageTo(
-      actorId = origin,
-      actorRef = dependencies(origin),
+      dependencies(origin),
       data,
       RequestRoute.toString
     )

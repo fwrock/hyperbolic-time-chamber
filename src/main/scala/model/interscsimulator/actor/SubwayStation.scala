@@ -22,8 +22,8 @@ class SubwayStation(
   override protected val actorId: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends BaseActor[SubwayStationState](
       actorId = actorId,
       timeManager = timeManager,
@@ -33,7 +33,6 @@ class SubwayStation(
 
   override def onStart(): Unit =
     sendMessageTo(
-      state.nodeId,
       dependencies(state.nodeId),
       RegisterSubwayStationData(
         lines = state.lines.keys.toSeq
@@ -60,7 +59,7 @@ class SubwayStation(
   private def handleRegisterPassenger(
     event: ActorInteractionEvent[RegisterSubwayPassengerData]
   ): Unit = {
-    val person = Identify(event.actorRefId, event.actorRef)
+    val person = Identify(event.actorRefId, event.actorClassType, event.actorRef)
     state.people.get(event.data.line) match {
       case Some(people) =>
         state.people.put(event.data.line, people :+ person)
@@ -86,8 +85,11 @@ class SubwayStation(
     event: ActorInteractionEvent[SubwayRequestPassengerData]
   ): Unit =
     sendMessageTo(
-      actorId = event.actorRefId,
-      actorRef = event.actorRef,
+      Identify(
+        id = event.actorRefId,
+        classType = event.actorClassType,
+        actorRef = event.actorRef,
+      ),
       data = SubwayLoadPassengerData(
         people = peopleToLoad
       )
@@ -106,7 +108,7 @@ class SubwayStation(
             if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = actorRef
+              dependencies(subway.actorId) = Identify(subway.actorId, classOf[Subway].getName, actorRef)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
@@ -147,20 +149,14 @@ class SubwayStation(
 
   private def convertLineRouteToPath(
     line: String
-  ): mutable.Queue[(RoutePathItem, RoutePathItem)] = {
-    val route = mutable.Queue[(RoutePathItem, RoutePathItem)]()
+  ): mutable.Queue[(Identify, Identify)] = {
+    val route = mutable.Queue[(Identify, Identify)]()
     val lineRoute = state.linesRoute(line)
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          RoutePathItem(
-            actorId = lineRoute(i)._1.nodeId,
-            actorRef = dependencies(lineRoute(i)._1.nodeId)
-          ),
-          RoutePathItem(
-            actorId = lineRoute(i)._2,
-            actorRef = dependencies(lineRoute(i)._2)
-          )
+          dependencies(lineRoute(i)._1.nodeId),
+          dependencies(lineRoute(i)._2)
         )
       )
     route

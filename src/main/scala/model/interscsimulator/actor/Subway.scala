@@ -2,12 +2,13 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.state.SubwayState
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, Stopped, WaitingLoadPassenger}
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStation
@@ -18,8 +19,8 @@ class Subway(
   override protected val actorId: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends Movable[SubwayState](
       actorId = actorId,
       timeManager = timeManager,
@@ -66,12 +67,11 @@ class Subway(
     )
     state.currentPath match
       case Some((node, _)) =>
-        val station = retrieveSubwayStationFromNodeId(node.actorId)
+        val station = retrieveSubwayStationFromNodeId(node.id)
         station match
           case Some(stationId) =>
             sendMessageTo(
-              actorId = stationId,
-              actorRef = dependencies(stationId),
+              dependencies(stationId),
               data = SubwayRequestPassengerData(
                 line = state.line,
                 availableSpace = availableSpace
@@ -86,16 +86,15 @@ class Subway(
   private def requestUnloadPeopleData(): Unit =
     state.currentPath match
       case Some((node, _)) =>
-        val busStop = retrieveSubwayStationFromNodeId(node.actorId)
+        val busStop = retrieveSubwayStationFromNodeId(node.id)
         busStop match
           case Some(busStopId) =>
             state.passengers.foreach {
               person =>
                 sendMessageTo(
-                  actorId = person._1,
-                  actorRef = person._2,
+                  person._2,
                   data = SubwayRequestUnloadPassengerData(
-                    nodeId = node.actorId,
+                    nodeId = node.id,
                     nodeRef = node.actorRef
                   )
                 )
@@ -113,7 +112,7 @@ class Subway(
   private def handleBusLoadPeople(event: ActorInteractionEvent[SubwayLoadPassengerData]): Unit = {
     state.nodeState.isLoaded = true
     for (person <- event.data.people)
-      state.passengers.put(person.id, person.actorRef)
+      state.passengers.put(person.id, person)
     onFinishNodeState()
   }
 
@@ -143,7 +142,7 @@ class Subway(
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
-  override def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  override def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         if state.currentPathPosition < path.size then

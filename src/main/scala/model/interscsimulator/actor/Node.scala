@@ -26,8 +26,8 @@ class Node(
   override protected val actorId: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Identify] =
+    mutable.Map[String, Identify]()
 ) extends BaseActor[NodeState](
       actorId = actorId,
       timeManager = timeManager,
@@ -52,14 +52,14 @@ class Node(
     }
 
   private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
-    state.busStops.put(event.data.label, Identify(event.actorRefId, event.actorRef))
+    state.busStops.put(event.data.label, event.toIdentity())
 
   private def handleRegisterSubwayStation(
     event: ActorInteractionEvent[RegisterSubwayStationData]
   ): Unit =
     event.data.lines.foreach {
       line =>
-        state.subwayStations.put(line, Identify(event.actorRefId, event.actorRef))
+        state.subwayStations.put(line, event.toIdentity())
     }
 
   private def handleLinkConnections(event: ActorInteractionEvent[LinkConnectionsData]): Unit =
@@ -78,10 +78,11 @@ class Node(
 
   private def handleRequestRouteLinks(event: ActorInteractionEvent[RequestRouteData]): Unit = {
     val path = event.data.path
-    val updatedPath = path :+ (RoutePathItem(actorRef = self, actorId = getActorId), null)
+    val updatedPath = path :+ (toIdentify, null)
     val data = RequestRouteData(
       requester = event.data.requester,
       requesterId = event.data.requesterId,
+      requesterClassType = event.data.requesterClassType,
       currentCost = event.data.currentCost,
       targetNodeId = event.data.targetNodeId,
       originNodeId = event.data.originNodeId,
@@ -89,13 +90,13 @@ class Node(
     )
 
     state.links.foreach {
-      link => sendMessageTo(link, dependencies(link), data, EventTypeEnum.RequestRoute.toString)
+      link => sendMessageTo(dependencies(link), data, EventTypeEnum.RequestRoute.toString)
     }
   }
 
   private def handleRequestRouteTarget(event: ActorInteractionEvent[RequestRouteData]): Unit = {
     val path = event.data.path
-    val updatedPath = path :+ (null, RoutePathItem(actorRef = self, actorId = getActorId))
+    val updatedPath = path :+ (null, toIdentify)
     val data = ReceiveRouteData(
       path = updatedPath,
       label = event.data.label,
@@ -103,8 +104,11 @@ class Node(
       destination = event.data.targetNodeId
     )
     sendMessageTo(
-      event.data.requesterId,
-      event.data.requester,
+      Identify(
+        id = event.data.requesterId,
+        classType = event.data.requesterClassType,
+        actorRef = event.data.requester
+      ),
       data,
       EventTypeEnum.ReceiveRoute.toString
     )
@@ -112,7 +116,6 @@ class Node(
 
   private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit =
     sendMessageTo(
-      event.data.requesterId,
       dependencies(event.data.requesterId),
       event.data,
       EventTypeEnum.ForwardRoute.toString
@@ -126,8 +129,7 @@ class Node(
         state.signals.get(identify.id) match
           case Some(signalState) =>
             sendMessageTo(
-              event.actorRefId,
-              event.actorRef,
+              event.toIdentity(),
               SignalStateData(
                 phase = signalState.state,
                 nextTick = signalState.nextTick
@@ -136,8 +138,7 @@ class Node(
             )
           case None =>
             sendMessageTo(
-              event.actorRefId,
-              event.actorRef,
+              event.toIdentity(),
               SignalStateData(
                 phase = Green,
                 nextTick = currentTick
