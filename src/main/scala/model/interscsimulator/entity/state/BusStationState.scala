@@ -6,7 +6,7 @@ import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum.Start
-import org.interscity.htc.model.interscsimulator.entity.state.model.{BusInformation, RoutePathItem, SubRoutePair}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
 
 import scala.collection.mutable
 
@@ -18,11 +18,13 @@ case class BusStationState(
   busStops: Map[String, String],
   interval: Tick,
   buses: mutable.Queue[BusInformation],
-  goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] =
-    Some(mutable.Map.empty),
+  goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] = Some(
+    mutable.Map.empty
+  ),
   goingBestCost: Double = Double.MaxValue,
-  returningRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] =
-    Some(mutable.Map.empty),
+  returningRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] = Some(
+    mutable.Map.empty
+  ),
   returningBestCost: Double = Double.MaxValue,
   var status: BusStationStateEnum = Start
 ) extends BaseState(startTick = startTick)

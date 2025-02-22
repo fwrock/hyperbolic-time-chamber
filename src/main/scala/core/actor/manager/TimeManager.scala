@@ -1,15 +1,15 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
+import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
+import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent }
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
@@ -96,7 +96,9 @@ class TimeManager(
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorRef)
-    scheduleApply(ScheduleEvent(tick = event.startTick, actorRef = event.actorRef, identify = event.identify))
+    scheduleApply(
+      ScheduleEvent(tick = event.startTick, actorRef = event.actorRef, identify = event.identify)
+    )
   }
 
   private def startSimulation(start: StartSimulationEvent): Unit = {
@@ -111,7 +113,9 @@ class TimeManager(
       logEvent(s"TimeManager started at tick $localTickOffset with parent $self")
       notifyLocalManagers(start)
     } else {
-      logEvent(s"TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self")
+      logEvent(
+        s"TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
+      )
       self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     }
   }

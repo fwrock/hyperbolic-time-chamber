@@ -3,18 +3,18 @@ package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
 import org.interscity.htc.model.interscsimulator.entity.state.BusState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
-import org.interscity.htc.model.interscsimulator.util.{BusUtil, SpeedUtil}
+import org.interscity.htc.model.interscsimulator.util.{ BusUtil, SpeedUtil }
 import org.interscity.htc.model.interscsimulator.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 

@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.actor
 
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
@@ -16,7 +16,7 @@ import org.interscity.htc.model.interscsimulator.entity.event.data.RequestRouteD
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(

@@ -1,15 +1,15 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
+import core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
 import core.entity.state.DefaultState
-import core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent}
+import core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent }
 
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 import core.entity.configuration.Simulation
 
-import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized

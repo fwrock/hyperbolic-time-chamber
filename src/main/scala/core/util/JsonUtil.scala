@@ -30,9 +30,8 @@ object JsonUtil {
     mapper.convertValue(content, clazz)
   }
 
-  def toJson[T](data: T): String = {
+  def toJson[T](data: T): String =
     mapper.writeValueAsString(data)
-  }
 
   def fromJson[T](data: String)(implicit m: Manifest[T]): T = {
     val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
@@ -57,7 +56,6 @@ object JsonUtil {
     mapper.readValue(json, clazz)
   }
 
-  def jsonToObject[T](json: String, clazz: Class[T]): T = {
+  def jsonToObject[T](json: String, clazz: Class[T]): T =
     mapper.readValue(json, clazz)
-  }
 }

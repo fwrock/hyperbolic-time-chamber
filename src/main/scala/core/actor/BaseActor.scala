@@ -1,15 +1,15 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{Actor, ActorLogging, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.interscity.htc.core.entity.actor.Identify
 
 import scala.Long.MinValue
@@ -52,18 +52,6 @@ abstract class BaseActor[T <: BaseState](
   override def preStart(): Unit = {
     super.preStart()
     logEvent(s"Starting actor $self")
-    /*if (timeManager != null && !timeManager.equals(self)) {
-      log.info(s"Registering actor ($self) with time manager at tick $startTick")
-      timeManager ! RegisterActorEvent(
-        startTick = startTick,
-        actorRef = self,
-        identify = Identify(
-          id = actorId,
-          actorRef = self
-        )
-      )
-    }
-     */
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
@@ -100,7 +88,9 @@ abstract class BaseActor[T <: BaseState](
   ): Unit = {
     lamportClock.increment()
     val shardingRegion = getShardRef(identify.classType)
-    logEvent(s"Sending message to ${identify.actorRef.path.name} with Lamport clock ${getLamportClock}")
+    logEvent(
+      s"Sending message to ${identify.actorRef.path.name} with Lamport clock ${getLamportClock}"
+    )
     shardingRegion ! EntityEnvelopeEvent[D](
       identify.id,
       ActorInteractionEvent(
@@ -187,26 +177,24 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit = {
-    val logMessage = s"$actorId - $eventInfo"
-    log.info(logMessage)
-  }
+  protected def logEvent(eventInfo: String): Unit =
+    log.info(s"$actorId: $eventInfo")
 
   override def receive: Receive = {
     case event: SpontaneousEvent         => handleSpontaneous(event)
     case event: ActorInteractionEvent[_] => handleInteractWith(event)
     case event: DestructEvent            => destruct(event)
-    case event: EntityEnvelopeEvent[_] => handleEnvelopeEvent(event)
+    case event: EntityEnvelopeEvent[_]   => handleEnvelopeEvent(event)
     case event                           => handleEvent(event)
   }
 
-  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent[_]): Unit = {
+  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent[_]): Unit =
     entityEnvelopeEvent.event match {
       case event: SpontaneousEvent         => handleSpontaneous(event)
       case event: ActorInteractionEvent[_] => handleInteractWith(event)
-      case event                               => handleEvent(event)
+      case event: DestructEvent            => destruct(event)
+      case event                           => handleEvent(event)
     }
-  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
@@ -242,7 +230,12 @@ abstract class BaseActor[T <: BaseState](
       actorRef = self,
       identify = Identify(actorId, getClass.getName, self),
       scheduleEvent = scheduleTick.map(
-        tick => ScheduleEvent(tick = tick, actorRef = self, identify = Identify(actorId, getClass.getName, self))
+        tick =>
+          ScheduleEvent(
+            tick = tick,
+            actorRef = self,
+            identify = Identify(actorId, getClass.getName, self)
+          )
       ),
       timeManager = currentTimeManager
     )
@@ -251,7 +244,11 @@ abstract class BaseActor[T <: BaseState](
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   protected def scheduleEvent(tick: Tick): Unit =
-    timeManager ! ScheduleEvent(tick = tick, actorRef = self, identify = Identify(actorId, getClass.getName, self))
+    timeManager ! ScheduleEvent(
+      tick = tick,
+      actorRef = self,
+      identify = Identify(actorId, getClass.getName, self)
+    )
 
   /** Gets the time manager actor reference.
     * @return
@@ -265,11 +262,13 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def getActorId: String = actorId
 
-  protected def getSelfShard: ActorRef = ClusterSharding(context.system).shardRegion(getClass.getName)
+  protected def getSelfShard: ActorRef =
+    ClusterSharding(context.system).shardRegion(getClass.getName)
 
   protected def getShardName: String = getClass.getName
 
-  protected def getShardRef(className: String): ActorRef = ClusterSharding(context.system).shardRegion(className)
+  protected def getShardRef(className: String): ActorRef =
+    ClusterSharding(context.system).shardRegion(className)
 
   protected def toIdentify: Identify = Identify(getActorId, getShardName, self)
 }
