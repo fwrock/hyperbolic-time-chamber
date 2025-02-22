@@ -8,8 +8,8 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 import scala.collection.mutable
 
 final case class ReceiveRouteData(
-                                   path: mutable.Queue[(Identify, Identify)],
-                                   label: String,
-                                   origin: String,
-                                   destination: String
+  path: mutable.Queue[(Identify, Identify)],
+  label: String,
+  origin: String,
+  destination: String
 ) extends BaseEventData

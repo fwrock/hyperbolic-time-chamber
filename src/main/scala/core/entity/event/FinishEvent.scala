@@ -7,9 +7,9 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
 
 case class FinishEvent(
-                        actorRef: ActorRef,
-                        identify: Identify,
-                        end: Tick,
-                        scheduleEvent: Option[ScheduleEvent] = None,
-                        timeManager: ActorRef = null
+  actorRef: ActorRef,
+  identify: Identify,
+  end: Tick,
+  scheduleEvent: Option[ScheduleEvent] = None,
+  timeManager: ActorRef = null
 ) extends BaseEvent(tick = end, actorRef = actorRef)

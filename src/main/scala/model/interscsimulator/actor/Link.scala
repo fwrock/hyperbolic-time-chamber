@@ -47,7 +47,7 @@ class Link(
       identify,
       LinkConnectionsData(
         to = dependencies(state.to),
-        from = dependencies(state.from),
+        from = dependencies(state.from)
       ),
       EventTypeEnum.RequestRoute.toString
     )

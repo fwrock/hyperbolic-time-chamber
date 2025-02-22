@@ -5,10 +5,10 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{Busy, Free, Waiting}
-import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
+import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 import org.interscity.htc.model.supermarket.entity.model.ClientQueued
 import org.interscity.htc.model.supermarket.entity.state.CashierState
 import org.interscity.htc.model.supermarket.util.CashierUtil
@@ -65,7 +65,10 @@ class Cashier(
   private def handleNewClientService(event: ActorInteractionEvent[NewClientServiceData]): Unit =
     if (state.queue.isEmpty && (state.status == Waiting || state.status == Free)) {
       state.status = Busy
-      sendMessageTo(Identify(event.actorRefId, event.actorClassType, event.actorRef), StartClientServiceData())
+      sendMessageTo(
+        Identify(event.actorRefId, event.actorClassType, event.actorRef),
+        StartClientServiceData()
+      )
       onFinishSpontaneous(Some(currentTick + serviceTime(event.data.amountThings)))
     } else {
       state.queue.enqueue(
@@ -82,7 +85,7 @@ class Cashier(
 
   override def handleEvent: Receive = {
     case EntityEnvelopeEvent(entityId, event: SpontaneousEvent) =>
-        logEvent(s"EntityEnvelopeEvent not handled ${entityId} ${event}")
+      logEvent(s"EntityEnvelopeEvent not handled ${entityId} ${event}")
     case event: Any =>
       logEvent(s"Event not handled ${event}")
   }

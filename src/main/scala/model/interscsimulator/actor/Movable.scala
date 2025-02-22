@@ -6,14 +6,14 @@ import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
@@ -94,7 +94,7 @@ abstract class Movable[T <: MovableState](
             linkEnter()
           case (node, link) =>
             sendMessageTo(
-             link,
+              link,
               data = EnterLinkData(
                 actorId = getActorId,
                 actorRef = getSelfShard,

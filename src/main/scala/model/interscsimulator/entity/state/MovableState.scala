@@ -3,24 +3,24 @@ package model.interscsimulator.entity.state
 
 import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.RouteWaiting
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
 
 abstract class MovableState(
-                             val startTick: Long,
-                             var movableBestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
-                             var movableCurrentPath: Option[(Identify, Identify)] = None,
-                             var movableCurrentNode: String = null,
-                             val origin: String,
-                             val destination: String,
-                             var movableBestCost: Double = Double.MaxValue,
-                             var movableStatus: MovableStatusEnum = RouteWaiting,
-                             var movableReachedDestination: Boolean = false,
-                             val actorType: ActorTypeEnum,
-                             val size: Double
+  val startTick: Long,
+  var movableBestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
+  var movableCurrentPath: Option[(Identify, Identify)] = None,
+  var movableCurrentNode: String = null,
+  val origin: String,
+  val destination: String,
+  var movableBestCost: Double = Double.MaxValue,
+  var movableStatus: MovableStatusEnum = RouteWaiting,
+  var movableReachedDestination: Boolean = false,
+  val actorType: ActorTypeEnum,
+  val size: Double
 ) extends BaseState(startTick = startTick) {
 
   def getStatus: MovableStatusEnum = movableStatus

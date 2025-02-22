@@ -3,12 +3,12 @@ package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.state.SubwayState
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, Stopped, WaitingLoadPassenger}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStation

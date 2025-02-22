@@ -5,6 +5,6 @@ import org.apache.pekko.actor.ActorRef
 
 case class Identify(
   id: String,
-  classType: String, 
+  classType: String,
   actorRef: ActorRef
 )
