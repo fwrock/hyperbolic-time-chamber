@@ -13,6 +13,7 @@ val pekkoHttpVersion = "1.1.0"
 val logbackVersion = "1.5.16"
 val jacksonModuleVersion = "2.18.2"
 val jacksonDatabindVersion = "2.18.2"
+val jacksonDataTypeVersion = "2.18.2"
 
 val cassandraConnectorsVersion = "1.1.0"
 
@@ -42,6 +43,7 @@ lazy val root = (project in file("."))
       // Jackson
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonModuleVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonDatabindVersion,
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonDataTypeVersion,
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,

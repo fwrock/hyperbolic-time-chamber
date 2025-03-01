@@ -2,10 +2,11 @@ package org.interscity.htc
 package core.actor.manager
 
 import core.actor.BaseActor
-import core.entity.state.{ BaseState, DefaultState }
+import core.entity.state.BaseState
 
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 
 import scala.collection.mutable
 
@@ -13,7 +14,7 @@ abstract class BaseManager[T <: BaseState](
   actorId: String = null,
   timeManager: ActorRef = null,
   data: String = null,
-  dependencies: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
+  dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = actorId,
@@ -23,25 +24,25 @@ abstract class BaseManager[T <: BaseState](
     ) {
 
   protected def createSingletonManager(
-    manager: BaseActor[_],
+    manager: Props,
     name: String,
     terminateMessage: Any
   ): ActorRef =
     context.system.actorOf(
       ClusterSingletonManager.props(
-        singletonProps = Props(manager),
+        singletonProps = manager,
         terminationMessage = terminateMessage,
         settings = ClusterSingletonManagerSettings(context.system)
       ),
       name = name
     )
 
-  protected def createSingletonProxy(name: String): ActorRef =
+  protected def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
     context.system.actorOf(
       ClusterSingletonProxy.props(
         singletonManagerPath = s"/user/$name",
         settings = ClusterSingletonProxySettings(context.system)
       ),
-      name = s"${name}-proxy"
+      name = s"$name$suffix-proxy"
     )
 }

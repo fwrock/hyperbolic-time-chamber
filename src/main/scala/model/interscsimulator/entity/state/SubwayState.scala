@@ -4,6 +4,7 @@ package model.interscsimulator.entity.state
 import core.entity.state.BaseState
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.ActorTypeEnum.Subway
@@ -26,9 +27,9 @@ case class SubwayState(
   override val origin: String,
   override val destination: String,
   nodeState: SubwayNodeState = SubwayNodeState(),
-  passengers: mutable.Map[String, ActorRef] = mutable.Map.empty,
-  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  passengers: mutable.Map[String, Identify] = mutable.Map.empty,
+  var bestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
+  var currentPath: Option[(Identify, Identify)] = None,
   var currentPathPosition: Int = 0,
   var bestCost: Double = Double.MaxValue,
   line: String,

@@ -7,11 +7,11 @@ import core.exception.SimulationEnvConfigFoundException
 
 object SimulationUtil {
 
-  def loadSimulationConfig(configuration: String = null): Simulation = {
-    println("Loading simulation configuration... ")
-    println(configuration)
+  def loadSimulationConfig(configuration: String = null): Simulation =
     if (configuration != null) {
-      fromJson[Simulation](readJsonFile(configuration))
+      val content = readJsonFile(configuration)
+      println(s"Configuration loaded:\n$content")
+      fromJson[Simulation](content)
     } else {
       val envConfig = "HTC_SIMULATION_CONFIG_FILE"
       sys.env.get(envConfig) match {
@@ -19,5 +19,4 @@ object SimulationUtil {
         case None       => throw new SimulationEnvConfigFoundException(envConfig)
       }
     }
-  }
 }

@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.interscsimulator.entity.event.data
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
@@ -12,5 +13,5 @@ final case class ForwardRouteData(
   requesterId: String = null,
   updatedCost: Double = 0,
   targetNodeId: String = null,
-  path: mutable.Queue[(RoutePathItem, RoutePathItem)]
+  path: mutable.Queue[(Identify, Identify)]
 ) extends BaseEventData

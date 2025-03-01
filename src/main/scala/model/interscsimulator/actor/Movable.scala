@@ -5,6 +5,7 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
@@ -17,14 +18,14 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventT
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 abstract class Movable[T <: MovableState](
-  override protected val actorId: String,
+  private var movableId: String = null,
   private val timeManager: ActorRef,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      actorId = actorId,
+      actorId = movableId,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -93,18 +94,18 @@ abstract class Movable[T <: MovableState](
             linkEnter()
           case (node, link) =>
             sendMessageTo(
-              actorId = link.actorId,
-              actorRef = link.actorRef,
+              link.id,
+              link.classType,
               data = EnterLinkData(
                 actorId = getActorId,
-                actorRef = self,
+                actorRef = getSelfShard,
                 actorType = state.actorType,
                 actorSize = state.size
               ),
               EventTypeEnum.EnterLink.toString
             )
           case (node, null) =>
-            onFinish(node.actorId)
+            onFinish(node.id)
           case _ =>
             logEvent("Path item not handled")
       case None =>
@@ -119,8 +120,8 @@ abstract class Movable[T <: MovableState](
             logEvent("No link to leave")
           case (node, link) =>
             sendMessageTo(
-              actorId = link.actorId,
-              actorRef = link.actorRef,
+              link.id,
+              link.classType,
               data = LeaveLinkData(
                 actorId = getActorId,
                 actorRef = self,
@@ -135,7 +136,7 @@ abstract class Movable[T <: MovableState](
       case None =>
         logEvent("No link to leave")
 
-  protected def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  protected def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.dequeue)
@@ -143,7 +144,7 @@ abstract class Movable[T <: MovableState](
         logEvent("No path to follow")
         None
 
-  protected def viewNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  protected def viewNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.head)

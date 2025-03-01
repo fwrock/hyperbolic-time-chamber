@@ -5,10 +5,11 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActor
+import org.interscity.htc.core.util.ActorCreatorUtil.{ createShardedActor, createShardedActorSeveralArgs }
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
@@ -19,22 +20,23 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathI
 import scala.collection.mutable
 
 class SubwayStation(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[SubwayStationState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
     ) {
 
-  override def onStart(): Unit =
+  override def onInitialize(event: InitializeEvent): Unit =
+    val node = dependencies(state.nodeId)
     sendMessageTo(
-      state.nodeId,
-      dependencies(state.nodeId),
+      node.id,
+      node.classType,
       RegisterSubwayStationData(
         lines = state.lines.keys.toSeq
       )
@@ -60,7 +62,7 @@ class SubwayStation(
   private def handleRegisterPassenger(
     event: ActorInteractionEvent[RegisterSubwayPassengerData]
   ): Unit = {
-    val person = Identify(event.actorRefId, event.actorRef)
+    val person = Identify(event.actorRefId, event.actorClassType, event.actorRef)
     state.people.get(event.data.line) match {
       case Some(people) =>
         state.people.put(event.data.line, people :+ person)
@@ -86,8 +88,8 @@ class SubwayStation(
     event: ActorInteractionEvent[SubwayRequestPassengerData]
   ): Unit =
     sendMessageTo(
-      actorId = event.actorRefId,
-      actorRef = event.actorRef,
+      event.actorRefId,
+      event.actorClassType,
       data = SubwayLoadPassengerData(
         people = peopleToLoad
       )
@@ -106,7 +108,7 @@ class SubwayStation(
             if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = actorRef
+              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
@@ -115,7 +117,7 @@ class SubwayStation(
     }
 
   private def createSubway(subway: SubwayInformation): ActorRef =
-    createShardedActor(
+    createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Subway],
       entityId = subway.actorId,
@@ -147,20 +149,14 @@ class SubwayStation(
 
   private def convertLineRouteToPath(
     line: String
-  ): mutable.Queue[(RoutePathItem, RoutePathItem)] = {
-    val route = mutable.Queue[(RoutePathItem, RoutePathItem)]()
+  ): mutable.Queue[(Identify, Identify)] = {
+    val route = mutable.Queue[(Identify, Identify)]()
     val lineRoute = state.linesRoute(line)
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          RoutePathItem(
-            actorId = lineRoute(i)._1.nodeId,
-            actorRef = dependencies(lineRoute(i)._1.nodeId)
-          ),
-          RoutePathItem(
-            actorId = lineRoute(i)._2,
-            actorRef = dependencies(lineRoute(i)._2)
-          )
+          dependencies(lineRoute(i)._1.nodeId).toIdentify(),
+          dependencies(lineRoute(i)._2).toIdentify()
         )
       )
     route

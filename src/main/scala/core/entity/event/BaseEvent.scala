@@ -33,6 +33,7 @@ abstract class BaseEvent[D <: BaseEventData](
   tick: Tick = Long.MinValue,
   actorRef: ActorRef = null,
   actorRefId: String = null,
+  actorClassType: String = null,
   eventType: String = "default"
 ) extends Command {
 

@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.interscsimulator.entity.state
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.ActorTypeEnum.Bus
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ RouteWaiting, Start }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
@@ -19,9 +20,9 @@ class BusState(
   var busStops: Map[String, String],
   val numberOfPorts: Int,
   val nodeState: BusNodeState = BusNodeState(),
-  val people: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef](),
-  var bestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  var currentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  val people: mutable.Map[String, Identify] = mutable.Map[String, Identify](),
+  var bestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
+  var currentPath: Option[(Identify, Identify)] = None,
   var currentPathPosition: Int = 0,
   override val origin: String,
   override val destination: String,
