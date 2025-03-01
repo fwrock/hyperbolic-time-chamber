@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
@@ -16,13 +16,13 @@ import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStati
 import scala.collection.mutable
 
 class Subway(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends Movable[SubwayState](
-      actorId = actorId,
+      movableId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -70,8 +70,10 @@ class Subway(
         val station = retrieveSubwayStationFromNodeId(node.id)
         station match
           case Some(stationId) =>
+            val dependency = dependencies(stationId)
             sendMessageTo(
-              dependencies(stationId),
+              dependency.id,
+              dependency.classType,
               data = SubwayRequestPassengerData(
                 line = state.line,
                 availableSpace = availableSpace
@@ -92,7 +94,8 @@ class Subway(
             state.passengers.foreach {
               person =>
                 sendMessageTo(
-                  person._2,
+                  person._2.id,
+                  person._2.classType,
                   data = SubwayRequestUnloadPassengerData(
                     nodeId = node.id,
                     nodeRef = node.actorRef

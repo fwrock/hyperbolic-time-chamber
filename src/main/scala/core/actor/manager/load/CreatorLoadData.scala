@@ -4,16 +4,16 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.actor.{ ActorSimulation, Identify }
-import core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, StartCreationEvent }
-import core.exception.{ CyclicDependencyException, NotFoundDependencyReferenceException }
+import core.entity.actor.{ ActorSimulation, Dependency, Identify, Initialization }
+import core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent }
 import core.util.{ ActorCreatorUtil, JsonUtil }
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardedActor, createSingletonActor }
+import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor }
 
+import org.apache.pekko.cluster.sharding.ShardRegion
+import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.execution.RegisterActorEvent
-import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple, SingletonDistributed }
+import org.interscity.htc.core.util.JsonUtil.convertValue
 
 import scala.collection.mutable
 
@@ -28,175 +28,76 @@ class CreatorLoadData(
     ) {
 
   private val actors: mutable.ListBuffer[ActorSimulation] = mutable.ListBuffer()
+  private val initializeData = mutable.Map[String, Initialization]()
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent  => handleCreateActors(event)
     case event: StartCreationEvent => handleStartCreation(event)
+    case event: ShardRegion.StartEntityAck =>
+      handleInitialize(event)
+    case event: InitializeEntityAckEvent => handleFinishInitialization(event)
+  }
+
+  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
+    if (initializeData.isEmpty && actors.isEmpty) {
+      logEvent("Finish creation")
+      loadDataManager ! FinishCreationEvent(actorRef = self)
+    }
+  }
+
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+    initializeData.get(event.entityId) match
+      case Some(data) =>
+        getShardRef(data.classType) ! EntityEnvelopeEvent(
+          entityId = event.entityId,
+          event = InitializeEvent(
+            id = data.id,
+            actorRef = self,
+            data = data.toInitializeData
+          )
+        )
+        initializeData.remove(event.entityId)
+      case None =>
+        logEvent(s"Data not found ${event.entityId}")
   }
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logEvent("Start creation")
-
-    val actorsMap = actors
-      .map(
-        actor => actor.id -> actor
-      )
-      .toMap
-    val dependencyGraph = mutable.Map[String, List[String]]().withDefaultValue(List.empty)
-
-    actors.foreach {
+    actors.distinctBy(_.id).foreach {
       actor =>
-        actor.dependencies.foreach {
-          case (_, dep) =>
-            dependencyGraph(dep) = dependencyGraph(dep) :+ actor.id
-        }
-    }
 
-    val sortedActors = topologicalSort(
-      actors
-        .map(
-          actor => actor.id
+        initializeData(actor.id) = Initialization(
+          id = actor.id,
+          classType = actor.typeActor,
+          data = actor.data.content,
+          dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
-        .toList,
-      dependencyGraph
-    )
 
-    val actorRefs = mutable.Map[String, Identify]()
+        val shardRegion = createShardRegion(
+          system = context.system,
+          actorClassName = actor.typeActor,
+          entityId = actor.id,
+          timeManager = timeManager,
+          creatorManager = self
+        )
 
-    sortedActors.foreach {
-      name =>
-        val actor: ActorSimulation = actorsMap(name)
-
-        val dependencies = actor.dependencies.map {
-          case (label, refName) =>
-            refName -> actorRefs.getOrElse(
-              refName,
-              throw new NotFoundDependencyReferenceException(s"The reference $refName not found")
-            )
-        }.to(mutable.Map)
-
-        val actorRef = newActor(actor = actor, dependencies = dependencies)
+        shardRegion ! ShardRegion.StartEntity(actor.id)
 
         timeManager ! RegisterActorEvent(
-          startTick = JsonUtil.convertValue[DefaultState](actor.data.content).getStartTick,
-          actorRef = actorRef,
+          startTick = convertValue[DefaultState](actor.data.content).getStartTick,
+          actorRef = shardRegion,
           identify = Identify(
             actor.id,
             actor.typeActor,
-            actorRef
+            shardRegion
           )
         )
-
-        actorRefs(actor.id) = Identify(
-          actor.id,
-          actor.typeActor,
-          actorRef
-        )
     }
-
-    actorRefs.toMap
-
-    loadDataManager ! FinishCreationEvent(actorRef = self)
+    actors.clear()
   }
-
-  private def newActor(
-    actor: ActorSimulation,
-    dependencies: mutable.Map[String, Identify]
-  ): ActorRef =
-    actor.creationType match {
-      case Simple =>
-        logEvent(s"TimeManager pool created: $getTimeManager")
-        createLoadBalanceDistributedActor(actor, dependencies)
-      case SingletonDistributed =>
-        createSingletonDistributedActor(actor, dependencies)
-      case LoadBalancedDistributed =>
-        createLoadBalanceDistributedActor(actor, dependencies)
-      case PoolDistributed =>
-        createPoolDistributedActor(actor, dependencies)
-    }
-
-  private def createSingletonDistributedActor(
-    actor: ActorSimulation,
-    dependencies: mutable.Map[String, Identify]
-  ): ActorRef =
-    createSingletonActor(
-      system = context.system,
-      actorClassName = actor.typeActor,
-      entityId = actor.id,
-      getTimeManager,
-      actor.data.content.asInstanceOf[AnyRef],
-      dependencies
-    )
-
-  private def createLoadBalanceDistributedActor(
-    actor: ActorSimulation,
-    dependencies: mutable.Map[String, Identify]
-  ): ActorRef =
-    createShardedActor(
-      system = context.system,
-      actorClassName = actor.typeActor,
-      entityId = actor.id,
-      timeManager = getTimeManager,
-      data = actor.data.content,
-      dependencies = dependencies
-    )
-
-  private def createPoolDistributedActor(
-    actor: ActorSimulation,
-    dependencies: mutable.Map[String, Identify]
-  ): ActorRef =
-    createPoolActor(
-      system = context.system,
-      actorClassName = actor.typeActor,
-      entityId = actor.id,
-      poolConfiguration = actor.poolConfiguration,
-      getTimeManager,
-      actor.data.content.asInstanceOf[AnyRef],
-      dependencies
-    )
 
   private def handleCreateActors(event: CreateActorsEvent): Unit =
     event.actors.foreach {
       actor => actors += actor
     }
-
-  private def topologicalSort(
-    nodes: List[String],
-    dependencyGraph: mutable.Map[String, List[String]]
-  ): List[String] = {
-    val visited = mutable.Set[String]()
-    val inPath = mutable.Set[String]()
-    val sorted = mutable.ListBuffer[String]()
-
-    def visit(node: String): Boolean = {
-      if (inPath.contains(node)) {
-        throw new CyclicDependencyException(s"Cycle detected with actor $node")
-      }
-      if (!visited.contains(node)) {
-        visited.add(node)
-        inPath.add(node)
-
-        dependencyGraph(node).foreach {
-          dep =>
-            if (!visit(dep)) {
-              return false
-            }
-        }
-
-        inPath.remove(node)
-        sorted.prepend(node)
-      }
-      true
-    }
-
-    nodes.foreach {
-      node =>
-        if (!visit(node))
-          throw new CyclicDependencyException(
-            s"Cycle detected in the dependency graph for actor $node"
-          )
-    }
-
-    sorted.toList
-  }
 }

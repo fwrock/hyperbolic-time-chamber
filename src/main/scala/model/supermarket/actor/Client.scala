@@ -5,7 +5,7 @@ import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
@@ -14,19 +14,22 @@ import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServ
 import scala.collection.mutable
 
 class Client(
-  override protected val actorId: String,
+  private val id: String,
   private val timeManager: ActorRef,
+  private val creatorManager: ActorRef = null,
   private val data: Any,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[ClientState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
+      creatorManager = creatorManager,
       data = data,
       dependencies = dependencies
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
+    logEvent(s"${event}")
     state.status match {
       case Start =>
         state.status = Waiting
@@ -38,13 +41,17 @@ class Client(
         logEvent(s"Event current status not handled ${state.status}")
     }
 
-  private def enterQueue(): Unit =
+  private def enterQueue(): Unit = {
+    logEvent("Entering queue")
+    val cashier = dependencies(state.cashierId)
     sendMessageTo(
-      dependencies(state.cashierId),
+      cashier.id,
+      cashier.classType,
       NewClientServiceData(
         amountThings = state.amountThings
       )
     )
+  }
 
   override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
     event match {

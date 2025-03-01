@@ -179,7 +179,7 @@ class TimeManager(
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
     }
-    schedule.logEvent(context, schedule.actorRef)
+    logEvent(s"Schedule event for ${schedule.identify.id} at tick ${schedule.tick}")
     scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
         scheduled.actorsRef.add(schedule.identify)
@@ -192,14 +192,20 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
+      logEvent(s"Finish event for ${finish.identify} at tick ${finish.end}")
+      logEvent(s"Finish event destruct: ${finish.destruct}")
+      logEvent("TimeManager finish event apply")
       finish.logEvent(context, self)
-      runningEvents.remove(finish.identify)
+      logEvent(s"Running events: ${runningEvents.size}")
+      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.id}")
+      runningEvents.filterInPlace(_.id != finish.identify.id)
+      logEvent(s"Running events after remove: ${runningEvents.size}")
       finish.scheduleEvent.foreach(scheduleApply)
       if (finish.destruct) {
-          registeredActors.remove(finish.identify.actorRef)
-
+        registeredActors.remove(finish.identify.actorRef)
       }
     } else {
+      logEvent("TimeManager finish event forward")
       finish.timeManager ! finish
     }
 
@@ -223,7 +229,9 @@ class TimeManager(
     }
 
   private def notifyManagers(): Unit =
-    if (parentManager.isDefined && (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size)) {
+    if (
+      parentManager.isDefined && (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size)
+    ) {
       parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, actorRef = self)
     } else {
       notifyLocalManagers(UpdateGlobalTimeEvent(tick = localTickOffset))
@@ -239,10 +247,12 @@ class TimeManager(
         logEvent(
           s"Sending spontaneous event to ${scheduled.actorsRef.size} scheduled actors at tick $tick"
         )
-        sendSpontaneousEvent(tick, scheduled.actorsRef ++ runningEvents)
+        logEvent(s"Scheduled actors at tick $tick: ${scheduled.actorsRef}")
+        sendSpontaneousEvent(tick, scheduled.actorsRef)
         scheduledActors.remove(tick)
       case None =>
-        sendSpontaneousEvent(tick, runningEvents)
+      // logEvent(s"No scheduled actors at tick $tick")
+      // sendSpontaneousEvent(tick, runningEvents)
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
@@ -251,7 +261,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    identity.actorRef ! EntityEnvelopeEvent[DefaultBaseEventData](
+    getShardRef(identity.classType) ! EntityEnvelopeEvent[DefaultBaseEventData](
       identity.id,
       SpontaneousEvent(
         tick = tick,

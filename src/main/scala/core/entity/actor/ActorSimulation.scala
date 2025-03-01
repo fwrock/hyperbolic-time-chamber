@@ -14,5 +14,5 @@ case class ActorSimulation @JsonCreator() (
   @JsonProperty("poolConfiguration") poolConfiguration: PoolDistributedConfiguration =
     PoolDistributedConfiguration(),
   @JsonProperty("data") data: ActorDataSimulation,
-  @JsonProperty("dependencies") dependencies: Map[String, String] = null
+  @JsonProperty("dependencies") dependencies: Map[String, Dependency] = null
 )

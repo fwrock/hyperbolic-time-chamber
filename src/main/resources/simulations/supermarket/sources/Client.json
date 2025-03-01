@@ -12,7 +12,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -28,7 +31,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -44,7 +50,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -60,7 +69,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -76,7 +88,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -92,7 +107,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -108,7 +126,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -124,7 +145,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -140,7 +164,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -156,7 +183,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -172,7 +202,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -188,7 +221,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -204,7 +240,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -220,7 +259,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -236,7 +278,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -252,7 +297,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -268,7 +316,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -284,7 +335,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -300,7 +354,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -316,7 +373,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -332,7 +392,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -348,7 +411,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -364,7 +430,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -380,7 +449,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -396,7 +468,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -412,7 +487,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -428,7 +506,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -444,7 +525,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -460,7 +544,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -476,7 +563,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -492,7 +582,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -508,7 +601,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -524,7 +620,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -540,7 +639,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -556,7 +658,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -572,7 +677,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -588,7 +696,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -604,7 +715,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -620,7 +734,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -636,7 +753,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -652,7 +772,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -668,7 +791,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -684,7 +810,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -700,7 +829,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -716,7 +848,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -732,7 +867,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -748,7 +886,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -764,7 +905,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -780,7 +924,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -796,7 +943,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -812,7 +962,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -828,7 +981,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -844,7 +1000,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -860,7 +1019,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -876,7 +1038,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -892,7 +1057,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -908,7 +1076,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -924,7 +1095,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -940,7 +1114,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -956,7 +1133,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -972,7 +1152,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -988,7 +1171,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1004,7 +1190,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1020,7 +1209,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1036,7 +1228,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1052,7 +1247,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1068,7 +1266,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1084,7 +1285,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1100,7 +1304,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1116,7 +1323,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1132,7 +1342,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1148,7 +1361,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1164,7 +1380,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1180,7 +1399,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1196,7 +1418,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1212,7 +1437,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1228,7 +1456,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1244,7 +1475,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1260,7 +1494,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1276,7 +1513,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1292,7 +1532,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1308,7 +1551,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1324,7 +1570,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1340,7 +1589,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1356,7 +1608,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1372,7 +1627,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1388,7 +1646,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1404,7 +1665,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1420,7 +1684,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1436,7 +1703,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1452,7 +1722,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1468,7 +1741,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1484,7 +1760,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1500,7 +1779,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1516,7 +1798,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1532,7 +1817,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1548,7 +1836,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1564,7 +1855,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1580,7 +1874,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   },
   {
@@ -1596,7 +1893,10 @@
       }
     },
     "dependencies": {
-      "cashier": "dtmi:org:interscity:model:supermarket:actor:cashier;1"
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
     }
   }
 ]
