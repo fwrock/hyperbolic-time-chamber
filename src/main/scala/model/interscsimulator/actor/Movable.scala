@@ -5,7 +5,7 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
@@ -18,14 +18,14 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventT
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 abstract class Movable[T <: MovableState](
-  override protected val actorId: String,
+  private var movableId: String = null,
   private val timeManager: ActorRef,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      actorId = actorId,
+      actorId = movableId,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -94,7 +94,8 @@ abstract class Movable[T <: MovableState](
             linkEnter()
           case (node, link) =>
             sendMessageTo(
-              link,
+              link.id,
+              link.classType,
               data = EnterLinkData(
                 actorId = getActorId,
                 actorRef = getSelfShard,
@@ -119,7 +120,8 @@ abstract class Movable[T <: MovableState](
             logEvent("No link to leave")
           case (node, link) =>
             sendMessageTo(
-              link,
+              link.id,
+              link.classType,
               data = LeaveLinkData(
                 actorId = getActorId,
                 actorRef = self,

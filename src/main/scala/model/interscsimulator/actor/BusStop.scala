@@ -4,8 +4,9 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.state.BusStopState
@@ -13,21 +14,23 @@ import org.interscity.htc.model.interscsimulator.entity.state.BusStopState
 import scala.collection.mutable
 
 class BusStop(
-  override protected val actorId: String,
+  private var id: String = null,
   private val timeManager: ActorRef,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[BusStopState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
     ) {
 
-  override def onStart(): Unit =
+  override def onInitialize(event: InitializeEvent): Unit =
+    val dependency = dependencies(state.nodeId)
     sendMessageTo(
-      dependencies(state.nodeId),
+      dependency.id,
+      dependency.classType,
       RegisterBusStopData(
         label = state.label
       )
@@ -58,7 +61,8 @@ class BusStop(
     event: ActorInteractionEvent[BusRequestPassengerData]
   ): Unit =
     sendMessageTo(
-      event.toIdentity(),
+      event.actorRefId,
+      event.actorClassType,
       data = BusLoadPassengerData(
         people = peopleToLoad
       )

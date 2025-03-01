@@ -13,7 +13,7 @@ def main(): Unit = {
   val cluster = Cluster(system)
 
   val configuration =
-    "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple/simulation.json"
+    "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket/simulation.json"
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(

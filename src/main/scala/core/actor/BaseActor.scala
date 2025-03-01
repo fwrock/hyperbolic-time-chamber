@@ -10,7 +10,8 @@ import core.entity.control.LamportClock
 import core.util.JsonUtil
 
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.control.load.{ InitializeEntityAckEvent, InitializeEvent }
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -32,10 +33,11 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   The state of the actor
   */
 abstract class BaseActor[T <: BaseState](
-  protected val actorId: String,
+  protected var actorId: String,
   private val timeManager: ActorRef = null,
+  private val creatorManager: ActorRef = null,
   private val data: Any = null,
-  protected val dependencies: mutable.Map[String, Identify] = mutable.Map[String, Identify]()
+  protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends Actor
     with ActorLogging {
@@ -45,13 +47,14 @@ abstract class BaseActor[T <: BaseState](
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
+  private var isInitialized: Boolean = false
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
     */
   override def preStart(): Unit = {
     super.preStart()
-    logEvent(s"Starting actor $self")
+    logEvent(s"Starting actor with actorId: $actorId")
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
@@ -59,15 +62,37 @@ abstract class BaseActor[T <: BaseState](
     onStart()
   }
 
+  private def onFinishInitialize(): Unit =
+    if (!isInitialized && creatorManager != null) {
+      isInitialized = true
+      creatorManager ! InitializeEntityAckEvent(
+        entityId = actorId
+      )
+    }
+
   /** Starts the actor. This method is called on start the actor before starts processing messages.
     * If you want to perform any action before the actor starts processing messages, you should
     * override this method.
     */
-  protected def onStart(): Unit = {}
+  protected def onStart(): Unit = ()
 
   protected def handleEvent: Receive = {
-    case _ => log.info("Event not handled")
+    case event => logEvent(s"Event not handled $event")
   }
+
+  private def initialize(event: InitializeEvent): Unit = {
+    actorId = event.id
+    if (event.data.data != null) {
+      state = JsonUtil.convertValue[T](event.data.data)
+      startTick = state.getStartTick
+    }
+    dependencies.clear()
+    dependencies ++= event.data.dependencies
+    onInitialize(event)
+    onFinishInitialize()
+  }
+
+  protected def onInitialize(event: InitializeEvent): Unit = ()
 
   /** Sends a message to another simulation actor.
     * @param actorId
@@ -82,17 +107,18 @@ abstract class BaseActor[T <: BaseState](
     *   The type of the data
     */
   protected def sendMessageTo[D <: BaseEventData](
-    identify: Identify,
+    entityId: String,
+    classType: String,
     data: D,
     eventType: String = "default"
   ): Unit = {
     lamportClock.increment()
-    val shardingRegion = getShardRef(identify.classType)
+    val shardingRegion = getShardRef(classType)
     logEvent(
-      s"Sending message to ${identify.actorRef.path.name} with Lamport clock ${getLamportClock}"
+      s"Sending message to ${entityId} with Lamport clock ${getLamportClock}"
     )
     shardingRegion ! EntityEnvelopeEvent[D](
-      identify.id,
+      entityId,
       ActorInteractionEvent(
         tick = currentTick,
         lamportTick = getLamportClock,
@@ -151,7 +177,7 @@ abstract class BaseActor[T <: BaseState](
     * @param event
     *   The spontaneous event
     */
-  protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
+  protected def actSpontaneous(event: SpontaneousEvent): Unit = ()
 
   /** Handles the interaction with another actor. This method is called when the actor receives an
     * interaction event. It updates the Lamport clock and calls the actInteractWith method.
@@ -171,7 +197,7 @@ abstract class BaseActor[T <: BaseState](
     * @param event
     *   The interaction event
     */
-  def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {}
+  def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = ()
 
   /** Logs an event. This method is called when the actor wants to log an event.
     * @param eventInfo
@@ -185,16 +211,22 @@ abstract class BaseActor[T <: BaseState](
     case event: ActorInteractionEvent[_] => handleInteractWith(event)
     case event: DestructEvent            => destruct(event)
     case event: EntityEnvelopeEvent[_]   => handleEnvelopeEvent(event)
+    case event: InitializeEvent          => initialize(event)
+    case event: ShardRegion.StartEntity  => handleStartEntity(event)
     case event                           => handleEvent(event)
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent[_]): Unit =
     entityEnvelopeEvent.event match {
+      case event: InitializeEvent          => initialize(event)
       case event: SpontaneousEvent         => handleSpontaneous(event)
       case event: ActorInteractionEvent[_] => handleInteractWith(event)
       case event: DestructEvent            => destruct(event)
       case event                           => handleEvent(event)
     }
+
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
+    actorId = event.entityId
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
@@ -224,7 +256,7 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
-    destruct: Boolean = false,
+    destruct: Boolean = false
   ): Unit =
     timeManager ! FinishEvent(
       end = currentTick,
@@ -239,7 +271,7 @@ abstract class BaseActor[T <: BaseState](
           )
       ),
       timeManager = currentTimeManager,
-      destruct = destruct,
+      destruct = destruct
     )
 
   protected def selfSpontaneous(): Unit =
@@ -273,18 +305,4 @@ abstract class BaseActor[T <: BaseState](
     ClusterSharding(context.system).shardRegion(className)
 
   protected def toIdentify: Identify = Identify(getActorId, getShardName, self)
-}
-
-/** The companion object of the BaseActor class. It provides the idExtractor and shardResolver for
-  * the shard region. The idExtractor is used to extract the entity id from the message. The
-  * shardResolver is used to extract the shard id from the message.
-  */
-object BaseActor {
-  val idExtractor: ShardRegion.ExtractEntityId = {
-    case EntityEnvelopeEvent(entityId, payload) => (entityId, payload)
-  }
-
-  val shardResolver: ShardRegion.ExtractShardId = {
-    case EntityEnvelopeEvent(entityId, _) => (entityId.hashCode % 100).toString
-  }
 }

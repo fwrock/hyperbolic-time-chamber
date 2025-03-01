@@ -12,6 +12,7 @@ import org.apache.pekko.routing.RoundRobinPool
 import org.interscity.htc.core.entity.actor.{ Identify, PoolDistributedConfiguration }
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 
+import java.util.UUID
 import scala.collection.mutable
 
 object ActorCreatorUtil {
@@ -75,23 +76,17 @@ object ActorCreatorUtil {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    /*
     val extractEntityId: ShardRegion.ExtractEntityId = {
-      case cmd: Command => (entityId, cmd)
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
     }
 
     val extractShardId: ShardRegion.ExtractShardId = {
-      case cmd: Command => (entityId.hashCode % 10).toString
+      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 10).toString
+      case ShardRegion.StartEntity(id) => (id.hashCode % 10).toString
     }
 
-     */
-    val extractEntityId: ShardRegion.ExtractEntityId = {
-      case msg @ EntityEnvelopeEvent(id, _) => (id, msg)
-    }
-
-    val extractShardId: ShardRegion.ExtractShardId = {
-      case EntityEnvelopeEvent(id, _) => (id.hashCode % 10).toString
-    }
+    println(s"Creating sharded actor $actorClassName with entityId $entityId and with data $data")
 
     sharding.start(
       typeName = s"$actorClassName",
@@ -100,6 +95,49 @@ object ActorCreatorUtil {
       extractEntityId = extractEntityId,
       extractShardId = extractShardId
     )
+  }
+
+  def createShardRegion(
+    system: ActorSystem,
+    actorClassName: String,
+    entityId: String,
+    timeManager: ActorRef,
+    creatorManager: ActorRef
+  ): ActorRef = {
+    val clazz = Class.forName(actorClassName)
+    val sharding = ClusterSharding(system)
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 10).toString
+      case ShardRegion.StartEntity(id) => (id.hashCode % 10).toString
+    }
+
+    if (!sharding.shardTypeNames.contains(actorClassName)) {
+      println(s"Creating shard region for $actorClassName with entityId $entityId")
+
+      sharding.start(
+        typeName = actorClassName,
+        entityProps = Props(
+          clazz,
+          entityId,
+          timeManager,
+          creatorManager,
+          null,
+          mutable.Map[String, Identify]()
+        ),
+        settings = ClusterShardingSettings(system),
+        extractEntityId = extractEntityId,
+        extractShardId = extractShardId
+      )
+    } else {
+      println(s"Shard region for $actorClassName already exists with entityId $entityId")
+      sharding.shardRegion(actorClassName)
+    }
   }
 
   def createShardedActorSeveralArgs[T <: BaseActor[_]](

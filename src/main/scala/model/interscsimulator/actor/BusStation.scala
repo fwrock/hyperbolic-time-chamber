@@ -4,7 +4,7 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
@@ -20,13 +20,13 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusInforma
 import scala.collection.mutable
 
 class BusStation(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[BusStationState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -43,10 +43,9 @@ class BusStation(
           val bus = state.buses.dequeue()
           val actorRef = createBus(bus)
           val className = classOf[Bus].getName
-          dependencies(bus.actorId) = Identify(
+          dependencies(bus.actorId) = Dependency(
             id = actorId,
-            classType = className,
-            actorRef = getShardRef(className)
+            classType = className
           )
           onFinishSpontaneous(Some(currentTick + state.interval))
         } else {
@@ -79,10 +78,9 @@ class BusStation(
       val bus = state.buses.dequeue()
       val actorRef = createBus(bus)
       val className = classOf[Bus].getName
-      dependencies(bus.actorId) = Identify(
+      dependencies(bus.actorId) = Dependency(
         id = actorId,
-        classType = className,
-        actorRef = getShardRef(className)
+        classType = className
       )
       state.status = Working
       onFinishSpontaneous(Some(currentTick + state.interval))
@@ -160,8 +158,10 @@ class BusStation(
       path = mutable.Queue(),
       label = label
     )
+    val dependency = dependencies(origin)
     sendMessageTo(
-      dependencies(origin),
+      dependency.id,
+      dependency.classType,
       data,
       RequestRoute.toString
     )

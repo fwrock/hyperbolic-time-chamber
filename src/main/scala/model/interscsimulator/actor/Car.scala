@@ -5,7 +5,7 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil
@@ -20,13 +20,13 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.Movabl
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends Movable[CarState](
-      actorId = actorId,
+      movableId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -66,8 +66,10 @@ class Car(
       originNodeId = state.origin,
       path = mutable.Queue()
     )
+    val dependency = dependencies(state.origin)
     sendMessageTo(
-      dependencies(state.origin),
+      dependency.id,
+      dependency.classType,
       data,
       EventTypeEnum.RequestRoute.toString
     )
@@ -80,7 +82,8 @@ class Car(
         (item._1, item._2) match
           case (node, link) =>
             sendMessageTo(
-              node,
+              node.id,
+              node.classType,
               RequestSignalStateData(
                 targetLinkId = link.id
               ),

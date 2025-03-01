@@ -8,7 +8,7 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.NodeState
 import model.interscsimulator.entity.state.enumeration.EventTypeEnum
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -23,13 +23,13 @@ import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateDa
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[NodeState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -90,7 +90,15 @@ class Node(
     )
 
     state.links.foreach {
-      link => sendMessageTo(dependencies(link), data, EventTypeEnum.RequestRoute.toString)
+
+      link =>
+        val dependency = dependencies(link)
+        sendMessageTo(
+          dependency.id,
+          dependency.classType,
+          data,
+          EventTypeEnum.RequestRoute.toString
+        )
     }
   }
 
@@ -104,19 +112,18 @@ class Node(
       destination = event.data.targetNodeId
     )
     sendMessageTo(
-      Identify(
-        id = event.data.requesterId,
-        classType = event.data.requesterClassType,
-        actorRef = event.data.requester
-      ),
+      event.data.requesterId,
+      event.data.requesterClassType,
       data,
       EventTypeEnum.ReceiveRoute.toString
     )
   }
 
   private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit =
+    val dependency = dependencies(event.data.requesterId)
     sendMessageTo(
-      dependencies(event.data.requesterId),
+      dependency.id,
+      dependency.classType,
       event.data,
       EventTypeEnum.ForwardRoute.toString
     )
@@ -129,7 +136,8 @@ class Node(
         state.signals.get(identify.id) match
           case Some(signalState) =>
             sendMessageTo(
-              event.toIdentity(),
+              event.actorRefId,
+              event.actorClassType,
               SignalStateData(
                 phase = signalState.state,
                 nextTick = signalState.nextTick
@@ -138,7 +146,8 @@ class Node(
             )
           case None =>
             sendMessageTo(
-              event.toIdentity(),
+              event.actorRefId,
+              event.actorClassType,
               SignalStateData(
                 phase = Green,
                 nextTick = currentTick

@@ -5,7 +5,8 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.util.ActorCreatorUtil.{ createShardedActor, createShardedActorSeveralArgs }
@@ -19,21 +20,23 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathI
 import scala.collection.mutable
 
 class SubwayStation(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Identify] =
-    mutable.Map[String, Identify]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[SubwayStationState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
     ) {
 
-  override def onStart(): Unit =
+  override def onInitialize(event: InitializeEvent): Unit =
+    val node = dependencies(state.nodeId)
     sendMessageTo(
-      dependencies(state.nodeId),
+      node.id,
+      node.classType,
       RegisterSubwayStationData(
         lines = state.lines.keys.toSeq
       )
@@ -85,11 +88,8 @@ class SubwayStation(
     event: ActorInteractionEvent[SubwayRequestPassengerData]
   ): Unit =
     sendMessageTo(
-      Identify(
-        id = event.actorRefId,
-        classType = event.actorClassType,
-        actorRef = event.actorRef
-      ),
+      event.actorRefId,
+      event.actorClassType,
       data = SubwayLoadPassengerData(
         people = peopleToLoad
       )
@@ -108,8 +108,7 @@ class SubwayStation(
             if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) =
-                Identify(subway.actorId, classOf[Subway].getName, actorRef)
+              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
@@ -156,8 +155,8 @@ class SubwayStation(
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          dependencies(lineRoute(i)._1.nodeId),
-          dependencies(lineRoute(i)._2)
+          dependencies(lineRoute(i)._1.nodeId).toIdentify(),
+          dependencies(lineRoute(i)._2).toIdentify()
         )
       )
     route

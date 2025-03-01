@@ -6,7 +6,7 @@ import core.entity.state.BaseState
 
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 
 import scala.collection.mutable
 
@@ -14,7 +14,7 @@ abstract class BaseManager[T <: BaseState](
   actorId: String = null,
   timeManager: ActorRef = null,
   data: String = null,
-  dependencies: mutable.Map[String, Identify] = mutable.Map[String, Identify]()
+  dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = actorId,
