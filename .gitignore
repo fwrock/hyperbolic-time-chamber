@@ -45,3 +45,7 @@ build/
 
 ### Scala ###
 .bsp/
+
+### Logs ###
+*.log
+logs/

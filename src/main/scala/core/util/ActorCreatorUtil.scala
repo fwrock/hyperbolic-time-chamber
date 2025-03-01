@@ -3,58 +3,49 @@ package core.util
 
 import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
 import core.actor.BaseActor
-import core.entity.event.Command
+import core.entity.event.{ Command, EntityEnvelopeEvent }
 
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
+import org.interscity.htc.core.entity.actor.{ Identify, PoolDistributedConfiguration }
 import org.interscity.htc.core.entity.event.control.execution.DestructEvent
+
+import java.util.UUID
+import scala.collection.mutable
 
 object ActorCreatorUtil {
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
-    val constructor = actorClass.getConstructors.head
-    val instance = constructor.newInstance(args*).asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val props = Props(actorClass, args: _*)
     system.actorOf(props)
   }
 
   def createActor[T](system: ActorSystem, actorClass: Class[T]): ActorRef = {
-    val constructor = actorClass.getConstructors.head
-    val instance = constructor.newInstance().asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val props = Props(actorClass)
     system.actorOf(props)
   }
 
   def createActor(system: ActorSystem, actorClassName: String, args: AnyRef*): ActorRef = {
-    val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructors.head
-    val instance = constructor.newInstance(args*).asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val clazz = Class.forName(actorClassName).asInstanceOf[Class[BaseActor[?]]]
+    val props = Props(clazz, args: _*)
     system.actorOf(props)
   }
 
   def createActor(system: ActorSystem, actorClassName: String): ActorRef = {
-    val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructors.head
-    val instance = constructor.newInstance().asInstanceOf[BaseActor[?]]
-    val props = Props(instance)
+    val clazz = Class.forName(actorClassName).asInstanceOf[Class[BaseActor[?]]]
+    val props = Props(clazz)
     system.actorOf(props)
   }
 
-  def createShardedActor(
+  def createShardedActorSeveralArgs(
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
     constructorParams: AnyRef*
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructor(classOf[String])
-    val actorInstance =
-      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
-
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
@@ -67,23 +58,94 @@ object ActorCreatorUtil {
 
     sharding.start(
       typeName = s"$actorClassName",
-      entityProps = Props(actorInstance),
+      entityProps = Props(clazz, constructorParams: _*),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractEntityId,
       extractShardId = extractShardId
     )
   }
 
-  def createShardedActor[T <: BaseActor[_]](
+  def createShardedActor(
+    system: ActorSystem,
+    actorClassName: String,
+    entityId: String,
+    timeManager: ActorRef,
+    data: Any = null,
+    dependencies: mutable.Map[String, Identify] = mutable.Map[String, Identify]()
+  ): ActorRef = {
+    val clazz = Class.forName(actorClassName)
+    val sharding = ClusterSharding(system)
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 10).toString
+      case ShardRegion.StartEntity(id) => (id.hashCode % 10).toString
+    }
+
+    println(s"Creating sharded actor $actorClassName with entityId $entityId and with data $data")
+
+    sharding.start(
+      typeName = s"$actorClassName",
+      entityProps = Props(clazz, entityId, timeManager, data, dependencies),
+      settings = ClusterShardingSettings(system),
+      extractEntityId = extractEntityId,
+      extractShardId = extractShardId
+    )
+  }
+
+  def createShardRegion(
+    system: ActorSystem,
+    actorClassName: String,
+    entityId: String,
+    timeManager: ActorRef,
+    creatorManager: ActorRef
+  ): ActorRef = {
+    val clazz = Class.forName(actorClassName)
+    val sharding = ClusterSharding(system)
+
+    val extractEntityId: ShardRegion.ExtractEntityId = {
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
+    }
+
+    val extractShardId: ShardRegion.ExtractShardId = {
+      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 10).toString
+      case ShardRegion.StartEntity(id) => (id.hashCode % 10).toString
+    }
+
+    if (!sharding.shardTypeNames.contains(actorClassName)) {
+      println(s"Creating shard region for $actorClassName with entityId $entityId")
+
+      sharding.start(
+        typeName = actorClassName,
+        entityProps = Props(
+          clazz,
+          entityId,
+          timeManager,
+          creatorManager,
+          null,
+          mutable.Map[String, Identify]()
+        ),
+        settings = ClusterShardingSettings(system),
+        extractEntityId = extractEntityId,
+        extractShardId = extractShardId
+      )
+    } else {
+      println(s"Shard region for $actorClassName already exists with entityId $entityId")
+      sharding.shardRegion(actorClassName)
+    }
+  }
+
+  def createShardedActorSeveralArgs[T <: BaseActor[_]](
     system: ActorSystem,
     actorClass: Class[T],
     entityId: String,
     constructorParams: AnyRef*
   ): ActorRef = {
-    val constructor = actorClass.getConstructor(classOf[String])
-    val actorInstance =
-      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
-
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
@@ -96,7 +158,7 @@ object ActorCreatorUtil {
 
     sharding.start(
       typeName = s"${actorClass.getName}",
-      entityProps = Props(actorInstance),
+      entityProps = Props(actorClass, constructorParams: _*),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractEntityId,
       extractShardId = extractShardId
@@ -114,20 +176,27 @@ object ActorCreatorUtil {
     val actorInstance =
       constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
 
-    createSingleton(system, actorInstance, entityId, DestructEvent(tick = 0, actorRef = null))
+    createSingleton(
+      system,
+      clazz,
+      entityId,
+      DestructEvent(tick = 0, actorRef = null),
+      constructorParams
+    )
 
     createSingletonProxy(system, entityId)
   }
 
-  private def createSingleton(
+  private def createSingleton[T](
     system: ActorSystem,
-    actor: BaseActor[_],
+    actorClass: Class[T],
     name: String,
-    terminateMessage: Any
+    terminateMessage: Any,
+    constructorParams: AnyRef*
   ): ActorRef =
     system.actorOf(
       ClusterSingletonManager.props(
-        singletonProps = Props(actor),
+        singletonProps = Props(actorClass, constructorParams: _*),
         terminationMessage = terminateMessage,
         settings = ClusterSingletonManagerSettings(system)
       ),
@@ -159,15 +228,17 @@ object ActorCreatorUtil {
       system = system,
       entityId = entityId,
       poolConfiguration = poolConfiguration,
-      actor = actorInstance
+      actorClass = clazz,
+      constructorParams
     )
   }
 
-  private def createPoolManagerActor(
+  private def createPoolManagerActor[T](
     system: ActorSystem,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    actor: BaseActor[_]
+    actorClass: Class[T],
+    constructorParams: AnyRef*
   ): ActorRef =
     system.actorOf(
       ClusterRouterPool(
@@ -180,7 +251,8 @@ object ActorCreatorUtil {
         )
       ).props(
         Props(
-          actor
+          actorClass,
+          constructorParams: _*
         )
       ),
       name = entityId

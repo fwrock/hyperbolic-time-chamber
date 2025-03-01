@@ -7,6 +7,7 @@ import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ FinishEvent, ScheduleEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.TrafficSignalState
 
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
@@ -17,13 +18,13 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.{ Phase, Sig
 import scala.collection.mutable
 
 class TrafficSignal(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[TrafficSignalState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -87,7 +88,8 @@ class TrafficSignal(
           phaseOrigin = phaseOrigin,
           nextTick = nextTick
         )
-        sendMessageTo(node, dependencies(node), data, TrafficSignalChangeStatus.toString)
+        val dependency = dependencies(node)
+        sendMessageTo(dependency.id, dependency.classType, data, TrafficSignalChangeStatus.toString)
     }
 
   private def calcNewState(currentCycleTick: Tick, phase: Phase): TrafficSignalPhaseStateEnum =

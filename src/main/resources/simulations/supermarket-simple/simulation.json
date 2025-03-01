@@ -4,7 +4,7 @@
   "startRealTime": "2025-02-18T07:00:00Z",
   "timeUnit": "seconds",
   "timeStep": 1,
-  "duration": 60000,
+  "duration": 100,
   "startTick": 0,
   "actorsDataSources": [
     {
@@ -12,7 +12,7 @@
       "dataSource": {
         "sourceType": "json",
         "info": {
-          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket/sources/Cashier.json"
+          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple/sources/Cashier.json"
         }
       }
     },
@@ -21,7 +21,7 @@
       "dataSource": {
         "sourceType": "json",
         "info": {
-          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket/sources/Client.json"
+          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple/sources/Client.json"
         }
       }
     }

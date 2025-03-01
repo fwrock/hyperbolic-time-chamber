@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
@@ -15,13 +16,13 @@ import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStati
 import scala.collection.mutable
 
 class Subway(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends Movable[SubwayState](
-      actorId = actorId,
+      movableId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -66,12 +67,13 @@ class Subway(
     )
     state.currentPath match
       case Some((node, _)) =>
-        val station = retrieveSubwayStationFromNodeId(node.actorId)
+        val station = retrieveSubwayStationFromNodeId(node.id)
         station match
           case Some(stationId) =>
+            val dependency = dependencies(stationId)
             sendMessageTo(
-              actorId = stationId,
-              actorRef = dependencies(stationId),
+              dependency.id,
+              dependency.classType,
               data = SubwayRequestPassengerData(
                 line = state.line,
                 availableSpace = availableSpace
@@ -86,16 +88,16 @@ class Subway(
   private def requestUnloadPeopleData(): Unit =
     state.currentPath match
       case Some((node, _)) =>
-        val busStop = retrieveSubwayStationFromNodeId(node.actorId)
+        val busStop = retrieveSubwayStationFromNodeId(node.id)
         busStop match
           case Some(busStopId) =>
             state.passengers.foreach {
               person =>
                 sendMessageTo(
-                  actorId = person._1,
-                  actorRef = person._2,
+                  person._2.id,
+                  person._2.classType,
                   data = SubwayRequestUnloadPassengerData(
-                    nodeId = node.actorId,
+                    nodeId = node.id,
                     nodeRef = node.actorRef
                   )
                 )
@@ -113,7 +115,7 @@ class Subway(
   private def handleBusLoadPeople(event: ActorInteractionEvent[SubwayLoadPassengerData]): Unit = {
     state.nodeState.isLoaded = true
     for (person <- event.data.people)
-      state.passengers.put(person.id, person.actorRef)
+      state.passengers.put(person.id, person)
     onFinishNodeState()
   }
 
@@ -143,7 +145,7 @@ class Subway(
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
-  override def getNextPath: Option[(RoutePathItem, RoutePathItem)] =
+  override def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         if state.currentPathPosition < path.size then

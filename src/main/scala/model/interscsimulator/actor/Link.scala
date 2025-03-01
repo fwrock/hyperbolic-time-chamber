@@ -14,17 +14,17 @@ import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, RequestRouteData }
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
 
 class Link(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[LinkState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -38,23 +38,17 @@ class Link(
 
   override def onStart(): Unit = {
     super.onStart()
-    sendConnections(state.to, dependencies(state.to))
-    sendConnections(state.from, dependencies(state.from))
+    sendConnections(state.to, dependencies(state.to).toIdentify())
+    sendConnections(state.from, dependencies(state.from).toIdentify())
   }
 
-  private def sendConnections(actorId: String, actorRef: ActorRef): Unit =
+  private def sendConnections(actorId: String, identify: Identify): Unit =
     sendMessageTo(
-      actorId,
-      actorRef,
+      identify.id,
+      identify.classType,
       LinkConnectionsData(
-        to = Identify(
-          actorRef = dependencies(state.to),
-          id = state.to
-        ),
-        from = Identify(
-          actorRef = dependencies(state.from),
-          id = state.from
-        )
+        to = dependencies(state.to).toIdentify(),
+        from = dependencies(state.from).toIdentify()
       ),
       EventTypeEnum.RequestRoute.toString
     )
@@ -84,8 +78,8 @@ class Link(
       )
     )
     sendMessageTo(
-      event.data.actorId,
-      event.actorRef,
+      event.actorRefId,
+      event.actorClassType,
       data,
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
@@ -94,14 +88,8 @@ class Link(
   private def handleRequestRoute(event: ActorInteractionEvent[RequestRouteData]): Unit = {
     val path = event.data.path
     val updatedPath = path :+ (
-      RoutePathItem(
-        actorRef = dependencies(state.to),
-        actorId = state.to
-      ),
-      RoutePathItem(
-        actorRef = self,
-        actorId = getActorId
-      )
+      dependencies(state.to).toIdentify(),
+      toIdentify
     )
     val data = ForwardRouteData(
       requester = event.data.requester,
@@ -110,6 +98,7 @@ class Link(
       targetNodeId = event.data.targetNodeId,
       path = updatedPath
     )
-    sendMessageTo(state.to, dependencies(state.to), data, ForwardRoute.toString)
+    val to = dependencies(state.to)
+    sendMessageTo(to.id, to.classType, data, ForwardRoute.toString)
   }
 }

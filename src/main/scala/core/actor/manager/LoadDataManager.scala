@@ -10,15 +10,15 @@ import core.actor.manager.load.CreatorLoadData
 import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil
-
 import core.util.ActorCreatorUtil.createActor
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class LoadDataManager(
-  timeManager: ActorRef,
-  simulationManager: ActorRef
+  val timeManager: ActorRef,
+  val poolTimeManager: ActorRef,
+  val simulationManager: ActorRef
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager",
@@ -40,14 +40,15 @@ class LoadDataManager(
     logEvent("Load data")
     loadDataAmount = event.actorsDataSources.size
     creatorRef = context.actorOf(
-      Props(new CreatorLoadData(loadDataManager = self, timeManager = getTimeManager))
+      Props(new CreatorLoadData(loadDataManager = self, timeManager = poolTimeManager))
     )
     event.actorsDataSources.foreach {
       actorDataSource =>
+        logEvent(s"Load data source ${actorDataSource}")
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
-          getTimeManager
+          poolTimeManager
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
@@ -73,9 +74,24 @@ class LoadDataManager(
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     creatorRef ! DestructEvent(actorRef = self)
-    simulationManager ! event
+    simulationManager ! FinishLoadDataEvent(actorRef = self)
   }
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && loadDataAmount == loaders.size
+}
+
+object LoadDataManager {
+  def props(
+    timeManager: ActorRef,
+    poolTimeManager: ActorRef,
+    simulationManager: ActorRef
+  ): Props =
+    Props(
+      new LoadDataManager(
+        timeManager = timeManager,
+        poolTimeManager = poolTimeManager,
+        simulationManager = simulationManager
+      )
+    )
 }

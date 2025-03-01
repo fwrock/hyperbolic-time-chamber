@@ -1,6 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.entity.state
 
+import org.interscity.htc.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.RouteWaiting
@@ -10,8 +11,8 @@ import scala.collection.mutable
 
 abstract class MovableState(
   val startTick: Long,
-  var movableBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = None,
-  var movableCurrentPath: Option[(RoutePathItem, RoutePathItem)] = None,
+  var movableBestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
+  var movableCurrentPath: Option[(Identify, Identify)] = None,
   var movableCurrentNode: String = null,
   val origin: String,
   val destination: String,
@@ -26,14 +27,14 @@ abstract class MovableState(
 
   def updateStatus(newStatus: MovableStatusEnum): Unit = movableStatus = newStatus
 
-  def getBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]] = movableBestRoute
+  def getBestRoute: Option[mutable.Queue[(Identify, Identify)]] = movableBestRoute
 
-  def updateBestRoute(newBestRoute: Option[mutable.Queue[(RoutePathItem, RoutePathItem)]]): Unit =
+  def updateBestRoute(newBestRoute: Option[mutable.Queue[(Identify, Identify)]]): Unit =
     movableBestRoute = newBestRoute
 
-  def getCurrentPath: Option[(RoutePathItem, RoutePathItem)] = movableCurrentPath
+  def getCurrentPath: Option[(Identify, Identify)] = movableCurrentPath
 
-  def updateCurrentPath(newCurrentPath: Option[(RoutePathItem, RoutePathItem)]): Unit =
+  def updateCurrentPath(newCurrentPath: Option[(Identify, Identify)]): Unit =
     movableCurrentPath = newCurrentPath
 
   def getCurrentNode: String = movableCurrentNode

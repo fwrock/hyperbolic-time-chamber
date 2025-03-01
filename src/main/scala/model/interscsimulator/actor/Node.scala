@@ -8,7 +8,7 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.interscsimulator.entity.state.NodeState
 import model.interscsimulator.entity.state.enumeration.EventTypeEnum
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -23,13 +23,13 @@ import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateDa
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
-  override protected val actorId: String = null,
+  private var id: String = null,
   private val timeManager: ActorRef = null,
   private val data: String = null,
-  override protected val dependencies: mutable.Map[String, ActorRef] =
-    mutable.Map[String, ActorRef]()
+  override protected val dependencies: mutable.Map[String, Dependency] =
+    mutable.Map[String, Dependency]()
 ) extends BaseActor[NodeState](
-      actorId = actorId,
+      actorId = id,
       timeManager = timeManager,
       data = data,
       dependencies = dependencies
@@ -52,14 +52,14 @@ class Node(
     }
 
   private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
-    state.busStops.put(event.data.label, Identify(event.actorRefId, event.actorRef))
+    state.busStops.put(event.data.label, event.toIdentity())
 
   private def handleRegisterSubwayStation(
     event: ActorInteractionEvent[RegisterSubwayStationData]
   ): Unit =
     event.data.lines.foreach {
       line =>
-        state.subwayStations.put(line, Identify(event.actorRefId, event.actorRef))
+        state.subwayStations.put(line, event.toIdentity())
     }
 
   private def handleLinkConnections(event: ActorInteractionEvent[LinkConnectionsData]): Unit =
@@ -78,10 +78,11 @@ class Node(
 
   private def handleRequestRouteLinks(event: ActorInteractionEvent[RequestRouteData]): Unit = {
     val path = event.data.path
-    val updatedPath = path :+ (RoutePathItem(actorRef = self, actorId = getActorId), null)
+    val updatedPath = path :+ (toIdentify, null)
     val data = RequestRouteData(
       requester = event.data.requester,
       requesterId = event.data.requesterId,
+      requesterClassType = event.data.requesterClassType,
       currentCost = event.data.currentCost,
       targetNodeId = event.data.targetNodeId,
       originNodeId = event.data.originNodeId,
@@ -89,13 +90,21 @@ class Node(
     )
 
     state.links.foreach {
-      link => sendMessageTo(link, dependencies(link), data, EventTypeEnum.RequestRoute.toString)
+
+      link =>
+        val dependency = dependencies(link)
+        sendMessageTo(
+          dependency.id,
+          dependency.classType,
+          data,
+          EventTypeEnum.RequestRoute.toString
+        )
     }
   }
 
   private def handleRequestRouteTarget(event: ActorInteractionEvent[RequestRouteData]): Unit = {
     val path = event.data.path
-    val updatedPath = path :+ (null, RoutePathItem(actorRef = self, actorId = getActorId))
+    val updatedPath = path :+ (null, toIdentify)
     val data = ReceiveRouteData(
       path = updatedPath,
       label = event.data.label,
@@ -104,16 +113,17 @@ class Node(
     )
     sendMessageTo(
       event.data.requesterId,
-      event.data.requester,
+      event.data.requesterClassType,
       data,
       EventTypeEnum.ReceiveRoute.toString
     )
   }
 
   private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit =
+    val dependency = dependencies(event.data.requesterId)
     sendMessageTo(
-      event.data.requesterId,
-      dependencies(event.data.requesterId),
+      dependency.id,
+      dependency.classType,
       event.data,
       EventTypeEnum.ForwardRoute.toString
     )
@@ -127,7 +137,7 @@ class Node(
           case Some(signalState) =>
             sendMessageTo(
               event.actorRefId,
-              event.actorRef,
+              event.actorClassType,
               SignalStateData(
                 phase = signalState.state,
                 nextTick = signalState.nextTick
@@ -137,7 +147,7 @@ class Node(
           case None =>
             sendMessageTo(
               event.actorRefId,
-              event.actorRef,
+              event.actorClassType,
               SignalStateData(
                 phase = Green,
                 nextTick = currentTick
