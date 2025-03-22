@@ -115,7 +115,7 @@ abstract class BaseActor[T <: BaseState](
     lamportClock.increment()
     val shardingRegion = getShardRef(classType)
     logEvent(
-      s"Sending message to ${entityId} with Lamport clock ${getLamportClock}"
+      s"Sending message to ${entityId} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
     )
     shardingRegion ! EntityEnvelopeEvent[D](
       entityId,
@@ -187,7 +187,7 @@ abstract class BaseActor[T <: BaseState](
   private def handleInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {
     updateLamportClock(event.lamportTick)
     logEvent(
-      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock}"
+      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
     )
     actInteractWith(event)
   }
@@ -203,8 +203,9 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit =
+  protected def logEvent(eventInfo: String): Unit = {
     log.info(s"$actorId: $eventInfo")
+  }
 
   override def receive: Receive = {
     case event: SpontaneousEvent         => handleSpontaneous(event)
@@ -274,9 +275,16 @@ abstract class BaseActor[T <: BaseState](
       destruct = destruct
     )
 
+  /**
+   * Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the actor.
+   */
   protected def selfSpontaneous(): Unit =
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
+  /** Schedules an event at a specific tick. This method is used to schedule an event in the time manager.
+   * @param tick
+   * The tick at which the event should be scheduled
+   */
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(
       tick = tick,
@@ -296,13 +304,32 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def getActorId: String = actorId
 
+  /** Gets the actor reference of the shard region for the current actor.
+   * @return
+   * The actor reference of the shard region
+   */
   protected def getSelfShard: ActorRef =
     ClusterSharding(context.system).shardRegion(getClass.getName)
 
+  /** Gets the shard name for the current actor.
+   * @return
+   * The shard name
+   */
   protected def getShardName: String = getClass.getName
 
+  /** Gets the actor reference of the shard region for a given class name.
+   *
+   * @param className
+   * The class name of the shard region
+   * @return
+   * The actor reference of the shard region
+   */
   protected def getShardRef(className: String): ActorRef =
     ClusterSharding(context.system).shardRegion(className)
 
+  /** Creates an Identify object for the current actor.
+   * @return
+   * The Identify object
+   */
   protected def toIdentify: Identify = Identify(getActorId, getShardName, self)
 }
