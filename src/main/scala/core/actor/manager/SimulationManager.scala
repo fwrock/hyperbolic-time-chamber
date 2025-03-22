@@ -35,10 +35,10 @@ class SimulationManager(
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
   }
 
-//  override def onStart(): Unit =
-//    getSelfProxy ! PrepareSimulationEvent(
-//      configuration = simulationPath
-//    )
+  override def onStart(): Unit =
+    getSelfProxy ! PrepareSimulationEvent(
+      configuration = simulationPath
+    )
 
   private def startSimulation(): Unit = {
     loadManager ! DestructEvent(actorRef = self)

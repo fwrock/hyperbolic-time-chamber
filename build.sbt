@@ -23,9 +23,11 @@ lazy val root = (project in file("."))
     idePackagePrefix := Some("org.interscity.htc"),
     assembly / assemblyJarName := "hyperbolic-time-chamber-0.1.0.jar",
     assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-      case "logback.xml" => MergeStrategy.concat
-      case "application.conf" => MergeStrategy.concat
+      case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
+      case PathList("META-INF", _*) => MergeStrategy.discard
+      case PathList("reference.conf", _*)         => MergeStrategy.concat
+      case "application.conf"                     => MergeStrategy.concat
+      case "logback.xml"                          => MergeStrategy.concat
       case x => MergeStrategy.first
     },
     libraryDependencies ++= Seq(
@@ -54,7 +56,6 @@ lazy val root = (project in file("."))
       "ch.qos.logback" % "logback-classic" % logbackVersion,
       "ch.qos.logback" % "logback-core" % logbackVersion,
       "org.slf4j" % "slf4j-api" % "2.0.17",
-      "org.slf4j" % "slf4j-log4j12" % "2.0.17",
 
       // Faker
       "com.github.javafaker" % "javafaker" % "1.0.2",

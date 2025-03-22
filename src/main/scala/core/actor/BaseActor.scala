@@ -1,22 +1,23 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef }
-import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
+import org.apache.pekko.actor.{Actor, ActorLogging, ActorRef}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.control.load.{ InitializeEntityAckEvent, InitializeEvent }
+import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
+import org.interscity.htc.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.slf4j.LoggerFactory
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -48,6 +49,7 @@ abstract class BaseActor[T <: BaseState](
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
@@ -205,6 +207,7 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def logEvent(eventInfo: String): Unit = {
     log.info(s"$actorId: $eventInfo")
+    logger.info(s"$actorId: $eventInfo")
   }
 
   override def receive: Receive = {
