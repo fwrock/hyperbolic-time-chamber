@@ -5,8 +5,7 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
 import org.interscity.htc.core.actor.manager.SimulationManager
-import org.interscity.htc.core.entity.event.control.execution.{PrepareSimulationEvent, StopSimulationEvent}
-import org.interscity.htc.core.util.DistributedUtil
+import org.interscity.htc.core.entity.event.control.execution.StopSimulationEvent
 
 @main
 def main(): Unit = {
@@ -23,7 +22,7 @@ def main(): Unit = {
   }
 
   val configuration =
-    "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple/simulation.json"
+    "simulations/supermarket-simple/simulation.json"
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(
@@ -37,8 +36,4 @@ def main(): Unit = {
     ),
     name = "simulation-manager"
   )
-  val clusterName = System.getenv("CLUSTER_NAME")
-  if (clusterName == "node2") {
-    DistributedUtil.createSingletonProxy(system, "simulation-manager") ! PrepareSimulationEvent(configuration)
-  }
 }
