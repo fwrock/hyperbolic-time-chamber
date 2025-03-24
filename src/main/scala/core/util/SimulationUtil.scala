@@ -25,6 +25,7 @@ object SimulationUtil {
 
   def createShards(system: ActorSystem, configuration: String = null): Unit =
     loadSimulationConfig(configuration).actorsDataSources.foreach(source => {
+      system.log.info(s"Creating shard region for ${source.classType}")
       createShardRegion(
         system,
         source.classType,

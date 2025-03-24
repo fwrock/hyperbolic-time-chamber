@@ -118,7 +118,7 @@ object ActorCreatorUtil {
     }
 
     if (!sharding.shardTypeNames.contains(actorClassName)) {
-      println(s"Creating shard region for $actorClassName with entityId $entityId")
+      system.log.info(s"Creating shard region for $actorClassName with entityId $entityId")
 
       sharding.start(
         typeName = actorClassName,
@@ -135,7 +135,7 @@ object ActorCreatorUtil {
         extractShardId = extractShardId
       )
     } else {
-      println(s"Shard region for $actorClassName already exists recycle with entityId $entityId")
+      system.log.info(s"Already exists shard region for $actorClassName, create actor shard with entityId $entityId")
       sharding.shardRegion(actorClassName)
     }
   }
