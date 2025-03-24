@@ -2,8 +2,11 @@ package org.interscity.htc
 package core.util
 
 import core.entity.configuration.Simulation
-import core.util.JsonUtil.{ fromJson, readJsonFile }
+import core.util.JsonUtil.{fromJson, readJsonFile}
 import core.exception.SimulationEnvConfigFoundException
+
+import org.apache.pekko.actor.ActorSystem
+import org.interscity.htc.core.util.ActorCreatorUtil.createShardRegion
 
 object SimulationUtil {
 
@@ -19,4 +22,15 @@ object SimulationUtil {
         case None       => throw new SimulationEnvConfigFoundException(envConfig)
       }
     }
+
+  def createShards(system: ActorSystem, configuration: String = null): Unit =
+    loadSimulationConfig(configuration).actorsDataSources.foreach(source => {
+      createShardRegion(
+        system,
+        source.classType,
+        s"${source.classType}-shard-initiator",
+        null,
+        null
+      )
+    })
 }

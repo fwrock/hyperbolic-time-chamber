@@ -3,13 +3,18 @@ package org.interscity.htc
 import org.apache.pekko.actor.Props
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.Cluster
+import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
+import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.interscity.htc.core.actor.manager.SimulationManager
 import org.interscity.htc.core.entity.event.control.execution.StopSimulationEvent
+import org.interscity.htc.core.util.SimulationUtil
 
 @main
 def main(): Unit = {
   val system = ActorSystem("hyperbolic-time-chamber")
+
+  PekkoManagement(system).start()
 
   val cluster = Cluster(system)
 
@@ -23,6 +28,8 @@ def main(): Unit = {
 
   val configuration =
     "simulations/supermarket-simple/simulation.json"
+
+  SimulationUtil.createShards(system, configuration)
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(

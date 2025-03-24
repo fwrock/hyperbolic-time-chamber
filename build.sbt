@@ -12,6 +12,7 @@ val pekkoVersion = "1.1.3"
 val pekkoManagementVersion = "1.1.0"
 val logbackVersion = "1.5.18"
 val jacksonVersion = "2.18.3"
+val kryoVersion = "1.2.1"
 
 val cassandraConnectorsVersion = "1.1.0"
 
@@ -35,6 +36,8 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-actor" % pekkoVersion,
       "org.apache.pekko" %% "pekko-actor-typed" % pekkoVersion,
       "org.apache.pekko" %% "pekko-cluster-sharding-typed" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-management" % pekkoManagementVersion,
+      "org.apache.pekko" %% "pekko-management-cluster-http" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-slf4j" % pekkoVersion,
       "org.apache.pekko" %% "pekko-cluster" % pekkoVersion,
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
@@ -51,6 +54,9 @@ lazy val root = (project in file("."))
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
+
+      // Kryo
+      "io.altoo" %% "pekko-kryo-serialization" % kryoVersion,
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
