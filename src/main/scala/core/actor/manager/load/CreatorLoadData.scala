@@ -3,12 +3,12 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import core.entity.actor.{ActorSimulation, Dependency, Identify, Initialization}
-import core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent}
-import core.util.{ActorCreatorUtil, JsonUtil}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import core.entity.actor.{ ActorSimulation, Dependency, Identify, Initialization }
+import core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent }
+import core.util.{ ActorCreatorUtil, JsonUtil }
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor}
+import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor }
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
@@ -38,14 +38,13 @@ class CreatorLoadData(
     case event: InitializeEntityAckEvent => handleFinishInitialization(event)
   }
 
-  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
+  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
     if (initializeData.isEmpty && actors.isEmpty) {
       logEvent("Finish creation")
       loadDataManager ! FinishCreationEvent(actorRef = self)
     }
-  }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
     initializeData.get(event.entityId) match
       case Some(data) =>
         getShardRef(data.classType) ! EntityEnvelopeEvent(
@@ -59,7 +58,6 @@ class CreatorLoadData(
         initializeData.remove(event.entityId)
       case None =>
         logEvent(s"Data not found ${event.entityId}")
-  }
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logEvent("Start creation")
@@ -105,9 +103,9 @@ class CreatorLoadData(
 
 object CreatorLoadData {
   def props(
-             loadDataManager: ActorRef,
-             timeManager: ActorRef
-           ): Props =
+    loadDataManager: ActorRef,
+    timeManager: ActorRef
+  ): Props =
     Props(
       new CreatorLoadData(
         loadDataManager = loadDataManager,

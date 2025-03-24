@@ -59,9 +59,9 @@ class LoadDataManager(
 
   private def createCreatorLoadData(): ActorRef = {
     createSingletonManager(
-        manager = CreatorLoadData.props(loadDataManager = self, timeManager = poolTimeManager),
-        name = "creator-load-data",
-        terminateMessage = DestructEvent(actorRef = self)
+      manager = CreatorLoadData.props(loadDataManager = self, timeManager = poolTimeManager),
+      name = "creator-load-data",
+      terminateMessage = DestructEvent(actorRef = self)
     )
     createSingletonProxy("creator-load-data", s"-${System.nanoTime()}")
   }

@@ -13,6 +13,8 @@ val pekkoManagementVersion = "1.1.0"
 val logbackVersion = "1.5.18"
 val jacksonVersion = "2.18.3"
 val kryoVersion = "1.2.1"
+val protobufVersion = "4.30.1"
+val pekkoProtobuf = "1.0.3"
 
 val cassandraConnectorsVersion = "1.1.0"
 
@@ -43,6 +45,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-protobuf" % pekkoProtobuf,
 
       // Brokers
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
@@ -57,6 +60,9 @@ lazy val root = (project in file("."))
 
       // Kryo
       "io.altoo" %% "pekko-kryo-serialization" % kryoVersion,
+
+      // Protobuf
+      "com.google.protobuf" % "protobuf-java" % protobufVersion,
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
