@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory
   */
 abstract class BaseActor[T <: BaseState](
   protected var actorId: String,
-  private val timeManager: ActorRef = null,
+  private var timeManager: ActorRef = null,
   private val creatorManager: ActorRef = null,
   private val data: Any = null,
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
@@ -88,6 +88,7 @@ abstract class BaseActor[T <: BaseState](
       state = JsonUtil.convertValue[T](event.data.data)
       startTick = state.getStartTick
     }
+    timeManager = event.data.timeManager
     dependencies.clear()
     dependencies ++= event.data.dependencies
     onInitialize(event)

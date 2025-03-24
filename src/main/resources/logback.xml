@@ -21,7 +21,7 @@
     </appender>
 
     <!-- Define o nível de log geral da aplicação -->
-    <root level="DEBUG">
+    <root level="INFO">
 <!--        <appender-ref ref="FILE" />-->
         <appender-ref ref="STDOUT" />
     </root>

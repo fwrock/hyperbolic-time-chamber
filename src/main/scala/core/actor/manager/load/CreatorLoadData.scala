@@ -3,12 +3,12 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.ActorRef
-import core.entity.actor.{ ActorSimulation, Dependency, Identify, Initialization }
-import core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent }
-import core.util.{ ActorCreatorUtil, JsonUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.entity.actor.{ActorSimulation, Dependency, Identify, Initialization}
+import core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent}
+import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor }
+import core.util.ActorCreatorUtil.{createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor}
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
@@ -70,6 +70,7 @@ class CreatorLoadData(
           id = actor.id,
           classType = actor.typeActor,
           data = actor.data.content,
+          timeManager = timeManager,
           dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
 
@@ -100,4 +101,17 @@ class CreatorLoadData(
     event.actors.foreach {
       actor => actors += actor
     }
+}
+
+object CreatorLoadData {
+  def props(
+             loadDataManager: ActorRef,
+             timeManager: ActorRef
+           ): Props =
+    Props(
+      new CreatorLoadData(
+        loadDataManager = loadDataManager,
+        timeManager = timeManager
+      )
+    )
 }
