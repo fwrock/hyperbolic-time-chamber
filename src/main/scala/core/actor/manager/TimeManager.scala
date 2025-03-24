@@ -179,7 +179,7 @@ class TimeManager(
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
     }
-    logEvent(s"Schedule event for ${schedule.identify.id} at tick ${schedule.tick}")
+    logEvent(s"${getLabel}: Schedule event for ${schedule.identify.id} at tick ${schedule.tick}")
     scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
         scheduled.actorsRef.add(schedule.identify)
@@ -189,6 +189,9 @@ class TimeManager(
           ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.identify))
         )
   }
+
+  private def getLabel: String = if parentManager.isEmpty then "GlobalTimeManager"
+  else "LocalTimeManager"
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {

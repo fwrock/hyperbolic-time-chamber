@@ -3,4 +3,6 @@ package core.entity.event.control.execution
 
 import core.entity.event.BaseEvent
 
-case class PauseSimulationEvent() extends BaseEvent(tick = -1, actorRef = null)
+import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
+
+case class PauseSimulationEvent() extends BaseEvent[DefaultBaseEventData](tick = -1, actorRef = null)

@@ -2,10 +2,10 @@ package org.interscity.htc
 package core.entity.event
 
 import core.types.CoreTypes.Tick
+
 import core.entity.event.data.BaseEventData
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo
-import org.apache.pekko.actor.{ActorContext, ActorRef}
+import org.apache.pekko.actor.{ ActorContext, ActorRef }
 import org.apache.pekko.event.Logging
 
 sealed trait Command
@@ -27,7 +27,6 @@ sealed trait Command
   * @tparam D
   *   the type of the data of the event
   */
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "type")
 abstract class BaseEvent[D <: BaseEventData](
   lamportTick: Tick = 0,
   data: D = null,

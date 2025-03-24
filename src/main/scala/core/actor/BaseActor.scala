@@ -1,17 +1,17 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{Actor, ActorLogging, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.interscity.htc.core.entity.actor.{Dependency, Identify}
-import org.interscity.htc.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.control.load.{ InitializeEntityAckEvent, InitializeEvent }
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -279,16 +279,17 @@ abstract class BaseActor[T <: BaseState](
       destruct = destruct
     )
 
-  /**
-   * Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the actor.
-   */
+  /** Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the
+    * actor.
+    */
   protected def selfSpontaneous(): Unit =
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
-  /** Schedules an event at a specific tick. This method is used to schedule an event in the time manager.
-   * @param tick
-   * The tick at which the event should be scheduled
-   */
+  /** Schedules an event at a specific tick. This method is used to schedule an event in the time
+    * manager.
+    * @param tick
+    *   The tick at which the event should be scheduled
+    */
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(
       tick = tick,
@@ -309,31 +310,31 @@ abstract class BaseActor[T <: BaseState](
   protected def getActorId: String = actorId
 
   /** Gets the actor reference of the shard region for the current actor.
-   * @return
-   * The actor reference of the shard region
-   */
+    * @return
+    *   The actor reference of the shard region
+    */
   protected def getSelfShard: ActorRef =
     ClusterSharding(context.system).shardRegion(getClass.getName)
 
   /** Gets the shard name for the current actor.
-   * @return
-   * The shard name
-   */
+    * @return
+    *   The shard name
+    */
   protected def getShardName: String = getClass.getName
 
   /** Gets the actor reference of the shard region for a given class name.
-   *
-   * @param className
-   * The class name of the shard region
-   * @return
-   * The actor reference of the shard region
-   */
+    *
+    * @param className
+    *   The class name of the shard region
+    * @return
+    *   The actor reference of the shard region
+    */
   protected def getShardRef(className: String): ActorRef =
     ClusterSharding(context.system).shardRegion(className)
 
   /** Creates an Identify object for the current actor.
-   * @return
-   * The Identify object
-   */
+    * @return
+    *   The Identify object
+    */
   protected def toIdentify: Identify = Identify(getActorId, getShardName, self)
 }

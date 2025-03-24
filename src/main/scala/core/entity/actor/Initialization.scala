@@ -15,5 +15,11 @@ case class Initialization(
 ) {
 
   def toInitializeData: InitializeData =
-    InitializeData(data = data, timeManager = timeManager, dependencies = dependencies.map { case (label, dep) => dep.id -> dep })
+    InitializeData(
+      data = data,
+      timeManager = timeManager,
+      dependencies = dependencies.map {
+        case (label, dep) => dep.id -> dep
+      }
+    )
 }
