@@ -8,15 +8,23 @@ ThisBuild / scalaVersion := "3.3.5"
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
+// Apache Pekko
 val pekkoVersion = "1.1.3"
 val pekkoHttpVersion = "1.1.0"
-val logbackVersion = "1.5.16"
-val jacksonModuleVersion = "2.18.2"
-val jacksonDatabindVersion = "2.18.2"
-val jacksonDataTypeVersion = "2.18.2"
 
+// Logs
+val logbackVersion = "1.5.18"
+
+// Serialization
+val jacksonModuleVersion = "2.18.3"
+val jacksonDatabindVersion = "2.18.3"
+val jacksonDataTypeVersion = "2.18.3"
+val kryoVersion = "1.2.1"
+val protobufVersion = "4.30.1"
+val pekkoProtobuf = "1.0.3"
+
+// Connectors
 val cassandraConnectorsVersion = "1.1.0"
-
 val kafkaConnectorsVersion = "1.1.0"
 
 lazy val root = (project in file("."))
@@ -33,6 +41,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-protobuf" % pekkoProtobuf,
 
       // Brokers
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
@@ -45,6 +54,12 @@ lazy val root = (project in file("."))
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonDatabindVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonDataTypeVersion,
 
+      // Kryo
+      "io.altoo" %% "pekko-kryo-serialization" % kryoVersion,
+
+      // Protobuf
+      "com.google.protobuf" % "protobuf-java" % protobufVersion,
+
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
 
@@ -55,5 +70,11 @@ lazy val root = (project in file("."))
       // Test
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
+    ),
+    Compile / PB.targets := Seq(
+      PB.gens.java -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    Compile / PB.protoSources := Seq(
+      baseDirectory.value / "src" / "main" / "protobuf"
     )
   )
