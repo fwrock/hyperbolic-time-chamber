@@ -190,8 +190,7 @@ class TimeManager(
         )
   }
 
-  private def getLabel: String = if parentManager.isEmpty then "GlobalTimeManager"
-  else "LocalTimeManager"
+  private def getLabel: String = if parentManager.isEmpty then "GlobalTimeManager" else "LocalTimeManager"
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {

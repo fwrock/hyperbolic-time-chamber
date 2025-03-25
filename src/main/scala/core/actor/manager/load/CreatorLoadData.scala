@@ -47,6 +47,7 @@ class CreatorLoadData(
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
     initializeData.get(event.entityId) match
       case Some(data) =>
+        logEvent(s"Initialize ${event.entityId}")
         getShardRef(data.classType) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = InitializeEvent(

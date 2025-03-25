@@ -76,5 +76,11 @@ lazy val root = (project in file("."))
       // Test
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
+    ),
+    Compile / PB.targets := Seq(
+      PB.gens.java -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    Compile / PB.protoSources := Seq(
+      baseDirectory.value / "src" / "main" / "protobuf"
     )
   )

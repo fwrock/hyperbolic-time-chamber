@@ -56,7 +56,7 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-    logEvent(s"Starting actor with actorId: $actorId")
+    logEvent(s"Starting an actor type: $getClass")
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
@@ -230,8 +230,10 @@ abstract class BaseActor[T <: BaseState](
       case event                           => handleEvent(event)
     }
 
-  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
+    logEvent(s"Starting entity with id ${event.entityId}")
     actorId = event.entityId
+  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
