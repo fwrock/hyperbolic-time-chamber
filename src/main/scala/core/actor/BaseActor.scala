@@ -117,7 +117,7 @@ abstract class BaseActor[T <: BaseState](
     logEvent(
       s"Sending message to ${entityId} with Lamport clock ${getLamportClock}"
     )
-    shardingRegion ! EntityEnvelopeEvent[D](
+    shardingRegion ! EntityEnvelopeEvent(
       entityId,
       ActorInteractionEvent(
         tick = currentTick,
@@ -210,13 +210,13 @@ abstract class BaseActor[T <: BaseState](
     case event: SpontaneousEvent         => handleSpontaneous(event)
     case event: ActorInteractionEvent[_] => handleInteractWith(event)
     case event: DestructEvent            => destruct(event)
-    case event: EntityEnvelopeEvent[_]   => handleEnvelopeEvent(event)
+    case event: EntityEnvelopeEvent   => handleEnvelopeEvent(event)
     case event: InitializeEvent          => initialize(event)
     case event: ShardRegion.StartEntity  => handleStartEntity(event)
     case event                           => handleEvent(event)
   }
 
-  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent[_]): Unit =
+  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
       case event: InitializeEvent          => initialize(event)
       case event: SpontaneousEvent         => handleSpontaneous(event)

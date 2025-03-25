@@ -12,7 +12,6 @@ import core.entity.state.DefaultState
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
 import scala.collection.mutable
 
@@ -261,7 +260,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    getShardRef(identity.classType) ! EntityEnvelopeEvent[DefaultBaseEventData](
+    getShardRef(identity.classType) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
@@ -319,7 +318,7 @@ class TimeManager(
     }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent[DefaultBaseEventData](
+    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = self)
     )
