@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity;
+
+import "google/protobuf/any.proto";
+
+message Identify {
+  string id = 1;
+  string classType = 2;
+  string actorRef = 3;
+}
+
+message ActorSimulation {
+  string id = 1;
+  string name = 2;
+  string typeActor = 3;
+  ActorDataSimulation data = 4;
+  map<string, Dependency> dependencies = 5;
+}
+
+message ActorDataSimulation {
+  string dataType = 1;
+  google.protobuf.Any content = 2;
+}
+
+message Dependency {
+  string id = 1;
+  string classType = 2;
+}
+
+message Initialization {
+  string id = 1;
+  string classType = 2;
+  repeated google.protobuf.Any data = 3;
+  map<string, Dependency> dependencies = 4;
+}
+
+enum DataSourceType {
+  json = 0;
+  csv = 1;
+  xml = 2;
+  mongodb = 3;
+  cassandra = 4;
+}
+
+message DataSource {
+    DataSourceType sourceType = 1;
+    map<string, bytes> info = 2;
+}
+
+message ActorDataSource {
+  string classType = 1;
+  DataSource dataSource = 2;
+}

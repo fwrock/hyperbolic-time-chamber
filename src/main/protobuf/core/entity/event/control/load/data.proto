@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity.event.control.load;
+
+import "core/entity/actor.proto";
+
+message InitializationData {
+  bytes data = 1;
+  map<string, Dependency> dependencies = 2;
+}
+
+message RequestInitializeData {
+  string id = 1;
+  string classType = 2;
+}

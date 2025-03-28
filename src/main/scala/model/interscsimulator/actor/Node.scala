@@ -52,14 +52,14 @@ class Node(
     }
 
   private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
-    state.busStops.put(event.data.label, event.toIdentity())
+    state.busStops.put(event.data.label, event.toIdentity)
 
   private def handleRegisterSubwayStation(
     event: ActorInteractionEvent[RegisterSubwayStationData]
   ): Unit =
     event.data.lines.foreach {
       line =>
-        state.subwayStations.put(line, event.toIdentity())
+        state.subwayStations.put(line, event.toIdentity)
     }
 
   private def handleLinkConnections(event: ActorInteractionEvent[LinkConnectionsData]): Unit =

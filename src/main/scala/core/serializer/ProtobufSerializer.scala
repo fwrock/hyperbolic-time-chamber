@@ -9,7 +9,7 @@ import java.io.NotSerializableException
 import scala.util.{Failure, Success, Try}
 
 class ProtobufSerializer(
-  system: ExtendedActorSystem
+  val system: ExtendedActorSystem
                         ) extends SerializerWithStringManifest {
 
   override def identifier: Int = 27011998

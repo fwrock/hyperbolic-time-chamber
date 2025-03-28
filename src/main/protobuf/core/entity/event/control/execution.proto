@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity.event.control;
+
+import "core/entity/actor.proto";
+import "core/entity/event/control/execution/data.proto";
+
+message AcknowledgeTickEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+  string timeManagerRef = 3;
+}
+
+message DestructEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+}
+
+message LocalTimeReportEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+}
+
+message RemoteTimeReportEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+  string timeManagerRef = 3;
+}
+
+message PauseSimulationEvent {
+
+}
+
+message PrepareSimulationEvent {
+  string configuration = 1;
+}
+
+message RegisterActorEvent {
+  uint64 startTick = 1;
+  string actorRef = 2;
+  Identify identity = 3;
+}
+
+message ResumeSimulationEvent {
+
+}
+
+message StartSimulationEvent {
+  uint64 startTick = 1;
+  string actorRef = 2;
+  core.entity.event.control.execution.StartSimulationData data = 3;
+}
+
+message StopSimulationEvent {
+
+}
+
+message TimeManagerRegisterEvent {
+  string actorRef = 1;
+}
+
+message UpdateGlobalTimeEvent {
+  uint64 tick = 1;
+}

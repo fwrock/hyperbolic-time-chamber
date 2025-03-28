@@ -69,7 +69,7 @@ class BusStop(
     )
 
   private def handleRegisterPassenger(event: ActorInteractionEvent[RegisterPassengerData]): Unit = {
-    val person = event.toIdentity()
+    val person = event.toIdentity
     state.people.get(event.data.label) match {
       case Some(people) =>
         state.people.put(event.data.label, people :+ person)
