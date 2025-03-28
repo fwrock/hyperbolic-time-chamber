@@ -1,5 +1,4 @@
 import sbt.Keys.libraryDependencies
-
 import scala.collection.Seq
 
 ThisBuild / version := "0.1.0-SNAPSHOT"
@@ -41,7 +40,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
-      "org.apache.pekko" %% "pekko-protobuf" % pekkoProtobuf,
+      "org.apache.pekko" %% "pekko-protobuf-v3" % pekkoVersion,
 
       // Brokers
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
@@ -76,7 +75,7 @@ lazy val root = (project in file("."))
       baseDirectory.value / "src" / "main" / "protobuf"
     ),
     Compile / PB.targets := Seq(
-      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
     ),
     PB.protocVersion := "-v4.30.2"
   )
