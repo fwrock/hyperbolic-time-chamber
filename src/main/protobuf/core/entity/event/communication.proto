@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity.event;
+
+import "core/entity/actor.proto";
+
+message EntityEnvelope {
+  string entityId = 1;
+  bytes payload = 2;
+}
+
+message ScheduleEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+  Identify identify = 3;
+}
+
+message FinishEvent {
+  string actorRef = 1;
+  Identify identity = 2;
+  uint64 end = 3;
+  optional ScheduleEvent scheduleEvent = 4;
+  string timeManager = 5;
+  bool destruct = 6;
+}
+
+message SpontaneousEvent {
+  uint64 tick = 1;
+  string actorRef = 2;
+}
