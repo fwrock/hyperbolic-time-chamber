@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity.event.control.execution;
+
+message StartSimulationData {
+  uint64 startTime = 1;
+}

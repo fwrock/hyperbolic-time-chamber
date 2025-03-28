@@ -26,7 +26,7 @@ case class ActorInteractionEvent[D <: BaseEventData](
       eventType = eventType
     ) {
 
-  def toIdentity() = Identify(
+  def toIdentity: Identify = Identify(
     id = actorRefId,
     classType = actorClassType,
     actorRef = actorRef

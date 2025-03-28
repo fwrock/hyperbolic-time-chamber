@@ -20,7 +20,7 @@ val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
 val kryoVersion = "1.2.1"
-val protobufVersion = "4.30.1"
+val protobufVersion = "4.30.2"
 val pekkoProtobuf = "1.0.3"
 
 // Connectors
@@ -59,6 +59,7 @@ lazy val root = (project in file("."))
 
       // Protobuf
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
@@ -71,10 +72,11 @@ lazy val root = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
     ),
-    Compile / PB.targets := Seq(
-      PB.gens.java -> (Compile / sourceManaged).value / "scalapb"
-    ),
     Compile / PB.protoSources := Seq(
       baseDirectory.value / "src" / "main" / "protobuf"
-    )
+    ),
+    Compile / PB.targets := Seq(
+      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    PB.protocVersion := "-v4.30.2"
   )

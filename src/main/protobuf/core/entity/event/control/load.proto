@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity.event.control;
+
+import "core/entity/actor.proto";
+import "core/entity/event/control/load/data.proto";
+
+message CreateActorsEvent {
+  repeated ActorSimulation actors = 1;
+}
+
+message FinishCreationEvent {
+  string actorRef = 1;
+}
+
+message FinishLoadDataEvent {
+  string actorRef = 1;
+}
+
+message InitializeEntityAckEvent {
+  string entityId = 1;
+}
+
+message InitializeEvent {
+  string id = 1;
+  string actorRef = 2;
+  control.load.InitializationData data = 3;
+}
+
+message LoadDataEvent {
+  string actorRef = 1;
+  repeated ActorDataSource actorsDataSources = 2;
+}
+
+message LoadDataSourceEvent {
+  ActorDataSource actorDataSource = 1;
+  string managerRef = 2;
+  string creatorRef = 3;
+}
+
+message RequestInitializeEvent {
+  string actorRef = 1;
+  control.load.RequestInitializeData data = 2;
+}
