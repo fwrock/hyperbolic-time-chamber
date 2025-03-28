@@ -3,12 +3,11 @@ package core.serializer
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.serialization.{Serialization, SerializationExtension, SerializerWithStringManifest}
+import org.apache.pekko.serialization.{SerializationExtension, SerializerWithStringManifest}
+import org.htc.protobuf.core.entity.event.communication.EntityEnvelope
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.protobuf.EntityEnvelope.EntityEnvelope
 
-import java.nio.charset.StandardCharsets
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 class EntityEnvelopeSerializer(
   val system: ExtendedActorSystem
@@ -25,7 +24,7 @@ class EntityEnvelopeSerializer(
     o match {
       case EntityEnvelopeEvent(entityId, payload) =>
         val triedSerializedPayload = serialization.serialize(payload)
-
+        
         triedSerializedPayload match {
           case Success(serializedPayload) =>
             val proto = EntityEnvelope(entityId, ByteString.copyFrom(serializedPayload))
