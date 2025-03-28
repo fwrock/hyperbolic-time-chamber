@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package org.interscity.htc.core.entity.event.protobuf;
-
-message EntityEnvelope {
-  string entityId = 1;
-  bytes payload = 2;
-}
