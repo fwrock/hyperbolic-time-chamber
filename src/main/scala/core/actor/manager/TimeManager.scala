@@ -6,12 +6,12 @@ import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, RegisterActorEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, RegisterActorEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
 
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 import org.interscity.htc.core.entity.actor.Identify
 
 import scala.collection.mutable
@@ -46,7 +46,7 @@ class TimeManager(
     if (parentManager.isEmpty) {
       createTimeManagersPool()
     } else {
-      parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
+      parentManager.get ! TimeManagerRegisterEvent(actorRef = getPath)
     }
 
   private def createTimeManagersPool(): Unit = {
@@ -70,7 +70,7 @@ class TimeManager(
       "time-manager-router"
     )
     logEvent(s"TimeManager pool created: $timeManagersPool")
-    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool.path.toString)
   }
 
   override def handleEvent: Receive = {
@@ -85,13 +85,13 @@ class TimeManager(
     case UpdateGlobalTimeEvent(tick)       => syncWithGlobalTime(tick)
     case acknowledge: AcknowledgeTickEvent => handleAcknowledgeTick(acknowledge)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
-      registerTimeManager(timeManagerRegisterEvent.actorRef)
+      registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick)
   }
 
-  private def registerTimeManager(timeManager: ActorRef): Unit =
-    localTimeManagers.put(timeManager, Long.MinValue)
+  private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
+    localTimeManagers.put(getActorRef(timeManagerRegisterEvent.actorRef), Long.MinValue)
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorRef)

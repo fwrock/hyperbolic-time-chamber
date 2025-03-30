@@ -1,16 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent }
+import core.entity.event.control.load.{FinishCreationEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent}
 import core.enumeration.DataSourceType
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.event.control.execution.DestructEvent
 import core.actor.manager.load.CreatorLoadData
 import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil
 import core.util.ActorCreatorUtil.createActor
+
+import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -63,9 +65,12 @@ class LoadDataManager(
     dataSourceType.clazz.getDeclaredConstructor().newInstance()
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
-    loaders(event.actorRef) = true
+    logEvent(s"Load data maanager actorRef = ${event.actorRef}")
+    val actorRef = getActorRef(event.actorRef)
 
-    event.actorRef ! DestructEvent(actorRef = self)
+    loaders(actorRef) = true
+
+    actorRef! DestructEvent(actorRef = self)
 
     if (isAllDataLoaded) {
       creatorRef ! StartCreationEvent(actorRef = self)
@@ -74,7 +79,7 @@ class LoadDataManager(
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     creatorRef ! DestructEvent(actorRef = self)
-    simulationManager ! FinishLoadDataEvent(actorRef = self)
+    simulationManager ! FinishLoadDataEvent(actorRef = self.path.toString)
   }
 
   private def isAllDataLoaded: Boolean =
