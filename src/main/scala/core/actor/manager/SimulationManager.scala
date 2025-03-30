@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.LoadDataEvent
 import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
@@ -11,7 +10,7 @@ import core.entity.configuration.Simulation
 import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
-import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
+import org.htc.protobuf.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -69,7 +68,7 @@ class SimulationManager(
     loadManager = createSingletonLoadManager()
 
     createSingletonProxy("load-manager") ! LoadDataEvent(
-      actorRef = self,
+      actorRef = getPath,
       actorsDataSources = configuration.actorsDataSources
     )
   }

@@ -1,8 +1,7 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{FinishCreationEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent}
-import core.enumeration.DataSourceType
+import core.enumeration.DataSourceTypeEnum
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import core.actor.manager.load.CreatorLoadData
@@ -12,7 +11,7 @@ import core.util.ActorCreatorUtil
 import core.util.ActorCreatorUtil.createActor
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -49,19 +48,19 @@ class LoadDataManager(
         logEvent(s"Load data source ${actorDataSource}")
         val loader = createActor(
           context.system,
-          actorDataSource.dataSource.sourceType.clazz,
+          DataSourceTypeEnum.valueOf(actorDataSource.dataSource.get.sourceType.name).clazz,
           poolTimeManager
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
-          managerRef = self,
-          creatorRef = creatorRef,
-          actorDataSource = actorDataSource
+          managerRef = getPath,
+          creatorRef = creatorRef.path.toString,
+          actorDataSource = Some(actorDataSource)
         )
     }
   }
 
-  private def loadDataStrategy(dataSourceType: DataSourceType): LoadDataStrategy =
+  private def loadDataStrategy(dataSourceType: DataSourceTypeEnum): LoadDataStrategy =
     dataSourceType.clazz.getDeclaredConstructor().newInstance()
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
@@ -73,13 +72,13 @@ class LoadDataManager(
     actorRef! DestructEvent(actorRef = getPath)
 
     if (isAllDataLoaded) {
-      creatorRef ! StartCreationEvent(actorRef = self)
+      creatorRef ! StartCreationEvent(actorRef = getPath)
     }
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     creatorRef ! DestructEvent(actorRef = getPath)
-    simulationManager ! FinishLoadDataEvent(actorRef = self.path.toString)
+    simulationManager ! FinishLoadDataEvent(actorRef = getPath)
   }
 
   private def isAllDataLoaded: Boolean =

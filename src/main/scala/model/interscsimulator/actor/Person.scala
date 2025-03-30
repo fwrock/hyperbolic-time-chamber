@@ -4,7 +4,7 @@ package model.interscsimulator.actor
 import model.interscsimulator.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Dependency
 
 import scala.collection.mutable
 

@@ -34,11 +34,12 @@ message PauseSimulationEvent {
 message PrepareSimulationEvent {
   string configuration = 1;
 }
+import core.entity.event.control.execution.AcknowledgeTickEvent
 
 message RegisterActorEvent {
   uint64 startTick = 1;
   string actorRef = 2;
-  Identify identity = 3;
+  Identify identify = 3;
 }
 
 message ResumeSimulationEvent {

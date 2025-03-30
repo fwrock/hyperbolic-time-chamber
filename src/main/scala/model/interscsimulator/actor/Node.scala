@@ -4,11 +4,11 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.interscsimulator.entity.state.NodeState
 import model.interscsimulator.entity.state.enumeration.EventTypeEnum
 
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -18,9 +18,9 @@ import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkConn
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.interscsimulator.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.{ForwardRouteData, ReceiveRouteData, RequestRouteData}
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
 
 class Node(
   private var id: String = null,

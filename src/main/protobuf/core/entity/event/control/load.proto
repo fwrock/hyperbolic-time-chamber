@@ -42,3 +42,7 @@ message RequestInitializeEvent {
   string actorRef = 1;
   control.load.RequestInitializeData data = 2;
 }
+
+message StartCreationEvent {
+  string actorRef = 1;
+}

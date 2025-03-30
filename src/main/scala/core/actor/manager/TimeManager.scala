@@ -1,18 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
+import core.entity.event.{EntityEnvelopeEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{AcknowledgeTickEvent, LocalTimeReportEvent, RegisterActorEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
 
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 
 import scala.collection.mutable
 
@@ -82,7 +82,7 @@ class TimeManager(
     case PauseSimulationEvent              => if (isRunning) pauseSimulation()
     case ResumeSimulationEvent             => resumeSimulation()
     case StopSimulationEvent               => stopSimulation()
-    case UpdateGlobalTimeEvent(tick)       => syncWithGlobalTime(tick)
+    case e: UpdateGlobalTimeEvent       => syncWithGlobalTime(e.tick)
     case acknowledge: AcknowledgeTickEvent => handleAcknowledgeTick(acknowledge)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
@@ -94,7 +94,7 @@ class TimeManager(
     localTimeManagers.put(getActorRef(timeManagerRegisterEvent.actorRef), Long.MinValue)
 
   private def registerActor(event: RegisterActorEvent): Unit = {
-    registeredActors.add(event.actorRef)
+    registeredActors.add(getActorRef(event.actorRef))
     scheduleApply(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorRef, identify = event.identify)
     )
@@ -182,34 +182,33 @@ class TimeManager(
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
     }
-    logEvent(s"Schedule event for ${schedule.identify.id} at tick ${schedule.tick}")
+    logEvent(s"Schedule event for ${schedule.identify.get.id} at tick ${schedule.tick}")
     scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
-        scheduled.actorsRef.add(schedule.identify)
+        schedule.identify.foreach(scheduled.actorsRef.add)
       case None =>
         scheduledActors.put(
           schedule.tick,
-          ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.identify))
+          ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.identify.get))
         )
   }
 
   private def finishEventApply(finish: FinishEvent): Unit =
-    if (finish.timeManager == self) {
+    if (finish.timeManager == self.path.toString) {
       logEvent(s"Finish event for ${finish.identify} at tick ${finish.end}")
       logEvent(s"Finish event destruct: ${finish.destruct}")
       logEvent("TimeManager finish event apply")
-      finish.logEvent(context, self)
       logEvent(s"Running events: ${runningEvents.size}")
-      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.id}")
-      runningEvents.filterInPlace(_.id != finish.identify.id)
+      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.get.id}")
+      runningEvents.filterInPlace(_.id != finish.identify.get.id)
       logEvent(s"Running events after remove: ${runningEvents.size}")
       finish.scheduleEvent.foreach(scheduleApply)
       if (finish.destruct) {
-        registeredActors.remove(getActorRef(finish.identify.actorPathRef))
+        registeredActors.remove(getActorRef(finish.identify.get.actorRef))
       }
     } else {
       logEvent("TimeManager finish event forward")
-      finish.timeManager ! finish
+      getActorRef(finish.timeManager) ! finish
     }
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
@@ -235,7 +234,7 @@ class TimeManager(
     if (
       parentManager.isDefined && (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size)
     ) {
-      parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, actorRef = self)
+      parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, actorRef = getPath)
     } else {
       notifyLocalManagers(UpdateGlobalTimeEvent(tick = localTickOffset))
     }
@@ -273,10 +272,10 @@ class TimeManager(
     )
 
   private def handleAcknowledgeTick(acknowledge: AcknowledgeTickEvent): Unit =
-    if (acknowledge.timeManager == self) {
+    if (acknowledge.timeManagerRef == getPath) {
       tickAcknowledge = tickAcknowledge + 1
     } else {
-      acknowledge.timeManager ! acknowledge
+      getActorRef(acknowledge.timeManagerRef) ! acknowledge
     }
 
   private def advanceToNextTick(): Unit = {
@@ -322,8 +321,8 @@ class TimeManager(
     }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
-      finishEvent.identify.id,
+    getShardRef(finishEvent.identify.get.classType) ! EntityEnvelopeEvent(
+      finishEvent.identify.get.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
 

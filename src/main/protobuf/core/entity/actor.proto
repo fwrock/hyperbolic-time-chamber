@@ -20,7 +20,7 @@ message ActorSimulation {
 
 message ActorDataSimulation {
   string dataType = 1;
-  google.protobuf.Any content = 2;
+  bytes content = 2;
 }
 
 message Dependency {
@@ -31,7 +31,7 @@ message Dependency {
 message Initialization {
   string id = 1;
   string classType = 2;
-  repeated google.protobuf.Any data = 3;
+  bytes data = 3;
   map<string, Dependency> dependencies = 4;
 }
 

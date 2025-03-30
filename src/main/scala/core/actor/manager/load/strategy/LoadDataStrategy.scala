@@ -1,12 +1,13 @@
 package org.interscity.htc
 package core.actor.manager.load.strategy
 
-import core.entity.configuration.ActorDataSource
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.control.load.LoadDataSourceEvent
 import core.entity.state.DefaultState
+
+import org.htc.protobuf.core.entity.actor.ActorDataSource
+import org.htc.protobuf.core.entity.event.control.load.LoadDataSourceEvent
 
 import scala.collection.mutable
 

@@ -17,9 +17,9 @@ message ScheduleEvent {
 
 message FinishEvent {
   string actorRef = 1;
-  Identify identity = 2;
+  Identify identify = 2;
   uint64 end = 3;
-  optional ScheduleEvent scheduleEvent = 4;
+  ScheduleEvent scheduleEvent = 4;
   string timeManager = 5;
   bool destruct = 6;
 }

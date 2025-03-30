@@ -6,7 +6,7 @@ import core.types.CoreTypes.Tick
 import org.apache.pekko.actor.ActorRef
 import core.entity.event.data.BaseEventData
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 
 case class ActorInteractionEvent(
                                   tick: Tick,
@@ -21,6 +21,6 @@ case class ActorInteractionEvent(
   def toIdentity: Identify = Identify(
     id = actorRefId,
     classType = actorClassType,
-    actorPathRef = actorPathRef
+    actorRef = actorPathRef
   )
 }

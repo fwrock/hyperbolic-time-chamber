@@ -1,10 +1,9 @@
 package org.interscity.htc
 package core.actor.manager.load.strategy
 
-import core.entity.configuration.ActorDataSource
-import core.entity.event.control.load.LoadDataSourceEvent
-
 import org.apache.pekko.actor.ActorRef
+import org.htc.protobuf.core.entity.actor.ActorDataSource
+import org.htc.protobuf.core.entity.event.control.load.LoadDataSourceEvent
 
 class CassandraLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager = timeManager) {
   override def load(actorDataSource: ActorDataSource): Unit =

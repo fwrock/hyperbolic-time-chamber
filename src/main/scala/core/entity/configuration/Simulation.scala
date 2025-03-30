@@ -3,6 +3,8 @@ package core.entity.configuration
 
 import core.types.CoreTypes.Tick
 
+import org.htc.protobuf.core.entity.actor.ActorDataSource
+
 import java.time.LocalDateTime
 
 case class Simulation(
