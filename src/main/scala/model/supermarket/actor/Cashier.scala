@@ -4,11 +4,11 @@ package model.supermarket.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+import org.interscity.htc.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
-import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
+import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{Busy, Free, Waiting}
 import org.interscity.htc.model.supermarket.entity.model.ClientQueued
 import org.interscity.htc.model.supermarket.entity.state.CashierState
 import org.interscity.htc.model.supermarket.util.CashierUtil
@@ -68,14 +68,14 @@ class Cashier(
         logEvent(s"Event current status not handled ${state.status}")
     }
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[NewClientServiceData] => handleNewClientService(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case e: NewClientServiceData => handleNewClientService(event, e)
       case _ =>
         logEvent(s"Event not handled ${event}")
     }
 
-  private def handleNewClientService(event: ActorInteractionEvent[NewClientServiceData]): Unit =
+  private def handleNewClientService(event: ActorInteractionEvent, data: NewClientServiceData): Unit =
     if (state.queue.isEmpty && (state.status == Waiting || state.status == Free)) {
       state.status = Busy
       sendMessageTo(
@@ -83,16 +83,16 @@ class Cashier(
         event.actorClassType,
         StartClientServiceData()
       )
-      onFinishSpontaneous(Some(currentTick + serviceTime(event.data.amountThings)))
+      onFinishSpontaneous(Some(currentTick + serviceTime(data.amountThings)))
     } else {
       state.queue.enqueue(
         ClientQueued(
           client = Identify(
             id = event.actorRefId,
             classType = event.actorClassType,
-            actorRef = event.actorRef
+            actorPathRef = event.actorPathRef
           ),
-          amountThings = event.data.amountThings
+          amountThings = data.amountThings
         )
       )
     }

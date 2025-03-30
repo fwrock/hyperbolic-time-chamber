@@ -55,15 +55,15 @@ class BusStation(
         logEvent(s"Event current status not handled ${state.status}")
     }
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[ReceiveRouteData] => handleRequestRoute(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case e: ReceiveRouteData => handleRequestRoute(event)
       case _ =>
         logEvent("Event not handled")
     }
 
-  private def handleRequestRoute(value: ActorInteractionEvent[ReceiveRouteData]): Unit = {
-    val route = value.data
+  private def handleRequestRoute(value: ActorInteractionEvent): Unit = {
+    val route = value.data.asInstanceOf[ReceiveRouteData]
     if (route.label == "going-route") {
       state.goingRoute match
         case Some(goingRoute) =>

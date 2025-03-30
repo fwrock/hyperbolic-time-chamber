@@ -42,20 +42,20 @@ abstract class Movable[T <: MovableState](
       case _ =>
         logEvent(s"Event current status not handled ${state.movableStatus}")
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[ForwardRouteData] => handleForwardRoute(e)
-      case e: ActorInteractionEvent[ReceiveRouteData] => handleReceiveRoute()
-      case e: ActorInteractionEvent[LinkInfoData]     => handleLinkInfo(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: ForwardRouteData => handleForwardRoute(d)
+      case d: ReceiveRouteData => handleReceiveRoute()
+      case d: LinkInfoData     => handleLinkInfo(event, d)
       case _ =>
         logEvent("Event not handled")
     }
 
-  private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit = {
-    val updatedCost = event.data.updatedCost
+  private def handleForwardRoute(data: ForwardRouteData): Unit = {
+    val updatedCost = data.updatedCost
     if (updatedCost < state.movableBestCost) {
       state.movableBestCost = updatedCost
-      state.movableBestRoute = Some(event.data.path)
+      state.movableBestRoute = Some(data.path)
     }
   }
 
@@ -64,17 +64,17 @@ abstract class Movable[T <: MovableState](
     linkEnter()
   }
 
-  private def handleLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit =
+  private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
     EventTypeEnum.valueOf(event.eventType) match {
-      case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event)
-      case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event)
+      case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
+      case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
       case _ =>
         logEvent("Event not handled")
     }
 
-  protected def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
+  protected def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {}
 
-  protected def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {}
+  protected def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {}
 
   protected def onFinish(nodeId: String): Unit =
     if (state.destination == nodeId) {

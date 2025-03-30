@@ -28,3 +28,24 @@ message SpontaneousEvent {
   uint64 tick = 1;
   string actorRef = 2;
 }
+
+message ActorInteractionEvent {
+  uint64 tick = 1;
+  uint64 lamportTick = 2;
+  string actorRefId = 3;
+  string actorRef = 4;
+  string actorClassType = 5;
+  string eventType = 6;
+  bytes data_bytes = 7;
+  string data_class_manifest = 8;
+}
+
+message ActorInteraction{
+  uint64 tick = 1;
+  uint64 lamportTick = 2;
+  string actorRefId = 3;
+  string actorRef = 4;
+  string actorClassType = 5;
+  string eventType = 6;
+  bytes data = 7;
+}

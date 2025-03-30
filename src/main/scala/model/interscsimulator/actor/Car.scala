@@ -46,10 +46,10 @@ class Car(
     }
   }
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
-    event match {
-      case e: ActorInteractionEvent[SignalStateData] => handleSignalState(e)
+    event.data match {
+      case d: SignalStateData => handleSignalState(event, d)
       case _ =>
         logEvent("Event not handled")
     }
@@ -92,10 +92,10 @@ class Car(
       case None => ???
   }
 
-  private def handleSignalState(event: ActorInteractionEvent[SignalStateData]): Unit =
-    if (event.data.phase == Red) {
+  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
+    if (data.phase == Red) {
       state.movableStatus = WaitingSignal
-      onFinishSpontaneous(Some(event.data.nextTick))
+      onFinishSpontaneous(Some(data.nextTick))
     } else {
       linkLeaving()
     }
@@ -105,18 +105,18 @@ class Car(
     super.linkLeaving()
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
-    state.distance += event.data.linkLength
+  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    state.distance += data.linkLength
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
     val time = linkDensitySpeed(
-      length = event.data.linkLength,
-      capacity = event.data.linkCapacity,
-      numberOfCars = event.data.linkNumberOfCars,
-      freeSpeed = event.data.linkFreeSpeed,
-      lanes = event.data.linkLanes
+      length = data.linkLength,
+      capacity = data.linkCapacity,
+      numberOfCars = data.linkNumberOfCars,
+      freeSpeed = data.linkFreeSpeed,
+      lanes = data.linkLanes
     )
     state.movableStatus = Moving
     onFinishSpontaneous(Some(currentTick + time.toLong))

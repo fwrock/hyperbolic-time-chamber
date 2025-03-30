@@ -89,7 +89,7 @@ class CreatorLoadData(
           identify = Identify(
             actor.id,
             actor.typeActor,
-            shardRegion
+            shardRegion.path.name
           )
         )
     }

@@ -53,19 +53,19 @@ class Client(
     )
   }
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[StartClientServiceData]  => handleStartClientService(e)
-      case e: ActorInteractionEvent[FinishClientServiceData] => handleFinishClientService(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: StartClientServiceData  => handleStartClientService(d)
+      case d: FinishClientServiceData => handleFinishClientService(d)
       case _ =>
         logEvent(s"Event not handled ${event}")
     }
 
-  private def handleStartClientService(event: ActorInteractionEvent[StartClientServiceData]): Unit =
+  private def handleStartClientService(data: StartClientServiceData): Unit =
     state.status = InService
 
   private def handleFinishClientService(
-    event: ActorInteractionEvent[FinishClientServiceData]
+                                         data: FinishClientServiceData
   ): Unit = {
     state.status = Finished
     onFinishSpontaneous(destruct = true)

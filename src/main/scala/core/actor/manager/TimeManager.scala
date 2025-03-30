@@ -201,7 +201,7 @@ class TimeManager(
       logEvent(s"Running events after remove: ${runningEvents.size}")
       finish.scheduleEvent.foreach(scheduleApply)
       if (finish.destruct) {
-        registeredActors.remove(finish.identify.actorRef)
+        registeredActors.remove(getActorRef(finish.identify.actorPathRef))
       }
     } else {
       logEvent("TimeManager finish event forward")

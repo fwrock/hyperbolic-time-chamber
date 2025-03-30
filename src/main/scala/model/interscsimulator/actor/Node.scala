@@ -37,55 +37,55 @@ class Node(
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[RegisterBusStopData]       => handleRegisterBusStop(e)
-      case e: ActorInteractionEvent[RegisterSubwayStationData] => handleRegisterSubwayStation(e)
-      case e: ActorInteractionEvent[RequestRouteData]          => handleRequestRoute(e)
-      case e: ActorInteractionEvent[ForwardRouteData]          => handleForwardRoute(e)
-      case e: ActorInteractionEvent[RequestSignalStateData]    => handleRequestSignalState(e)
-      case e: ActorInteractionEvent[TrafficSignalChangeStatusData] =>
-        handleReceiveSignalChangeStatus(e)
-      case e: ActorInteractionEvent[LinkConnectionsData] => handleLinkConnections(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RegisterBusStopData       => handleRegisterBusStop(event, d)
+      case d: RegisterSubwayStationData => handleRegisterSubwayStation(event, d)
+      case d: RequestRouteData          => handleRequestRoute(event, d)
+      case d: ForwardRouteData          => handleForwardRoute(event, d)
+      case d: RequestSignalStateData    => handleRequestSignalState(event, d)
+      case d: TrafficSignalChangeStatusData =>
+        handleReceiveSignalChangeStatus(event, d)
+      case d: LinkConnectionsData => handleLinkConnections(event, d)
       case _ =>
         logEvent("Event not handled")
     }
 
-  private def handleRegisterBusStop(event: ActorInteractionEvent[RegisterBusStopData]): Unit =
-    state.busStops.put(event.data.label, event.toIdentity)
+  private def handleRegisterBusStop(event: ActorInteractionEvent, data: RegisterBusStopData): Unit =
+    state.busStops.put(data.label, event.toIdentity)
 
   private def handleRegisterSubwayStation(
-    event: ActorInteractionEvent[RegisterSubwayStationData]
+    event: ActorInteractionEvent, data: RegisterSubwayStationData
   ): Unit =
-    event.data.lines.foreach {
+    data.lines.foreach {
       line =>
         state.subwayStations.put(line, event.toIdentity)
     }
 
-  private def handleLinkConnections(event: ActorInteractionEvent[LinkConnectionsData]): Unit =
-    if (event.data.to.id == getActorId) {
-      state.connections.put(event.actorRefId, event.data.from)
+  private def handleLinkConnections(event: ActorInteractionEvent, data: LinkConnectionsData): Unit =
+    if (data.to.id == getActorId) {
+      state.connections.put(event.actorRefId, data.from)
     } else {
-      state.connections.put(event.actorRefId, event.data.to)
+      state.connections.put(event.actorRefId, data.to)
     }
 
-  private def handleRequestRoute(event: ActorInteractionEvent[RequestRouteData]): Unit =
-    if (getActorId == event.data.targetNodeId) {
-      handleRequestRouteTarget(event)
+  private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit =
+    if (getActorId == data.targetNodeId) {
+      handleRequestRouteTarget(event, data)
     } else {
-      handleRequestRouteLinks(event)
+      handleRequestRouteLinks(event, data)
     }
 
-  private def handleRequestRouteLinks(event: ActorInteractionEvent[RequestRouteData]): Unit = {
-    val path = event.data.path
+  private def handleRequestRouteLinks(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
+    val path = data.path
     val updatedPath = path :+ (toIdentify, null)
-    val data = RequestRouteData(
-      requester = event.data.requester,
-      requesterId = event.data.requesterId,
-      requesterClassType = event.data.requesterClassType,
-      currentCost = event.data.currentCost,
-      targetNodeId = event.data.targetNodeId,
-      originNodeId = event.data.originNodeId,
+    val dataRequest = RequestRouteData(
+      requester = data.requester,
+      requesterId = data.requesterId,
+      requesterClassType = data.requesterClassType,
+      currentCost = data.currentCost,
+      targetNodeId = data.targetNodeId,
+      originNodeId = data.originNodeId,
       path = updatedPath
     )
 
@@ -96,31 +96,31 @@ class Node(
         sendMessageTo(
           dependency.id,
           dependency.classType,
-          data,
+          dataRequest,
           EventTypeEnum.RequestRoute.toString
         )
     }
   }
 
-  private def handleRequestRouteTarget(event: ActorInteractionEvent[RequestRouteData]): Unit = {
-    val path = event.data.path
+  private def handleRequestRouteTarget(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
+    val path = data.path
     val updatedPath = path :+ (null, toIdentify)
-    val data = ReceiveRouteData(
+    val dataReceive = ReceiveRouteData(
       path = updatedPath,
-      label = event.data.label,
-      origin = event.data.originNodeId,
-      destination = event.data.targetNodeId
+      label = data.label,
+      origin = data.originNodeId,
+      destination = data.targetNodeId
     )
     sendMessageTo(
-      event.data.requesterId,
-      event.data.requesterClassType,
-      data,
+      data.requesterId,
+      data.requesterClassType,
+      dataReceive,
       EventTypeEnum.ReceiveRoute.toString
     )
   }
 
-  private def handleForwardRoute(event: ActorInteractionEvent[ForwardRouteData]): Unit =
-    val dependency = dependencies(event.data.requesterId)
+  private def handleForwardRoute(event: ActorInteractionEvent, data: ForwardRouteData): Unit =
+    val dependency = dependencies(data.requesterId)
     sendMessageTo(
       dependency.id,
       dependency.classType,
@@ -129,9 +129,9 @@ class Node(
     )
 
   private def handleRequestSignalState(
-    event: ActorInteractionEvent[RequestSignalStateData]
+    event: ActorInteractionEvent, data: RequestSignalStateData
   ): Unit =
-    state.connections.get(event.data.targetLinkId) match
+    state.connections.get(data.targetLinkId) match
       case Some(identify) =>
         state.signals.get(identify.id) match
           case Some(signalState) =>
@@ -157,7 +157,7 @@ class Node(
       case None => ???
 
   private def handleReceiveSignalChangeStatus(
-    event: ActorInteractionEvent[TrafficSignalChangeStatusData]
+    event: ActorInteractionEvent, data: TrafficSignalChangeStatusData
   ): Unit =
-    state.signals.put(event.data.phaseOrigin, event.data.signalState)
+    state.signals.put(data.phaseOrigin, data.signalState)
 }

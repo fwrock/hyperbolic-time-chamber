@@ -52,40 +52,40 @@ class SubwayStation(
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[RegisterSubwayPassengerData] => handleRegisterPassenger(e)
-      case e: ActorInteractionEvent[SubwayRequestPassengerData]  => handleSubwayRequestPassenger(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
+      case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
       case _                                                     => logEvent("Event not handled")
     }
 
   private def handleRegisterPassenger(
-    event: ActorInteractionEvent[RegisterSubwayPassengerData]
+    event: ActorInteractionEvent, data: RegisterSubwayPassengerData
   ): Unit = {
-    val person = Identify(event.actorRefId, event.actorClassType, event.actorRef)
-    state.people.get(event.data.line) match {
+    val person = Identify(event.actorRefId, event.actorClassType, event.actorPathRef)
+    state.people.get(data.line) match {
       case Some(people) =>
-        state.people.put(event.data.line, people :+ person)
+        state.people.put(data.line, people :+ person)
       case None =>
-        state.people.put(event.data.line, mutable.Seq(person))
+        state.people.put(data.line, mutable.Seq(person))
     }
   }
 
   private def handleSubwayRequestPassenger(
-    event: ActorInteractionEvent[SubwayRequestPassengerData]
+    event: ActorInteractionEvent, data: SubwayRequestPassengerData
   ): Unit =
-    state.people.get(event.data.line) match {
+    state.people.get(data.line) match {
       case Some(people) =>
-        val peopleToLoad = people.take(event.data.availableSpace)
-        state.people.put(event.data.line, people.drop(event.data.availableSpace))
-        sendLoadPeopleToSubway(peopleToLoad, event)
+        val peopleToLoad = people.take(data.availableSpace)
+        state.people.put(data.line, people.drop(data.availableSpace))
+        sendLoadPeopleToSubway(peopleToLoad, event, data)
       case None =>
-        sendLoadPeopleToSubway(mutable.Seq(), event)
+        sendLoadPeopleToSubway(mutable.Seq(), event, data)
     }
 
   private def sendLoadPeopleToSubway(
     peopleToLoad: mutable.Seq[Identify],
-    event: ActorInteractionEvent[SubwayRequestPassengerData]
+    event: ActorInteractionEvent, data: SubwayRequestPassengerData
   ): Unit =
     sendMessageTo(
       event.actorRefId,
