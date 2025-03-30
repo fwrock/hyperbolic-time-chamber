@@ -3,7 +3,7 @@ package model.interscsimulator.entity.event.data.subway
 
 import core.entity.event.data.BaseEventData
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 
 import scala.collection.mutable
 

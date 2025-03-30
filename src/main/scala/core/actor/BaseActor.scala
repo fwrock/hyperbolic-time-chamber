@@ -2,18 +2,18 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.AcknowledgeTickEvent
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.interscity.htc.core.entity.actor.{Dependency, Identify}
-import org.interscity.htc.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -86,12 +86,16 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit = {
     actorId = event.id
-    if (event.data.data != null) {
-      state = JsonUtil.convertValue[T](event.data.data)
-      startTick = state.getStartTick
-    }
-    dependencies.clear()
-    dependencies ++= event.data.dependencies
+    event.data.foreach(data => {
+        if (data.data != null) {
+          state = JsonUtil.convertValueByString[T](data.data)
+          startTick = state.getStartTick
+        }
+        if (data.dependencies != null) {
+          dependencies.clear()
+          dependencies ++= data.dependencies
+        }
+    })
     onInitialize(event)
     onFinishInitialize()
   }
@@ -169,8 +173,8 @@ abstract class BaseActor[T <: BaseState](
     if (timeManager != null && timeManager != self) {
       timeManager ! AcknowledgeTickEvent(
         tick = currentTick,
-        actorRef = self,
-        timeManager = currentTimeManager
+        actorRef = getPath,
+        timeManagerRef = currentTimeManager.path.toString
       )
     }
 
@@ -264,17 +268,17 @@ abstract class BaseActor[T <: BaseState](
   ): Unit =
     timeManager ! FinishEvent(
       end = currentTick,
-      actorRef = self,
-      identify = Identify(actorId, getClass.getName, self.path.name),
+      actorRef = getPath,
+      identify = Some(Identify(actorId, getClass.getName, getPath)),
       scheduleEvent = scheduleTick.map(
         tick =>
           ScheduleEvent(
             tick = tick,
-            actorRef = self,
-            identify = Identify(actorId, getClass.getName, self.path.name)
+            actorRef = getPath,
+            identify = Some(Identify(actorId, getClass.getName, getPath))
           )
       ),
-      timeManager = currentTimeManager,
+      timeManager = currentTimeManager.path.toString,
       destruct = destruct
     )
 
@@ -284,8 +288,8 @@ abstract class BaseActor[T <: BaseState](
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(
       tick = tick,
-      actorRef = self,
-      identify = Identify(actorId, getClass.getName, self.path.name)
+      actorRef = getPath,
+      identify = Some(Identify(actorId, getClass.getName, getPath))
     )
 
   protected def getActorRef(path: String): ActorRef =
