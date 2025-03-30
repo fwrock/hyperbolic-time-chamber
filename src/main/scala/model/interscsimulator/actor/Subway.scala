@@ -44,11 +44,11 @@ class Subway(
       case _ =>
         logEvent(s"Event current status not handled ${state.movableStatus}")
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
-    event match {
-      case e: ActorInteractionEvent[SubwayLoadPassengerData]   => handleBusLoadPeople(e)
-      case e: ActorInteractionEvent[SubwayUnloadPassengerData] => handleUnloadPassenger(e)
+    event.data match {
+      case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
+      case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
       case _ =>
         logEvent("Event not handled")
     }
@@ -98,7 +98,7 @@ class Subway(
                   person._2.classType,
                   data = SubwayRequestUnloadPassengerData(
                     nodeId = node.id,
-                    nodeRef = node.actorRef
+                    nodeRef = getActorRef(node.actorPathRef)
                   )
                 )
             }
@@ -112,33 +112,33 @@ class Subway(
       case (_, v) => v == value
     }.map(_._1)
 
-  private def handleBusLoadPeople(event: ActorInteractionEvent[SubwayLoadPassengerData]): Unit = {
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: SubwayLoadPassengerData): Unit = {
     state.nodeState.isLoaded = true
-    for (person <- event.data.people)
+    for (person <- data.people)
       state.passengers.put(person.id, person)
     onFinishNodeState()
   }
 
   private def handleUnloadPassenger(
-    event: ActorInteractionEvent[SubwayUnloadPassengerData]
+    event: ActorInteractionEvent, data: SubwayUnloadPassengerData
   ): Unit = {
     state.countUnloadReceived += 1
-    state.countUnloadPassenger += (if (event.data.isArrival) 1 else 0)
+    state.countUnloadPassenger += (if (data.isArrival) 1 else 0)
     if (state.countUnloadReceived == state.passengers.size) {
       state.nodeState.isUnloaded = true
       onFinishNodeState()
     }
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
-    state.distance += event.data.linkLength
+  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    state.distance += data.linkLength
     state.movableStatus = Ready
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
     val time = timeToNextStation(
-      distance = event.data.linkLength,
+      distance = data.linkLength,
       velocity = state.velocity
     )
     state.movableStatus = Moving

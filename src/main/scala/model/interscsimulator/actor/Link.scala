@@ -53,16 +53,16 @@ class Link(
       EventTypeEnum.RequestRoute.toString
     )
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[RequestRouteData] => handleRequestRoute(e)
-      case e: ActorInteractionEvent[EnterLinkData]    => handleEnterLink(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RequestRouteData => handleRequestRoute(event, d)
+      case d: EnterLinkData    => handleEnterLink(event, d)
       case _ =>
         logEvent("Event not handled")
     }
 
-  private def handleEnterLink(event: ActorInteractionEvent[EnterLinkData]): Unit = {
-    val data = LinkInfoData(
+  private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    val dataLink = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,
       linkNumberOfCars = state.registered.size,
@@ -71,34 +71,34 @@ class Link(
     )
     state.registered.add(
       LinkRegister(
-        actorId = event.data.actorId,
-        actorRef = event.data.actorRef,
-        actorType = event.data.actorType,
-        actorSize = event.data.actorSize
+        actorId = data.actorId,
+        actorRef = data.actorRef,
+        actorType = data.actorType,
+        actorSize = data.actorSize
       )
     )
     sendMessageTo(
       event.actorRefId,
       event.actorClassType,
-      data,
+      dataLink,
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
   }
 
-  private def handleRequestRoute(event: ActorInteractionEvent[RequestRouteData]): Unit = {
-    val path = event.data.path
+  private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
+    val path = data.path
     val updatedPath = path :+ (
       dependencies(state.to).toIdentify(),
       toIdentify
     )
-    val data = ForwardRouteData(
-      requester = event.data.requester,
-      requesterId = event.data.requesterId,
-      updatedCost = cost + event.data.currentCost,
-      targetNodeId = event.data.targetNodeId,
+    val dataForward = ForwardRouteData(
+      requester = data.requester,
+      requesterId = data.requesterId,
+      updatedCost = cost + data.currentCost,
+      targetNodeId = data.targetNodeId,
       path = updatedPath
     )
     val to = dependencies(state.to)
-    sendMessageTo(to.id, to.classType, data, ForwardRoute.toString)
+    sendMessageTo(to.id, to.classType, dataForward, ForwardRoute.toString)
   }
 }

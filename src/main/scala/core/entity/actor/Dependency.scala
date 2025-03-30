@@ -8,5 +8,5 @@ case class Dependency(
   classType: String
 ) {
   def toIdentify(actorRef: ActorRef = null): Identify =
-    Identify(id = id, classType = classType, actorRef = actorRef)
+    Identify(id = id, classType = classType, actorPathRef = actorRef.path.name)
 }
