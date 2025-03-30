@@ -4,7 +4,7 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ScheduleEvent, SpontaneousEvent}
+import core.entity.event.SpontaneousEvent
 import model.interscsimulator.entity.state.TrafficSignalState
 
 import org.htc.protobuf.core.entity.actor.Dependency

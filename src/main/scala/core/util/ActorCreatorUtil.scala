@@ -9,8 +9,9 @@ import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSet
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import org.apache.pekko.routing.RoundRobinPool
+import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.interscity.htc.core.entity.actor.{Identify, PoolDistributedConfiguration}
+import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 
 import java.util.UUID
 import scala.collection.mutable
