@@ -5,12 +5,10 @@ import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
 import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
 import core.entity.control.LamportClock
 import core.util.JsonUtil
-import scalapb.GeneratedMessage
 
-import com.google.protobuf.ByteString
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
 import org.interscity.htc.core.entity.actor.{Dependency, Identify}
@@ -19,7 +17,6 @@ import org.interscity.htc.core.entity.event.control.load.{InitializeEntityAckEve
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import org.interscity.htc.core.entity.event.data.BaseEventData
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
