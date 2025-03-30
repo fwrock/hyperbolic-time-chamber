@@ -1,16 +1,17 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent }
+import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, RegisterActorEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
+import org.htc.protobuf.core.entity.event.control.execution.{PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.interscity.htc.core.entity.actor.Identify
 
 import scala.collection.mutable
@@ -56,7 +57,6 @@ class TimeManager(
           totalInstances = 2,
           maxInstancesPerNode = 1,
           allowLocalRoutees = true
-          // useRoles = Set("time-manager")
         )
       ).props(
         Props(
@@ -74,7 +74,7 @@ class TimeManager(
   }
 
   override def handleEvent: Receive = {
-    case start: StartSimulationEvent       => startSimulation(start)
+    case start: StartSimulationTimeEvent       => startSimulation(start)
     case register: RegisterActorEvent      => registerActor(register)
     case schedule: ScheduleEvent           => scheduleApply(schedule)
     case finish: FinishEvent               => finishEventApply(finish)
@@ -100,9 +100,13 @@ class TimeManager(
     )
   }
 
-  private def startSimulation(start: StartSimulationEvent): Unit = {
+  private def startSimulation(start: StartSimulationTimeEvent): Unit = {
     logEvent(s"TimeManager started: $start")
-    startTime = start.data.startTime
+    start.data match
+      case Some(data) =>
+        startTime = data.startTime
+      case _ =>
+        startTime = System.currentTimeMillis()
     initialTick = start.startTick
     localTickOffset = initialTick
     isPaused = false

@@ -45,10 +45,10 @@ message ResumeSimulationEvent {
 
 }
 
-message StartSimulationEvent {
+message StartSimulationTimeEvent {
   uint64 startTick = 1;
   string actorRef = 2;
-  core.entity.event.control.execution.StartSimulationData data = 3;
+  core.entity.event.control.execution.StartSimulationTimeData data = 3;
 }
 
 message StopSimulationEvent {
