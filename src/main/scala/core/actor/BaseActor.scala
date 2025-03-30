@@ -5,19 +5,19 @@ import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
 import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, ScheduleEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
+import core.entity.event.control.execution.AcknowledgeTickEvent
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.{Dependency, Identify}
 import org.interscity.htc.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -246,7 +246,7 @@ abstract class BaseActor[T <: BaseState](
     * messages. It calls the onDestruct method.
     */
   protected def selfDestruct(): Unit =
-    self ! DestructEvent(currentTick, currentTimeManager)
+    self ! DestructEvent(currentTick, currentTimeManager.path.toString)
 
   /** Finishes the actor. This method is called when the actor finishes processing messages. It
     * calls the onDestruct method.
