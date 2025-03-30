@@ -6,12 +6,12 @@ import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.ScheduledActors
-import core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, RegisterActorEvent, UpdateGlobalTimeEvent}
+import core.entity.event.control.execution.{AcknowledgeTickEvent, LocalTimeReportEvent, RegisterActorEvent, UpdateGlobalTimeEvent}
 import core.entity.state.DefaultState
 
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PauseSimulationEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 import org.interscity.htc.core.entity.actor.Identify
 
 import scala.collection.mutable
@@ -318,13 +318,13 @@ class TimeManager(
   private def terminateAllActors(): Unit =
     registeredActors.foreach {
       actor =>
-        actor ! DestructEvent(tick = localTickOffset, actorRef = self)
+        actor ! DestructEvent(tick = localTickOffset, actorRef = getPath)
     }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
     getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
-      DestructEvent(tick = localTickOffset, actorRef = self)
+      DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
 
   private def printState(): Unit = {

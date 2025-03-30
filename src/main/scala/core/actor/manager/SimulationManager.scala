@@ -3,14 +3,13 @@ package core.actor.manager
 
 import core.entity.event.control.load.LoadDataEvent
 import core.entity.state.DefaultState
-import core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
 
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 import core.entity.configuration.Simulation
 
 import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
-import org.htc.protobuf.core.entity.event.control.execution.{PrepareSimulationEvent, StartSimulationTimeEvent, TimeManagerRegisterEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 
@@ -44,7 +43,7 @@ class SimulationManager(
     )
 
   private def startSimulation(): Unit = {
-    loadManager ! DestructEvent(actorRef = self)
+    loadManager ! DestructEvent(actorRef = getPath)
     logEvent("Start simulation")
     createSingletonProxy("time-manager", s"-${System.nanoTime()}") ! StartSimulationTimeEvent(
       data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))

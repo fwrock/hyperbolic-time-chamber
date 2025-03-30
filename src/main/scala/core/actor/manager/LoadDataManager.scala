@@ -5,13 +5,13 @@ import core.entity.event.control.load.{FinishCreationEvent, LoadDataEvent, LoadD
 import core.enumeration.DataSourceType
 
 import org.apache.pekko.actor.{ActorRef, Props}
-import core.entity.event.control.execution.DestructEvent
 import core.actor.manager.load.CreatorLoadData
 import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil
 import core.util.ActorCreatorUtil.createActor
 
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 
 import scala.collection.mutable
@@ -70,7 +70,7 @@ class LoadDataManager(
 
     loaders(actorRef) = true
 
-    actorRef! DestructEvent(actorRef = self)
+    actorRef! DestructEvent(actorRef = getPath)
 
     if (isAllDataLoaded) {
       creatorRef ! StartCreationEvent(actorRef = self)
@@ -78,7 +78,7 @@ class LoadDataManager(
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    creatorRef ! DestructEvent(actorRef = self)
+    creatorRef ! DestructEvent(actorRef = getPath)
     simulationManager ! FinishLoadDataEvent(actorRef = self.path.toString)
   }
 

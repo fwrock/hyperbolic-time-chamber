@@ -3,9 +3,9 @@ package org.interscity.htc
 import org.apache.pekko.actor.Props
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.Cluster
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
+import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
+import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import org.interscity.htc.core.actor.manager.SimulationManager
-import org.interscity.htc.core.entity.event.control.execution.StopSimulationEvent
 
 @main
 def main(): Unit = {
