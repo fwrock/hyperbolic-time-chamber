@@ -315,6 +315,8 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def getActorId: String = actorId
 
+  protected def getPath: String = self.path.toString
+
   protected def getSelfShard: ActorRef =
     ClusterSharding(context.system).shardRegion(getClass.getName)
 

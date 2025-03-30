@@ -1,12 +1,14 @@
 package org.interscity.htc
 package core.actor.manager.load.strategy
 
-import core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataSourceEvent }
+import core.entity.event.control.load.{CreateActorsEvent, LoadDataSourceEvent}
 
 import org.apache.pekko.actor.ActorRef
 import core.entity.configuration.ActorDataSource
 import core.util.JsonUtil
 import core.entity.actor.ActorSimulation
+
+import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 
 import scala.compiletime.uninitialized
 
@@ -36,7 +38,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     log.info(s"Data loaded from JSON")
 
-    managerRef ! FinishLoadDataEvent(actorRef = self)
+    managerRef ! FinishLoadDataEvent(actorRef = getPath)
   }
 
 }
