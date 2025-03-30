@@ -12,7 +12,7 @@ class ProtobufSerializer(
   val system: ExtendedActorSystem
                         ) extends SerializerWithStringManifest {
 
-  override def identifier: Int = 16071977
+  override def identifier: Int = 27011998
 
   override def manifest(o: AnyRef): String = o.getClass.getName
 

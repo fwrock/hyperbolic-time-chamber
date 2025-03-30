@@ -18,7 +18,7 @@ class ActorInteractionSerializer(
   private val EnvelopeManifest = classOf[ActorInteractionEvent].getName
   private lazy val serialization = SerializationExtension(system)
 
-  override def identifier: Int = 10042004
+  override def identifier: Int = 16071977
 
   override def manifest(o: AnyRef): String = o.getClass.getName
 
