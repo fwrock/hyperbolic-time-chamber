@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event.data
 
-import core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.actor.Dependency
 
 import org.apache.pekko.actor.ActorRef
 

@@ -3,7 +3,7 @@ package model.supermarket.entity.state
 
 import core.types.CoreTypes.Tick
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.Free

@@ -3,16 +3,19 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.entity.actor.{ ActorSimulation, Dependency, Identify, Initialization }
-import core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, RequestInitializeEvent, StartCreationEvent }
-import core.util.{ ActorCreatorUtil, JsonUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{ createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor }
+import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.{ActorSimulation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.execution.RegisterActorEvent
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, InitializeEvent}
+import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.JsonUtil.convertValue
 
 import scala.collection.mutable
@@ -41,7 +44,7 @@ class CreatorLoadData(
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
     if (initializeData.isEmpty && actors.isEmpty) {
       logEvent("Finish creation")
-      loadDataManager ! FinishCreationEvent(actorRef = self)
+      loadDataManager ! FinishCreationEvent(actorRef = getPath)
     }
 
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
@@ -53,7 +56,11 @@ class CreatorLoadData(
           event = InitializeEvent(
             id = data.id,
             actorRef = self,
-            data = data.toInitializeData
+            data = InitializeData(
+              data = data.data,
+              timeManager = data.timeManager,
+              dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep }
+            )
           )
         )
         initializeData.remove(event.entityId)
@@ -85,12 +92,12 @@ class CreatorLoadData(
 
         timeManager ! RegisterActorEvent(
           startTick = convertValue[DefaultState](actor.data.content).getStartTick,
-          actorRef = shardRegion,
-          identify = Identify(
+          actorRef = shardRegion.path.toString,
+          identify = Some(Identify(
             actor.id,
             actor.typeActor,
-            shardRegion
-          )
+            shardRegion.path.toString
+          ))
         )
     }
     actors.clear()

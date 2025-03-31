@@ -1,5 +1,4 @@
 import sbt.Keys.libraryDependencies
-
 import scala.collection.Seq
 
 ThisBuild / version := "0.1.0"
@@ -8,16 +7,25 @@ ThisBuild / scalaVersion := "3.3.5"
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
+// Apache Pekko
 val pekkoVersion = "1.1.3"
 val pekkoManagementVersion = "1.1.0"
-val logbackVersion = "1.5.18"
 val jacksonVersion = "2.18.3"
+val pekkoHttpVersion = "1.1.0"
+
+// Logs
+val logbackVersion = "1.5.18"
+
+// Serialization
+val jacksonModuleVersion = "2.18.3"
+val jacksonDatabindVersion = "2.18.3"
+val jacksonDataTypeVersion = "2.18.3"
 val kryoVersion = "1.2.1"
-val protobufVersion = "4.30.1"
+val protobufVersion = "4.30.2"
 val pekkoProtobuf = "1.0.3"
 
+// Connectors
 val cassandraConnectorsVersion = "1.1.0"
-
 val kafkaConnectorsVersion = "1.1.0"
 
 lazy val root = (project in file("."))
@@ -41,11 +49,12 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-management" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-management-cluster-http" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-slf4j" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-http" % pekkoHttpVersion,
       "org.apache.pekko" %% "pekko-cluster" % pekkoVersion,
       "org.apache.pekko" %% "pekko-cluster-tools" % pekkoVersion,
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
-      "org.apache.pekko" %% "pekko-protobuf" % pekkoProtobuf,
+      "org.apache.pekko" %% "pekko-protobuf-v3" % pekkoVersion,
 
       // Brokers
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
@@ -64,6 +73,11 @@ lazy val root = (project in file("."))
       // Protobuf
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
 
+      // Protobuf
+      "com.google.protobuf" % "protobuf-java" % protobufVersion,
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.1",
+
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
       "ch.qos.logback" % "logback-core" % logbackVersion,
@@ -77,10 +91,11 @@ lazy val root = (project in file("."))
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
     ),
-    Compile / PB.targets := Seq(
-      PB.gens.java -> (Compile / sourceManaged).value / "scalapb"
-    ),
     Compile / PB.protoSources := Seq(
       baseDirectory.value / "src" / "main" / "protobuf"
-    )
+    ),
+    Compile / PB.targets := Seq(
+      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
+    ),
+    PB.protocVersion := "-v4.30.2"
   )

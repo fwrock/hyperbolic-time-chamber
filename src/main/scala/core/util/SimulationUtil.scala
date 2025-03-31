@@ -1,9 +1,10 @@
 package org.interscity.htc
 package core.util
 
-import core.entity.configuration.Simulation
-import core.util.JsonUtil.{ fromJson, readJsonFile }
+import core.util.JsonUtil.{fromJson, readJsonFile}
 import core.exception.SimulationEnvConfigFoundException
+
+import org.interscity.htc.core.entity.configuration.Simulation
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion

@@ -4,7 +4,7 @@ package core.entity.control
 import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 
 import scala.collection.mutable
 

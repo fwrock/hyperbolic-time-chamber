@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity;
+
+import "google/protobuf/any.proto";
+
+message Identify {
+  string id = 1;
+  string classType = 2;
+  string actorRef = 3;
+}
+
+message ActorSimulation {
+  string id = 1;
+  string name = 2;
+  string typeActor = 3;
+  ActorDataSimulation data = 4;
+  map<string, Dependency> dependencies = 5;
+}
+
+message ActorDataSimulation {
+  string dataType = 1;
+  google.protobuf.Any content = 2;
+  repeated Property properties = 3;
+}
+
+message Dependency {
+  string id = 1;
+  string classType = 2;
+}
+
+message Initialization {
+  string id = 1;
+  string classType = 2;
+  google.protobuf.Any data = 3;
+  map<string, Dependency> dependencies = 4;
+  repeated Property properties = 5;
+}
+
+enum DataSourceType {
+  json = 0;
+  csv = 1;
+  xml = 2;
+  mongodb = 3;
+  cassandra = 4;
+}
+
+message DataSource {
+    DataSourceType sourceType = 1;
+    map<string, string> info = 2;
+}
+
+message ActorDataSource {
+  string classType = 1;
+  DataSource dataSource = 2;
+}
+
+message Property {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Any defaultValue = 3;
+  string schema = 4;
+  string comment = 5;
+  string description = 6;
+  string displayName = 7;
+  bool writeable = 8;
+}
+
+message Relationship {
+  string id = 1;
+  string name = 2;
+  string target = 3;
+  string comment = 4;
+  string description = 5;
+  string displayName = 6;
+  repeated Property properties = 7;
+}

@@ -6,29 +6,21 @@ import core.types.CoreTypes.Tick
 import org.apache.pekko.actor.ActorRef
 import core.entity.event.data.BaseEventData
 
-import org.interscity.htc.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 
-case class ActorInteractionEvent[D <: BaseEventData](
-  tick: Tick,
-  lamportTick: Tick,
-  actorRefId: String,
-  actorRef: ActorRef,
-  actorClassType: String,
-  eventType: String = "default",
-  data: D
-) extends BaseEvent[D](
-      tick = tick,
-      lamportTick = lamportTick,
-      actorRefId = actorRefId,
-      actorRef = actorRef,
-      actorClassType = actorClassType,
-      data = data,
-      eventType = eventType
-    ) {
+case class ActorInteractionEvent(
+                                  tick: Tick,
+                                  lamportTick: Tick,
+                                  actorRefId: String,
+                                  actorPathRef: String,
+                                  actorClassType: String,
+                                  eventType: String = "default",
+                                  data: AnyRef
+) {
 
-  def toIdentity() = Identify(
+  def toIdentity: Identify = Identify(
     id = actorRefId,
     classType = actorClassType,
-    actorRef = actorRef
+    actorRef = actorPathRef
   )
 }
