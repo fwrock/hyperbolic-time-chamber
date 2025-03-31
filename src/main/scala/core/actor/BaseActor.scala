@@ -4,7 +4,7 @@ package core.actor
 import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
 import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
-import core.entity.state.{BaseState, State}
+import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.{JsonUtil, StateUtil}
 
@@ -51,7 +51,6 @@ abstract class BaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
-  protected var newState: State = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
 
