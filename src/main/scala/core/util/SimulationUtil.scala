@@ -4,9 +4,7 @@ package core.util
 import core.util.JsonUtil.{fromJson, readJsonFile}
 import core.exception.SimulationEnvConfigFoundException
 
-import org.htc.protobuf.core.entity.configuration.Simulation
-
-import scalapb.json4s.JsonFormat
+import org.interscity.htc.core.entity.configuration.Simulation
 
 object SimulationUtil {
 
@@ -14,11 +12,11 @@ object SimulationUtil {
     if (configuration != null) {
       val content = readJsonFile(configuration)
       println(s"Configuration loaded:\n$content")
-      JsonFormat.fromJsonString[Simulation](content)
+      fromJson[Simulation](content)
     } else {
       val envConfig = "HTC_SIMULATION_CONFIG_FILE"
       sys.env.get(envConfig) match {
-        case Some(file) => JsonFormat.fromJsonString[Simulation](readJsonFile(file))
+        case Some(file) => fromJson[Simulation](readJsonFile(file))
         case None       => throw new SimulationEnvConfigFoundException(envConfig)
       }
     }

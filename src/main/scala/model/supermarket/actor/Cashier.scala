@@ -5,9 +5,8 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.core.entity.event.communication.SpontaneousEvent
 import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
-import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{Busy, Free, Waiting}
 import org.interscity.htc.model.supermarket.entity.model.ClientQueued
 import org.interscity.htc.model.supermarket.entity.state.CashierState

@@ -6,15 +6,17 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.{createActor, createPoolActor, createShardRegion, createShardedActor, createSingletonActor}
+import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.{ActorSimulation, Dependency, Identify, Initialization}
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
-import org.htc.protobuf.core.entity.event.control.load.data.InitializationData
-import org.htc.protobuf.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEntityAckEvent, InitializeEvent, StartCreationEvent}
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.{ActorSimulation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.util.JsonUtil.{convertValue, convertValueByString}
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, InitializeEvent}
+import org.interscity.htc.core.entity.event.data.InitializeData
+import org.interscity.htc.core.util.JsonUtil.convertValue
 
 import scala.collection.mutable
 
@@ -53,12 +55,11 @@ class CreatorLoadData(
           entityId = event.entityId,
           event = InitializeEvent(
             id = data.id,
-            actorRef = getPath,
-            data = Some(InitializationData(
+            actorRef = self,
+            data = InitializeData(
               data = data.data,
-              dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep },
-              properties = data.properties
-            ))
+              dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep }
+            )
           )
         )
         initializeData.remove(event.entityId)
@@ -74,9 +75,8 @@ class CreatorLoadData(
         initializeData(actor.id) = Initialization(
           id = actor.id,
           classType = actor.typeActor,
-          data = actor.data.get.content,
-          dependencies = actor.dependencies,
-          properties = actor.data.get.properties
+          data = actor.data.content,
+          dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
 
         val shardRegion = createShardRegion(
@@ -90,7 +90,7 @@ class CreatorLoadData(
         shardRegion ! ShardRegion.StartEntity(actor.id)
 
         timeManager ! RegisterActorEvent(
-          startTick = convertValue[DefaultState](actor.data.get.content).getStartTick,
+          startTick = convertValue[DefaultState](actor.data.content).getStartTick,
           actorRef = shardRegion.path.toString,
           identify = Some(Identify(
             actor.id,

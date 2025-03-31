@@ -6,8 +6,8 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import core.entity.state.DefaultState
 
-import org.htc.protobuf.core.entity.actor.ActorDataSource
-import org.htc.protobuf.core.entity.event.control.load.LoadDataSourceEvent
+import org.interscity.htc.core.entity.configuration.ActorDataSource
+import org.interscity.htc.core.entity.event.control.load.LoadDataSourceEvent
 
 import scala.collection.mutable
 

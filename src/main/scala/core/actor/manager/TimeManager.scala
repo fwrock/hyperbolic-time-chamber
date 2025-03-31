@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.EntityEnvelopeEvent
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.{ActorRef, Props}
@@ -11,7 +11,7 @@ import core.entity.state.DefaultState
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent, SpontaneousEvent}
+import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 
 import scala.collection.mutable
@@ -118,7 +118,7 @@ class TimeManager(
       logEvent(
         s"TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
       )
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = getPath)
+      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     }
   }
 
@@ -132,7 +132,7 @@ class TimeManager(
   private def resumeSimulation(): Unit =
     if (isPaused) {
       isPaused = false
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = getPath)
+      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
       if (parentManager.isEmpty) {
         notifyLocalManagers(ResumeSimulationEvent)
       }
@@ -148,7 +148,7 @@ class TimeManager(
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
     if (parentManager.nonEmpty) {
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = getPath)
+      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     }
   }
 
@@ -194,21 +194,21 @@ class TimeManager(
   }
 
   private def finishEventApply(finish: FinishEvent): Unit =
-    if (finish.timeManager == self.path.toString) {
+    if (finish.timeManager == self) {
       logEvent(s"Finish event for ${finish.identify} at tick ${finish.end}")
       logEvent(s"Finish event destruct: ${finish.destruct}")
       logEvent("TimeManager finish event apply")
       logEvent(s"Running events: ${runningEvents.size}")
-      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.get.id}")
-      runningEvents.filterInPlace(_.id != finish.identify.get.id)
+      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.id}")
+      runningEvents.filterInPlace(_.id != finish.identify.id)
       logEvent(s"Running events after remove: ${runningEvents.size}")
       finish.scheduleEvent.foreach(scheduleApply)
       if (finish.destruct) {
-        registeredActors.remove(getActorRef(finish.identify.get.actorRef))
+        registeredActors.remove(getActorRef(finish.identify.actorRef))
       }
     } else {
       logEvent("TimeManager finish event forward")
-      getActorRef(finish.timeManager) ! finish
+      finish.timeManager ! finish
     }
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
@@ -225,7 +225,7 @@ class TimeManager(
       processNextEventTick(spontaneous.tick)
       localTickOffset = nextTick
       notifyManagers()
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = getPath)
+      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     } else {
       advanceToNextTick()
     }
@@ -267,7 +267,7 @@ class TimeManager(
       identity.id,
       SpontaneousEvent(
         tick = tick,
-        actorRef = getPath
+        actorRef = self
       )
     )
 
@@ -282,7 +282,7 @@ class TimeManager(
     val newTick = nextTick
     if (localTickOffset < simulationDuration) {
       localTickOffset = newTick
-      self ! SpontaneousEvent(tick = newTick, actorRef = getPath)
+      self ! SpontaneousEvent(tick = newTick, actorRef = self)
     } else {
       terminateSimulation()
     }
@@ -321,8 +321,8 @@ class TimeManager(
     }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.get.classType) ! EntityEnvelopeEvent(
-      finishEvent.identify.get.id,
+    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
+      finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
 

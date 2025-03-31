@@ -4,8 +4,10 @@ package core.actor.manager.load.strategy
 import org.apache.pekko.actor.ActorRef
 import core.util.JsonUtil
 
-import org.htc.protobuf.core.entity.actor.{ActorDataSource, ActorSimulation}
-import org.htc.protobuf.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataSourceEvent}
+import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
+import org.interscity.htc.core.entity.actor.ActorSimulation
+import org.interscity.htc.core.entity.configuration.ActorDataSource
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, LoadDataSourceEvent}
 
 import scala.compiletime.uninitialized
 
@@ -19,15 +21,15 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
-    managerRef = getActorRef(event.managerRef)
-    creatorRef = getActorRef(event.creatorRef)
-    event.actorDataSource.foreach(load)
+    managerRef = event.managerRef
+    creatorRef = event.creatorRef
+    load(event.actorDataSource)
   }
 
   override protected def load(source: ActorDataSource): Unit = {
     log.info(s"Loading data of ${source.classType} from JSON")
 
-    val content = JsonUtil.readJsonFile(source.dataSource.get.info("path").asInstanceOf[String])
+    val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     val actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
