@@ -2,19 +2,19 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
 import org.interscity.htc.model.interscsimulator.entity.state.BusState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
-import org.interscity.htc.model.interscsimulator.util.{ BusUtil, SpeedUtil }
+import org.interscity.htc.model.interscsimulator.util.{BusUtil, SpeedUtil}
 import org.interscity.htc.model.interscsimulator.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 
@@ -52,42 +52,42 @@ class Bus(
       case _ =>
         logEvent(s"Event current status not handled ${state.movableStatus}")
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
-    event match {
-      case e: ActorInteractionEvent[BusLoadPassengerData]   => handleBusLoadPeople(e)
-      case e: ActorInteractionEvent[BusUnloadPassengerData] => handleUnloadPassenger(e)
-      case e: ActorInteractionEvent[SignalStateData]        => handleSignalState(e)
+    event.data match {
+      case d: BusLoadPassengerData  => handleBusLoadPeople(event, d)
+      case d: BusUnloadPassengerData => handleUnloadPassenger(event, d)
+      case d: SignalStateData        => handleSignalState(event, d)
       case _ =>
         logEvent("Event not handled")
     }
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
-    state.distance += event.data.linkLength
+  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    state.distance += data.linkLength
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
     val time = linkDensitySpeed(
-      length = event.data.linkLength,
-      capacity = event.data.linkCapacity,
-      numberOfCars = event.data.linkNumberOfCars,
-      freeSpeed = event.data.linkFreeSpeed,
-      lanes = event.data.linkLanes
+      length = data.linkLength,
+      capacity = data.linkCapacity,
+      numberOfCars = data.linkNumberOfCars,
+      freeSpeed = data.linkFreeSpeed,
+      lanes = data.linkLanes
     )
     state.movableStatus = Moving
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
-  private def handleBusLoadPeople(event: ActorInteractionEvent[BusLoadPassengerData]): Unit =
-    if (event.data.people.nonEmpty) {
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit =
+    if (data.people.nonEmpty) {
       val nextTickTime = currentTick + loadPersonTime(
         numberOfPorts = state.numberOfPorts,
-        numberOfPassengers = event.data.people.size
+        numberOfPassengers = data.people.size
       )
       scheduleEvent(nextTickTime)
-      for (person <- event.data.people)
+      for (person <- data.people)
         state.people.put(person.id, person)
       state.nodeState.timeToLoadedPassengers = nextTickTime
       onFinishNodeState()
@@ -96,20 +96,20 @@ class Bus(
       onFinishNodeState()
     }
 
-  private def handleSignalState(event: ActorInteractionEvent[SignalStateData]): Unit =
-    if (event.data.phase == Red) {
+  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
+    if (data.phase == Red) {
       state.movableStatus = WaitingSignal
-      state.nodeState.timeToOpenSignal = event.data.nextTick
-      scheduleEvent(event.data.nextTick)
+      state.nodeState.timeToOpenSignal = data.nextTick
+      scheduleEvent(data.nextTick)
       onFinishNodeState()
     } else {
       state.nodeState.timeToOpenSignal = currentTick
       onFinishNodeState()
     }
 
-  private def handleUnloadPassenger(event: ActorInteractionEvent[BusUnloadPassengerData]): Unit = {
+  private def handleUnloadPassenger(event: ActorInteractionEvent, data: BusUnloadPassengerData): Unit = {
     state.countUnloadReceived += 1
-    state.countUnloadPassenger += (if (event.data.isArrival) 1 else 0)
+    state.countUnloadPassenger += (if (data.isArrival) 1 else 0)
     if (state.countUnloadReceived == state.people.size) {
       val nextTickTime = currentTick + BusUtil.unloadPersonTime(
         numberOfPorts = state.numberOfPorts,
@@ -186,7 +186,7 @@ class Bus(
                   person._2.classType,
                   data = BusRequestUnloadPassengerData(
                     nodeId = node.id,
-                    nodeRef = node.actorRef
+                    nodeRef = getActorRef(node.actorRef)
                   )
                 )
             }

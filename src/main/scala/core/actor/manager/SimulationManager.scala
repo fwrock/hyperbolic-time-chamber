@@ -1,15 +1,17 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
 import core.entity.state.DefaultState
-import core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationEvent, StopSimulationEvent, TimeManagerRegisterEvent }
 
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
-import core.entity.configuration.Simulation
 
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
+import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
+import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
+import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
+import org.interscity.htc.core.entity.configuration.Simulation
+import org.interscity.htc.core.entity.event.control.load.LoadDataEvent
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -41,9 +43,11 @@ class SimulationManager(
     )
 
   private def startSimulation(): Unit = {
-    loadManager ! DestructEvent(actorRef = self)
+    loadManager ! DestructEvent(actorRef = getPath)
     logEvent("Start simulation")
-    createSingletonProxy("time-manager", s"-${System.nanoTime()}") ! StartSimulationEvent()
+    createSingletonProxy("time-manager", s"-${System.nanoTime()}") ! StartSimulationTimeEvent(
+      data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))
+    )
   }
 
   private def getSelfProxy: ActorRef =
@@ -61,11 +65,11 @@ class SimulationManager(
     }
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
-    poolTimeManager = event.actorRef
+    poolTimeManager = getActorRef(event.actorRef)
     loadManager = createSingletonLoadManager()
 
     createSingletonProxy("load-manager") ! LoadDataEvent(
-      actorRef = self,
+      actorRef = getActorRef(getPath),
       actorsDataSources = configuration.actorsDataSources
     )
   }

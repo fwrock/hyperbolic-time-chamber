@@ -4,10 +4,11 @@ package core.util
 import com.fasterxml.jackson.core.`type`.TypeReference
 
 import scala.io.Source
-import com.fasterxml.jackson.databind.{ DeserializationFeature, ObjectMapper }
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.databind.`type`.TypeFactory
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.google.protobuf.ByteString
 
 object JsonUtil {
 
@@ -22,8 +23,14 @@ object JsonUtil {
     finally source.close()
   }
 
-  def convertValue[T](content: Any)(implicit m: Manifest[T]): T =
-    mapper.convertValue(content, m.runtimeClass).asInstanceOf[T]
+  def convertValue[T: Manifest](content: Any): T = {
+    val json = mapper.writeValueAsString(content) // Transforma o Map em JSON
+    val javaType = TypeFactory.defaultInstance().constructType(implicitly[Manifest[T]].runtimeClass)
+    mapper.readValue(json, javaType).asInstanceOf[T] // Converte corretamente para a case class
+  }
+    
+  def convertValueByString[T](content: ByteString)(implicit m: Manifest[T]): T =
+    mapper.convertValue(content.toByteArray, m.runtimeClass).asInstanceOf[T]
 
   def convertValue(content: Any, className: String): Any = {
     val clazz = Class.forName(className)

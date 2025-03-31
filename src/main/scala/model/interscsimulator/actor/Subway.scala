@@ -2,13 +2,13 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.state.SubwayState
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, Stopped, WaitingLoadPassenger}
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil
 import org.interscity.htc.model.interscsimulator.util.SubwayUtil.timeToNextStation
@@ -44,11 +44,11 @@ class Subway(
       case _ =>
         logEvent(s"Event current status not handled ${state.movableStatus}")
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
-    event match {
-      case e: ActorInteractionEvent[SubwayLoadPassengerData]   => handleBusLoadPeople(e)
-      case e: ActorInteractionEvent[SubwayUnloadPassengerData] => handleUnloadPassenger(e)
+    event.data match {
+      case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
+      case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
       case _ =>
         logEvent("Event not handled")
     }
@@ -98,7 +98,7 @@ class Subway(
                   person._2.classType,
                   data = SubwayRequestUnloadPassengerData(
                     nodeId = node.id,
-                    nodeRef = node.actorRef
+                    nodeRef = getActorRef(node.actorRef)
                   )
                 )
             }
@@ -112,33 +112,33 @@ class Subway(
       case (_, v) => v == value
     }.map(_._1)
 
-  private def handleBusLoadPeople(event: ActorInteractionEvent[SubwayLoadPassengerData]): Unit = {
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: SubwayLoadPassengerData): Unit = {
     state.nodeState.isLoaded = true
-    for (person <- event.data.people)
+    for (person <- data.people)
       state.passengers.put(person.id, person)
     onFinishNodeState()
   }
 
   private def handleUnloadPassenger(
-    event: ActorInteractionEvent[SubwayUnloadPassengerData]
+    event: ActorInteractionEvent, data: SubwayUnloadPassengerData
   ): Unit = {
     state.countUnloadReceived += 1
-    state.countUnloadPassenger += (if (event.data.isArrival) 1 else 0)
+    state.countUnloadPassenger += (if (data.isArrival) 1 else 0)
     if (state.countUnloadReceived == state.passengers.size) {
       state.nodeState.isUnloaded = true
       onFinishNodeState()
     }
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
-    state.distance += event.data.linkLength
+  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    state.distance += data.linkLength
     state.movableStatus = Ready
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent[LinkInfoData]): Unit = {
+  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
     val time = timeToNextStation(
-      distance = event.data.linkLength,
+      distance = data.linkLength,
       velocity = state.velocity
     )
     state.movableStatus = Moving
