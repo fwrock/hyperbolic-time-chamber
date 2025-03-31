@@ -52,6 +52,7 @@ class SimulationManager(
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
+      println("Creating self proxy")
       selfProxy = context.system.actorOf(
         ClusterSingletonProxy.props(
           singletonManagerPath = "/user/simulation-manager",
@@ -61,6 +62,7 @@ class SimulationManager(
       )
       selfProxy
     } else {
+      println("Reusing self proxy")
       selfProxy
     }
 

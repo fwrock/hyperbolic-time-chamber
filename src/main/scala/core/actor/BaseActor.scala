@@ -19,6 +19,7 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -39,8 +40,8 @@ import scala.concurrent.{Await, ExecutionContext, Future}
   */
 abstract class BaseActor[T <: BaseState](
   protected var actorId: String,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
+  private var timeManager: ActorRef = null,
+  private var creatorManager: ActorRef = null,
   private val data: Any = null,
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
@@ -53,13 +54,14 @@ abstract class BaseActor[T <: BaseState](
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
     */
   override def preStart(): Unit = {
     super.preStart()
-    logEvent(s"Starting actor with actorId: $actorId")
+    logEvent(s"Starting an actor type: $getClass")
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
       startTick = state.getStartTick
@@ -69,6 +71,7 @@ abstract class BaseActor[T <: BaseState](
 
   private def onFinishInitialize(): Unit =
     if (!isInitialized && creatorManager != null) {
+      logEvent(s"Finishing initialization")
       isInitialized = true
       creatorManager ! InitializeEntityAckEvent(
         entityId = actorId
@@ -87,13 +90,17 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit = {
     actorId = event.id
+    logEvent(s"Initializing actor with id $actorId, event $event")
     if (event.data.data != null) {
       state = JsonUtil.convertValue[T](event.data.data)
       startTick = state.getStartTick
     }
+    timeManager = event.data.timeManager
+    creatorManager = event.data.creatorManager
     dependencies.clear()
     dependencies ++= event.data.dependencies
     onInitialize(event)
+    logEvent(s"isInitialized = $isInitialized, creatorManager = $creatorManager")
     onFinishInitialize()
   }
 
@@ -120,7 +127,7 @@ abstract class BaseActor[T <: BaseState](
     lamportClock.increment()
     val shardingRegion = getShardRef(classType)
     logEvent(
-      s"Sending message to ${entityId} with Lamport clock ${getLamportClock}"
+      s"Sending message to ${entityId} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
     )
     shardingRegion ! EntityEnvelopeEvent(
       entityId,
@@ -192,7 +199,7 @@ abstract class BaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
     logEvent(
-      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock}"
+      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
     )
     actInteractWith(event)
   }
@@ -208,8 +215,10 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit =
+  protected def logEvent(eventInfo: String): Unit = {
     log.info(s"$actorId: $eventInfo")
+    logger.info(s"$actorId: $eventInfo")
+  }
 
   override def receive: Receive = {
     case event: SpontaneousEvent         => handleSpontaneous(event)
@@ -230,8 +239,10 @@ abstract class BaseActor[T <: BaseState](
       case event                           => handleEvent(event)
     }
 
-  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
+    logEvent(s"Starting entity with id ${event.entityId}")
     actorId = event.entityId
+  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
@@ -279,9 +290,17 @@ abstract class BaseActor[T <: BaseState](
       destruct = destruct
     )
 
+  /** Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the
+    * actor.
+    */
   protected def selfSpontaneous(): Unit =
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
+  /** Schedules an event at a specific tick. This method is used to schedule an event in the time
+    * manager.
+    * @param tick
+    *   The tick at which the event should be scheduled
+    */
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(
       tick = tick,
@@ -318,11 +337,26 @@ abstract class BaseActor[T <: BaseState](
 
   protected def getPath: String = self.path.toString
 
+  /** Gets the actor reference of the shard region for the current actor.
+    * @return
+    *   The actor reference of the shard region
+    */
   protected def getSelfShard: ActorRef =
     ClusterSharding(context.system).shardRegion(getClass.getName)
 
+  /** Gets the shard name for the current actor.
+    * @return
+    *   The shard name
+    */
   protected def getShardName: String = getClass.getName
 
+  /** Gets the actor reference of the shard region for a given class name.
+    *
+    * @param className
+    *   The class name of the shard region
+    * @return
+    *   The actor reference of the shard region
+    */
   protected def getShardRef(className: String): ActorRef =
     ClusterSharding(context.system).shardRegion(className)
 

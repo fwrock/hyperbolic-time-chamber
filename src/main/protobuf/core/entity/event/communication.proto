@@ -7,6 +7,8 @@ import "core/entity/actor.proto";
 message EntityEnvelope {
   string entityId = 1;
   bytes payload = 2;
+  int32 payload_serializer_id = 3;
+  string payload_manifest = 4;
 }
 
 message ScheduleEvent {

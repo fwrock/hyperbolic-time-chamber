@@ -18,7 +18,7 @@ object JsonUtil {
   mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
   def readJsonFile(filePath: String): String = {
-    val source = Source.fromFile(filePath)
+    val source = Source.fromResource(filePath)
     try source.getLines().mkString("\n")
     finally source.close()
   }

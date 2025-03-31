@@ -6,7 +6,10 @@ import core.entity.state.BaseState
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
+import org.interscity.htc.core.util.{ ActorCreatorUtil, DistributedUtil }
 
 import scala.collection.mutable
 
@@ -27,22 +30,13 @@ abstract class BaseManager[T <: BaseState](
     manager: Props,
     name: String,
     terminateMessage: Any
-  ): ActorRef =
-    context.system.actorOf(
-      ClusterSingletonManager.props(
-        singletonProps = manager,
-        terminationMessage = terminateMessage,
-        settings = ClusterSingletonManagerSettings(context.system)
-      ),
-      name = name
-    )
+  ): ActorRef = ActorCreatorUtil.createSingletonManager(
+    system = context.system,
+    manager = manager,
+    name = name,
+    terminateMessage = terminateMessage
+  )
 
   protected def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
-    context.system.actorOf(
-      ClusterSingletonProxy.props(
-        singletonManagerPath = s"/user/$name",
-        settings = ClusterSingletonProxySettings(context.system)
-      ),
-      name = s"$name$suffix-proxy"
-    )
+    DistributedUtil.createSingletonProxy(context.system, name, suffix)
 }

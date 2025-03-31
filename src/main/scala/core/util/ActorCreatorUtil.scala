@@ -119,7 +119,7 @@ object ActorCreatorUtil {
     }
 
     if (!sharding.shardTypeNames.contains(actorClassName)) {
-      println(s"Creating shard region for $actorClassName with entityId $entityId")
+      system.log.info(s"Creating shard region for $actorClassName with entityId $entityId")
 
       sharding.start(
         typeName = actorClassName,
@@ -136,7 +136,9 @@ object ActorCreatorUtil {
         extractShardId = extractShardId
       )
     } else {
-      println(s"Shard region for $actorClassName already exists with entityId $entityId")
+      system.log.info(
+        s"Already exists shard region for $actorClassName, create actor shard with entityId $entityId"
+      )
       sharding.shardRegion(actorClassName)
     }
   }
@@ -187,6 +189,21 @@ object ActorCreatorUtil {
 
     createSingletonProxy(system, entityId)
   }
+
+  def createSingletonManager(
+    system: ActorSystem,
+    manager: Props,
+    name: String,
+    terminateMessage: Any
+  ): ActorRef =
+    system.actorOf(
+      ClusterSingletonManager.props(
+        singletonProps = manager,
+        terminationMessage = terminateMessage,
+        settings = ClusterSingletonManagerSettings(system)
+      ),
+      name = name
+    )
 
   private def createSingleton[T](
     system: ActorSystem,
