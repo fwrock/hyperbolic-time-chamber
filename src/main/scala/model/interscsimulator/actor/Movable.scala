@@ -6,7 +6,8 @@ import model.interscsimulator.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.htc.protobuf.core.entity.event.communication.SpontaneousEvent
+import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
 

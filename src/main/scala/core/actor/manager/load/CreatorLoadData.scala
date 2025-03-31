@@ -88,7 +88,7 @@ class CreatorLoadData(
         shardRegion ! ShardRegion.StartEntity(actor.id)
 
         timeManager ! RegisterActorEvent(
-          startTick = convertValueByString[DefaultState](actor.data.get.content).getStartTick,
+          startTick = convertValue[DefaultState](actor.data.get.content).getStartTick,
           actorRef = shardRegion.path.toString,
           identify = Some(Identify(
             actor.id,
