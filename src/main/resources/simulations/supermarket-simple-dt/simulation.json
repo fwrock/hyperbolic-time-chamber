@@ -12,7 +12,7 @@
       "dataSource": {
         "sourceType": "json",
         "info": {
-          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple-dt/sources/Cashier.json"
+          "path": "simulations/supermarket-simple-dt/sources/Cashier.json"
         }
       }
     },
@@ -21,7 +21,7 @@
       "dataSource": {
         "sourceType": "json",
         "info": {
-          "path": "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple-dt/sources/Client.json"
+          "path": "simulations/supermarket-simple-dt/sources/Client.json"
         }
       }
     }

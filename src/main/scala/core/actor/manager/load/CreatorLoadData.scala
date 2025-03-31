@@ -3,8 +3,8 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.ActorRef
-import core.util.{ActorCreatorUtil, JsonUtil}
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, DistributedUtil, JsonUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
@@ -41,16 +41,16 @@ class CreatorLoadData(
     case event: InitializeEntityAckEvent => handleFinishInitialization(event)
   }
 
-  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
+  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
     if (initializeData.isEmpty && actors.isEmpty) {
       logEvent("Finish creation")
       loadDataManager ! FinishCreationEvent(actorRef = getPath)
     }
-  }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
     initializeData.get(event.entityId) match
       case Some(data) =>
+        logEvent(s"Initialize ${event.entityId}")
         getShardRef(data.classType) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = InitializeEvent(
@@ -58,6 +58,8 @@ class CreatorLoadData(
             actorRef = self,
             data = InitializeData(
               data = data.data,
+              timeManager = data.timeManager,
+              creatorManager = data.creatorManager,
               dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep }
             )
           )
@@ -65,7 +67,6 @@ class CreatorLoadData(
         initializeData.remove(event.entityId)
       case None =>
         logEvent(s"Data not found ${event.entityId}")
-  }
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logEvent("Start creation")
@@ -76,6 +77,8 @@ class CreatorLoadData(
           id = actor.id,
           classType = actor.typeActor,
           data = actor.data.content,
+          timeManager = timeManager,
+          creatorManager = createSingletonProxy("creator-load-data", s"-${System.nanoTime()}"),
           dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
 
@@ -106,4 +109,20 @@ class CreatorLoadData(
     event.actors.foreach {
       actor => actors += actor
     }
+
+  private def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
+    DistributedUtil.createSingletonProxy(context.system, name, suffix)
+}
+
+object CreatorLoadData {
+  def props(
+    loadDataManager: ActorRef,
+    timeManager: ActorRef
+  ): Props =
+    Props(
+      new CreatorLoadData(
+        loadDataManager = loadDataManager,
+        timeManager = timeManager
+      )
+    )
 }

@@ -193,6 +193,8 @@ class TimeManager(
         )
   }
 
+  private def getLabel: String = if parentManager.isEmpty then "GlobalTimeManager" else "LocalTimeManager"
+
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       logEvent(s"Finish event for ${finish.identify} at tick ${finish.end}")

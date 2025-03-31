@@ -41,9 +41,7 @@ class LoadDataManager(
   private def loadData(event: LoadDataEvent): Unit = {
     logEvent("Load data")
     loadDataAmount = event.actorsDataSources.size
-    creatorRef = context.actorOf(
-      Props(new CreatorLoadData(loadDataManager = self, timeManager = poolTimeManager))
-    )
+    creatorRef = createCreatorLoadData()
     event.actorsDataSources.foreach {
       actorDataSource =>
         logEvent(s"Load data source ${actorDataSource}")
@@ -59,6 +57,15 @@ class LoadDataManager(
           actorDataSource = actorDataSource
         )
     }
+  }
+
+  private def createCreatorLoadData(): ActorRef = {
+    createSingletonManager(
+      manager = CreatorLoadData.props(loadDataManager = self, timeManager = poolTimeManager),
+      name = "creator-load-data",
+      terminateMessage = DestructEvent(actorRef = self.path.toString),
+    )
+    createSingletonProxy("creator-load-data", s"-${System.nanoTime()}")
   }
 
   private def loadDataStrategy(dataSourceType: DataSourceTypeEnum): LoadDataStrategy =

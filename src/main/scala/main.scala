@@ -5,20 +5,32 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
+import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.interscity.htc.core.actor.manager.SimulationManager
 import com.typesafe.config.ConfigFactory
+import org.interscity.htc.core.util.SimulationUtil
 
 @main
 def main(): Unit = {
   val system = ActorSystem("hyperbolic-time-chamber")
 
-  val config = ConfigFactory.load()
-  println(config.getString("pekko.actor.provider"))
+  PekkoManagement(system).start()
 
   val cluster = Cluster(system)
 
+  cluster.registerOnMemberUp {
+    system.log.info(s"Member is up: ${cluster.selfMember}")
+  }
+
+  cluster.registerOnMemberRemoved {
+    system.log.info(s"Member is removed: ${cluster.selfMember}")
+  }
+
   val configuration =
-    "/home/dean/PhD/simulator/hyperbolic-time-chamber/src/main/resources/simulations/supermarket-simple-dt/simulation.json"
+    "simulations/supermarket-simple-dt/simulation.json"
+
+  SimulationUtil.createShards(system, configuration)
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(
@@ -32,12 +44,4 @@ def main(): Unit = {
     ),
     name = "simulation-manager"
   )
-
-  cluster.registerOnMemberUp {
-    println(s"Member is up: ${cluster.selfMember}")
-  }
-
-  cluster.registerOnMemberRemoved {
-    println(s"Member is removed: ${cluster.selfMember}")
-  }
 }

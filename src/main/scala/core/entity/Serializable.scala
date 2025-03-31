@@ -3,5 +3,4 @@ package core.entity
 
 import scalapb.GeneratedMessage
 
-
 trait Serializable extends GeneratedMessage

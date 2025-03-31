@@ -1,89 +1,35 @@
-version: '3'
+version: '3.8'
 services:
-  master:
-    image: braindrill:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: 'master'
-    tty: true
-    stdin_open: true
+  node1:
+    build: .
+    container_name: node_1
     ports:
       - '1600:1600'
-      - '8080:8080'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - engine:/data
-    working_dir: /app
+      - "2551:2551"
+      - "8558:8558"
     environment:
-      CLUSTER_IP: 'master'
-      CLUSTER_PORT: '1600'
-      CLUSTER_ROLE: 'master'
-      SEED_IP: 'master'
-  worker-1:
-    image: braindrill:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    tty: true
-    stdin_open: true
-    ports:
-      - '17350:17350'
-    security_opt:
-      - 'seccomp=unconfined'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - engine:/data
-    working_dir: /app
-    environment:
-      CLUSTER_IP: 'worker-1'
-      CLUSTER_PORT: '17350'
-      CLUSTER_ROLE: 'worker'
-      SEED_IP: 'master'
-      SEED_PORT: '1600'
-  worker-2:
-    image: braindrill:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    tty: true
-    stdin_open: true
-    ports:
-      - '17351:17351'
-    security_opt:
-      - 'seccomp=unconfined'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - engine:/data
-    working_dir: /app
-    environment:
-      CLUSTER_IP: 'worker-2'
-      CLUSTER_PORT: '17351'
-      CLUSTER_ROLE: 'worker'
-      SEED_IP: 'master'
-      SEED_PORT: '1600'
-  worker-3:
-    image: braindrill:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    tty: true
-    stdin_open: true
-    ports:
-      - '17352:17352'
-    security_opt:
-      - 'seccomp=unconfined'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - engine:/data
-    working_dir: /app
-    environment:
-      CLUSTER_IP: 'worker-3'
-      CLUSTER_PORT: '17352'
-      CLUSTER_ROLE: 'worker'
-      SEED_IP: 'master'
-      SEED_PORT: '1600'
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: node1
+      CLUSTER_NAME: node1
+      SEED_PORT_1600_TCP_ADDR: node1
+    networks:
+      - hyperbolic-time-chamber-network
 
-volumes:
-  engine:
-    external: true
+  node2:
+    build: .
+    container_name: node_2
+    ports:
+      - '1601:1601'
+      - "2552:2551"
+      - "8559:8558"
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: node2
+      CLUSTER_NAME: node2
+      SEED_PORT_1600_TCP_ADDR: node1
+    networks:
+      - hyperbolic-time-chamber-network
+
+networks:
+  hyperbolic-time-chamber-network:
+    driver: bridge
