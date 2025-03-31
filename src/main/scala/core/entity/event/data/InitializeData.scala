@@ -10,5 +10,6 @@ import scala.collection.mutable
 case class InitializeData(
   data: Any,
   timeManager: ActorRef,
+  creatorManager: ActorRef,
   dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 ) extends BaseEventData

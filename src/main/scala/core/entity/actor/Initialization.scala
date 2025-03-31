@@ -12,6 +12,7 @@ case class Initialization(
                            classType: String,
                            data: Any,
                            timeManager: ActorRef,
+                           creatorManager: ActorRef,
                            dependencies: mutable.Map[String, actor.Dependency] = mutable.Map[String, actor.Dependency]()
                          ) {
 
@@ -19,6 +20,7 @@ case class Initialization(
     InitializeData(
       data = data,
       timeManager = timeManager,
+      creatorManager = creatorManager,
       dependencies = dependencies.map {
         case (label, dep) => dep.id -> dep
       }
