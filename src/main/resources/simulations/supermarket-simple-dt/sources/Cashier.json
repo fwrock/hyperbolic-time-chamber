@@ -1,0 +1,37 @@
+[
+  {
+    "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+    "name": "Cashier",
+    "typeActor": "org.interscity.htc.model.supermarket.actor.Cashier",
+    "data": {
+      "dataType": "org.interscity.htc.model.supermarket.entity.state.CashierState",
+      "content": {
+        "startTick": 0
+      },
+      "properties": [
+        {
+          "name": "cashierId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+          "writeable": false
+        },
+        {
+          "name": "startTick",
+          "schema": "long",
+          "unit": "s",
+          "defaultValue": 0,
+          "writeable": false
+        },
+        {
+          "name": "status",
+          "schema": "org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum",
+          "defaultValue": "Free",
+          "writeable": true
+        }
+      ]
+    },
+    "dependencies": {
+
+    }
+  }
+]

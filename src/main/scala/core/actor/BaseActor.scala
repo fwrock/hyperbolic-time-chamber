@@ -4,9 +4,9 @@ package core.actor
 import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
 import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
 import core.types.CoreTypes.Tick
-import core.entity.state.BaseState
+import core.entity.state.{BaseState, State}
 import core.entity.control.LamportClock
-import core.util.JsonUtil
+import core.util.{JsonUtil, StateUtil}
 
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
@@ -50,6 +50,7 @@ abstract class BaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
+  protected var newState: State = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
 
@@ -91,6 +92,8 @@ abstract class BaseActor[T <: BaseState](
           state = JsonUtil.convertValue[T](data.data)
           startTick = state.getStartTick
         }
+        newState = State(properties = StateUtil.convertProperties(data.properties), relationships = null)
+        logEvent(s"newState: $newState")
         dependencies.clear()
         dependencies ++= data.dependencies
     })

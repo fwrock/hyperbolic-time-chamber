@@ -8,6 +8,8 @@ import "google/protobuf/any.proto";
 message InitializationData {
   google.protobuf.Any data = 1;
   map<string, Dependency> dependencies = 2;
+  repeated Property properties = 3;
+  repeated Relationship relationships = 4;
 }
 
 message RequestInitializeData {

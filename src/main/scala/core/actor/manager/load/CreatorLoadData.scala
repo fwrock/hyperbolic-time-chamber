@@ -56,7 +56,8 @@ class CreatorLoadData(
             actorRef = getPath,
             data = Some(InitializationData(
               data = data.data,
-              dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep }
+              dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep },
+              properties = data.properties
             ))
           )
         )
@@ -74,7 +75,8 @@ class CreatorLoadData(
           id = actor.id,
           classType = actor.typeActor,
           data = actor.data.get.content,
-          dependencies = actor.dependencies
+          dependencies = actor.dependencies,
+          properties = actor.data.get.properties
         )
 
         val shardRegion = createShardRegion(
