@@ -4,10 +4,10 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.SpontaneousEvent
 import model.interscsimulator.entity.state.TrafficSignalState
 
 import org.htc.protobuf.core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.event.communication.SpontaneousEvent
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus

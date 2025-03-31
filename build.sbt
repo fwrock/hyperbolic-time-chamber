@@ -59,6 +59,7 @@ lazy val root = (project in file("."))
       // Protobuf
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.1",
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,

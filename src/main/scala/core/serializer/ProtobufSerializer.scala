@@ -1,6 +1,8 @@
 package org.interscity.htc
 package core.serializer
 
+import scalapb.GeneratedMessage
+
 import org.apache.pekko.actor.ExtendedActorSystem
 import org.apache.pekko.serialization.SerializerWithStringManifest
 import org.interscity.htc.core.entity.Serializable
@@ -21,8 +23,8 @@ class ProtobufSerializer(
       case ser: Serializable => ser.toByteArray
       case _ =>
         throw new IllegalArgumentException(
-          s"Não é possível serializar [${o.getClass.getName}] com ProtobufSerializer. " +
-            s"Ele não estende ${classOf[Serializable].getName}"
+          s"It's not possible to serializer [${o.getClass.getName}] using ProtobufSerializer. " +
+            s"It's not extends ${classOf[GeneratedMessage].getName}"
         )
     }
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {

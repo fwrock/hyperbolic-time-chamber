@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, SpontaneousEvent}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
@@ -11,7 +11,7 @@ import core.util.JsonUtil
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent}
+import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent, SpontaneousEvent}
 import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
 import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
 
@@ -88,7 +88,7 @@ abstract class BaseActor[T <: BaseState](
     actorId = event.id
     event.data.foreach(data => {
         if (data.data != null) {
-          state = JsonUtil.convertValueByString[T](data.data)
+          state = JsonUtil.convertValue[T](data.data)
           startTick = state.getStartTick
         }
         if (data.dependencies != null) {
@@ -161,7 +161,7 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
-    currentTimeManager = event.actorRef
+    currentTimeManager = getActorRef(event.actorRef)
     actSpontaneous(event)
   }
 
@@ -283,7 +283,7 @@ abstract class BaseActor[T <: BaseState](
     )
 
   protected def selfSpontaneous(): Unit =
-    self ! SpontaneousEvent(currentTick, currentTimeManager)
+    self ! SpontaneousEvent(currentTick, currentTimeManager.path.toString)
 
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(

@@ -20,7 +20,7 @@ message ActorSimulation {
 
 message ActorDataSimulation {
   string dataType = 1;
-  bytes content = 2;
+  google.protobuf.Any content = 2;
 }
 
 message Dependency {
@@ -31,7 +31,7 @@ message Dependency {
 message Initialization {
   string id = 1;
   string classType = 2;
-  bytes data = 3;
+  google.protobuf.Any data = 3;
   map<string, Dependency> dependencies = 4;
 }
 
@@ -45,7 +45,7 @@ enum DataSourceType {
 
 message DataSource {
     DataSourceType sourceType = 1;
-    map<string, bytes> info = 2;
+    map<string, string> info = 2;
 }
 
 message ActorDataSource {

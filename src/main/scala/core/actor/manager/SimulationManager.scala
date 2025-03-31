@@ -5,9 +5,9 @@ import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
-import core.entity.configuration.Simulation
 
 import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.htc.protobuf.core.entity.configuration.Simulation
 import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.htc.protobuf.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
@@ -69,7 +69,7 @@ class SimulationManager(
 
     createSingletonProxy("load-manager") ! LoadDataEvent(
       actorRef = getPath,
-      actorsDataSources = configuration.actorsDataSources
+      actorsDataSources = configuration.actorDataSources
     )
   }
 

@@ -6,10 +6,15 @@ import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import org.interscity.htc.core.actor.manager.SimulationManager
+import com.typesafe.config.ConfigFactory
 
 @main
 def main(): Unit = {
   val system = ActorSystem("hyperbolic-time-chamber")
+
+  val config = ConfigFactory.load()
+  println(config.getString("pekko.actor.provider"))
+
   val cluster = Cluster(system)
 
   val configuration =
