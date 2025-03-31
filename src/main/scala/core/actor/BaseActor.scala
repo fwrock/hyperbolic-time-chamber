@@ -19,7 +19,6 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -42,7 +41,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 abstract class BaseActor[T <: BaseState](
   protected var actorId: String,
   private var timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
+  private var creatorManager: ActorRef = null,
   private val data: Any = null,
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
@@ -72,6 +71,7 @@ abstract class BaseActor[T <: BaseState](
 
   private def onFinishInitialize(): Unit =
     if (!isInitialized && creatorManager != null) {
+      logEvent(s"Finishing initialization")
       isInitialized = true
       creatorManager ! InitializeEntityAckEvent(
         entityId = actorId
@@ -90,14 +90,17 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit = {
     actorId = event.id
+    logEvent(s"Initializing actor with id $actorId, event $event")
     if (event.data.data != null) {
       state = JsonUtil.convertValue[T](event.data.data)
       startTick = state.getStartTick
     }
     timeManager = event.data.timeManager
+    creatorManager = event.data.creatorManager
     dependencies.clear()
     dependencies ++= event.data.dependencies
     onInitialize(event)
+    logEvent(s"isInitialized = $isInitialized, creatorManager = $creatorManager")
     onFinishInitialize()
   }
 

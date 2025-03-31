@@ -4,7 +4,7 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ActorRef, Props}
-import core.util.{ActorCreatorUtil, JsonUtil}
+import core.util.{ActorCreatorUtil, DistributedUtil, JsonUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
@@ -59,6 +59,7 @@ class CreatorLoadData(
             data = InitializeData(
               data = data.data,
               timeManager = data.timeManager,
+              creatorManager = data.creatorManager,
               dependencies = data.dependencies.map { case (label, dep) => dep.id -> dep }
             )
           )
@@ -77,6 +78,7 @@ class CreatorLoadData(
           classType = actor.typeActor,
           data = actor.data.content,
           timeManager = timeManager,
+          creatorManager = createSingletonProxy("creator-load-data", s"-${System.nanoTime()}"),
           dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
 
@@ -107,6 +109,9 @@ class CreatorLoadData(
     event.actors.foreach {
       actor => actors += actor
     }
+
+  private def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
+    DistributedUtil.createSingletonProxy(context.system, name, suffix)
 }
 
 object CreatorLoadData {
