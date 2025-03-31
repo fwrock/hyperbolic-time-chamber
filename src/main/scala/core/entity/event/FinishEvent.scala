@@ -4,14 +4,14 @@ package core.entity.event
 import core.types.CoreTypes.Tick
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
+import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 
 case class FinishEvent(
-  actorRef: ActorRef,
-  identify: Identify,
-  end: Tick,
-  scheduleEvent: Option[ScheduleEvent] = None,
-  timeManager: ActorRef = null,
-  destruct: Boolean = false
-) extends BaseEvent[DefaultBaseEventData](tick = end, actorRef = actorRef)
+                        actorRef: ActorRef,
+                        identify: Identify,
+                        end: Tick,
+                        scheduleEvent: Option[ScheduleEvent] = None,
+                        timeManager: ActorRef = null,
+                        destruct: Boolean = false
+) extends BaseEvent(tick = end, actorRef = actorRef)

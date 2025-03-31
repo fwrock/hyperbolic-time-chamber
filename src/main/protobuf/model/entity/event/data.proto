@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package org.htc.protobuf.model.entity.event;
+
+message FinishClientServiceData {
+
+}
+
+message NewClientServiceData {
+  uint32 amountThings = 1;
+}
+
+message StartClientServiceData {
+
+}

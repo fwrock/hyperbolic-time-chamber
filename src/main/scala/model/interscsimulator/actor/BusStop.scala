@@ -4,11 +4,10 @@ package model.interscsimulator.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
-import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
+import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.state.BusStopState
 
 import scala.collection.mutable
@@ -36,29 +35,29 @@ class BusStop(
       )
     )
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[RegisterPassengerData]   => handleRegisterPassenger(e)
-      case e: ActorInteractionEvent[BusRequestPassengerData] => handleBusRequestPassenger(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
+      case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
       case _ =>
         logEvent("Event not handled")
     }
 
   private def handleBusRequestPassenger(
-    event: ActorInteractionEvent[BusRequestPassengerData]
+    event: ActorInteractionEvent, data: BusRequestPassengerData
   ): Unit =
-    state.people.get(event.data.label) match {
+    state.people.get(data.label) match {
       case Some(people) =>
-        val peopleToLoad = people.take(event.data.availableSpace)
-        state.people.put(event.data.label, people.drop(event.data.availableSpace))
+        val peopleToLoad = people.take(data.availableSpace)
+        state.people.put(data.label, people.drop(data.availableSpace))
         sendLoadPeopleToBus(peopleToLoad, event)
       case None =>
         sendLoadPeopleToBus(mutable.Seq(), event)
     }
 
   private def sendLoadPeopleToBus(
-    peopleToLoad: mutable.Seq[Identify],
-    event: ActorInteractionEvent[BusRequestPassengerData]
+                                   peopleToLoad: mutable.Seq[Identify],
+                                   event: ActorInteractionEvent,
   ): Unit =
     sendMessageTo(
       event.actorRefId,
@@ -68,13 +67,13 @@ class BusStop(
       )
     )
 
-  private def handleRegisterPassenger(event: ActorInteractionEvent[RegisterPassengerData]): Unit = {
-    val person = event.toIdentity()
-    state.people.get(event.data.label) match {
+  private def handleRegisterPassenger(event: ActorInteractionEvent, data: RegisterPassengerData): Unit = {
+    val person = event.toIdentity
+    state.people.get(data.label) match {
       case Some(people) =>
-        state.people.put(event.data.label, people :+ person)
+        state.people.put(data.label, people :+ person)
       case None =>
-        state.people.put(event.data.label, mutable.Seq(person))
+        state.people.put(data.label, mutable.Seq(person))
     }
   }
 }

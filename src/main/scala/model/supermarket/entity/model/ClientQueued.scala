@@ -1,9 +1,9 @@
 package org.interscity.htc
 package model.supermarket.entity.model
 
-import core.entity.actor.Identify
+import org.htc.protobuf.core.entity.actor.Identify
 
 case class ClientQueued(
-  client: Identify,
-  amountThings: Int
+                         client: Identify,
+                         amountThings: Int
 )

@@ -1,12 +1,12 @@
 {
   "name": "HTC-Simulator: Supermarket",
   "description": "Simulates a supermarket with clients and cashiers",
-  "startRealTime": "2025-02-18T07:00:00Z",
+  "startRealTime": "2025-01-27T12:30:45.123",
   "timeUnit": "seconds",
   "timeStep": 1,
   "duration": 5000,
   "startTick": 0,
-  "actorsDataSources": [
+  "actorDataSources": [
     {
       "classType": "org.interscity.htc.model.supermarket.actor.Cashier",
       "dataSource": {
