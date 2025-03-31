@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package org.htc.protobuf.core.entity;
+
+import "google/protobuf/timestamp.proto";
+import "core/entity/actor.proto";
+
+message Simulation {
+    string name = 1;
+    string description = 2;
+    uint64 startTick = 3;
+    string startRealTime = 4;
+    string timeUnit = 5;
+    uint64 timeStep = 6;
+    uint64 duration = 7;
+    repeated ActorDataSource actorDataSources = 8;
+}

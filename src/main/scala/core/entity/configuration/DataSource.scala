@@ -1,9 +1,9 @@
 package org.interscity.htc
 package core.entity.configuration
 
-import core.enumeration.DataSourceType
+import core.enumeration.DataSourceTypeEnum
 
 case class DataSource(
-  sourceType: DataSourceType,
+  sourceType: DataSourceTypeEnum,
   info: Map[String, Any]
 )

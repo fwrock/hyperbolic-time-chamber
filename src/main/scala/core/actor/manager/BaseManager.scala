@@ -4,9 +4,9 @@ package core.actor.manager
 import core.actor.BaseActor
 import core.entity.state.BaseState
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.htc.protobuf.core.entity.actor.Dependency
 
 import scala.collection.mutable
 

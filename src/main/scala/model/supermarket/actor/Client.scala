@@ -5,11 +5,10 @@ import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
-import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
+import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{Finished, InService, Start, Waiting}
+import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
 
 import scala.collection.mutable
 
@@ -53,19 +52,19 @@ class Client(
     )
   }
 
-  override def actInteractWith[D <: BaseEventData](event: ActorInteractionEvent[D]): Unit =
-    event match {
-      case e: ActorInteractionEvent[StartClientServiceData]  => handleStartClientService(e)
-      case e: ActorInteractionEvent[FinishClientServiceData] => handleFinishClientService(e)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: StartClientServiceData  => handleStartClientService(d)
+      case d: FinishClientServiceData => handleFinishClientService(d)
       case _ =>
         logEvent(s"Event not handled ${event}")
     }
 
-  private def handleStartClientService(event: ActorInteractionEvent[StartClientServiceData]): Unit =
+  private def handleStartClientService(data: StartClientServiceData): Unit =
     state.status = InService
 
   private def handleFinishClientService(
-    event: ActorInteractionEvent[FinishClientServiceData]
+                                         data: FinishClientServiceData
   ): Unit = {
     state.status = Finished
     onFinishSpontaneous(destruct = true)

@@ -1,0 +1,161 @@
+[
+  {
+    "id": "dtmi:org:interscity:model:supermarket:actor:client;1",
+    "name": "Actor1",
+    "typeActor": "org.interscity.htc.model.supermarket.actor.Client",
+    "data": {
+      "dataType": "org.interscity.htc.model.supermarket.entity.state.ClientState",
+      "content": {
+        "startTick": 1,
+        "cashierId": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "amountThings": 1
+      },
+      "properties": [
+        {
+          "name": "clientId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:client;1",
+          "writeable": false
+        },
+        {
+          "name": "cashierId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+          "writeable": false
+        },
+        {
+          "name": "startTick",
+          "schema": "long",
+          "unit": "s",
+          "defaultValue": 1,
+          "writeable": false
+        },
+        {
+          "name": "amountThings",
+          "schema": "int",
+          "unit": "s",
+          "defaultValue": 1,
+          "writeable": false
+        },
+        {
+          "name": "status",
+          "schema": "org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum",
+          "defaultValue": "Start",
+          "writeable": true
+        }
+      ]
+    },
+    "dependencies": {
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
+    }
+  },
+  {
+    "id": "dtmi:org:interscity:model:supermarket:actor:client;3",
+    "name": "Actor3",
+    "typeActor": "org.interscity.htc.model.supermarket.actor.Client",
+    "data": {
+      "dataType": "org.interscity.htc.model.supermarket.entity.state.ClientState",
+      "content": {
+        "startTick": 40,
+        "cashierId": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "amountThings": 1
+      },
+      "properties": [
+        {
+          "name": "clientId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:client;3",
+          "writeable": false
+        },
+        {
+          "name": "cashierId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+          "writeable": false
+        },
+        {
+          "name": "startTick",
+          "schema": "long",
+          "unit": "s",
+          "defaultValue": 40,
+          "writeable": false
+        },
+        {
+          "name": "amountThings",
+          "schema": "int",
+          "unit": "s",
+          "defaultValue": 1,
+          "writeable": false
+        },
+        {
+          "name": "status",
+          "schema": "org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum",
+          "defaultValue": "Start",
+          "writeable": true
+        }
+      ]
+    },
+    "dependencies": {
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
+    }
+  },
+  {
+    "id": "dtmi:org:interscity:model:supermarket:actor:client;2",
+    "name": "Actor2",
+    "typeActor": "org.interscity.htc.model.supermarket.actor.Client",
+    "data": {
+      "dataType": "org.interscity.htc.model.supermarket.entity.state.ClientState",
+      "content": {
+        "startTick": 10,
+        "cashierId": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "amountThings": 1
+      },
+      "properties": [
+        {
+          "name": "clientId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:client;2",
+          "writeable": false
+        },
+        {
+          "name": "cashierId",
+          "schema": "string",
+          "defaultValue": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+          "writeable": false
+        },
+        {
+          "name": "startTick",
+          "schema": "long",
+          "unit": "s",
+          "defaultValue": 10,
+          "writeable": false
+        },
+        {
+          "name": "amountThings",
+          "schema": "int",
+          "unit": "s",
+          "defaultValue": 1,
+          "writeable": false
+        },
+        {
+          "name": "status",
+          "schema": "org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum",
+          "defaultValue": "Start",
+          "writeable": true
+        }
+      ]
+    },
+    "dependencies": {
+      "cashier": {
+        "id": "dtmi:org:interscity:model:supermarket:actor:cashier;1",
+        "classType": "org.interscity.htc.model.supermarket.actor.Cashier"
+      }
+    }
+  }
+]
