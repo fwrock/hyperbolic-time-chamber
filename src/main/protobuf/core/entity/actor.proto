@@ -21,6 +21,7 @@ message ActorSimulation {
 message ActorDataSimulation {
   string dataType = 1;
   google.protobuf.Any content = 2;
+  repeated Property properties = 3;
 }
 
 message Dependency {
@@ -33,6 +34,7 @@ message Initialization {
   string classType = 2;
   google.protobuf.Any data = 3;
   map<string, Dependency> dependencies = 4;
+  repeated Property properties = 5;
 }
 
 enum DataSourceType {
@@ -51,4 +53,25 @@ message DataSource {
 message ActorDataSource {
   string classType = 1;
   DataSource dataSource = 2;
+}
+
+message Property {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Any defaultValue = 3;
+  string schema = 4;
+  string comment = 5;
+  string description = 6;
+  string displayName = 7;
+  bool writeable = 8;
+}
+
+message Relationship {
+  string id = 1;
+  string name = 2;
+  string target = 3;
+  string comment = 4;
+  string description = 5;
+  string displayName = 6;
+  repeated Property properties = 7;
 }

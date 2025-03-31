@@ -23,8 +23,11 @@ object JsonUtil {
     finally source.close()
   }
 
-  def convertValue[T](content: Any)(implicit m: Manifest[T]): T =
-    mapper.convertValue(content, m.runtimeClass).asInstanceOf[T]
+  def convertValue[T: Manifest](content: Any): T = {
+    val json = mapper.writeValueAsString(content) // Transforma o Map em JSON
+    val javaType = TypeFactory.defaultInstance().constructType(implicitly[Manifest[T]].runtimeClass)
+    mapper.readValue(json, javaType).asInstanceOf[T] // Converte corretamente para a case class
+  }
     
   def convertValueByString[T](content: ByteString)(implicit m: Manifest[T]): T =
     mapper.convertValue(content.toByteArray, m.runtimeClass).asInstanceOf[T]
