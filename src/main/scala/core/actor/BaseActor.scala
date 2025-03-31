@@ -91,10 +91,8 @@ abstract class BaseActor[T <: BaseState](
           state = JsonUtil.convertValue[T](data.data)
           startTick = state.getStartTick
         }
-        if (data.dependencies != null) {
-          dependencies.clear()
-          dependencies ++= data.dependencies
-        }
+        dependencies.clear()
+        dependencies ++= data.dependencies
     })
     onInitialize(event)
     onFinishInitialize()
