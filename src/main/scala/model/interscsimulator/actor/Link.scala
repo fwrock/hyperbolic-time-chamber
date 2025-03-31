@@ -6,17 +6,17 @@ import model.interscsimulator.entity.state.LinkState
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ActorTypeEnum, EventTypeEnum}
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{EnterLink, ForwardRoute, RequestRoute}
-import org.interscity.htc.model.interscsimulator.entity.state.model.{LinkRegister, RoutePathItem}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, EventTypeEnum }
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum.{ EnterLink, ForwardRoute, RequestRoute }
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ LinkRegister, RoutePathItem }
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import model.interscsimulator.entity.event.data.{EnterLinkData, ForwardRouteData, RequestRouteData}
+import model.interscsimulator.entity.event.data.{ EnterLinkData, ForwardRouteData, RequestRouteData }
 
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.util.IdentifyUtil
-import org.interscity.htc.model.interscsimulator.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
 
 class Link(
   private var id: String = null,

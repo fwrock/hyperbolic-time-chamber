@@ -6,7 +6,7 @@ import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.core.types.CoreTypes.Tick
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.BusStationStateEnum.Start
-import org.interscity.htc.model.interscsimulator.entity.state.model.{BusInformation, RoutePathItem, SubRoutePair}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
 
 import scala.collection.mutable
 

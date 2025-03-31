@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.util
 
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 
 object IdentifyUtil {
 
