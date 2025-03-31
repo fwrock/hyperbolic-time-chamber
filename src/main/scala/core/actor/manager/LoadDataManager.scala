@@ -11,7 +11,8 @@ import core.util.ActorCreatorUtil
 import core.util.ActorCreatorUtil.createActor
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, StartCreationEvent}
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.event.control.load.{LoadDataEvent, LoadDataSourceEvent}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -48,14 +49,14 @@ class LoadDataManager(
         logEvent(s"Load data source ${actorDataSource}")
         val loader = createActor(
           context.system,
-          DataSourceTypeEnum.valueOf(actorDataSource.dataSource.get.sourceType.name).clazz,
+          actorDataSource.dataSource.sourceType.clazz,
           poolTimeManager
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
-          managerRef = getPath,
-          creatorRef = creatorRef.path.toString,
-          actorDataSource = Some(actorDataSource)
+          managerRef = self,
+          creatorRef = creatorRef,
+          actorDataSource = actorDataSource
         )
     }
   }

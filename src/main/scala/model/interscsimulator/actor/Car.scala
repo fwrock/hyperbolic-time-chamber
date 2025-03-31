@@ -1,12 +1,11 @@
 package org.interscity.htc
 package model.interscsimulator.actor
 
-import core.entity.event.ActorInteractionEvent
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.interscsimulator.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.communication.SpontaneousEvent
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil

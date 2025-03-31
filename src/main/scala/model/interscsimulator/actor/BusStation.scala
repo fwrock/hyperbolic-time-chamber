@@ -5,10 +5,9 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.core.entity.event.communication.SpontaneousEvent
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.util.ActorCreatorUtil.{createShardedActor, createShardedActorSeveralArgs}
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ActorCreatorUtil, JsonUtil}

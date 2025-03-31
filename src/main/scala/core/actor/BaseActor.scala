@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 import core.entity.state.{BaseState, State}
 import core.entity.control.LamportClock
@@ -11,9 +11,10 @@ import core.util.{JsonUtil, StateUtil}
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.core.entity.event.communication.{FinishEvent, ScheduleEvent, SpontaneousEvent}
+import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, InitializeEvent}
+import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -87,16 +88,12 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit = {
     actorId = event.id
-    event.data.foreach(data => {
-        if (data.data != null) {
-          state = JsonUtil.convertValue[T](data.data)
-          startTick = state.getStartTick
-        }
-        newState = State(properties = StateUtil.convertProperties(data.properties), relationships = null)
-        logEvent(s"newState: $newState")
-        dependencies.clear()
-        dependencies ++= data.dependencies
-    })
+    if (event.data.data != null) {
+      state = JsonUtil.convertValue[T](event.data.data)
+      startTick = state.getStartTick
+    }
+    dependencies.clear()
+    dependencies ++= event.data.dependencies
     onInitialize(event)
     onFinishInitialize()
   }
@@ -162,7 +159,7 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
-    currentTimeManager = getActorRef(event.actorRef)
+    currentTimeManager = event.actorRef
     actSpontaneous(event)
   }
 
@@ -269,8 +266,8 @@ abstract class BaseActor[T <: BaseState](
   ): Unit =
     timeManager ! FinishEvent(
       end = currentTick,
-      actorRef = getPath,
-      identify = Some(Identify(actorId, getClass.getName, getPath)),
+      actorRef = self,
+      identify = Identify(actorId, getClass.getName, getPath),
       scheduleEvent = scheduleTick.map(
         tick =>
           ScheduleEvent(
@@ -279,12 +276,12 @@ abstract class BaseActor[T <: BaseState](
             identify = Some(Identify(actorId, getClass.getName, getPath))
           )
       ),
-      timeManager = currentTimeManager.path.toString,
+      timeManager = currentTimeManager,
       destruct = destruct
     )
 
   protected def selfSpontaneous(): Unit =
-    self ! SpontaneousEvent(currentTick, currentTimeManager.path.toString)
+    self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   protected def scheduleEvent(tick: Tick): Unit =
     timeManager ! ScheduleEvent(

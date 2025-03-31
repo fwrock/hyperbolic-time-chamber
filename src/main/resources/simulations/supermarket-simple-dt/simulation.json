@@ -6,7 +6,7 @@
   "timeStep": 1,
   "duration": 100,
   "startTick": 0,
-  "actorDataSources": [
+  "actorsDataSources": [
     {
       "classType": "org.interscity.htc.model.supermarket.actor.Cashier",
       "dataSource": {

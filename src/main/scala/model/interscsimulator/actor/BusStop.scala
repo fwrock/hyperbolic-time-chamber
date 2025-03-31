@@ -5,9 +5,8 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
-import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData}
 import org.interscity.htc.model.interscsimulator.entity.state.BusStopState
 
