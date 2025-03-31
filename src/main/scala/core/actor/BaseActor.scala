@@ -6,7 +6,7 @@ import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEven
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{JsonUtil, StateUtil}
+import core.util.JsonUtil
 
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.util.Timeout
