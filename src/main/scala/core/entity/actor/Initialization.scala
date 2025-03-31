@@ -8,13 +8,13 @@ import org.interscity.htc.core.entity.event.data.InitializeData
 import scala.collection.mutable
 
 case class Initialization(
-                           id: String,
-                           classType: String,
-                           data: Any,
-                           timeManager: ActorRef,
-                           creatorManager: ActorRef,
-                           dependencies: mutable.Map[String, actor.Dependency] = mutable.Map[String, actor.Dependency]()
-                         ) {
+  id: String,
+  classType: String,
+  data: Any,
+  timeManager: ActorRef,
+  creatorManager: ActorRef,
+  dependencies: mutable.Map[String, actor.Dependency] = mutable.Map[String, actor.Dependency]()
+) {
 
   def toInitializeData: InitializeData =
     InitializeData(

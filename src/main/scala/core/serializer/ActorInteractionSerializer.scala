@@ -1,19 +1,19 @@
 package org.interscity.htc
 package core.serializer
 
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
 
 import com.google.protobuf.ByteString
-import org.apache.pekko.actor.{ActorRef, ExtendedActorSystem}
-import org.apache.pekko.serialization.{SerializationExtension, SerializerWithStringManifest}
-import org.htc.protobuf.core.entity.event.communication.{ActorInteraction, EntityEnvelope}
+import org.apache.pekko.actor.{ ActorRef, ExtendedActorSystem }
+import org.apache.pekko.serialization.{ SerializationExtension, SerializerWithStringManifest }
+import org.htc.protobuf.core.entity.event.communication.{ ActorInteraction, EntityEnvelope }
 import org.interscity.htc.core.types.CoreTypes.Tick
 
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 
 class ActorInteractionSerializer(
   val system: ExtendedActorSystem
-                              ) extends SerializerWithStringManifest {
+) extends SerializerWithStringManifest {
 
   private val EnvelopeManifest = classOf[ActorInteractionEvent].getName
   private lazy val serialization = SerializationExtension(system)
@@ -24,9 +24,17 @@ class ActorInteractionSerializer(
 
   override def toBinary(o: AnyRef): Array[Byte] =
     o match {
-      case ActorInteractionEvent(tick, lamportTick, actorRefId, actorRef, actorClassType, eventType, data) =>
+      case ActorInteractionEvent(
+            tick,
+            lamportTick,
+            actorRefId,
+            actorRef,
+            actorClassType,
+            eventType,
+            data
+          ) =>
         val triedSerializedPayload = serialization.serialize(data)
-        
+
         triedSerializedPayload match {
           case Success(serializedPayload) =>
             val proto = ActorInteraction(
@@ -43,13 +51,17 @@ class ActorInteractionSerializer(
             throw new IllegalArgumentException(s"Cannot serialize payload", exception)
         }
 
-      case _ => throw new IllegalArgumentException(s"Cannot serialize object of type: ${o.getClass.getName}")
+      case _ =>
+        throw new IllegalArgumentException(
+          s"Cannot serialize object of type: ${o.getClass.getName}"
+        )
     }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {
     val proto = ActorInteraction.parseFrom(bytes)
-    val triedDeserializedPayload = serialization.deserialize(proto.data.toByteArray, classOf[AnyRef])
-    
+    val triedDeserializedPayload =
+      serialization.deserialize(proto.data.toByteArray, classOf[AnyRef])
+
     triedDeserializedPayload match {
       case Success(deserializedPayload) =>
         ActorInteractionEvent(

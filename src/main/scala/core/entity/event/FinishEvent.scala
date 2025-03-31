@@ -8,10 +8,10 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 
 case class FinishEvent(
-                        actorRef: ActorRef,
-                        identify: Identify,
-                        end: Tick,
-                        scheduleEvent: Option[ScheduleEvent] = None,
-                        timeManager: ActorRef = null,
-                        destruct: Boolean = false
+  actorRef: ActorRef,
+  identify: Identify,
+  end: Tick,
+  scheduleEvent: Option[ScheduleEvent] = None,
+  timeManager: ActorRef = null,
+  destruct: Boolean = false
 ) extends BaseEvent(tick = end, actorRef = actorRef)

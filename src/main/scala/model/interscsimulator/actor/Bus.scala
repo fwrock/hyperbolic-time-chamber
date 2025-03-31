@@ -2,19 +2,19 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
+import org.interscity.htc.model.interscsimulator.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.interscsimulator.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.interscsimulator.entity.event.node.SignalStateData
 import org.interscity.htc.model.interscsimulator.entity.state.BusState
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathItem
-import org.interscity.htc.model.interscsimulator.util.{BusUtil, SpeedUtil}
+import org.interscity.htc.model.interscsimulator.util.{ BusUtil, SpeedUtil }
 import org.interscity.htc.model.interscsimulator.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.interscsimulator.util.SpeedUtil.linkDensitySpeed
 
@@ -55,7 +55,7 @@ class Bus(
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
     event.data match {
-      case d: BusLoadPassengerData  => handleBusLoadPeople(event, d)
+      case d: BusLoadPassengerData   => handleBusLoadPeople(event, d)
       case d: BusUnloadPassengerData => handleUnloadPassenger(event, d)
       case d: SignalStateData        => handleSignalState(event, d)
       case _ =>
@@ -63,12 +63,18 @@ class Bus(
     }
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+  override def actHandleReceiveLeaveLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {
     state.distance += data.linkLength
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+  override def actHandleReceiveEnterLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {
     val time = linkDensitySpeed(
       length = data.linkLength,
       capacity = data.linkCapacity,
@@ -107,7 +113,10 @@ class Bus(
       onFinishNodeState()
     }
 
-  private def handleUnloadPassenger(event: ActorInteractionEvent, data: BusUnloadPassengerData): Unit = {
+  private def handleUnloadPassenger(
+    event: ActorInteractionEvent,
+    data: BusUnloadPassengerData
+  ): Unit = {
     state.countUnloadReceived += 1
     state.countUnloadPassenger += (if (data.isArrival) 1 else 0)
     if (state.countUnloadReceived == state.people.size) {

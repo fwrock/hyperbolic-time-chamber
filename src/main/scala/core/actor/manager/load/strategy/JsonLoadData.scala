@@ -7,7 +7,7 @@ import core.util.JsonUtil
 import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 import org.interscity.htc.core.entity.actor.ActorSimulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 
