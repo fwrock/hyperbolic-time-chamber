@@ -55,6 +55,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-serialization-jackson" % pekkoVersion,
       "org.apache.pekko" %% "pekko-stream" % pekkoVersion,
       "org.apache.pekko" %% "pekko-protobuf-v3" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-remote" % pekkoVersion,
 
       // Brokers
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,

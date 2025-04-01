@@ -50,4 +50,6 @@ message ActorInteraction{
   string actorClassType = 5;
   string eventType = 6;
   bytes data = 7;
+  int32 payload_serializer_id = 8;
+  string payload_manifest = 9;
 }
