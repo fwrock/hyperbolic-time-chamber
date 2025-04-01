@@ -1,15 +1,14 @@
 package org.interscity.htc
 package core.serializer
 
-import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
 
 import com.google.protobuf.ByteString
-import org.apache.pekko.actor.{ ActorRef, ExtendedActorSystem }
-import org.apache.pekko.serialization.{ SerializationExtension, SerializerWithStringManifest }
-import org.htc.protobuf.core.entity.event.communication.{ ActorInteraction, EntityEnvelope }
-import org.interscity.htc.core.types.CoreTypes.Tick
+import org.apache.pekko.actor.ExtendedActorSystem
+import org.apache.pekko.serialization.{SerializationExtension, SerializerWithStringManifest, Serializer as PekkoSerializer}
+import org.htc.protobuf.core.entity.event.communication.{ActorInteraction, EntityEnvelope}
 
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success, Try}
 
 class ActorInteractionSerializer(
   val system: ExtendedActorSystem
@@ -33,48 +32,85 @@ class ActorInteractionSerializer(
             eventType,
             data
           ) =>
-        val triedSerializedPayload = serialization.serialize(data)
+
+        val payloadSerializer: PekkoSerializer = serialization.serializerFor(data.getClass)
+
+        val payloadManifest: String = payloadSerializer match {
+          case s: SerializerWithStringManifest => s.manifest(data)
+          case _ => ""
+        }
+
+        val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(data))
 
         triedSerializedPayload match {
           case Success(serializedPayload) =>
             val proto = ActorInteraction(
-              tick,
-              lamportTick,
-              actorRefId,
-              actorRef,
-              actorClassType,
-              eventType,
-              ByteString.copyFrom(serializedPayload)
+              tick = tick,
+              lamportTick = lamportTick,
+              actorRefId = actorRefId,
+              actorRef = actorRef,
+              actorClassType = actorClassType,
+              eventType = eventType,
+              data = ByteString.copyFrom(serializedPayload),
+              payloadSerializerId = payloadSerializer.identifier,
+              payloadManifest = payloadManifest
             )
             proto.toByteArray
           case Failure(exception) =>
-            throw new IllegalArgumentException(s"Cannot serialize payload", exception)
+            throw new IllegalArgumentException(
+              s"Cannot serialize nested payload of type [${data.getClass.getName}] " +
+                s"using serializerId [${payloadSerializer.identifier}] and manifest [$payloadManifest].",
+              exception
+            )
         }
 
-      case _ =>
+      case other =>
         throw new IllegalArgumentException(
-          s"Cannot serialize object of type: ${o.getClass.getName}"
+          s"Cannot serialize object of type [${other.getClass.getName}]. " +
+            s"This serializer only handles [${classOf[EntityEnvelopeEvent].getName}]."
         )
     }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {
-    val proto = ActorInteraction.parseFrom(bytes)
-    val triedDeserializedPayload =
-      serialization.deserialize(proto.data.toByteArray, classOf[AnyRef])
+    Try {
+      val proto = ActorInteraction.parseFrom(bytes)
 
-    triedDeserializedPayload match {
-      case Success(deserializedPayload) =>
-        ActorInteractionEvent(
-          proto.tick,
-          proto.lamportTick,
-          proto.actorRefId,
-          proto.actorRef,
-          proto.actorClassType,
-          proto.eventType,
-          deserializedPayload
+      val payloadBytes: Array[Byte] = proto.data.toByteArray
+      val payloadSerializerId: Int = proto.payloadSerializerId
+      val payloadManifest: String = proto.payloadManifest
+
+      val triedDeserializedPayload: Try[AnyRef] = serialization.deserialize(
+        payloadBytes,
+        payloadSerializerId,
+        payloadManifest
+      )
+
+      triedDeserializedPayload match {
+        case Success(deserializedPayload) =>
+          ActorInteractionEvent(
+            proto.tick,
+            proto.lamportTick,
+            proto.actorRefId,
+            proto.actorRef,
+            proto.actorClassType,
+            proto.eventType,
+            deserializedPayload
+          )
+        case Failure(exception) =>
+          throw new IllegalArgumentException(
+            s"Failed to deserialize nested payload using serializerId [$payloadSerializerId] " +
+              s"and manifest [$payloadManifest]. Check Pekko serialization configuration for this payload type.",
+            exception
+          )
+      }
+    } match {
+      case Success(event) => event
+      case Failure(ex) =>
+        throw new IllegalArgumentException(
+          s"Failed to deserialize EntityEnvelopeEvent from binary. " +
+            s"Manifest provided was [$manifest]. Error: ${ex.getMessage}",
+          ex
         )
-      case Failure(exception) =>
-        throw new IllegalArgumentException(s"Error deserializing payload", exception)
     }
   }
 }
