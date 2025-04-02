@@ -2,19 +2,19 @@ package org.interscity.htc
 package model.interscsimulator.actor
 
 import core.actor.BaseActor
-import model.interscsimulator.entity.state.{SubwayState, SubwayStationState}
+import model.interscsimulator.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ActorCreatorUtil, IdentifyUtil, JsonUtil}
-import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData}
+import org.interscity.htc.core.util.{ ActorCreatorUtil, IdentifyUtil, JsonUtil }
+import org.interscity.htc.model.interscsimulator.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum
-import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{Start, Working}
-import org.interscity.htc.model.interscsimulator.entity.state.model.{RoutePathItem, SubwayInformation, SubwayLineInformation}
+import org.interscity.htc.model.interscsimulator.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
+import org.interscity.htc.model.interscsimulator.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
 
 import scala.collection.mutable
 
@@ -55,11 +55,12 @@ class SubwayStation(
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
       case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
-      case _                                                     => logEvent("Event not handled")
+      case _                              => logEvent("Event not handled")
     }
 
   private def handleRegisterPassenger(
-    event: ActorInteractionEvent, data: RegisterSubwayPassengerData
+    event: ActorInteractionEvent,
+    data: RegisterSubwayPassengerData
   ): Unit = {
     val person = Identify(event.actorRefId, event.actorClassType, event.actorPathRef)
     state.people.get(data.line) match {
@@ -71,7 +72,8 @@ class SubwayStation(
   }
 
   private def handleSubwayRequestPassenger(
-    event: ActorInteractionEvent, data: SubwayRequestPassengerData
+    event: ActorInteractionEvent,
+    data: SubwayRequestPassengerData
   ): Unit =
     state.people.get(data.line) match {
       case Some(people) =>
@@ -84,7 +86,8 @@ class SubwayStation(
 
   private def sendLoadPeopleToSubway(
     peopleToLoad: mutable.Seq[Identify],
-    event: ActorInteractionEvent, data: SubwayRequestPassengerData
+    event: ActorInteractionEvent,
+    data: SubwayRequestPassengerData
   ): Unit =
     sendMessageTo(
       event.actorRefId,

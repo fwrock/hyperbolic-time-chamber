@@ -1,18 +1,18 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{Actor, ActorLogging, ActorNotFound, ActorRef}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ Actor, ActorLogging, ActorNotFound, ActorRef }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
@@ -22,7 +22,7 @@ import scala.compiletime.uninitialized
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -49,7 +49,7 @@ abstract class BaseActor[T <: BaseState](
     with ActorLogging {
 
   protected var startTick: Tick = MinValue
-  private val lamportClock = new LamportClock()
+  protected val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
@@ -119,10 +119,10 @@ abstract class BaseActor[T <: BaseState](
     *   The type of the data
     */
   protected def sendMessageTo(
-                               entityId: String,
-                               classType: String,
-                               data: AnyRef,
-                               eventType: String = "default"
+    entityId: String,
+    classType: String,
+    data: AnyRef,
+    eventType: String = "default"
   ): Unit = {
     lamportClock.increment()
     val shardingRegion = getShardRef(classType)
@@ -138,7 +138,7 @@ abstract class BaseActor[T <: BaseState](
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,
-        eventType = eventType,
+        eventType = eventType
       )
     )
   }
@@ -217,26 +217,25 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def logEvent(eventInfo: String): Unit = {
     log.info(s"$actorId: $eventInfo")
-    logger.info(s"$actorId: $eventInfo")
   }
 
   override def receive: Receive = {
-    case event: SpontaneousEvent         => handleSpontaneous(event)
-    case event: ActorInteractionEvent => handleInteractWith(event)
-    case event: DestructEvent            => destruct(event)
-    case event: EntityEnvelopeEvent   => handleEnvelopeEvent(event)
-    case event: InitializeEvent          => initialize(event)
-    case event: ShardRegion.StartEntity  => handleStartEntity(event)
-    case event                           => handleEvent(event)
+    case event: SpontaneousEvent        => handleSpontaneous(event)
+    case event: ActorInteractionEvent   => handleInteractWith(event)
+    case event: DestructEvent           => destruct(event)
+    case event: EntityEnvelopeEvent     => handleEnvelopeEvent(event)
+    case event: InitializeEvent         => initialize(event)
+    case event: ShardRegion.StartEntity => handleStartEntity(event)
+    case event                          => handleEvent(event)
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
-      case event: InitializeEvent          => initialize(event)
-      case event: SpontaneousEvent         => handleSpontaneous(event)
+      case event: InitializeEvent       => initialize(event)
+      case event: SpontaneousEvent      => handleSpontaneous(event)
       case event: ActorInteractionEvent => handleInteractWith(event)
-      case event: DestructEvent            => destruct(event)
-      case event                           => handleEvent(event)
+      case event: DestructEvent         => destruct(event)
+      case event                        => handleEvent(event)
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
@@ -314,7 +313,8 @@ abstract class BaseActor[T <: BaseState](
   private def getActorRefFromPath(path: String): Future[ActorRef] = {
     implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
     implicit val timeout: Timeout = Timeout(3, TimeUnit.SECONDS)
-    context.system.actorSelection(path)
+    context.system
+      .actorSelection(path)
       .resolveOne()
       .recover {
         case _: ActorNotFound =>

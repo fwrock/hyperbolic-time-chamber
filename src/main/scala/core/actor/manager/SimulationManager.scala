@@ -6,8 +6,8 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 
-import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent}
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent }
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 import org.interscity.htc.core.entity.configuration.Simulation

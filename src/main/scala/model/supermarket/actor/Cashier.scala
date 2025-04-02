@@ -5,9 +5,10 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
-import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
-import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{Busy, Free, Waiting}
+import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+//import org.htc.protobuf.model.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
 import org.interscity.htc.model.supermarket.entity.model.ClientQueued
 import org.interscity.htc.model.supermarket.entity.state.CashierState
 import org.interscity.htc.model.supermarket.util.CashierUtil
@@ -35,33 +36,53 @@ class Cashier(
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
+    logEvent(
+      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
+    )
     state.status match {
       case Free =>
-        logEvent("Cashier is free")
         if (state.queue.nonEmpty) {
           logEvent("Cashier is attending a client")
           val queued = state.queue.dequeue()
           state.clientInService = Some(queued.client)
           sendMessageTo(queued.client.id, queued.client.classType, StartClientServiceData())
+          logEvent(
+            s"DD Spontaneous event (queue non empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Busy}"
+          )
           state.status = Busy
           onFinishSpontaneous(Some(currentTick + serviceTime(queued.amountThings)))
         } else {
           logEvent("Cashier is waiting")
+          logEvent(
+            s"DD Spontaneous event (queue empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
+          )
           state.status = Waiting
+          logEvent(
+            s"DD Send Finish event  to tick ${currentTick} and lamport ${lamportClock.getClock}"
+          )
           onFinishSpontaneous()
         }
       case Busy =>
-        logEvent("Cashier is busy")
-        sendMessageTo(
-          state.clientInService.get.id,
-          state.clientInService.get.classType,
-          FinishClientServiceData()
+        state.clientInService.foreach(client =>
+          sendMessageTo(
+            client.id,
+            client.classType,
+            FinishClientServiceData()
+          )
         )
         state.clientInService = None
+        logEvent(
+          s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Free}"
+        )
         state.status = Free
+        logEvent(
+          s"DD Send Finish event schedule to tick ${currentTick + CashierUtil.breakTime} and lamport ${lamportClock.getClock}"
+        )
         onFinishSpontaneous(Some(currentTick + CashierUtil.breakTime))
       case Waiting =>
-        logEvent("Cashier is waiting")
+        logEvent(
+          s"DD Send Finish event  to tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+        )
         onFinishSpontaneous()
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
@@ -69,12 +90,19 @@ class Cashier(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case e: NewClientServiceData => handleNewClientService(event, e)
+      case e: NewClientServiceData =>
+        logEvent(
+          s"DD new client service  to tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+        )
+        handleNewClientService(event, e)
       case _ =>
         logEvent(s"Event not handled ${event}")
     }
 
-  private def handleNewClientService(event: ActorInteractionEvent, data: NewClientServiceData): Unit =
+  private def handleNewClientService(
+    event: ActorInteractionEvent,
+    data: NewClientServiceData
+  ): Unit =
     if (state.queue.isEmpty && (state.status == Waiting || state.status == Free)) {
       state.status = Busy
       sendMessageTo(
@@ -82,8 +110,14 @@ class Cashier(
         event.actorClassType,
         StartClientServiceData()
       )
+      logEvent(
+        s"DD Free cashier - Send Finish event schedule to tick ${currentTick + serviceTime(data.amountThings)} and lamport ${lamportClock.getClock}"
+      )
       onFinishSpontaneous(Some(currentTick + serviceTime(data.amountThings)))
     } else {
+      logEvent(
+        s"DD Queued client at tick ${event.tick} and lamport ${event.lamportTick} queue size ${state.queue.size} with status ${state.status}"
+      )
       state.queue.enqueue(
         ClientQueued(
           client = Identify(
