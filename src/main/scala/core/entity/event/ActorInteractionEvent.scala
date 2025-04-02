@@ -9,13 +9,13 @@ import core.entity.event.data.BaseEventData
 import org.htc.protobuf.core.entity.actor.Identify
 
 case class ActorInteractionEvent(
-                                  tick: Tick,
-                                  lamportTick: Tick,
-                                  actorRefId: String,
-                                  actorPathRef: String,
-                                  actorClassType: String,
-                                  eventType: String = "default",
-                                  data: AnyRef
+  tick: Tick,
+  lamportTick: Tick,
+  actorRefId: String,
+  actorPathRef: String,
+  actorClassType: String,
+  eventType: String = "default",
+  data: AnyRef
 ) {
 
   def toIdentity: Identify = Identify(

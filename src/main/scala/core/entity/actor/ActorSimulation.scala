@@ -3,7 +3,7 @@ package core.entity.actor
 
 import core.enumeration.CreationTypeEnum
 
-import com.fasterxml.jackson.annotation.{JsonCreator, JsonProperty}
+import com.fasterxml.jackson.annotation.{ JsonCreator, JsonProperty }
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.enumeration.CreationTypeEnum.Simple
 

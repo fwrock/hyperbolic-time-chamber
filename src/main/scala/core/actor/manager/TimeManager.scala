@@ -1,18 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 import core.entity.control.ScheduledActors
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent }
 
 import scala.collection.mutable
 
@@ -74,7 +74,7 @@ class TimeManager(
   }
 
   override def handleEvent: Receive = {
-    case start: StartSimulationTimeEvent       => startSimulation(start)
+    case start: StartSimulationTimeEvent   => startSimulation(start)
     case register: RegisterActorEvent      => registerActor(register)
     case schedule: ScheduleEvent           => scheduleApply(schedule)
     case finish: FinishEvent               => finishEventApply(finish)
@@ -82,7 +82,7 @@ class TimeManager(
     case PauseSimulationEvent              => if (isRunning) pauseSimulation()
     case ResumeSimulationEvent             => resumeSimulation()
     case StopSimulationEvent               => stopSimulation()
-    case e: UpdateGlobalTimeEvent       => syncWithGlobalTime(e.tick)
+    case e: UpdateGlobalTimeEvent          => syncWithGlobalTime(e.tick)
     case acknowledge: AcknowledgeTickEvent => handleAcknowledgeTick(acknowledge)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
@@ -193,7 +193,8 @@ class TimeManager(
         )
   }
 
-  private def getLabel: String = if parentManager.isEmpty then "GlobalTimeManager" else "LocalTimeManager"
+  private def getLabel: String =
+    if parentManager.isEmpty then "GlobalTimeManager" else "LocalTimeManager"
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {

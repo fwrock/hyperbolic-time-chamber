@@ -3,15 +3,15 @@ package core.serializer
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.serialization.{SerializationExtension, SerializerWithStringManifest, Serializer => PekkoSerializer}
+import org.apache.pekko.serialization.{ SerializationExtension, Serializer => PekkoSerializer, SerializerWithStringManifest }
 import org.htc.protobuf.core.entity.event.communication.EntityEnvelope
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 class EntityEnvelopeSerializer(
   val system: ExtendedActorSystem
-                              ) extends SerializerWithStringManifest {
+) extends SerializerWithStringManifest {
 
   private val EnvelopeManifest = classOf[EntityEnvelopeEvent].getName
   private lazy val serialization = SerializationExtension(system)
@@ -27,7 +27,7 @@ class EntityEnvelopeSerializer(
 
         val payloadManifest: String = payloadSerializer match {
           case s: SerializerWithStringManifest => s.manifest(payload)
-          case _ => ""
+          case _                               => ""
         }
         val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(payload))
 
@@ -35,7 +35,7 @@ class EntityEnvelopeSerializer(
           case Success(serializedPayloadBytes) =>
             val proto = EntityEnvelope(
               entityId = entityId,
-              payload =ByteString.copyFrom(serializedPayloadBytes),
+              payload = ByteString.copyFrom(serializedPayloadBytes),
               payloadSerializerId = payloadSerializer.identifier,
               payloadManifest = payloadManifest
             )
@@ -44,15 +44,18 @@ class EntityEnvelopeSerializer(
             throw new IllegalArgumentException(
               s"Cannot serialize nested payload of type [${payload.getClass.getName}] " +
                 s"using serializerId [${payloadSerializer.identifier}] and manifest [$payloadManifest].",
-              exception)
+              exception
+            )
         }
 
       case other =>
-        throw new IllegalArgumentException(s"Cannot serialize object of type [${other.getClass.getName}]. " +
-          s"This serializer only handles [${classOf[EntityEnvelopeEvent].getName}].")
+        throw new IllegalArgumentException(
+          s"Cannot serialize object of type [${other.getClass.getName}]. " +
+            s"This serializer only handles [${classOf[EntityEnvelopeEvent].getName}]."
+        )
     }
 
-  override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {
+  override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef =
     Try {
       val proto: EntityEnvelope = EntityEnvelope.parseFrom(bytes)
 
@@ -72,13 +75,16 @@ class EntityEnvelopeSerializer(
           throw new IllegalArgumentException(
             s"Failed to deserialize nested payload using serializerId [$payloadSerializerId] " +
               s"and manifest [$payloadManifest]. Check Pekko serialization configuration for this payload type.",
-            exception)
+            exception
+          )
       }
     } match {
       case Success(event) => event
       case Failure(ex) =>
-        throw new IllegalArgumentException(s"Failed to deserialize EntityEnvelopeEvent from binary. " +
-          s"Manifest provided was [$manifest]. Error: ${ex.getMessage}", ex)
+        throw new IllegalArgumentException(
+          s"Failed to deserialize EntityEnvelopeEvent from binary. " +
+            s"Manifest provided was [$manifest]. Error: ${ex.getMessage}",
+          ex
+        )
     }
-  }
 }

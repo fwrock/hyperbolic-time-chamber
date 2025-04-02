@@ -9,6 +9,7 @@ import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{Finished, InService, Start, Waiting}
 import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+//import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
 
 import scala.collection.mutable
 
@@ -28,20 +29,27 @@ class Client(
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    logEvent(s"${event}")
+    logEvent(
+      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
+    )
     state.status match {
       case Start =>
+        logEvent(
+          s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
+        )
         state.status = Waiting
         enterQueue()
         onFinishSpontaneous()
       case Waiting =>
-        sendAcknowledgeTick()
+        onFinishSpontaneous()
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
     }
 
   private def enterQueue(): Unit = {
-    logEvent("Entering queue")
+    logEvent(
+      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+    )
     val cashier = dependencies(state.cashierId)
     sendMessageTo(
       cashier.id,
@@ -54,8 +62,16 @@ class Client(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: StartClientServiceData  => handleStartClientService(d)
-      case d: FinishClientServiceData => handleFinishClientService(d)
+      case d: StartClientServiceData =>
+        logEvent(
+          s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+        )
+        handleStartClientService(d)
+      case d: FinishClientServiceData =>
+        logEvent(
+          s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+        )
+        handleFinishClientService(d)
       case _ =>
         logEvent(s"Event not handled ${event}")
     }
@@ -64,7 +80,7 @@ class Client(
     state.status = InService
 
   private def handleFinishClientService(
-                                         data: FinishClientServiceData
+    data: FinishClientServiceData
   ): Unit = {
     state.status = Finished
     onFinishSpontaneous(destruct = true)
