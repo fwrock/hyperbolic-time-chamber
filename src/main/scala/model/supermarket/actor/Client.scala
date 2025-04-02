@@ -6,9 +6,10 @@ import model.supermarket.entity.state.ClientState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
-import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{Finished, InService, Start, Waiting}
+import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
+//import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
 
 import scala.collection.mutable
 
