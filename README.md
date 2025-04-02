@@ -1,27 +1,27 @@
 # HTC-Simulator (Hyperbolic Time Chamber Simulator)
 
-**Um Simulador de Eventos Discretos Baseado em Atores Utilizando Scala e Akka**
+**An Actor-Based Discrete Event Simulator Using Scala and Akka**
 
-Inspirado na lendária "Câmara do Tempo Hiperbólica" de Dragon Ball, o HTC-Simulator é um poderoso simulador de eventos discretos que aproveita o poder da programação baseada em atores com Scala e Akka.
+Inspired by the legendary "Hyperbolic Time Chamber" from Dragon Ball, HTC-Simulator is a powerful discrete event simulator that leverages the power of actor-based programming with Scala and Akka.
 
-## Recursos Atuais:
+## Current Features:
 
-* Gerenciamento de Tempo de Simulação: Controle preciso do fluxo do tempo dentro da simulação.
-* Coordenação de Eventos: Orquestração eficiente da interação entre diferentes entidades (atores) na simulação.
+* **Simulation Time Management:** Precise control over the flow of time within the simulation.
+* **Event Coordination:** Efficient orchestration of interactions between different entities (actors) in the simulation.
 
-## Recursos em Desenvolvimento:
+## Features Under Development:
 
-* Relatórios: Geração de relatórios detalhados sobre os resultados da simulação.
-* Digital Twin: Criação de réplicas digitais de sistemas do mundo real para simulação e análise.
-* Dataflow: Suporte para processamento de fluxo de dados em tempo real dentro da simulação.
-* Snapshot: Capacidade de capturar o estado da simulação em momentos específicos para análise posterior ou restauração.
-* Machine Learning: Integração de algoritmos de aprendizado de máquina para análise preditiva e tomada de decisão dentro da simulação.
+* **Reporting:** Generation of detailed reports on simulation results.
+* **Digital Twin:** Creation of digital replicas of real-world systems for simulation and analysis.
+* **Dataflow:** Support for real-time data stream processing within the simulation.
+* **Snapshot:** Ability to capture the simulation state at specific moments for later analysis or restoration.
+* **Machine Learning:** Integration of machine learning algorithms for predictive analysis and decision-making within the simulation.
 
-## Dados de Entrada:
+## Input Data:
 
-### Configuração da Simulação:
+### Simulation Configuration:
 
-Para iniciar uma nova simulação, você precisa fornecer um arquivo de configuração JSON com os detalhes da simulação, incluindo o nome, descrição, data de início, data de término, unidade de tempo e passo de tempo.
+To start a new simulation, you need to provide a JSON configuration file with the simulation details, including the name, description, start date, end date, time unit, and time step.
 
 ```json
 {
@@ -109,10 +109,9 @@ Para iniciar uma nova simulação, você precisa fornecer um arquivo de configur
 }
 ```
 
-### Fontes de Dados dos Atores:
+### Actor Data Sources
 
-Cada ator na simulação é definido por um tipo específico e uma fonte de dados correspondente. Os dados dos atores podem ser fornecidos em diferentes formatos, como JSON, XML, MongoDB, Cassandra, etc.
-
+Each actor in the simulation is defined by a specific type and a corresponding data source. Actor data can be provided in different formats, such as JSON, XML, MongoDB, Cassandra, etc.
 **data/actor1.json:**
 ```json
 [
@@ -176,25 +175,23 @@ Cada ator na simulação é definido por um tipo específico e uma fonte de dado
 ```
 
 
-## Começando:
+## Getting Started:
 
 ```bash
-git clone [https://github.com/seu-usuario/HTC-Simulator.git](https://github.com/seu-usuario/HTC-Simulator.git)
-cd HTC-Simulator
-sbt compile
-sbt run
+git clone [https://github.com/fwrock/hyperbolic-time-chamber.git](https://github.com/your-username/HTC-Simulator.git) # Please replace with the actual URL if different
+cd hyperbolic-time-chamber
+./build-and-run.sh # Build and run the simulator with docker compose
 ```
 
-## Contribuindo:
-Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar pull requests.
+## Contributing:
+Contributions are welcome! Feel free to open issues or submit pull requests.
 
-## Observações:
-O HTC-Simulator ainda está em desenvolvimento ativo. Novos recursos e melhorias estão a caminho!
-O nome "Hyperbolic Time Chamber" é uma homenagem à série Dragon Ball e não implica qualquer afiliação ou endosso.
-Esperamos que o HTC-Simulator seja uma ferramenta valiosa para suas necessidades de simulação. Divirta-se explorando as possibilidades!
+## Notes:
+HTC-Simulator is still under active development. New features and improvements are on the way!
+The name "Hyperbolic Time Chamber" is a tribute to the Dragon Ball series and does not imply any affiliation or endorsement.
+We hope HTC-Simulator will be a valuable tool for your simulation needs. Enjoy exploring the possibilities!
 
 ## Contato:
-Em caso de dúvidas ou sugestões, entre em contato através de [wallison.rocha@usp.br].
+For questions or suggestions, please contact [wallison.rocha@usp.br].
 Licença:
-Este projeto está licenciado sob a Licença MIT - consulte o arquivo LICENSE para obter detalhes.
-
+his project is licensed under the Apache 2.0 License - see the LICENSE file for details.
