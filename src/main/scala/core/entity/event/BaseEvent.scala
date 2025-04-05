@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import core.entity.event.data.BaseEventData
 

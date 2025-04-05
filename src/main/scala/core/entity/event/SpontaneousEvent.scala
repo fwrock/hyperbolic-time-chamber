@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event
 
-import core.types.CoreTypes.{ EventId, SubTick, Tick }
+import core.types.{ EventId, SubTick, Tick }
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData

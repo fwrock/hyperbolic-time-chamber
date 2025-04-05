@@ -72,14 +72,7 @@ class LoadDataManager(
           maxInstancesPerNode = amountDataSources,
           allowLocalRoutees = true
         )
-      ).props(
-        Props(
-          new CreatorLoadData(
-            loadDataManager = getSelfProxy,
-            timeManager = poolTimeManager,
-          )
-        )
-      ),
+      ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager)),
       "create-load-data-manager-router"
     )
 
@@ -140,10 +133,9 @@ object LoadDataManager {
     simulationManager: ActorRef
   ): Props =
     Props(
-      new LoadDataManager(
-        timeManager = timeManager,
-        poolTimeManager = poolTimeManager,
-        simulationManager = simulationManager
-      )
+      classOf[LoadDataManager],
+      timeManager,
+      poolTimeManager,
+      simulationManager
     )
 }

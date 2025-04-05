@@ -3,7 +3,7 @@ package core.actor
 
 import org.apache.pekko.actor.{ Actor, ActorLogging, ActorNotFound, ActorRef }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
-import core.types.CoreTypes.Tick
+import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.JsonUtil
@@ -45,7 +45,7 @@ abstract class BaseActor[T <: BaseState](
   private val data: Any = null,
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
-    extends Actor
+    extends ActorSerializable
     with ActorLogging {
 
   protected var startTick: Tick = MinValue
