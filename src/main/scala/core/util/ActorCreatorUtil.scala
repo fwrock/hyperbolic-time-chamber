@@ -113,9 +113,10 @@ object ActorCreatorUtil {
       case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
     }
 
+    // preciso ver esse extrator
     val extractShardId: ShardRegion.ExtractShardId = {
-      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 10).toString
-      case ShardRegion.StartEntity(id) => (id.hashCode % 10).toString
+      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 5000).toString
+      case ShardRegion.StartEntity(id) => (id.hashCode % 5000).toString
     }
 
     if (!sharding.shardTypeNames.contains(actorClassName)) {

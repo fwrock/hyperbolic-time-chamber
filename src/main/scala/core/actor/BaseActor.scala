@@ -89,6 +89,9 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def initialize(event: InitializeEvent): Unit = {
+    if (actorId != event.id) {
+      log.warning(s"Actor Start id ${actorId} is different initialize id ${event.id}")
+    }
     actorId = event.id
     logEvent(s"Initializing actor with id $actorId, event $event")
     if (event.data.data != null) {
@@ -100,7 +103,6 @@ abstract class BaseActor[T <: BaseState](
     dependencies.clear()
     dependencies ++= event.data.dependencies
     onInitialize(event)
-    logEvent(s"isInitialized = $isInitialized, creatorManager = $creatorManager")
     onFinishInitialize()
   }
 
@@ -272,22 +274,24 @@ abstract class BaseActor[T <: BaseState](
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
-  ): Unit =
-    timeManager ! FinishEvent(
+  ): Unit = {
+    currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
       identify = Identify(actorId, getClass.getName, getPath),
-      scheduleEvent = scheduleTick.map(
-        tick =>
-          ScheduleEvent(
-            tick = tick,
-            actorRef = getPath,
-            identify = Some(Identify(actorId, getClass.getName, getPath))
-          )
-      ),
+      scheduleEvent = None,
       timeManager = currentTimeManager,
       destruct = destruct
     )
+    scheduleTick.foreach(
+      tick =>
+        timeManager ! ScheduleEvent(
+          tick = tick,
+          actorRef = getPath,
+          identify = Some(Identify(actorId, getClass.getName, getPath))
+        )
+    )
+  }
 
   /** Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the
     * actor.
