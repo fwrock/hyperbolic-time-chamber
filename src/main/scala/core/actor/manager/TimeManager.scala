@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager
 
 import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
@@ -58,15 +58,7 @@ class TimeManager(
           maxInstancesPerNode = 1,
           allowLocalRoutees = true
         )
-      ).props(
-        Props(
-          new TimeManager(
-            simulationDuration = simulationDuration,
-            simulationManager = simulationManager,
-            parentManager = Some(selfProxy)
-          )
-        )
-      ),
+      ).props(TimeManager.props(simulationDuration, simulationManager, Some(selfProxy))),
       "time-manager-router"
     )
     logEvent(s"TimeManager pool created: $timeManagersPool")
@@ -352,5 +344,5 @@ object TimeManager {
     simulationManager: ActorRef,
     parentManager: Option[ActorRef]
   ): Props =
-    Props(new TimeManager(simulationDuration, simulationManager, parentManager))
+    Props(classOf[TimeManager], simulationDuration, simulationManager, parentManager)
 }

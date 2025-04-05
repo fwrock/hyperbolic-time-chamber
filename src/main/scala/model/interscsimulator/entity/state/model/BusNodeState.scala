@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.entity.state.model
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 case class BusNodeState(
   var timeToLoadedPassengers: Tick = Long.MinValue,

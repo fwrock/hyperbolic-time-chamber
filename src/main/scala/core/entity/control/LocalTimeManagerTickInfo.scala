@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.control
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 case class LocalTimeManagerTickInfo (
                                       tick: Tick,

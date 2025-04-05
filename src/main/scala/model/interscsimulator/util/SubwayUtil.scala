@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.util
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 object SubwayUtil {
 

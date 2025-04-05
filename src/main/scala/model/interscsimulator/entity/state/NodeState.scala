@@ -4,7 +4,7 @@ package model.interscsimulator.entity.state
 import core.entity.state.BaseState
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.types.CoreTypes.Tick
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.interscsimulator.entity.state.model.SignalState
 

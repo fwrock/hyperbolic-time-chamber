@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.supermarket.entity.state
 
 import core.entity.state.BaseState
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.Start

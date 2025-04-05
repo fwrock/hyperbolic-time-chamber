@@ -127,9 +127,8 @@ object CreatorLoadData {
     timeManager: ActorRef
   ): Props =
     Props(
-      new CreatorLoadData(
-        loadDataManager = loadDataManager,
-        timeManager = timeManager
-      )
+      classOf[CreatorLoadData],
+      loadDataManager,
+      timeManager
     )
 }
