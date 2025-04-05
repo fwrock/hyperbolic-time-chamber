@@ -25,17 +25,12 @@ def main(): Unit = {
     system.log.info(s"Member is removed: ${cluster.selfMember}")
   }
 
-  val configuration =
-    "simulations/supermarket-simple/simulation.json"
-
-  SimulationUtil.createShards(system, configuration)
+  SimulationUtil.createShards(system)
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(
       singletonProps = Props(
-        SimulationManager(
-          simulationPath = configuration
-        )
+        SimulationManager()
       ),
       terminationMessage = StopSimulationEvent(),
       settings = ClusterSingletonManagerSettings(system)

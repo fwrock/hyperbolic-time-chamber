@@ -15,7 +15,6 @@ object SimulationUtil {
   def loadSimulationConfig(configuration: String = null): Simulation =
     if (configuration != null) {
       val content = readJsonFile(configuration)
-//      println(s"Configuration loaded:\n$content")
       fromJson[Simulation](content)
     } else {
       val envConfig = "HTC_SIMULATION_CONFIG_FILE"
