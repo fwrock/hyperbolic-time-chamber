@@ -1,18 +1,16 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.enumeration.DataSourceTypeEnum
-
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.actor.manager.load.CreatorLoadData
-import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil
 import core.util.ActorCreatorUtil.createActor
 
+import org.apache.pekko.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonProxySettings}
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.event.control.load.{ LoadDataEvent, LoadDataSourceEvent }
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.event.control.load.{LoadDataEvent, LoadDataSourceEvent}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -31,6 +29,7 @@ class LoadDataManager(
   private var loadDataAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
+  private var selfProxy: ActorRef = null
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -44,7 +43,7 @@ class LoadDataManager(
     creatorRef = createCreatorLoadData()
     event.actorsDataSources.foreach {
       actorDataSource =>
-        logEvent(s"Load data source ${actorDataSource}")
+        logEvent(s"Load data source ${actorDataSource.dataSource} of type ${actorDataSource.classType}")
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
@@ -52,7 +51,7 @@ class LoadDataManager(
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
-          managerRef = self,
+          managerRef = selfProxy,
           creatorRef = creatorRef,
           actorDataSource = actorDataSource
         )
@@ -61,18 +60,15 @@ class LoadDataManager(
 
   private def createCreatorLoadData(): ActorRef = {
     createSingletonManager(
-      manager = CreatorLoadData.props(loadDataManager = self, timeManager = poolTimeManager),
+      manager = CreatorLoadData.props(loadDataManager = getSelfProxy, timeManager = poolTimeManager),
       name = "creator-load-data",
-      terminateMessage = DestructEvent(actorRef = self.path.toString)
+      terminateMessage = DestructEvent(actorRef = getSelfProxy.path.toString)
     )
     createSingletonProxy("creator-load-data", s"-${System.nanoTime()}")
   }
 
-  private def loadDataStrategy(dataSourceType: DataSourceTypeEnum): LoadDataStrategy =
-    dataSourceType.clazz.getDeclaredConstructor().newInstance()
-
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
-    logEvent(s"Load data maanager actorRef = ${event.actorRef}")
+    logEvent(s"Load data manager actorRef = ${event.actorRef}")
     val actorRef = getActorRef(event.actorRef)
 
     loaders(actorRef) = true
@@ -91,6 +87,20 @@ class LoadDataManager(
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && loadDataAmount == loaders.size
+
+  private def getSelfProxy: ActorRef =
+    if (selfProxy == null) {
+      selfProxy = context.system.actorOf(
+        ClusterSingletonProxy.props(
+          singletonManagerPath = "/user/load-manager",
+          settings = ClusterSingletonProxySettings(context.system)
+        ),
+        name = s"load-manager-proxy-${System.currentTimeMillis()}"
+      )
+      selfProxy
+    } else {
+      selfProxy
+    }
 }
 
 object LoadDataManager {

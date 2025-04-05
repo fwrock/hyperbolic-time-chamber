@@ -45,14 +45,15 @@ class SimulationManager(
   private def startSimulation(): Unit = {
     loadManager ! DestructEvent(actorRef = getPath)
     logEvent("Start simulation")
-    createSingletonProxy("time-manager", s"-${System.nanoTime()}") ! StartSimulationTimeEvent(
+    createSingletonProxy("global-time-manager", s"-${System.nanoTime()}") ! StartSimulationTimeEvent(
+      startTick = configuration.startTick,
+      actorRef = getPath,
       data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))
     )
   }
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
-      println("Creating self proxy")
       selfProxy = context.system.actorOf(
         ClusterSingletonProxy.props(
           singletonManagerPath = "/user/simulation-manager",
@@ -62,7 +63,6 @@ class SimulationManager(
       )
       selfProxy
     } else {
-      println("Reusing self proxy")
       selfProxy
     }
 
@@ -71,17 +71,15 @@ class SimulationManager(
     loadManager = createSingletonLoadManager()
 
     createSingletonProxy("load-manager") ! LoadDataEvent(
-      actorRef = getActorRef(getPath),
+      actorRef = selfProxy,
       actorsDataSources = configuration.actorsDataSources
     )
   }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
-    logEvent("Run simulation")
     configuration = loadSimulationConfig(event.configuration)
-
+    logEvent(s"Run simulation: \n$configuration")
     timeManager = createSingletonTimeManager()
-    logEvent(s"Time manager parent singleton was created $timeManager")
   }
 
   private def createSingletonTimeManager(): ActorRef =
@@ -91,7 +89,7 @@ class SimulationManager(
         simulationManager = getSelfProxy,
         parentManager = None
       ),
-      name = "time-manager",
+      name = "global-time-manager",
       terminateMessage = StopSimulationEvent()
     )
 

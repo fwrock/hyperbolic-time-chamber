@@ -32,6 +32,7 @@ class CreatorLoadData(
 
   private val actors: mutable.ListBuffer[ActorSimulation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
+  private var selfProxy: ActorRef = null
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent  => handleCreateActors(event)
@@ -55,7 +56,7 @@ class CreatorLoadData(
           entityId = event.entityId,
           event = InitializeEvent(
             id = data.id,
-            actorRef = self,
+            actorRef = getSelfProxy,
             data = InitializeData(
               data = data.data,
               timeManager = data.timeManager,
@@ -80,7 +81,7 @@ class CreatorLoadData(
           classType = actor.typeActor,
           data = actor.data.content,
           timeManager = timeManager,
-          creatorManager = createSingletonProxy("creator-load-data", s"-${System.nanoTime()}"),
+          creatorManager = getSelfProxy,
           dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
         )
 
@@ -89,7 +90,7 @@ class CreatorLoadData(
           actorClassName = actor.typeActor,
           entityId = actor.id,
           timeManager = timeManager,
-          creatorManager = self
+          creatorManager = getSelfProxy
         )
 
         shardRegion ! ShardRegion.StartEntity(actor.id)
@@ -108,6 +109,14 @@ class CreatorLoadData(
     }
     actors.clear()
   }
+
+  private def getSelfProxy: ActorRef =
+    if (selfProxy == null) {
+      selfProxy = createSingletonProxy("creator-load-data", s"-${System.nanoTime()}")
+      selfProxy
+    } else {
+      selfProxy
+    }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit =
     event.actors.foreach {

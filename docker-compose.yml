@@ -12,6 +12,14 @@ services:
       CLUSTER_IP: node1
       CLUSTER_NAME: node1
       SEED_PORT_1600_TCP_ADDR: node1
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "2.0"
+#          memory: 2g
+#        reservations:
+#          cpus: "0.5"
+#          memory: 1g
     networks:
       - hyperbolic-time-chamber-network
 
@@ -27,9 +35,60 @@ services:
       CLUSTER_IP: node2
       CLUSTER_NAME: node2
       SEED_PORT_1600_TCP_ADDR: node1
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "2.0"
+#          memory: 2g
+#        reservations:
+#          cpus: "0.5"
+#          memory: 1g
     networks:
       - hyperbolic-time-chamber-network
-
+#  node3:
+#    build: .
+#    container_name: node_3
+#    ports:
+#      - '1602:1602'
+#      - "2553:2551"
+#      - "8560:8558"
+#    environment:
+#      CLUSTER_PORT: 1602
+#      CLUSTER_IP: node3
+#      CLUSTER_NAME: node3
+#      SEED_PORT_1600_TCP_ADDR: node1
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "2.0"
+#          memory: 2g
+#        reservations:
+#          cpus: "0.5"
+#          memory: 1g
+#    networks:
+#      - hyperbolic-time-chamber-network
+#  node4:
+#    build: .
+#    container_name: node_4
+#    ports:
+#      - '1603:1603'
+#      - "2554:2551"
+#      - "8561:8558"
+#    environment:
+#      CLUSTER_PORT: 1603
+#      CLUSTER_IP: node4
+#      CLUSTER_NAME: node4
+#      SEED_PORT_1600_TCP_ADDR: node1
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "2.0"
+#          memory: 2g
+#        reservations:
+#          cpus: "0.5"
+#          memory: 1g
+#    networks:
+#      - hyperbolic-time-chamber-network
 networks:
   hyperbolic-time-chamber-network:
     driver: bridge

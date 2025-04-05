@@ -4,7 +4,7 @@
   "startRealTime": "2025-01-27T12:30:45.123",
   "timeUnit": "seconds",
   "timeStep": 1,
-  "duration": 5000,
+  "duration": 100,
   "startTick": 0,
   "actorsDataSources": [
     {

@@ -50,14 +50,23 @@ class Client(
     logEvent(
       s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
     )
-    val cashier = dependencies(state.cashierId)
-    sendMessageTo(
-      cashier.id,
-      cashier.classType,
-      NewClientServiceData(
-        amountThings = state.amountThings
+    try {
+      val cashier = dependencies(state.cashierId)
+      sendMessageTo(
+        cashier.id,
+        cashier.classType,
+        NewClientServiceData(
+          amountThings = state.amountThings
+        )
       )
-    )
+    } catch {
+      case e: Exception =>
+        log.warning(s"$actorId - $dependencies - ${state.cashierId}")
+        log.error(
+          s"DD Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+        )
+        log.error(e.getMessage)
+    }
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
@@ -83,7 +92,7 @@ class Client(
     data: FinishClientServiceData
   ): Unit = {
     state.status = Finished
-    onFinishSpontaneous(destruct = true)
+    onFinishSpontaneous(destruct = false)
   }
 
 }

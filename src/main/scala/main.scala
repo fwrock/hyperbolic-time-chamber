@@ -26,7 +26,7 @@ def main(): Unit = {
   }
 
   val configuration =
-    "simulations/supermarket-simple-dt/simulation.json"
+    "simulations/supermarket-simple/simulation.json"
 
   SimulationUtil.createShards(system, configuration)
 

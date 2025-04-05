@@ -16,6 +16,8 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
 
+  private val batchSize: Int = 10
+
   override def handleEvent: Receive = {
     case event: LoadDataSourceEvent => load(event)
   }
@@ -27,17 +29,22 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   override protected def load(source: ActorDataSource): Unit = {
-    log.info(s"Loading data of ${source.classType} from JSON")
+    logEvent(s"Loading data of ${source.classType} from JSON")
 
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     val actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
-    creatorRef ! CreateActorsEvent(actors)
-
-    log.info(s"Data loaded from JSON")
+    if (actors.size < batchSize) {
+      creatorRef ! CreateActorsEvent(actors)
+    } else {
+      actors.grouped(batchSize).foreach(batch => {
+        creatorRef ! CreateActorsEvent(batch)
+      })
+    }
+    
+    logEvent(s"Data loaded from JSON")
 
     managerRef ! FinishLoadDataEvent(actorRef = getPath)
   }
-
 }

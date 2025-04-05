@@ -1,18 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.CoreTypes.Tick
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.entity.control.ScheduledActors
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
 
 import scala.collection.mutable
 
@@ -22,7 +22,7 @@ class TimeManager(
   val parentManager: Option[ActorRef]
 ) extends BaseManager[DefaultState](
       timeManager = null,
-      actorId = "time-manager",
+      actorId = if parentManager.isEmpty then s"local-time-manager-${System.nanoTime()}" else "global-time-manager",
       data = null,
       dependencies = mutable.Map.empty
     ) {
@@ -34,13 +34,12 @@ class TimeManager(
   private var isPaused: Boolean = false
   private var isStopped: Boolean = false
 
-  private var tickAcknowledge: Long = 0
   private val registeredActors = mutable.Set[ActorRef]()
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
   private val runningEvents = mutable.Set[Identify]()
   private var timeManagersPool: ActorRef = _
 
-  private val localTimeManagers: mutable.Map[ActorRef, Tick] = mutable.Map()
+  private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
 
   override def onStart(): Unit =
     if (parentManager.isEmpty) {
@@ -50,6 +49,7 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
+    val selfProxy = createSingletonProxy(s"global-time-manager", s"-${System.nanoTime()}")
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(1),
@@ -63,13 +63,14 @@ class TimeManager(
           new TimeManager(
             simulationDuration = simulationDuration,
             simulationManager = simulationManager,
-            parentManager = Some(createSingletonProxy(s"time-manager", s"-${System.nanoTime()}"))
+            parentManager = Some(selfProxy)
           )
         )
       ),
       "time-manager-router"
     )
     logEvent(s"TimeManager pool created: $timeManagersPool")
+    // Can to exists a problem here, because the time manager pool is created after the simulation manager
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool.path.toString)
   }
 
@@ -83,15 +84,19 @@ class TimeManager(
     case ResumeSimulationEvent             => resumeSimulation()
     case StopSimulationEvent               => stopSimulation()
     case e: UpdateGlobalTimeEvent          => syncWithGlobalTime(e.tick)
-    case acknowledge: AcknowledgeTickEvent => handleAcknowledgeTick(acknowledge)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
-      handleLocalTimeReport(sender(), localTimeReport.tick)
+      handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
   }
 
   private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
-    localTimeManagers.put(getActorRef(timeManagerRegisterEvent.actorRef), Long.MinValue)
+    localTimeManagers.put(
+      getActorRef(timeManagerRegisterEvent.actorRef),
+      LocalTimeManagerTickInfo(
+        tick = localTickOffset,
+      )
+    )
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(getActorRef(event.actorRef))
@@ -101,7 +106,7 @@ class TimeManager(
   }
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
-    logEvent(s"TimeManager started: $start")
+    logEvent(s"Started simulation: $start")
     start.data match
       case Some(data) =>
         startTime = data.startTime
@@ -112,11 +117,11 @@ class TimeManager(
     isPaused = false
     isStopped = false
     if (parentManager.isEmpty) {
-      logEvent(s"TimeManager started at tick $localTickOffset with parent $self")
+      logEvent(s"Global TimeManager started at tick $localTickOffset")
       notifyLocalManagers(start)
     } else {
       logEvent(
-        s"TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
+        s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
       )
       self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
     }
@@ -152,21 +157,35 @@ class TimeManager(
     }
   }
 
-  private def handleLocalTimeReport(localManager: ActorRef, tick: Tick): Unit =
+  private def handleLocalTimeReport(localManager: ActorRef, tick: Tick, hasScheduled: Boolean): Unit =
     if (parentManager.isEmpty) {
-      localTimeManagers.update(localManager, tick)
-      if (!(localTimeManagers.values.min == Long.MinValue)) {
+      localTimeManagers.update(localManager, LocalTimeManagerTickInfo(
+        tick = tick,
+        hasSchedule = hasScheduled,
+        isProcessed = true
+      ))
+      if (localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
       }
     }
 
   private def calculateAndBroadcastNextGlobalTick(): Unit = {
-    val nextTick = localTimeManagers.values.min
+    val scheduled = localTimeManagers.values.filter(_.hasSchedule)
+    val nextTick = if (scheduled.nonEmpty) {
+      scheduled.map(_.tick).min
+    } else {
+      localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+    }
     localTickOffset = nextTick
     tickOffset = nextTick - initialTick
     localTimeManagers.keys.foreach {
       timeManager =>
-        localTimeManagers.update(timeManager, Long.MinValue)
+        localTimeManagers.update(
+          timeManager,
+          LocalTimeManagerTickInfo(
+            tick = nextTick,
+          )
+        )
     }
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
@@ -198,20 +217,18 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-      logEvent(s"Finish event for ${finish.identify} at tick ${finish.end}")
-      logEvent(s"Finish event destruct: ${finish.destruct}")
-      logEvent("TimeManager finish event apply")
-      logEvent(s"Running events: ${runningEvents.size}")
-      logEvent(s"Running events = $runningEvents, finish = ${finish.identify.id}")
       runningEvents.filterInPlace(_.id != finish.identify.id)
-      logEvent(s"Running events after remove: ${runningEvents.size}")
-      finish.scheduleEvent.foreach(scheduleApply)
-      if (finish.destruct) {
-        registeredActors.remove(getActorRef(finish.identify.actorRef))
-      }
+      finishDestruct(finish)
+      advanceToNextTick()
+      reportGlobalTimeManager(true)
     } else {
       logEvent("TimeManager finish event forward")
       finish.timeManager ! finish
+    }
+
+  private def finishDestruct(finish: FinishEvent): Unit =
+    if (finish.destruct) {
+      registeredActors.remove(getActorRef(finish.identify.actorRef))
     }
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
@@ -219,45 +236,37 @@ class TimeManager(
       if (localTickOffset - initialTick >= simulationDuration) {
         terminateSimulation()
       } else {
-        processNextEvent(spontaneous)
+        processTick(spontaneous.tick)
       }
     }
 
-  private def processNextEvent(spontaneous: SpontaneousEvent): Unit =
+  private def processTick(tick: Tick): Unit =
     if (scheduledActors.nonEmpty) {
-      processNextEventTick(spontaneous.tick)
-      localTickOffset = nextTick
-      notifyManagers()
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+      processNextEventTick(tick)
     } else {
       advanceToNextTick()
+      reportGlobalTimeManager()
     }
 
-  private def notifyManagers(): Unit =
-    if (
-      parentManager.isDefined && (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size)
-    ) {
-      parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, actorRef = getPath)
-    } else {
-      notifyLocalManagers(UpdateGlobalTimeEvent(tick = localTickOffset))
+  private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
+    if (parentManager.isDefined && runningEvents.isEmpty) {
+      parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, hasScheduled = hasScheduled, actorRef = getPath)
     }
 
   private def processNextEventTick(tick: Tick): Unit =
     scheduledActors.get(tick) match
       case Some(scheduled) =>
         scheduled.actorsRef.foreach {
-          actor =>
-            runningEvents.add(actor)
+          actor => runningEvents.add(actor)
         }
         logEvent(
           s"Sending spontaneous event to ${scheduled.actorsRef.size} scheduled actors at tick $tick"
         )
-        logEvent(s"Scheduled actors at tick $tick: ${scheduled.actorsRef}")
         sendSpontaneousEvent(tick, scheduled.actorsRef)
         scheduledActors.remove(tick)
       case None =>
-      // logEvent(s"No scheduled actors at tick $tick")
-      // sendSpontaneousEvent(tick, runningEvents)
+        advanceToNextTick()
+        reportGlobalTimeManager()
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
@@ -274,31 +283,19 @@ class TimeManager(
       )
     )
 
-  private def handleAcknowledgeTick(acknowledge: AcknowledgeTickEvent): Unit =
-    if (acknowledge.timeManagerRef == getPath) {
-      tickAcknowledge = tickAcknowledge + 1
-    } else {
-      getActorRef(acknowledge.timeManagerRef) ! acknowledge
-    }
-
   private def advanceToNextTick(): Unit = {
     val newTick = nextTick
     if (localTickOffset < simulationDuration) {
       localTickOffset = newTick
-      self ! SpontaneousEvent(tick = newTick, actorRef = self)
     } else {
       terminateSimulation()
     }
   }
 
   private def nextTick: Tick = {
-    if (runningEvents.isEmpty || tickAcknowledge >= runningEvents.size) {
-      tickAcknowledge = 0
-      return (scheduledActors.nonEmpty, runningEvents.nonEmpty) match {
-        case (true, false)
-            if !scheduledActors.contains(
-              localTickOffset
-            ) =>
+    if (runningEvents.isEmpty) {
+      return (scheduledActors.nonEmpty, runningEvents.isEmpty) match {
+        case (true, true) =>
           scheduledActors.keys.minOption.getOrElse(localTickOffset + 1)
         case _ => localTickOffset + 1
       }
@@ -307,7 +304,7 @@ class TimeManager(
   }
 
   private def terminateSimulation(): Unit = {
-    if (tickAcknowledge >= runningEvents.size && scheduledActors.isEmpty) { // Verifica se scheduledActors está vazio
+    if (runningEvents.isEmpty && scheduledActors.isEmpty) { // Verifica se scheduledActors está vazio
       terminateAllActors()
       if (parentManager.isEmpty) {
         notifyLocalManagers(StopSimulationEvent)
@@ -332,7 +329,6 @@ class TimeManager(
   private def printState(): Unit = {
     log.info(s"runningEvents: ${runningEvents.size}")
     log.info(s"scheduledActors: ${scheduledActors.size}")
-    log.info(s"tickAcknowledge: $tickAcknowledge")
     log.info(s"localTickOffset: $localTickOffset")
     log.info(s"tickOffset: $tickOffset")
   }
