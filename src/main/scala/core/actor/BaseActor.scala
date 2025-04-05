@@ -93,7 +93,6 @@ abstract class BaseActor[T <: BaseState](
       log.warning(s"Actor Start id ${actorId} is different initialize id ${event.id}")
     }
     actorId = event.id
-    logEvent(s"Initializing actor with id $actorId, event $event")
     if (event.data.data != null) {
       state = JsonUtil.convertValue[T](event.data.data)
       startTick = state.getStartTick
@@ -237,6 +236,7 @@ abstract class BaseActor[T <: BaseState](
       case event: SpontaneousEvent      => handleSpontaneous(event)
       case event: ActorInteractionEvent => handleInteractWith(event)
       case event: DestructEvent         => destruct(event)
+      case event: ShardRegion.StartEntity => handleStartEntity(event)
       case event                        => handleEvent(event)
     }
 
