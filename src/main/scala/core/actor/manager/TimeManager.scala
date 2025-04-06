@@ -12,7 +12,10 @@ import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSet
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent, UpdateGlobalTimeEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
+import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.util.ManagerConstantsUtil
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 
@@ -22,10 +25,14 @@ class TimeManager(
   val parentManager: Option[ActorRef]
 ) extends BaseManager[DefaultState](
       timeManager = null,
-      actorId = if parentManager.isEmpty then s"local-time-manager-${System.nanoTime()}" else "global-time-manager",
+      actorId =
+        if parentManager.isEmpty then s"$LOAD_MANAGER_ACTOR_NAME-${System.nanoTime()}"
+        else GLOBAL_TIME_MANAGER_ACTOR_NAME,
       data = null,
       dependencies = mutable.Map.empty
     ) {
+
+  private var selfProxy: ActorRef = null
 
   private var startTime: Long = 0
   private var localTickOffset: Tick = 0
@@ -45,11 +52,10 @@ class TimeManager(
     if (parentManager.isEmpty) {
       createTimeManagersPool()
     } else {
-      parentManager.get ! TimeManagerRegisterEvent(actorRef = getPath)
+      parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
 
   private def createTimeManagersPool(): Unit = {
-    val selfProxy = createSingletonProxy(s"global-time-manager", s"-${System.nanoTime()}")
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(1),
@@ -58,24 +64,24 @@ class TimeManager(
           maxInstancesPerNode = 1,
           allowLocalRoutees = true
         )
-      ).props(TimeManager.props(simulationDuration, simulationManager, Some(selfProxy))),
-      "time-manager-router"
+      ).props(TimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))),
+      name = POOL_TIME_MANAGER_ACTOR_NAME
     )
     logEvent(s"TimeManager pool created: $timeManagersPool")
     // Can to exists a problem here, because the time manager pool is created after the simulation manager
-    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool.path.toString)
+    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
   }
 
   override def handleEvent: Receive = {
-    case start: StartSimulationTimeEvent   => startSimulation(start)
-    case register: RegisterActorEvent      => registerActor(register)
-    case schedule: ScheduleEvent           => scheduleApply(schedule)
-    case finish: FinishEvent               => finishEventApply(finish)
-    case spontaneous: SpontaneousEvent     => if (isRunning) actSpontaneous(spontaneous)
-    case PauseSimulationEvent              => if (isRunning) pauseSimulation()
-    case ResumeSimulationEvent             => resumeSimulation()
-    case StopSimulationEvent               => stopSimulation()
-    case e: UpdateGlobalTimeEvent          => syncWithGlobalTime(e.tick)
+    case start: StartSimulationTimeEvent => startSimulation(start)
+    case register: RegisterActorEvent    => registerActor(register)
+    case schedule: ScheduleEvent         => scheduleApply(schedule)
+    case finish: FinishEvent             => finishEventApply(finish)
+    case spontaneous: SpontaneousEvent   => if (isRunning) actSpontaneous(spontaneous)
+    case PauseSimulationEvent            => if (isRunning) pauseSimulation()
+    case ResumeSimulationEvent           => resumeSimulation()
+    case StopSimulationEvent             => stopSimulation()
+    case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
@@ -84,9 +90,9 @@ class TimeManager(
 
   private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
     localTimeManagers.put(
-      getActorRef(timeManagerRegisterEvent.actorRef),
+      timeManagerRegisterEvent.actorRef,
       LocalTimeManagerTickInfo(
-        tick = localTickOffset,
+        tick = localTickOffset
       )
     )
 
@@ -149,13 +155,20 @@ class TimeManager(
     }
   }
 
-  private def handleLocalTimeReport(localManager: ActorRef, tick: Tick, hasScheduled: Boolean): Unit =
+  private def handleLocalTimeReport(
+    localManager: ActorRef,
+    tick: Tick,
+    hasScheduled: Boolean
+  ): Unit =
     if (parentManager.isEmpty) {
-      localTimeManagers.update(localManager, LocalTimeManagerTickInfo(
-        tick = tick,
-        hasSchedule = hasScheduled,
-        isProcessed = true
-      ))
+      localTimeManagers.update(
+        localManager,
+        LocalTimeManagerTickInfo(
+          tick = tick,
+          hasSchedule = hasScheduled,
+          isProcessed = true
+        )
+      )
       if (localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
       }
@@ -175,7 +188,7 @@ class TimeManager(
         localTimeManagers.update(
           timeManager,
           LocalTimeManagerTickInfo(
-            tick = nextTick,
+            tick = nextTick
           )
         )
     }
@@ -242,7 +255,11 @@ class TimeManager(
 
   private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
     if (parentManager.isDefined && runningEvents.isEmpty) {
-      parentManager.get ! LocalTimeReportEvent(tick = localTickOffset, hasScheduled = hasScheduled, actorRef = getPath)
+      parentManager.get ! LocalTimeReportEvent(
+        tick = localTickOffset,
+        hasScheduled = hasScheduled,
+        actorRef = getPath
+      )
     }
 
   private def processNextEventTick(tick: Tick): Unit =
@@ -319,23 +336,31 @@ class TimeManager(
     )
 
   private def printState(): Unit = {
-    log.info(s"runningEvents: ${runningEvents.size}")
-    log.info(s"scheduledActors: ${scheduledActors.size}")
-    log.info(s"localTickOffset: $localTickOffset")
-    log.info(s"tickOffset: $tickOffset")
+    logEvent(s"runningEvents: ${runningEvents.size}")
+    logEvent(s"scheduledActors: ${scheduledActors.size}")
+    logEvent(s"localTickOffset: $localTickOffset")
+    logEvent(s"tickOffset: $tickOffset")
   }
 
   private def printSimulationDuration(): Unit = {
     val duration = System.currentTimeMillis() - startTime
-    log.info(s"Simulation endTick: $localTickOffset")
-    log.info(s"Simulation total ticks: ${localTickOffset - initialTick}")
-    log.info(s"Simulation duration: $duration ms")
-    log.info(s"Simulation duration: ${duration / 1000} s")
-    log.info(s"Simulation duration: ${duration / 1000 / 60} min")
-    log.info(s"Simulation duration: ${duration / 1000 / 60 / 60} h")
+    logEvent(s"Simulation endTick: $localTickOffset")
+    logEvent(s"Simulation total ticks: ${localTickOffset - initialTick}")
+    logEvent(s"Simulation duration: $duration ms")
+    logEvent(s"Simulation duration: ${duration / 1000.0} s")
+    logEvent(s"Simulation duration: ${duration / 1000.0 / 60.0} min")
+    logEvent(s"Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
   }
 
   private def isRunning: Boolean = !isPaused && !isStopped
+
+  private def getSelfProxy: ActorRef =
+    if (selfProxy == null) {
+      selfProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
+      selfProxy
+    } else {
+      selfProxy
+    }
 }
 
 object TimeManager {

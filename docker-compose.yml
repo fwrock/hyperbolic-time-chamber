@@ -13,7 +13,7 @@ services:
       CLUSTER_IP: node1
       CLUSTER_NAME: node1
       SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket-simple-dt/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -32,125 +32,125 @@ services:
       CLUSTER_IP: node2
       CLUSTER_NAME: node2
       SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket-simple-dt/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
-  node3:
-    build: .
-    container_name: node_3
-    hostname: node3
-    ports:
-      - '1602:1602'
-      - "2553:2551"
-      - "8560:8558"
-    environment:
-      CLUSTER_PORT: 1602
-      CLUSTER_IP: node3
-      CLUSTER_NAME: node3
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
-
-  node4:
-    build: .
-    container_name: node_4
-    hostname: node4
-    ports:
-      - '1603:1603'
-      - "2554:2551"
-      - "8561:8558"
-    environment:
-      CLUSTER_PORT: 1603
-      CLUSTER_IP: node4
-      CLUSTER_NAME: node4
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
-
-  node5:
-    build: .
-    container_name: node_5
-    hostname: node5
-    ports:
-      - '1604:1604'
-      - "2555:2551"
-      - "8562:8558"
-    environment:
-      CLUSTER_PORT: 1604
-      CLUSTER_IP: node5
-      CLUSTER_NAME: node5
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
-
-  node6:
-    build: .
-    container_name: node_6
-    hostname: node6
-    ports:
-      - '1605:1605'
-      - "2556:2551"
-      - "8563:8558"
-    environment:
-      CLUSTER_PORT: 1605
-      CLUSTER_IP: node6
-      CLUSTER_NAME: node6
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
-
-  node7:
-    build: .
-    container_name: node_7
-    hostname: node7
-    ports:
-      - '1606:1606'
-      - "2557:2551"
-      - "8564:8558"
-    environment:
-      CLUSTER_PORT: 1606
-      CLUSTER_IP: node7
-      CLUSTER_NAME: node7
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
-
-  node8:
-    build: .
-    container_name: node_8
-    hostname: node8
-    ports:
-      - '1607:1607'
-      - "2558:2551"
-      - "8565:8558"
-    environment:
-      CLUSTER_PORT: 1607
-      CLUSTER_IP: node8
-      CLUSTER_NAME: node8
-      SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000000_1000/simulation.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+#  node3:
+#    build: .
+#    container_name: node_3
+#    hostname: node3
+#    ports:
+#      - '1602:1602'
+#      - "2553:2551"
+#      - "8560:8558"
+#    environment:
+#      CLUSTER_PORT: 1602
+#      CLUSTER_IP: node3
+#      CLUSTER_NAME: node3
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
+#
+#  node4:
+#    build: .
+#    container_name: node_4
+#    hostname: node4
+#    ports:
+#      - '1603:1603'
+#      - "2554:2551"
+#      - "8561:8558"
+#    environment:
+#      CLUSTER_PORT: 1603
+#      CLUSTER_IP: node4
+#      CLUSTER_NAME: node4
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
+#
+#  node5:
+#    build: .
+#    container_name: node_5
+#    hostname: node5
+#    ports:
+#      - '1604:1604'
+#      - "2555:2551"
+#      - "8562:8558"
+#    environment:
+#      CLUSTER_PORT: 1604
+#      CLUSTER_IP: node5
+#      CLUSTER_NAME: node5
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
+#
+#  node6:
+#    build: .
+#    container_name: node_6
+#    hostname: node6
+#    ports:
+#      - '1605:1605'
+#      - "2556:2551"
+#      - "8563:8558"
+#    environment:
+#      CLUSTER_PORT: 1605
+#      CLUSTER_IP: node6
+#      CLUSTER_NAME: node6
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
+#
+#  node7:
+#    build: .
+#    container_name: node_7
+#    hostname: node7
+#    ports:
+#      - '1606:1606'
+#      - "2557:2551"
+#      - "8564:8558"
+#    environment:
+#      CLUSTER_PORT: 1606
+#      CLUSTER_IP: node7
+#      CLUSTER_NAME: node7
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
+#
+#  node8:
+#    build: .
+#    container_name: node_8
+#    hostname: node8
+#    ports:
+#      - '1607:1607'
+#      - "2558:2551"
+#      - "8565:8558"
+#    environment:
+#      CLUSTER_PORT: 1607
+#      CLUSTER_IP: node8
+#      CLUSTER_NAME: node8
+#      SEED_PORT_1600_TCP_ADDR: node1
+#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
+#    volumes:
+#      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+#    networks:
+#      - hyperbolic-time-chamber-network
 
 networks:
   hyperbolic-time-chamber-network:

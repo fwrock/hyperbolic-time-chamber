@@ -141,6 +141,12 @@ object ActorCreatorUtil {
         s"Already exists shard region for $actorClassName, create actor shard with entityId $entityId"
       )
       sharding.shardRegion(actorClassName)
+//      sharding.startProxy(
+//        typeName = actorClassName,
+//        role = None,
+//        extractEntityId = extractEntityId,
+//        extractShardId = extractShardId
+//      )
     }
   }
 

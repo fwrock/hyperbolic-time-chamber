@@ -3,18 +3,18 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import core.util.{ActorCreatorUtil, DistributedUtil, JsonUtil}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import core.util.{ ActorCreatorUtil, DistributedUtil, JsonUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
-import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, InitializeEntityAckEvent, LoadDataCreatorRegisterEvent, StartCreationEvent}
-import org.interscity.htc.core.entity.actor.{ActorSimulation, Initialization}
+import org.htc.protobuf.core.entity.event.control.load.{ FinishCreationEvent, InitializeEntityAckEvent, LoadDataCreatorRegisterEvent, StartCreationEvent }
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, InitializeEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, InitializeEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.JsonUtil.convertValue
 
@@ -116,7 +116,7 @@ class CreatorLoadData(
       actor => actors += actor
     }
     sender() ! LoadDataCreatorRegisterEvent(
-        actorRef = getPath,
+      actorRef = getPath
     )
   }
 }

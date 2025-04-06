@@ -1,14 +1,14 @@
 package org.interscity.htc
 package core.serializer
 
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent}
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.serialization.{SerializationExtension, SerializerWithStringManifest, Serializer as PekkoSerializer}
-import org.htc.protobuf.core.entity.event.communication.{ActorInteraction, EntityEnvelope}
+import org.apache.pekko.serialization.{ SerializationExtension, Serializer as PekkoSerializer, SerializerWithStringManifest }
+import org.htc.protobuf.core.entity.event.communication.{ ActorInteraction, EntityEnvelope }
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 class ActorInteractionSerializer(
   val system: ExtendedActorSystem
@@ -32,12 +32,11 @@ class ActorInteractionSerializer(
             eventType,
             data
           ) =>
-
         val payloadSerializer: PekkoSerializer = serialization.serializerFor(data.getClass)
 
         val payloadManifest: String = payloadSerializer match {
           case s: SerializerWithStringManifest => s.manifest(data)
-          case _ => ""
+          case _                               => ""
         }
 
         val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(data))
@@ -71,7 +70,7 @@ class ActorInteractionSerializer(
         )
     }
 
-  override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = {
+  override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef =
     Try {
       val proto = ActorInteraction.parseFrom(bytes)
 
@@ -112,5 +111,4 @@ class ActorInteractionSerializer(
           ex
         )
     }
-  }
 }
