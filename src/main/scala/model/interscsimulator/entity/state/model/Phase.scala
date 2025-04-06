@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.entity.state.model
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import model.interscsimulator.entity.state.enumeration.TrafficSignalPhaseStateEnum
 

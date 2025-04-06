@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.control
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 class LamportClock {
   private var clock: Tick = 0L

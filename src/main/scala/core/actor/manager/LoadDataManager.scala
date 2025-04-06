@@ -1,19 +1,20 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.enumeration.DataSourceTypeEnum
-
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.actor.manager.load.CreatorLoadData
-import core.actor.manager.load.strategy.LoadDataStrategy
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil
+import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
 import core.util.ActorCreatorUtil.createActor
 
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.event.control.load.{ LoadDataEvent, LoadDataSourceEvent }
+import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.event.control.load.{LoadDataEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME}
 
+import java.util.UUID
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
@@ -28,9 +29,12 @@ class LoadDataManager(
       dependencies = mutable.Map.empty
     ) {
 
-  private var loadDataAmount: Int = Int.MaxValue
+  private var loadDataTotalAmount = 0L
+  private var dataSourceAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
+  private var selfProxy: ActorRef = null
+  private val creators = mutable.Set[String]()
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -39,12 +43,14 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    logEvent("Load data")
-    loadDataAmount = event.actorsDataSources.size
-    creatorRef = createCreatorLoadData()
+    dataSourceAmount = event.actorsDataSources.size
+    logEvent(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
+    creatorRef = createCreatorLoadData(dataSourceAmount)
     event.actorsDataSources.foreach {
       actorDataSource =>
-        logEvent(s"Load data source ${actorDataSource}")
+        logEvent(
+          s"Load data source ${actorDataSource.dataSource} of type ${actorDataSource.classType}"
+        )
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
@@ -52,45 +58,72 @@ class LoadDataManager(
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
-          managerRef = self,
+          managerRef = getSelfProxy,
           creatorRef = creatorRef,
           actorDataSource = actorDataSource
         )
     }
   }
 
-  private def createCreatorLoadData(): ActorRef = {
-    createSingletonManager(
-      manager = CreatorLoadData.props(loadDataManager = self, timeManager = poolTimeManager),
-      name = "creator-load-data",
-      terminateMessage = DestructEvent(actorRef = self.path.toString)
+  private def createCreatorLoadData(amountDataSources: Int): ActorRef =
+    context.actorOf(
+      ClusterRouterPool(
+        RoundRobinPool(1),
+        ClusterRouterPoolSettings(
+          totalInstances = amountDataSources * 2,
+          maxInstancesPerNode = amountDataSources,
+          allowLocalRoutees = true
+        )
+      ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager)),
+      name = POOL_CREATOR_LOAD_DATA_ACTOR_NAME
     )
-    createSingletonProxy("creator-load-data", s"-${System.nanoTime()}")
-  }
-
-  private def loadDataStrategy(dataSourceType: DataSourceTypeEnum): LoadDataStrategy =
-    dataSourceType.clazz.getDeclaredConstructor().newInstance()
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
-    logEvent(s"Load data maanager actorRef = ${event.actorRef}")
+    logEvent(s"Finish load data manager actorRef = ${event.actorRef}, amount = ${event.amount}")
     val actorRef = getActorRef(event.actorRef)
 
+    loadDataTotalAmount += event.amount
+    if (event.creators.nonEmpty) {
+      creators ++= event.creators
+    }
     loaders(actorRef) = true
+
+    logEvent(s"loaders = $loaders")
 
     actorRef ! DestructEvent(actorRef = getPath)
 
+    logEvent(s"all loaders = ${loaders.values
+        .forall(_ == true)}, dataSourceAmount = $dataSourceAmount, loaders.size = ${loaders.size}")
     if (isAllDataLoaded) {
-      creatorRef ! StartCreationEvent(actorRef = getPath)
+      creators.foreach {
+        creator =>
+          val creatorActorRef = getActorRef(creator)
+          creatorActorRef ! StartCreationEvent(actorRef = getPath)
+      }
     }
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    creatorRef ! DestructEvent(actorRef = getPath)
-    simulationManager ! FinishLoadDataEvent(actorRef = getPath)
+    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}, amount=${event.amount}")
+    loadDataTotalAmount -= event.amount
+    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}")
+    if (loadDataTotalAmount <= 0) {
+      logEvent("Finish creation")
+      creatorRef ! DestructEvent(actorRef = getPath)
+      simulationManager ! FinishLoadDataEvent(actorRef = getPath)
+    }
   }
 
   private def isAllDataLoaded: Boolean =
-    loaders.values.forall(_ == true) && loadDataAmount == loaders.size
+    loaders.values.forall(_ == true) && dataSourceAmount == loaders.size
+
+  private def getSelfProxy: ActorRef =
+    if (selfProxy == null) {
+      selfProxy = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME)
+      selfProxy
+    } else {
+      selfProxy
+    }
 }
 
 object LoadDataManager {
@@ -100,10 +133,9 @@ object LoadDataManager {
     simulationManager: ActorRef
   ): Props =
     Props(
-      new LoadDataManager(
-        timeManager = timeManager,
-        poolTimeManager = poolTimeManager,
-        simulationManager = simulationManager
-      )
+      classOf[LoadDataManager],
+      timeManager,
+      poolTimeManager,
+      simulationManager
     )
 }

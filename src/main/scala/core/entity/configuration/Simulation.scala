@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.configuration
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import java.time.LocalDateTime
 

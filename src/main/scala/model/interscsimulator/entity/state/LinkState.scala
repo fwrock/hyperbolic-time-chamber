@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.entity.state
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.model.interscsimulator.entity.state.model.LinkRegister

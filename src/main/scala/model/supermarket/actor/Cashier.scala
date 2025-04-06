@@ -5,6 +5,7 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
 //import org.htc.protobuf.model.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
@@ -30,6 +31,13 @@ class Cashier(
       data = data,
       dependencies = dependencies
     ) {
+
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+    logEvent(
+      s"Cashier InitializeEvent = $event"
+    )
+  }
 
   override def handleEvent: Receive = {
     case event => logEvent(s"Event not handled ${event}")
@@ -63,12 +71,13 @@ class Cashier(
           onFinishSpontaneous()
         }
       case Busy =>
-        state.clientInService.foreach(client =>
-          sendMessageTo(
-            client.id,
-            client.classType,
-            FinishClientServiceData()
-          )
+        state.clientInService.foreach(
+          client =>
+            sendMessageTo(
+              client.id,
+              client.classType,
+              FinishClientServiceData()
+            )
         )
         state.clientInService = None
         logEvent(

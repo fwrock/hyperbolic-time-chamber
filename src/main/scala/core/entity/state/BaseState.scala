@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.state
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import org.apache.pekko.actor.{ ActorContext, ActorRef }
 import org.apache.pekko.event.Logging

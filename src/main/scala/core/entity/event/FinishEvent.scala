@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify

@@ -3,7 +3,7 @@ package core.actor
 
 import org.apache.pekko.actor.{ Actor, ActorLogging, ActorNotFound, ActorRef }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
-import core.types.CoreTypes.Tick
+import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.JsonUtil
@@ -45,7 +45,7 @@ abstract class BaseActor[T <: BaseState](
   private val data: Any = null,
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
-    extends Actor
+    extends ActorSerializable
     with ActorLogging {
 
   protected var startTick: Tick = MinValue
@@ -89,8 +89,10 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def initialize(event: InitializeEvent): Unit = {
+    if (actorId != event.id) {
+      log.warning(s"Actor Start id ${actorId} is different initialize id ${event.id}")
+    }
     actorId = event.id
-    logEvent(s"Initializing actor with id $actorId, event $event")
     if (event.data.data != null) {
       state = JsonUtil.convertValue[T](event.data.data)
       startTick = state.getStartTick
@@ -100,7 +102,6 @@ abstract class BaseActor[T <: BaseState](
     dependencies.clear()
     dependencies ++= event.data.dependencies
     onInitialize(event)
-    logEvent(s"isInitialized = $isInitialized, creatorManager = $creatorManager")
     onFinishInitialize()
   }
 
@@ -215,9 +216,8 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit = {
+  protected def logEvent(eventInfo: String): Unit =
     log.info(s"$actorId: $eventInfo")
-  }
 
   override def receive: Receive = {
     case event: SpontaneousEvent        => handleSpontaneous(event)
@@ -231,11 +231,12 @@ abstract class BaseActor[T <: BaseState](
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
-      case event: InitializeEvent       => initialize(event)
-      case event: SpontaneousEvent      => handleSpontaneous(event)
-      case event: ActorInteractionEvent => handleInteractWith(event)
-      case event: DestructEvent         => destruct(event)
-      case event                        => handleEvent(event)
+      case event: InitializeEvent         => initialize(event)
+      case event: SpontaneousEvent        => handleSpontaneous(event)
+      case event: ActorInteractionEvent   => handleInteractWith(event)
+      case event: DestructEvent           => destruct(event)
+      case event: ShardRegion.StartEntity => handleStartEntity(event)
+      case event                          => handleEvent(event)
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
@@ -272,22 +273,24 @@ abstract class BaseActor[T <: BaseState](
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
-  ): Unit =
-    timeManager ! FinishEvent(
+  ): Unit = {
+    currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
       identify = Identify(actorId, getClass.getName, getPath),
-      scheduleEvent = scheduleTick.map(
-        tick =>
-          ScheduleEvent(
-            tick = tick,
-            actorRef = getPath,
-            identify = Some(Identify(actorId, getClass.getName, getPath))
-          )
-      ),
+      scheduleEvent = None,
       timeManager = currentTimeManager,
       destruct = destruct
     )
+    scheduleTick.foreach(
+      tick =>
+        timeManager ! ScheduleEvent(
+          tick = tick,
+          actorRef = getPath,
+          identify = Some(Identify(actorId, getClass.getName, getPath))
+        )
+    )
+  }
 
   /** Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the
     * actor.

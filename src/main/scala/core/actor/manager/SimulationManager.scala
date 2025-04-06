@@ -6,12 +6,14 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerRegisterEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 import org.interscity.htc.core.entity.configuration.Simulation
+import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.entity.event.control.load.LoadDataEvent
+import org.interscity.htc.core.util.ManagerConstantsUtil
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -19,7 +21,7 @@ import scala.compiletime.uninitialized
 class SimulationManager(
   val simulationPath: String = null
 ) extends BaseManager[DefaultState](
-      actorId = "simulation-manager",
+      actorId = SIMULATION_MANAGER_ACTOR_NAME,
       timeManager = null,
       data = null,
       dependencies = mutable.Map.empty
@@ -45,43 +47,35 @@ class SimulationManager(
   private def startSimulation(): Unit = {
     loadManager ! DestructEvent(actorRef = getPath)
     logEvent("Start simulation")
-    createSingletonProxy("time-manager", s"-${System.nanoTime()}") ! StartSimulationTimeEvent(
+    createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME) ! StartSimulationTimeEvent(
+      startTick = configuration.startTick,
+      actorRef = getPath,
       data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))
     )
   }
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
-      println("Creating self proxy")
-      selfProxy = context.system.actorOf(
-        ClusterSingletonProxy.props(
-          singletonManagerPath = "/user/simulation-manager",
-          settings = ClusterSingletonProxySettings(context.system)
-        ),
-        name = "simulation-manager-proxy"
-      )
+      selfProxy = createSingletonProxy(SIMULATION_MANAGER_ACTOR_NAME)
       selfProxy
     } else {
-      println("Reusing self proxy")
       selfProxy
     }
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
-    poolTimeManager = getActorRef(event.actorRef)
+    poolTimeManager = event.actorRef
     loadManager = createSingletonLoadManager()
 
-    createSingletonProxy("load-manager") ! LoadDataEvent(
-      actorRef = getActorRef(getPath),
+    createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
+      actorRef = selfProxy,
       actorsDataSources = configuration.actorsDataSources
     )
   }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
-    logEvent("Run simulation")
     configuration = loadSimulationConfig(event.configuration)
-
+    logEvent(s"Run simulation: \n$configuration")
     timeManager = createSingletonTimeManager()
-    logEvent(s"Time manager parent singleton was created $timeManager")
   }
 
   private def createSingletonTimeManager(): ActorRef =
@@ -91,7 +85,7 @@ class SimulationManager(
         simulationManager = getSelfProxy,
         parentManager = None
       ),
-      name = "time-manager",
+      name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
     )
 
@@ -102,7 +96,7 @@ class SimulationManager(
         poolTimeManager = poolTimeManager,
         simulationManager = selfProxy
       ),
-      name = "load-manager",
+      name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
     )
 }
