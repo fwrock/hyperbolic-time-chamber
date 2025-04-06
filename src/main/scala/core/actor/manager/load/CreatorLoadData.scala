@@ -11,10 +11,10 @@ import core.util.ActorCreatorUtil.createShardRegion
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
-import org.htc.protobuf.core.entity.event.control.load.{ FinishCreationEvent, InitializeEntityAckEvent, LoadDataCreatorRegisterEvent, StartCreationEvent }
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
 import org.interscity.htc.core.entity.actor.{ ActorSimulation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, InitializeEvent }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.JsonUtil.convertValue
 
@@ -45,7 +45,7 @@ class CreatorLoadData(
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
     if (initializeData.isEmpty && actors.isEmpty) {
       logEvent("Finish creation")
-      loadDataManager ! FinishCreationEvent(actorRef = getPath, amount = amountActors)
+      loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
     }
 
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
@@ -116,7 +116,7 @@ class CreatorLoadData(
       actor => actors += actor
     }
     sender() ! LoadDataCreatorRegisterEvent(
-      actorRef = getPath
+      actorRef = self
     )
   }
 }

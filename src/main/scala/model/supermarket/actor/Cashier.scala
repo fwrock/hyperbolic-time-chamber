@@ -4,10 +4,9 @@ package model.supermarket.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
-import org.interscity.htc.model.supermarket.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
-//import org.htc.protobuf.model.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
+import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
 import org.interscity.htc.model.supermarket.entity.model.ClientQueued
@@ -95,6 +94,7 @@ class Cashier(
         onFinishSpontaneous()
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous()
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
