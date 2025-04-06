@@ -4,10 +4,9 @@ package core.actor.manager.load.strategy
 import org.apache.pekko.actor.ActorRef
 import core.util.JsonUtil
 
-import org.htc.protobuf.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.entity.actor.ActorSimulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -21,7 +20,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var totalBatchAmount: Int = 0
   private var currentBatchAmount: Int = 0
   private var isSentAllDataToCreator = false
-  private val creators = mutable.Set[String]()
+  private val creators = mutable.Set[ActorRef]()
 
   override def handleEvent: Receive = {
     case event: LoadDataSourceEvent          => load(event)
@@ -76,9 +75,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
       logEvent("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(
-        actorRef = getPath,
+        actorRef = self,
         amount = creators.size,
-        creators = creators.toList
+        creators = creators
       )
     }
   }

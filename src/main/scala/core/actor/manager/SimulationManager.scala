@@ -8,10 +8,9 @@ import core.util.SimulationUtil.loadSimulationConfig
 
 import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
-import org.htc.protobuf.core.entity.event.control.load.FinishLoadDataEvent
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.LoadDataEvent
+import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
 
