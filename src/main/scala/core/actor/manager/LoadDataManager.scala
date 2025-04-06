@@ -1,18 +1,18 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 import core.actor.manager.load.CreatorLoadData
 import core.entity.state.DefaultState
-import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
+import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
 import core.util.ActorCreatorUtil.createActor
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, StartCreationEvent}
-import org.interscity.htc.core.entity.event.control.load.{LoadDataEvent, LoadDataSourceEvent}
-import org.interscity.htc.core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME}
+import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
+import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
 import java.util.UUID
 import scala.collection.mutable
@@ -30,11 +30,12 @@ class LoadDataManager(
     ) {
 
   private var loadDataTotalAmount = 0L
+  private var currentLoadDataAmount = 0L
   private var dataSourceAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
-  private val creators = mutable.Set[String]()
+  private val creators = mutable.Set[ActorRef]()
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -80,7 +81,7 @@ class LoadDataManager(
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
     logEvent(s"Finish load data manager actorRef = ${event.actorRef}, amount = ${event.amount}")
-    val actorRef = getActorRef(event.actorRef)
+    val actorRef = event.actorRef
 
     loadDataTotalAmount += event.amount
     if (event.creators.nonEmpty) {
@@ -97,20 +98,23 @@ class LoadDataManager(
     if (isAllDataLoaded) {
       creators.foreach {
         creator =>
-          val creatorActorRef = getActorRef(creator)
-          creatorActorRef ! StartCreationEvent(actorRef = getPath)
+          creator ! StartCreationEvent(actorRef = getPath)
       }
     }
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}, amount=${event.amount}")
-    loadDataTotalAmount -= event.amount
-    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}")
-    if (loadDataTotalAmount <= 0) {
+    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+    currentLoadDataAmount += event.amount
+    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+    if (loadDataTotalAmount == currentLoadDataAmount) {
       logEvent("Finish creation")
       creatorRef ! DestructEvent(actorRef = getPath)
-      simulationManager ! FinishLoadDataEvent(actorRef = getPath)
+      simulationManager ! FinishLoadDataEvent(
+        actorRef = selfProxy,
+        amount = loadDataTotalAmount,
+        creators = mutable.Set()
+      )
     }
   }
 

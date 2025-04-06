@@ -9,7 +9,6 @@ import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
-//import org.htc.protobuf.model.entity.event.data.{FinishClientServiceData, NewClientServiceData, StartClientServiceData}
 
 import scala.collection.mutable
 
@@ -29,22 +28,31 @@ class Client(
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    logEvent(
-      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
-    )
-    state.status match {
-      case Start =>
-        logEvent(
-          s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
+    try {
+      logEvent(
+        s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
+      )
+      state.status match {
+        case Start =>
+          logEvent(
+            s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
+          )
+          state.status = Waiting
+          enterQueue()
+          onFinishSpontaneous()
+        case Waiting =>
+          onFinishSpontaneous()
+        case _ =>
+          logEvent(s"Event current status not handled ${state.status}")
+      }
+    } catch
+      case e: Exception =>
+        log.error(
+          s"DD $actorId Error spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock}",
+          e
         )
-        state.status = Waiting
-        enterQueue()
+        e.printStackTrace()
         onFinishSpontaneous()
-      case Waiting =>
-        onFinishSpontaneous()
-      case _ =>
-        logEvent(s"Event current status not handled ${state.status}")
-    }
 
   private def enterQueue(): Unit = {
     logEvent(
@@ -92,7 +100,7 @@ class Client(
     data: FinishClientServiceData
   ): Unit = {
     state.status = Finished
-    onFinishSpontaneous(destruct = false)
+    onFinishSpontaneous()
   }
 
 }

@@ -3,7 +3,6 @@ package core.entity.event.control.load
 
 import org.apache.pekko.actor.ActorRef
 
-case class FinishCreationEvent(
-  actorRef: ActorRef,
-  amount: Long
+case class LoadDataCreatorRegisterEvent(
+  actorRef: ActorRef
 )
