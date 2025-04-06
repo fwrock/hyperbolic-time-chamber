@@ -20,6 +20,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var totalBatchAmount: Int = 0
   private var currentBatchAmount: Int = 0
   private var isSentAllDataToCreator = false
+  private var amountActors = 0L
   private val creators = mutable.Set[ActorRef]()
 
   override def handleEvent: Receive = {
@@ -42,7 +43,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     logEvent(s"Loaded ${actors.size} actors from JSON")
 
-    if (actors.size < batchSize) {
+    amountActors = actors.size
+
+    if (amountActors < batchSize) {
       totalBatchAmount += 1
       creatorRef ! CreateActorsEvent(actors)
     } else {
@@ -76,7 +79,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
       logEvent("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
-        amount = creators.size,
+        amount = amountActors,
         creators = creators
       )
     }
