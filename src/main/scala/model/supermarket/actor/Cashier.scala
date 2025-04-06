@@ -94,6 +94,7 @@ class Cashier(
         onFinishSpontaneous()
       case _ =>
         logEvent(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous()
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =

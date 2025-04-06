@@ -52,6 +52,7 @@ class Client(
           e
         )
         e.printStackTrace()
+        onFinishSpontaneous()
 
   private def enterQueue(): Unit = {
     logEvent(
