@@ -13,7 +13,7 @@ services:
       CLUSTER_IP: node1
       CLUSTER_NAME: node1
       SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket-simple-dt/simulation.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -32,7 +32,7 @@ services:
       CLUSTER_IP: node2
       CLUSTER_NAME: node2
       SEED_PORT_1600_TCP_ADDR: node1
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket-simple-dt/simulation.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/supermarket_simulation_1000_10_500/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
