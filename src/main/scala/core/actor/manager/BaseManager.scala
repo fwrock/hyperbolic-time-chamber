@@ -34,6 +34,6 @@ abstract class BaseManager[T <: BaseState](
     terminateMessage = terminateMessage
   )
 
-  protected def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
-    DistributedUtil.createSingletonProxy(context.system, name, suffix)
+  protected def createSingletonProxy(name: String): ActorRef =
+    DistributedUtil.createSingletonProxy(context.system, name)
 }

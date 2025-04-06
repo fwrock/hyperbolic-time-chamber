@@ -216,9 +216,8 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit = {
+  protected def logEvent(eventInfo: String): Unit =
     log.info(s"$actorId: $eventInfo")
-  }
 
   override def receive: Receive = {
     case event: SpontaneousEvent        => handleSpontaneous(event)
@@ -232,12 +231,12 @@ abstract class BaseActor[T <: BaseState](
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
-      case event: InitializeEvent       => initialize(event)
-      case event: SpontaneousEvent      => handleSpontaneous(event)
-      case event: ActorInteractionEvent => handleInteractWith(event)
-      case event: DestructEvent         => destruct(event)
+      case event: InitializeEvent         => initialize(event)
+      case event: SpontaneousEvent        => handleSpontaneous(event)
+      case event: ActorInteractionEvent   => handleInteractWith(event)
+      case event: DestructEvent           => destruct(event)
       case event: ShardRegion.StartEntity => handleStartEntity(event)
-      case event                        => handleEvent(event)
+      case event                          => handleEvent(event)
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {

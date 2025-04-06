@@ -4,10 +4,10 @@ package core.actor.manager.load.strategy
 import org.apache.pekko.actor.ActorRef
 import core.util.JsonUtil
 
-import org.htc.protobuf.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataCreatorRegisterEvent}
+import org.htc.protobuf.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.entity.actor.ActorSimulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -24,7 +24,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private val creators = mutable.Set[String]()
 
   override def handleEvent: Receive = {
-    case event: LoadDataSourceEvent => load(event)
+    case event: LoadDataSourceEvent          => load(event)
     case event: LoadDataCreatorRegisterEvent => registerCreators(event)
   }
 
@@ -41,20 +41,25 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     val actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
+    logEvent(s"Loaded ${actors.size} actors from JSON")
+
     if (actors.size < batchSize) {
       totalBatchAmount += 1
       creatorRef ! CreateActorsEvent(actors)
     } else {
-      actors.grouped(batchSize).foreach(batch => {
-        totalBatchAmount += 1
-        creatorRef ! CreateActorsEvent(batch)
-      })
+      actors.grouped(batchSize).foreach {
+        batch =>
+          totalBatchAmount += 1
+          creatorRef ! CreateActorsEvent(batch)
+      }
     }
+
+    logEvent(s"Total batch amount: $totalBatchAmount")
 
     isSentAllDataToCreator = true
 
     sendFinishLoadDataEvent()
-    
+
     logEvent(s"Data loaded from JSON")
   }
 
@@ -65,9 +70,16 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   private def sendFinishLoadDataEvent(): Unit = {
+    logEvent(
+      s"Current batch amount: $currentBatchAmount, Total batch amount: $totalBatchAmount, isSentAllDataToCreator: $isSentAllDataToCreator"
+    )
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
-      logEvent("All data loaded")
-      managerRef ! FinishLoadDataEvent(actorRef = getPath, amount = creators.size, creators = creators.toList)
+      logEvent("All data loaded and sent to creators")
+      managerRef ! FinishLoadDataEvent(
+        actorRef = getPath,
+        amount = creators.size,
+        creators = creators.toList
+      )
     }
   }
 }
