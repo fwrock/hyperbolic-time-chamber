@@ -4,11 +4,8 @@ package core.actor.manager
 import core.actor.BaseActor
 import core.entity.state.BaseState
 
+import org.htc.protobuf.core.entity.actor.Dependency
 import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.interscity.htc.core.util.{ ActorCreatorUtil, DistributedUtil }
 
 import scala.collection.mutable
@@ -37,6 +34,6 @@ abstract class BaseManager[T <: BaseState](
     terminateMessage = terminateMessage
   )
 
-  protected def createSingletonProxy(name: String, suffix: String = ""): ActorRef =
-    DistributedUtil.createSingletonProxy(context.system, name, suffix)
+  protected def createSingletonProxy(name: String): ActorRef =
+    DistributedUtil.createSingletonProxy(context.system, name)
 }

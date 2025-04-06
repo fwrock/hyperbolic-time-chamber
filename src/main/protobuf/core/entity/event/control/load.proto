@@ -11,10 +11,13 @@ message CreateActorsEvent {
 
 message FinishCreationEvent {
   string actorRef = 1;
+  uint64 amount = 2;
 }
 
 message FinishLoadDataEvent {
   string actorRef = 1;
+  uint64 amount = 2;
+  repeated string creators = 3;
 }
 
 message InitializeEntityAckEvent {
@@ -44,5 +47,9 @@ message RequestInitializeEvent {
 }
 
 message StartCreationEvent {
+  string actorRef = 1;
+}
+
+message LoadDataCreatorRegisterEvent {
   string actorRef = 1;
 }

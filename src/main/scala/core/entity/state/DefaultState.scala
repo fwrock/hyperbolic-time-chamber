@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.state
 
-import core.types.CoreTypes.Tick
+import core.types.Tick
 
 /** Default state. This class can be used as a default state, without necessary to create a new
   * class.

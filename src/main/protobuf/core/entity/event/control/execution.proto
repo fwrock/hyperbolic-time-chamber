@@ -18,7 +18,8 @@ message DestructEvent {
 
 message LocalTimeReportEvent {
   uint64 tick = 1;
-  string actorRef = 2;
+  bool hasScheduled = 2;
+  string actorRef = 3;
 }
 
 message RemoteTimeReportEvent {

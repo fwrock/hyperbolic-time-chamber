@@ -5,7 +5,7 @@ import core.entity.state.BaseState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.types.CoreTypes.Tick
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.ActorTypeEnum.Subway
 import org.interscity.htc.model.interscsimulator.entity.state.enumeration.MovableStatusEnum.Start

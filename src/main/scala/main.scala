@@ -7,7 +7,8 @@ import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.interscity.htc.core.actor.manager.SimulationManager
-import org.interscity.htc.core.util.SimulationUtil
+import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
+import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
 @main
 def main(): Unit = {
@@ -25,21 +26,16 @@ def main(): Unit = {
     system.log.info(s"Member is removed: ${cluster.selfMember}")
   }
 
-  val configuration =
-    "simulations/supermarket-simple-dt/simulation.json"
-
-  SimulationUtil.createShards(system, configuration)
+  SimulationUtil.createShards(system)
 
   val simulation = system.actorOf(
     ClusterSingletonManager.props(
       singletonProps = Props(
-        SimulationManager(
-          simulationPath = configuration
-        )
+        SimulationManager()
       ),
       terminationMessage = StopSimulationEvent(),
       settings = ClusterSingletonManagerSettings(system)
     ),
-    name = "simulation-manager"
+    name = SIMULATION_MANAGER_ACTOR_NAME
   )
 }
