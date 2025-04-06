@@ -167,7 +167,16 @@ abstract class BaseActor[T <: BaseState](
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
     currentTimeManager = event.actorRef
-    actSpontaneous(event)
+    try {
+      actSpontaneous(event)
+    } catch
+      case e: Exception =>
+        log.error(
+          s"Error spontaneous event at tick ${event.tick} and lamport ${getLamportClock}",
+          e
+        )
+        e.printStackTrace()
+        onFinishSpontaneous()
   }
 
   /** Sends an acknowledge tick event to the time manager. This method is called when the actor
