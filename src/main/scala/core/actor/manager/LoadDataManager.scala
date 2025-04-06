@@ -30,6 +30,7 @@ class LoadDataManager(
     ) {
 
   private var loadDataTotalAmount = 0L
+  private var currentLoadDataAmount = 0L
   private var dataSourceAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
@@ -103,10 +104,10 @@ class LoadDataManager(
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}, amount=${event.amount}")
-    loadDataTotalAmount -= event.amount
-    logEvent(s"loadDataTotalAmount=${loadDataTotalAmount}")
-    if (loadDataTotalAmount <= 0) {
+    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+    currentLoadDataAmount += event.amount
+    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+    if (loadDataTotalAmount == currentLoadDataAmount) {
       logEvent("Finish creation")
       creatorRef ! DestructEvent(actorRef = getPath)
       simulationManager ! FinishLoadDataEvent(
