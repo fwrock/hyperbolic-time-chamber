@@ -13,14 +13,12 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 
-import java.util.UUID
 import scala.collection.mutable
 
 object ActorCreatorUtil {
 
   private val extractEntityId: ShardRegion.ExtractEntityId = {
     case EntityEnvelopeEvent(id, payload) => (id, payload)
-//    case ShardRegion.StartEntity(id) => (id, ShardRegion.StartEntity(id))
   }
 
   private val extractShardId: ShardRegion.ExtractShardId = {
