@@ -21,14 +21,9 @@ import org.interscity.htc.model.interscsimulator.entity.event.data.link.{ LinkCo
 class Link(
   private var id: String = null,
   private val timeManager: ActorRef = null,
-  private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[LinkState](
       actorId = id,
       timeManager = timeManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   private def cost: Double = {

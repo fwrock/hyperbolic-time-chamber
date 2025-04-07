@@ -26,8 +26,6 @@ class CreatorLoadData(
 ) extends BaseActor[DefaultState](
       timeManager = timeManager,
       actorId = "creator-load-data",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   private val actors: mutable.ListBuffer[ActorSimulation] = mutable.ListBuffer()
@@ -51,21 +49,22 @@ class CreatorLoadData(
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
     initializeData.get(event.entityId) match
       case Some(data) =>
-        logEvent(s"Initialize ${event.entityId}")
+        val initializeEvent = InitializeEvent(
+          id = data.id,
+          actorRef = self,
+          data = InitializeData(
+            data = data.data,
+            timeManager = data.timeManager,
+            creatorManager = data.creatorManager,
+            dependencies = data.dependencies.map {
+              case (label, dep) => dep.id -> dep
+            }
+          )
+        )
+        logEvent(s"Initialize ${event.entityId} with $initializeEvent")
         getShardRef(data.classType) ! EntityEnvelopeEvent(
           entityId = event.entityId,
-          event = InitializeEvent(
-            id = data.id,
-            actorRef = self,
-            data = InitializeData(
-              data = data.data,
-              timeManager = data.timeManager,
-              creatorManager = data.creatorManager,
-              dependencies = data.dependencies.map {
-                case (label, dep) => dep.id -> dep
-              }
-            )
-          )
+          event = initializeEvent
         )
         initializeData.remove(event.entityId)
       case None =>

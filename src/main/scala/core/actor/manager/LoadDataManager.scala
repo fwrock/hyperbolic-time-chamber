@@ -14,7 +14,6 @@ import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
-import java.util.UUID
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
@@ -25,8 +24,6 @@ class LoadDataManager(
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   private var loadDataTotalAmount = 0L
@@ -35,7 +32,7 @@ class LoadDataManager(
   private var creatorRef: ActorRef = uninitialized
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
-  private val creators = mutable.Set[ActorRef]()
+  private val creators = mutable.Map[ActorRef, Boolean]()
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -80,23 +77,24 @@ class LoadDataManager(
     )
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
-    logEvent(s"Finish load data manager actorRef = ${event.actorRef}, amount = ${event.amount}")
     val actorRef = event.actorRef
 
     loadDataTotalAmount += event.amount
     if (event.creators.nonEmpty) {
-      creators ++= event.creators
+      event.creators.foreach {
+        creator => creators.put(creator, false)
+      }
     }
     loaders(actorRef) = true
 
     logEvent(s"loaders = $loaders")
 
     actorRef ! DestructEvent(actorRef = getPath)
-
-    logEvent(s"all loaders = ${loaders.values
-        .forall(_ == true)}, dataSourceAmount = $dataSourceAmount, loaders.size = ${loaders.size}")
+//
+//    logEvent(s"all loaders = ${loaders.values
+//        .forall(_ == true)}, dataSourceAmount = $dataSourceAmount, loaders.size = ${loaders.size}")
     if (isAllDataLoaded) {
-      creators.foreach {
+      creators.keys.foreach {
         creator =>
           creator ! StartCreationEvent(actorRef = getPath)
       }
@@ -104,9 +102,16 @@ class LoadDataManager(
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
-    currentLoadDataAmount += event.amount
-    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+//    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+    creators.get(event.actorRef) match
+      case Some(flag) =>
+        if (!flag) {
+          currentLoadDataAmount += event.amount
+          creators(event.actorRef) = true
+        }
+      case None =>
+        logEvent(s"Creator not found ${event.actorRef}")
+//    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
     if (loadDataTotalAmount == currentLoadDataAmount) {
       logEvent("Finish creation")
       creatorRef ! DestructEvent(actorRef = getPath)

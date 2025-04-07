@@ -14,8 +14,6 @@ class CsvReportManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "csv-report-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   override def handleEvent: Receive = {

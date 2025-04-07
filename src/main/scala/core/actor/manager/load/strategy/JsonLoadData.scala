@@ -35,7 +35,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   override protected def load(source: ActorDataSource): Unit = {
-    logEvent(s"Loading data of ${source.classType} from JSON")
+//    logEvent(s"Loading data of ${source.classType} from JSON")
 
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
@@ -72,9 +72,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   private def sendFinishLoadDataEvent(): Unit = {
-    logEvent(
-      s"Current batch amount: $currentBatchAmount, Total batch amount: $totalBatchAmount, isSentAllDataToCreator: $isSentAllDataToCreator"
-    )
+//    logEvent(
+//      s"Current batch amount: $currentBatchAmount, Total batch amount: $totalBatchAmount, isSentAllDataToCreator: $isSentAllDataToCreator"
+//    )
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
       logEvent("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(

@@ -22,8 +22,6 @@ class SimulationManager(
 ) extends BaseManager[DefaultState](
       actorId = SIMULATION_MANAGER_ACTOR_NAME,
       timeManager = null,
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   private var timeManager: ActorRef = uninitialized

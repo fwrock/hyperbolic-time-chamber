@@ -15,8 +15,6 @@ abstract class LoadDataStrategy(timeManager: ActorRef)
     extends BaseActor[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-strategy-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
   protected def load(event: LoadDataSourceEvent): Unit
   protected def load(actorDataSource: ActorDataSource): Unit
