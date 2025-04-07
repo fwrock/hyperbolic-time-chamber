@@ -5,12 +5,9 @@ import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
-
-import scala.collection.mutable
 
 class Client(
   private val id: String,
@@ -51,7 +48,7 @@ class Client(
 
   private def enterQueue(): Unit = {
     logEvent(
-      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status} dependencySize=${dependencies.size}"
     )
     try {
       val cashier = dependencies(state.cashierId)
@@ -65,7 +62,6 @@ class Client(
     } catch {
       case e: Exception =>
         log.error(s"$actorId - dependencies=$dependencies - ${state.cashierId}")
-        log.error(s"$actorId - dep=$dep - ${state.cashierId}")
         log.error(
           s"DD $actorId Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}, isInitialized= $isInitialized"
         )
