@@ -28,8 +28,6 @@ class TimeManager(
       actorId =
         if parentManager.isEmpty then s"$LOAD_MANAGER_ACTOR_NAME-${System.nanoTime()}"
         else GLOBAL_TIME_MANAGER_ACTOR_NAME,
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   private var selfProxy: ActorRef = null

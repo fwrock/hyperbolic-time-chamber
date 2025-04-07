@@ -16,15 +16,10 @@ class Client(
   private val id: String,
   private val timeManager: ActorRef,
   private val creatorManager: ActorRef = null,
-  private val data: Any,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[ClientState](
       actorId = id,
       timeManager = timeManager,
       creatorManager = creatorManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -69,9 +64,10 @@ class Client(
       )
     } catch {
       case e: Exception =>
-        log.warning(s"$actorId - $dependencies - ${state.cashierId}")
+        log.error(s"$actorId - dependencies=$dependencies - ${state.cashierId}")
+        log.error(s"$actorId - dep=$dep - ${state.cashierId}")
         log.error(
-          s"DD Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+          s"DD $actorId Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}, isInitialized= $isInitialized"
         )
         log.error(e.getMessage)
     }
@@ -102,5 +98,4 @@ class Client(
     state.status = Finished
     onFinishSpontaneous()
   }
-
 }

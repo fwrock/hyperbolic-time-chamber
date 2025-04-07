@@ -10,8 +10,6 @@ class MachineLearningManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "machine-learning-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   override def handleEvent: Receive = {

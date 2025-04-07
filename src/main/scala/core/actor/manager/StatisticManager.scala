@@ -10,8 +10,6 @@ class StatisticManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "statistic-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   override def handleEvent: Receive = {
