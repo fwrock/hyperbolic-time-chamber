@@ -1,18 +1,19 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ Actor, ActorLogging, ActorNotFound, ActorRef }
-import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
+import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef}
+import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.JsonUtil
 
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
+import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
@@ -20,9 +21,10 @@ import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 import org.slf4j.LoggerFactory
+
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -30,11 +32,6 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
   *   The id of the actor
   * @param timeManager
   *   The actor reference of the time manager
-  * @param data
-  *   The data to initialize the actor. This is used to maintain the actor state and to restore from
-  *   a snapshot.
-  * @param dependencies
-  *   The dependencies of the actor. This is used to send messages to other actors.
   * @tparam T
   *   The state of the actor
   */
@@ -42,8 +39,6 @@ abstract class BaseActor[T <: BaseState](
   protected var actorId: String,
   private var timeManager: ActorRef = null,
   private var creatorManager: ActorRef = null,
-  private val data: Any = null,
-  protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging {
@@ -53,8 +48,14 @@ abstract class BaseActor[T <: BaseState](
   protected var currentTick: Tick = 0
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
-  private var isInitialized: Boolean = false
+  protected var isInitialized: Boolean = false
   private val logger = LoggerFactory.getLogger(getClass)
+  protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
+  protected val dep: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
+
+  private val snapShotInterval = 100
+
+  override def persistenceId: String = actorId
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
@@ -62,10 +63,6 @@ abstract class BaseActor[T <: BaseState](
   override def preStart(): Unit = {
     super.preStart()
     logEvent(s"Starting an actor type: $getClass")
-    if (data != null) {
-      state = JsonUtil.convertValue[T](data)
-      startTick = state.getStartTick
-    }
     onStart()
   }
 
@@ -89,17 +86,24 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def initialize(event: InitializeEvent): Unit = {
-    actorId = event.id
-    if (event.data.data != null) {
-      state = JsonUtil.convertValue[T](event.data.data)
-      startTick = state.getStartTick
+    if (!isInitialized) {
+      logEvent(
+        s"Initializing actor with id= $actorId, state= $state, event= $event"
+      )
+      actorId = event.id
+      if (event.data.data != null && state == null) {
+        state = JsonUtil.convertValue[T](event.data.data)
+        startTick = state.getStartTick
+      }
+      timeManager = event.data.timeManager
+      creatorManager = event.data.creatorManager
+      dep ++= event.data.dependencies
+      dependencies ++= event.data.dependencies
+      onInitialize(event)
+      onFinishInitialize()
+    } else {
+        log.error(s"Actor already initialized with id= $actorId, state= $state, not initializing again with $event")
     }
-    timeManager = event.data.timeManager
-    creatorManager = event.data.creatorManager
-    dependencies.clear()
-    dependencies ++= event.data.dependencies
-    onInitialize(event)
-    onFinishInitialize()
   }
 
   protected def onInitialize(event: InitializeEvent): Unit = ()
@@ -169,11 +173,12 @@ abstract class BaseActor[T <: BaseState](
     } catch
       case e: Exception =>
         log.error(
-          s"Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state",
+          s"$actorId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
           e
         )
         e.printStackTrace()
         onFinishSpontaneous()
+    save(event)
   }
 
   /** Sends an acknowledge tick event to the time manager. This method is called when the actor
@@ -209,6 +214,7 @@ abstract class BaseActor[T <: BaseState](
       s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
     )
     actInteractWith(event)
+    save(event)
   }
 
   /** This method is called when the actor receives an interaction event. It should be overridden by
@@ -232,7 +238,28 @@ abstract class BaseActor[T <: BaseState](
     case event: EntityEnvelopeEvent     => handleEnvelopeEvent(event)
     case event: InitializeEvent         => initialize(event)
     case event: ShardRegion.StartEntity => handleStartEntity(event)
+    case SaveSnapshotSuccess(metadata) =>
+//      log.info(s"Snapshot saved successfully: ${metadata.persistenceId} seqNr ${metadata.sequenceNr}")
+    case SaveSnapshotFailure(metadata, cause) =>
+//      log.error(s"Snapshot save failed: ${metadata.persistenceId} seqNr ${metadata.sequenceNr}", cause)
     case event                          => handleEvent(event)
+  }
+
+  private def save(event: Any): Unit = {
+    persist(event) { e =>
+      context.system.eventStream.publish(e)
+      if (lastSequenceNr % snapShotInterval == 0)
+        saveSnapshot(state)
+    }
+  }
+
+  def receiveCommand: Receive = receive
+
+  def receiveRecover: Receive = {
+    case snapshot: SnapshotOffer =>
+      state = snapshot.snapshot.asInstanceOf[T]
+//      logEvent(s"Recovered from snapshot: $state")
+    case _ => receive
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
