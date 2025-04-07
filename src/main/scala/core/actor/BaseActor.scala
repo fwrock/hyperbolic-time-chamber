@@ -51,7 +51,6 @@ abstract class BaseActor[T <: BaseState](
   protected var isInitialized: Boolean = false
   private val logger = LoggerFactory.getLogger(getClass)
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
-  protected val dep: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 
   private val snapShotInterval = 100
 
@@ -87,9 +86,9 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit = {
     if (!isInitialized) {
-      logEvent(
-        s"Initializing actor with id= $actorId, state= $state, event= $event"
-      )
+//      logEvent(
+//        s"Initializing actor with id= $actorId, state= $state, event= $event"
+//      )
       actorId = event.id
       if (event.data.data != null && state == null) {
         state = JsonUtil.convertValue[T](event.data.data)
@@ -97,7 +96,6 @@ abstract class BaseActor[T <: BaseState](
       }
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
-      dep ++= event.data.dependencies
       dependencies ++= event.data.dependencies
       onInitialize(event)
       onFinishInitialize()

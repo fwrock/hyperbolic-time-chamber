@@ -42,7 +42,7 @@ class CreatorLoadData(
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
     if (initializeData.isEmpty && actors.isEmpty) {
-      logEvent("Finish creation")
+      logEvent(s"Finish creation of all $amountActors actors")
       loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
     }
 
@@ -61,7 +61,7 @@ class CreatorLoadData(
             }
           )
         )
-        logEvent(s"Initialize ${event.entityId} with $initializeEvent")
+//        logEvent(s"Initialize ${event.entityId} with $initializeEvent")
         getShardRef(data.classType) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = initializeEvent
@@ -71,7 +71,7 @@ class CreatorLoadData(
         logEvent(s"Data not found ${event.entityId}")
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
-    logEvent("Start creation")
+    logEvent(s"Start creation of ${actors.size} actors")
     amountActors = actors.size
     actors.distinctBy(_.id).foreach {
       actor =>
