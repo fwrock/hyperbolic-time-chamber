@@ -22,6 +22,7 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 import org.slf4j.LoggerFactory
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -47,15 +48,16 @@ abstract class BaseActor[T <: BaseState](
   protected var startTick: Tick = MinValue
   protected val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
+  private val persistentActorId: String = UUID.randomUUID().toString
   protected var state: T = uninitialized
   private var currentTimeManager: ActorRef = uninitialized
   protected var isInitialized: Boolean = false
   private val logger = LoggerFactory.getLogger(getClass)
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 
-  private val snapShotInterval = 100
+  private val snapShotInterval = 1000
 
-  override def persistenceId: String = actorId
+  override def persistenceId: String = persistentActorId
 
   /** Initializes the actor. This method is called before the actor starts processing messages. It
     * registers the actor with the time manager and calls the onStart method.
@@ -88,20 +90,26 @@ abstract class BaseActor[T <: BaseState](
       actorId = event.id
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
-      if (event.data.data != null && state == null) {
-        state = JsonUtil.convertValue[T](event.data.data)
-        startTick = state.getStartTick
-        registerOnTimeManager()
-      }
+      state = JsonUtil.convertValue[T](event.data.data)
       dependencies ++= event.data.dependencies
-      onInitialize(event)
-      onFinishInitialize()
+
+      if (state != null) {
+        startTick = state.getStartTick
+        logInfo(s"Initialized with state. StartTick: ${state.getStartTick}")
+        onInitialize(event)
+        registerOnTimeManager(event.data.timeManager)
+        onFinishInitialize()
+      } else {
+        logError(s"FAILED TO INITIALIZE - state is null after conversion. Data received: ${event.data.data}")
+        onFinishInitialize()
+        context.stop(self)
+      }
     } else {
-        log.error(s"Actor already initialized with id= $actorId, state= $state, not initializing again with $event")
+      log.error(s"Actor already initialized with id= $actorId, state= $state, not initializing again with $event")
     }
   }
 
-  private def registerOnTimeManager(): Unit = {
+  private def registerOnTimeManager(timeManager: ActorRef): Unit = {
     timeManager ! RegisterActorEvent(
       startTick = startTick,
       actorId = actorId,
@@ -248,6 +256,9 @@ abstract class BaseActor[T <: BaseState](
   protected def logError(eventInfo: String, throwable: Throwable): Unit =
     log.error(throwable, s"$actorId: $eventInfo")
 
+  protected def logError(eventInfo: String): Unit =
+    log.error(s"$actorId: $eventInfo")
+
   override def receive: Receive = {
     case event: SpontaneousEvent        => handleSpontaneous(event)
     case event: ActorInteractionEvent   => handleInteractWith(event)
@@ -392,13 +403,13 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getSelfShard: ActorRef =
-    ClusterSharding(context.system).shardRegion(getClass.getName)
+    ClusterSharding(context.system).shardRegion(getShardName)
 
   /** Gets the shard name for the current actor.
     * @return
     *   The shard name
     */
-  protected def getShardName: String = shardId
+  protected def getShardName: String = shardId.replace(":", "_").replace(";", "_")
 
   /** Gets the actor reference of the shard region for a given class name.
     *
@@ -408,7 +419,7 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getShardRef(className: String): ActorRef =
-    ClusterSharding(context.system).shardRegion(className)
+    ClusterSharding(context.system).shardRegion(className.replace(":", "_").replace(";", "_"))
 
   protected def toIdentify: Identify = Identify(getActorId, getShardName, self.path.name)
 }
