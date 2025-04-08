@@ -22,7 +22,7 @@ object ActorCreatorUtil {
   }
 
   private val extractShardId: ShardRegion.ExtractShardId = {
-    case EntityEnvelopeEvent(id, _) => (id.hashCode % 1000).toString
+    case EntityEnvelopeEvent(id, _)  => (id.hashCode % 1000).toString
     case ShardRegion.StartEntity(id) => (id.hashCode % 1000).toString
   }
 
@@ -120,7 +120,9 @@ object ActorCreatorUtil {
     val shardName = shardId.replace(":", "_").replace(";", "_")
 
     if (!sharding.shardTypeNames.contains(shardName)) {
-      system.log.info(s"Creating shard region for $actorClassName with id $shardName entityId $entityId")
+      system.log.info(
+        s"Creating shard region for $actorClassName with id $shardName entityId $entityId"
+      )
 
       sharding.start(
         typeName = shardName,
@@ -129,7 +131,7 @@ object ActorCreatorUtil {
           entityId,
           shardId,
           timeManager,
-          creatorManager,
+          creatorManager
         ),
         settings = ClusterShardingSettings(system),
         extractEntityId = extractEntityId,

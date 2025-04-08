@@ -17,12 +17,12 @@ class Cashier(
   private val id: String,
   private val shard: String,
   private val timeManager: ActorRef,
-  private val creatorManager: ActorRef = null,
+  private val creatorManager: ActorRef = null
 ) extends BaseActor[CashierState](
       actorId = id,
       shardId = shard,
       timeManager = timeManager,
-      creatorManager = creatorManager,
+      creatorManager = creatorManager
     ) {
 
   override def handleEvent: Receive = {
@@ -30,10 +30,11 @@ class Cashier(
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    if (state == null) {
-      onFinishSpontaneous()
-      return
-    }
+    logInfo(
+      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status $state"
+    )
+    onFinishSpontaneous()
+    /*
     logInfo(
       s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
     )
@@ -96,7 +97,7 @@ class Cashier(
         )
         e.printStackTrace()
         onFinishSpontaneous()
-    }
+    }*/
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =

@@ -14,10 +14,10 @@ import scala.collection.mutable
 
 class BusStop(
   private var id: String = null,
-  private val timeManager: ActorRef,
+  private val timeManager: ActorRef
 ) extends BaseActor[BusStopState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =

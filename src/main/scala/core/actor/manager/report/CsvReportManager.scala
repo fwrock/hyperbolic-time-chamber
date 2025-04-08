@@ -13,7 +13,7 @@ import scala.collection.mutable
 class CsvReportManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "csv-report-manager",
+      actorId = "csv-report-manager"
     ) {
 
   override def handleEvent: Receive = {

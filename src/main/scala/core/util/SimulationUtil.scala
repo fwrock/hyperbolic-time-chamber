@@ -5,8 +5,8 @@ import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
 
 import org.interscity.htc.core.entity.configuration.Simulation
-
 import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.cluster.sharding.ShardRegion
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardRegion
 
 object SimulationUtil {
@@ -34,5 +34,6 @@ object SimulationUtil {
           null,
           null
         )
+        shardRegion ! ShardRegion.StartEntity(s"${source.id}-shard-initiator")
     }
 }

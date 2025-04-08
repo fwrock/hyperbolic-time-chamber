@@ -22,10 +22,10 @@ import scala.collection.mutable
 
 class Bus(
   private val id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends Movable[BusState](
       movableId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
