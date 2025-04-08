@@ -126,17 +126,15 @@ abstract class BaseActor[T <: BaseState](
     *   The data to send
     * @param eventType
     *   The type of the event
-    * @tparam D
-    *   The type of the data
     */
   protected def sendMessageTo(
-    entityId: String,
-    classType: String,
-    data: AnyRef,
-    eventType: String = "default"
+                               entityId: String,
+                               shardId: String,
+                               data: AnyRef,
+                               eventType: String = "default"
   ): Unit = {
     lamportClock.increment()
-    val shardingRegion = getShardRef(classType)
+    val shardingRegion = getShardRef(shardId)
     logInfo(
       s"Sending message to ${entityId} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
     )
@@ -146,6 +144,7 @@ abstract class BaseActor[T <: BaseState](
         tick = currentTick,
         lamportTick = getLamportClock,
         actorRefId = getActorId,
+        shardRefId = getShardName,
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,

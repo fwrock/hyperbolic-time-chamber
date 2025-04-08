@@ -58,7 +58,7 @@ class Client(
       val cashier = dependencies(state.cashierId)
       sendMessageTo(
         cashier.id,
-        cashier.classType,
+        cashier.resourceId,
         NewClientServiceData(
           amountThings = state.amountThings
         )
