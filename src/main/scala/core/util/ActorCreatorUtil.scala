@@ -110,6 +110,7 @@ object ActorCreatorUtil {
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
+    shardId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef
   ): ActorRef = {
@@ -124,6 +125,7 @@ object ActorCreatorUtil {
         entityProps = Props(
           clazz,
           entityId,
+          shardId,
           timeManager,
           creatorManager,
         ),
@@ -132,7 +134,7 @@ object ActorCreatorUtil {
         extractShardId = extractShardId
       )
     } else {
-      sharding.shardRegion(actorClassName)
+      sharding.shardRegion(shardId)
     }
   }
 

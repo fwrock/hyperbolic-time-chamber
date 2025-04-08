@@ -37,6 +37,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
   */
 abstract class BaseActor[T <: BaseState](
   protected var actorId: String,
+  protected var shardId: String = null,
   private var timeManager: ActorRef = null,
   private var creatorManager: ActorRef = null,
 )(implicit m: Manifest[T])
@@ -398,7 +399,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The shard name
     */
-  protected def getShardName: String = getClass.getName
+  protected def getShardName: String = shardId
 
   /** Gets the actor reference of the shard region for a given class name.
     *

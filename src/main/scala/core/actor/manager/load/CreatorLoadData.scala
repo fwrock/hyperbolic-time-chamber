@@ -2,22 +2,22 @@ package org.interscity.htc
 package core.actor.manager.load
 
 import core.actor.BaseActor
-import org.apache.pekko.actor.{ ActorRef, Props, Timers } // Import Timers if using scheduleOnce with key/timer instead of direct scheduler
-import core.util.{ ActorCreatorUtil, DistributedUtil, JsonUtil }
+
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.ActorCreatorUtil
 import core.entity.state.DefaultState
-import core.util.ActorCreatorUtil.createShardRegion // Assuming this helper is available
+import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.{ ActorSimulation, Initialization }
+import org.htc.protobuf.core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent}
 import org.interscity.htc.core.entity.event.data.InitializeData
 
 import scala.collection.mutable
-import scala.concurrent.duration._
-
+import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext.Implicits.global
 case object ProcessNextCreateChunk
 
@@ -29,13 +29,13 @@ class CreatorLoadData(
   actorId = "creator-load-data",
 ) {
 
-  private val actorsBuffer: mutable.ListBuffer[ActorSimulation] = mutable.ListBuffer()
+  private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
   private var amountActors = 0
   private var finishEventSent: Boolean = false
 
   // Lista imutável dos atores que ainda precisam ter StartEntity enviado (para throttling)
-  private var actorsToCreate: List[ActorSimulation] = List.empty
+  private var actorsToCreate: List[ActorSimulationCreation] = List.empty
 
   private val CREATE_CHUNK_SIZE = 50      // Quantos atores processar por vez
   private val DELAY_BETWEEN_CHUNKS = 500.milliseconds // Pausa entre os blocos
@@ -68,7 +68,7 @@ class CreatorLoadData(
 
     // Copia os atores acumulados para a lista de processamento e limpa o buffer
     // Usar distinctBy para o caso de receber atores duplicados dos loaders
-    actorsToCreate = actorsBuffer.distinctBy(_.id).toList
+    actorsToCreate = actorsBuffer.distinctBy(_.actor.id).toList
     actorsBuffer.clear()
     amountActors = actorsToCreate.size
 
@@ -94,15 +94,16 @@ class CreatorLoadData(
 //      logEvent(s"Processing creation chunk of ${chunk.size} actors. Remaining: ${actorsToCreate.size - chunk.size}")
 
       // Processa cada ator no chunk atual
-      chunk.foreach { actor =>
+      chunk.foreach { actorCreation =>
         // Guarda os dados para a inicialização posterior (após StartEntityAck)
-        initializeData(actor.id) = Initialization(
-          id = actor.id,
-          classType = actor.typeActor,
-          data = actor.data.content,
+        initializeData(actorCreation.actor.id) = Initialization(
+          id = actorCreation.actor.id,
+          shardId = actorCreation.shardId,
+          classType = actorCreation.actor.typeActor,
+          data = actorCreation.actor.data.content,
           timeManager = timeManager,
           creatorManager = self, // Passa a própria ref para o ator entidade saber a quem responder
-          dependencies = mutable.Map[String, Dependency]() ++= actor.dependencies
+          dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
         )
 
         // Obtem/Cria a ShardRegion - ATENÇÃO: Otimizar chamada sharding.start!
@@ -110,13 +111,14 @@ class CreatorLoadData(
         // createShardRegion deve apenas fazer sharding.shardRegion(...) na maioria das vezes.
         val shardRegion = createShardRegion(
           system = context.system,
-          actorClassName = actor.typeActor,
-          entityId = actor.id, // entityId não é usado por createShardRegion, só actorClassName
+          shardId = actorCreation.shardId,
+          actorClassName = actorCreation.actor.typeActor,
+          entityId = actorCreation.actor.id, // entityId não é usado por createShardRegion, só actorClassName
           timeManager = timeManager,
           creatorManager = self
         )
 
-        shardRegion ! ShardRegion.StartEntity(actor.id)
+        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
       }
       
 
