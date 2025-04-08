@@ -9,7 +9,7 @@ import scala.collection.mutable
 class StatisticManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "statistic-manager",
+      actorId = "statistic-manager"
     ) {
 
   override def handleEvent: Receive = {

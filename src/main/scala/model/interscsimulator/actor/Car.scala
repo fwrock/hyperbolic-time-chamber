@@ -21,10 +21,10 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.Traffi
 
 class Car(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends Movable[CarState](
       movableId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
@@ -55,7 +55,7 @@ class Car(
     val data = RequestRouteData(
       requester = getSelfShard,
       requesterId = actorId,
-      requesterClassType = getShardName,
+      requesterClassType = getShardId,
       currentCost = 0,
       targetNodeId = state.destination,
       originNodeId = state.origin,

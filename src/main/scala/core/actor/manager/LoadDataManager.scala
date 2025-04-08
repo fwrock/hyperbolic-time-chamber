@@ -24,7 +24,7 @@ class LoadDataManager(
   val simulationManager: ActorRef
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "load-data-manager",
+      actorId = "load-data-manager"
     ) {
 
   private var loadDataTotalAmount = 0L

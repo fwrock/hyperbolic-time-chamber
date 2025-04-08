@@ -9,7 +9,7 @@ import scala.collection.mutable
 class SnapshotManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "snapshot-manager",
+      actorId = "snapshot-manager"
     ) {
 
   override def handleEvent: Receive = {

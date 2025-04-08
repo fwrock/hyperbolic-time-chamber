@@ -9,7 +9,7 @@ import scala.collection.mutable
 class ReportManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "report-manager",
+      actorId = "report-manager"
     ) {
 
   override def handleEvent: Receive = {

@@ -13,15 +13,21 @@ class Client(
   private val id: String,
   private val shard: String,
   private val timeManager: ActorRef,
-  private val creatorManager: ActorRef = null,
+  private val creatorManager: ActorRef = null
 ) extends BaseActor[ClientState](
       actorId = id,
       shardId = shard,
       timeManager = timeManager,
-      creatorManager = creatorManager,
+      creatorManager = creatorManager
     ) {
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit =
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    logInfo(
+      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status $state"
+    )
+    onFinishSpontaneous()
+  }
+  /*
     try {
       if (state == null) {
         onFinishSpontaneous()
@@ -51,6 +57,8 @@ class Client(
         )
         e.printStackTrace()
         onFinishSpontaneous()
+
+   */
 
   private def enterQueue(): Unit = {
     logInfo(

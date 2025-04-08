@@ -9,7 +9,7 @@ import scala.collection.mutable
 class DataFlowManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "data-flow-manager",
+      actorId = "data-flow-manager"
     ) {
 
   override def handleEvent: Receive = {

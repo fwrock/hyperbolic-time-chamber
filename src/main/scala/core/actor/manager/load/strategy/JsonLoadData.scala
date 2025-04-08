@@ -4,9 +4,9 @@ package core.actor.manager.load.strategy
 import org.apache.pekko.actor.ActorRef
 import core.util.JsonUtil
 
-import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -41,7 +41,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
 
-    val actorsToCreate = actors.map(actor => ActorSimulationCreation(shardId = source.id, actor = actor))
+    val actorsToCreate = actors.map(
+      actor => ActorSimulationCreation(shardId = source.id, actor = actor)
+    )
 
     amountActors = actorsToCreate.size
 
@@ -58,7 +60,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     actors = null
 
-    logInfo(s"All loaded $self - $totalBatchAmount batch of size $batchSize created from $amountActors actors list")
+    logInfo(
+      s"All loaded $self - $totalBatchAmount batch of size $batchSize created from $amountActors actors list"
+    )
 
     isSentAllDataToCreator = true
 
@@ -71,7 +75,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     sendFinishLoadDataEvent()
   }
 
-  private def sendFinishLoadDataEvent(): Unit = {
+  private def sendFinishLoadDataEvent(): Unit =
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
       logInfo("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(
@@ -80,5 +84,4 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
         creators = creators
       )
     }
-  }
 }

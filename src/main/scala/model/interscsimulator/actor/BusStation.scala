@@ -21,10 +21,10 @@ import scala.collection.mutable
 
 class BusStation(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends BaseActor[BusStationState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -145,7 +145,7 @@ class BusStation(
   private def requestRoute(origin: String, destination: String, label: String): Unit = {
     val data = RequestRouteData(
       requester = getSelfShard,
-      requesterClassType = getShardName,
+      requesterClassType = getShardId,
       requesterId = actorId,
       currentCost = 0,
       targetNodeId = destination,

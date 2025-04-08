@@ -10,8 +10,8 @@ import scala.collection.mutable
 
 class Person(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends Movable[CarState](
       movableId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {}

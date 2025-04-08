@@ -3,5 +3,5 @@ package core.entity.actor
 
 case class ActorSimulationCreation(
   shardId: String,
-  actor: ActorSimulation,
-                                  )
+  actor: ActorSimulation
+)
