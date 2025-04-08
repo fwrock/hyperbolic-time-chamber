@@ -28,7 +28,7 @@ object SimulationUtil {
       source =>
         val shardRegion = createShardRegion(
           system,
-          source.id,
+          source.classType,
           s"${source.id}-shard-initiator",
           source.id,
           null,
