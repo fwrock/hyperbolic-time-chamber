@@ -24,7 +24,7 @@ case object ProcessNextCreateChunk
 class CreatorLoadData(
                        loadDataManager: ActorRef,
                        timeManager: ActorRef
-                     ) extends BaseActor[DefaultState]( // Consider adding with Timers if using named timers
+                     ) extends BaseActor[DefaultState](
   timeManager = timeManager,
   actorId = "creator-load-data",
 ) {
@@ -48,13 +48,10 @@ class CreatorLoadData(
     case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
   }
 
-  // Recebe atores do Loader e acumula no buffer
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
-    // logEvent(s"Received ${event.actors.size} actors from ${event.actorRef}") // Log opcional
     event.actors.foreach { actor =>
       actorsBuffer += actor
     }
-    // Envia confirmação de volta para o Loader específico que enviou o batch
     event.actorRef ! LoadDataCreatorRegisterEvent(actorRef = self)
   }
 
@@ -127,7 +124,6 @@ class CreatorLoadData(
 
       // Se ainda há atores, agenda o próximo chunk
       if (actorsToCreate.nonEmpty) {
-//        logEvent(s"Scheduling next chunk processing in $DELAY_BETWEEN_CHUNKS.") // Log opcional
         context.system.scheduler.scheduleOnce(DELAY_BETWEEN_CHUNKS, self, ProcessNextCreateChunk)
       } else {
         logInfo("All creation chunks have been scheduled.")
@@ -148,12 +144,13 @@ class CreatorLoadData(
           actorRef = self,
           data = InitializeData(
             data = data.data,
+            shardId = data.shardId,
             timeManager = data.timeManager,
             creatorManager = data.creatorManager,
             dependencies = data.dependencies.map { case (_, dep) => dep.id -> dep }
           )
         )
-        getShardRef(data.classType) ! EntityEnvelopeEvent(
+        getShardRef(data.shardId) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = initializeEvent
         )
