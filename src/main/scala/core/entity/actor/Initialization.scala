@@ -9,6 +9,7 @@ import scala.collection.mutable
 
 case class Initialization(
   id: String,
+  shardId: String,
   classType: String,
   data: Any,
   timeManager: ActorRef,
@@ -19,6 +20,7 @@ case class Initialization(
   def toInitializeData: InitializeData =
     InitializeData(
       data = data,
+      shardId = shardId,
       timeManager = timeManager,
       creatorManager = creatorManager,
       dependencies = dependencies.map {

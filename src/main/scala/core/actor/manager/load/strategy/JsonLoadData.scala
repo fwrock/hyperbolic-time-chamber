@@ -4,9 +4,9 @@ package core.actor.manager.load.strategy
 import org.apache.pekko.actor.ActorRef
 import core.util.JsonUtil
 
-import org.interscity.htc.core.entity.actor.ActorSimulation
+import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -41,13 +41,15 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
 
-    amountActors = actors.size
+    val actorsToCreate = actors.map(actor => ActorSimulationCreation(shardId = source.id, actor = actor))
+
+    amountActors = actorsToCreate.size
 
     if (amountActors < batchSize) {
       totalBatchAmount += 1
-      creatorRef ! CreateActorsEvent(actors = actors, actorRef = self)
+      creatorRef ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
     } else {
-      actors.grouped(batchSize).foreach {
+      actorsToCreate.grouped(batchSize).foreach {
         batch =>
           totalBatchAmount += 1
           creatorRef ! CreateActorsEvent(actors = batch, actorRef = self)
@@ -70,7 +72,6 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   private def sendFinishLoadDataEvent(): Unit = {
-//    logEvent(s"$self - $amountActors actors created, $currentBatchAmount batches sent to creators and totalBatchAmount $totalBatchAmount")
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
       logInfo("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(

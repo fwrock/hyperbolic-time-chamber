@@ -110,20 +110,24 @@ object ActorCreatorUtil {
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
+    shardId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    if (!sharding.shardTypeNames.contains(actorClassName)) {
-      system.log.info(s"Creating shard region for $actorClassName with entityId $entityId")
+    val shardName = shardId.replace(":", "_").replace(";", "_")
+
+    if (!sharding.shardTypeNames.contains(shardName)) {
+      system.log.info(s"Creating shard region for $actorClassName with id $shardName entityId $entityId")
 
       sharding.start(
-        typeName = actorClassName,
+        typeName = shardName,
         entityProps = Props(
           clazz,
           entityId,
+          shardId,
           timeManager,
           creatorManager,
         ),
@@ -132,7 +136,7 @@ object ActorCreatorUtil {
         extractShardId = extractShardId
       )
     } else {
-      sharding.shardRegion(actorClassName)
+      sharding.shardRegion(shardName)
     }
   }
 

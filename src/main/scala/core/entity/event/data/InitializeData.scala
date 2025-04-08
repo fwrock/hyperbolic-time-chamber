@@ -9,6 +9,7 @@ import scala.collection.mutable
 
 case class InitializeData(
   data: Any,
+  shardId: String,
   timeManager: ActorRef,
   creatorManager: ActorRef,
   dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()

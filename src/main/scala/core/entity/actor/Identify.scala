@@ -5,9 +5,10 @@ import org.apache.pekko.actor.ActorRef
 
 case class Identify(
   id: String,
+  shardId: String,
   classType: String,
   actorRef: ActorRef
 ) {
   def toDependency: Dependency =
-    Dependency(id = id, classType = classType)
+    Dependency(id = id, resourceId = shardId, classType = classType)
 }
