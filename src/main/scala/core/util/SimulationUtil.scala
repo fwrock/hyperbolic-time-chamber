@@ -24,12 +24,13 @@ object SimulationUtil {
     }
 
   def startShards(system: ActorSystem, configuration: String = null): Unit =
-    loadSimulationConfig(configuration).actorsDataSources.distinctBy(_.classType).foreach {
+    loadSimulationConfig(configuration).actorsDataSources.distinctBy(_.id).foreach {
       source =>
         val shardRegion = createShardRegion(
           system,
-          source.classType,
-          s"${source.classType}-shard-initiator",
+          source.id,
+          s"${source.id}-shard-initiator",
+          source.id,
           null,
           null
         )
