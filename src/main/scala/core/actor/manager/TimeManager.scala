@@ -328,7 +328,7 @@ class TimeManager(
   }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
+    getShardRef(finishEvent.identify.shardId) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
