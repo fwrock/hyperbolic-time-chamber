@@ -22,8 +22,6 @@ class SimulationManager(
 ) extends BaseManager[DefaultState](
       actorId = SIMULATION_MANAGER_ACTOR_NAME,
       timeManager = null,
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   private var timeManager: ActorRef = uninitialized
@@ -45,7 +43,7 @@ class SimulationManager(
 
   private def startSimulation(): Unit = {
     loadManager ! DestructEvent(actorRef = getPath)
-    logEvent("Start simulation")
+    logInfo("Start simulation")
     createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME) ! StartSimulationTimeEvent(
       startTick = configuration.startTick,
       actorRef = getPath,
@@ -73,7 +71,7 @@ class SimulationManager(
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
-    logEvent(s"Run simulation: \n$configuration")
+    logInfo(s"Run simulation: \n$configuration")
     timeManager = createSingletonTimeManager()
   }
 
