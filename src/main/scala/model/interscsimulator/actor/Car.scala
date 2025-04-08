@@ -46,7 +46,7 @@ class Car(
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
   }
 

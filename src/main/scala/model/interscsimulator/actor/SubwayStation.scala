@@ -44,13 +44,13 @@ class SubwayStation(
       case Working =>
         createSubwayFrom(filterLinesByNextTick())
       case _ =>
-        logEvent(s"Event current status not handled ${state.status}")
+        logInfo(s"Event current status not handled ${state.status}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
       case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
-      case _                              => logEvent("Event not handled")
+      case _                              => logInfo("Event not handled")
     }
 
   private def handleRegisterPassenger(
@@ -110,7 +110,7 @@ class SubwayStation(
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
           case None =>
-            logEvent(s"Subway not found for line $line")
+            logInfo(s"Subway not found for line $line")
     }
 
   private def createSubway(subway: SubwayInformation): ActorRef =

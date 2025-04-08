@@ -54,7 +54,7 @@ class Link(
       case d: RequestRouteData => handleRequestRoute(event, d)
       case d: EnterLinkData    => handleEnterLink(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {

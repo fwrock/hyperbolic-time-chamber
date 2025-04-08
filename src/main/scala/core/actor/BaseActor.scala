@@ -13,7 +13,7 @@ import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, S
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
@@ -61,13 +61,11 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-    logEvent(s"Starting an actor type: $getClass")
     onStart()
   }
 
   private def onFinishInitialize(): Unit =
     if (!isInitialized && creatorManager != null) {
-      logEvent(s"Finishing initialization")
       isInitialized = true
       creatorManager ! InitializeEntityAckEvent(
         entityId = actorId
@@ -81,27 +79,39 @@ abstract class BaseActor[T <: BaseState](
   protected def onStart(): Unit = ()
 
   protected def handleEvent: Receive = {
-    case event => logEvent(s"Event not handled $event")
+    case event => logInfo(s"Event not handled $event")
   }
 
   private def initialize(event: InitializeEvent): Unit = {
     if (!isInitialized) {
-//      logEvent(
-//        s"Initializing actor with id= $actorId, state= $state, event= $event"
-//      )
       actorId = event.id
+      timeManager = event.data.timeManager
+      creatorManager = event.data.creatorManager
       if (event.data.data != null && state == null) {
         state = JsonUtil.convertValue[T](event.data.data)
         startTick = state.getStartTick
+        registerOnTimeManager()
       }
-      timeManager = event.data.timeManager
-      creatorManager = event.data.creatorManager
       dependencies ++= event.data.dependencies
       onInitialize(event)
       onFinishInitialize()
     } else {
         log.error(s"Actor already initialized with id= $actorId, state= $state, not initializing again with $event")
     }
+  }
+
+  private def registerOnTimeManager(): Unit = {
+    timeManager ! RegisterActorEvent(
+      startTick = startTick,
+      actorId = actorId,
+      identify = Some(
+        Identify(
+          actorId,
+          getShardName,
+          getSelfShard.path.toString
+        )
+      )
+    )
   }
 
   protected def onInitialize(event: InitializeEvent): Unit = ()
@@ -126,7 +136,7 @@ abstract class BaseActor[T <: BaseState](
   ): Unit = {
     lamportClock.increment()
     val shardingRegion = getShardRef(classType)
-    logEvent(
+    logInfo(
       s"Sending message to ${entityId} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
     )
     shardingRegion ! EntityEnvelopeEvent(
@@ -170,7 +180,7 @@ abstract class BaseActor[T <: BaseState](
       actSpontaneous(event)
     } catch
       case e: Exception =>
-        log.error(
+        logError(
           s"$actorId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
           e
         )
@@ -208,7 +218,7 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
-    logEvent(
+    logInfo(
       s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
     )
     actInteractWith(event)
@@ -226,8 +236,17 @@ abstract class BaseActor[T <: BaseState](
     * @param eventInfo
     *   The information of the event
     */
-  protected def logEvent(eventInfo: String): Unit =
+  protected def logInfo(eventInfo: String): Unit =
     log.info(s"$actorId: $eventInfo")
+
+  protected def logDebug(eventInfo: String): Unit =
+    log.debug(s"$actorId: $eventInfo")
+
+  protected def logWarn(eventInfo: String): Unit =
+    log.warning(s"$actorId: $eventInfo")
+
+  protected def logError(eventInfo: String, throwable: Throwable): Unit =
+    log.error(throwable, s"$actorId: $eventInfo")
 
   override def receive: Receive = {
     case event: SpontaneousEvent        => handleSpontaneous(event)
@@ -237,9 +256,7 @@ abstract class BaseActor[T <: BaseState](
     case event: InitializeEvent         => initialize(event)
     case event: ShardRegion.StartEntity => handleStartEntity(event)
     case SaveSnapshotSuccess(metadata) =>
-//      log.info(s"Snapshot saved successfully: ${metadata.persistenceId} seqNr ${metadata.sequenceNr}")
     case SaveSnapshotFailure(metadata, cause) =>
-//      log.error(s"Snapshot save failed: ${metadata.persistenceId} seqNr ${metadata.sequenceNr}", cause)
     case event                          => handleEvent(event)
   }
 
@@ -256,7 +273,6 @@ abstract class BaseActor[T <: BaseState](
   def receiveRecover: Receive = {
     case snapshot: SnapshotOffer =>
       state = snapshot.snapshot.asInstanceOf[T]
-//      logEvent(s"Recovered from snapshot: $state")
     case _ => receive
   }
 
@@ -271,7 +287,7 @@ abstract class BaseActor[T <: BaseState](
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
-    logEvent(s"Starting entity with id ${event.entityId}")
+    logInfo(s"Starting entity with id ${event.entityId}")
     actorId = event.entityId
   }
 

@@ -21,12 +21,16 @@ class Client(
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     try {
-      logEvent(
+      if (state == null) {
+        onFinishSpontaneous()
+        return
+      }
+      logInfo(
         s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
       )
       state.status match {
         case Start =>
-          logEvent(
+          logInfo(
             s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
           )
           state.status = Waiting
@@ -35,7 +39,7 @@ class Client(
         case Waiting =>
           onFinishSpontaneous()
         case _ =>
-          logEvent(s"Event current status not handled ${state.status}")
+          logInfo(s"Event current status not handled ${state.status}")
       }
     } catch
       case e: Exception =>
@@ -47,7 +51,7 @@ class Client(
         onFinishSpontaneous()
 
   private def enterQueue(): Unit = {
-    logEvent(
+    logInfo(
       s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status} dependencySize=${dependencies.size}"
     )
     try {
@@ -72,17 +76,17 @@ class Client(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: StartClientServiceData =>
-        logEvent(
+        logInfo(
           s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
         )
         handleStartClientService(d)
       case d: FinishClientServiceData =>
-        logEvent(
+        logInfo(
           s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
         )
         handleFinishClientService(d)
       case _ =>
-        logEvent(s"Event not handled ${event}")
+        logInfo(s"Event not handled ${event}")
     }
 
   private def handleStartClientService(data: StartClientServiceData): Unit =

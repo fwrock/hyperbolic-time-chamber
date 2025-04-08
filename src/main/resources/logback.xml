@@ -1,17 +1,17 @@
 <configuration>
     <!-- Define o appender de arquivo -->
-    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-        <!-- Define o nome do arquivo de log -->
-        <file>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</file>
-        <!-- Configuração de rotação do arquivo (tamanho máximo 10MB) -->
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>30</maxHistory> <!-- Mantém 30 dias de logs -->
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
+<!--    <appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
+<!--        &lt;!&ndash; Define o nome do arquivo de log &ndash;&gt;-->
+<!--        <file>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</file>-->
+<!--        &lt;!&ndash; Configuração de rotação do arquivo (tamanho máximo 10MB) &ndash;&gt;-->
+<!--        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">-->
+<!--            <fileNamePattern>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</fileNamePattern>-->
+<!--            <maxHistory>30</maxHistory> &lt;!&ndash; Mantém 30 dias de logs &ndash;&gt;-->
+<!--        </rollingPolicy>-->
+<!--        <encoder>-->
+<!--            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
+<!--        </encoder>-->
+<!--    </appender>-->
 
     <!-- Define o appender para console -->
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
