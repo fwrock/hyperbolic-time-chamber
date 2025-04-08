@@ -5,36 +5,32 @@ import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
-
-import scala.collection.mutable
 
 class Client(
   private val id: String,
   private val timeManager: ActorRef,
   private val creatorManager: ActorRef = null,
-  private val data: Any,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[ClientState](
       actorId = id,
       timeManager = timeManager,
       creatorManager = creatorManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     try {
-      logEvent(
+      if (state == null) {
+        onFinishSpontaneous()
+        return
+      }
+      logInfo(
         s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
       )
       state.status match {
         case Start =>
-          logEvent(
+          logInfo(
             s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
           )
           state.status = Waiting
@@ -43,7 +39,7 @@ class Client(
         case Waiting =>
           onFinishSpontaneous()
         case _ =>
-          logEvent(s"Event current status not handled ${state.status}")
+          logInfo(s"Event current status not handled ${state.status}")
       }
     } catch
       case e: Exception =>
@@ -55,8 +51,8 @@ class Client(
         onFinishSpontaneous()
 
   private def enterQueue(): Unit = {
-    logEvent(
-      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+    logInfo(
+      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status} dependencySize=${dependencies.size}"
     )
     try {
       val cashier = dependencies(state.cashierId)
@@ -69,9 +65,9 @@ class Client(
       )
     } catch {
       case e: Exception =>
-        log.warning(s"$actorId - $dependencies - ${state.cashierId}")
+        log.error(s"$actorId - dependencies=$dependencies - ${state.cashierId}")
         log.error(
-          s"DD Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
+          s"DD $actorId Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}, isInitialized= $isInitialized"
         )
         log.error(e.getMessage)
     }
@@ -80,17 +76,17 @@ class Client(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: StartClientServiceData =>
-        logEvent(
+        logInfo(
           s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
         )
         handleStartClientService(d)
       case d: FinishClientServiceData =>
-        logEvent(
+        logInfo(
           s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
         )
         handleFinishClientService(d)
       case _ =>
-        logEvent(s"Event not handled ${event}")
+        logInfo(s"Event not handled ${event}")
     }
 
   private def handleStartClientService(data: StartClientServiceData): Unit =
@@ -102,5 +98,4 @@ class Client(
     state.status = Finished
     onFinishSpontaneous()
   }
-
 }

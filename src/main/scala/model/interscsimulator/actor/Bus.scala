@@ -23,14 +23,9 @@ import scala.collection.mutable
 class Bus(
   private val id: String = null,
   private val timeManager: ActorRef = null,
-  private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends Movable[BusState](
       movableId = id,
       timeManager = timeManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -50,7 +45,7 @@ class Bus(
           linkLeaving()
         }
       case _ =>
-        logEvent(s"Event current status not handled ${state.movableStatus}")
+        logInfo(s"Event current status not handled ${state.movableStatus}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
@@ -59,7 +54,7 @@ class Bus(
       case d: BusUnloadPassengerData => handleUnloadPassenger(event, d)
       case d: SignalStateData        => handleSignalState(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
   }
 
@@ -176,9 +171,9 @@ class Bus(
               )
             )
           case None =>
-            logEvent("No has bus stop to load passenger")
+            logInfo("No has bus stop to load passenger")
       case None =>
-        logEvent("No path to load passenger")
+        logInfo("No path to load passenger")
   }
 
   private def requestUnloadPeopleData(): Unit = {
@@ -200,9 +195,9 @@ class Bus(
                 )
             }
           case None =>
-            logEvent("No has bus stop to unload passenger")
+            logInfo("No has bus stop to unload passenger")
       case None =>
-        logEvent("No path to unload passenger")
+        logInfo("No path to unload passenger")
   }
 
   private def retrieveBusStopFromNodeId(value: String): Option[String] =

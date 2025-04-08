@@ -2,10 +2,10 @@
     <!-- Define o appender de arquivo -->
 <!--    <appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
 <!--        &lt;!&ndash; Define o nome do arquivo de log &ndash;&gt;-->
-<!--        <file>logs/app-log.log</file>-->
+<!--        <file>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</file>-->
 <!--        &lt;!&ndash; Configuração de rotação do arquivo (tamanho máximo 10MB) &ndash;&gt;-->
 <!--        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">-->
-<!--            <fileNamePattern>logs/app-log.%d{yyyy-MM-dd}.log</fileNamePattern>-->
+<!--            <fileNamePattern>/app/hyperbolic-time-chamber/output/logs/app-log.%d{yyyy-MM-dd}.log</fileNamePattern>-->
 <!--            <maxHistory>30</maxHistory> &lt;!&ndash; Mantém 30 dias de logs &ndash;&gt;-->
 <!--        </rollingPolicy>-->
 <!--        <encoder>-->

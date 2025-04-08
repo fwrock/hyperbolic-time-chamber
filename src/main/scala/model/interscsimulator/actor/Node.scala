@@ -25,14 +25,9 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.Traffi
 class Node(
   private var id: String = null,
   private val timeManager: ActorRef = null,
-  private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[NodeState](
       actorId = id,
       timeManager = timeManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
@@ -48,7 +43,7 @@ class Node(
         handleReceiveSignalChangeStatus(event, d)
       case d: LinkConnectionsData => handleLinkConnections(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleRegisterBusStop(event: ActorInteractionEvent, data: RegisterBusStopData): Unit =

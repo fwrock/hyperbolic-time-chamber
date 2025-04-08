@@ -13,10 +13,18 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 
-import java.util.UUID
 import scala.collection.mutable
 
 object ActorCreatorUtil {
+
+  private val extractEntityId: ShardRegion.ExtractEntityId = {
+    case EntityEnvelopeEvent(id, payload) => (id, payload)
+  }
+
+  private val extractShardId: ShardRegion.ExtractShardId = {
+    case EntityEnvelopeEvent(id, _) => (id.hashCode % 1000).toString
+    case ShardRegion.StartEntity(id) => (id.hashCode % 1000).toString
+  }
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
     val props = Props(actorClass, args: _*)
@@ -108,17 +116,6 @@ object ActorCreatorUtil {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    val extractEntityId: ShardRegion.ExtractEntityId = {
-      case EntityEnvelopeEvent(id, payload) => (id, payload)
-      case ShardRegion.StartEntity(id)      => (id, ShardRegion.StartEntity(id))
-    }
-
-    // preciso ver esse extrator
-    val extractShardId: ShardRegion.ExtractShardId = {
-      case EntityEnvelopeEvent(id, _)  => (id.hashCode % 5000).toString
-      case ShardRegion.StartEntity(id) => (id.hashCode % 5000).toString
-    }
-
     if (!sharding.shardTypeNames.contains(actorClassName)) {
       system.log.info(s"Creating shard region for $actorClassName with entityId $entityId")
 
@@ -129,24 +126,13 @@ object ActorCreatorUtil {
           entityId,
           timeManager,
           creatorManager,
-          null,
-          mutable.Map[String, Identify]()
         ),
         settings = ClusterShardingSettings(system),
         extractEntityId = extractEntityId,
         extractShardId = extractShardId
       )
     } else {
-      system.log.info(
-        s"Already exists shard region for $actorClassName, create actor shard with entityId $entityId"
-      )
       sharding.shardRegion(actorClassName)
-//      sharding.startProxy(
-//        typeName = actorClassName,
-//        role = None,
-//        extractEntityId = extractEntityId,
-//        extractShardId = extractShardId
-//      )
     }
   }
 
@@ -190,7 +176,7 @@ object ActorCreatorUtil {
       system,
       clazz,
       entityId,
-      DestructEvent(tick = 0, actorRef = null),
+      DestructEvent(actorRef = null),
       constructorParams
     )
 

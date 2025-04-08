@@ -1,6 +1,6 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.Actor
+import org.apache.pekko.persistence.PersistentActor
 
-trait ActorSerializable extends Actor
+trait ActorSerializable extends PersistentActor

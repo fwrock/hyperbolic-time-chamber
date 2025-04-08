@@ -10,8 +10,6 @@ class DigitalTwinManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "data-flow-manager",
-      data = null,
-      dependencies = mutable.Map.empty
     ) {
 
   override def handleEvent: Receive = {

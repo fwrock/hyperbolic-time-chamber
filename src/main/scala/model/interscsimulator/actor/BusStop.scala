@@ -15,14 +15,9 @@ import scala.collection.mutable
 class BusStop(
   private var id: String = null,
   private val timeManager: ActorRef,
-  private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[BusStopState](
       actorId = id,
       timeManager = timeManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =
@@ -40,7 +35,7 @@ class BusStop(
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleBusRequestPassenger(

@@ -22,14 +22,9 @@ import scala.collection.mutable
 class BusStation(
   private var id: String = null,
   private val timeManager: ActorRef = null,
-  private val data: String = null,
-  override protected val dependencies: mutable.Map[String, Dependency] =
-    mutable.Map[String, Dependency]()
 ) extends BaseActor[BusStationState](
       actorId = id,
       timeManager = timeManager,
-      data = data,
-      dependencies = dependencies
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -52,14 +47,14 @@ class BusStation(
           state.status = WorkingWithOutBus
         }
       case _ =>
-        logEvent(s"Event current status not handled ${state.status}")
+        logInfo(s"Event current status not handled ${state.status}")
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case e: ReceiveRouteData => handleRequestRoute(event)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleRequestRoute(value: ActorInteractionEvent): Unit = {
