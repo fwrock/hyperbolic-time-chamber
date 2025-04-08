@@ -35,7 +35,7 @@ class BusStop(
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleBusRequestPassenger(

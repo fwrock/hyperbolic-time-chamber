@@ -16,7 +16,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
 
-  private val batchSize: Int = 10
+  private val batchSize: Int = 100
   private var totalBatchAmount: Int = 0
   private var currentBatchAmount: Int = 0
   private var isSentAllDataToCreator = false
@@ -37,24 +37,26 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   override protected def load(source: ActorDataSource): Unit = {
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
-    val actors = JsonUtil.fromJsonList[ActorSimulation](content)
+    var actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
-    logEvent(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
+    logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
 
     amountActors = actors.size
 
     if (amountActors < batchSize) {
       totalBatchAmount += 1
-      creatorRef ! CreateActorsEvent(actors)
+      creatorRef ! CreateActorsEvent(actors = actors, actorRef = self)
     } else {
       actors.grouped(batchSize).foreach {
         batch =>
           totalBatchAmount += 1
-          creatorRef ! CreateActorsEvent(batch)
+          creatorRef ! CreateActorsEvent(actors = batch, actorRef = self)
       }
     }
 
-    logEvent(s"$totalBatchAmount batch of size $batchSize created from $amountActors actors list")
+    actors = null
+
+    logInfo(s"All loaded $self - $totalBatchAmount batch of size $batchSize created from $amountActors actors list")
 
     isSentAllDataToCreator = true
 
@@ -68,8 +70,9 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   }
 
   private def sendFinishLoadDataEvent(): Unit = {
+//    logEvent(s"$self - $amountActors actors created, $currentBatchAmount batches sent to creators and totalBatchAmount $totalBatchAmount")
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
-      logEvent("All data loaded and sent to creators")
+      logInfo("All data loaded and sent to creators")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,

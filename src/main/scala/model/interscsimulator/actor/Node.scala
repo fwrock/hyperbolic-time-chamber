@@ -43,7 +43,7 @@ class Node(
         handleReceiveSignalChangeStatus(event, d)
       case d: LinkConnectionsData => handleLinkConnections(event, d)
       case _ =>
-        logEvent("Event not handled")
+        logInfo("Event not handled")
     }
 
   private def handleRegisterBusStop(event: ActorInteractionEvent, data: RegisterBusStopData): Unit =

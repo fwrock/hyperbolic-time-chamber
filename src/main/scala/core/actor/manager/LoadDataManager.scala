@@ -9,6 +9,7 @@ import core.util.ActorCreatorUtil.createActor
 
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
+import org.apache.pekko.routing.RoundRobinRoutingLogic
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
@@ -42,11 +43,11 @@ class LoadDataManager(
 
   private def loadData(event: LoadDataEvent): Unit = {
     dataSourceAmount = event.actorsDataSources.size
-    logEvent(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
+    logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
     creatorRef = createCreatorLoadData(dataSourceAmount)
     event.actorsDataSources.foreach {
       actorDataSource =>
-        logEvent(
+        logInfo(
           s"Load data source ${actorDataSource.dataSource} of type ${actorDataSource.classType}"
         )
         val loader = createActor(
@@ -63,18 +64,21 @@ class LoadDataManager(
     }
   }
 
-  private def createCreatorLoadData(amountDataSources: Int): ActorRef =
+  private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
+    val totalInstances = amountDataSources
+    val maxInstancesPerNode = Math.max(10, amountDataSources / 8)
     context.actorOf(
       ClusterRouterPool(
-        RoundRobinPool(1),
-        ClusterRouterPoolSettings(
-          totalInstances = amountDataSources * 2,
-          maxInstancesPerNode = amountDataSources,
+        local = RoundRobinPool(0),
+        settings = ClusterRouterPoolSettings(
+          totalInstances = totalInstances,
+          maxInstancesPerNode = maxInstancesPerNode,
           allowLocalRoutees = true
         )
       ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager)),
       name = POOL_CREATOR_LOAD_DATA_ACTOR_NAME
     )
+  }
 
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
     val actorRef = event.actorRef
@@ -86,13 +90,9 @@ class LoadDataManager(
       }
     }
     loaders(actorRef) = true
-
-    logEvent(s"loaders = $loaders")
-
+//    logEvent(s"Finish load: ${(loaders.values.count(_ == true)/loaders.values.size.toDouble) * 100.0}%(${loaders.values.count(_ == true)}/${loaders.values.size})")
     actorRef ! DestructEvent(actorRef = getPath)
-//
-//    logEvent(s"all loaders = ${loaders.values
-//        .forall(_ == true)}, dataSourceAmount = $dataSourceAmount, loaders.size = ${loaders.size}")
+
     if (isAllDataLoaded) {
       creators.keys.foreach {
         creator =>
@@ -102,19 +102,19 @@ class LoadDataManager(
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-//    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
     creators.get(event.actorRef) match
       case Some(flag) =>
         if (!flag) {
           currentLoadDataAmount += event.amount
           creators(event.actorRef) = true
+        } else {
+          logInfo(s"Creator already finished ${event.actorRef} with ${event.amount}")
         }
       case None =>
-        logEvent(s"Creator not found ${event.actorRef}")
-//    logEvent(s"loadDataTotalAmount=$loadDataTotalAmount, amount=${event.amount}, currentLoadDataAmount=$currentLoadDataAmount")
+        logInfo(s"Creator not found ${event.actorRef}")
+//    logEvent(s"Finish creation ${(currentLoadDataAmount/loadDataTotalAmount.toDouble) * 100.0}% ($currentLoadDataAmount/$loadDataTotalAmount)")
     if (loadDataTotalAmount == currentLoadDataAmount) {
-      logEvent("Finish creation")
-      creatorRef ! DestructEvent(actorRef = getPath)
+      logInfo("Finish creation")
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,
