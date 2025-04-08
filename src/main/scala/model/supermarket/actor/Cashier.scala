@@ -42,7 +42,7 @@ class Cashier(
             logInfo("Cashier is attending a client")
             val queued = state.queue.dequeue()
             state.clientInService = Some(queued.client)
-            sendMessageTo(queued.client.id, queued.client.classType, StartClientServiceData())
+            sendMessageTo(queued.client.id, queued.client.shardId, StartClientServiceData())
             logInfo(
               s"DD Spontaneous event (queue non empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Busy}"
             )
@@ -64,7 +64,7 @@ class Cashier(
             client =>
               sendMessageTo(
                 client.id,
-                client.classType,
+                client.shardId,
                 FinishClientServiceData()
               )
           )
@@ -116,7 +116,7 @@ class Cashier(
       state.status = Busy
       sendMessageTo(
         event.actorRefId,
-        event.actorClassType,
+        event.shardRefId,
         StartClientServiceData()
       )
       logInfo(

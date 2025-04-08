@@ -46,10 +46,11 @@ message ActorInteraction{
   uint64 tick = 1;
   uint64 lamportTick = 2;
   string actorRefId = 3;
-  string actorRef = 4;
-  string actorClassType = 5;
-  string eventType = 6;
-  bytes data = 7;
-  int32 payload_serializer_id = 8;
-  string payload_manifest = 9;
+  string shardRefId = 4;
+  string actorRef = 5;
+  string actorClassType = 6;
+  string eventType = 7;
+  bytes data = 8;
+  int32 payload_serializer_id = 9;
+  string payload_manifest = 10;
 }

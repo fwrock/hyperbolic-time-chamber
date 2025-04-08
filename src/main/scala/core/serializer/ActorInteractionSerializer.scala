@@ -27,6 +27,7 @@ class ActorInteractionSerializer(
             tick,
             lamportTick,
             actorRefId,
+            shardRefId,
             actorRef,
             actorClassType,
             eventType,
@@ -87,13 +88,14 @@ class ActorInteractionSerializer(
       triedDeserializedPayload match {
         case Success(deserializedPayload) =>
           ActorInteractionEvent(
-            proto.tick,
-            proto.lamportTick,
-            proto.actorRefId,
-            proto.actorRef,
-            proto.actorClassType,
-            proto.eventType,
-            deserializedPayload
+            tick = proto.tick,
+            lamportTick = proto.lamportTick,
+            actorRefId = proto.actorRefId,
+            shardRefId = proto.shardRefId,
+            actorPathRef = proto.actorRef,
+            actorClassType = proto.actorClassType,
+            eventType = proto.eventType,
+            data = deserializedPayload
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(
