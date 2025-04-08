@@ -20,6 +20,7 @@ case class Initialization(
   def toInitializeData: InitializeData =
     InitializeData(
       data = data,
+      shardId = shardId,
       timeManager = timeManager,
       creatorManager = creatorManager,
       dependencies = dependencies.map {

@@ -4,7 +4,7 @@ package model.supermarket.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
@@ -15,10 +15,12 @@ import org.interscity.htc.model.supermarket.util.CashierUtil.serviceTime
 
 class Cashier(
   private val id: String,
+  private val shard: String,
   private val timeManager: ActorRef,
   private val creatorManager: ActorRef = null,
 ) extends BaseActor[CashierState](
       actorId = id,
+      shardId = shard,
       timeManager = timeManager,
       creatorManager = creatorManager,
     ) {
