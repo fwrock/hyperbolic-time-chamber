@@ -289,7 +289,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    getShardRef(identity.classType) ! EntityEnvelopeEvent(
+    getShardRef(identity.shardId) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
@@ -328,7 +328,7 @@ class TimeManager(
   }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
+    getShardRef(finishEvent.identify.shardId) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )

@@ -11,10 +11,12 @@ import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServ
 
 class Client(
   private val id: String,
+  private val shard: String,
   private val timeManager: ActorRef,
   private val creatorManager: ActorRef = null,
 ) extends BaseActor[ClientState](
       actorId = id,
+      shardId = shard,
       timeManager = timeManager,
       creatorManager = creatorManager,
     ) {
@@ -58,7 +60,7 @@ class Client(
       val cashier = dependencies(state.cashierId)
       sendMessageTo(
         cashier.id,
-        cashier.classType,
+        cashier.resourceId,
         NewClientServiceData(
           amountThings = state.amountThings
         )

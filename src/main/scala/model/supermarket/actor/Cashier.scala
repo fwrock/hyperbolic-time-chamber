@@ -4,7 +4,7 @@ package model.supermarket.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.CashierStatusEnum.{ Busy, Free, Waiting }
@@ -15,10 +15,12 @@ import org.interscity.htc.model.supermarket.util.CashierUtil.serviceTime
 
 class Cashier(
   private val id: String,
+  private val shard: String,
   private val timeManager: ActorRef,
   private val creatorManager: ActorRef = null,
 ) extends BaseActor[CashierState](
       actorId = id,
+      shardId = shard,
       timeManager = timeManager,
       creatorManager = creatorManager,
     ) {
@@ -42,7 +44,7 @@ class Cashier(
             logInfo("Cashier is attending a client")
             val queued = state.queue.dequeue()
             state.clientInService = Some(queued.client)
-            sendMessageTo(queued.client.id, queued.client.classType, StartClientServiceData())
+            sendMessageTo(queued.client.id, queued.client.shardId, StartClientServiceData())
             logInfo(
               s"DD Spontaneous event (queue non empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Busy}"
             )
@@ -64,7 +66,7 @@ class Cashier(
             client =>
               sendMessageTo(
                 client.id,
-                client.classType,
+                client.shardId,
                 FinishClientServiceData()
               )
           )
@@ -116,7 +118,7 @@ class Cashier(
       state.status = Busy
       sendMessageTo(
         event.actorRefId,
-        event.actorClassType,
+        event.shardRefId,
         StartClientServiceData()
       )
       logInfo(

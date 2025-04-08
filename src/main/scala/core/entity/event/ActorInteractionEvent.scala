@@ -12,6 +12,7 @@ case class ActorInteractionEvent(
   tick: Tick,
   lamportTick: Tick,
   actorRefId: String,
+  shardRefId: String,
   actorPathRef: String,
   actorClassType: String,
   eventType: String = "default",
