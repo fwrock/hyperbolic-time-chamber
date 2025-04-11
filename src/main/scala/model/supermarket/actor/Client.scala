@@ -21,13 +21,7 @@ class Client(
       creatorManager = creatorManager
     ) {
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    logInfo(
-      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status $state"
-    )
-    onFinishSpontaneous()
-  }
-  /*
+  override def actSpontaneous(event: SpontaneousEvent): Unit =
     try {
       if (state == null) {
         onFinishSpontaneous()
@@ -58,8 +52,6 @@ class Client(
         e.printStackTrace()
         onFinishSpontaneous()
 
-   */
-
   private def enterQueue(): Unit = {
     logInfo(
       s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status} dependencySize=${dependencies.size}"
@@ -84,20 +76,28 @@ class Client(
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
-    event.data match {
-      case d: StartClientServiceData =>
-        logInfo(
-          s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+    try
+      event.data match {
+        case d: StartClientServiceData =>
+          logInfo(
+            s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+          )
+          handleStartClientService(d)
+        case d: FinishClientServiceData =>
+          logInfo(
+            s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+          )
+          handleFinishClientService(d)
+        case _ =>
+          logInfo(s"Event not handled ${event}")
+      }
+    catch
+      case e: Exception =>
+        logError(
+          s"DD $actorId Error interact with event at tick ${event.tick} and lamport ${lamportClock.getClock}, state=$state",
+          e
         )
-        handleStartClientService(d)
-      case d: FinishClientServiceData =>
-        logInfo(
-          s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
-        )
-        handleFinishClientService(d)
-      case _ =>
-        logInfo(s"Event not handled ${event}")
-    }
+        e.printStackTrace()
 
   private def handleStartClientService(data: StartClientServiceData): Unit =
     state.status = InService

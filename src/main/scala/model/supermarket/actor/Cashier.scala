@@ -29,16 +29,8 @@ class Cashier(
     case event => logInfo(s"Event not handled ${event}")
   }
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    logInfo(
-      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status $state"
-    )
-    onFinishSpontaneous()
-    /*
-    logInfo(
-      s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
-    )
-    try {
+  override def actSpontaneous(event: SpontaneousEvent): Unit =
+    try
       state.status match {
         case Free =>
           if (state.queue.nonEmpty) {
@@ -89,27 +81,34 @@ class Cashier(
           logInfo(s"Event current status not handled ${state.status}")
           onFinishSpontaneous()
       }
-    } catch {
+    catch {
       case e: Exception =>
-          logError(
+        logError(
           s"DD $actorId Error spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock}, state=$state",
           e
         )
         e.printStackTrace()
         onFinishSpontaneous()
-    }*/
-  }
+    }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
-    event.data match {
-      case e: NewClientServiceData =>
-        logInfo(
-          s"DD new client service  to tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+    try
+      event.data match {
+        case e: NewClientServiceData =>
+          logInfo(
+            s"DD new client service  to tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
+          )
+          handleNewClientService(event, e)
+        case _ =>
+          logInfo(s"Event not handled ${event}")
+      }
+    catch
+      case e: Exception =>
+        logError(
+          s"DD $actorId Error interact with event at event ${event} and lamport ${lamportClock.getClock}, state=$state",
+          e
         )
-        handleNewClientService(event, e)
-      case _ =>
-        logInfo(s"Event not handled ${event}")
-    }
+        e.printStackTrace()
 
   private def handleNewClientService(
     event: ActorInteractionEvent,
@@ -118,8 +117,8 @@ class Cashier(
     if (state.queue.isEmpty && (state.status == Waiting || state.status == Free)) {
       state.status = Busy
       sendMessageTo(
-        event.actorRefId,
-        event.shardRefId,
+        entityId =  event.actorRefId,
+        shardId = event.shardRefId,
         StartClientServiceData()
       )
       logInfo(
@@ -134,6 +133,7 @@ class Cashier(
         ClientQueued(
           client = Identify(
             id = event.actorRefId,
+            shardId = event.shardRefId,
             classType = event.actorClassType,
             actorRef = event.actorPathRef
           ),

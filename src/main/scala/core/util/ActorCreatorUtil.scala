@@ -117,7 +117,7 @@ object ActorCreatorUtil {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    val shardName = shardId.replace(":", "_").replace(";", "_")
+    val shardName = IdUtil.format(shardId)
 
     if (!sharding.shardTypeNames.contains(shardName)) {
       system.log.info(
