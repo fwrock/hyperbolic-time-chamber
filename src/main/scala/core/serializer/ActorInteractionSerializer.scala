@@ -48,6 +48,7 @@ class ActorInteractionSerializer(
               tick = tick,
               lamportTick = lamportTick,
               actorRefId = actorRefId,
+              shardRefId = shardRefId,
               actorRef = actorRef,
               actorClassType = actorClassType,
               eventType = eventType,

@@ -2,11 +2,11 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.JsonUtil
+import core.util.{IdUtil, JsonUtil}
 
-import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
+import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -16,7 +16,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
 
-  private val batchSize: Int = 100
+  private val batchSize: Int = 10000
   private var totalBatchAmount: Int = 0
   private var currentBatchAmount: Int = 0
   private var isSentAllDataToCreator = false
@@ -42,7 +42,11 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
 
     val actorsToCreate = actors.map(
-      actor => ActorSimulationCreation(shardId = source.id, actor = actor)
+      actor =>
+        ActorSimulationCreation(
+          shardId = IdUtil.format(source.id),
+          actor = actor.copy(id =  IdUtil.format(actor.id))
+        )
     )
 
     amountActors = actorsToCreate.size

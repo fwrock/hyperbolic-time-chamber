@@ -4,12 +4,13 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.ActorCreatorUtil
+import core.util.{ ActorCreatorUtil, JsonUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
@@ -31,6 +32,7 @@ class CreatorLoadData(
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
+  private val initializedAcknowledges = mutable.Map[String, Boolean]()
   private var amountActors = 0
   private var finishEventSent: Boolean = false
 
@@ -96,6 +98,8 @@ class CreatorLoadData(
             dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
           )
 
+          initializedAcknowledges.put(actorCreation.actor.id, false)
+
           val shardRegion = createShardRegion(
             system = context.system,
             shardId = actorCreation.shardId,
@@ -147,12 +151,15 @@ class CreatorLoadData(
         )
     }
 
-  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
+  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
+    logInfo(s"Received InitializeEntityAck for ${event.entityId}.")
+    initializedAcknowledges.put(event.entityId, true)
     checkAndSendFinish()
+  }
 
   private def checkAndSendFinish(): Unit =
     if (!finishEventSent && initializeData.isEmpty) {
-      if (actorsToCreate.isEmpty) {
+      if (actorsToCreate.isEmpty && initializedAcknowledges.values.forall(_ == true)) {
         logInfo(
           s"All $amountActors actors created and acknowledged initialization. Sending FinishCreationEvent."
         )

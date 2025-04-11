@@ -56,8 +56,8 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 512
-    val maxInstancesPerNode = Math.max(10, 512 / 8)
+    val totalInstances = 8
+    val maxInstancesPerNode = Math.max(1, totalInstances / 8)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -100,6 +100,7 @@ class TimeManager(
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorId)
+//    logInfo(s"Registering actor ${event.identify.get.id} shard ${event.identify.get.shardId} at tick ${event.startTick}")
     scheduleApply(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
     )
@@ -107,6 +108,7 @@ class TimeManager(
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
     logInfo(s"Started simulation: $start")
+    unstashAll()
     start.data match
       case Some(data) =>
         startTime = data.startTime
@@ -123,7 +125,7 @@ class TimeManager(
       logInfo(
         s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
       )
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+      self ! UpdateGlobalTimeEvent(localTickOffset)
     }
   }
 
@@ -153,7 +155,13 @@ class TimeManager(
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
     if (parentManager.nonEmpty) {
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+      if (isRunning) {
+        if (localTickOffset - initialTick >= simulationDuration) {
+          terminateSimulation()
+        } else {
+          processTick(localTickOffset)
+        }
+      }
     }
   }
 
@@ -171,6 +179,7 @@ class TimeManager(
           isProcessed = true
         )
       )
+//      logInfo(s"$localManager reported tick $tick with hasScheduled $hasScheduled reported (${localTimeManagers.values.count(_.isProcessed == true)}/${localTimeManagers.values.size})")
       if (localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
       }
@@ -194,6 +203,7 @@ class TimeManager(
           )
         )
     }
+//    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
@@ -285,6 +295,7 @@ class TimeManager(
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
       actor =>
+//        logInfo(s"$getLabel - Sending spontaneous event to actor ${actor.id} shard ${actor.shardId} at tick $tick")
         sendSpontaneousEvent(tick, actor)
     }
 
@@ -342,12 +353,12 @@ class TimeManager(
 
   private def printSimulationDuration(): Unit = {
     val duration = System.currentTimeMillis() - startTime
-    logInfo(s"Simulation endTick: $localTickOffset")
-    logInfo(s"Simulation total ticks: ${localTickOffset - initialTick}")
-    logInfo(s"Simulation duration: $duration ms")
-    logInfo(s"Simulation duration: ${duration / 1000.0} s")
-    logInfo(s"Simulation duration: ${duration / 1000.0 / 60.0} min")
-    logInfo(s"Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
+    logInfo(s"$getLabel - Simulation endTick: $localTickOffset")
+    logInfo(s"$getLabel - Simulation total ticks: ${localTickOffset - initialTick}")
+    logInfo(s"$getLabel - Simulation duration: $duration ms")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0} min")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
   }
 
   private def isRunning: Boolean = !isPaused && !isStopped
