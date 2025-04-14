@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.JsonUtil
+import core.util.{IdUtil, JsonUtil}
 
 import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
@@ -38,10 +38,14 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     var actors = JsonUtil.fromJsonList[ActorSimulation](content)
-
-    logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
-
-    val actorsToCreate = actors.map(actor => ActorSimulationCreation(shardId = source.id, actor = actor))
+    
+    val actorsToCreate = actors.map(
+      actor =>
+        ActorSimulationCreation(
+          shardId = IdUtil.format(source.id),
+          actor = actor.copy(id =  IdUtil.format(actor.id))
+        )
+    )
 
     amountActors = actorsToCreate.size
 
@@ -58,8 +62,6 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     actors = null
 
-    logInfo(s"All loaded $self - $totalBatchAmount batch of size $batchSize created from $amountActors actors list")
-
     isSentAllDataToCreator = true
 
     sendFinishLoadDataEvent()
@@ -71,14 +73,13 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     sendFinishLoadDataEvent()
   }
 
-  private def sendFinishLoadDataEvent(): Unit = {
+  private def sendFinishLoadDataEvent(): Unit =
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
-      logInfo("All data loaded and sent to creators")
+      logInfo(s"All data loaded and sent to creators: $amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,
         creators = creators
       )
     }
-  }
 }

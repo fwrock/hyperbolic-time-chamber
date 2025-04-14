@@ -17,10 +17,10 @@ import scala.collection.mutable
 
 class Subway(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends Movable[SubwayState](
       movableId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =

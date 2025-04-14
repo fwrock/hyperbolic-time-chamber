@@ -12,11 +12,11 @@ import scala.collection.mutable
 
 abstract class BaseManager[T <: BaseState](
   actorId: String = null,
-  timeManager: ActorRef = null,
+  timeManager: ActorRef = null
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = actorId,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   protected def createSingletonManager(

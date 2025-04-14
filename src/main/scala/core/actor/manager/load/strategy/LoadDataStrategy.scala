@@ -14,7 +14,7 @@ import scala.collection.mutable
 abstract class LoadDataStrategy(timeManager: ActorRef)
     extends BaseActor[DefaultState](
       timeManager = timeManager,
-      actorId = "load-data-strategy-manager",
+      actorId = "load-data-strategy-manager"
     ) {
   protected def load(event: LoadDataSourceEvent): Unit
   protected def load(actorDataSource: ActorDataSource): Unit

@@ -20,10 +20,10 @@ import scala.collection.mutable
 
 class SubwayStation(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends BaseActor[SubwayStationState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =

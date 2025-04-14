@@ -24,7 +24,7 @@ class LoadDataManager(
   val simulationManager: ActorRef
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
-      actorId = "load-data-manager",
+      actorId = "load-data-manager"
     ) {
 
   private var loadDataTotalAmount = 0L
@@ -113,8 +113,8 @@ class LoadDataManager(
       case None =>
         logInfo(s"Creator not found ${event.actorRef}")
 //    logEvent(s"Finish creation ${(currentLoadDataAmount/loadDataTotalAmount.toDouble) * 100.0}% ($currentLoadDataAmount/$loadDataTotalAmount)")
-    if (loadDataTotalAmount == currentLoadDataAmount) {
-      logInfo("Finish creation")
+    if (loadDataTotalAmount == currentLoadDataAmount && creators.values.forall(_.self == true)) {
+      logInfo("Finish creation fully")
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,

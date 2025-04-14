@@ -24,10 +24,10 @@ import org.interscity.htc.model.interscsimulator.entity.state.enumeration.Traffi
 
 class Node(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends BaseActor[NodeState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
