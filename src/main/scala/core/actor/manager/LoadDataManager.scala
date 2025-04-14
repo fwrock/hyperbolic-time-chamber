@@ -9,7 +9,6 @@ import core.util.ActorCreatorUtil.createActor
 
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.apache.pekko.routing.RoundRobinRoutingLogic
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
@@ -90,7 +89,6 @@ class LoadDataManager(
       }
     }
     loaders(actorRef) = true
-//    logEvent(s"Finish load: ${(loaders.values.count(_ == true)/loaders.values.size.toDouble) * 100.0}%(${loaders.values.count(_ == true)}/${loaders.values.size})")
     actorRef ! DestructEvent(actorRef = getPath)
 
     if (isAllDataLoaded) {
@@ -112,7 +110,6 @@ class LoadDataManager(
         }
       case None =>
         logInfo(s"Creator not found ${event.actorRef}")
-//    logEvent(s"Finish creation ${(currentLoadDataAmount/loadDataTotalAmount.toDouble) * 100.0}% ($currentLoadDataAmount/$loadDataTotalAmount)")
     if (loadDataTotalAmount == currentLoadDataAmount && creators.values.forall(_.self == true)) {
       logInfo("Finish creation fully")
       simulationManager ! FinishLoadDataEvent(
