@@ -19,11 +19,11 @@ import org.interscity.htc.model.interscsimulator.entity.state.model.RoutePathIte
 
 abstract class Movable[T <: MovableState](
   private var movableId: String = null,
-  private val timeManager: ActorRef,
+  private val timeManager: ActorRef
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = movableId,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   protected def requestRoute(): Unit = {}

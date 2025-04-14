@@ -5,11 +5,11 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
-import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.interscity.htc.core.actor.manager.SimulationManager
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
-import org.interscity.htc.core.util.{ManagerConstantsUtil, SimulationUtil}
+import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
 @main
 def main(): Unit = {

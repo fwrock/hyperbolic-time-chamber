@@ -56,8 +56,8 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 512
-    val maxInstancesPerNode = Math.max(10, 512 / 8)
+    val totalInstances = 40
+    val maxInstancesPerNode = Math.max(10, totalInstances / 8)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -69,8 +69,6 @@ class TimeManager(
       ).props(TimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))),
       name = POOL_TIME_MANAGER_ACTOR_NAME
     )
-    logInfo(s"TimeManager pool created: $timeManagersPool")
-    // Can to exists a problem here, because the time manager pool is created after the simulation manager
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
   }
 
@@ -107,6 +105,7 @@ class TimeManager(
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
     logInfo(s"Started simulation: $start")
+    unstashAll()
     start.data match
       case Some(data) =>
         startTime = data.startTime
@@ -123,7 +122,7 @@ class TimeManager(
       logInfo(
         s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
       )
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+      self ! UpdateGlobalTimeEvent(localTickOffset)
     }
   }
 
@@ -153,7 +152,13 @@ class TimeManager(
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
     if (parentManager.nonEmpty) {
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+      if (isRunning) {
+        if (localTickOffset - initialTick >= simulationDuration) {
+          terminateSimulation()
+        } else {
+          processTick(localTickOffset)
+        }
+      }
     }
   }
 
@@ -194,6 +199,7 @@ class TimeManager(
           )
         )
     }
+    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
@@ -207,9 +213,6 @@ class TimeManager(
     if (schedule.tick < localTickOffset) {
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
-    }
-    if (countScheduled % 10000 == 0) {
-      logInfo(s"$getLabel - $countScheduled Schedule events")
     }
     countScheduled += 1
     scheduledActors.get(schedule.tick) match
@@ -232,7 +235,7 @@ class TimeManager(
       advanceToNextTick()
       reportGlobalTimeManager(true)
     } else {
-      logInfo("TimeManager finish event forward")
+//      logInfo("TimeManager finish event forward")
       finish.timeManager ! finish
     }
 
@@ -273,9 +276,6 @@ class TimeManager(
         scheduled.actorsRef.foreach {
           actor => runningEvents.add(actor)
         }
-        logInfo(
-          s"$getLabel - Sending spontaneous event to ${scheduled.actorsRef.size} scheduled actors at tick $tick"
-        )
         sendSpontaneousEvent(tick, scheduled.actorsRef)
         scheduledActors.remove(tick)
       case None =>
@@ -318,7 +318,7 @@ class TimeManager(
   }
 
   private def terminateSimulation(): Unit = {
-    if (runningEvents.isEmpty && scheduledActors.isEmpty) { // Verifica se scheduledActors está vazio
+    if (runningEvents.isEmpty && scheduledActors.isEmpty) {
       if (parentManager.isEmpty) {
         notifyLocalManagers(StopSimulationEvent)
       }
@@ -342,12 +342,12 @@ class TimeManager(
 
   private def printSimulationDuration(): Unit = {
     val duration = System.currentTimeMillis() - startTime
-    logInfo(s"Simulation endTick: $localTickOffset")
-    logInfo(s"Simulation total ticks: ${localTickOffset - initialTick}")
-    logInfo(s"Simulation duration: $duration ms")
-    logInfo(s"Simulation duration: ${duration / 1000.0} s")
-    logInfo(s"Simulation duration: ${duration / 1000.0 / 60.0} min")
-    logInfo(s"Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
+    logInfo(s"$getLabel - Simulation endTick: $localTickOffset")
+    logInfo(s"$getLabel - Simulation total ticks: ${localTickOffset - initialTick}")
+    logInfo(s"$getLabel - Simulation duration: $duration ms")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0} min")
+    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
   }
 
   private def isRunning: Boolean = !isPaused && !isStopped

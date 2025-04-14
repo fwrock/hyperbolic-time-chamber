@@ -20,10 +20,10 @@ import org.interscity.htc.model.interscsimulator.entity.event.data.link.{ LinkCo
 
 class Link(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends BaseActor[LinkState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   private def cost: Double = {

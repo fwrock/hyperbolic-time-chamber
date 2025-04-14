@@ -19,10 +19,10 @@ import scala.collection.mutable
 
 class TrafficSignal(
   private var id: String = null,
-  private val timeManager: ActorRef = null,
+  private val timeManager: ActorRef = null
 ) extends BaseActor[TrafficSignalState](
       actorId = id,
-      timeManager = timeManager,
+      timeManager = timeManager
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =

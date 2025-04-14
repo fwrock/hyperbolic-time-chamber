@@ -13,12 +13,12 @@ class Client(
   private val id: String,
   private val shard: String,
   private val timeManager: ActorRef,
-  private val creatorManager: ActorRef = null,
+  private val creatorManager: ActorRef = null
 ) extends BaseActor[ClientState](
       actorId = id,
       shardId = shard,
       timeManager = timeManager,
-      creatorManager = creatorManager,
+      creatorManager = creatorManager
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -27,14 +27,8 @@ class Client(
         onFinishSpontaneous()
         return
       }
-      logInfo(
-        s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} with status ${state.status}"
-      )
       state.status match {
         case Start =>
-          logInfo(
-            s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
-          )
           state.status = Waiting
           enterQueue()
           onFinishSpontaneous()
@@ -45,17 +39,10 @@ class Client(
       }
     } catch
       case e: Exception =>
-        log.error(
-          s"DD $actorId Error spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock}",
-          e
-        )
         e.printStackTrace()
         onFinishSpontaneous()
 
   private def enterQueue(): Unit = {
-    logInfo(
-      s"DD Entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status} dependencySize=${dependencies.size}"
-    )
     try {
       val cashier = dependencies(state.cashierId)
       sendMessageTo(
@@ -67,29 +54,23 @@ class Client(
       )
     } catch {
       case e: Exception =>
-        log.error(s"$actorId - dependencies=$dependencies - ${state.cashierId}")
-        log.error(
-          s"DD $actorId Error entering queue at tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}, isInitialized= $isInitialized"
-        )
         log.error(e.getMessage)
     }
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
-    event.data match {
-      case d: StartClientServiceData =>
-        logInfo(
-          s"DD start client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
-        )
-        handleStartClientService(d)
-      case d: FinishClientServiceData =>
-        logInfo(
-          s"DD finish client service at tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
-        )
-        handleFinishClientService(d)
-      case _ =>
-        logInfo(s"Event not handled ${event}")
-    }
+    try
+      event.data match {
+        case d: StartClientServiceData =>
+          handleStartClientService(d)
+        case d: FinishClientServiceData =>
+          handleFinishClientService(d)
+        case _ =>
+          logInfo(s"Event not handled ${event}")
+      }
+    catch
+      case e: Exception =>
+        e.printStackTrace()
 
   private def handleStartClientService(data: StartClientServiceData): Unit =
     state.status = InService
