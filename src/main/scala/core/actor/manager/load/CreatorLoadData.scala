@@ -9,8 +9,7 @@ import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
+import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
@@ -38,8 +37,8 @@ class CreatorLoadData(
 
   private var actorsToCreate: List[ActorSimulationCreation] = List.empty
 
-  private val CREATE_CHUNK_SIZE = 50 // Quantos atores processar por vez
-  private val DELAY_BETWEEN_CHUNKS = 500.milliseconds // Pausa entre os blocos
+  private val CREATE_CHUNK_SIZE = 50
+  private val DELAY_BETWEEN_CHUNKS = 500.milliseconds
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent          => handleCreateActors(event)
@@ -70,9 +69,6 @@ class CreatorLoadData(
     amountActors = actorsToCreate.size
 
     if (actorsToCreate.nonEmpty) {
-      logInfo(
-        s"Will create $amountActors unique actors in chunks of $CREATE_CHUNK_SIZE with ${DELAY_BETWEEN_CHUNKS} delay."
-      )
       self ! ProcessNextCreateChunk
     } else {
       logInfo("No actors to create for this creator.")
@@ -116,11 +112,7 @@ class CreatorLoadData(
 
       if (actorsToCreate.nonEmpty) {
         context.system.scheduler.scheduleOnce(DELAY_BETWEEN_CHUNKS, self, ProcessNextCreateChunk)
-      } else {
-        logInfo("All creation chunks have been scheduled.")
       }
-    } else {
-      logInfo("ProcessNextCreateChunk called but no actors remaining to create.")
     }
   }
 
@@ -152,7 +144,6 @@ class CreatorLoadData(
     }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
-    logInfo(s"Received InitializeEntityAck for ${event.entityId}.")
     initializedAcknowledges.put(event.entityId, true)
     checkAndSendFinish()
   }
@@ -166,9 +157,7 @@ class CreatorLoadData(
         loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
         finishEventSent = true
       } else {}
-    } else if (finishEventSent) {
-      logInfo(s"Ignoring checkAndSendFinish call, finish already sent.") // Log opcional
-    } else {}
+    }
 }
 
 object CreatorLoadData {

@@ -34,24 +34,13 @@ class Cashier(
       state.status match {
         case Free =>
           if (state.queue.nonEmpty) {
-            logInfo("Cashier is attending a client")
             val queued = state.queue.dequeue()
             state.clientInService = Some(queued.client)
             sendMessageTo(queued.client.id, queued.client.shardId, StartClientServiceData())
-            logInfo(
-              s"DD Spontaneous event (queue non empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Busy}"
-            )
             state.status = Busy
             onFinishSpontaneous(Some(currentTick + serviceTime(queued.amountThings)))
           } else {
-            logInfo("Cashier is waiting")
-            logInfo(
-              s"DD Spontaneous event (queue empty) at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Waiting}"
-            )
             state.status = Waiting
-            logInfo(
-              s"DD Send Finish event  to tick ${currentTick} and lamport ${lamportClock.getClock}"
-            )
             onFinishSpontaneous()
           }
         case Busy =>
@@ -64,29 +53,15 @@ class Cashier(
               )
           )
           state.clientInService = None
-          logInfo(
-            s"DD Spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock} changing status of ${state.status} to ${Free}"
-          )
           state.status = Free
-          logInfo(
-            s"DD Send Finish event schedule to tick ${currentTick + CashierUtil.breakTime} and lamport ${lamportClock.getClock}"
-          )
           onFinishSpontaneous(Some(currentTick + CashierUtil.breakTime))
         case Waiting =>
-          logInfo(
-            s"DD Send Finish event  to tick ${currentTick} and lamport ${lamportClock.getClock} with status ${state.status}"
-          )
           onFinishSpontaneous()
         case _ =>
-          logInfo(s"Event current status not handled ${state.status}")
           onFinishSpontaneous()
       }
     catch {
       case e: Exception =>
-        logError(
-          s"DD $actorId Error spontaneous event at tick ${event.tick} and lamport ${lamportClock.getClock}, state=$state",
-          e
-        )
         e.printStackTrace()
         onFinishSpontaneous()
     }
@@ -95,19 +70,12 @@ class Cashier(
     try
       event.data match {
         case e: NewClientServiceData =>
-          logInfo(
-            s"DD new client service  to tick ${event.tick} and lamport ${event.lamportTick} with status ${state.status}"
-          )
           handleNewClientService(event, e)
         case _ =>
           logInfo(s"Event not handled ${event}")
       }
     catch
       case e: Exception =>
-        logError(
-          s"DD $actorId Error interact with event at event ${event} and lamport ${lamportClock.getClock}, state=$state",
-          e
-        )
         e.printStackTrace()
 
   private def handleNewClientService(
@@ -121,14 +89,8 @@ class Cashier(
         shardId = event.shardRefId,
         StartClientServiceData()
       )
-      logInfo(
-        s"DD Free cashier - Send Finish event schedule to tick ${currentTick + serviceTime(data.amountThings)} and lamport ${lamportClock.getClock}"
-      )
       onFinishSpontaneous(Some(currentTick + serviceTime(data.amountThings)))
     } else {
-      logInfo(
-        s"DD Queued client at tick ${event.tick} and lamport ${event.lamportTick} queue size ${state.queue.size} with status ${state.status}"
-      )
       state.queue.enqueue(
         ClientQueued(
           client = Identify(

@@ -66,7 +66,7 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-    logInfo(s"Starting actor with id $actorId and self $self")
+//    logInfo(s"Starting actor with id $actorId and self $self")
     onStart()
   }
 
@@ -89,7 +89,6 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def initialize(event: InitializeEvent): Unit =
-    logInfo(s"event: $event")
     if (!isInitialized) {
       actorId = event.id
       entityId = event.id
@@ -100,21 +99,21 @@ abstract class BaseActor[T <: BaseState](
 
       if (state != null) {
         startTick = state.getStartTick
-        logInfo(s"${event.id} Initialized with state. StartTick: ${state.getStartTick}")
+//        logInfo(s"${event.id} Initialized with state. StartTick: ${state.getStartTick}")
         onInitialize(event)
         registerOnTimeManager()
         onFinishInitialize()
       } else {
-        logError(
-          s"FAILED TO INITIALIZE - state is null after conversion. Data received: ${event.data.data}"
-        )
+//        logError(
+//          s"FAILED TO INITIALIZE - state is null after conversion. Data received: ${event.data.data}"
+//        )
         onFinishInitialize()
         context.stop(self)
       }
     } else {
-      logError(
-        s"Actor already initialized with id= $entityId, state= $state, not initializing again with $event"
-      )
+//      logError(
+//        s"Actor already initialized with id= $entityId, state= $state, not initializing again with $event"
+//      )
     }
 
   private def registerOnTimeManager(): Unit =
@@ -150,9 +149,9 @@ abstract class BaseActor[T <: BaseState](
     eventType: String = "default"
   ): Unit = {
     lamportClock.increment()
-    logInfo(
-      s"Sending message to ${entityId} and shardId $shardId with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
-    )
+//    logInfo(
+//      s"Sending message to ${entityId} and shardId $shardId with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
+//    )
     val shardingRegion = getShardRef(IdUtil.format(shardId))
 
     shardingRegion ! EntityEnvelopeEvent(
@@ -196,10 +195,10 @@ abstract class BaseActor[T <: BaseState](
     try actSpontaneous(event)
     catch
       case e: Exception =>
-        logError(
-          s"$entityId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
-          e
-        )
+//        logError(
+//          s"$entityId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
+//          e
+//        )
         e.printStackTrace()
         onFinishSpontaneous()
     save(event)
@@ -234,9 +233,9 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
-    logInfo(
-      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
-    )
+//    logInfo(
+//      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
+//    )
     actInteractWith(event)
     save(event)
   }
@@ -307,7 +306,7 @@ abstract class BaseActor[T <: BaseState](
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
-    logInfo(s"Starting entity with id ${event.entityId}")
+//    logInfo(s"Starting entity with id ${event.entityId}")
     entityId = event.entityId
   }
 
