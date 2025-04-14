@@ -16,7 +16,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
 
-  private val batchSize: Int = 10000
+  private val batchSize: Int = 100
   private var totalBatchAmount: Int = 0
   private var currentBatchAmount: Int = 0
   private var isSentAllDataToCreator = false
@@ -38,9 +38,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     var actors = JsonUtil.fromJsonList[ActorSimulation](content)
-
-    logInfo(s"Loaded ${actors.size} actors of ${source.classType} from JSON")
-
+    
     val actorsToCreate = actors.map(
       actor =>
         ActorSimulationCreation(
@@ -64,10 +62,6 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     actors = null
 
-    logInfo(
-      s"All loaded $self - $totalBatchAmount batch of size $batchSize created from $amountActors actors list"
-    )
-
     isSentAllDataToCreator = true
 
     sendFinishLoadDataEvent()
@@ -81,7 +75,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
   private def sendFinishLoadDataEvent(): Unit =
     if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
-      logInfo("All data loaded and sent to creators")
+      logInfo(s"All data loaded and sent to creators: $amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,

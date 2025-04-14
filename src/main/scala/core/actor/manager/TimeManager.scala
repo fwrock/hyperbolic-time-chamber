@@ -56,8 +56,8 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 8
-    val maxInstancesPerNode = Math.max(1, totalInstances / 8)
+    val totalInstances = 40
+    val maxInstancesPerNode = Math.max(10, totalInstances / 8)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -69,8 +69,6 @@ class TimeManager(
       ).props(TimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))),
       name = POOL_TIME_MANAGER_ACTOR_NAME
     )
-    logInfo(s"TimeManager pool created: $timeManagersPool")
-    // Can to exists a problem here, because the time manager pool is created after the simulation manager
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
   }
 
@@ -100,7 +98,6 @@ class TimeManager(
 
   private def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorId)
-//    logInfo(s"Registering actor ${event.identify.get.id} shard ${event.identify.get.shardId} at tick ${event.startTick}")
     scheduleApply(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
     )
@@ -179,7 +176,6 @@ class TimeManager(
           isProcessed = true
         )
       )
-//      logInfo(s"$localManager reported tick $tick with hasScheduled $hasScheduled reported (${localTimeManagers.values.count(_.isProcessed == true)}/${localTimeManagers.values.size})")
       if (localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
       }
@@ -203,7 +199,7 @@ class TimeManager(
           )
         )
     }
-//    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
+    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
@@ -217,9 +213,6 @@ class TimeManager(
     if (schedule.tick < localTickOffset) {
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
-    }
-    if (countScheduled % 10000 == 0) {
-      logInfo(s"$getLabel - $countScheduled Schedule events")
     }
     countScheduled += 1
     scheduledActors.get(schedule.tick) match
@@ -242,7 +235,7 @@ class TimeManager(
       advanceToNextTick()
       reportGlobalTimeManager(true)
     } else {
-      logInfo("TimeManager finish event forward")
+//      logInfo("TimeManager finish event forward")
       finish.timeManager ! finish
     }
 
@@ -283,9 +276,6 @@ class TimeManager(
         scheduled.actorsRef.foreach {
           actor => runningEvents.add(actor)
         }
-        logInfo(
-          s"$getLabel - Sending spontaneous event to ${scheduled.actorsRef.size} scheduled actors at tick $tick"
-        )
         sendSpontaneousEvent(tick, scheduled.actorsRef)
         scheduledActors.remove(tick)
       case None =>
@@ -295,7 +285,6 @@ class TimeManager(
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
     actorsRef.foreach {
       actor =>
-//        logInfo(s"$getLabel - Sending spontaneous event to actor ${actor.id} shard ${actor.shardId} at tick $tick")
         sendSpontaneousEvent(tick, actor)
     }
 
@@ -329,7 +318,7 @@ class TimeManager(
   }
 
   private def terminateSimulation(): Unit = {
-    if (runningEvents.isEmpty && scheduledActors.isEmpty) { // Verifica se scheduledActors está vazio
+    if (runningEvents.isEmpty && scheduledActors.isEmpty) {
       if (parentManager.isEmpty) {
         notifyLocalManagers(StopSimulationEvent)
       }
