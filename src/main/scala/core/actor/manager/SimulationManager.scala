@@ -28,7 +28,6 @@ class SimulationManager(
 
   private var timeManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
-  private var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
