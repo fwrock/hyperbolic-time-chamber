@@ -1,20 +1,20 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -307,10 +307,9 @@ abstract class BaseActor[T <: BaseState](
       case event                          => handleEvent(event)
     }
 
-  private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
 //    logInfo(s"Starting entity with id ${event.entityId}")
     entityId = event.entityId
-  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
