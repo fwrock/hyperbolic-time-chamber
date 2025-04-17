@@ -36,9 +36,8 @@ class LoadDataManager(
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     reporters = poolReporters
-  }
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
