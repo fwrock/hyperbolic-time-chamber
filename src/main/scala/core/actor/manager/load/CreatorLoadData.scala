@@ -3,18 +3,19 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, JsonUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, JsonUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent}
 import org.interscity.htc.core.entity.event.data.InitializeData
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -23,7 +24,8 @@ case object ProcessNextCreateChunk
 
 class CreatorLoadData(
   loadDataManager: ActorRef,
-  timeManager: ActorRef
+  timeManager: ActorRef,
+  reporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseActor[DefaultState](
       timeManager = timeManager,
       actorId = "creator-load-data"
@@ -91,6 +93,7 @@ class CreatorLoadData(
             data = actorCreation.actor.data.content,
             timeManager = timeManager,
             creatorManager = self,
+            reporters = reporters,
             dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
           )
 
@@ -127,6 +130,7 @@ class CreatorLoadData(
             shardId = data.shardId,
             timeManager = data.timeManager,
             creatorManager = data.creatorManager,
+            reporters = data.reporters,
             dependencies = data.dependencies.map {
               case (_, dep) => dep.id -> dep
             }
@@ -163,11 +167,13 @@ class CreatorLoadData(
 object CreatorLoadData {
   def props(
     loadDataManager: ActorRef,
-    timeManager: ActorRef
+    timeManager: ActorRef,
+    reporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[CreatorLoadData],
       loadDataManager,
-      timeManager
+      timeManager,
+      reporters
     )
 }

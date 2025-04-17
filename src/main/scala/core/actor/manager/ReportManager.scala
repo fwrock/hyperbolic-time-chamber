@@ -1,15 +1,15 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.state.DefaultState
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME}
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME }
 
 import scala.collection.mutable
 
@@ -37,7 +37,7 @@ class ReportManager(
       config.getStringList("htc.report-manager.enabled-strategies").toArray.toList.map(_.toString)
     ).getOrElse(List("csv"))
 
-    enabledStrategies.foreach { 
+    enabledStrategies.foreach {
       reportType =>
         val reportTypeEnum = ReportTypeEnum.valueOf(reportType)
         reporters.put(reportTypeEnum, createReportData(reportTypeEnum))
