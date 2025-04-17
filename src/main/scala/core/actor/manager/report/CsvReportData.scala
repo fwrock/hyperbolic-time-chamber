@@ -8,9 +8,10 @@ import org.apache.pekko.actor.ActorRef
 import java.io.{ BufferedWriter, FileWriter }
 import scala.collection.mutable
 
-class CsvReportData(timeManager: ActorRef)
+class CsvReportData(override val reportManager: ActorRef)
     extends ReportData(
-      id = "csv-report-manager"
+      id = "csv-report-manager",
+      reportManager = reportManager
     ) {
 
   override def handleEvent: Receive = {
