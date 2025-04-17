@@ -8,6 +8,7 @@ import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.{IdUtil, JsonUtil}
 
+import com.typesafe.config.ConfigFactory
 import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
 import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
 import org.apache.pekko.util.Timeout
@@ -46,6 +47,7 @@ abstract class BaseActor[T <: BaseState](
     with ActorLogging
     with Stash {
 
+  protected val config = ConfigFactory.load()
   protected var startTick: Tick = MinValue
   protected val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
