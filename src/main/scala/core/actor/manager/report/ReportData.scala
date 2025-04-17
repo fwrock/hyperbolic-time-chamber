@@ -8,8 +8,7 @@ import org.apache.pekko.actor.ActorRef
 
 abstract class ReportData(
   val id: String = "",
-  val reportManager: ActorRef = null,
-                         ) extends BaseActor[DefaultState](
-  actorId = id
-) {
-}
+  val reportManager: ActorRef = null
+) extends BaseActor[DefaultState](
+      actorId = id
+    ) {}
