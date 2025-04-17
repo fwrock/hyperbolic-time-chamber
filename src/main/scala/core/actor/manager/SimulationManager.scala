@@ -6,13 +6,15 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
+import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
+import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -26,6 +28,7 @@ class SimulationManager(
 
   private var timeManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
+  private var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
@@ -34,6 +37,7 @@ class SimulationManager(
     case event: PrepareSimulationEvent   => prepareSimulation(event)
     case event: FinishLoadDataEvent      => startSimulation()
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
+    case event: RegisterReportersEvent   => registerReporters(event)
   }
 
   override def onStart(): Unit =
@@ -59,14 +63,24 @@ class SimulationManager(
       selfProxy
     }
 
+  private def registerReporters(event: RegisterReportersEvent): Unit = {
+    reporters = event.reporters
+    startLoadData()
+  }
+
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
-    loadManager = createSingletonLoadManager()
+    startLoadData()
+  }
 
-    createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
-      actorRef = selfProxy,
-      actorsDataSources = configuration.actorsDataSources
-    )
+  private def startLoadData(): Unit = {
+    if (poolTimeManager != null && reporters != null) {
+      loadManager = createSingletonLoadManager()
+      createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
+        actorRef = selfProxy,
+        actorsDataSources = configuration.actorsDataSources
+      )
+    }
   }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
@@ -91,7 +105,8 @@ class SimulationManager(
       manager = LoadDataManager.props(
         timeManager = poolTimeManager,
         poolTimeManager = poolTimeManager,
-        simulationManager = selfProxy
+        simulationManager = selfProxy,
+        reporters = reporters
       ),
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

@@ -1,26 +1,28 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import core.actor.manager.load.CreatorLoadData
 import core.entity.state.DefaultState
-import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
+import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
 import core.util.ActorCreatorUtil.createActor
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
+import org.interscity.htc.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class LoadDataManager(
-  val timeManager: ActorRef,
-  val poolTimeManager: ActorRef,
-  val simulationManager: ActorRef
+                       val timeManager: ActorRef,
+                       val poolTimeManager: ActorRef,
+                       val simulationManager: ActorRef,
+                       val reporters: mutable.Map[ReportTypeEnum, ActorRef],
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager"
@@ -136,12 +138,14 @@ object LoadDataManager {
   def props(
     timeManager: ActorRef,
     poolTimeManager: ActorRef,
-    simulationManager: ActorRef
+    simulationManager: ActorRef,
+    reporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[LoadDataManager],
       timeManager,
       poolTimeManager,
-      simulationManager
+      simulationManager,
+      reporters
     )
 }
