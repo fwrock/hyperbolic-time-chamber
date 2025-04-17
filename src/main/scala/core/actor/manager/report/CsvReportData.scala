@@ -4,16 +4,13 @@ package core.actor.manager.report
 import core.entity.event.BaseEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.actor.manager.BaseManager
-import org.interscity.htc.core.entity.state.DefaultState
 
 import java.io.{ BufferedWriter, FileWriter }
 import scala.collection.mutable
 
-class CsvReportManager(timeManager: ActorRef)
-    extends BaseManager[DefaultState](
-      timeManager = timeManager,
-      actorId = "csv-report-manager"
+class CsvReportData(timeManager: ActorRef)
+    extends ReportData(
+      id = "csv-report-manager"
     ) {
 
   override def handleEvent: Receive = {
