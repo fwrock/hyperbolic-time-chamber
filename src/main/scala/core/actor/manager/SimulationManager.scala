@@ -104,7 +104,7 @@ class SimulationManager(
         timeManager = poolTimeManager,
         poolTimeManager = poolTimeManager,
         simulationManager = selfProxy,
-        reporters = reporters
+        poolReporters = reporters
       ),
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

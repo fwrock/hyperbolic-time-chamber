@@ -8,10 +8,10 @@ import org.interscity.htc.core.enumeration.ReportTypeEnum
 import scala.collection.mutable
 
 case class InitializeData(
-                           data: Any,
-                           shardId: String,
-                           timeManager: ActorRef,
-                           creatorManager: ActorRef,
-                           reporters: mutable.Map[ReportTypeEnum, ActorRef],
-                           dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
+  data: Any,
+  shardId: String,
+  timeManager: ActorRef,
+  creatorManager: ActorRef,
+  reporters: mutable.Map[ReportTypeEnum, ActorRef],
+  dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 ) extends BaseEventData
