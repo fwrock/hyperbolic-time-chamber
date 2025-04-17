@@ -3,8 +3,7 @@ package core.entity.state
 
 import core.types.Tick
 
-import org.apache.pekko.actor.{ ActorContext, ActorRef }
-import org.apache.pekko.event.Logging
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 
 /** Base class for all states.
   *
@@ -12,7 +11,8 @@ import org.apache.pekko.event.Logging
   *   the tick when the state started
   */
 abstract class BaseState(
-  startTick: Tick = Long.MinValue
+  startTick: Tick = Long.MinValue,
+  reporterType: ReportTypeEnum = null,
 ) {
 
   /** Gets the tick when the state started.
@@ -21,4 +21,6 @@ abstract class BaseState(
     *   the tick when the state started
     */
   def getStartTick: Tick = startTick
+  
+  def getReporterType: ReportTypeEnum = reporterType
 }
