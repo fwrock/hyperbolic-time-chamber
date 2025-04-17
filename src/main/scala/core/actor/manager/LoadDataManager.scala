@@ -22,7 +22,7 @@ class LoadDataManager(
   val timeManager: ActorRef,
   val poolTimeManager: ActorRef,
   val simulationManager: ActorRef,
-  val reporters: mutable.Map[ReportTypeEnum, ActorRef]
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager"
@@ -35,6 +35,10 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
+
+  override def onStart(): Unit = {
+    reporters = poolReporters
+  }
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -139,13 +143,13 @@ object LoadDataManager {
     timeManager: ActorRef,
     poolTimeManager: ActorRef,
     simulationManager: ActorRef,
-    reporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[LoadDataManager],
       timeManager,
       poolTimeManager,
       simulationManager,
-      reporters
+      poolReporters
     )
 }
