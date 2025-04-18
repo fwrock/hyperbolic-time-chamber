@@ -382,15 +382,16 @@ abstract class BaseActor[T <: BaseState](
     )
 
   protected def report(event: ReportEvent): Unit = {
+    val defaultReportType = ReportTypeEnum.valueOf(Some(config.getString("htc.report-manager.default-reporter")).getOrElse("csv"))
     val reportType = if (state.getReporterType != null) {
       state.getReporterType
     } else {
-      ReportTypeEnum.valueOf(config.getString("htc.report-manager.default-reporter"))
+      defaultReportType
     }
     if (reporters.contains(reportType)) {
       reporters(reportType) ! event
     } else {
-      logError(s"Report type $reportType not found")
+      reporters(defaultReportType) ! event
     }
   }
 
