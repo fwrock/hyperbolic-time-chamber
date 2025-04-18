@@ -11,4 +11,6 @@ object ManagerConstantsUtil {
   val POOL_CREATOR_LOAD_DATA_ACTOR_NAME = "pool-creator-load-data"
   val REPORT_MANAGER_ACTOR_NAME = "report-manager"
   val POOL_REPORT_DATA_ACTOR_NAME_PREFIX = "pool-report-data-"
+  val POOL_CASSANDRA_ENTITY_MANAGER_REPORT_DATA_ACTOR_NAME_PREFIX =
+    "pool-cassandra-entity-manager-report-data-"
 }

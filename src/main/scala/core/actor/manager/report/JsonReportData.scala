@@ -6,8 +6,8 @@ import core.entity.event.control.report.ReportEvent
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.util.JsonUtil
 
-import java.io.{BufferedWriter, FileWriter}
-import java.nio.file.{Files, Path, Paths}
+import java.io.{ BufferedWriter, FileWriter }
+import java.nio.file.{ Files, Path, Paths }
 import scala.collection.mutable
 
 class JsonReportData(override val reportManager: ActorRef)
@@ -17,7 +17,8 @@ class JsonReportData(override val reportManager: ActorRef)
     ) {
 
   private val prefix = Some(config.getString("htc.report-manager.json.prefix")).getOrElse("report_")
-  private val directory = Some(config.getString("htc.report-manager.json.directory")).getOrElse(s"/tmp/reports/json/${System.currentTimeMillis()}")
+  private val directory = Some(config.getString("htc.report-manager.json.directory"))
+    .getOrElse(s"/tmp/reports/json/${System.currentTimeMillis()}")
   private val batchSize = Some(config.getInt("htc.report-manager.json.batch-size")).getOrElse(1000)
 
   private val buffer = mutable.ListBuffer[ReportEvent]()
