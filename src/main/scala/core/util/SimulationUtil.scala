@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.util
 
-import core.util.JsonUtil.{fromJson, readJsonFile}
+import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
 
 import org.interscity.htc.core.entity.configuration.Simulation

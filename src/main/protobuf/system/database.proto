@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package org.htc.protobuf.system.database;
+
+message CreateEntityEvent{
+  string table = 1;
+  repeated string columns = 2;
+  repeated string values = 3;
+}
+
+message CreateEntityBatchResponse{
+  repeated CreateEntityEvent events = 1;
+}

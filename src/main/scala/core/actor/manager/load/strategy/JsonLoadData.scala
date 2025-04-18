@@ -2,11 +2,11 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
-import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -38,12 +38,12 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     var actors = JsonUtil.fromJsonList[ActorSimulation](content)
-    
+
     val actorsToCreate = actors.map(
       actor =>
         ActorSimulationCreation(
           shardId = IdUtil.format(source.id),
-          actor = actor.copy(id =  IdUtil.format(actor.id))
+          actor = actor.copy(id = IdUtil.format(actor.id))
         )
     )
 

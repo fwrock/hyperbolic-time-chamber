@@ -42,7 +42,7 @@ class Client(
         e.printStackTrace()
         onFinishSpontaneous()
 
-  private def enterQueue(): Unit = {
+  private def enterQueue(): Unit =
     try {
       val cashier = dependencies(state.cashierId)
       sendMessageTo(
@@ -56,7 +56,6 @@ class Client(
       case e: Exception =>
         log.error(e.getMessage)
     }
-  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     try
