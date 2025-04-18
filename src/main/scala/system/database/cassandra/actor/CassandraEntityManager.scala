@@ -3,28 +3,26 @@ package system.database.cassandra.actor
 
 import system.actor.BaseActorSystem
 
-import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.actor.Props
+import org.htc.protobuf.system.database.database.CreateEntityEvent
 import org.interscity.htc.system.database.cassandra.connection.CassandraConnection
-import org.interscity.htc.system.database.cassandra.entity.event.{ CreateEntityEvent, DeleteEntityEvent, ReadEntityEvent, UpdateEntityEvent }
+import org.interscity.htc.system.database.cassandra.entity.event.{DeleteEntityEvent, ReadEntityEvent, UpdateEntityEvent}
 
 class CassandraEntityManager(
-  connectionName: String
+  connectionName: String,
+  keyspace: String = null
 ) extends BaseActorSystem {
 
   private val connection = CassandraConnection.createSession(connectionName, context.system)
 
   override def receive: Receive = {
-    case entity: CreateEntityEvent =>
-      val result = connection.executeWrite(
-        s"INSERT INTO ${entity.table} (${entity.columns.mkString(",")}) VALUES (${entity.values.mkString(",")})"
-      )
-      sender() ! result
+    case event: CreateEntityEvent => insert(event.table, event.columns, event.values)
 
-    case event: ReadEntityEvent =>
-      val result = connection.select(s"SELECT ${event.projection} FROM ${event.table} ${
-          if (event.selection != null) s"WHERE ${event.selection}" else ""
-        }")
-      sender() ! result
+      case event: ReadEntityEvent =>
+        val result = connection.select(s"SELECT ${event.projection} FROM ${event.table} ${
+            if (event.selection != null) s"WHERE ${event.selection}" else ""
+          }")
+        sender() ! result
 
     case event: UpdateEntityEvent =>
       val setClause = event.setColumns.map {
@@ -39,4 +37,29 @@ class CassandraEntityManager(
       sender() ! result
   }
 
+  private def insert(
+                      table: String,
+                      columns: Seq[String] ,
+                      values: Seq[String]
+                    ): Unit = {
+    val result = connection.executeWrite(
+      s"INSERT INTO ${table} (${columns.mkString(",")}) VALUES (${values.mkString(",")})"
+    )
+    sender() ! result
+  }
+
+
+}
+
+
+object CassandraEntityManager {
+  def props(
+    connectionName: String,
+    keyspace: String = null
+  ): Props =
+    Props(
+      classOf[CassandraEntityManager],
+      connectionName,
+      keyspace
+    )
 }
