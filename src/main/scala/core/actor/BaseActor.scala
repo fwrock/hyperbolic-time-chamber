@@ -20,9 +20,7 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import org.slf4j.LoggerFactory
 
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -40,20 +38,21 @@ abstract class BaseActor[T <: BaseState](
   protected var actorId: String = null,
   protected var shardId: String = null,
   private var timeManager: ActorRef = null,
-  private var creatorManager: ActorRef = null
+  private var creatorManager: ActorRef = null,
+  private var data: Any = null
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
     with Stash {
 
   protected var startTick: Tick = MinValue
-  protected val lamportClock = new LamportClock()
+  private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
   protected var state: T = uninitialized
   protected var entityId: String = actorId
   private var currentTimeManager: ActorRef = uninitialized
-  protected var isInitialized: Boolean = false
+  private var isInitialized: Boolean = false
 
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 
@@ -66,7 +65,13 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-//    logInfo(s"Starting actor with id $actorId and self $self")
+    if (data != null) {
+      state = JsonUtil.convertValue[T](data)
+      if (state != null) {
+        startTick = state.getStartTick
+        registerOnTimeManager()
+      }
+    }
     onStart()
   }
 
@@ -99,21 +104,13 @@ abstract class BaseActor[T <: BaseState](
 
       if (state != null) {
         startTick = state.getStartTick
-//        logInfo(s"${event.id} Initialized with state. StartTick: ${state.getStartTick}")
         onInitialize(event)
         registerOnTimeManager()
         onFinishInitialize()
       } else {
-//        logError(
-//          s"FAILED TO INITIALIZE - state is null after conversion. Data received: ${event.data.data}"
-//        )
         onFinishInitialize()
         context.stop(self)
       }
-    } else {
-//      logError(
-//        s"Actor already initialized with id= $entityId, state= $state, not initializing again with $event"
-//      )
     }
 
   private def registerOnTimeManager(): Unit =
@@ -195,10 +192,6 @@ abstract class BaseActor[T <: BaseState](
     try actSpontaneous(event)
     catch
       case e: Exception =>
-//        logError(
-//          s"$entityId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
-//          e
-//        )
         e.printStackTrace()
         onFinishSpontaneous()
     save(event)
@@ -233,9 +226,6 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
-//    logInfo(
-//      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
-//    )
     actInteractWith(event)
     save(event)
   }
