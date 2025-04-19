@@ -131,7 +131,8 @@ object ActorCreatorUtil {
           entityId,
           shardId,
           timeManager,
-          creatorManager
+          creatorManager,
+          null
         ),
         settings = ClusterShardingSettings(system),
         extractEntityId = extractEntityId,
@@ -234,7 +235,7 @@ object ActorCreatorUtil {
     actorClassName: String,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    constructorParams: AnyRef*
+    constructorParams: Any*
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     val constructor = clazz.getConstructor(classOf[String])
@@ -255,7 +256,7 @@ object ActorCreatorUtil {
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
     actorClass: Class[T],
-    constructorParams: AnyRef*
+    constructorParams: Any*
   ): ActorRef =
     system.actorOf(
       ClusterRouterPool(
@@ -264,7 +265,6 @@ object ActorCreatorUtil {
           totalInstances = poolConfiguration.totalInstances,
           maxInstancesPerNode = poolConfiguration.maxInstancesPerNode,
           allowLocalRoutees = poolConfiguration.allowLocalRoutes,
-          useRoles = poolConfiguration.useRoles
         )
       ).props(
         Props(
