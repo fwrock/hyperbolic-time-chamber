@@ -13,6 +13,8 @@ import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -20,7 +22,8 @@ import scala.compiletime.uninitialized
 class LoadDataManager(
   val timeManager: ActorRef,
   val poolTimeManager: ActorRef,
-  val simulationManager: ActorRef
+  val simulationManager: ActorRef,
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "load-data-manager"
@@ -34,6 +37,9 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
+
+  override def onStart(): Unit =
+    reporters = poolReporters
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -77,7 +83,7 @@ class LoadDataManager(
           maxInstancesPerNode = maxInstancesPerNode,
           allowLocalRoutees = true
         )
-      ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager)),
+      ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager, reporters)),
       name = POOL_CREATOR_LOAD_DATA_ACTOR_NAME
     )
   }
@@ -155,12 +161,14 @@ object LoadDataManager {
   def props(
     timeManager: ActorRef,
     poolTimeManager: ActorRef,
-    simulationManager: ActorRef
+    simulationManager: ActorRef,
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[LoadDataManager],
       timeManager,
       poolTimeManager,
-      simulationManager
+      simulationManager,
+      poolReporters
     )
 }
