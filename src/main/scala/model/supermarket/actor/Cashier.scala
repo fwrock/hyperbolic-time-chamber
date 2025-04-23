@@ -85,7 +85,7 @@ class Cashier(
     if (state.queue.isEmpty && (state.status == Waiting || state.status == Free)) {
       state.status = Busy
       sendMessageTo(
-        entityId =  event.actorRefId,
+        entityId = event.actorRefId,
         shardId = event.shardRefId,
         StartClientServiceData()
       )
