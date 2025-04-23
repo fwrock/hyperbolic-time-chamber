@@ -11,6 +11,8 @@ import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulation
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
+import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
 
@@ -34,6 +36,7 @@ class SimulationManager(
     case event: PrepareSimulationEvent   => prepareSimulation(event)
     case event: FinishLoadDataEvent      => startSimulation()
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
+    case event: RegisterReportersEvent   => registerReporters(event)
   }
 
   override def onStart(): Unit =
@@ -59,15 +62,24 @@ class SimulationManager(
       selfProxy
     }
 
+  private def registerReporters(event: RegisterReportersEvent): Unit = {
+    reporters = event.reporters
+    startLoadData()
+  }
+
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
-    loadManager = createSingletonLoadManager()
-
-    createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
-      actorRef = selfProxy,
-      actorsDataSources = configuration.actorsDataSources
-    )
+    startLoadData()
   }
+
+  private def startLoadData(): Unit =
+    if (poolTimeManager != null && reporters != null) {
+      loadManager = createSingletonLoadManager()
+      createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
+        actorRef = selfProxy,
+        actorsDataSources = configuration.actorsDataSources
+      )
+    }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
@@ -91,7 +103,8 @@ class SimulationManager(
       manager = LoadDataManager.props(
         timeManager = poolTimeManager,
         poolTimeManager = poolTimeManager,
-        simulationManager = selfProxy
+        simulationManager = selfProxy,
+        poolReporters = reporters
       ),
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

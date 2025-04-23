@@ -8,14 +8,20 @@ import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.{ IdUtil, JsonUtil }
 
+import com.typesafe.config.ConfigFactory
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.entity.event.control.report.ReportEvent
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
 
@@ -47,11 +53,13 @@ abstract class BaseActor[T <: BaseState](
     with ActorLogging
     with Stash {
 
+  protected val config = ConfigFactory.load()
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
   protected var state: T = uninitialized
+  protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
   protected var entityId: String = actorId
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
@@ -103,7 +111,7 @@ abstract class BaseActor[T <: BaseState](
       creatorManager = event.data.creatorManager
       state = JsonUtil.convertValue[T](event.data.data)
       dependencies ++= event.data.dependencies
-
+      reporters = event.data.reporters
       if (state != null) {
         startTick = state.getStartTick
         onInitialize(event)
@@ -315,7 +323,6 @@ abstract class BaseActor[T <: BaseState](
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
-//    logInfo(s"Starting entity with id ${event.entityId}")
     entityId = event.entityId
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
@@ -402,6 +409,32 @@ abstract class BaseActor[T <: BaseState](
         )
       )
     )
+
+  protected def report(event: ReportEvent): Unit = {
+    val defaultReportType = ReportTypeEnum.valueOf(
+      Some(config.getString("htc.report-manager.default-reporter")).getOrElse("csv")
+    )
+    val reportType = if (state.getReporterType != null) {
+      state.getReporterType
+    } else {
+      defaultReportType
+    }
+    if (reporters.contains(reportType)) {
+      reporters(reportType) ! event
+    } else {
+      reporters(defaultReportType) ! event
+    }
+  }
+
+  protected def report(data: Any): Unit = {
+    val event = ReportEvent(
+      entityId = entityId,
+      tick = currentTick,
+      lamportTick = getLamportClock,
+      data = data
+    )
+    report(event)
+  }
 
   protected def getActorRef(path: String): ActorRef =
     Await.result(getActorRefFromPath(path), Duration.Inf)

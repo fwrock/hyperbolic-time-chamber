@@ -8,6 +8,7 @@ import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCr
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
