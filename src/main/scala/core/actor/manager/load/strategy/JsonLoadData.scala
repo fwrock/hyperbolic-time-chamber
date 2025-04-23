@@ -2,11 +2,12 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
-import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
@@ -15,6 +16,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
+  private var creatorPoolRef: ActorRef = uninitialized
 
   private val batchSize: Int = 100
   private var totalBatchAmount: Int = 0
@@ -31,6 +33,7 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
   override protected def load(event: LoadDataSourceEvent): Unit = {
     managerRef = event.managerRef
     creatorRef = event.creatorRef
+    creatorPoolRef = event.creatorPoolRef
     load(event.actorDataSource)
   }
 
@@ -38,27 +41,28 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
 
     var actors = JsonUtil.fromJsonList[ActorSimulation](content)
-    
+
     val actorsToCreate = actors.map(
       actor =>
         ActorSimulationCreation(
           shardId = IdUtil.format(source.id),
-          actor = actor.copy(id =  IdUtil.format(actor.id))
+          actor = actor.copy(id = IdUtil.format(actor.id))
         )
     )
 
     amountActors = actorsToCreate.size
 
-    if (amountActors < batchSize) {
-      totalBatchAmount += 1
-      creatorRef ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
-    } else {
-      actorsToCreate.grouped(batchSize).foreach {
-        batch =>
-          totalBatchAmount += 1
-          creatorRef ! CreateActorsEvent(actors = batch, actorRef = self)
-      }
-    }
+    val shadedActors = actorsToCreate.filter(
+      a =>
+        a.actor.creationType == null ||
+          a.actor.creationType == LoadBalancedDistributed
+    )
+
+    val poolActors = actorsToCreate.filter(
+      a => a.actor.creationType == PoolDistributed
+    )
+    sendToCreator(creatorRef, shadedActors)
+    sendToCreator(creatorPoolRef, poolActors)
 
     actors = null
 
@@ -66,6 +70,18 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
     sendFinishLoadDataEvent()
   }
+
+  private def sendToCreator(creator: ActorRef, actorsToCreate: Seq[ActorSimulationCreation]): Unit =
+    if (actorsToCreate.size < batchSize) {
+      totalBatchAmount += 1
+      creator ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
+    } else {
+      actorsToCreate.grouped(batchSize).foreach {
+        batch =>
+          totalBatchAmount += 1
+          creator ! CreateActorsEvent(actors = batch, actorRef = self)
+      }
+    }
 
   private def registerCreators(event: LoadDataCreatorRegisterEvent): Unit = {
     currentBatchAmount += 1

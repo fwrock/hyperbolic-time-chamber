@@ -9,4 +9,5 @@ object ManagerConstantsUtil {
   val SIMULATION_MANAGER_ACTOR_NAME = "simulation-manager"
   val LOAD_MANAGER_ACTOR_NAME = "load-manager"
   val POOL_CREATOR_LOAD_DATA_ACTOR_NAME = "pool-creator-load-data"
+  val POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME = "pool-creator-pool-load-data"
 }

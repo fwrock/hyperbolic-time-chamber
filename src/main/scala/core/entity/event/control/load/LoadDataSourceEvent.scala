@@ -10,5 +10,6 @@ import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 case class LoadDataSourceEvent(
   actorDataSource: ActorDataSource,
   managerRef: ActorRef,
-  creatorRef: ActorRef
+  creatorRef: ActorRef,
+  creatorPoolRef: ActorRef
 ) extends BaseEvent[DefaultBaseEventData](actorRef = managerRef)
