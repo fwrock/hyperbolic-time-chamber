@@ -1,13 +1,13 @@
 package org.interscity.htc
 package core.util
 
-import org.apache.pekko.actor.{ActorRef, ActorSystem, Props}
+import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
 import core.actor.BaseActor
-import core.entity.event.{Command, EntityEnvelopeEvent}
+import core.entity.event.{ Command, EntityEnvelopeEvent }
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
@@ -266,7 +266,7 @@ object ActorCreatorUtil {
         ClusterRouterPoolSettings(
           totalInstances = poolConfiguration.totalInstances,
           maxInstancesPerNode = poolConfiguration.maxInstancesPerNode,
-          allowLocalRoutees = poolConfiguration.allowLocalRoutes,
+          allowLocalRoutees = poolConfiguration.allowLocalRoutes
         )
       ).props(
         Props(

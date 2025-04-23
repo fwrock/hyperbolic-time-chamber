@@ -3,14 +3,14 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 import core.util.ActorCreatorUtil
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent}
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 import scala.collection.mutable
@@ -37,9 +37,9 @@ class CreatorPoolLoadData(
   private val DELAY_BETWEEN_CHUNKS = 500.milliseconds
 
   override def handleEvent: Receive = {
-    case event: CreateActorsEvent          => handleCreateActors(event)
-    case event: StartCreationEvent         => handleStartCreation(event)
-    case ProcessNextCreateChunk            => handleProcessNextCreateChunk()
+    case event: CreateActorsEvent  => handleCreateActors(event)
+    case event: StartCreationEvent => handleStartCreation(event)
+    case ProcessNextCreateChunk    => handleProcessNextCreateChunk()
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
@@ -76,7 +76,6 @@ class CreatorPoolLoadData(
 
       chunk.foreach {
         actorCreation =>
-
           createPoolActor(
             system = context.system,
             actorClassName = actorCreation.actor.typeActor,
@@ -85,7 +84,7 @@ class CreatorPoolLoadData(
             timeManager,
             self,
             actorCreation.actor.data.content,
-            CreationTypeEnum.PoolDistributed,
+            CreationTypeEnum.PoolDistributed
           )
       }
 

@@ -1,30 +1,30 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed, Simple}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -147,7 +147,7 @@ abstract class BaseActor[T <: BaseState](
     shardId: String = null,
     data: AnyRef,
     eventType: String = "default",
-    actorType: CreationTypeEnum = LoadBalancedDistributed,
+    actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
     if (actorType == PoolDistributed) {
@@ -158,11 +158,11 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def sendMessageToShard(
-                                  entityId: String,
-                                  shardId: String,
-                                  data: AnyRef,
-                                  eventType: String = "default"
-                                ): Unit = {
+    entityId: String,
+    shardId: String,
+    data: AnyRef,
+    eventType: String = "default"
+  ): Unit = {
     val shardingRegion = getShardRef(IdUtil.format(shardId))
 
     shardingRegion ! EntityEnvelopeEvent(
@@ -184,8 +184,8 @@ abstract class BaseActor[T <: BaseState](
     entityId: String,
     data: AnyRef,
     eventType: String = "default"
-                               ): Unit = {
-    val pool =  getActorRef(s"/actor/$entityId")
+  ): Unit = {
+    val pool = getActorRef(s"/actor/$entityId")
     pool ! ActorInteractionEvent(
       tick = currentTick,
       lamportTick = getLamportClock,
@@ -314,10 +314,9 @@ abstract class BaseActor[T <: BaseState](
       case event                          => handleEvent(event)
     }
 
-  private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
 //    logInfo(s"Starting entity with id ${event.entityId}")
     entityId = event.entityId
-  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.
