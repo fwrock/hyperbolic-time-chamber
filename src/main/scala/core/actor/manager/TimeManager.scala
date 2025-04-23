@@ -14,6 +14,7 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
 
@@ -235,7 +236,6 @@ class TimeManager(
       advanceToNextTick()
       reportGlobalTimeManager(true)
     } else {
-//      logInfo("TimeManager finish event forward")
       finish.timeManager ! finish
     }
 
@@ -289,12 +289,25 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
+    if (identity.typeActor == CreationTypeEnum.PoolDistributed.toString) {
+      sendSpontaneousEventPool(tick, identity)
+    } else {
+      sendSpontaneousEventShard(tick, identity)
+    }
+
+  private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
     getShardRef(identity.shardId) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
         actorRef = self
       )
+    )
+
+  private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit =
+    getActorRef(s"/actor/${identity.id}") ! SpontaneousEvent(
+      tick = tick,
+      actorRef = self
     )
 
   private def advanceToNextTick(): Unit = {

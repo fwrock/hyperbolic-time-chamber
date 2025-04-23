@@ -1,31 +1,30 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import org.slf4j.LoggerFactory
-
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -40,20 +39,22 @@ abstract class BaseActor[T <: BaseState](
   protected var actorId: String = null,
   protected var shardId: String = null,
   private var timeManager: ActorRef = null,
-  private var creatorManager: ActorRef = null
+  private var creatorManager: ActorRef = null,
+  private var data: Any = null,
+  private var actorType: CreationTypeEnum = Simple
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
     with Stash {
 
   protected var startTick: Tick = MinValue
-  protected val lamportClock = new LamportClock()
+  private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
   protected var state: T = uninitialized
   protected var entityId: String = actorId
   private var currentTimeManager: ActorRef = uninitialized
-  protected var isInitialized: Boolean = false
+  private var isInitialized: Boolean = false
 
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 
@@ -66,7 +67,13 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-//    logInfo(s"Starting actor with id $actorId and self $self")
+    if (data != null) {
+      state = JsonUtil.convertValue[T](data)
+      if (state != null) {
+        startTick = state.getStartTick
+        registerOnTimeManager()
+      }
+    }
     onStart()
   }
 
@@ -99,21 +106,13 @@ abstract class BaseActor[T <: BaseState](
 
       if (state != null) {
         startTick = state.getStartTick
-//        logInfo(s"${event.id} Initialized with state. StartTick: ${state.getStartTick}")
         onInitialize(event)
         registerOnTimeManager()
         onFinishInitialize()
       } else {
-//        logError(
-//          s"FAILED TO INITIALIZE - state is null after conversion. Data received: ${event.data.data}"
-//        )
         onFinishInitialize()
         context.stop(self)
       }
-    } else {
-//      logError(
-//        s"Actor already initialized with id= $entityId, state= $state, not initializing again with $event"
-//      )
     }
 
   private def registerOnTimeManager(): Unit =
@@ -125,7 +124,8 @@ abstract class BaseActor[T <: BaseState](
           id = IdUtil.format(entityId),
           shardId = IdUtil.format(shardId),
           classType = getClass.getName,
-          actorRef = getSelfShard.path.toString
+          actorRef = getSelfShard.path.toString,
+          typeActor = actorType.toString
         )
       )
     )
@@ -144,14 +144,25 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def sendMessageTo(
     entityId: String,
+    shardId: String = null,
+    data: AnyRef,
+    eventType: String = "default",
+    actorType: CreationTypeEnum = LoadBalancedDistributed
+  ): Unit = {
+    lamportClock.increment()
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(entityId, data, eventType)
+    } else {
+      sendMessageToShard(entityId, shardId, data, eventType)
+    }
+  }
+
+  private def sendMessageToShard(
+    entityId: String,
     shardId: String,
     data: AnyRef,
     eventType: String = "default"
   ): Unit = {
-    lamportClock.increment()
-//    logInfo(
-//      s"Sending message to ${entityId} and shardId $shardId with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
-//    )
     val shardingRegion = getShardRef(IdUtil.format(shardId))
 
     shardingRegion ! EntityEnvelopeEvent(
@@ -166,6 +177,24 @@ abstract class BaseActor[T <: BaseState](
         data = data,
         eventType = eventType
       )
+    )
+  }
+
+  private def sendMessageToPool(
+    entityId: String,
+    data: AnyRef,
+    eventType: String = "default"
+  ): Unit = {
+    val pool = getActorRef(s"/actor/$entityId")
+    pool ! ActorInteractionEvent(
+      tick = currentTick,
+      lamportTick = getLamportClock,
+      actorRefId = IdUtil.format(getActorId),
+      shardRefId = IdUtil.format(getShardId),
+      actorClassType = getClass.getName,
+      actorPathRef = self.path.name,
+      data = data,
+      eventType = eventType
     )
   }
 
@@ -195,27 +224,10 @@ abstract class BaseActor[T <: BaseState](
     try actSpontaneous(event)
     catch
       case e: Exception =>
-//        logError(
-//          s"$entityId Error spontaneous event at tick ${event.tick} and lamport $getLamportClock state= $state, isInitialized= $isInitialized",
-//          e
-//        )
         e.printStackTrace()
         onFinishSpontaneous()
     save(event)
   }
-
-  /** Sends an acknowledge tick event to the time manager. This method is called when the actor
-    * receives a spontaneous event and the actor finish processing the event and no needs schedule
-    * new tick in this current tick.
-    */
-  protected def sendAcknowledgeTick(): Unit =
-    if (timeManager != null && timeManager != self) {
-      timeManager ! AcknowledgeTickEvent(
-        tick = currentTick,
-        actorRef = getPath,
-        timeManagerRef = currentTimeManager.path.toString
-      )
-    }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
     * the actor to handle the spontaneous event. The spontaneous events are thrown by the time
@@ -233,9 +245,6 @@ abstract class BaseActor[T <: BaseState](
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
-//    logInfo(
-//      s"Received interaction from ${sender().path.name} with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${event.data}"
-//    )
     actInteractWith(event)
     save(event)
   }
@@ -305,10 +314,9 @@ abstract class BaseActor[T <: BaseState](
       case event                          => handleEvent(event)
     }
 
-  private def handleStartEntity(event: ShardRegion.StartEntity): Unit = {
+  private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
 //    logInfo(s"Starting entity with id ${event.entityId}")
     entityId = event.entityId
-  }
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the destruct method.

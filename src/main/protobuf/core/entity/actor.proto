@@ -9,6 +9,7 @@ message Identify {
   string shardId = 2;
   string classType = 3;
   string actorRef = 4;
+  string typeActor = 5;
 }
 
 message ActorSimulation {
@@ -29,6 +30,7 @@ message Dependency {
   string id = 1;
   string classType = 2;
   string resourceId = 3;
+  string typeActor = 4;
 }
 
 message Initialization {
