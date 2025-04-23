@@ -13,14 +13,15 @@ import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, S
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{AcknowledgeTickEvent, DestructEvent, RegisterActorEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed, Simple}
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -39,7 +40,8 @@ abstract class BaseActor[T <: BaseState](
   protected var shardId: String = null,
   private var timeManager: ActorRef = null,
   private var creatorManager: ActorRef = null,
-  private var data: Any = null
+  private var data: Any = null,
+  private var actorType: CreationTypeEnum = Simple
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
@@ -122,7 +124,8 @@ abstract class BaseActor[T <: BaseState](
           id = IdUtil.format(entityId),
           shardId = IdUtil.format(shardId),
           classType = getClass.getName,
-          actorRef = getSelfShard.path.toString
+          actorRef = getSelfShard.path.toString,
+          typeActor = actorType.toString
         )
       )
     )
@@ -141,14 +144,25 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def sendMessageTo(
     entityId: String,
-    shardId: String,
+    shardId: String = null,
     data: AnyRef,
-    eventType: String = "default"
+    eventType: String = "default",
+    actorType: CreationTypeEnum = LoadBalancedDistributed,
   ): Unit = {
     lamportClock.increment()
-//    logInfo(
-//      s"Sending message to ${entityId} and shardId $shardId with Lamport clock ${getLamportClock} and tick ${currentTick} and data ${data}"
-//    )
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(entityId, data, eventType)
+    } else {
+      sendMessageToShard(entityId, shardId, data, eventType)
+    }
+  }
+
+  private def sendMessageToShard(
+                                  entityId: String,
+                                  shardId: String,
+                                  data: AnyRef,
+                                  eventType: String = "default"
+                                ): Unit = {
     val shardingRegion = getShardRef(IdUtil.format(shardId))
 
     shardingRegion ! EntityEnvelopeEvent(
@@ -163,6 +177,24 @@ abstract class BaseActor[T <: BaseState](
         data = data,
         eventType = eventType
       )
+    )
+  }
+
+  private def sendMessageToPool(
+    entityId: String,
+    data: AnyRef,
+    eventType: String = "default"
+                               ): Unit = {
+    val pool =  getActorRef(s"/actor/$entityId")
+    pool ! ActorInteractionEvent(
+      tick = currentTick,
+      lamportTick = getLamportClock,
+      actorRefId = IdUtil.format(getActorId),
+      shardRefId = IdUtil.format(getShardId),
+      actorClassType = getClass.getName,
+      actorPathRef = self.path.name,
+      data = data,
+      eventType = eventType
     )
   }
 
@@ -196,19 +228,6 @@ abstract class BaseActor[T <: BaseState](
         onFinishSpontaneous()
     save(event)
   }
-
-  /** Sends an acknowledge tick event to the time manager. This method is called when the actor
-    * receives a spontaneous event and the actor finish processing the event and no needs schedule
-    * new tick in this current tick.
-    */
-  protected def sendAcknowledgeTick(): Unit =
-    if (timeManager != null && timeManager != self) {
-      timeManager ! AcknowledgeTickEvent(
-        tick = currentTick,
-        actorRef = getPath,
-        timeManagerRef = currentTimeManager.path.toString
-      )
-    }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
     * the actor to handle the spontaneous event. The spontaneous events are thrown by the time

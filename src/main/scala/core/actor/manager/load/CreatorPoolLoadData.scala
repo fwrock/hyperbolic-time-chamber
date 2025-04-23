@@ -11,6 +11,7 @@ import core.util.ActorCreatorUtil.createPoolActor
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
 import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent}
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -84,6 +85,7 @@ class CreatorPoolLoadData(
             timeManager,
             self,
             actorCreation.actor.data.content,
+            CreationTypeEnum.PoolDistributed,
           )
       }
 
