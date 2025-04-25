@@ -16,6 +16,7 @@ abstract class MovableState(
   var movableCurrentNode: String = null,
   val origin: String,
   val destination: String,
+  val gpsId: String = null,
   var movableBestCost: Double = Double.MaxValue,
   var movableStatus: MovableStatusEnum = RouteWaiting,
   var movableReachedDestination: Boolean = false,
@@ -58,4 +59,5 @@ abstract class MovableState(
 
   def getSize: Double = size
 
+  def getGpsId: String = gpsId
 }

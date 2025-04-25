@@ -10,7 +10,7 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ForwardRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
 import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
@@ -90,16 +90,16 @@ class GPS(
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
     val origin = state.cityMap.vertices.find(_.id == request.origin)
     val destination = state.cityMap.vertices.find(_.id == request.destination)
-    var data = ForwardRoute()
+    var data = ReceiveRoute()
     (origin, destination) match {
       case (Some(originNode), Some(destinationNode)) =>
         state.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
-            data = ForwardRoute(cost = path._1, path = Some(convertPath(path._2)))
+            data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
-            data = ForwardRoute()
+            data = ReceiveRoute()
       case _ =>
-        data = ForwardRoute()
+        data = ReceiveRoute()
     }
     sendMessageTo(
       entityId = identify.id,
