@@ -141,7 +141,7 @@ abstract class BaseActor[T <: BaseState](
   protected def onInitialize(event: InitializeEvent): Unit = ()
 
   /** Sends a message to another simulation actor.
-    * @param actorId
+    * @param entityId
     *   The id of the entity in the shard region and simulation
     * @param actorRef
     *   The actor reference of the actor. This is the shard region actor reference.
@@ -183,7 +183,8 @@ abstract class BaseActor[T <: BaseState](
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,
-        eventType = eventType
+        eventType = eventType,
+        actorType = LoadBalancedDistributed.toString
       )
     )
   }
@@ -202,7 +203,8 @@ abstract class BaseActor[T <: BaseState](
       actorClassType = getClass.getName,
       actorPathRef = self.path.name,
       data = data,
-      eventType = eventType
+      eventType = eventType,
+      actorType = PoolDistributed.toString
     )
   }
 
