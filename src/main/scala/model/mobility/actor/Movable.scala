@@ -5,17 +5,15 @@ import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
 
-import scala.collection.mutable
-import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, ForwardRoute, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
 abstract class Movable[T <: MovableState](
   private var movableId: String = null,
@@ -39,29 +37,15 @@ abstract class Movable[T <: MovableState](
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: ForwardRouteData => handleForwardRoute(d)
-      case d: ForwardRoute =>
-      case d: ReceiveRouteData => handleReceiveRoute()
+      case d: ReceiveRoute => handleReceiveRoute(d)
       case d: LinkInfoData     => handleLinkInfo(event, d)
       case _ =>
         logInfo("Event not handled")
     }
 
-  private def handleForwardRoute(data: ForwardRouteData): Unit = {
-    val updatedCost = data.updatedCost
-    if (updatedCost < state.movableBestCost) {
-      state.movableBestCost = updatedCost
-      state.movableBestRoute = Some(data.path)
-    }
-  }
-
-  private def handleForwardRoute(data: ForwardRoute): Unit = {
+  private def handleReceiveRoute(data: ReceiveRoute): Unit = {
     val updatedCost = data.cost
     state.movableBestRoute = data.path
-  }
-
-
-  private def handleReceiveRoute(): Unit = {
     state.movableStatus = Ready
     linkEnter()
   }
@@ -103,16 +87,19 @@ abstract class Movable[T <: MovableState](
               link.classType,
               data = EnterLinkData(
                 actorId = getActorId,
-                actorRef = getSelfShard,
+                shardId = getShardId,
                 actorType = state.actorType,
-                actorSize = state.size
+                actorSize = state.size,
+                actorCreationType = LoadBalancedDistributed,
               ),
-              EventTypeEnum.EnterLink.toString
+              EventTypeEnum.EnterLink.toString,
+              actorType = LoadBalancedDistributed
             )
           case null =>
             logInfo("Path item not handled")
       case None if state.movableBestRoute.isEmpty =>
-
+        state.movableStatus = Finished
+        onFinishSpontaneous()
       case None =>
         state.movableCurrentPath = getNextPath
         linkEnter()
@@ -127,11 +114,13 @@ abstract class Movable[T <: MovableState](
               link.classType,
               data = LeaveLinkData(
                 actorId = getActorId,
-                actorRef = self,
+                shardId = getShardId,
                 actorType = state.actorType,
-                actorSize = state.size
+                actorSize = state.size,
+                actorCreationType = LoadBalancedDistributed,
               ),
-              EventTypeEnum.LeaveLink.toString
+              EventTypeEnum.LeaveLink.toString,
+              actorType = LoadBalancedDistributed,
             )
             if (state.movableBestRoute.isEmpty) {
               onFinish(node.id)
@@ -157,4 +146,19 @@ abstract class Movable[T <: MovableState](
       case None =>
         logInfo("No path to follow")
         None
+
+
+  protected def getCurrentNode: Identify =
+    state.movableCurrentPath match
+      case Some(item) =>
+        item._2
+      case None =>
+        null
+
+  protected def getNextLink: Identify =
+    viewNextPath match
+      case Some(item) =>
+        item._1
+      case None =>
+        null
 }

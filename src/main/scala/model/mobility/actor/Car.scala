@@ -1,20 +1,20 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.SpeedUtil
 
-import scala.collection.mutable
-import org.interscity.htc.model.mobility.entity.event.data.RequestRouteData
+import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
@@ -50,39 +50,36 @@ class Car(
 
   override def requestRoute(): Unit = {
     state.movableStatus = RouteWaiting
-    val data = RequestRouteData(
-      requester = getSelfShard,
-      requesterId = actorId,
-      requesterClassType = getShardId,
-      currentCost = 0,
-      targetNodeId = state.destination,
-      originNodeId = state.origin,
-      path = mutable.Queue()
+    val data = RequestRoute(
+      origin = state.origin,
+      destination = state.destination,
     )
-    val dependency = dependencies(state.origin)
+    val dependency = dependencies(state.gpsId)
     sendMessageTo(
-      dependency.id,
-      dependency.classType,
-      data,
-      EventTypeEnum.RequestRoute.toString
+      entityId = dependency.id,
+      shardId = dependency.resourceId,
+      data = data,
+      eventType = EventTypeEnum.RequestRoute.toString,
+      actorType = PoolDistributed
     )
   }
 
   private def requestSignalState(): Unit = {
     state.movableStatus = WaitingSignalState
-    viewNextPath match
-      case Some(item) =>
-        (item._1, item._2) match
-          case (node, link) =>
+    getCurrentNode match
+      case node =>
+        getNextLink match
+          case link =>
             sendMessageTo(
-              node.id,
-              node.classType,
-              RequestSignalStateData(
-                targetLinkId = link.id
-              ),
-              EventTypeEnum.RequestSignalState.toString
-            )
-      case None => ???
+                entityId = node.id,
+                shardId = node.shardId,
+                RequestSignalStateData(
+                  targetLinkId = link.id
+                ),
+                EventTypeEnum.RequestSignalState.toString
+              )
+          case null => {}
+      case null => {}
   }
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =

@@ -3,12 +3,13 @@ package model.mobility.entity.event.data
 
 import model.mobility.entity.state.enumeration.ActorTypeEnum
 
-import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 case class LeaveLinkData(
-  actorRef: ActorRef,
-  actorId: String,
-  actorType: ActorTypeEnum,
-  actorSize: Double
+                          shardId: String,
+                          actorId: String,
+                          actorType: ActorTypeEnum,
+                          actorSize: Double,
+                          actorCreationType: CreationTypeEnum,
 ) extends BaseEventData

@@ -6,17 +6,16 @@ import model.mobility.entity.state.LinkState
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, EventTypeEnum }
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ EnterLink, ForwardRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ LinkRegister, RoutePathItem }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
+import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
 
-import scala.collection.mutable
-import org.interscity.htc.core.entity.event.data.BaseEventData
-import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, RequestRouteData }
+import model.mobility.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData}
 
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
-import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
+import org.interscity.htc.model.mobility.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
 
 class Link(
   private var id: String = null,
@@ -68,16 +67,36 @@ class Link(
     state.registered.add(
       LinkRegister(
         actorId = data.actorId,
-        actorRef = data.actorRef,
+        shardId = data.shardId,
         actorType = data.actorType,
-        actorSize = data.actorSize
+        actorSize = data.actorSize,
+        actorCreationType = data.actorCreationType,
       )
     )
     sendMessageTo(
-      event.actorRefId,
-      event.actorClassType,
-      dataLink,
-      EventTypeEnum.ReceiveEnterLinkInfo.toString
+      entityId = event.actorRefId,
+      shardId = event.shardRefId,
+      data = dataLink,
+      eventType = EventTypeEnum.ReceiveEnterLinkInfo.toString,
+      actorType = LoadBalancedDistributed
+    )
+  }
+
+  private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    state.registered.filterInPlace(_.actorId != data.actorId)
+    val dataLink = LinkInfoData(
+      linkLength = state.length,
+      linkCapacity = state.capacity,
+      linkNumberOfCars = state.registered.size,
+      linkFreeSpeed = state.freeSpeed,
+      linkLanes = state.lanes
+    )
+    sendMessageTo(
+      entityId = event.actorRefId,
+      shardId = event.shardRefId,
+      data = dataLink,
+      eventType = EventTypeEnum.ReceiveLeaveLinkInfo.toString,
+      actorType = LoadBalancedDistributed
     )
   }
 
