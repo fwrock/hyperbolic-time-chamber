@@ -5,13 +5,11 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.SpeedUtil
 
 import scala.collection.mutable
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.RequestRouteData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
