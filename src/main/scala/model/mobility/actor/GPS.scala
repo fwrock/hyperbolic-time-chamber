@@ -9,10 +9,12 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
-import org.interscity.htc.model.mobility.entity.event.data.{ ForwardRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.collections.graph.Edge
+import org.interscity.htc.model.mobility.entity.event.data.{ForwardRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
-import scala.util.{ Failure, Success }
+import scala.collection.mutable
+import scala.util.{Failure, Success}
 
 class GPS(
   private var id: String = null,
@@ -88,22 +90,42 @@ class GPS(
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
     val origin = state.cityMap.vertices.find(_.id == request.origin)
     val destination = state.cityMap.vertices.find(_.id == request.destination)
+    var data = ForwardRoute()
     (origin, destination) match {
       case (Some(originNode), Some(destinationNode)) =>
-        state.cityMap.aStarEdges(originNode, destinationNode, heuristicFunc)
-        sendMessageTo(
-          entityId = identify.id,
-          shardId = identify.shardId,
-          actorType = CreationTypeEnum.valueOf(identify.typeActor),
-          data = ForwardRoute()
-        )
+        state.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
+          case Some(path) =>
+            data = ForwardRoute(Some(convertPath(path._2)))
+          case _ =>
+            data = ForwardRoute()
       case _ =>
-        sendMessageTo(
-          entityId = identify.id,
-          shardId = identify.shardId,
-          actorType = CreationTypeEnum.valueOf(identify.typeActor),
-          data = ForwardRoute()
-        )
+        data = ForwardRoute()
     }
+    sendMessageTo(
+      entityId = identify.id,
+      shardId = identify.shardId,
+      actorType = CreationTypeEnum.valueOf(identify.typeActor),
+      data = data
+    )
+  }
+
+  private def convertPath(path: List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]): mutable.Queue[(Identify, Identify)] = {
+    val convertedPath = mutable.Queue[(Identify, Identify)]()
+    path.foreach { case (edge, node) =>
+      val edgeId = Identify(
+        id = edge.label.id,
+        shardId = edge.label.shardId,
+        classType = edge.label.classType,
+        typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+      )
+      val nodeId = Identify(
+        id = node.id,
+        shardId = node.shardId,
+        classType = node.classType,
+        typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+      )
+      convertedPath.enqueue((edgeId, nodeId))
+    }
+    convertedPath
   }
 }
