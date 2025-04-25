@@ -7,11 +7,12 @@ import model.mobility.entity.state.GPSState
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
-import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.entity.event.data.{ForwardRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 
 class GPS(
   private var id: String = null,
@@ -90,8 +91,19 @@ class GPS(
     (origin, destination) match {
       case (Some(originNode), Some(destinationNode)) =>
         state.cityMap.aStarEdges(originNode, destinationNode, heuristicFunc)
+        sendMessageTo(
+          entityId = identify.id,
+          shardId = identify.shardId,
+          actorType = CreationTypeEnum.valueOf(identify.typeActor),
+          data = ForwardRoute()
+        )
       case _ =>
-        logError("Invalid origin or destination node")
+        sendMessageTo(
+          entityId = identify.id,
+          shardId = identify.shardId,
+          actorType = CreationTypeEnum.valueOf(identify.typeActor),
+          data = ForwardRoute()
+        )
     }
   }
 
