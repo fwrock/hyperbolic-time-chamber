@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.interscsimulator.collections
 
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 
 case class RoadInfo(roadType: String, name: Option[String], speedLimit: Option[Int])
 
@@ -24,8 +24,11 @@ object GraphUsageExample extends App {
 
   println(s"Vértices: ${roadGraph.vertices}")
   println("\nInformações das Arestas:")
-  roadGraph.edges.foreach { edge =>
-    println(f"  De ${edge.source}%-15s para ${edge.target}%-15s Peso: ${edge.weight}%-5.1f Label: ${edge.label}")
+  roadGraph.edges.foreach {
+    edge =>
+      println(
+        f"  De ${edge.source}%-15s para ${edge.target}%-15s Peso: ${edge.weight}%-5.1f Label: ${edge.label}"
+      )
   }
 
   println(s"\nLabel da aresta SP -> RJ: ${roadGraph.label("São Paulo", "Rio de Janeiro")}")
@@ -35,8 +38,9 @@ object GraphUsageExample extends App {
   // Algoritmos ainda funcionam (usando apenas o peso)
   println("\nDijkstra a partir de 'São Paulo':")
   val shortestPaths = roadGraph.dijkstra("São Paulo") // Numeric[Double] é implícito
-  shortestPaths.foreach { case (dest, (dist, pred)) =>
-    println(f"  Para $dest: Distância $dist%.1f via ${pred.getOrElse("N/A")}")
+  shortestPaths.foreach {
+    case (dest, (dist, pred)) =>
+      println(f"  Para $dest: Distância $dist%.1f via ${pred.getOrElse("N/A")}")
   }
 
   // --- Carregamento via JSON ---
@@ -72,8 +76,11 @@ object GraphUsageExample extends App {
     case Success(graph) =>
       println("Grafo com labels carregado com sucesso via JSON!")
       println(s"Vértices: ${graph.vertices}")
-      graph.edges.foreach { edge =>
-        println(f"  ${edge.source} -> ${edge.target} | W: ${edge.weight}%-5.1f | L: ${edge.label}")
+      graph.edges.foreach {
+        edge =>
+          println(
+            f"  ${edge.source} -> ${edge.target} | W: ${edge.weight}%-5.1f | L: ${edge.label}"
+          )
       }
       println(s"\nLabel A -> C: ${graph.label("A", "C")}")
       println(s"Peso B -> D: ${graph.weight("B", "D")}") // Deverá ser 0.0 (default)

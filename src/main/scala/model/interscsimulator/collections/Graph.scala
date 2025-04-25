@@ -1,13 +1,13 @@
 package org.interscity.htc
 package model.interscsimulator.collections
 
-import org.interscity.htc.model.interscsimulator.collections.graph.{Edge, EdgeInfo}
-import com.fasterxml.jackson.databind.{DeserializationFeature, JavaType, ObjectMapper}
+import org.interscity.htc.model.interscsimulator.collections.graph.{ Edge, EdgeInfo }
+import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.interscity.htc.core.util.JsonUtil
 
 import scala.reflect.ClassTag
-import scala.collection.immutable.{Map, Queue, Set}
+import scala.collection.immutable.{ Map, Queue, Set }
 import scala.collection.mutable
 import scala.util.Try
 import scala.annotation.tailrec
@@ -123,12 +123,12 @@ case class Graph[V, W, L] private (
     dfsRecursive(List(startNode), Set.empty, List.empty)
   }
 
-  /**
-   * A* que retorna o caminho como uma lista de Arestas.
-   * Otimizado pelo uso de uma boa heurística (fornecida pelo chamador).
-   */
-  def aStarEdges(startNode: V, goalNode: V, heuristic: (V, V) => Double)
-                (implicit num: Numeric[W]): Option[(Double, List[Edge[V, W, L]])] = {
+  /** A* que retorna o caminho como uma lista de Arestas. Otimizado pelo uso de uma boa heurística
+    * (fornecida pelo chamador).
+    */
+  def aStarEdges(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
+    num: Numeric[W]
+  ): Option[(Double, List[Edge[V, W, L]])] = {
 
     if (!contains(startNode) || !contains(goalNode)) return None
 
@@ -136,7 +136,8 @@ case class Graph[V, W, L] private (
     val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]() // Mapa para reconstrução (Nó -> Predecessor)
-    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val openSet =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
 
     gScore(startNode) = 0.0
     fScore(startNode) = heuristic(startNode, goalNode)
@@ -150,35 +151,40 @@ case class Graph[V, W, L] private (
       if (current == goalNode) {
         foundGoalScore = Some(gScore(goalNode)) // Armazena o custo ao encontrar
       } else if (gScore(current) < Double.PositiveInfinity) { // Evita explorar nós já "infinitos" se o goal foi removido
-        neighbors(current).foreach { case (neighbor, edgeInfo) =>
-          val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
-          if (tentativeGScore < gScore(neighbor)) {
-            cameFrom(neighbor) = current
-            gScore(neighbor) = tentativeGScore
-            fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
-            openSet.enqueue((fScore(neighbor), neighbor))
-          }
+        neighbors(current).foreach {
+          case (neighbor, edgeInfo) =>
+            val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
+            if (tentativeGScore < gScore(neighbor)) {
+              cameFrom(neighbor) = current
+              gScore(neighbor) = tentativeGScore
+              fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
+              openSet.enqueue((fScore(neighbor), neighbor))
+            }
         }
       }
     }
 
     // Após o loop, se o goal foi encontrado, reconstrói o caminho e retorna com o custo
-    foundGoalScore.flatMap { cost =>
-      reconstructEdgePath(cameFrom, startNode, goalNode).map(path => (cost, path))
+    foundGoalScore.flatMap {
+      cost =>
+        reconstructEdgePath(cameFrom, startNode, goalNode).map(
+          path => (cost, path)
+        )
     }
   }
 
-
   /** A* que retorna o caminho como uma lista de tuplas (Aresta, Nó Destino). */
-  def aStarEdgeTargets(startNode: V, goalNode: V, heuristic: (V, V) => Double)
-                      (implicit num: Numeric[W]): Option[(Double, List[(Edge[V, W, L], V)])] = {
+  def aStarEdgeTargets(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
+    num: Numeric[W]
+  ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     // Lógica do A* é idêntica à de aStarEdges até o final do loop while
     if (!contains(startNode) || !contains(goalNode)) return None
     val weightToDouble: W => Double = num.toDouble(_)
     val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]()
-    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val openSet =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
 
     gScore(startNode) = 0.0
     fScore(startNode) = heuristic(startNode, goalNode)
@@ -191,27 +197,32 @@ case class Graph[V, W, L] private (
       if (current == goalNode) {
         foundGoalScore = Some(gScore(goalNode))
       } else if (gScore(current) < Double.PositiveInfinity) {
-        neighbors(current).foreach { case (neighbor, edgeInfo) =>
-          val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
-          if (tentativeGScore < gScore(neighbor)) {
-            cameFrom(neighbor) = current
-            gScore(neighbor) = tentativeGScore
-            fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
-            openSet.enqueue((fScore(neighbor), neighbor))
-          }
+        neighbors(current).foreach {
+          case (neighbor, edgeInfo) =>
+            val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
+            if (tentativeGScore < gScore(neighbor)) {
+              cameFrom(neighbor) = current
+              gScore(neighbor) = tentativeGScore
+              fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
+              openSet.enqueue((fScore(neighbor), neighbor))
+            }
         }
       }
     }
 
     // Reconstrução diferente no final
-    foundGoalScore.flatMap { cost =>
-      reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (cost, path))
+    foundGoalScore.flatMap {
+      cost =>
+        reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
+          path => (cost, path)
+        )
     }
   }
 
   // Manter o A* original que retorna List[V] para compatibilidade ou simplicidade
-  def aStar(startNode: V, goalNode: V, heuristic: (V, V) => Double)
-           (implicit num: Numeric[W]): Option[List[V]] = {
+  def aStar(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
+    num: Numeric[W]
+  ): Option[List[V]] = {
     // ... (lógica original do A*, usando mutable cameFrom) ...
     // No final, se encontrar o caminho:
     // return Some(reconstructNodePath(cameFrom, startNode, goalNode))
@@ -222,7 +233,8 @@ case class Graph[V, W, L] private (
     val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]()
-    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val openSet =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
 
     gScore(startNode) = 0.0
     fScore(startNode) = heuristic(startNode, goalNode)
@@ -234,20 +246,20 @@ case class Graph[V, W, L] private (
       if (current == goalNode) {
         found = true
       } else if (gScore(current) < Double.PositiveInfinity) {
-        neighbors(current).foreach { case (neighbor, edgeInfo) =>
-          val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
-          if (tentativeGScore < gScore(neighbor)) {
-            cameFrom(neighbor) = current
-            gScore(neighbor) = tentativeGScore
-            fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
-            openSet.enqueue((fScore(neighbor), neighbor))
-          }
+        neighbors(current).foreach {
+          case (neighbor, edgeInfo) =>
+            val tentativeGScore = gScore(current) + weightToDouble(edgeInfo.weight)
+            if (tentativeGScore < gScore(neighbor)) {
+              cameFrom(neighbor) = current
+              gScore(neighbor) = tentativeGScore
+              fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
+              openSet.enqueue((fScore(neighbor), neighbor))
+            }
         }
       }
     }
     if (found) Some(reconstructNodePath(cameFrom, startNode, goalNode)) else None
   }
-
 
   // --- Dijkstra com Retornos Alternativos ---
 
@@ -269,13 +281,14 @@ case class Graph[V, W, L] private (
 
       // Otimização: Se encontramos uma distância maior que a já registrada, pulamos (acontece com enqueue de duplicatas)
       if (distU <= distances(u)) {
-        neighbors(u).foreach { case (v, edgeInfo) =>
-          val altDistance = distances(u) + weightToDouble(edgeInfo.weight)
-          if (altDistance < distances(v)) {
-            distances(v) = altDistance
-            predecessors(v) = u
-            pq.enqueue((altDistance, v))
-          }
+        neighbors(u).foreach {
+          case (v, edgeInfo) =>
+            val altDistance = distances(u) + weightToDouble(edgeInfo.weight)
+            if (altDistance < distances(v)) {
+              distances(v) = altDistance
+              predecessors(v) = u
+              pq.enqueue((altDistance, v))
+            }
         }
       }
     }
@@ -286,35 +299,45 @@ case class Graph[V, W, L] private (
   def dijkstra(startNode: V)(implicit num: Numeric[W]): Map[V, (Double, Option[V])] = {
     val (distances, predecessors) = dijkstraCore(startNode)
     // Constrói o mapa de resultado no formato original
-    vertices.map { v =>
-      val dist = distances.getOrElse(v, Double.PositiveInfinity)
-      val pred = predecessors.get(v)
-      v -> (dist, pred)
+    vertices.map {
+      v =>
+        val dist = distances.getOrElse(v, Double.PositiveInfinity)
+        val pred = predecessors.get(v)
+        v -> (dist, pred)
     }.toMap
   }
 
   /** Dijkstra que retorna mapa de (Distância, Lista de Arestas Opcional). */
-  def dijkstraEdges(startNode: V)(implicit num: Numeric[W]): Map[V, (Double, Option[List[Edge[V, W, L]]])] = {
+  def dijkstraEdges(
+    startNode: V
+  )(implicit num: Numeric[W]): Map[V, (Double, Option[List[Edge[V, W, L]]])] = {
     val (distances, predecessors) = dijkstraCore(startNode)
     // Para cada vértice alcançável, reconstrói o caminho de arestas
-    vertices.map { v =>
-      val dist = distances.getOrElse(v, Double.PositiveInfinity)
-      val pathOpt = if (dist.isInfinity) None else reconstructEdgePathFromImmutable(predecessors, startNode, v)
-      v -> (dist, pathOpt)
+    vertices.map {
+      v =>
+        val dist = distances.getOrElse(v, Double.PositiveInfinity)
+        val pathOpt =
+          if (dist.isInfinity) None
+          else reconstructEdgePathFromImmutable(predecessors, startNode, v)
+        v -> (dist, pathOpt)
     }.toMap
   }
 
   /** Dijkstra que retorna mapa de (Distância, Lista de Tuplas (Aresta, Nó Destino) Opcional). */
-  def dijkstraEdgeTargets(startNode: V)(implicit num: Numeric[W]): Map[V, (Double, Option[List[(Edge[V, W, L], V)]])] = {
+  def dijkstraEdgeTargets(
+    startNode: V
+  )(implicit num: Numeric[W]): Map[V, (Double, Option[List[(Edge[V, W, L], V)]])] = {
     val (distances, predecessors) = dijkstraCore(startNode)
     // Para cada vértice alcançável, reconstrói o caminho de tuplas
-    vertices.map { v =>
-      val dist = distances.getOrElse(v, Double.PositiveInfinity)
-      val pathOpt = if (dist.isInfinity) None else reconstructEdgeTargetTuplePathFromImmutable(predecessors, startNode, v)
-      v -> (dist, pathOpt)
+    vertices.map {
+      v =>
+        val dist = distances.getOrElse(v, Double.PositiveInfinity)
+        val pathOpt =
+          if (dist.isInfinity) None
+          else reconstructEdgeTargetTuplePathFromImmutable(predecessors, startNode, v)
+        v -> (dist, pathOpt)
     }.toMap
   }
-
 
   // reconstructPath (como antes)
   private def reconstructPath(cameFrom: mutable.Map[V, V], current: V): List[V] = {
@@ -328,27 +351,34 @@ case class Graph[V, W, L] private (
   }
 
   /** Reconstrói o caminho como uma lista de nós (V). */
-  private def reconstructNodePath(cameFrom: mutable.Map[V, V], startNode: V, endNode: V): List[V] = {
+  private def reconstructNodePath(
+    cameFrom: mutable.Map[V, V],
+    startNode: V,
+    endNode: V
+  ): List[V] = {
     @tailrec
-    def loop(curr: V, acc: List[V]): List[V] = {
+    def loop(curr: V, acc: List[V]): List[V] =
       if (curr == startNode) curr :: acc
-      else cameFrom.get(curr) match {
-        case Some(prev) => loop(prev, curr :: acc)
-        case None => curr :: acc // Should only happen if endNode == startNode
-      }
-    }
+      else
+        cameFrom.get(curr) match {
+          case Some(prev) => loop(prev, curr :: acc)
+          case None       => curr :: acc // Should only happen if endNode == startNode
+        }
 
     if (startNode == endNode) List(startNode)
     else loop(endNode, Nil)
   }
 
-
   /** Reconstrói o caminho como uma lista de arestas (Edge). */
-  private def reconstructEdgePath(cameFrom: mutable.Map[V, V], startNode: V, endNode: V): Option[List[Edge[V, W, L]]] = {
+  private def reconstructEdgePath(
+    cameFrom: mutable.Map[V, V],
+    startNode: V,
+    endNode: V
+  ): Option[List[Edge[V, W, L]]] = {
     if (startNode == endNode) return Some(List.empty) // Sem arestas para caminho de nó único
 
     @tailrec
-    def loop(curr: V, acc: List[Edge[V, W, L]]): Option[List[Edge[V, W, L]]] = {
+    def loop(curr: V, acc: List[Edge[V, W, L]]): Option[List[Edge[V, W, L]]] =
       cameFrom.get(curr) match {
         case Some(prev) =>
           // Busca a informação da aresta (prev -> curr)
@@ -361,18 +391,20 @@ case class Graph[V, W, L] private (
           }
         case None => if (curr == startNode) Some(acc) else None // Chegou ao início ou erro
       }
-    }
     // Inicia a reconstrução a partir do nó final
     loop(endNode, Nil)
   }
 
-
   /** Reconstrói o caminho como lista de tuplas (Edge, TargetNode). */
-  private def reconstructEdgeTargetTuplePath(cameFrom: mutable.Map[V, V], startNode: V, endNode: V): Option[List[(Edge[V, W, L], V)]] = {
+  private def reconstructEdgeTargetTuplePath(
+    cameFrom: mutable.Map[V, V],
+    startNode: V,
+    endNode: V
+  ): Option[List[(Edge[V, W, L], V)]] = {
     if (startNode == endNode) return Some(List.empty)
 
     @tailrec
-    def loop(curr: V, acc: List[(Edge[V, W, L], V)]): Option[List[(Edge[V, W, L], V)]] = {
+    def loop(curr: V, acc: List[(Edge[V, W, L], V)]): Option[List[(Edge[V, W, L], V)]] =
       cameFrom.get(curr) match {
         case Some(prev) =>
           edgeInfo(prev, curr) match {
@@ -385,23 +417,35 @@ case class Graph[V, W, L] private (
           }
         case None => if (curr == startNode) Some(acc) else None // Erro
       }
-    }
 
     loop(endNode, Nil)
   }
 
   // Adaptação da função original (que usa mutable Map) para usar Map imutável (passado dos novos algoritmos)
-  private def reconstructNodePathFromImmutable(cameFrom: Map[V, V], startNode: V, endNode: V): List[V] = {
-    reconstructNodePath(mutable.Map.newBuilder(cameFrom).result(), startNode, endNode) // Converte para Map padrão para reutilizar
-  }
+  private def reconstructNodePathFromImmutable(
+    cameFrom: Map[V, V],
+    startNode: V,
+    endNode: V
+  ): List[V] =
+    reconstructNodePath(
+      mutable.Map.newBuilder(cameFrom).result(),
+      startNode,
+      endNode
+    ) // Converte para Map padrão para reutilizar
 
-  private def reconstructEdgePathFromImmutable(cameFrom: Map[V, V], startNode: V, endNode: V): Option[List[Edge[V, W, L]]] = {
+  private def reconstructEdgePathFromImmutable(
+    cameFrom: Map[V, V],
+    startNode: V,
+    endNode: V
+  ): Option[List[Edge[V, W, L]]] =
     reconstructEdgePath(mutable.Map.newBuilder(cameFrom).result(), startNode, endNode)
-  }
 
-  private def reconstructEdgeTargetTuplePathFromImmutable(cameFrom: Map[V, V], startNode: V, endNode: V): Option[List[(Edge[V, W, L], V)]] = {
+  private def reconstructEdgeTargetTuplePathFromImmutable(
+    cameFrom: Map[V, V],
+    startNode: V,
+    endNode: V
+  ): Option[List[(Edge[V, W, L], V)]] =
     reconstructEdgeTargetTuplePath(mutable.Map.newBuilder(cameFrom).result(), startNode, endNode)
-  }
 
 }
 
@@ -445,28 +489,28 @@ object Graph {
   )
 
   /** Carrega um grafo a partir de um arquivo JSON usando Jackson.
-   *
-   * @param filePath
-   * A path to JSON file.
-   * @param defaultWeightForUnweighted
-   * Peso a ser usado se 'weight' estiver ausente.
-   * @tparam V
-   * Implicit ClassTag for V.
-   * @tparam W
-   * Implicit ClassTag for W.
-   * @tparam L
-   * Implicit ClassTag for L (necessário para deserializar o label).
-   * @return
-   * Try[Graph[V, W, L]] contendo o grafo ou o erro.
-   *
-   * Formato JSON esperado: { "vertices": ["A", "B", "C"], // Opcional "edges": [ {"source": "A",
-   * "target": "B", "weight": 5, "label": {"type": "road", "name": "BR-101"}}, {"source": "B",
-   * "target": "C", "label": {"type": "path"}} // Peso omitido ], "directed": false }
-   */
+    *
+    * @param filePath
+    *   A path to JSON file.
+    * @param defaultWeightForUnweighted
+    *   Peso a ser usado se 'weight' estiver ausente.
+    * @tparam V
+    *   Implicit ClassTag for V.
+    * @tparam W
+    *   Implicit ClassTag for W.
+    * @tparam L
+    *   Implicit ClassTag for L (necessário para deserializar o label).
+    * @return
+    *   Try[Graph[V, W, L]] contendo o grafo ou o erro.
+    *
+    * Formato JSON esperado: { "vertices": ["A", "B", "C"], // Opcional "edges": [ {"source": "A",
+    * "target": "B", "weight": 5, "label": {"type": "road", "name": "BR-101"}}, {"source": "B",
+    * "target": "C", "label": {"type": "path"}} // Peso omitido ], "directed": false }
+    */
   def loadFromJsonFile[V: ClassTag, W: ClassTag, L: ClassTag]( // Adiciona L: ClassTag
-                                                           filePath: String,
-                                                           defaultWeightForUnweighted: W
-                                                         ): Try[Graph[V, W, L]] = {
+    filePath: String,
+    defaultWeightForUnweighted: W
+  ): Try[Graph[V, W, L]] = {
     val content = JsonUtil.readJsonFile(filePath)
     loadFromJson(content, defaultWeightForUnweighted)
   }
