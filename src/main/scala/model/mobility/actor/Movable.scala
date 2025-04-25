@@ -97,10 +97,7 @@ abstract class Movable[T <: MovableState](
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
-          case (from, null) =>
-            state.movableCurrentPath = getNextPath
-            linkEnter()
-          case (node, link) =>
+          case (link, node) =>
             sendMessageTo(
               link.id,
               link.classType,
@@ -112,10 +109,10 @@ abstract class Movable[T <: MovableState](
               ),
               EventTypeEnum.EnterLink.toString
             )
-          case (node, null) =>
-            onFinish(node.id)
-          case _ =>
+          case null =>
             logInfo("Path item not handled")
+      case None if state.movableBestRoute.isEmpty =>
+
       case None =>
         state.movableCurrentPath = getNextPath
         linkEnter()
@@ -124,9 +121,7 @@ abstract class Movable[T <: MovableState](
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
-          case (from, null) =>
-            logInfo("No link to leave")
-          case (node, link) =>
+          case (link, node) =>
             sendMessageTo(
               link.id,
               link.classType,
@@ -138,6 +133,9 @@ abstract class Movable[T <: MovableState](
               ),
               EventTypeEnum.LeaveLink.toString
             )
+            if (state.movableBestRoute.isEmpty) {
+              onFinish(node.id)
+            }
             state.movableCurrentPath = None
           case _ =>
             logInfo("Path item not handled")
