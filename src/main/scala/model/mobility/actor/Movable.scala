@@ -5,15 +5,15 @@ import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, RouteWaiting, Start}
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData }
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, ForwardRoute, ForwardRouteData, LeaveLinkData, ReceiveRouteData, RequestRouteData}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
@@ -40,6 +40,7 @@ abstract class Movable[T <: MovableState](
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: ForwardRouteData => handleForwardRoute(d)
+      case d: ForwardRoute =>
       case d: ReceiveRouteData => handleReceiveRoute()
       case d: LinkInfoData     => handleLinkInfo(event, d)
       case _ =>
@@ -53,6 +54,12 @@ abstract class Movable[T <: MovableState](
       state.movableBestRoute = Some(data.path)
     }
   }
+
+  private def handleForwardRoute(data: ForwardRoute): Unit = {
+    val updatedCost = data.cost
+    state.movableBestRoute = data.path
+  }
+
 
   private def handleReceiveRoute(): Unit = {
     state.movableStatus = Ready

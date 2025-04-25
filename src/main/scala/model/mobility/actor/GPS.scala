@@ -95,7 +95,7 @@ class GPS(
       case (Some(originNode), Some(destinationNode)) =>
         state.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
-            data = ForwardRoute(Some(convertPath(path._2)))
+            data = ForwardRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
             data = ForwardRoute()
       case _ =>
