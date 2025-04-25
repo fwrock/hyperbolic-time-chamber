@@ -5,7 +5,7 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.GPSState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.model.interscsimulator.collections.{Graph, RoadInfo}
+import org.interscity.htc.model.interscsimulator.collections.Graph
 import org.interscity.htc.model.interscsimulator.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.util.{Failure, Success}
