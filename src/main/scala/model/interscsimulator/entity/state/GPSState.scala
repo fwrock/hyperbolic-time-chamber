@@ -4,8 +4,10 @@ package model.interscsimulator.entity.state
 import core.entity.state.BaseState
 
 import org.interscity.htc.core.types.Tick
+import org.interscity.htc.model.interscsimulator.types.CityMap
 
 case class GPSState(
   startTick: Tick,
-  simulationPath: String = null
+  cityMapPath: String = null,
+  var cityMap: CityMap = null,
 ) extends BaseState(startTick = startTick)

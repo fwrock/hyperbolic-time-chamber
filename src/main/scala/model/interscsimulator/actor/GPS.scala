@@ -5,8 +5,10 @@ import core.actor.BaseActor
 import model.interscsimulator.entity.state.GPSState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.ActorSimulation
-import org.interscity.htc.core.util.{ JsonUtil, SimulationUtil }
+import org.interscity.htc.model.interscsimulator.collections.{Graph, RoadInfo}
+import org.interscity.htc.model.interscsimulator.entity.state.model.{EdgeGraph, NodeGraph}
+
+import scala.util.{Failure, Success}
 
 class GPS(
   private var id: String = null,
@@ -17,19 +19,15 @@ class GPS(
     ) {
 
   override def onStart(): Unit = {
-    val simulation = SimulationUtil.loadSimulationConfig(state.simulationPath)
-
-    simulation.actorsDataSources
-      .filter(
-        s => s.classType == classOf[Node].getName
-      )
-      .foreach {
-        source =>
-          val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
-
-          var actors = JsonUtil.fromJsonList[ActorSimulation](content)
-      }
-
+    Graph.loadFromJsonFile[NodeGraph, Double, EdgeGraph](state.cityMapPath, 0.0) match {
+      case Success(graph) =>
+        state.cityMap = graph
+        logInfo("City map loaded successfully")
+        logInfo(s"Nodes amount: ${state.cityMap.vertices.size}")
+      case Failure(e) =>
+        logError(s"Error on load and process city map from json file: ${e.getMessage}")
+        e.printStackTrace()
+    }
   }
 
 }

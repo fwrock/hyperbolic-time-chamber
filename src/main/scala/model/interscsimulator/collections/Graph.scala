@@ -1,12 +1,13 @@
 package org.interscity.htc
 package model.interscsimulator.collections
 
-import org.interscity.htc.model.interscsimulator.collections.graph.{ Edge, EdgeInfo }
-import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
+import org.interscity.htc.model.interscsimulator.collections.graph.{Edge, EdgeInfo}
+import com.fasterxml.jackson.databind.{DeserializationFeature, JavaType, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.interscity.htc.core.util.JsonUtil
 
 import scala.reflect.ClassTag
-import scala.collection.immutable.{ Map, Queue, Set }
+import scala.collection.immutable.{Map, Queue, Set}
 import scala.collection.mutable
 import scala.util.Try
 import scala.annotation.tailrec
@@ -120,7 +121,7 @@ case class Graph[V, W, L] private (
           }
       }
     dfsRecursive(List(startNode), Set.empty, List.empty)
-  } 
+  }
 
   /**
    * A* que retorna o caminho como uma lista de Arestas.
@@ -443,17 +444,44 @@ object Graph {
     directed: Boolean
   )
 
+  /** Carrega um grafo a partir de um arquivo JSON usando Jackson.
+   *
+   * @param filePath
+   * A path to JSON file.
+   * @param defaultWeightForUnweighted
+   * Peso a ser usado se 'weight' estiver ausente.
+   * @tparam V
+   * Implicit ClassTag for V.
+   * @tparam W
+   * Implicit ClassTag for W.
+   * @tparam L
+   * Implicit ClassTag for L (necessário para deserializar o label).
+   * @return
+   * Try[Graph[V, W, L]] contendo o grafo ou o erro.
+   *
+   * Formato JSON esperado: { "vertices": ["A", "B", "C"], // Opcional "edges": [ {"source": "A",
+   * "target": "B", "weight": 5, "label": {"type": "road", "name": "BR-101"}}, {"source": "B",
+   * "target": "C", "label": {"type": "path"}} // Peso omitido ], "directed": false }
+   */
+  def loadFromJsonFile[V: ClassTag, W: ClassTag, L: ClassTag]( // Adiciona L: ClassTag
+                                                           filePath: String,
+                                                           defaultWeightForUnweighted: W
+                                                         ): Try[Graph[V, W, L]] = {
+    val content = JsonUtil.readJsonFile(filePath)
+    loadFromJson(content, defaultWeightForUnweighted)
+  }
+
   /** Carrega um grafo a partir de uma string JSON usando Jackson.
     *
     * @param jsonString
     *   A string JSON.
     * @param defaultWeightForUnweighted
     *   Peso a ser usado se 'weight' estiver ausente.
-    * @param classTagV
+    * @tparam V
     *   Implicit ClassTag for V.
-    * @param classTagW
+    * @tparam W
     *   Implicit ClassTag for W.
-    * @param classTagL
+    * @tparam L
     *   Implicit ClassTag for L (necessário para deserializar o label).
     * @return
     *   Try[Graph[V, W, L]] contendo o grafo ou o erro.
