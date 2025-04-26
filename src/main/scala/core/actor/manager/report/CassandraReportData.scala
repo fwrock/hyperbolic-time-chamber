@@ -25,9 +25,6 @@ class CassandraReportData(override val reportManager: ActorRef)
   private val databaseSource = Some(
     config.getString("htc.report-manager.cassandra.database-source")
   ).getOrElse("default")
-  private val strategyDataStorage = Some(
-    config.getString("htc.report-manager.cassandra.strategy-data-storage")
-  ).getOrElse("replicate")
   private val batchSize =
     Some(config.getInt("htc.report-manager.cassandra.batch-size")).getOrElse(1000)
 
