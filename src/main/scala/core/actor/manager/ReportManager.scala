@@ -80,3 +80,12 @@ class ReportManager(
   }
 
 }
+
+object ReportManager {
+  def props(
+             simulationManager: ActorRef,
+             timeManager: ActorRef,
+           ): Props =
+    Props(classOf[ReportManager], timeManager, simulationManager)
+}
+
