@@ -6,22 +6,30 @@ import model.mobility.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute}
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
-
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute }
+import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData, ReceiveRoute }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 
 abstract class Movable[T <: MovableState](
   private var movableId: String = null,
-  private val timeManager: ActorRef
+  private var movableShardId: String = null,
+  private val timeManager: ActorRef = null,
+  private val creatorManager: ActorRef = null,
+  private val data: Any = null,
+  private val actorType: CreationTypeEnum = LoadBalancedDistributed
 )(implicit m: Manifest[T])
     extends BaseActor[T](
       actorId = movableId,
-      timeManager = timeManager
+      shardId = movableShardId,
+      timeManager = timeManager,
+      creatorManager = creatorManager,
+      data = data,
+      actorType = actorType
     ) {
 
   protected def requestRoute(): Unit = {}
@@ -38,7 +46,7 @@ abstract class Movable[T <: MovableState](
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: ReceiveRoute => handleReceiveRoute(d)
-      case d: LinkInfoData     => handleLinkInfo(event, d)
+      case d: LinkInfoData => handleLinkInfo(event, d)
       case _ =>
         logInfo("Event not handled")
     }
@@ -90,7 +98,7 @@ abstract class Movable[T <: MovableState](
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed,
+                actorCreationType = LoadBalancedDistributed
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
@@ -117,10 +125,10 @@ abstract class Movable[T <: MovableState](
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed,
+                actorCreationType = LoadBalancedDistributed
               ),
               EventTypeEnum.LeaveLink.toString,
-              actorType = LoadBalancedDistributed,
+              actorType = LoadBalancedDistributed
             )
             if (state.movableBestRoute.isEmpty) {
               onFinish(node.id)
@@ -146,7 +154,6 @@ abstract class Movable[T <: MovableState](
       case None =>
         logInfo("No path to follow")
         None
-
 
   protected def getCurrentNode: Identify =
     state.movableCurrentPath match

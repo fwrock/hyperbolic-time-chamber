@@ -4,7 +4,7 @@ package model.mobility.actor
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.NodeState
 import model.mobility.entity.state.enumeration.EventTypeEnum
 
@@ -13,22 +13,31 @@ import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
 import org.interscity.htc.core.entity.event.data.BaseEventData
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.bus.RegisterBusStopData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkConnectionsData
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.mobility.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.mobility.entity.event.data.{ForwardRouteData, ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.mobility.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
   private var id: String = null,
-  private val timeManager: ActorRef = null
+  private var shard: String = null,
+  private val timeManager: ActorRef = null,
+  private val creatorManager: ActorRef = null,
+  private val data: Any = null,
+  private val actorType: CreationTypeEnum = LoadBalancedDistributed
 ) extends BaseActor[NodeState](
       actorId = id,
-      timeManager = timeManager
+      shardId = shard,
+      timeManager = timeManager,
+      creatorManager = creatorManager,
+      data = data,
+      actorType = actorType
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}

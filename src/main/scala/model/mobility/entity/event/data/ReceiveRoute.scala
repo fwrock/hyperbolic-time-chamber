@@ -7,5 +7,5 @@ import scala.collection.mutable
 
 case class ReceiveRoute(
   cost: Double = Double.MaxValue,
-  path: Option[mutable.Queue[(Identify, Identify)]] = None,
-                       )
+  path: Option[mutable.Queue[(Identify, Identify)]] = None
+)

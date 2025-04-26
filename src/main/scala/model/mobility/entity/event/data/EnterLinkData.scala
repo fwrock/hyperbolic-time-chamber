@@ -7,9 +7,9 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 final case class EnterLinkData(
-                                shardId: String,
-                                actorId: String,
-                                actorType: ActorTypeEnum,
-                                actorCreationType: CreationTypeEnum,
-                                actorSize: Double
+  shardId: String,
+  actorId: String,
+  actorType: ActorTypeEnum,
+  actorCreationType: CreationTypeEnum,
+  actorSize: Double
 ) extends BaseEventData
