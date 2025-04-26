@@ -25,7 +25,8 @@ class GPS(
     ) {
 
   override def onStart(): Unit =
-    Graph.loadFromJsonFile[NodeGraph, Double, EdgeGraph](state.cityMapPath, 0.0) match {
+    val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
+    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](state.cityMapPath, nodeGraphIdExtractor, 0.0) match {
       case Success(graph) =>
         state.cityMap = graph
         logInfo("City map loaded successfully")

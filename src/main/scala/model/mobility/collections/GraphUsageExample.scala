@@ -1,7 +1,9 @@
 package org.interscity.htc
 package model.mobility.collections
 
-import scala.util.{ Failure, Success }
+import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
+
+import scala.util.{Failure, Success}
 
 case class RoadInfo(roadType: String, name: Option[String], speedLimit: Option[Int])
 
@@ -46,46 +48,80 @@ object GraphUsageExample extends App {
   // --- Carregamento via JSON ---
   println("\n--- Carregando Grafo com Label via JSON ---")
 
-  val jsonWithLabels = """
+  val jsonWithRefs = """
   {
-    "vertices": ["A", "B", "C", "D"],
+    "nodes": [
+      {"id": "A", "shardId": "s1", "classType": "sensor", "latitude": 0.0, "longitude": 0.0},
+      {"id": "B", "shardId": "s1", "classType": "actuator", "latitude": 1.0, "longitude": 5.0},
+      {"id": "C", "shardId": "s2", "classType": "sensor", "latitude": 4.0, "longitude": 2.0},
+      {"id": "D", "shardId": "s2", "classType": "storage", "latitude": 5.0, "longitude": 6.0}
+    ],
     "edges": [
       {
-        "source": "A", "target": "B", "weight": 10.5,
-        "label": {"roadType": "local", "name": "Rua Principal", "speedLimit": 50}
+        "source_id": "A",
+        "target_id": "B",
+        "weight": 6.0,
+        "label": {"roadType": "local", "name": "Rua 1", "speedLimit": 50}
       },
       {
-        "source": "A", "target": "C", "weight": 5.2,
-        "label": {"roadType": "path", "name": null, "speedLimit": null}
+        "source_id": "A",
+        "target_id": "C",
+        "weight": 5.0,
+        "label": {"roadType": "express", "name": "Via Rápida", "speedLimit": 80}
       },
       {
-        "source": "B", "target": "D",
-        "label": {"roadType": "service", "name": "Travessa B", "speedLimit": 30}
+        "source_id": "B",
+        "target_id": "D",
+        "label": {"roadType": "local", "name": "Rua 2", "speedLimit": 50}
       },
       {
-        "source": "C", "target": "D", "weight": 8.0,
-        "label": {"roadType": "local", "name": "Av. Lateral", "speedLimit": 40}
+        "source_id": "C",
+        "target_id": "D",
+        "weight": 3.5,
+        "label": {"roadType": "express", "name": "Av Principal", "speedLimit": 60}
       }
     ],
     "directed": false
   }
   """
 
-  // ClassTags para String, Double, RoadInfo são necessários (implícitos aqui)
-  Graph.loadFromJson[String, Double, RoadInfo](jsonWithLabels, 0.0) match { // 0.0 = default weight
+  // Função para extrair o ID (String) de um NodeGraph
+  val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
+
+  // Chama loadFromJson com os tipos e a função extratora
+  // V = NodeGraph, ID = String, W = Double, L = RoadInfo
+  Graph.loadFromJson[NodeGraph, String, Double, RoadInfo](
+    jsonWithRefs,
+    nodeGraphIdExtractor, // Passa a função aqui
+    0.0 // Default weight
+  ) match {
     case Success(graph) =>
-      println("Grafo com labels carregado com sucesso via JSON!")
-      println(s"Vértices: ${graph.vertices}")
-      graph.edges.foreach {
-        edge =>
-          println(
-            f"  ${edge.source} -> ${edge.target} | W: ${edge.weight}%-5.1f | L: ${edge.label}"
-          )
+      println("Grafo com referências carregado com sucesso!")
+      println(s"Vértices: ${graph.vertices}") // Deve mostrar objetos NodeGraph(...)
+      println("Arestas:")
+      graph.edges.foreach { edge =>
+        // Note que source/target agora são os objetos NodeGraph completos
+        println(f"  ${edge.source.id} -> ${edge.target.id} | W: ${edge.weight}%.1f | L: ${edge.label.roadType}")
       }
-      println(s"\nLabel A -> C: ${graph.label("A", "C")}")
-      println(s"Peso B -> D: ${graph.weight("B", "D")}") // Deverá ser 0.0 (default)
+
+      // Testar um algoritmo
+      println("\nExecutando A* de A para D:")
+      val heuristic: (NodeGraph, NodeGraph) => Double = (n1, n2) => n1.euclideanDistance(n2) // Supondo que euclideanDistance existe
+      val startOpt = graph.vertices.find(_.id == "A")
+      val goalOpt = graph.vertices.find(_.id == "D")
+
+      (startOpt, goalOpt) match {
+        case (Some(start), Some(goal)) =>
+          graph.aStarEdges(start, goal, heuristic) match {
+            case Some((cost, path)) => println(f"  Caminho encontrado! Custo: $cost%.2f Arestas: ${path.size}")
+            case None => println("  Caminho A* não encontrado.")
+          }
+        case _ => println("Nó inicial ou final não encontrado no grafo carregado.")
+      }
+
+
     case Failure(e) =>
-      println(s"Falha ao carregar grafo com labels do JSON: ${e.getMessage}")
+      println(s"Falha ao carregar grafo com referências do JSON: ${e.getMessage}")
       e.printStackTrace()
   }
 }
