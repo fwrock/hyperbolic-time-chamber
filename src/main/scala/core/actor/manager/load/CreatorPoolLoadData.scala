@@ -4,7 +4,7 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.ActorCreatorUtil
+import core.util.{ ActorCreatorUtil, IdUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
@@ -79,8 +79,10 @@ class CreatorPoolLoadData(
           createPoolActor(
             system = context.system,
             actorClassName = actorCreation.actor.typeActor,
-            entityId = actorCreation.actor.id,
+            entityId = IdUtil.format(actorCreation.actor.id),
             poolConfiguration = actorCreation.actor.poolConfiguration,
+            IdUtil.format(actorCreation.actor.id),
+            null,
             timeManager,
             self,
             actorCreation.actor.data.content,

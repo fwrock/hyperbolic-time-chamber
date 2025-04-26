@@ -4,7 +4,7 @@ package core.actor.manager.report
 import core.entity.event.control.report.ReportEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.system.database.database.CreateEntityEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
@@ -46,9 +46,9 @@ class CassandraReportData(override val reportManager: ActorRef)
         val fields = report.getClass.getDeclaredFields.map(_.getName)
         val values = report.productIterator.toList.map(_.toString)
         driver ! CreateEntityEvent(
-            table = "report",
-            columns = fields,
-            values = values,
+          table = "report",
+          columns = fields,
+          values = values
         )
     }
     buffer.clear()

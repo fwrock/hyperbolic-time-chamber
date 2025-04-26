@@ -3,10 +3,8 @@ package core.entity.event
 
 import core.types.Tick
 
-import org.apache.pekko.actor.ActorRef
-import core.entity.event.data.BaseEventData
-
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 case class ActorInteractionEvent(
   tick: Tick,
@@ -16,7 +14,8 @@ case class ActorInteractionEvent(
   actorPathRef: String,
   actorClassType: String,
   eventType: String = "default",
-  data: AnyRef
+  data: AnyRef,
+  actorType: String = CreationTypeEnum.LoadBalancedDistributed.toString
 ) {
 
   def toIdentity: Identify = Identify(
