@@ -6,17 +6,15 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
+import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
-import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
 
-import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class SimulationManager(
@@ -29,6 +27,7 @@ class SimulationManager(
   private var timeManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
+  private var reportManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
 
@@ -85,6 +84,7 @@ class SimulationManager(
     configuration = loadSimulationConfig(event.configuration)
     logInfo(s"Run simulation: \n$configuration")
     timeManager = createSingletonTimeManager()
+    reportManager = createSingletonReportManager()
   }
 
   private def createSingletonTimeManager(): ActorRef =
@@ -95,6 +95,16 @@ class SimulationManager(
         parentManager = None
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
+    )
+
+  private def createSingletonReportManager(): ActorRef =
+    createSingletonManager(
+      manager = ReportManager.props(
+        simulationManager = getSelfProxy,
+        timeManager = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME)
+      ),
+      name = REPORT_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
     )
 
