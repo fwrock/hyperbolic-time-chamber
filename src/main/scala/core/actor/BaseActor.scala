@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
@@ -11,13 +11,10 @@ import core.util.{ IdUtil, JsonUtil }
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
-import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
-import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
@@ -47,7 +44,7 @@ abstract class BaseActor[T <: BaseState](
   private var timeManager: ActorRef = null,
   private var creatorManager: ActorRef = null,
   private var data: Any = null,
-  private var actorType: CreationTypeEnum = Simple
+  private var actorType: CreationTypeEnum = LoadBalancedDistributed
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
@@ -77,7 +74,7 @@ abstract class BaseActor[T <: BaseState](
     super.preStart()
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
-      if (state != null) {
+      if (state != null && Option(state.getStartTick).isDefined) {
         startTick = state.getStartTick
         registerOnTimeManager()
       }
@@ -141,7 +138,7 @@ abstract class BaseActor[T <: BaseState](
   protected def onInitialize(event: InitializeEvent): Unit = ()
 
   /** Sends a message to another simulation actor.
-    * @param actorId
+    * @param entityId
     *   The id of the entity in the shard region and simulation
     * @param actorRef
     *   The actor reference of the actor. This is the shard region actor reference.
@@ -183,7 +180,8 @@ abstract class BaseActor[T <: BaseState](
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,
-        eventType = eventType
+        eventType = eventType,
+        actorType = LoadBalancedDistributed.toString
       )
     )
   }
@@ -202,7 +200,8 @@ abstract class BaseActor[T <: BaseState](
       actorClassType = getClass.getName,
       actorPathRef = self.path.name,
       data = data,
-      eventType = eventType
+      eventType = eventType,
+      actorType = PoolDistributed.toString
     )
   }
 
@@ -435,6 +434,9 @@ abstract class BaseActor[T <: BaseState](
     )
     report(event)
   }
+
+  protected def getActorPoolRef(entityId: String): ActorSelection =
+    context.system.actorSelection(s"/user/${IdUtil.format(entityId)}")
 
   protected def getActorRef(path: String): ActorRef =
     Await.result(getActorRefFromPath(path), Duration.Inf)
