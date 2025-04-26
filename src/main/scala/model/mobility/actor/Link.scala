@@ -9,20 +9,29 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-
 import model.mobility.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData}
 
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
 import org.interscity.htc.model.mobility.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
 
 class Link(
   private var id: String = null,
-  private val timeManager: ActorRef = null
+  private var shard: String = null,
+  private val timeManager: ActorRef = null,
+  private val creatorManager: ActorRef = null,
+  private val data: Any = null,
+  private val actorType: CreationTypeEnum = LoadBalancedDistributed
 ) extends BaseActor[LinkState](
       actorId = id,
-      timeManager = timeManager
+      shardId = shard,
+      timeManager = timeManager,
+      creatorManager = creatorManager,
+      data = data,
+      actorType = actorType
     ) {
 
   private def cost: Double = {
@@ -31,7 +40,7 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
 
-  override def onStart(): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit = {
     super.onStart()
     sendConnections(state.to, IdentifyUtil.fromDependency(dependencies(state.to)))
     sendConnections(state.from, IdentifyUtil.fromDependency(dependencies(state.from)))
@@ -70,7 +79,7 @@ class Link(
         shardId = data.shardId,
         actorType = data.actorType,
         actorSize = data.actorSize,
-        actorCreationType = data.actorCreationType,
+        actorCreationType = data.actorCreationType
       )
     )
     sendMessageTo(

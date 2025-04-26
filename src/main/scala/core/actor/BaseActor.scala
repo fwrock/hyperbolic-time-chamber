@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
@@ -44,7 +44,7 @@ abstract class BaseActor[T <: BaseState](
   private var timeManager: ActorRef = null,
   private var creatorManager: ActorRef = null,
   private var data: Any = null,
-  private var actorType: CreationTypeEnum = Simple
+  private var actorType: CreationTypeEnum = LoadBalancedDistributed
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
@@ -74,7 +74,7 @@ abstract class BaseActor[T <: BaseState](
     super.preStart()
     if (data != null) {
       state = JsonUtil.convertValue[T](data)
-      if (state != null) {
+      if (state != null && Option(state.getStartTick).isDefined) {
         startTick = state.getStartTick
         registerOnTimeManager()
       }
@@ -434,6 +434,9 @@ abstract class BaseActor[T <: BaseState](
     )
     report(event)
   }
+
+  protected def getActorPoolRef(entityId: String): ActorSelection =
+    context.system.actorSelection(s"/user/${IdUtil.format(entityId)}")
 
   protected def getActorRef(path: String): ActorRef =
     Await.result(getActorRefFromPath(path), Duration.Inf)

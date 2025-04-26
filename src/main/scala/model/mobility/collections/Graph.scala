@@ -1,14 +1,14 @@
 package org.interscity.htc
 package model.mobility.collections
 
-import org.interscity.htc.model.mobility.collections.graph.{Edge, EdgeInfo}
-import com.fasterxml.jackson.databind.{DeserializationFeature, JavaType, ObjectMapper}
+import org.interscity.htc.model.mobility.collections.graph.{ Edge, EdgeInfo }
+import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.interscity.htc.core.util.JsonUtil
 import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
 
 import scala.reflect.ClassTag
-import scala.collection.immutable.{Map, Queue, Set}
+import scala.collection.immutable.{ Map, Queue, Set }
 import scala.collection.mutable
 import scala.util.Try
 import scala.annotation.tailrec
@@ -16,18 +16,18 @@ import scala.math.Numeric
 
 /** Estrutura para uma aresta no JSON, usando IDs de referência. */
 private case class JsonEdgeRefFormat[ID, W, L](
-                                                source_id: ID, // Referência ao ID do nó fonte
-                                                target_id: ID, // Referência ao ID do nó destino
-                                                weight: Option[W],
-                                                label: L
-                                              )
+  source_id: ID, // Referência ao ID do nó fonte
+  target_id: ID, // Referência ao ID do nó destino
+  weight: Option[W],
+  label: L
+)
 
 /** Estrutura que representa o formato JSON completo com referências. */
 private case class JsonGraphRefFormat[V, ID, W, L]( // Adicionado tipo ID
-                                                    nodes: List[V], // Lista de nós completos (obrigatória agora)
-                                                    edges: List[JsonEdgeRefFormat[ID, W, L]], // Lista de arestas por ID
-                                                    directed: Boolean
-                                                  )
+  nodes: List[V], // Lista de nós completos (obrigatória agora)
+  edges: List[JsonEdgeRefFormat[ID, W, L]], // Lista de arestas por ID
+  directed: Boolean
+)
 
 /** Classe principal do Grafo, agora com tipo de label L para arestas.
   * @param adjacencyList
@@ -488,7 +488,13 @@ object Graph {
       val classW = implicitly[ClassTag[W]].runtimeClass
       val classL = implicitly[ClassTag[L]].runtimeClass
       // Constrói o tipo parametrizado JsonGraphRefFormat[V, ID, W, L]
-      typeFactory.constructParametricType(classOf[JsonGraphRefFormat[_, _, _, _]], classV, classID, classW, classL)
+      typeFactory.constructParametricType(
+        classOf[JsonGraphRefFormat[_, _, _, _]],
+        classV,
+        classID,
+        classW,
+        classL
+      )
     }
   }
 
@@ -530,46 +536,50 @@ object Graph {
     */
   def loadFromJsonFile[V: ClassTag, ID: ClassTag, W: ClassTag, L: ClassTag]( // Adiciona L: ClassTag
     filePath: String,
-                                                                             idExtractor: V => ID, // Função para extrair ID do nó V
-                                                                             defaultWeightForUnweighted: W
+    idExtractor: V => ID, // Função para extrair ID do nó V
+    defaultWeightForUnweighted: W
   ): Try[Graph[V, W, L]] = {
     val content = JsonUtil.readJsonFile(filePath)
     loadFromJson(content, idExtractor, defaultWeightForUnweighted)
   }
 
-  /**
-   * Carrega um grafo a partir de uma string JSON usando referências de ID para nós.
-   * Mais eficiente para nós (V) que são objetos complexos.
-   *
-   * @param jsonString A string JSON.
-   * @param idExtractor Função para extrair o identificador único (tipo ID) de um objeto de nó (V).
-   * @param defaultWeightForUnweighted Peso a ser usado se 'weight' estiver ausente.
-   * @param classTagV Implicit ClassTag for V.
-   * @param classTagID Implicit ClassTag for ID (tipo do identificador).
-   * @param classTagW Implicit ClassTag for W.
-   * @param classTagL Implicit ClassTag for L.
-   * @tparam V Tipo do nó (vértice).
-   * @tparam ID Tipo do identificador do nó (usado nas referências `source_id`, `target_id`).
-   * @tparam W Tipo do peso da aresta.
-   * @tparam L Tipo do label da aresta.
-   * @return Try[Graph[V, W, L]] contendo o grafo ou o erro.
-   *
-   * Formato JSON esperado:
-   * {
-   * "nodes": [ {"id": "A", ...}, {"id": "B", ...} ], // Lista de objetos V
-   * "edges": [
-   * {"source_id": "A", "target_id": "B", "weight": 5, "label": {...}},
-   * {"source_id": "B", "target_id": "C", "label": {...}} // peso opcional
-   * ],
-   * "directed": false
-   * }
-   */
+  /** Carrega um grafo a partir de uma string JSON usando referências de ID para nós. Mais eficiente
+    * para nós (V) que são objetos complexos.
+    *
+    * @param jsonString
+    *   A string JSON.
+    * @param idExtractor
+    *   Função para extrair o identificador único (tipo ID) de um objeto de nó (V).
+    * @param defaultWeightForUnweighted
+    *   Peso a ser usado se 'weight' estiver ausente.
+    * @param classTagV
+    *   Implicit ClassTag for V.
+    * @param classTagID
+    *   Implicit ClassTag for ID (tipo do identificador).
+    * @param classTagW
+    *   Implicit ClassTag for W.
+    * @param classTagL
+    *   Implicit ClassTag for L.
+    * @tparam V
+    *   Tipo do nó (vértice).
+    * @tparam ID
+    *   Tipo do identificador do nó (usado nas referências `source_id`, `target_id`).
+    * @tparam W
+    *   Tipo do peso da aresta.
+    * @tparam L
+    *   Tipo do label da aresta.
+    * @return
+    *   Try[Graph[V, W, L]] contendo o grafo ou o erro.
+    *
+    * Formato JSON esperado: { "nodes": [ {"id": "A", ...}, {"id": "B", ...} ], // Lista de objetos
+    * V "edges": [ {"source_id": "A", "target_id": "B", "weight": 5, "label": {...}}, {"source_id":
+    * "B", "target_id": "C", "label": {...}} // peso opcional ], "directed": false }
+    */
   def loadFromJson[V: ClassTag, ID: ClassTag, W: ClassTag, L: ClassTag]( // Nova assinatura
-                                                                         jsonString: String,
-                                                                         idExtractor: V => ID, // Função para extrair ID do nó V
-                                                                         defaultWeightForUnweighted: W
-                                                                       ): Try[Graph[V, W, L]] = {
-
+    jsonString: String,
+    idExtractor: V => ID, // Função para extrair ID do nó V
+    defaultWeightForUnweighted: W
+  ): Try[Graph[V, W, L]] =
     Try {
       // 1. Constrói o JavaType específico para JsonGraphRefFormat[V, ID, W, L]
       val graphFormatType: JavaType = JacksonConfig.buildGraphRefFormatType[V, ID, W, L]()
@@ -582,42 +592,48 @@ object Graph {
       // --- Passagem 1: Construir o mapa de nós (ID -> V) ---
       val nodeMapBuilder = Map.newBuilder[ID, V]
       val seenIds = mutable.Set[ID]() // Para detectar IDs duplicados
-      jsonGraph.nodes.foreach { node =>
-        val nodeId = idExtractor(node)
-        if (seenIds.contains(nodeId)) {
-          // Tratamento de erro para IDs duplicados
-          throw new IllegalArgumentException(s"ID de nó duplicado encontrado no JSON: $nodeId")
-        }
-        seenIds.add(nodeId)
-        nodeMapBuilder += (nodeId -> node)
+      jsonGraph.nodes.foreach {
+        node =>
+          val nodeId = idExtractor(node)
+          if (seenIds.contains(nodeId)) {
+            // Tratamento de erro para IDs duplicados
+            throw new IllegalArgumentException(s"ID de nó duplicado encontrado no JSON: $nodeId")
+          }
+          seenIds.add(nodeId)
+          nodeMapBuilder += (nodeId -> node)
       }
       val nodeMap: Map[ID, V] = nodeMapBuilder.result()
 
       // --- Passagem 2: Construir o grafo usando as referências ---
       var graph = Graph.empty[V, W, L]
 
-      jsonGraph.edges.foreach { jsonEdge =>
-        // Busca os nós V usando os IDs de referência
-        val sourceNodeOpt = nodeMap.get(jsonEdge.source_id)
-        val targetNodeOpt = nodeMap.get(jsonEdge.target_id)
+      jsonGraph.edges.foreach {
+        jsonEdge =>
+          // Busca os nós V usando os IDs de referência
+          val sourceNodeOpt = nodeMap.get(jsonEdge.source_id)
+          val targetNodeOpt = nodeMap.get(jsonEdge.target_id)
 
-        // Verifica se ambos os nós foram encontrados
-        (sourceNodeOpt, targetNodeOpt) match {
-          case (Some(sourceNode), Some(targetNode)) =>
-            // Nós encontrados, processa a aresta
-            val weight = jsonEdge.weight.getOrElse(defaultWeightForUnweighted)
-            val label = jsonEdge.label
+          // Verifica se ambos os nós foram encontrados
+          (sourceNodeOpt, targetNodeOpt) match {
+            case (Some(sourceNode), Some(targetNode)) =>
+              // Nós encontrados, processa a aresta
+              val weight = jsonEdge.weight.getOrElse(defaultWeightForUnweighted)
+              val label = jsonEdge.label
 
-            if (jsonGraph.directed) {
-              graph = graph.addEdge(sourceNode, targetNode, weight, label)
-            } else {
-              graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, label)
-            }
-          case (None, _) =>
-            throw new NoSuchElementException(s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado na lista 'nodes' do JSON.")
-          case (_, None) =>
-            throw new NoSuchElementException(s"Nó de destino com ID '${jsonEdge.target_id}' não encontrado na lista 'nodes' do JSON.")
-        }
+              if (jsonGraph.directed) {
+                graph = graph.addEdge(sourceNode, targetNode, weight, label)
+              } else {
+                graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, label)
+              }
+            case (None, _) =>
+              throw new NoSuchElementException(
+                s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado na lista 'nodes' do JSON."
+              )
+            case (_, None) =>
+              throw new NoSuchElementException(
+                s"Nó de destino com ID '${jsonEdge.target_id}' não encontrado na lista 'nodes' do JSON."
+              )
+          }
       }
       graph // Retorna o grafo construído
 
@@ -631,5 +647,4 @@ object Graph {
       case e: Exception => // Outros erros
         throw new Exception(s"Erro ao processar o JSON ou construir o grafo: ${e.getMessage}", e)
     }
-  }
 }

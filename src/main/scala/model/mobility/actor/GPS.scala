@@ -8,17 +8,22 @@ import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
-import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
+import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
 
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 
 class GPS(
   private var id: String = null,
-  private val timeManager: ActorRef = null
+  private var shard: String = null,
+  private val timeManager: ActorRef = null,
+  private val creatorManager: ActorRef = null,
+  private val data: Any = null,
+  private val actorType: CreationTypeEnum = PoolDistributed
 ) extends BaseActor[GPSState](
       actorId = id,
       timeManager = timeManager
@@ -26,7 +31,11 @@ class GPS(
 
   override def onStart(): Unit =
     val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
-    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](state.cityMapPath, nodeGraphIdExtractor, 0.0) match {
+    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
+      state.cityMapPath,
+      nodeGraphIdExtractor,
+      0.0
+    ) match {
       case Success(graph) =>
         state.cityMap = graph
         logInfo("City map loaded successfully")
@@ -110,22 +119,25 @@ class GPS(
     )
   }
 
-  private def convertPath(path: List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]): mutable.Queue[(Identify, Identify)] = {
+  private def convertPath(
+    path: List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
+  ): mutable.Queue[(Identify, Identify)] = {
     val convertedPath = mutable.Queue[(Identify, Identify)]()
-    path.foreach { case (edge, node) =>
-      val edgeId = Identify(
-        id = edge.label.id,
-        shardId = edge.label.shardId,
-        classType = edge.label.classType,
-        typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
-      )
-      val nodeId = Identify(
-        id = node.id,
-        shardId = node.shardId,
-        classType = node.classType,
-        typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
-      )
-      convertedPath.enqueue((edgeId, nodeId))
+    path.foreach {
+      case (edge, node) =>
+        val edgeId = Identify(
+          id = edge.label.id,
+          shardId = edge.label.shardId,
+          classType = edge.label.classType,
+          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+        )
+        val nodeId = Identify(
+          id = node.id,
+          shardId = node.shardId,
+          classType = node.classType,
+          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+        )
+        convertedPath.enqueue((edgeId, nodeId))
     }
     convertedPath
   }

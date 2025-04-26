@@ -3,11 +3,11 @@ package model.mobility.collections
 
 import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
 
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 
 case class RoadInfo(roadType: String, name: Option[String], speedLimit: Option[Int])
 
-object GraphUsageExample extends App {
+object GraphUsageExample {
 
   // --- Criação Manual ---
   println("--- Grafo com Label nas Arestas (String, Double, RoadInfo) ---")
@@ -99,26 +99,30 @@ object GraphUsageExample extends App {
       println("Grafo com referências carregado com sucesso!")
       println(s"Vértices: ${graph.vertices}") // Deve mostrar objetos NodeGraph(...)
       println("Arestas:")
-      graph.edges.foreach { edge =>
-        // Note que source/target agora são os objetos NodeGraph completos
-        println(f"  ${edge.source.id} -> ${edge.target.id} | W: ${edge.weight}%.1f | L: ${edge.label.roadType}")
+      graph.edges.foreach {
+        edge =>
+          // Note que source/target agora são os objetos NodeGraph completos
+          println(
+            f"  ${edge.source.id} -> ${edge.target.id} | W: ${edge.weight}%.1f | L: ${edge.label.roadType}"
+          )
       }
 
       // Testar um algoritmo
       println("\nExecutando A* de A para D:")
-      val heuristic: (NodeGraph, NodeGraph) => Double = (n1, n2) => n1.euclideanDistance(n2) // Supondo que euclideanDistance existe
+      val heuristic: (NodeGraph, NodeGraph) => Double =
+        (n1, n2) => n1.euclideanDistance(n2) // Supondo que euclideanDistance existe
       val startOpt = graph.vertices.find(_.id == "A")
       val goalOpt = graph.vertices.find(_.id == "D")
 
       (startOpt, goalOpt) match {
         case (Some(start), Some(goal)) =>
           graph.aStarEdges(start, goal, heuristic) match {
-            case Some((cost, path)) => println(f"  Caminho encontrado! Custo: $cost%.2f Arestas: ${path.size}")
+            case Some((cost, path)) =>
+              println(f"  Caminho encontrado! Custo: $cost%.2f Arestas: ${path.size}")
             case None => println("  Caminho A* não encontrado.")
           }
         case _ => println("Nó inicial ou final não encontrado no grafo carregado.")
       }
-
 
     case Failure(e) =>
       println(s"Falha ao carregar grafo com referências do JSON: ${e.getMessage}")

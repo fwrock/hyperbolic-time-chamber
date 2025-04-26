@@ -7,9 +7,9 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 case class LeaveLinkData(
-                          shardId: String,
-                          actorId: String,
-                          actorType: ActorTypeEnum,
-                          actorSize: Double,
-                          actorCreationType: CreationTypeEnum,
+  shardId: String,
+  actorId: String,
+  actorType: ActorTypeEnum,
+  actorSize: Double,
+  actorCreationType: CreationTypeEnum
 ) extends BaseEventData

@@ -7,6 +7,7 @@ import core.exception.SimulationEnvConfigFoundException
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardRegion
 
 import java.util.UUID
@@ -27,17 +28,22 @@ object SimulationUtil {
     }
 
   def startShards(system: ActorSystem, configuration: String = null): Unit =
-    loadSimulationConfig(configuration).actorsDataSources.distinctBy(_.id).foreach {
-      source =>
-        val initiatorId = s"${UUID.randomUUID().toString}-shard-initiator"
-        val shardRegion = createShardRegion(
-          system,
-          source.classType,
-          initiatorId,
-          IdUtil.format(source.id),
-          null,
-          null
-        )
-        shardRegion ! ShardRegion.StartEntity(initiatorId)
-    }
+    loadSimulationConfig(configuration).actorsDataSources
+      .distinctBy(_.id)
+      .filter(
+        s => s.creationType == null || s.creationType == CreationTypeEnum.LoadBalancedDistributed
+      )
+      .foreach {
+        source =>
+          val initiatorId = s"${UUID.randomUUID().toString}-shard-initiator"
+          val shardRegion = createShardRegion(
+            system,
+            source.classType,
+            initiatorId,
+            IdUtil.format(source.id),
+            null,
+            null
+          )
+          shardRegion ! ShardRegion.StartEntity(initiatorId)
+      }
 }
