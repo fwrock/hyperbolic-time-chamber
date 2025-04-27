@@ -67,20 +67,29 @@ abstract class Movable[T <: MovableState](
     data: LinkInfoData
   ): Unit = {}
 
-  protected def onFinish(nodeId: String): Unit =
+  protected def onFinish(nodeId: String): Unit = {
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
     } else {
       state.movableStatus = Finished
     }
+    report(data = state.movableStatus, "changed status")
     onFinishSpontaneous()
+  }
 
   protected def linkEnter(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
+            report(data = EnterLinkData(
+              actorId = getActorId,
+              shardId = getShardId,
+              actorType = state.actorType,
+              actorSize = state.size,
+              actorCreationType = LoadBalancedDistributed
+            ), "enter link")
             sendMessageTo(
               entityId = link.id,
               shardId = link.shardId,
@@ -103,11 +112,18 @@ abstract class Movable[T <: MovableState](
         state.movableCurrentPath = getNextPath
         linkEnter()
 
-  protected def linkLeaving(): Unit =
+  protected def leivingLink(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
+            report(data = LeaveLinkData(
+              actorId = getActorId,
+              shardId = getShardId,
+              actorType = state.actorType,
+              actorSize = state.size,
+              actorCreationType = LoadBalancedDistributed
+            ), "leaving link")
             sendMessageTo(
               entityId = link.id,
               shardId = link.shardId,

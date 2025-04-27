@@ -24,10 +24,9 @@ class Car(
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     state.movableStatus match {
       case Moving =>
-        logInfo(s"${state.destination} - $getCurrentNode")
         requestSignalState()
       case WaitingSignal =>
-        linkLeaving()
+        leivingLink()
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
       case _ => super.actSpontaneous(event)
@@ -43,10 +42,12 @@ class Car(
 
   override def requestRoute(): Unit = {
     state.movableStatus = RouteWaiting
+    report(data = state.movableStatus, "changed status")
     val data = RequestRoute(
       origin = state.origin,
       destination = state.destination
     )
+    report(data = data)
     val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
@@ -59,6 +60,7 @@ class Car(
 
   private def requestSignalState(): Unit = {
     state.movableStatus = WaitingSignalState
+    report(data = state.movableStatus, "changed status")
     getCurrentNode match
       case node =>
         getNextLink match
@@ -78,14 +80,16 @@ class Car(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
       state.movableStatus = WaitingSignal
+      report(data = state.movableStatus, "changed status")
       onFinishSpontaneous(Some(data.nextTick))
     } else {
-      linkLeaving()
+      leivingLink()
     }
 
-  override def linkLeaving(): Unit = {
+  override def leivingLink(): Unit = {
     state.movableStatus = Ready
-    super.linkLeaving()
+    report(data = state.movableStatus, "link leaving changed status")
+    super.leivingLink()
   }
 
   override def actHandleReceiveLeaveLinkInfo(
@@ -93,6 +97,7 @@ class Car(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
+    report(data = state.distance, "traveled distance")
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -107,8 +112,9 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
-    logInfo(s"Time: $time")
+    report(data = (time, data, s"km/s = ${data.linkLength / time}"), label = "time and average velocity")
     state.movableStatus = Moving
+    report(data = state.movableStatus, "changed status")
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }

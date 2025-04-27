@@ -36,7 +36,7 @@ class CsvReportData(override val reportManager: ActorRef)
     buffer.foreach {
       report =>
         writer.write(
-          s"${report.entityId},${report.timestamp},${report.tick}${report.lamportTick},${report.data}\n"
+          s"${report.entityId},${report.timestamp},${report.tick}${report.lamportTick},${report.data},${report.label}\n"
         )
     }
     writer.close()
