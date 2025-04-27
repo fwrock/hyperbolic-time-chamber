@@ -41,7 +41,7 @@ class Bus(
       case WaitingSignal | WaitingLoadPassenger | WaitingUnloadPassenger =>
         if (isEndNodeState && nodeStateMaxTime == event.tick) {
           state.movableStatus = Moving
-          linkLeaving()
+          leivingLink()
         }
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")

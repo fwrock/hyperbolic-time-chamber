@@ -34,7 +34,7 @@ class Subway(
         requestLoadPassenger()
         requestUnloadPeopleData()
       case Stopped =>
-        linkLeaving()
+        leivingLink()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
 

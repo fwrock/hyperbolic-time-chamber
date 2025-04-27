@@ -442,9 +442,21 @@ abstract class BaseActor[T <: BaseState](
       )
     )
 
+  protected def report(data: Any, label: String = null): Unit = {
+    report(
+      event = ReportEvent(
+        entityId = entityId,
+        tick = currentTick,
+        lamportTick = getLamportClock,
+        data = data,
+        label = label
+      )
+    )
+  }
+
   protected def report(event: ReportEvent): Unit = {
     val defaultReportType = ReportTypeEnum.valueOf(
-      Some(config.getString("htc.report-manager.default-reporter")).getOrElse("csv")
+      Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")
     )
     val reportType = if (state.getReporterType != null) {
       state.getReporterType
