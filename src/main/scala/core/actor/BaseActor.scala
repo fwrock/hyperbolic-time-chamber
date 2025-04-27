@@ -16,13 +16,14 @@ import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
-import org.interscity.htc.core.entity.actor.Properties
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
+import java.util.UUID
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -47,23 +48,26 @@ abstract class BaseActor[T <: BaseState](
     with Stash {
 
   protected val config = ConfigFactory.load()
+  private var isInitialized: Boolean = false
+  private val snapShotInterval = 1000
+
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
+  protected var entityId: String =
+    if (properties != null) properties.entityId else UUID.randomUUID().toString
+  protected var shardId: String =
+    if (properties != null) properties.shardId else UUID.randomUUID().toString
   protected var state: T = uninitialized
-
-  protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
-  protected var timeManager: ActorRef = uninitialized
-  protected var creatorManager: ActorRef = uninitialized
-
-  protected var entityId: String = properties.entityId
-  private var currentTimeManager: ActorRef = uninitialized
-  private var isInitialized: Boolean = false
-
   protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
 
-  private val snapShotInterval = 1000
+  protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
+    if (properties != null) properties.reporters else null
+  protected var timeManager: ActorRef = if (properties != null) properties.timeManager else null
+  protected var creatorManager: ActorRef =
+    if (properties != null) properties.creatorManager else null
+  private var currentTimeManager: ActorRef = uninitialized
 
   override def persistenceId: String = s"${getClass.getName}-${self.path.name}"
 
@@ -84,9 +88,9 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def onFinishInitialize(): Unit =
-    if (!isInitialized && properties.creatorManager != null) {
+    if (!isInitialized && creatorManager != null) {
       isInitialized = true
-      properties.creatorManager ! InitializeEntityAckEvent(
+      creatorManager ! InitializeEntityAckEvent(
         entityId = entityId
       )
     }
@@ -128,7 +132,7 @@ abstract class BaseActor[T <: BaseState](
       identify = Some(
         Identify(
           id = IdUtil.format(entityId),
-          shardId = IdUtil.format(properties.shardId),
+          shardId = IdUtil.format(shardId),
           classType = getClass.getName,
           actorRef = getSelfShard.path.toString,
           typeActor = properties.actorType.toString

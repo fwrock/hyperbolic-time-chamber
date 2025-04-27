@@ -5,7 +5,7 @@ import core.actor.BaseActor
 import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.entity.actor.Properties
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 
 abstract class ReportData(

@@ -9,7 +9,8 @@ import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization, Properties }
+import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
@@ -19,12 +20,16 @@ import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class CreatorPoolLoadData(
-  loadDataManager: ActorRef,
-  timeManager: ActorRef
+  private val creatorProperties: CreatorProperties
 ) extends BaseActor[DefaultState](
       properties = Properties(
-        timeManager = timeManager,
-        entityId = "creator-pool-load-data"
+        entityId = creatorProperties.entityId,
+        shardId = creatorProperties.shardId,
+        creatorManager = creatorProperties.creatorManager,
+        timeManager = creatorProperties.timeManager,
+        reporters = creatorProperties.reporters,
+        data = creatorProperties.data,
+        actorType = creatorProperties.actorType
       )
     ) {
 
@@ -90,6 +95,7 @@ class CreatorPoolLoadData(
             shardId = IdUtil.format(actorCreation.shardId),
             timeManager = timeManager,
             creatorManager = self,
+            reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,
             creationType = PoolDistributed
           )
@@ -108,19 +114,20 @@ class CreatorPoolLoadData(
 
   private def checkAndSendFinish(): Unit =
     if (!finishEventSent && actorsToCreate.isEmpty) {
-      loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
+      creatorProperties.loadDataManager ! FinishCreationEvent(
+        actorRef = self,
+        amount = amountActors
+      )
       finishEventSent = true
     }
 }
 
 object CreatorPoolLoadData {
   def props(
-    loadDataManager: ActorRef,
-    timeManager: ActorRef
+    properties: CreatorProperties
   ): Props =
     Props(
       classOf[CreatorPoolLoadData],
-      loadDataManager,
-      timeManager
+      properties
     )
 }
