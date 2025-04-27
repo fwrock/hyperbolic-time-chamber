@@ -459,6 +459,9 @@ abstract class BaseActor[T <: BaseState](
       }
   }
 
+  protected def getDependency(entityId: String): Dependency =
+    dependencies(IdUtil.format(entityId))
+
   /** Gets the time manager actor reference.
     * @return
     *   The time manager actor reference
