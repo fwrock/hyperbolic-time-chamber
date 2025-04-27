@@ -4,12 +4,10 @@ package model.mobility.actor
 import core.actor.BaseActor
 import model.mobility.entity.state.GPSState
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
 import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
@@ -17,6 +15,7 @@ import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGra
 
 import scala.collection.mutable
 import scala.util.{ Failure, Success }
+import scala.compiletime.uninitialized
 
 class GPS(
   private val properties: Properties
@@ -24,18 +23,22 @@ class GPS(
       properties = properties
     ) {
 
+  private var cityMap: Graph[NodeGraph, Double, EdgeGraph] = uninitialized
+
   override def onStart(): Unit =
     if (state != null) {
+      logInfo(s"Starting actor $entityId: ${properties.data}")
       val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
+      logInfo(s"Loading city map from json file: ${state.cityMapPath}")
       Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
         state.cityMapPath,
         nodeGraphIdExtractor,
         0.0
       ) match {
         case Success(graph) =>
-          state.cityMap = graph
+          cityMap = graph
           logInfo("City map loaded successfully")
-          logInfo(s"Nodes amount: ${state.cityMap.vertices.size}")
+          logInfo(s"Nodes amount: ${cityMap.vertices.size}")
         case Failure(e) =>
           logError(s"Error on load and process city map from json file: ${e.getMessage}")
           e.printStackTrace()
@@ -50,7 +53,7 @@ class GPS(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case data: RequestRoute =>
-        if (state.cityMap == null) {
+        if (cityMap == null) {
           state.requests.enqueue(
             (
               Identify(
@@ -62,7 +65,7 @@ class GPS(
               data
             )
           )
-        } else if (state.cityMap != null && state.requests.nonEmpty) {
+        } else if (cityMap != null && state.requests.nonEmpty) {
           processQueuedRequests()
           handleRequestRoute(
             Identify(
@@ -89,7 +92,7 @@ class GPS(
     }
 
   private def processQueuedRequests(): Unit =
-    if (state.cityMap != null && state.requests.nonEmpty) {
+    if (cityMap != null && state.requests.nonEmpty) {
       while (state.requests.nonEmpty) {
         val request = state.requests.dequeue()
         handleRequestRoute(request._1, request._2)
@@ -97,19 +100,25 @@ class GPS(
     }
 
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
-    val origin = state.cityMap.vertices.find(_.id == request.origin)
-    val destination = state.cityMap.vertices.find(_.id == request.destination)
+    val origin = cityMap.vertices.find(_.id == request.origin)
+    val destination = cityMap.vertices.find(_.id == request.destination)
     var data = ReceiveRoute()
     (origin, destination) match {
       case (Some(originNode), Some(destinationNode)) =>
-        state.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
+        cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
+            if (path._2.isEmpty) {
+              logInfo(s"Path not found from ${request.origin} to ${request.destination}")
+            } else {
+              logInfo(s"Path found from ${request.origin} to ${request.destination}. Path: ${path._2}")
+            }
             data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
             data = ReceiveRoute()
       case _ =>
         data = ReceiveRoute()
     }
+    logInfo(s"Identify: $identify")
     sendMessageTo(
       entityId = identify.id,
       shardId = identify.shardId,

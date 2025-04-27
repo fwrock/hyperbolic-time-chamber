@@ -3,7 +3,6 @@ package model.supermarket.actor
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }

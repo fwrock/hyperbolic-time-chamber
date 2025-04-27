@@ -3,15 +3,16 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, IdUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, IdUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
+import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent }
+import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
+import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 
@@ -87,7 +88,7 @@ class CreatorPoolLoadData(
           logInfo(
             s"Creating actor $actorCreation"
           )
-          createPoolActor(
+          val actor = createPoolActor(
             system = context.system,
             actorClassName = actorCreation.actor.typeActor,
             entityId = IdUtil.format(actorCreation.actor.id),
@@ -97,8 +98,10 @@ class CreatorPoolLoadData(
             creatorManager = self,
             reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,
+            dependencies = mutable.Map[String, Dependency](),
             creationType = PoolDistributed
           )
+          logInfo(s"Actor created: $actor")
       }
 
       actorsToCreate = actorsToCreate.drop(chunk.size)
