@@ -20,12 +20,12 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class LoadDataManager(
-  val timeManager: ActorRef,
+  val timeSingletonManager: ActorRef,
   val poolTimeManager: ActorRef,
   val simulationManager: ActorRef,
   val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseManager[DefaultState](
-      timeManager = timeManager,
+      timeManager = timeSingletonManager,
       actorId = "load-data-manager"
     ) {
 
@@ -159,14 +159,14 @@ class LoadDataManager(
 
 object LoadDataManager {
   def props(
-    timeManager: ActorRef,
+    timeSingletonManager: ActorRef,
     poolTimeManager: ActorRef,
     simulationManager: ActorRef,
     poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[LoadDataManager],
-      timeManager,
+      timeSingletonManager,
       poolTimeManager,
       simulationManager,
       poolReporters

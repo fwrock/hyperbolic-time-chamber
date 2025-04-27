@@ -3,6 +3,7 @@ package model.mobility.actor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
@@ -21,11 +22,9 @@ import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import scala.collection.mutable
 
 class Bus(
-  private val id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends Movable[BusState](
-      movableId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =

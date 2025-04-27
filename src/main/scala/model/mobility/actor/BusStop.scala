@@ -5,6 +5,7 @@ import core.actor.BaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.mobility.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
@@ -13,11 +14,9 @@ import org.interscity.htc.model.mobility.entity.state.BusStopState
 import scala.collection.mutable
 
 class BusStop(
-  private var id: String = null,
-  private val timeManager: ActorRef
+  private val properties: Properties
 ) extends BaseActor[BusStopState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =

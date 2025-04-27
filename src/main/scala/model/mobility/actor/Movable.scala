@@ -6,6 +6,7 @@ import model.mobility.entity.state.MovableState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
@@ -16,20 +17,10 @@ import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, Leav
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 
 abstract class Movable[T <: MovableState](
-  private var movableId: String = null,
-  private var movableShardId: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      actorId = movableId,
-      shardId = movableShardId,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   protected def requestRoute(): Unit = {}

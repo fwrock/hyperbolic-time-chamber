@@ -16,6 +16,7 @@ import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
@@ -39,12 +40,7 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
   *   The state of the actor
   */
 abstract class BaseActor[T <: BaseState](
-  protected var actorId: String = null,
-  protected var shardId: String = null,
-  private var timeManager: ActorRef = null,
-  private var creatorManager: ActorRef = null,
-  private var data: Any = null,
-  private var actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
@@ -56,8 +52,12 @@ abstract class BaseActor[T <: BaseState](
   protected var currentTick: Tick = 0
 
   protected var state: T = uninitialized
+
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
-  protected var entityId: String = actorId
+  protected var timeManager: ActorRef = uninitialized
+  protected var creatorManager: ActorRef = uninitialized
+
+  protected var entityId: String = properties.entityId
   private var currentTimeManager: ActorRef = uninitialized
   private var isInitialized: Boolean = false
 
@@ -72,8 +72,9 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-    if (data != null) {
-      state = JsonUtil.convertValue[T](data)
+    logInfo(s"Starting actor $entityId: ${properties.data}")
+    if (properties.data != null) {
+      state = JsonUtil.convertValue[T](properties.data)
       if (state != null && Option(state.getStartTick).isDefined) {
         startTick = state.getStartTick
         registerOnTimeManager()
@@ -83,9 +84,9 @@ abstract class BaseActor[T <: BaseState](
   }
 
   private def onFinishInitialize(): Unit =
-    if (!isInitialized && creatorManager != null) {
+    if (!isInitialized && properties.creatorManager != null) {
       isInitialized = true
-      creatorManager ! InitializeEntityAckEvent(
+      properties.creatorManager ! InitializeEntityAckEvent(
         entityId = entityId
       )
     }
@@ -102,7 +103,7 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit =
     if (!isInitialized) {
-      actorId = event.id
+      entityId = event.id
       entityId = event.id
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
@@ -127,10 +128,10 @@ abstract class BaseActor[T <: BaseState](
       identify = Some(
         Identify(
           id = IdUtil.format(entityId),
-          shardId = IdUtil.format(shardId),
+          shardId = IdUtil.format(properties.shardId),
           classType = getClass.getName,
           actorRef = getSelfShard.path.toString,
-          typeActor = actorType.toString
+          typeActor = properties.actorType.toString
         )
       )
     )
@@ -479,7 +480,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The shard name
     */
-  protected def getShardId: String = shardId.replace(":", "_").replace(";", "_")
+  protected def getShardId: String = properties.shardId.replace(":", "_").replace(";", "_")
 
   /** Gets the actor reference of the shard region for a given class name.
     *

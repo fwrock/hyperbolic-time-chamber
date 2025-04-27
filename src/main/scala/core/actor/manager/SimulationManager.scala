@@ -24,7 +24,7 @@ class SimulationManager(
       timeManager = null
     ) {
 
-  private var timeManager: ActorRef = uninitialized
+  private var timeSingletonManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
@@ -83,7 +83,7 @@ class SimulationManager(
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
     logInfo(s"Run simulation: \n$configuration")
-    timeManager = createSingletonTimeManager()
+    timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
   }
 
@@ -111,7 +111,7 @@ class SimulationManager(
   private def createSingletonLoadManager(): ActorRef =
     createSingletonManager(
       manager = LoadDataManager.props(
-        timeManager = poolTimeManager,
+        timeSingletonManager = timeSingletonManager,
         poolTimeManager = poolTimeManager,
         simulationManager = selfProxy,
         poolReporters = reporters

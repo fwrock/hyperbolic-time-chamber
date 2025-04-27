@@ -6,6 +6,7 @@ import model.mobility.entity.state.GPSState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
@@ -18,31 +19,29 @@ import scala.collection.mutable
 import scala.util.{ Failure, Success }
 
 class GPS(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = PoolDistributed
+  private val properties: Properties
 ) extends BaseActor[GPSState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def onStart(): Unit =
-    val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
-    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-      state.cityMapPath,
-      nodeGraphIdExtractor,
-      0.0
-    ) match {
-      case Success(graph) =>
-        state.cityMap = graph
-        logInfo("City map loaded successfully")
-        logInfo(s"Nodes amount: ${state.cityMap.vertices.size}")
-      case Failure(e) =>
-        logError(s"Error on load and process city map from json file: ${e.getMessage}")
-        e.printStackTrace()
+    if (state != null) {
+      val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
+      Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
+        state.cityMapPath,
+        nodeGraphIdExtractor,
+        0.0
+      ) match {
+        case Success(graph) =>
+          state.cityMap = graph
+          logInfo("City map loaded successfully")
+          logInfo(s"Nodes amount: ${state.cityMap.vertices.size}")
+        case Failure(e) =>
+          logError(s"Error on load and process city map from json file: ${e.getMessage}")
+          e.printStackTrace()
+      }
+    } else {
+      logError(s"State is null, GPS cannot be initialized")
     }
 
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>

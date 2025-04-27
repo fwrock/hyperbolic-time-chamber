@@ -6,6 +6,7 @@ import core.entity.state.BaseState
 
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.apache.pekko.actor.{ ActorRef, Props }
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.util.{ ActorCreatorUtil, DistributedUtil }
 
 import scala.collection.mutable
@@ -15,8 +16,10 @@ abstract class BaseManager[T <: BaseState](
   timeManager: ActorRef = null
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      actorId = actorId,
-      timeManager = timeManager
+      properties = Properties(
+        entityId = actorId,
+        timeManager = timeManager
+      )
     ) {
 
   protected def createSingletonManager(

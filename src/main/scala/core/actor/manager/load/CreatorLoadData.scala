@@ -11,7 +11,7 @@ import core.util.ActorCreatorUtil.createShardRegion
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization, Properties }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
@@ -27,8 +27,10 @@ class CreatorLoadData(
   timeManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseActor[DefaultState](
-      timeManager = timeManager,
-      actorId = "creator-load-data"
+      properties = Properties(
+        entityId = "creator-load-data",
+        timeManager = timeManager
+      )
     ) {
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
