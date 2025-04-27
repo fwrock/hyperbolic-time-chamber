@@ -20,7 +20,7 @@ class BusStop(
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =
-    val dependency = dependencies(state.nodeId)
+    val dependency = getDependency(state.nodeId)
     sendMessageTo(
       dependency.id,
       dependency.classType,

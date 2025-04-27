@@ -152,7 +152,7 @@ class BusStation(
       path = mutable.Queue(),
       label = label
     )
-    val dependency = dependencies(origin)
+    val dependency = getDependency(origin)
     sendMessageTo(
       dependency.id,
       dependency.classType,
