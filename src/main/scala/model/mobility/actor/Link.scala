@@ -4,7 +4,6 @@ package model.mobility.actor
 import core.actor.BaseActor
 import model.mobility.entity.state.LinkState
 
-import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
@@ -33,8 +32,8 @@ class Link(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onStart()
-    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
-    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
+//    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
+//    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
   }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =

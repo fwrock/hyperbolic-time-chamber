@@ -1,9 +1,9 @@
 package org.interscity.htc
 package model.mobility.collections
 
-import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 
 case class RoadInfo(roadType: String, name: Option[String], speedLimit: Option[Int])
 
@@ -51,38 +51,381 @@ object GraphUsageExample {
   val jsonWithRefs = """
   {
     "nodes": [
-      {"id": "A", "shardId": "s1", "classType": "sensor", "latitude": 0.0, "longitude": 0.0},
-      {"id": "B", "shardId": "s1", "classType": "actuator", "latitude": 1.0, "longitude": 5.0},
-      {"id": "C", "shardId": "s2", "classType": "sensor", "latitude": 4.0, "longitude": 2.0},
-      {"id": "D", "shardId": "s2", "classType": "storage", "latitude": 5.0, "longitude": 6.0}
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N1",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "0.0",
+            "longitude": "0.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "100.0",
+            "longitude": "0.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "200.0",
+            "longitude": "0.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "0.0",
+            "longitude": "100.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "100.0",
+            "longitude": "100.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "200.0",
+            "longitude": "100.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N7",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "0.0",
+            "longitude": "200.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "100.0",
+            "longitude": "200.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "200.0",
+            "longitude": "200.0"
+        },
+        {
+            "id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "classType": "org.interscity.htc.model.mobility.actor.Node",
+            "shardId": "dtmi:org:interscity:model:mobility:resource:node;1",
+            "latitude": "300.0",
+            "longitude": "100.0"
+        }
     ],
     "edges": [
-      {
-        "source_id": "A",
-        "target_id": "B",
-        "weight": 6.0,
-        "label": {"roadType": "local", "name": "Rua 1", "speedLimit": 50}
-      },
-      {
-        "source_id": "A",
-        "target_id": "C",
-        "weight": 5.0,
-        "label": {"roadType": "express", "name": "Via Rápida", "speedLimit": 80}
-      },
-      {
-        "source_id": "B",
-        "target_id": "D",
-        "label": {"roadType": "local", "name": "Rua 2", "speedLimit": 50}
-      },
-      {
-        "source_id": "C",
-        "target_id": "D",
-        "weight": 3.5,
-        "label": {"roadType": "express", "name": "Av Principal", "speedLimit": 60}
-      }
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N1",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L1_2",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N1",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L2_1",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L2_3",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L3_2",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L4_5",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L5_4",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L5_6",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L6_5",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N7",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L7_8",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N7",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L8_7",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L8_9",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L9_8",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N1",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L1_4",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N1",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L4_1",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L2_5",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N2",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L5_2",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L3_6",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L6_3",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N7",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L4_7",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N7",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N4",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L7_4",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L5_8",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N8",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N5",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L8_5",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L6_9",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L9_6",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L6_10",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N6",
+            "weight": 100.0,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L10_6",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 100.0
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "weight": 141.4,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L9_10",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 141.4
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N9",
+            "weight": 141.4,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L10_9",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 141.4
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "weight": 141.4,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L3_10",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 141.4
+            }
+        },
+        {
+            "source_id": "dtmi:org:interscity:model:mobility:actor:node;N10",
+            "target_id": "dtmi:org:interscity:model:mobility:actor:node;N3",
+            "weight": 141.4,
+            "label": {
+                "id": "dtmi:org:interscity:model:mobility:actor:link;L10_3",
+                "shardId": "dtmi:org:interscity:model:mobility:resource:link;1",
+                "length": 141.4
+            }
+        }
     ],
     "directed": false
-  }
+}
   """
 
   // Função para extrair o ID (String) de um NodeGraph
@@ -90,7 +433,7 @@ object GraphUsageExample {
 
   // Chama loadFromJson com os tipos e a função extratora
   // V = NodeGraph, ID = String, W = Double, L = RoadInfo
-  Graph.loadFromJson[NodeGraph, String, Double, RoadInfo](
+  Graph.loadFromJson[NodeGraph, String, Double, EdgeGraph](
     jsonWithRefs,
     nodeGraphIdExtractor, // Passa a função aqui
     0.0 // Default weight
@@ -103,7 +446,7 @@ object GraphUsageExample {
         edge =>
           // Note que source/target agora são os objetos NodeGraph completos
           println(
-            f"  ${edge.source.id} -> ${edge.target.id} | W: ${edge.weight}%.1f | L: ${edge.label.roadType}"
+            f"  ${edge.source.id} -> ${edge.target.id} | W: ${edge.weight}%.1f | L: ${edge.label.id}"
           )
       }
 

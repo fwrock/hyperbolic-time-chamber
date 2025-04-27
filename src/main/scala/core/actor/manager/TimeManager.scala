@@ -305,7 +305,7 @@ class TimeManager(
     )
 
   private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit =
-    getActorRef(s"/actor/${identity.id}") ! SpontaneousEvent(
+    getActorPoolRef(identity.id) ! SpontaneousEvent(
       tick = tick,
       actorRef = self
     )

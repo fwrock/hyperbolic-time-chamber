@@ -12,7 +12,8 @@ import org.interscity.htc.core.enumeration.ReportTypeEnum
   */
 abstract class BaseState(
   startTick: Tick = Long.MinValue,
-  reporterType: ReportTypeEnum = null
+  reporterType: ReportTypeEnum = null,
+  scheduleOnTimeManager: Boolean = true,
 ) {
 
   /** Gets the tick when the state started.
@@ -23,4 +24,6 @@ abstract class BaseState(
   def getStartTick: Tick = startTick
 
   def getReporterType: ReportTypeEnum = reporterType
+
+  def isSetScheduleOnTimeManager: Boolean = scheduleOnTimeManager
 }

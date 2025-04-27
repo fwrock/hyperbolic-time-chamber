@@ -60,7 +60,7 @@ abstract class BaseActor[T <: BaseState](
   protected var shardId: String =
     if (properties != null) properties.shardId else UUID.randomUUID().toString
   protected var state: T = uninitialized
-  protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
+  protected val dependencies: mutable.Map[String, Dependency] = if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
 
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
@@ -76,12 +76,21 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
-    logInfo(s"Starting actor $entityId: ${properties.data}")
     if (properties.data != null) {
-      state = JsonUtil.convertValue[T](properties.data)
-      if (state != null && Option(state.getStartTick).isDefined) {
-        startTick = state.getStartTick
-        registerOnTimeManager()
+      try {
+        logInfo(s"Starting actor $entityId: ${properties.data}")
+        state = JsonUtil.convertValue[T](properties.data)
+        if (state != null) {
+          logInfo(s"State: $state")
+          startTick = state.getStartTick
+        }
+          if (state != null && state.isSetScheduleOnTimeManager) {
+          registerOnTimeManager()
+        }
+      } catch {
+        case e: Exception =>
+          logError(s"Error on start actor $entityId: ${e.getMessage}", e)
+          e.printStackTrace()
       }
     }
     onStart()
@@ -126,19 +135,35 @@ abstract class BaseActor[T <: BaseState](
     }
 
   private def registerOnTimeManager(): Unit =
-    timeManager ! RegisterActorEvent(
-      startTick = startTick,
-      actorId = entityId,
-      identify = Some(
-        Identify(
-          id = IdUtil.format(entityId),
-          shardId = IdUtil.format(shardId),
-          classType = getClass.getName,
-          actorRef = getSelfShard.path.toString,
-          typeActor = properties.actorType.toString
+    if (properties.actorType == LoadBalancedDistributed) {
+      timeManager ! RegisterActorEvent(
+        startTick = startTick,
+        actorId = entityId,
+        identify = Some(
+          Identify(
+            id = IdUtil.format(entityId),
+            shardId = IdUtil.format(shardId),
+            classType = getClass.getName,
+            actorRef = getSelfShard.path.toString,
+            typeActor = properties.actorType.toString
+          )
         )
       )
-    )
+    } else {
+      timeManager ! RegisterActorEvent(
+        startTick = startTick,
+        actorId = entityId,
+        identify = Some(
+          Identify(
+            id = IdUtil.format(entityId),
+            shardId = IdUtil.format(shardId),
+            classType = getClass.getName,
+            actorRef = self.path.toString,
+            typeActor = properties.actorType.toString
+          )
+        )
+      )
+    }
 
   protected def onInitialize(event: InitializeEvent): Unit = ()
 
@@ -196,7 +221,7 @@ abstract class BaseActor[T <: BaseState](
     data: AnyRef,
     eventType: String = "default"
   ): Unit = {
-    val pool = getActorRef(s"/actor/$entityId")
+    val pool = getActorPoolRef(entityId)
     pool ! ActorInteractionEvent(
       tick = currentTick,
       lamportTick = getLamportClock,
