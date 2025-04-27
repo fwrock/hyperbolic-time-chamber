@@ -4,7 +4,6 @@ package model.supermarket.actor
 import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
-import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
