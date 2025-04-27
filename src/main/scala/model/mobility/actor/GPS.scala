@@ -114,18 +114,12 @@ class GPS(
       case (Some(originNode), Some(destinationNode)) =>
         cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
-            if (path._2.isEmpty) {
-              logInfo(s"Path not found from ${request.origin} to ${request.destination}")
-            } else {
-              logInfo(s"Path found from ${request.origin} to ${request.destination}. Path: ${path._2}")
-            }
             data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
             data = ReceiveRoute()
       case _ =>
         data = ReceiveRoute()
     }
-    logInfo(s"Identify: $identify")
     sendMessageTo(
       entityId = identify.id,
       shardId = identify.shardId,

@@ -5,7 +5,6 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.SpeedUtil
@@ -23,25 +22,22 @@ class Car(
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    super.actSpontaneous(event)
     state.movableStatus match {
       case Moving =>
+        logInfo(s"${state.destination} - $getCurrentNode")
         requestSignalState()
       case WaitingSignal =>
         linkLeaving()
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
-      case _ =>
-        onFinishSpontaneous(Some(currentTick + 1))
+      case _ => super.actSpontaneous(event)
     }
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
-    super.actInteractWith(event)
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
-      case _ =>
-        logInfo("Event not handled")
+      case _ => super.actInteractWith(event)
     }
   }
 
@@ -111,7 +107,8 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
+    logInfo(s"Time: $time")
     state.movableStatus = Moving
-    onFinishSpontaneous(Some(currentTick + time.toLong))
+    onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }
