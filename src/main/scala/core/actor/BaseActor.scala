@@ -84,7 +84,7 @@ abstract class BaseActor[T <: BaseState](
           logInfo(s"State: $state")
           startTick = state.getStartTick
         }
-          if (state != null && state.isSetScheduleOnTimeManager) {
+        if (state != null && state.isSetScheduleOnTimeManager) {
           registerOnTimeManager()
         }
       } catch {
@@ -126,7 +126,9 @@ abstract class BaseActor[T <: BaseState](
       if (state != null) {
         startTick = state.getStartTick
         onInitialize(event)
-        registerOnTimeManager()
+        if (state.isSetScheduleOnTimeManager) {
+          registerOnTimeManager()
+        }
         onFinishInitialize()
       } else {
         onFinishInitialize()
@@ -185,6 +187,7 @@ abstract class BaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
+    logInfo(s"Sending message to $entityId: $data, $eventType")
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {

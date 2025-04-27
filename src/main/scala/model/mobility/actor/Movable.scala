@@ -32,13 +32,14 @@ abstract class Movable[T <: MovableState](
         linkEnter()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
+        onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: ReceiveRoute => handleReceiveRoute(d)
       case d: LinkInfoData => handleLinkInfo(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logInfo(s"Movable Event not handled: $event")
     }
 
   private def handleReceiveRoute(data: ReceiveRoute): Unit = {
@@ -53,7 +54,7 @@ abstract class Movable[T <: MovableState](
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
       case _ =>
-        logInfo("Event not handled")
+        logInfo(s"Event not handled: $event with data: $data")
     }
 
   protected def actHandleReceiveEnterLinkInfo(
@@ -81,8 +82,8 @@ abstract class Movable[T <: MovableState](
         (item._1, item._2) match
           case (link, node) =>
             sendMessageTo(
-              link.id,
-              link.classType,
+              entityId = link.id,
+              shardId = link.shardId,
               data = EnterLinkData(
                 actorId = getActorId,
                 shardId = getShardId,
@@ -108,8 +109,8 @@ abstract class Movable[T <: MovableState](
         (item._1, item._2) match
           case (link, node) =>
             sendMessageTo(
-              link.id,
-              link.classType,
+              entityId = link.id,
+              shardId = link.shardId,
               data = LeaveLinkData(
                 actorId = getActorId,
                 shardId = getShardId,

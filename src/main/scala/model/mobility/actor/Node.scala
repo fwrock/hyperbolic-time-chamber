@@ -152,7 +152,7 @@ class Node(
           case None =>
             sendMessageTo(
               entityId = event.actorRefId,
-              shardId = event.actorClassType,
+              shardId = event.shardRefId,
               data = SignalStateData(
                 phase = Green,
                 nextTick = currentTick
@@ -160,7 +160,17 @@ class Node(
               eventType = EventTypeEnum.ReceiveSignalState.toString,
               actorType = LoadBalancedDistributed
             )
-      case None => ???
+      case None =>
+        sendMessageTo(
+          entityId = event.actorRefId,
+          shardId = event.shardRefId,
+          data = SignalStateData(
+            phase = Green,
+            nextTick = currentTick
+          ),
+          eventType = EventTypeEnum.ReceiveSignalState.toString,
+          actorType = LoadBalancedDistributed
+        )
 
   private def handleReceiveSignalChangeStatus(
     event: ActorInteractionEvent,

@@ -49,8 +49,9 @@ class Link(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RequestRouteData => handleRequestRoute(event, d)
-      case d: EnterLinkData    => handleEnterLink(event, d)
+      case d: RequestRouteData  => handleRequestRoute(event, d)
+      case d: EnterLinkData     => handleEnterLink(event, d)
+      case d: LeaveLinkData     => handleLeaveLink(event, d)
       case _ =>
         logInfo("Event not handled")
     }
