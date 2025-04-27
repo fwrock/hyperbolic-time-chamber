@@ -1,20 +1,21 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData}
 import core.entity.state.DefaultState
-import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
+import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
 import core.util.ActorCreatorUtil.createActor
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent }
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
+import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
+import org.interscity.htc.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -60,7 +61,9 @@ class LoadDataManager(
         val loader = createActor(
           context.system,
           actorDataSource.dataSource.sourceType.clazz,
-          poolTimeManager
+          properties = Properties(
+            timeManager = poolTimeManager
+          )
         )
         loaders.put(loader, false)
         loader ! LoadDataSourceEvent(
@@ -83,7 +86,16 @@ class LoadDataManager(
           maxInstancesPerNode = maxInstancesPerNode,
           allowLocalRoutees = true
         )
-      ).props(CreatorLoadData.props(getSelfProxy, poolTimeManager, reporters)),
+      ).props(
+        CreatorLoadData.props(
+          CreatorProperties(
+            entityId = "creator-load-data",
+            loadDataManager = getSelfProxy,
+            timeManager = poolTimeManager,
+            reporters = reporters
+          )
+        )
+      ),
       name = POOL_CREATOR_LOAD_DATA_ACTOR_NAME
     )
   }
@@ -99,7 +111,16 @@ class LoadDataManager(
           maxInstancesPerNode = maxInstancesPerNode,
           allowLocalRoutees = true
         )
-      ).props(CreatorPoolLoadData.props(getSelfProxy, poolTimeManager)),
+      ).props(
+        CreatorPoolLoadData.props(
+          CreatorProperties(
+            entityId = "creator-pool-load-data",
+            loadDataManager = getSelfProxy,
+            timeManager = poolTimeManager,
+            reporters = reporters
+          )
+        )
+      ),
       name = POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
     )
   }

@@ -11,7 +11,8 @@ import core.util.ActorCreatorUtil.createShardRegion
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization, Properties }
+import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
@@ -23,13 +24,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
 case object ProcessNextCreateChunk
 
 class CreatorLoadData(
-  loadDataManager: ActorRef,
-  timeManager: ActorRef,
-  reporters: mutable.Map[ReportTypeEnum, ActorRef]
+  private val creatorProperties: CreatorProperties
 ) extends BaseActor[DefaultState](
       properties = Properties(
-        entityId = "creator-load-data",
-        timeManager = timeManager
+        entityId = creatorProperties.entityId,
+        shardId = creatorProperties.shardId,
+        creatorManager = creatorProperties.creatorManager,
+        timeManager = creatorProperties.timeManager,
+        reporters = creatorProperties.reporters,
+        data = creatorProperties.data,
+        actorType = creatorProperties.actorType
       )
     ) {
 
@@ -160,7 +164,10 @@ class CreatorLoadData(
         logInfo(
           s"All $amountActors actors created and acknowledged initialization. Sending FinishCreationEvent."
         )
-        loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
+        creatorProperties.loadDataManager ! FinishCreationEvent(
+          actorRef = self,
+          amount = amountActors
+        )
         finishEventSent = true
       } else {}
     }
@@ -168,14 +175,10 @@ class CreatorLoadData(
 
 object CreatorLoadData {
   def props(
-    loadDataManager: ActorRef,
-    timeManager: ActorRef,
-    reporters: mutable.Map[ReportTypeEnum, ActorRef]
+    creatorProperties: CreatorProperties
   ): Props =
     Props(
       classOf[CreatorLoadData],
-      loadDataManager,
-      timeManager,
-      reporters
+      creatorProperties
     )
 }

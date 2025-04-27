@@ -12,7 +12,8 @@ import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
-import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.enumeration.{ CreationTypeEnum, ReportTypeEnum }
 
 import scala.collection.mutable
 
@@ -29,6 +30,11 @@ object ActorCreatorUtil {
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
     val props = Props(actorClass, args: _*)
+    system.actorOf(props)
+  }
+
+  def createActor[T](system: ActorSystem, actorClass: Class[T], properties: Properties): ActorRef = {
+    val props = Props(actorClass, properties)
     system.actorOf(props)
   }
 
@@ -129,12 +135,13 @@ object ActorCreatorUtil {
         typeName = shardName,
         entityProps = Props(
           clazz,
-          entityId,
-          shardId,
-          timeManager,
-          creatorManager,
-          null,
-          CreationTypeEnum.LoadBalancedDistributed
+          Properties(
+            entityId = entityId,
+            shardId = shardId,
+            timeManager = timeManager,
+            creatorManager = creatorManager,
+            actorType = CreationTypeEnum.LoadBalancedDistributed
+          )
         ),
         settings = ClusterShardingSettings(system),
         extractEntityId = extractEntityId,
@@ -240,6 +247,7 @@ object ActorCreatorUtil {
     shardId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef,
+    reporters: mutable.Map[ReportTypeEnum, ActorRef],
     data: Any,
     creationType: CreationTypeEnum
   ): ActorRef = {
@@ -255,12 +263,15 @@ object ActorCreatorUtil {
       ).props(
         Props(
           clazz,
-          entityId,
-          shardId,
-          timeManager,
-          creatorManager,
-          data,
-          creationType
+          Properties(
+            entityId = entityId,
+            shardId = shardId,
+            timeManager = timeManager,
+            creatorManager = creatorManager,
+            reporters = reporters,
+            data = data,
+            actorType = creationType
+          )
         )
       ),
       name = entityId

@@ -7,7 +7,7 @@ import org.apache.pekko.actor.ActorRef
 import model.mobility.entity.state.TrafficSignalState
 
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.interscity.htc.core.entity.actor.Properties
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData

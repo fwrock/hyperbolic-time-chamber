@@ -6,7 +6,7 @@ import model.mobility.entity.state.GPSState
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.entity.actor.Properties
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed

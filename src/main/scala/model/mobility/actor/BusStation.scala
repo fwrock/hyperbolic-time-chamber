@@ -6,10 +6,10 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.interscity.htc.core.entity.actor.Properties
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.core.util.ActorCreatorUtil.{ createShardedActor, createShardedActorSeveralArgs }
+import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRouteData, RequestRouteData }
@@ -21,7 +21,7 @@ import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, Ro
 import scala.collection.mutable
 
 class BusStation(
-  private val properties: Properties
+  protected val properties: Properties
 ) extends BaseActor[BusStationState](
       properties = properties
     ) {
