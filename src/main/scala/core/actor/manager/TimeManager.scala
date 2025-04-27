@@ -105,7 +105,7 @@ class TimeManager(
   }
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
-    logInfo(s"Started simulation: $start")
+    logInfo(s"Started simulation: ${start.startTick}")
     unstashAll()
     start.data match
       case Some(data) =>
@@ -121,7 +121,7 @@ class TimeManager(
       notifyLocalManagers(start)
     } else {
       logInfo(
-        s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
+        s"Local TimeManager started at tick $localTickOffset"
       )
       self ! UpdateGlobalTimeEvent(localTickOffset)
     }
@@ -289,7 +289,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    if (identity.typeActor == CreationTypeEnum.PoolDistributed.toString) {
+    if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
       sendSpontaneousEventPool(tick, identity)
     } else {
       sendSpontaneousEventShard(tick, identity)

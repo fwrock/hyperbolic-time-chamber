@@ -99,7 +99,7 @@ class ActorInteractionSerializer(
             actorClassType = proto.actorClassType,
             eventType = proto.eventType,
             data = deserializedPayload,
-            actorType = proto.actorClassType
+            actorType = proto.actorType
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(

@@ -7,14 +7,15 @@ import model.mobility.entity.state.GPSState
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 import scala.compiletime.uninitialized
 
 class GPS(
@@ -25,7 +26,13 @@ class GPS(
 
   private var cityMap: Graph[NodeGraph, Double, EdgeGraph] = uninitialized
 
+  override def onInitialize(event: InitializeEvent): Unit =
+    loadCityMap()
+
   override def onStart(): Unit =
+    loadCityMap()
+
+  private def loadCityMap(): Unit =
     if (state != null) {
       logInfo(s"Starting actor $entityId: ${properties.data}")
       val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
@@ -60,7 +67,7 @@ class GPS(
                 id = event.actorRefId,
                 shardId = event.shardRefId,
                 classType = event.actorClassType,
-                typeActor = event.actorType
+                actorType = event.actorType
               ),
               data
             )
@@ -72,7 +79,7 @@ class GPS(
               id = event.actorRefId,
               shardId = event.shardRefId,
               classType = event.actorClassType,
-              typeActor = event.actorType
+              actorType = event.actorType
             ),
             data
           )
@@ -82,7 +89,7 @@ class GPS(
               id = event.actorRefId,
               shardId = event.shardRefId,
               classType = event.actorClassType,
-              typeActor = event.actorType
+              actorType = event.actorType
             ),
             data
           )
@@ -122,7 +129,7 @@ class GPS(
     sendMessageTo(
       entityId = identify.id,
       shardId = identify.shardId,
-      actorType = CreationTypeEnum.valueOf(identify.typeActor),
+      actorType = CreationTypeEnum.valueOf(identify.actorType),
       data = data
     )
   }
@@ -137,13 +144,13 @@ class GPS(
           id = edge.label.id,
           shardId = edge.label.shardId,
           classType = edge.label.classType,
-          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
         val nodeId = Identify(
           id = node.id,
           shardId = node.shardId,
           classType = node.classType,
-          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
         convertedPath.enqueue((edgeId, nodeId))
     }
