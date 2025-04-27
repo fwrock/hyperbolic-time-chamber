@@ -5,6 +5,7 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
@@ -18,19 +19,9 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusE
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 ) extends Movable[CarState](
-      movableId = id,
-      movableShardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {

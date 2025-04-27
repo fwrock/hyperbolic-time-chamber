@@ -9,6 +9,7 @@ import model.mobility.entity.state.NodeState
 import model.mobility.entity.state.enumeration.EventTypeEnum
 
 import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -25,19 +26,9 @@ import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 ) extends BaseActor[NodeState](
-      actorId = id,
-      shardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}

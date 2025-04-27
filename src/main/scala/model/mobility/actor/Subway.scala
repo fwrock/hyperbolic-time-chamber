@@ -3,6 +3,7 @@ package model.mobility.actor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
@@ -16,11 +17,9 @@ import org.interscity.htc.model.mobility.util.SubwayUtil.timeToNextStation
 import scala.collection.mutable
 
 class Subway(
-  private var id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends Movable[SubwayState](
-      movableId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =

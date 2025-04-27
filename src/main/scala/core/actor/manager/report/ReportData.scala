@@ -5,13 +5,16 @@ import core.actor.BaseActor
 import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 
 abstract class ReportData(
   val id: String = "",
   val reportManager: ActorRef = null
 ) extends BaseActor[DefaultState](
-      actorId = id
+      properties = Properties(
+        entityId = id
+      )
     ) {
 
   override def handleEvent: Receive = {

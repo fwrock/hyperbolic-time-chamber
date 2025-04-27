@@ -237,19 +237,33 @@ object ActorCreatorUtil {
     actorClassName: String,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    constructorParams: Any*
+    shardId: String,
+    timeManager: ActorRef,
+    creatorManager: ActorRef,
+    data: Any,
+    creationType: CreationTypeEnum
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
-    val constructor = clazz.getConstructor(classOf[String])
-    val actorInstance =
-      constructor.newInstance(entityId, constructorParams).asInstanceOf[BaseActor[?]]
-
-    createPoolManagerActor(
-      system = system,
-      entityId = entityId,
-      poolConfiguration = poolConfiguration,
-      actorClass = clazz,
-      constructorParams
+    system.actorOf(
+      ClusterRouterPool(
+        RoundRobinPool(poolConfiguration.roundRobinPool),
+        ClusterRouterPoolSettings(
+          totalInstances = poolConfiguration.totalInstances,
+          maxInstancesPerNode = poolConfiguration.maxInstancesPerNode,
+          allowLocalRoutees = poolConfiguration.allowLocalRoutes
+        )
+      ).props(
+        Props(
+          clazz,
+          entityId,
+          shardId,
+          timeManager,
+          creatorManager,
+          data,
+          creationType
+        )
+      ),
+      name = entityId
     )
   }
 

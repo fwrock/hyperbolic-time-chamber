@@ -6,6 +6,7 @@ import core.actor.BaseActor
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import org.interscity.htc.core.entity.actor.Properties
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.util.ActorCreatorUtil.{ createShardedActor, createShardedActorSeveralArgs }
@@ -20,11 +21,9 @@ import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, Ro
 import scala.collection.mutable
 
 class BusStation(
-  private var id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends BaseActor[BusStationState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -39,7 +38,7 @@ class BusStation(
           val actorRef = createBus(bus)
           val className = classOf[Bus].getName
           dependencies(bus.actorId) = Dependency(
-            id = actorId,
+            id = entityId,
             classType = className
           )
           onFinishSpontaneous(Some(currentTick + state.interval))
@@ -74,7 +73,7 @@ class BusStation(
       val actorRef = createBus(bus)
       val className = classOf[Bus].getName
       dependencies(bus.actorId) = Dependency(
-        id = actorId,
+        id = entityId,
         classType = className
       )
       state.status = Working
@@ -146,7 +145,7 @@ class BusStation(
     val data = RequestRouteData(
       requester = getSelfShard,
       requesterClassType = getShardId,
-      requesterId = actorId,
+      requesterId = entityId,
       currentCost = 0,
       targetNodeId = destination,
       originNodeId = origin,
