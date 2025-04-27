@@ -114,7 +114,7 @@ object CreatorPoolLoadData {
     timeManager: ActorRef
   ): Props =
     Props(
-      classOf[CreatorLoadData],
+      classOf[CreatorPoolLoadData],
       loadDataManager,
       timeManager
     )

@@ -9,14 +9,14 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import model.mobility.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData}
+import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
-import org.interscity.htc.model.mobility.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
 
 class Link(
   private var id: String = null,
