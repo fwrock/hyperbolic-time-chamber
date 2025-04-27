@@ -57,7 +57,7 @@ class Car(
       shardId = dependency.resourceId,
       data = data,
       eventType = EventTypeEnum.RequestRoute.toString,
-      actorType = PoolDistributed
+      actorType = CreationTypeEnum.valueOf(dependency.actorType)
     )
   }
 

@@ -145,7 +145,7 @@ abstract class BaseActor[T <: BaseState](
             shardId = IdUtil.format(shardId),
             classType = getClass.getName,
             actorRef = getSelfShard.path.toString,
-            typeActor = properties.actorType.toString
+            actorType = properties.actorType.toString
           )
         )
       )
@@ -159,7 +159,7 @@ abstract class BaseActor[T <: BaseState](
             shardId = IdUtil.format(shardId),
             classType = getClass.getName,
             actorRef = self.path.toString,
-            typeActor = properties.actorType.toString
+            actorType = properties.actorType.toString
           )
         )
       )
@@ -211,7 +211,7 @@ abstract class BaseActor[T <: BaseState](
         actorPathRef = self.path.name,
         data = data,
         eventType = eventType,
-        actorType = LoadBalancedDistributed.toString
+        actorType = properties.actorType.toString
       )
     )
   }
@@ -231,7 +231,7 @@ abstract class BaseActor[T <: BaseState](
       actorPathRef = self.path.name,
       data = data,
       eventType = eventType,
-      actorType = PoolDistributed.toString
+      actorType = properties.actorType.toString
     )
   }
 
