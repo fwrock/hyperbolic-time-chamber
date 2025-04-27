@@ -51,7 +51,7 @@ class Car(
       origin = state.origin,
       destination = state.destination
     )
-    val dependency = dependencies(state.gpsId)
+    val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
       shardId = dependency.resourceId,

@@ -38,7 +38,7 @@ class Client(
 
   private def enterQueue(): Unit =
     try {
-      val cashier = dependencies(state.cashierId)
+      val cashier = getDependency(state.cashierId)
       sendMessageTo(
         cashier.id,
         cashier.resourceId,

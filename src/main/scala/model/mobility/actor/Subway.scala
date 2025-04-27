@@ -64,7 +64,7 @@ class Subway(
         val station = retrieveSubwayStationFromNodeId(node.id)
         station match
           case Some(stationId) =>
-            val dependency = dependencies(stationId)
+            val dependency = getDependency(stationId)
             sendMessageTo(
               dependency.id,
               dependency.classType,

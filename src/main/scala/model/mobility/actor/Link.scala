@@ -33,8 +33,8 @@ class Link(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onStart()
-    sendConnections(state.to, IdentifyUtil.fromDependency(dependencies(state.to)))
-    sendConnections(state.from, IdentifyUtil.fromDependency(dependencies(state.from)))
+    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
+    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
   }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =
@@ -42,8 +42,8 @@ class Link(
       identify.id,
       identify.classType,
       LinkConnectionsData(
-        to = IdentifyUtil.fromDependency(dependencies(state.to)),
-        from = IdentifyUtil.fromDependency(dependencies(state.from))
+        to = IdentifyUtil.fromDependency(getDependency(state.to)),
+        from = IdentifyUtil.fromDependency(getDependency(state.from))
       ),
       EventTypeEnum.RequestRoute.toString
     )
@@ -103,7 +103,7 @@ class Link(
   private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
     val path = data.path
     val updatedPath = path :+ (
-      IdentifyUtil.fromDependency(dependencies(state.to)),
+      IdentifyUtil.fromDependency(getDependency(state.to)),
       toIdentify
     )
     val dataForward = ForwardRouteData(
@@ -113,7 +113,7 @@ class Link(
       targetNodeId = data.targetNodeId,
       path = updatedPath
     )
-    val to = dependencies(state.to)
+    val to = getDependency(state.to)
     sendMessageTo(to.id, to.classType, dataForward, ForwardRoute.toString)
   }
 }

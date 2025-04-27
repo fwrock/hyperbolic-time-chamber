@@ -26,7 +26,7 @@ class SubwayStation(
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =
-    val node = dependencies(state.nodeId)
+    val node = getDependency(state.nodeId)
     sendMessageTo(
       node.id,
       node.classType,
@@ -151,8 +151,8 @@ class SubwayStation(
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          IdentifyUtil.fromDependency(dependencies(lineRoute(i)._1.nodeId)),
-          IdentifyUtil.fromDependency(dependencies(lineRoute(i)._2))
+          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._1.nodeId)),
+          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._2))
         )
       )
     route

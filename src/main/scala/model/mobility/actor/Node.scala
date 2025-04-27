@@ -92,7 +92,7 @@ class Node(
     state.links.foreach {
 
       link =>
-        val dependency = dependencies(link)
+        val dependency = getDependency(link)
         sendMessageTo(
           dependency.id,
           dependency.classType,
@@ -123,7 +123,7 @@ class Node(
   }
 
   private def handleForwardRoute(event: ActorInteractionEvent, data: ForwardRouteData): Unit =
-    val dependency = dependencies(data.requesterId)
+    val dependency = getDependency(data.requesterId)
     sendMessageTo(
       dependency.id,
       dependency.classType,
