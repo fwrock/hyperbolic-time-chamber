@@ -4,14 +4,16 @@ package core.actor.manager.report
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 
-import java.io.{ BufferedWriter, FileWriter }
-import java.nio.file.{ Files, Path, Paths }
+import java.io.{BufferedWriter, FileWriter}
+import java.nio.file.{Files, Path, Paths}
+import java.time.LocalDateTime
 import scala.collection.mutable
 
-class CsvReportData(override val reportManager: ActorRef)
+class CsvReportData(override val reportManager: ActorRef, override val startRealTime: LocalDateTime)
     extends ReportData(
       id = "csv-report-manager",
-      reportManager = reportManager
+      reportManager = reportManager,
+      startRealTime = startRealTime,
     ) {
 
   private val prefix = Some(config.getString("htc.report-manager.csv.prefix")).getOrElse("report_")
@@ -36,7 +38,7 @@ class CsvReportData(override val reportManager: ActorRef)
     buffer.foreach {
       report =>
         writer.write(
-          s"${report.entityId},${report.timestamp},${report.tick},${report.lamportTick},${report.data},${report.label}\n"
+          s"${report.entityId},${report.timestamp},${startRealTime.plusSeconds(report.tick)},${report.tick},${report.lamportTick},${report.data},${report.label}\n"
         )
     }
     writer.close()

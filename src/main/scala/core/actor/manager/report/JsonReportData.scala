@@ -6,14 +6,16 @@ import core.entity.event.control.report.ReportEvent
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.util.JsonUtil
 
-import java.io.{ BufferedWriter, FileWriter }
-import java.nio.file.{ Files, Path, Paths }
+import java.io.{BufferedWriter, FileWriter}
+import java.nio.file.{Files, Path, Paths}
+import java.time.LocalDateTime
 import scala.collection.mutable
 
-class JsonReportData(override val reportManager: ActorRef)
+class JsonReportData(override val reportManager: ActorRef, override val startRealTime: LocalDateTime)
     extends ReportData(
       id = "json-report-manager",
-      reportManager = reportManager
+      reportManager = reportManager,
+      startRealTime = startRealTime
     ) {
 
   private val prefix = Some(config.getString("htc.report-manager.json.prefix")).getOrElse("report_")

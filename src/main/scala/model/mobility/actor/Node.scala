@@ -142,7 +142,7 @@ class Node(
             report(data = SignalStateData(
               phase = signalState.state,
               nextTick = signalState.nextTick
-            ), "send red signal state")
+            ), "send signal state")
             sendMessageTo(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
@@ -157,7 +157,7 @@ class Node(
             report(data = SignalStateData(
               phase = Green,
               nextTick = currentTick
-            ), "send green signal state")
+            ), "send signal state")
             sendMessageTo(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
@@ -172,7 +172,7 @@ class Node(
         report(data = SignalStateData(
           phase = Green,
           nextTick = currentTick
-        ), "send green signal state")
+        ), "send signal state")
         sendMessageTo(
           entityId = event.actorRefId,
           shardId = event.shardRefId,

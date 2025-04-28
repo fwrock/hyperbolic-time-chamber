@@ -74,6 +74,7 @@ class Link(
       )
     )
     report(data = (data.actorId, state.registered.size), "registered cars")
+    report(data = event.actorRefId, "send enter link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
@@ -93,6 +94,7 @@ class Link(
       linkFreeSpeed = state.freeSpeed,
       linkLanes = state.lanes
     )
+    report(data = event.actorRefId, "send leaving link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
