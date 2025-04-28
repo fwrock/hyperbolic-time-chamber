@@ -29,7 +29,7 @@ abstract class Movable[T <: MovableState](
       case Start =>
         requestRoute()
       case Ready =>
-        linkEnter()
+        enterLink()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
@@ -46,7 +46,7 @@ abstract class Movable[T <: MovableState](
     val updatedCost = data.cost
     state.movableBestRoute = data.path
     state.movableStatus = Ready
-    linkEnter()
+    enterLink()
   }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
@@ -68,28 +68,22 @@ abstract class Movable[T <: MovableState](
   ): Unit = {}
 
   protected def onFinish(nodeId: String): Unit = {
+    report(data = s"${state.movableStatus} -> $Finished", "change status")
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
     } else {
       state.movableStatus = Finished
     }
-    report(data = state.movableStatus, "changed status")
     onFinishSpontaneous()
   }
 
-  protected def linkEnter(): Unit =
+  protected def enterLink(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
-            report(data = EnterLinkData(
-              actorId = getActorId,
-              shardId = getShardId,
-              actorType = state.actorType,
-              actorSize = state.size,
-              actorCreationType = LoadBalancedDistributed
-            ), "enter link")
+            report(data = link.id, "enter link")
             sendMessageTo(
               entityId = link.id,
               shardId = link.shardId,
@@ -106,24 +100,19 @@ abstract class Movable[T <: MovableState](
           case null =>
             logInfo("Path item not handled")
       case None if state.movableBestRoute.isEmpty =>
+        report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
         onFinishSpontaneous()
       case None =>
         state.movableCurrentPath = getNextPath
-        linkEnter()
+        enterLink()
 
-  protected def leivingLink(): Unit =
+  protected def leavingLink(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
-            report(data = LeaveLinkData(
-              actorId = getActorId,
-              shardId = getShardId,
-              actorType = state.actorType,
-              actorSize = state.size,
-              actorCreationType = LoadBalancedDistributed
-            ), "leaving link")
+            report(data = link.id, "leaving link")
             sendMessageTo(
               entityId = link.id,
               shardId = link.shardId,

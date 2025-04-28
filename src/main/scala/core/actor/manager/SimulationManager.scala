@@ -102,7 +102,8 @@ class SimulationManager(
     createSingletonManager(
       manager = ReportManager.props(
         simulationManager = getSelfProxy,
-        timeManager = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME)
+        timeManager = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME),
+        startRealTime = configuration.startRealTime
       ),
       name = REPORT_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

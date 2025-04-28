@@ -1,21 +1,23 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.state.DefaultState
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME}
 
+import java.time.LocalDateTime
 import scala.collection.mutable
 
 class ReportManager(
   timeManager: ActorRef,
-  simulationManager: ActorRef
+  simulationManager: ActorRef,
+  startRealTime: LocalDateTime,
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "report-manager"
@@ -58,7 +60,7 @@ class ReportManager(
           maxInstancesPerNode = maxInstancesPerNode,
           allowLocalRoutees = true
         )
-      ).props(Props(reportType.clazz, getSelfProxy)),
+      ).props(Props(reportType.clazz, getSelfProxy, startRealTime)),
       name = s"$POOL_REPORT_DATA_ACTOR_NAME_PREFIX-$reportType"
     )
   }
@@ -83,8 +85,9 @@ class ReportManager(
 
 object ReportManager {
   def props(
-    simulationManager: ActorRef,
-    timeManager: ActorRef
+             simulationManager: ActorRef,
+             timeManager: ActorRef,
+             startRealTime: LocalDateTime,
   ): Props =
-    Props(classOf[ReportManager], timeManager, simulationManager)
+    Props(classOf[ReportManager], timeManager, simulationManager, startRealTime)
 }

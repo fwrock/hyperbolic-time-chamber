@@ -26,15 +26,15 @@ class Subway(
     state.movableStatus match
       case Start =>
         state.movableStatus = Ready
-        linkEnter()
+        enterLink()
       case Ready =>
-        linkEnter()
+        enterLink()
       case Moving =>
         state.status = Stopped
         requestLoadPassenger()
         requestUnloadPeopleData()
       case Stopped =>
-        leivingLink()
+        leavingLink()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
 

@@ -26,7 +26,7 @@ class Car(
       case Moving =>
         requestSignalState()
       case WaitingSignal =>
-        leivingLink()
+        leavingLink()
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
       case _ => super.actSpontaneous(event)
@@ -41,13 +41,13 @@ class Car(
   }
 
   override def requestRoute(): Unit = {
+    report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
     state.movableStatus = RouteWaiting
-    report(data = state.movableStatus, "changed status")
     val data = RequestRoute(
       origin = state.origin,
       destination = state.destination
     )
-    report(data = data)
+    report(data = s"${state.gpsId}", label = "request route")
     val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
@@ -59,12 +59,13 @@ class Car(
   }
 
   private def requestSignalState(): Unit = {
+    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
     state.movableStatus = WaitingSignalState
-    report(data = state.movableStatus, "changed status")
     getCurrentNode match
       case node =>
         getNextLink match
           case link =>
+            report(data = s"${node.id} -> ${link.id}", label = "request signal state")
             sendMessageTo(
               entityId = node.id,
               shardId = node.shardId,
@@ -79,17 +80,17 @@ class Car(
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
+      report(data = s"${state.movableStatus} -> $WaitingSignal", "change status")
       state.movableStatus = WaitingSignal
-      report(data = state.movableStatus, "changed status")
       onFinishSpontaneous(Some(data.nextTick))
     } else {
-      leivingLink()
+      leavingLink()
     }
 
-  override def leivingLink(): Unit = {
+  override def leavingLink(): Unit = {
+    report(data = s"${state.movableStatus} -> $Ready", "change status")
     state.movableStatus = Ready
-    report(data = state.movableStatus, "link leaving changed status")
-    super.leivingLink()
+    super.leavingLink()
   }
 
   override def actHandleReceiveLeaveLinkInfo(
@@ -112,9 +113,9 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
-    report(data = (time, data, s"km/s = ${data.linkLength / time}"), label = "time and average velocity")
+    report(data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time), label = "(time, length, free speed, speed)")
+    report(data = s"${state.movableStatus} -> $Moving", "change status")
     state.movableStatus = Moving
-    report(data = state.movableStatus, "changed status")
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }
