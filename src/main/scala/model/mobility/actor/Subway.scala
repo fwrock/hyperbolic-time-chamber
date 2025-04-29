@@ -3,6 +3,7 @@ package model.mobility.actor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
@@ -16,26 +17,24 @@ import org.interscity.htc.model.mobility.util.SubwayUtil.timeToNextStation
 import scala.collection.mutable
 
 class Subway(
-  private var id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends Movable[SubwayState](
-      movableId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match
       case Start =>
         state.movableStatus = Ready
-        linkEnter()
+        enterLink()
       case Ready =>
-        linkEnter()
+        enterLink()
       case Moving =>
         state.status = Stopped
         requestLoadPassenger()
         requestUnloadPeopleData()
       case Stopped =>
-        linkLeaving()
+        leavingLink()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
 
@@ -65,7 +64,7 @@ class Subway(
         val station = retrieveSubwayStationFromNodeId(node.id)
         station match
           case Some(stationId) =>
-            val dependency = dependencies(stationId)
+            val dependency = getDependency(stationId)
             sendMessageTo(
               dependency.id,
               dependency.classType,

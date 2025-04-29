@@ -2,18 +2,18 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{ IdUtil, JsonUtil }
+import core.util.{IdUtil, JsonUtil}
 
-import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed, Simple }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
 
 import scala.compiletime.uninitialized
 import scala.collection.mutable
 
-class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager = timeManager) {
+class JsonLoadData(private val properties: Properties) extends LoadDataStrategy(properties = properties) {
 
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
@@ -74,8 +74,10 @@ class JsonLoadData(timeManager: ActorRef) extends LoadDataStrategy(timeManager =
 
   private def sendToCreator(creator: ActorRef, actorsToCreate: Seq[ActorSimulationCreation]): Unit =
     if (actorsToCreate.size < batchSize) {
-      totalBatchAmount += 1
-      creator ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
+      if (actorsToCreate != null && actorsToCreate.nonEmpty) {
+        totalBatchAmount += 1
+        creator ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
+      }
     } else {
       actorsToCreate.grouped(batchSize).foreach {
         batch =>

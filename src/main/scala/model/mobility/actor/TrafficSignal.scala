@@ -3,10 +3,9 @@ package model.mobility.actor
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.ActorRef
 import model.mobility.entity.state.TrafficSignalState
 
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
@@ -18,11 +17,9 @@ import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState
 import scala.collection.mutable
 
 class TrafficSignal(
-  private var id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends BaseActor[TrafficSignalState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -83,7 +80,7 @@ class TrafficSignal(
           phaseOrigin = phaseOrigin,
           nextTick = nextTick
         )
-        val dependency = dependencies(node)
+        val dependency = getDependency(node)
         sendMessageTo(dependency.id, dependency.classType, data, TrafficSignalChangeStatus.toString)
     }
 

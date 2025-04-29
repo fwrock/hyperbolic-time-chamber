@@ -9,6 +9,7 @@ import model.mobility.entity.state.NodeState
 import model.mobility.entity.state.enumeration.EventTypeEnum
 
 import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -25,19 +26,9 @@ import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 ) extends BaseActor[NodeState](
-      actorId = id,
-      shardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
@@ -101,7 +92,7 @@ class Node(
     state.links.foreach {
 
       link =>
-        val dependency = dependencies(link)
+        val dependency = getDependency(link)
         sendMessageTo(
           dependency.id,
           dependency.classType,
@@ -132,7 +123,7 @@ class Node(
   }
 
   private def handleForwardRoute(event: ActorInteractionEvent, data: ForwardRouteData): Unit =
-    val dependency = dependencies(data.requesterId)
+    val dependency = getDependency(data.requesterId)
     sendMessageTo(
       dependency.id,
       dependency.classType,
@@ -148,6 +139,10 @@ class Node(
       case Some(identify) =>
         state.signals.get(identify.id) match
           case Some(signalState) =>
+            report(data = SignalStateData(
+              phase = signalState.state,
+              nextTick = signalState.nextTick
+            ), "send signal state")
             sendMessageTo(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
@@ -159,9 +154,13 @@ class Node(
               actorType = LoadBalancedDistributed
             )
           case None =>
+            report(data = SignalStateData(
+              phase = Green,
+              nextTick = currentTick
+            ), "send signal state")
             sendMessageTo(
               entityId = event.actorRefId,
-              shardId = event.actorClassType,
+              shardId = event.shardRefId,
               data = SignalStateData(
                 phase = Green,
                 nextTick = currentTick
@@ -169,7 +168,21 @@ class Node(
               eventType = EventTypeEnum.ReceiveSignalState.toString,
               actorType = LoadBalancedDistributed
             )
-      case None => ???
+      case None =>
+        report(data = SignalStateData(
+          phase = Green,
+          nextTick = currentTick
+        ), "send signal state")
+        sendMessageTo(
+          entityId = event.actorRefId,
+          shardId = event.shardRefId,
+          data = SignalStateData(
+            phase = Green,
+            nextTick = currentTick
+          ),
+          eventType = EventTypeEnum.ReceiveSignalState.toString,
+          actorType = LoadBalancedDistributed
+        )
 
   private def handleReceiveSignalChangeStatus(
     event: ActorInteractionEvent,

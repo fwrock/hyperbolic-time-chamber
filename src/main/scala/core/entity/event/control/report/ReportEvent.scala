@@ -10,5 +10,6 @@ case class ReportEvent(
   tick: Long,
   lamportTick: Long,
   timestamp: Long = System.nanoTime(),
-  data: Any
+  data: Any,
+  label: String = null
 ) extends BaseEvent[DefaultBaseEventData]

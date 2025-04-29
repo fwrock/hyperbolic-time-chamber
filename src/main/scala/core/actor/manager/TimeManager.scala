@@ -105,7 +105,7 @@ class TimeManager(
   }
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
-    logInfo(s"Started simulation: $start")
+    logInfo(s"Started simulation: ${start.startTick}")
     unstashAll()
     start.data match
       case Some(data) =>
@@ -121,7 +121,7 @@ class TimeManager(
       notifyLocalManagers(start)
     } else {
       logInfo(
-        s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
+        s"Local TimeManager started at tick $localTickOffset"
       )
       self ! UpdateGlobalTimeEvent(localTickOffset)
     }
@@ -211,6 +211,7 @@ class TimeManager(
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
+    logInfo(s"Schedule event received: ${schedule.identify.get.id} at tick ${schedule.tick}")
     if (schedule.tick < localTickOffset) {
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
@@ -231,6 +232,7 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
+      logInfo(s"Finish event received: ${finish.identify.id}")
       runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
       advanceToNextTick()
@@ -289,9 +291,11 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    if (identity.typeActor == CreationTypeEnum.PoolDistributed.toString) {
+    if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
+      logInfo(s"Send spontaneous event at tick $tick to pool actor ${identity.id}")
       sendSpontaneousEventPool(tick, identity)
     } else {
+      logInfo(s"Send spontaneous event at tick $tick to load balance actor ${identity.id}")
       sendSpontaneousEventShard(tick, identity)
     }
 
@@ -305,7 +309,7 @@ class TimeManager(
     )
 
   private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit =
-    getActorRef(s"/actor/${identity.id}") ! SpontaneousEvent(
+    getActorPoolRef(identity.id) ! SpontaneousEvent(
       tick = tick,
       actorRef = self
     )

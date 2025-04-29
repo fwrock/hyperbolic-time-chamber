@@ -4,34 +4,24 @@ package model.mobility.actor
 import core.actor.BaseActor
 import model.mobility.entity.state.LinkState
 
-import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import model.mobility.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData}
+import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
 
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
-import org.interscity.htc.model.mobility.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
 
 class Link(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 ) extends BaseActor[LinkState](
-      actorId = id,
-      shardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   private def cost: Double = {
@@ -42,8 +32,8 @@ class Link(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onStart()
-    sendConnections(state.to, IdentifyUtil.fromDependency(dependencies(state.to)))
-    sendConnections(state.from, IdentifyUtil.fromDependency(dependencies(state.from)))
+//    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
+//    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
   }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =
@@ -51,16 +41,17 @@ class Link(
       identify.id,
       identify.classType,
       LinkConnectionsData(
-        to = IdentifyUtil.fromDependency(dependencies(state.to)),
-        from = IdentifyUtil.fromDependency(dependencies(state.from))
+        to = IdentifyUtil.fromDependency(getDependency(state.to)),
+        from = IdentifyUtil.fromDependency(getDependency(state.from))
       ),
       EventTypeEnum.RequestRoute.toString
     )
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RequestRouteData => handleRequestRoute(event, d)
-      case d: EnterLinkData    => handleEnterLink(event, d)
+      case d: RequestRouteData  => handleRequestRoute(event, d)
+      case d: EnterLinkData     => handleEnterLink(event, d)
+      case d: LeaveLinkData     => handleLeaveLink(event, d)
       case _ =>
         logInfo("Event not handled")
     }
@@ -82,6 +73,8 @@ class Link(
         actorCreationType = data.actorCreationType
       )
     )
+    report(data = (data.actorId, state.registered.size), "registered cars")
+    report(data = event.actorRefId, "send enter link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
@@ -93,6 +86,7 @@ class Link(
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     state.registered.filterInPlace(_.actorId != data.actorId)
+    report(data = (data.actorId, state.registered.size), "remove registered cars")
     val dataLink = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,
@@ -100,6 +94,7 @@ class Link(
       linkFreeSpeed = state.freeSpeed,
       linkLanes = state.lanes
     )
+    report(data = event.actorRefId, "send leaving link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
@@ -112,7 +107,7 @@ class Link(
   private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
     val path = data.path
     val updatedPath = path :+ (
-      IdentifyUtil.fromDependency(dependencies(state.to)),
+      IdentifyUtil.fromDependency(getDependency(state.to)),
       toIdentify
     )
     val dataForward = ForwardRouteData(
@@ -122,7 +117,7 @@ class Link(
       targetNodeId = data.targetNodeId,
       path = updatedPath
     )
-    val to = dependencies(state.to)
+    val to = getDependency(state.to)
     sendMessageTo(to.id, to.classType, dataForward, ForwardRoute.toString)
   }
 }

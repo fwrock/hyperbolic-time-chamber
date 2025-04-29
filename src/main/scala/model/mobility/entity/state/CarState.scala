@@ -3,7 +3,8 @@ package model.mobility.entity.state
 
 import core.types.Tick
 
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
@@ -11,6 +12,8 @@ import scala.collection.mutable
 
 case class CarState(
   override val startTick: Tick,
+  override val reporterType: ReportTypeEnum = null,
+  override val scheduleOnTimeManager: Boolean = true,
   name: String,
   override val origin: String,
   override val destination: String = null,
@@ -26,6 +29,8 @@ case class CarState(
   var status: MovableStatusEnum = Start
 ) extends MovableState(
       startTick = startTick,
+      reporterType = reporterType,
+      scheduleOnTimeManager = scheduleOnTimeManager,
       movableBestCost = bestCost,
       movableStatus = status,
       origin = origin,
