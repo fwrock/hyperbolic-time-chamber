@@ -3,10 +3,8 @@ package model.mobility.actor
 
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
-
-import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.SpeedUtil
@@ -18,66 +16,56 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusE
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 ) extends Movable[CarState](
-      movableId = id,
-      movableShardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    super.actSpontaneous(event)
     state.movableStatus match {
       case Moving =>
         requestSignalState()
       case WaitingSignal =>
-        linkLeaving()
+        leavingLink()
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
-      case _ =>
-        onFinishSpontaneous(Some(currentTick + 1))
+      case _ => super.actSpontaneous(event)
     }
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
-    super.actInteractWith(event)
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
-      case _ =>
-        logInfo("Event not handled")
+      case _ => super.actInteractWith(event)
     }
   }
 
   override def requestRoute(): Unit = {
+    report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
     state.movableStatus = RouteWaiting
     val data = RequestRoute(
       origin = state.origin,
       destination = state.destination
     )
-    val dependency = dependencies(state.gpsId)
+    report(data = s"${state.gpsId}", label = "request route")
+    val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
       shardId = dependency.resourceId,
       data = data,
       eventType = EventTypeEnum.RequestRoute.toString,
-      actorType = PoolDistributed
+      actorType = CreationTypeEnum.valueOf(dependency.actorType)
     )
   }
 
   private def requestSignalState(): Unit = {
+    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
     state.movableStatus = WaitingSignalState
     getCurrentNode match
       case node =>
         getNextLink match
           case link =>
+            report(data = s"${node.id} -> ${link.id}", label = "request signal state")
             sendMessageTo(
               entityId = node.id,
               shardId = node.shardId,
@@ -92,15 +80,17 @@ class Car(
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
+      report(data = s"${state.movableStatus} -> $WaitingSignal", "change status")
       state.movableStatus = WaitingSignal
       onFinishSpontaneous(Some(data.nextTick))
     } else {
-      linkLeaving()
+      leavingLink()
     }
 
-  override def linkLeaving(): Unit = {
+  override def leavingLink(): Unit = {
+    report(data = s"${state.movableStatus} -> $Ready", "change status")
     state.movableStatus = Ready
-    super.linkLeaving()
+    super.leavingLink()
   }
 
   override def actHandleReceiveLeaveLinkInfo(
@@ -108,6 +98,7 @@ class Car(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
+    report(data = state.distance, "traveled distance")
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -122,7 +113,9 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
+    report(data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time), label = "(time, length, free speed, speed)")
+    report(data = s"${state.movableStatus} -> $Moving", "change status")
     state.movableStatus = Moving
-    onFinishSpontaneous(Some(currentTick + time.toLong))
+    onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }

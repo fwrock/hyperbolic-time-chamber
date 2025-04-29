@@ -4,20 +4,23 @@ package core.actor.manager.report
 import core.entity.event.control.report.ReportEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.system.database.database.CreateEntityEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CASSANDRA_ENTITY_MANAGER_REPORT_DATA_ACTOR_NAME_PREFIX
 import org.interscity.htc.system.database.cassandra.actor.CassandraEntityManager
 
+import java.time.LocalDateTime
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
-class CassandraReportData(override val reportManager: ActorRef)
+class CassandraReportData(override val reportManager: ActorRef,
+                          override val startRealTime: LocalDateTime)
     extends ReportData(
       id = "cassandra-report-manager",
-      reportManager = reportManager
+      reportManager = reportManager,
+      startRealTime = startRealTime
     ) {
 
   private var driver: ActorRef = uninitialized
@@ -25,9 +28,6 @@ class CassandraReportData(override val reportManager: ActorRef)
   private val databaseSource = Some(
     config.getString("htc.report-manager.cassandra.database-source")
   ).getOrElse("default")
-  private val strategyDataStorage = Some(
-    config.getString("htc.report-manager.cassandra.strategy-data-storage")
-  ).getOrElse("replicate")
   private val batchSize =
     Some(config.getInt("htc.report-manager.cassandra.batch-size")).getOrElse(1000)
 

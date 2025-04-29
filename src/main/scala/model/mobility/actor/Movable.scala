@@ -4,11 +4,11 @@ package model.mobility.actor
 import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, ReceiveRoute }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
@@ -16,20 +16,10 @@ import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, Leav
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 
 abstract class Movable[T <: MovableState](
-  private var movableId: String = null,
-  private var movableShardId: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = LoadBalancedDistributed
+  private val properties: Properties
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      actorId = movableId,
-      shardId = movableShardId,
-      timeManager = timeManager,
-      creatorManager = creatorManager,
-      data = data,
-      actorType = actorType
+      properties = properties
     ) {
 
   protected def requestRoute(): Unit = {}
@@ -39,23 +29,24 @@ abstract class Movable[T <: MovableState](
       case Start =>
         requestRoute()
       case Ready =>
-        linkEnter()
+        enterLink()
       case _ =>
         logInfo(s"Event current status not handled ${state.movableStatus}")
+        onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: ReceiveRoute => handleReceiveRoute(d)
       case d: LinkInfoData => handleLinkInfo(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logInfo(s"Movable Event not handled: $event")
     }
 
   private def handleReceiveRoute(data: ReceiveRoute): Unit = {
     val updatedCost = data.cost
     state.movableBestRoute = data.path
     state.movableStatus = Ready
-    linkEnter()
+    enterLink()
   }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
@@ -63,7 +54,7 @@ abstract class Movable[T <: MovableState](
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
       case _ =>
-        logInfo("Event not handled")
+        logInfo(s"Event not handled: $event with data: $data")
     }
 
   protected def actHandleReceiveEnterLinkInfo(
@@ -76,7 +67,8 @@ abstract class Movable[T <: MovableState](
     data: LinkInfoData
   ): Unit = {}
 
-  protected def onFinish(nodeId: String): Unit =
+  protected def onFinish(nodeId: String): Unit = {
+    report(data = s"${state.movableStatus} -> $Finished", "change status")
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -84,15 +76,17 @@ abstract class Movable[T <: MovableState](
       state.movableStatus = Finished
     }
     onFinishSpontaneous()
+  }
 
-  protected def linkEnter(): Unit =
+  protected def enterLink(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
+            report(data = link.id, "enter link")
             sendMessageTo(
-              link.id,
-              link.classType,
+              entityId = link.id,
+              shardId = link.shardId,
               data = EnterLinkData(
                 actorId = getActorId,
                 shardId = getShardId,
@@ -106,20 +100,22 @@ abstract class Movable[T <: MovableState](
           case null =>
             logInfo("Path item not handled")
       case None if state.movableBestRoute.isEmpty =>
+        report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
         onFinishSpontaneous()
       case None =>
         state.movableCurrentPath = getNextPath
-        linkEnter()
+        enterLink()
 
-  protected def linkLeaving(): Unit =
+  protected def leavingLink(): Unit =
     state.movableCurrentPath match
       case Some(item) =>
         (item._1, item._2) match
           case (link, node) =>
+            report(data = link.id, "leaving link")
             sendMessageTo(
-              link.id,
-              link.classType,
+              entityId = link.id,
+              shardId = link.shardId,
               data = LeaveLinkData(
                 actorId = getActorId,
                 shardId = getShardId,

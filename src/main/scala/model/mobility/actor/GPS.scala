@@ -4,45 +4,54 @@ package model.mobility.actor
 import core.actor.BaseActor
 import model.mobility.entity.state.GPSState
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
+import scala.compiletime.uninitialized
 
 class GPS(
-  private var id: String = null,
-  private var shard: String = null,
-  private val timeManager: ActorRef = null,
-  private val creatorManager: ActorRef = null,
-  private val data: Any = null,
-  private val actorType: CreationTypeEnum = PoolDistributed
+  private val properties: Properties
 ) extends BaseActor[GPSState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
+  private var cityMap: Graph[NodeGraph, Double, EdgeGraph] = uninitialized
+
+  override def onInitialize(event: InitializeEvent): Unit =
+    loadCityMap()
+
   override def onStart(): Unit =
-    val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
-    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-      state.cityMapPath,
-      nodeGraphIdExtractor,
-      0.0
-    ) match {
-      case Success(graph) =>
-        state.cityMap = graph
-        logInfo("City map loaded successfully")
-        logInfo(s"Nodes amount: ${state.cityMap.vertices.size}")
-      case Failure(e) =>
-        logError(s"Error on load and process city map from json file: ${e.getMessage}")
-        e.printStackTrace()
+    loadCityMap()
+
+  private def loadCityMap(): Unit =
+    if (state != null) {
+      logInfo(s"Starting actor $entityId: ${properties.data}")
+      val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
+      logInfo(s"Loading city map from json file: ${state.cityMapPath}")
+      Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
+        state.cityMapPath,
+        nodeGraphIdExtractor,
+        0.0
+      ) match {
+        case Success(graph) =>
+          cityMap = graph
+          logInfo("City map loaded successfully")
+          logInfo(s"Nodes amount: ${cityMap.vertices.size}")
+        case Failure(e) =>
+          logError(s"Error on load and process city map from json file: ${e.getMessage}")
+          e.printStackTrace()
+      }
+    } else {
+      logError(s"State is null, GPS cannot be initialized")
     }
 
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>
@@ -51,26 +60,26 @@ class GPS(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case data: RequestRoute =>
-        if (state.cityMap == null) {
+        if (cityMap == null) {
           state.requests.enqueue(
             (
               Identify(
                 id = event.actorRefId,
                 shardId = event.shardRefId,
                 classType = event.actorClassType,
-                typeActor = event.actorType
+                actorType = event.actorType
               ),
               data
             )
           )
-        } else if (state.cityMap != null && state.requests.nonEmpty) {
+        } else if (cityMap != null && state.requests.nonEmpty) {
           processQueuedRequests()
           handleRequestRoute(
             Identify(
               id = event.actorRefId,
               shardId = event.shardRefId,
               classType = event.actorClassType,
-              typeActor = event.actorType
+              actorType = event.actorType
             ),
             data
           )
@@ -80,7 +89,7 @@ class GPS(
               id = event.actorRefId,
               shardId = event.shardRefId,
               classType = event.actorClassType,
-              typeActor = event.actorType
+              actorType = event.actorType
             ),
             data
           )
@@ -90,7 +99,7 @@ class GPS(
     }
 
   private def processQueuedRequests(): Unit =
-    if (state.cityMap != null && state.requests.nonEmpty) {
+    if (cityMap != null && state.requests.nonEmpty) {
       while (state.requests.nonEmpty) {
         val request = state.requests.dequeue()
         handleRequestRoute(request._1, request._2)
@@ -98,12 +107,12 @@ class GPS(
     }
 
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
-    val origin = state.cityMap.vertices.find(_.id == request.origin)
-    val destination = state.cityMap.vertices.find(_.id == request.destination)
+    val origin = cityMap.vertices.find(_.id == request.origin)
+    val destination = cityMap.vertices.find(_.id == request.destination)
     var data = ReceiveRoute()
     (origin, destination) match {
       case (Some(originNode), Some(destinationNode)) =>
-        state.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
+        cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
             data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
@@ -114,7 +123,7 @@ class GPS(
     sendMessageTo(
       entityId = identify.id,
       shardId = identify.shardId,
-      actorType = CreationTypeEnum.valueOf(identify.typeActor),
+      actorType = CreationTypeEnum.valueOf(identify.actorType),
       data = data
     )
   }
@@ -129,13 +138,13 @@ class GPS(
           id = edge.label.id,
           shardId = edge.label.shardId,
           classType = edge.label.classType,
-          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
         val nodeId = Identify(
           id = node.id,
           shardId = node.shardId,
           classType = node.classType,
-          typeActor = CreationTypeEnum.LoadBalancedDistributed.toString
+          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
         convertedPath.enqueue((edgeId, nodeId))
     }

@@ -6,6 +6,7 @@ import model.mobility.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
@@ -19,15 +20,13 @@ import org.interscity.htc.model.mobility.entity.state.model.{ RoutePathItem, Sub
 import scala.collection.mutable
 
 class SubwayStation(
-  private var id: String = null,
-  private val timeManager: ActorRef = null
+  private val properties: Properties
 ) extends BaseActor[SubwayStationState](
-      actorId = id,
-      timeManager = timeManager
+      properties = properties
     ) {
 
   override def onInitialize(event: InitializeEvent): Unit =
-    val node = dependencies(state.nodeId)
+    val node = getDependency(state.nodeId)
     sendMessageTo(
       node.id,
       node.classType,
@@ -152,8 +151,8 @@ class SubwayStation(
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          IdentifyUtil.fromDependency(dependencies(lineRoute(i)._1.nodeId)),
-          IdentifyUtil.fromDependency(dependencies(lineRoute(i)._2))
+          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._1.nodeId)),
+          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._2))
         )
       )
     route
