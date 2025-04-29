@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, Stash }
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
@@ -14,16 +14,19 @@ import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, 
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ AcknowledgeTickEvent, DestructEvent, RegisterActorEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
+import java.util.UUID
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ Await, ExecutionContext, Future }
@@ -38,29 +41,33 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
   *   The state of the actor
   */
 abstract class BaseActor[T <: BaseState](
-  protected var actorId: String = null,
-  protected var shardId: String = null,
-  private var timeManager: ActorRef = null,
-  private var creatorManager: ActorRef = null
+  private val properties: Properties
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging
     with Stash {
 
   protected val config = ConfigFactory.load()
+  private var isInitialized: Boolean = false
+  private val snapShotInterval = 1000
+
   protected var startTick: Tick = MinValue
-  protected val lamportClock = new LamportClock()
+  private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
+  protected var entityId: String =
+    if (properties != null) properties.entityId else UUID.randomUUID().toString
+  protected var shardId: String =
+    if (properties != null) properties.shardId else UUID.randomUUID().toString
   protected var state: T = uninitialized
-  protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
-  protected var entityId: String = actorId
+  protected val dependencies: mutable.Map[String, Dependency] = if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
+
+  protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
+    if (properties != null) properties.reporters else null
+  protected var timeManager: ActorRef = if (properties != null) properties.timeManager else null
+  protected var creatorManager: ActorRef =
+    if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
-  protected var isInitialized: Boolean = false
-
-  protected val dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency]()
-
-  private val snapShotInterval = 1000
 
   override def persistenceId: String = s"${getClass.getName}-${self.path.name}"
 
@@ -69,6 +76,23 @@ abstract class BaseActor[T <: BaseState](
     */
   override def preStart(): Unit = {
     super.preStart()
+    if (properties.data != null) {
+      try {
+        logInfo(s"Starting actor $entityId: ${properties.data}")
+        state = JsonUtil.convertValue[T](properties.data)
+        if (state != null) {
+          logInfo(s"State: $state")
+          startTick = state.getStartTick
+        }
+        if (state != null && state.isSetScheduleOnTimeManager) {
+          registerOnTimeManager()
+        }
+      } catch {
+        case e: Exception =>
+          logError(s"Error on start actor $entityId: ${e.getMessage}", e)
+          e.printStackTrace()
+      }
+    }
     onStart()
   }
 
@@ -92,7 +116,7 @@ abstract class BaseActor[T <: BaseState](
 
   private def initialize(event: InitializeEvent): Unit =
     if (!isInitialized) {
-      actorId = event.id
+      entityId = event.id
       entityId = event.id
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
@@ -102,36 +126,51 @@ abstract class BaseActor[T <: BaseState](
       if (state != null) {
         startTick = state.getStartTick
         onInitialize(event)
-        registerOnTimeManager()
+        if (state.isSetScheduleOnTimeManager) {
+          registerOnTimeManager()
+        }
         onFinishInitialize()
       } else {
         onFinishInitialize()
         context.stop(self)
       }
-    } else {
-//      logError(
-//        s"Actor already initialized with id= $entityId, state= $state, not initializing again with $event"
-//      )
     }
 
   private def registerOnTimeManager(): Unit =
-    timeManager ! RegisterActorEvent(
-      startTick = startTick,
-      actorId = entityId,
-      identify = Some(
-        Identify(
-          id = IdUtil.format(entityId),
-          shardId = IdUtil.format(shardId),
-          classType = getClass.getName,
-          actorRef = getSelfShard.path.toString
+    if (properties.actorType == LoadBalancedDistributed) {
+      timeManager ! RegisterActorEvent(
+        startTick = startTick,
+        actorId = entityId,
+        identify = Some(
+          Identify(
+            id = IdUtil.format(entityId),
+            shardId = IdUtil.format(shardId),
+            classType = getClass.getName,
+            actorRef = getSelfShard.path.toString,
+            actorType = properties.actorType.toString
+          )
         )
       )
-    )
+    } else {
+      timeManager ! RegisterActorEvent(
+        startTick = startTick,
+        actorId = entityId,
+        identify = Some(
+          Identify(
+            id = IdUtil.format(entityId),
+            shardId = IdUtil.format(shardId),
+            classType = getClass.getName,
+            actorRef = self.path.toString,
+            actorType = properties.actorType.toString
+          )
+        )
+      )
+    }
 
   protected def onInitialize(event: InitializeEvent): Unit = ()
 
   /** Sends a message to another simulation actor.
-    * @param actorId
+    * @param entityId
     *   The id of the entity in the shard region and simulation
     * @param actorRef
     *   The actor reference of the actor. This is the shard region actor reference.
@@ -142,11 +181,26 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def sendMessageTo(
     entityId: String,
+    shardId: String = null,
+    data: AnyRef,
+    eventType: String = "default",
+    actorType: CreationTypeEnum = LoadBalancedDistributed
+  ): Unit = {
+    lamportClock.increment()
+    logInfo(s"Sending message to $entityId: $data, $eventType")
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(entityId, data, eventType)
+    } else {
+      sendMessageToShard(entityId, shardId, data, eventType)
+    }
+  }
+
+  private def sendMessageToShard(
+    entityId: String,
     shardId: String,
     data: AnyRef,
     eventType: String = "default"
   ): Unit = {
-    lamportClock.increment()
     val shardingRegion = getShardRef(IdUtil.format(shardId))
 
     shardingRegion ! EntityEnvelopeEvent(
@@ -159,8 +213,28 @@ abstract class BaseActor[T <: BaseState](
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,
-        eventType = eventType
+        eventType = eventType,
+        actorType = properties.actorType.toString
       )
+    )
+  }
+
+  private def sendMessageToPool(
+    entityId: String,
+    data: AnyRef,
+    eventType: String = "default"
+  ): Unit = {
+    val pool = getActorPoolRef(entityId)
+    pool ! ActorInteractionEvent(
+      tick = currentTick,
+      lamportTick = getLamportClock,
+      actorRefId = IdUtil.format(getActorId),
+      shardRefId = IdUtil.format(getShardId),
+      actorClassType = getClass.getName,
+      actorPathRef = self.path.name,
+      data = data,
+      eventType = eventType,
+      actorType = properties.actorType.toString
     )
   }
 
@@ -194,19 +268,6 @@ abstract class BaseActor[T <: BaseState](
         onFinishSpontaneous()
     save(event)
   }
-
-  /** Sends an acknowledge tick event to the time manager. This method is called when the actor
-    * receives a spontaneous event and the actor finish processing the event and no needs schedule
-    * new tick in this current tick.
-    */
-  protected def sendAcknowledgeTick(): Unit =
-    if (timeManager != null && timeManager != self) {
-      timeManager ! AcknowledgeTickEvent(
-        tick = currentTick,
-        actorRef = getPath,
-        timeManagerRef = currentTimeManager.path.toString
-      )
-    }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
     * the actor to handle the spontaneous event. The spontaneous events are thrown by the time
@@ -381,9 +442,21 @@ abstract class BaseActor[T <: BaseState](
       )
     )
 
+  protected def report(data: Any, label: String = null): Unit = {
+    report(
+      event = ReportEvent(
+        entityId = entityId,
+        tick = currentTick,
+        lamportTick = getLamportClock,
+        data = data,
+        label = label
+      )
+    )
+  }
+
   protected def report(event: ReportEvent): Unit = {
     val defaultReportType = ReportTypeEnum.valueOf(
-      Some(config.getString("htc.report-manager.default-reporter")).getOrElse("csv")
+      Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")
     )
     val reportType = if (state.getReporterType != null) {
       state.getReporterType
@@ -407,6 +480,9 @@ abstract class BaseActor[T <: BaseState](
     report(event)
   }
 
+  protected def getActorPoolRef(entityId: String): ActorSelection =
+    context.system.actorSelection(s"/user/${IdUtil.format(entityId)}")
+
   protected def getActorRef(path: String): ActorRef =
     Await.result(getActorRefFromPath(path), Duration.Inf)
 
@@ -422,6 +498,9 @@ abstract class BaseActor[T <: BaseState](
           null
       }
   }
+
+  protected def getDependency(entityId: String): Dependency =
+    dependencies(IdUtil.format(entityId))
 
   /** Gets the time manager actor reference.
     * @return
@@ -448,7 +527,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The shard name
     */
-  protected def getShardId: String = shardId.replace(":", "_").replace(";", "_")
+  protected def getShardId: String = properties.shardId.replace(":", "_").replace(";", "_")
 
   /** Gets the actor reference of the shard region for a given class name.
     *

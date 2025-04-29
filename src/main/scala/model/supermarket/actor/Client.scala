@@ -4,21 +4,15 @@ package model.supermarket.actor
 import core.actor.BaseActor
 import model.supermarket.entity.state.ClientState
 
-import org.apache.pekko.actor.ActorRef
+import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.supermarket.entity.enumeration.ClientStatusEnum.{ Finished, InService, Start, Waiting }
 import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServiceData, NewClientServiceData, StartClientServiceData }
 
 class Client(
-  private val id: String,
-  private val shard: String,
-  private val timeManager: ActorRef,
-  private val creatorManager: ActorRef = null
+  val properties: Properties
 ) extends BaseActor[ClientState](
-      actorId = id,
-      shardId = shard,
-      timeManager = timeManager,
-      creatorManager = creatorManager
+      properties = properties
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -44,7 +38,7 @@ class Client(
 
   private def enterQueue(): Unit =
     try {
-      val cashier = dependencies(state.cashierId)
+      val cashier = getDependency(state.cashierId)
       sendMessageTo(
         cashier.id,
         cashier.resourceId,

@@ -6,7 +6,7 @@ import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
 import org.apache.pekko.serialization.{ SerializationExtension, Serializer as PekkoSerializer, SerializerWithStringManifest }
-import org.htc.protobuf.core.entity.event.communication.{ ActorInteraction, EntityEnvelope }
+import org.htc.protobuf.core.entity.event.communication.ActorInteraction
 
 import scala.util.{ Failure, Success, Try }
 
@@ -31,7 +31,8 @@ class ActorInteractionSerializer(
             actorRef,
             actorClassType,
             eventType,
-            data
+            data,
+            actorType
           ) =>
         val payloadSerializer: PekkoSerializer = serialization.serializerFor(data.getClass)
 
@@ -54,7 +55,8 @@ class ActorInteractionSerializer(
               eventType = eventType,
               data = ByteString.copyFrom(serializedPayload),
               payloadSerializerId = payloadSerializer.identifier,
-              payloadManifest = payloadManifest
+              payloadManifest = payloadManifest,
+              actorType = actorType
             )
             proto.toByteArray
           case Failure(exception) =>
@@ -96,7 +98,8 @@ class ActorInteractionSerializer(
             actorPathRef = proto.actorRef,
             actorClassType = proto.actorClassType,
             eventType = proto.eventType,
-            data = deserializedPayload
+            data = deserializedPayload,
+            actorType = proto.actorType
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(

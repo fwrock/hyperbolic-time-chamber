@@ -3,17 +3,18 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, JsonUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, IdUtil, JsonUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
+import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent}
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 
@@ -23,12 +24,17 @@ import scala.concurrent.ExecutionContext.Implicits.global
 case object ProcessNextCreateChunk
 
 class CreatorLoadData(
-  loadDataManager: ActorRef,
-  timeManager: ActorRef,
-  reporters: mutable.Map[ReportTypeEnum, ActorRef]
+  private val creatorProperties: CreatorProperties
 ) extends BaseActor[DefaultState](
-      timeManager = timeManager,
-      actorId = "creator-load-data"
+      properties = Properties(
+        entityId = creatorProperties.entityId,
+        shardId = creatorProperties.shardId,
+        creatorManager = creatorProperties.creatorManager,
+        timeManager = creatorProperties.timeManager,
+        reporters = creatorProperties.reporters,
+        data = creatorProperties.data,
+        actorType = creatorProperties.actorType
+      )
     ) {
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
@@ -132,7 +138,7 @@ class CreatorLoadData(
             creatorManager = data.creatorManager,
             reporters = data.reporters,
             dependencies = data.dependencies.map {
-              case (_, dep) => dep.id -> dep
+              case (_, dep) => IdUtil.format(dep.id) -> dep
             }
           )
         )
@@ -158,7 +164,10 @@ class CreatorLoadData(
         logInfo(
           s"All $amountActors actors created and acknowledged initialization. Sending FinishCreationEvent."
         )
-        loadDataManager ! FinishCreationEvent(actorRef = self, amount = amountActors)
+        creatorProperties.loadDataManager ! FinishCreationEvent(
+          actorRef = self,
+          amount = amountActors
+        )
         finishEventSent = true
       } else {}
     }
@@ -166,14 +175,10 @@ class CreatorLoadData(
 
 object CreatorLoadData {
   def props(
-    loadDataManager: ActorRef,
-    timeManager: ActorRef,
-    reporters: mutable.Map[ReportTypeEnum, ActorRef]
+    creatorProperties: CreatorProperties
   ): Props =
     Props(
       classOf[CreatorLoadData],
-      loadDataManager,
-      timeManager,
-      reporters
+      creatorProperties
     )
 }
