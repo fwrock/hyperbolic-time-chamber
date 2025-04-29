@@ -14,6 +14,7 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
 
@@ -104,7 +105,7 @@ class TimeManager(
   }
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
-    logInfo(s"Started simulation: $start")
+    logInfo(s"Started simulation: ${start.startTick}")
     unstashAll()
     start.data match
       case Some(data) =>
@@ -120,7 +121,7 @@ class TimeManager(
       notifyLocalManagers(start)
     } else {
       logInfo(
-        s"Local TimeManager started at tick $localTickOffset with parent ${parentManager.get} and self $self"
+        s"Local TimeManager started at tick $localTickOffset"
       )
       self ! UpdateGlobalTimeEvent(localTickOffset)
     }
@@ -210,6 +211,7 @@ class TimeManager(
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
+    logInfo(s"Schedule event received: ${schedule.identify.get.id} at tick ${schedule.tick}")
     if (schedule.tick < localTickOffset) {
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
@@ -230,12 +232,12 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
+      logInfo(s"Finish event received: ${finish.identify.id}")
       runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
       advanceToNextTick()
       reportGlobalTimeManager(true)
     } else {
-//      logInfo("TimeManager finish event forward")
       finish.timeManager ! finish
     }
 
@@ -289,12 +291,27 @@ class TimeManager(
     }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
+    if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
+      logInfo(s"Send spontaneous event at tick $tick to pool actor ${identity.id}")
+      sendSpontaneousEventPool(tick, identity)
+    } else {
+      logInfo(s"Send spontaneous event at tick $tick to load balance actor ${identity.id}")
+      sendSpontaneousEventShard(tick, identity)
+    }
+
+  private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
     getShardRef(identity.shardId) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
         actorRef = self
       )
+    )
+
+  private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit =
+    getActorPoolRef(identity.id) ! SpontaneousEvent(
+      tick = tick,
+      actorRef = self
     )
 
   private def advanceToNextTick(): Unit = {

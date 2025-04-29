@@ -13,5 +13,6 @@ import scala.collection.mutable
 case class LoadDataSourceEvent(
   actorDataSource: ActorDataSource,
   managerRef: ActorRef,
-  creatorRef: ActorRef
+  creatorRef: ActorRef,
+  creatorPoolRef: ActorRef
 ) extends BaseEvent[DefaultBaseEventData](actorRef = managerRef)
