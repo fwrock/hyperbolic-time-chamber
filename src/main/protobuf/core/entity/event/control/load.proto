@@ -24,6 +24,10 @@ message InitializeEntityAckEvent {
   string entityId = 1;
 }
 
+message StartEntityAckEvent {
+  string entityId = 1;
+}
+
 message InitializeEvent {
   string id = 1;
   string actorRef = 2;
