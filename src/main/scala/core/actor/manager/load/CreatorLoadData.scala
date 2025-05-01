@@ -4,7 +4,7 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ActorRef, Props}
-import core.util.{ActorCreatorUtil, IdUtil, JsonUtil}
+import core.util.{ActorCreatorUtil, IdUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
@@ -16,7 +16,6 @@ import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initializa
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, LoadDataCreatorRegisterEvent}
 import org.interscity.htc.core.entity.event.data.InitializeData
-import org.interscity.htc.core.enumeration.ReportTypeEnum
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -121,6 +120,9 @@ class CreatorLoadData(
 
       if (actorsToCreate.nonEmpty) {
         context.system.scheduler.scheduleOnce(DELAY_BETWEEN_CHUNKS, self, ProcessNextCreateChunk)
+      } else {
+        logInfo("All actors created in this chunk.")
+        checkAndSendFinish()
       }
     }
   }
