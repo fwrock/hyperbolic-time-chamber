@@ -3,13 +3,13 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.Props
 import core.util.{ActorCreatorUtil, IdUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
+import org.htc.protobuf.core.entity.event.control.load.{StartCreationEvent, StartEntityAckEvent}
 import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
 import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent}
@@ -36,7 +36,7 @@ class CreatorPoolLoadData(
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
-  private val initializedAcknowledges = mutable.Map[String, Boolean]()
+  private val startedAcknowledges = mutable.Map[String, Boolean]()
   private var amountActors = 0
   private var finishEventSent: Boolean = false
 
@@ -46,9 +46,10 @@ class CreatorPoolLoadData(
   private val DELAY_BETWEEN_CHUNKS = 500.milliseconds
 
   override def handleEvent: Receive = {
-    case event: CreateActorsEvent  => handleCreateActors(event)
-    case event: StartCreationEvent => handleStartCreation(event)
-    case ProcessNextCreateChunk    => handleProcessNextCreateChunk()
+    case event: CreateActorsEvent   => handleCreateActors(event)
+    case event: StartCreationEvent  => handleStartCreation(event)
+    case event: StartEntityAckEvent => handleFinishStart(event)
+    case ProcessNextCreateChunk     => handleProcessNextCreateChunk()
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
@@ -101,7 +102,8 @@ class CreatorPoolLoadData(
             dependencies = mutable.Map[String, Dependency](),
             creationType = PoolDistributed
           )
-          logInfo(s"Actor created: $actor")
+
+          startedAcknowledges.put(IdUtil.format(actorCreation.actor.id), false)
       }
 
       actorsToCreate = actorsToCreate.drop(chunk.size)
@@ -115,8 +117,16 @@ class CreatorPoolLoadData(
     }
   }
 
+  private def handleFinishStart(event: StartEntityAckEvent): Unit = {
+    startedAcknowledges.put(event.entityId, true)
+    checkAndSendFinish()
+  }
+
   private def checkAndSendFinish(): Unit =
-    if (!finishEventSent && actorsToCreate.isEmpty) {
+    if (!finishEventSent && actorsToCreate.isEmpty && startedAcknowledges.values.forall(_ == true)) {
+      logInfo(
+        s"All $amountActors pool actors created and acknowledged initialization. Sending FinishCreationEvent."
+      )
       creatorProperties.loadDataManager ! FinishCreationEvent(
         actorRef = self,
         amount = amountActors
