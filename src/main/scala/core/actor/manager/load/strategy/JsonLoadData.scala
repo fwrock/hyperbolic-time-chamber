@@ -2,18 +2,20 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishLoadDataEvent, LoadDataCreatorRegisterEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, FinishLoadDataEvent, LoadDataSourceEvent, ProcessBatchesEvent }
 
+import java.util.UUID
 import scala.compiletime.uninitialized
 import scala.collection.mutable
 
-class JsonLoadData(private val properties: Properties) extends LoadDataStrategy(properties = properties) {
+class JsonLoadData(private val properties: Properties)
+    extends LoadDataStrategy(properties = properties) {
 
   private var managerRef: ActorRef = uninitialized
   private var creatorRef: ActorRef = uninitialized
@@ -25,10 +27,16 @@ class JsonLoadData(private val properties: Properties) extends LoadDataStrategy(
   private var isSentAllDataToCreator = false
   private var amountActors = 0L
   private val creators = mutable.Set[ActorRef]()
+  private var shardBatches: mutable.Queue[Seq[ActorSimulationCreation]] = uninitialized
+  private var poolBatches: mutable.Queue[Seq[ActorSimulationCreation]] = uninitialized
+  private var sourceClassType: String = uninitialized
+
+  private val processBatchControl = mutable.Map[String, Boolean]()
 
   override def handleEvent: Receive = {
-    case event: LoadDataSourceEvent          => load(event)
-    case event: LoadDataCreatorRegisterEvent => registerCreators(event)
+    case event: LoadDataSourceEvent => load(event)
+    case _: ProcessBatchesEvent     => handleProcessBatches()
+    case event: FinishCreationEvent => handleFinishLoadData(event)
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
@@ -40,8 +48,8 @@ class JsonLoadData(private val properties: Properties) extends LoadDataStrategy(
 
   override protected def load(source: ActorDataSource): Unit = {
     val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
-
-    var actors = JsonUtil.fromJsonList[ActorSimulation](content)
+    sourceClassType = source.classType
+    val actors = JsonUtil.fromJsonList[ActorSimulation](content)
 
     val actorsToCreate = actors.map(
       actor =>
@@ -53,51 +61,73 @@ class JsonLoadData(private val properties: Properties) extends LoadDataStrategy(
 
     amountActors = actorsToCreate.size
 
-    val shadedActors = actorsToCreate.filter(
+    val shardedActors = actorsToCreate.filter(
       a =>
         a.actor.creationType == null ||
           a.actor.creationType == LoadBalancedDistributed
     )
 
+    shardBatches = createBatches(shardedActors)
+
     val poolActors = actorsToCreate.filter(
       a => a.actor.creationType == PoolDistributed
     )
-    sendToCreator(creatorRef, shadedActors)
-    sendToCreator(creatorPoolRef, poolActors)
 
-    actors = null
+    poolBatches = createBatches(poolActors)
 
-    isSentAllDataToCreator = true
+    self ! ProcessBatchesEvent()
 
     sendFinishLoadDataEvent()
   }
 
-  private def sendToCreator(creator: ActorRef, actorsToCreate: Seq[ActorSimulationCreation]): Unit =
-    if (actorsToCreate.size < batchSize) {
-      if (actorsToCreate != null && actorsToCreate.nonEmpty) {
-        totalBatchAmount += 1
-        creator ! CreateActorsEvent(actors = actorsToCreate, actorRef = self)
-      }
-    } else {
-      actorsToCreate.grouped(batchSize).foreach {
-        batch =>
-          totalBatchAmount += 1
-          creator ! CreateActorsEvent(actors = batch, actorRef = self)
-      }
+  private def handleProcessBatches(): Unit = {
+    if (shardBatches.nonEmpty) {
+      val batch = shardBatches.dequeue()
+      sendToCreator(creatorRef, batch)
     }
-
-  private def registerCreators(event: LoadDataCreatorRegisterEvent): Unit = {
-    currentBatchAmount += 1
-    creators.add(event.actorRef)
+    if (poolBatches.nonEmpty) {
+      val batch = poolBatches.dequeue()
+      sendToCreator(creatorPoolRef, batch)
+    }
     sendFinishLoadDataEvent()
+  }
+
+  private def handleFinishLoadData(event: FinishCreationEvent): Unit = {
+    processBatchControl.put(event.batchId, true)
+    handleProcessBatches()
+  }
+
+  private def sendToCreator(
+    creator: ActorRef,
+    actorsToCreate: Seq[ActorSimulationCreation]
+  ): Unit = {
+    val batchId = UUID.randomUUID().toString
+    processBatchControl.put(batchId, false)
+    creator ! CreateActorsEvent(id = batchId, actors = actorsToCreate, actorRef = self)
+  }
+
+  private def createBatches(
+    actorsToCreate: Seq[ActorSimulationCreation]
+  ): mutable.Queue[Seq[ActorSimulationCreation]] = {
+    val batches = if (actorsToCreate.size < batchSize) {
+      Seq(actorsToCreate)
+    } else {
+      actorsToCreate.grouped(batchSize).toSeq
+    }
+    mutable.Queue(batches: _*)
   }
 
   private def sendFinishLoadDataEvent(): Unit =
-    if (currentBatchAmount >= totalBatchAmount && isSentAllDataToCreator) {
+    if (
+      shardBatches.isEmpty && poolBatches.isEmpty && processBatchControl.values.forall(
+        _.self == true
+      )
+    ) {
       logInfo(s"All data loaded and sent to creators: $amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,
+        actorClassType = sourceClassType,
         creators = creators
       )
     }
