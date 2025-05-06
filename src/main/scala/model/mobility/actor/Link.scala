@@ -30,11 +30,10 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
 
-  override def onInitialize(event: InitializeEvent): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit =
     super.onStart()
 //    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
 //    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
-  }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =
     sendMessageTo(
@@ -49,9 +48,9 @@ class Link(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RequestRouteData  => handleRequestRoute(event, d)
-      case d: EnterLinkData     => handleEnterLink(event, d)
-      case d: LeaveLinkData     => handleLeaveLink(event, d)
+      case d: RequestRouteData => handleRequestRoute(event, d)
+      case d: EnterLinkData    => handleEnterLink(event, d)
+      case d: LeaveLinkData    => handleLeaveLink(event, d)
       case _ =>
         logInfo("Event not handled")
     }

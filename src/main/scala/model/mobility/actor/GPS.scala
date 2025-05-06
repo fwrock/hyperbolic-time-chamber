@@ -11,11 +11,11 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
-import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
+import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
 
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 import scala.compiletime.uninitialized
 
 class GPS(
