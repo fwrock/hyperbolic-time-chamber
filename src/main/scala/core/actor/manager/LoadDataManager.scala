@@ -1,21 +1,21 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData }
 import core.entity.state.DefaultState
-import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
+import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
 import core.util.ActorCreatorUtil.createActor
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.StartCreationEvent
-import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
-import org.interscity.htc.core.entity.event.control.load.{FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent}
+import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
+import org.interscity.htc.core.entity.configuration.ActorDataSource
+import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, LoadNextEvent }
 import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME}
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -30,7 +30,7 @@ class LoadDataManager(
       actorId = "load-data-manager"
     ) {
 
-  private var loadDataTotalAmount = 0L
+  private val loadDataTotalAmount = 0L
   private var currentLoadDataAmount = 0L
   private var dataSourceAmount: Int = Int.MaxValue
   private var creatorRef: ActorRef = uninitialized
@@ -39,6 +39,9 @@ class LoadDataManager(
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
 
+  private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
+  private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
+
   override def onStart(): Unit =
     reporters = poolReporters
 
@@ -46,6 +49,7 @@ class LoadDataManager(
     case event: LoadDataEvent       => loadData(event)
     case event: FinishLoadDataEvent => handleFinishLoadData(event)
     case event: FinishCreationEvent => handleFinishCreation(event)
+    case _: LoadNextEvent           => handleLoadNext()
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
@@ -53,27 +57,43 @@ class LoadDataManager(
     logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
     creatorRef = createCreatorLoadData(dataSourceAmount)
     creatorPoolRef = createCreatorPoolLoadData(dataSourceAmount)
-    event.actorsDataSources.foreach {
-      actorDataSource =>
-        logInfo(
-          s"Load data source ${actorDataSource.dataSource} of type ${actorDataSource.classType}"
-        )
-        val loader = createActor(
-          context.system,
-          actorDataSource.dataSource.sourceType.clazz,
-          properties = Properties(
-            timeManager = poolTimeManager
-          )
-        )
-        loaders.put(loader, false)
-        loader ! LoadDataSourceEvent(
-          managerRef = getSelfProxy,
-          creatorRef = creatorRef,
-          creatorPoolRef = creatorPoolRef,
-          actorDataSource = actorDataSource
-        )
-    }
+
+    sourcesToCreate = event.actorsDataSources
+      .groupBy(
+        s => s.classType
+      )
+      .view
+      .mapValues(_.to(mutable.Queue))
+      .to(mutable.Map)
+
+    getSelfProxy ! LoadNextEvent()
   }
+
+  private def handleLoadNext(): Unit =
+    sourcesToCreate.foreach {
+      (key, queue) =>
+        if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
+          val source = queue.dequeue()
+          sourcesInCreation.add(key)
+          logInfo(
+            s"Load data source ${source.dataSource} of type ${source.classType}"
+          )
+          val loader = createActor(
+            context.system,
+            source.dataSource.sourceType.clazz,
+            properties = Properties(
+              timeManager = poolTimeManager
+            )
+          )
+          loaders.put(loader, false)
+          loader ! LoadDataSourceEvent(
+            managerRef = getSelfProxy,
+            creatorRef = creatorRef,
+            creatorPoolRef = creatorPoolRef,
+            actorDataSource = source
+          )
+        }
+    }
 
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = amountDataSources
@@ -128,20 +148,20 @@ class LoadDataManager(
   private def handleFinishLoadData(event: FinishLoadDataEvent): Unit = {
     val actorRef = event.actorRef
 
-    loadDataTotalAmount += event.amount
-    if (event.creators.nonEmpty) {
-      event.creators.foreach {
-        creator => creators.put(creator, false)
-      }
-    }
     loaders(actorRef) = true
+    sourcesInCreation.remove(event.actorClassType)
+
     actorRef ! DestructEvent(actorRef = getPath)
 
+    getSelfProxy ! LoadNextEvent()
+
     if (isAllDataLoaded) {
-      creators.keys.foreach {
-        creator =>
-          creator ! StartCreationEvent(actorRef = getPath)
-      }
+      simulationManager ! FinishLoadDataEvent(
+        actorRef = selfProxy,
+        amount = loadDataTotalAmount,
+        actorClassType = null,
+        creators = mutable.Set()
+      )
     }
   }
 
@@ -161,13 +181,15 @@ class LoadDataManager(
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,
+        actorClassType = null,
         creators = mutable.Set()
       )
     }
   }
 
   private def isAllDataLoaded: Boolean =
-    loaders.values.forall(_ == true) && dataSourceAmount == loaders.size
+    loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values
+      .forall(_.isEmpty)
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
