@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.actor.properties
 
-import core.enumeration.{CreationTypeEnum, ReportTypeEnum}
+import core.enumeration.{ CreationTypeEnum, ReportTypeEnum }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Dependency
