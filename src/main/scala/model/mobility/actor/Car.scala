@@ -21,7 +21,7 @@ class Car(
       properties = properties
     ) {
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+  override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Moving =>
         requestSignalState()
@@ -31,14 +31,12 @@ class Car(
         onFinishSpontaneous(Some(currentTick + 1))
       case _ => super.actSpontaneous(event)
     }
-  }
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
-      case _ => super.actInteractWith(event)
+      case _                  => super.actInteractWith(event)
     }
-  }
 
   override def requestRoute(): Unit = {
     report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
@@ -113,7 +111,10 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
-    report(data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time), label = "(time, length, free speed, speed)")
+    report(
+      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
+      label = "(time, length, free speed, speed)"
+    )
     report(data = s"${state.movableStatus} -> $Moving", "change status")
     state.movableStatus = Moving
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
