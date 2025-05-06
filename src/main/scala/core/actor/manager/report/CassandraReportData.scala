@@ -4,7 +4,7 @@ package core.actor.manager.report
 import core.entity.event.control.report.ReportEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.system.database.database.CreateEntityEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
@@ -15,9 +15,10 @@ import java.time.LocalDateTime
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
-class CassandraReportData(override val reportManager: ActorRef,
-                          override val startRealTime: LocalDateTime)
-    extends ReportData(
+class CassandraReportData(
+  override val reportManager: ActorRef,
+  override val startRealTime: LocalDateTime
+) extends ReportData(
       id = "cassandra-report-manager",
       reportManager = reportManager,
       startRealTime = startRealTime
