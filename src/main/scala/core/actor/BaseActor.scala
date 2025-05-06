@@ -1,27 +1,27 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
 import java.util.UUID
 import scala.Long.MinValue
@@ -29,7 +29,7 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -60,7 +60,8 @@ abstract class BaseActor[T <: BaseState](
   protected var shardId: String =
     if (properties != null) properties.shardId else UUID.randomUUID().toString
   protected var state: T = uninitialized
-  protected val dependencies: mutable.Map[String, Dependency] = if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
+  protected val dependencies: mutable.Map[String, Dependency] =
+    if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
 
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
@@ -84,7 +85,7 @@ abstract class BaseActor[T <: BaseState](
           logInfo(s"State: $state")
           startTick = state.getStartTick
         }
-        creatorManager ! StartEntityAckEvent(entityId =  entityId)
+        creatorManager ! StartEntityAckEvent(entityId = entityId)
         if (state != null && state.isSetScheduleOnTimeManager) {
           registerOnTimeManager()
         }
@@ -443,7 +444,7 @@ abstract class BaseActor[T <: BaseState](
       )
     )
 
-  protected def report(data: Any, label: String = null): Unit = {
+  protected def report(data: Any, label: String = null): Unit =
     report(
       event = ReportEvent(
         entityId = entityId,
@@ -453,7 +454,6 @@ abstract class BaseActor[T <: BaseState](
         label = label
       )
     )
-  }
 
   protected def report(event: ReportEvent): Unit = {
     val defaultReportType = ReportTypeEnum.valueOf(
