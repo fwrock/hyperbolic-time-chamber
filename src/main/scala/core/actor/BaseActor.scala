@@ -57,8 +57,7 @@ abstract class BaseActor[T <: BaseState](
 
   protected var entityId: String =
     if (properties != null) properties.entityId else UUID.randomUUID().toString
-  protected var shardId: String =
-    if (properties != null) properties.shardId else UUID.randomUUID().toString
+  protected var shardId: String = getShardId
   protected var state: T = uninitialized
   protected val dependencies: mutable.Map[String, Dependency] =
     if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
@@ -119,7 +118,6 @@ abstract class BaseActor[T <: BaseState](
   private def initialize(event: InitializeEvent): Unit =
     if (!isInitialized) {
       entityId = event.id
-      entityId = event.id
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
       state = JsonUtil.convertValue[T](event.data.data)
@@ -146,7 +144,7 @@ abstract class BaseActor[T <: BaseState](
         identify = Some(
           Identify(
             id = IdUtil.format(entityId),
-            shardId = IdUtil.format(shardId),
+            resourceId = IdUtil.format(properties.resourceId),
             classType = getClass.getName,
             actorRef = getSelfShard.path.toString,
             actorType = properties.actorType.toString
@@ -160,7 +158,7 @@ abstract class BaseActor[T <: BaseState](
         identify = Some(
           Identify(
             id = IdUtil.format(entityId),
-            shardId = IdUtil.format(shardId),
+            resourceId = IdUtil.format(properties.resourceId),
             classType = getClass.getName,
             actorRef = self.path.toString,
             actorType = properties.actorType.toString
@@ -210,7 +208,7 @@ abstract class BaseActor[T <: BaseState](
       ActorInteractionEvent(
         tick = currentTick,
         lamportTick = getLamportClock,
-        actorRefId = IdUtil.format(getActorId),
+        actorRefId = IdUtil.format(getEntityId),
         shardRefId = IdUtil.format(getShardId),
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
@@ -230,7 +228,7 @@ abstract class BaseActor[T <: BaseState](
     pool ! ActorInteractionEvent(
       tick = currentTick,
       lamportTick = getLamportClock,
-      actorRefId = IdUtil.format(getActorId),
+      actorRefId = IdUtil.format(getEntityId),
       shardRefId = IdUtil.format(getShardId),
       actorClassType = getClass.getName,
       actorPathRef = self.path.name,
@@ -393,8 +391,8 @@ abstract class BaseActor[T <: BaseState](
       end = currentTick,
       actorRef = self,
       identify = Identify(
-        id = IdUtil.format(getActorId),
-        shardId = IdUtil.format(getShardId),
+        id = IdUtil.format(getEntityId),
+        resourceId = IdUtil.format(properties.resourceId),
         classType = getClass.getName,
         actorRef = getPath
       ),
@@ -409,8 +407,8 @@ abstract class BaseActor[T <: BaseState](
           actorRef = getPath,
           identify = Some(
             Identify(
-              id = IdUtil.format(getActorId),
-              shardId = IdUtil.format(getShardId),
+              id = IdUtil.format(getEntityId),
+              resourceId = IdUtil.format(properties.resourceId),
               classType = getClass.getName,
               actorRef = getPath
             )
@@ -436,8 +434,8 @@ abstract class BaseActor[T <: BaseState](
       actorRef = getPath,
       identify = Some(
         Identify(
-          id = getActorId,
-          shardId = getShardId,
+          id = getEntityId,
+          resourceId = IdUtil.format(properties.resourceId),
           classType = getClass.getName,
           actorRef = getPath
         )
@@ -513,7 +511,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The actor id
     */
-  protected def getActorId: String = entityId
+  protected def getEntityId: String = entityId
 
   protected def getPath: String = self.path.toString
 
@@ -528,7 +526,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The shard name
     */
-  protected def getShardId: String = properties.shardId.replace(":", "_").replace(";", "_")
+  protected def getShardId: String = getClass.getName
 
   /** Gets the actor reference of the shard region for a given class name.
     *
@@ -538,12 +536,12 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getShardRef(className: String): ActorRef =
-    ClusterSharding(context.system).shardRegion(className.replace(":", "_").replace(";", "_"))
+    ClusterSharding(context.system).shardRegion(className)
 
   protected def toIdentify: Identify =
     Identify(
-      id = getActorId,
-      shardId = getShardId,
+      id = getEntityId,
+      resourceId = IdUtil.format(properties.resourceId),
       classType = getClass.getName,
       actorRef = self.path.name
     )

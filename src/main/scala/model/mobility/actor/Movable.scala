@@ -86,9 +86,9 @@ abstract class Movable[T <: MovableState](
             report(data = link.id, "enter link")
             sendMessageTo(
               entityId = link.id,
-              shardId = link.shardId,
+              shardId = link.classType,
               data = EnterLinkData(
-                actorId = getActorId,
+                actorId = getEntityId,
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
@@ -115,9 +115,9 @@ abstract class Movable[T <: MovableState](
             report(data = link.id, "leaving link")
             sendMessageTo(
               entityId = link.id,
-              shardId = link.shardId,
+              shardId = link.classType,
               data = LeaveLinkData(
-                actorId = getActorId,
+                actorId = getEntityId,
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,

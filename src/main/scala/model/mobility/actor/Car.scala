@@ -49,7 +49,7 @@ class Car(
     val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
-      shardId = dependency.resourceId,
+      shardId = dependency.classType,
       data = data,
       eventType = EventTypeEnum.RequestRoute.toString,
       actorType = CreationTypeEnum.valueOf(dependency.actorType)
@@ -66,7 +66,7 @@ class Car(
             report(data = s"${node.id} -> ${link.id}", label = "request signal state")
             sendMessageTo(
               entityId = node.id,
-              shardId = node.shardId,
+              shardId = node.classType,
               RequestSignalStateData(
                 targetLinkId = link.id
               ),
