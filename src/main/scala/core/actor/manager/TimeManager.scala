@@ -120,7 +120,7 @@ class TimeManager(
       logInfo(s"Global TimeManager started at tick $localTickOffset")
       notifyLocalManagers(start)
     } else {
-   chore   logInfo(
+      logInfo(
         s"Local TimeManager started at tick $localTickOffset"
       )
       self ! UpdateGlobalTimeEvent(localTickOffset)
@@ -300,7 +300,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
-    getShardRef(identity.shardId) ! EntityEnvelopeEvent(
+    getShardRef(identity.classType) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
@@ -345,7 +345,7 @@ class TimeManager(
   }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.shardId) ! EntityEnvelopeEvent(
+    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
