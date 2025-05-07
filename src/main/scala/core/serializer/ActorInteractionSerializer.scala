@@ -32,7 +32,8 @@ class ActorInteractionSerializer(
             actorClassType,
             eventType,
             data,
-            actorType
+            actorType,
+            resourceId
           ) =>
         val payloadSerializer: PekkoSerializer = serialization.serializerFor(data.getClass)
 
@@ -56,7 +57,8 @@ class ActorInteractionSerializer(
               data = ByteString.copyFrom(serializedPayload),
               payloadSerializerId = payloadSerializer.identifier,
               payloadManifest = payloadManifest,
-              actorType = actorType
+              actorType = actorType,
+              resourceId = resourceId
             )
             proto.toByteArray
           case Failure(exception) =>
@@ -99,7 +101,8 @@ class ActorInteractionSerializer(
             actorClassType = proto.actorClassType,
             eventType = proto.eventType,
             data = deserializedPayload,
-            actorType = proto.actorType
+            actorType = proto.actorType,
+            resourceId = proto.resourceId
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(
