@@ -26,7 +26,7 @@ class CreatorLoadData(
 ) extends BaseActor[DefaultState](
       properties = Properties(
         entityId = creatorProperties.entityId,
-        shardId = creatorProperties.shardId,
+        resourceId = creatorProperties.shardId,
         creatorManager = creatorProperties.creatorManager,
         timeManager = creatorProperties.timeManager,
         reporters = creatorProperties.reporters,
@@ -96,7 +96,7 @@ class CreatorLoadData(
         actorCreation =>
           initializeData(actorCreation.actor.id) = Initialization(
             id = actorCreation.actor.id,
-            shardId = actorCreation.shardId,
+            resourceId = actorCreation.resourceId,
             classType = actorCreation.actor.typeActor,
             data = actorCreation.actor.data.content,
             timeManager = timeManager,
@@ -109,7 +109,7 @@ class CreatorLoadData(
 
           val shardRegion = createShardRegion(
             system = context.system,
-            shardId = actorCreation.shardId,
+            resourceId = actorCreation.resourceId,
             actorClassName = actorCreation.actor.typeActor,
             entityId = actorCreation.actor.id,
             timeManager = timeManager,
@@ -159,7 +159,7 @@ class CreatorLoadData(
           actorRef = self,
           data = InitializeData(
             data = data.data,
-            shardId = data.shardId,
+            resourceId = data.resourceId,
             timeManager = data.timeManager,
             creatorManager = data.creatorManager,
             reporters = data.reporters,
@@ -168,7 +168,7 @@ class CreatorLoadData(
             }
           )
         )
-        getShardRef(data.shardId) ! EntityEnvelopeEvent(
+        getShardRef(data.resourceId) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = initializeEvent
         )
