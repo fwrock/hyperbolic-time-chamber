@@ -121,14 +121,14 @@ object ActorCreatorUtil {
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
-    shardId: String,
+    resourceId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    val shardName = IdUtil.format(shardId)
+    val shardName = actorClassName
 
     if (!sharding.shardTypeNames.contains(shardName)) {
       system.log.info(
@@ -141,7 +141,7 @@ object ActorCreatorUtil {
           clazz,
           Properties(
             entityId = entityId,
-            shardId = shardId,
+            resourceId = resourceId,
             timeManager = timeManager,
             creatorManager = creatorManager,
             actorType = CreationTypeEnum.LoadBalancedDistributed
@@ -248,7 +248,7 @@ object ActorCreatorUtil {
     actorClassName: String,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    shardId: String,
+    resourceId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef,
     reporters: mutable.Map[ReportTypeEnum, ActorRef],
@@ -270,7 +270,7 @@ object ActorCreatorUtil {
           clazz,
           Properties(
             entityId = entityId,
-            shardId = shardId,
+            resourceId = resourceId,
             timeManager = timeManager,
             creatorManager = creatorManager,
             reporters = reporters,
