@@ -60,14 +60,14 @@ class Node(
     }
 
   private def handleLinkConnections(event: ActorInteractionEvent, data: LinkConnectionsData): Unit =
-    if (data.to.id == getActorId) {
+    if (data.to.id == getEntityId) {
       state.connections.put(event.actorRefId, data.from)
     } else {
       state.connections.put(event.actorRefId, data.to)
     }
 
   private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit =
-    if (getActorId == data.targetNodeId) {
+    if (getEntityId == data.targetNodeId) {
       handleRequestRouteTarget(event, data)
     } else {
       handleRequestRouteLinks(event, data)

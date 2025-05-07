@@ -65,7 +65,7 @@ class GPS(
             (
               Identify(
                 id = event.actorRefId,
-                shardId = event.shardRefId,
+                resourceId = event.shardRefId,
                 classType = event.actorClassType,
                 actorType = event.actorType
               ),
@@ -77,7 +77,7 @@ class GPS(
           handleRequestRoute(
             Identify(
               id = event.actorRefId,
-              shardId = event.shardRefId,
+              resourceId = event.shardRefId,
               classType = event.actorClassType,
               actorType = event.actorType
             ),
@@ -87,7 +87,7 @@ class GPS(
           handleRequestRoute(
             Identify(
               id = event.actorRefId,
-              shardId = event.shardRefId,
+              resourceId = event.shardRefId,
               classType = event.actorClassType,
               actorType = event.actorType
             ),
@@ -122,7 +122,7 @@ class GPS(
     }
     sendMessageTo(
       entityId = identify.id,
-      shardId = identify.shardId,
+      shardId = identify.classType,
       actorType = CreationTypeEnum.valueOf(identify.actorType),
       data = data
     )
@@ -136,13 +136,13 @@ class GPS(
       case (edge, node) =>
         val edgeId = Identify(
           id = edge.label.id,
-          shardId = edge.label.shardId,
+          resourceId = edge.label.resourceId,
           classType = edge.label.classType,
           actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
         val nodeId = Identify(
           id = node.id,
-          shardId = node.shardId,
+          resourceId = node.resourceId,
           classType = node.classType,
           actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
