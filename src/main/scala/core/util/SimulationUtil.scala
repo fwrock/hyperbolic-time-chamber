@@ -33,6 +33,9 @@ object SimulationUtil {
       .filter(
         s => s.creationType == null || s.creationType == CreationTypeEnum.LoadBalancedDistributed
       )
+      .distinctBy(
+        s => s.classType
+      )
       .foreach {
         source =>
           val initiatorId = s"${UUID.randomUUID().toString}-shard-initiator"
