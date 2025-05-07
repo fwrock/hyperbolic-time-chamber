@@ -36,7 +36,7 @@ class JsonLoadData(private val properties: Properties)
   override def handleEvent: Receive = {
     case event: LoadDataSourceEvent => load(event)
     case _: ProcessBatchesEvent     => handleProcessBatches()
-    case event: FinishCreationEvent => handleFinishLoadData(event)
+    case event: FinishCreationEvent => handleFinishCreation(event)
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
@@ -92,8 +92,9 @@ class JsonLoadData(private val properties: Properties)
     sendFinishLoadDataEvent()
   }
 
-  private def handleFinishLoadData(event: FinishCreationEvent): Unit = {
+  private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     processBatchControl.put(event.batchId, true)
+    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/${shardBatches.size + poolBatches.size})")
     handleProcessBatches()
   }
 
