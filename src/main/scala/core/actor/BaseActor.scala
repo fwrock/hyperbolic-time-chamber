@@ -214,7 +214,8 @@ abstract class BaseActor[T <: BaseState](
         actorPathRef = self.path.name,
         data = data,
         eventType = eventType,
-        actorType = properties.actorType.toString
+        actorType = properties.actorType.toString,
+        resourceId = properties.resourceId
       )
     )
   }
@@ -234,7 +235,8 @@ abstract class BaseActor[T <: BaseState](
       actorPathRef = self.path.name,
       data = data,
       eventType = eventType,
-      actorType = properties.actorType.toString
+      actorType = properties.actorType.toString,
+      resourceId = properties.resourceId
     )
   }
 

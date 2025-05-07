@@ -54,4 +54,5 @@ message ActorInteraction{
   int32 payload_serializer_id = 9;
   string payload_manifest = 10;
   string actorType = 11;
+  string resourceId = 12;
 }
