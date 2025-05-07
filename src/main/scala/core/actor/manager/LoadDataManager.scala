@@ -48,7 +48,6 @@ class LoadDataManager(
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
     case event: FinishLoadDataEvent => handleFinishLoadData(event)
-    case event: FinishCreationEvent => handleFinishCreation(event)
     case _: LoadNextEvent           => handleLoadNext()
   }
 
@@ -149,6 +148,7 @@ class LoadDataManager(
     val actorRef = event.actorRef
 
     loaders(actorRef) = true
+    logInfo(s"Total loaded data: ${loaders.values.count(_.self == true)}/${loaders.size}")
     sourcesInCreation.remove(event.actorClassType)
 
     actorRef ! DestructEvent(actorRef = getPath)
@@ -156,28 +156,6 @@ class LoadDataManager(
     getSelfProxy ! LoadNextEvent()
 
     if (isAllDataLoaded) {
-      simulationManager ! FinishLoadDataEvent(
-        actorRef = selfProxy,
-        amount = loadDataTotalAmount,
-        actorClassType = null,
-        creators = mutable.Set()
-      )
-    }
-  }
-
-  private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    creators.get(event.actorRef) match
-      case Some(flag) =>
-        if (!flag) {
-          currentLoadDataAmount += event.amount
-          creators(event.actorRef) = true
-        } else {
-          logInfo(s"Creator already finished ${event.actorRef} with ${event.amount}")
-        }
-      case None =>
-        logInfo(s"Creator not found ${event.actorRef}")
-    if (loadDataTotalAmount == currentLoadDataAmount && creators.values.forall(_.self == true)) {
-      logInfo("Finish creation fully")
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,
