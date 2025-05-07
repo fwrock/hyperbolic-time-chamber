@@ -48,7 +48,6 @@ class Link(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RequestRouteData => handleRequestRoute(event, d)
       case d: EnterLinkData    => handleEnterLink(event, d)
       case d: LeaveLinkData    => handleLeaveLink(event, d)
       case _ =>
@@ -101,22 +100,5 @@ class Link(
       eventType = EventTypeEnum.ReceiveLeaveLinkInfo.toString,
       actorType = LoadBalancedDistributed
     )
-  }
-
-  private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit = {
-    val path = data.path
-    val updatedPath = path :+ (
-      IdentifyUtil.fromDependency(getDependency(state.to)),
-      toIdentify
-    )
-    val dataForward = ForwardRouteData(
-      requester = data.requester,
-      requesterId = data.requesterId,
-      updatedCost = cost + data.currentCost,
-      targetNodeId = data.targetNodeId,
-      path = updatedPath
-    )
-    val to = getDependency(state.to)
-    sendMessageTo(to.id, to.classType, dataForward, ForwardRoute.toString)
   }
 }

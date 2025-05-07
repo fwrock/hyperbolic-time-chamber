@@ -37,8 +37,6 @@ class Node(
     event.data match {
       case d: RegisterBusStopData       => handleRegisterBusStop(event, d)
       case d: RegisterSubwayStationData => handleRegisterSubwayStation(event, d)
-      case d: RequestRouteData          => handleRequestRoute(event, d)
-      case d: ForwardRouteData          => handleForwardRoute(event, d)
       case d: RequestSignalStateData    => handleRequestSignalState(event, d)
       case d: TrafficSignalChangeStatusData =>
         handleReceiveSignalChangeStatus(event, d)
@@ -65,71 +63,6 @@ class Node(
     } else {
       state.connections.put(event.actorRefId, data.to)
     }
-
-  private def handleRequestRoute(event: ActorInteractionEvent, data: RequestRouteData): Unit =
-    if (getEntityId == data.targetNodeId) {
-      handleRequestRouteTarget(event, data)
-    } else {
-      handleRequestRouteLinks(event, data)
-    }
-
-  private def handleRequestRouteLinks(
-    event: ActorInteractionEvent,
-    data: RequestRouteData
-  ): Unit = {
-    val path = data.path
-    val updatedPath = path :+ (toIdentify, null)
-    val dataRequest = RequestRouteData(
-      requester = data.requester,
-      requesterId = data.requesterId,
-      requesterClassType = data.requesterClassType,
-      currentCost = data.currentCost,
-      targetNodeId = data.targetNodeId,
-      originNodeId = data.originNodeId,
-      path = updatedPath
-    )
-
-    state.links.foreach {
-
-      link =>
-        val dependency = getDependency(link)
-        sendMessageTo(
-          dependency.id,
-          dependency.classType,
-          dataRequest,
-          EventTypeEnum.RequestRoute.toString
-        )
-    }
-  }
-
-  private def handleRequestRouteTarget(
-    event: ActorInteractionEvent,
-    data: RequestRouteData
-  ): Unit = {
-    val path = data.path
-    val updatedPath = path :+ (null, toIdentify)
-    val dataReceive = ReceiveRouteData(
-      path = updatedPath,
-      label = data.label,
-      origin = data.originNodeId,
-      destination = data.targetNodeId
-    )
-    sendMessageTo(
-      data.requesterId,
-      data.requesterClassType,
-      dataReceive,
-      EventTypeEnum.ReceiveRoute.toString
-    )
-  }
-
-  private def handleForwardRoute(event: ActorInteractionEvent, data: ForwardRouteData): Unit =
-    val dependency = getDependency(data.requesterId)
-    sendMessageTo(
-      dependency.id,
-      dependency.classType,
-      event.data,
-      EventTypeEnum.ForwardRoute.toString
-    )
 
   private def handleRequestSignalState(
     event: ActorInteractionEvent,
