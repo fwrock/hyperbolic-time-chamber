@@ -54,7 +54,7 @@ class JsonLoadData(private val properties: Properties)
     val actorsToCreate = actors.map(
       actor =>
         ActorSimulationCreation(
-          shardId = IdUtil.format(source.id),
+          resourceId = IdUtil.format(source.id),
           actor = actor.copy(id = IdUtil.format(actor.id))
         )
     )

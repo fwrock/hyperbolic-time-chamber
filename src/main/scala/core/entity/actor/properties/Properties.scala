@@ -11,7 +11,7 @@ import scala.collection.mutable
 
 case class Properties(
   entityId: String = null,
-  shardId: String = null,
+  var resourceId: String = null,
   timeManager: ActorRef = null,
   creatorManager: ActorRef = null,
   reporters: mutable.Map[ReportTypeEnum, ActorRef] = null,

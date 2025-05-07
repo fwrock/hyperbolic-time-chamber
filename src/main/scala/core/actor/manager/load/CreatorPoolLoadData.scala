@@ -12,7 +12,7 @@ import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ StartCreationEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, LoadDataCreatorRegisterEvent, ProcessNextCreateChunk }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, ProcessNextCreateChunk }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 
@@ -25,7 +25,7 @@ class CreatorPoolLoadData(
 ) extends BaseActor[DefaultState](
       properties = Properties(
         entityId = creatorProperties.entityId,
-        shardId = creatorProperties.shardId,
+        resourceId = creatorProperties.shardId,
         creatorManager = creatorProperties.creatorManager,
         timeManager = creatorProperties.timeManager,
         reporters = creatorProperties.reporters,
@@ -98,7 +98,7 @@ class CreatorPoolLoadData(
             actorClassName = actorCreation.actor.typeActor,
             entityId = IdUtil.format(actorCreation.actor.id),
             poolConfiguration = actorCreation.actor.poolConfiguration,
-            shardId = IdUtil.format(actorCreation.shardId),
+            resourceId = IdUtil.format(actorCreation.resourceId),
             timeManager = timeManager,
             creatorManager = self,
             reporters = creatorProperties.reporters,
