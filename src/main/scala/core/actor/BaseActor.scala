@@ -121,6 +121,7 @@ abstract class BaseActor[T <: BaseState](
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
       state = JsonUtil.convertValue[T](event.data.data)
+      dependencies.clear()
       dependencies ++= event.data.dependencies
       reporters = event.data.reporters
       if (state != null) {
