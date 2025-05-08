@@ -3,7 +3,7 @@ package model.mobility.entity.state.model
 
 case class NodeGraph(
   id: String,
-  shardId: String,
+  resourceId: String,
   classType: String,
   latitude: Double,
   longitude: Double

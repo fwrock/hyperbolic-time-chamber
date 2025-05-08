@@ -3,7 +3,7 @@ package model.mobility.entity.state.model
 
 case class EdgeGraph(
   id: String,
-  shardId: String,
+  resourceId: String,
   classType: String,
   length: Double
 ) {

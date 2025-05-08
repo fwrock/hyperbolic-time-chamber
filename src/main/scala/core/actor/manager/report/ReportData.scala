@@ -13,7 +13,7 @@ import java.time.LocalDateTime
 abstract class ReportData(
   val id: String = "",
   val reportManager: ActorRef = null,
-  val startRealTime: LocalDateTime,
+  val startRealTime: LocalDateTime
 ) extends BaseActor[DefaultState](
       properties = Properties(
         entityId = id

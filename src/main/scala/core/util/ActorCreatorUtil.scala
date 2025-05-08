@@ -1,19 +1,19 @@
 package org.interscity.htc
 package core.util
 
-import org.apache.pekko.actor.{ActorRef, ActorSystem, Props}
+import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
 import core.actor.BaseActor
-import core.entity.event.{Command, EntityEnvelopeEvent}
+import core.entity.event.{ Command, EntityEnvelopeEvent }
 
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import org.apache.pekko.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.enumeration.{CreationTypeEnum, ReportTypeEnum}
+import org.interscity.htc.core.enumeration.{ CreationTypeEnum, ReportTypeEnum }
 
 import scala.collection.mutable
 
@@ -33,7 +33,11 @@ object ActorCreatorUtil {
     system.actorOf(props)
   }
 
-  def createActor[T](system: ActorSystem, actorClass: Class[T], properties: Properties): ActorRef = {
+  def createActor[T](
+    system: ActorSystem,
+    actorClass: Class[T],
+    properties: Properties
+  ): ActorRef = {
     val props = Props(actorClass, properties)
     system.actorOf(props)
   }
@@ -117,14 +121,14 @@ object ActorCreatorUtil {
     system: ActorSystem,
     actorClassName: String,
     entityId: String,
-    shardId: String,
+    resourceId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     val sharding = ClusterSharding(system)
 
-    val shardName = IdUtil.format(shardId)
+    val shardName = actorClassName
 
     if (!sharding.shardTypeNames.contains(shardName)) {
       system.log.info(
@@ -137,7 +141,7 @@ object ActorCreatorUtil {
           clazz,
           Properties(
             entityId = entityId,
-            shardId = shardId,
+            resourceId = resourceId,
             timeManager = timeManager,
             creatorManager = creatorManager,
             actorType = CreationTypeEnum.LoadBalancedDistributed
@@ -244,7 +248,7 @@ object ActorCreatorUtil {
     actorClassName: String,
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
-    shardId: String,
+    resourceId: String,
     timeManager: ActorRef,
     creatorManager: ActorRef,
     reporters: mutable.Map[ReportTypeEnum, ActorRef],
@@ -266,7 +270,7 @@ object ActorCreatorUtil {
           clazz,
           Properties(
             entityId = entityId,
-            shardId = shardId,
+            resourceId = resourceId,
             timeManager = timeManager,
             creatorManager = creatorManager,
             reporters = reporters,

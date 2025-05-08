@@ -52,6 +52,7 @@ message RequestInitializeEvent {
 
 message StartCreationEvent {
   string actorRef = 1;
+  string batchId = 2;
 }
 
 message LoadDataCreatorRegisterEvent {

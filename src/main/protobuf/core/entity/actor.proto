@@ -6,7 +6,7 @@ import "google/protobuf/any.proto";
 
 message Identify {
   string id = 1;
-  string shardId = 2;
+  string resourceId = 2;
   string classType = 3;
   string actorRef = 4;
   string actorType = 5;

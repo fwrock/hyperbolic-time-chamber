@@ -4,5 +4,5 @@ package core.util
 object IdUtil {
 
   def format(id: String): String =
-    id.replace(":", "_").replace(";", "_")
+    if (id != null) id.replace(":", "_").replace(";", "_") else null
 }

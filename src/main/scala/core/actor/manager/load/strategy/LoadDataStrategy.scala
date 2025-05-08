@@ -10,8 +10,7 @@ import org.interscity.htc.core.entity.event.control.load.LoadDataSourceEvent
 
 abstract class LoadDataStrategy(
   private val properties: Properties
-                               )
-    extends BaseActor[DefaultState](
+) extends BaseActor[DefaultState](
       properties = properties
     ) {
   protected def load(event: LoadDataSourceEvent): Unit

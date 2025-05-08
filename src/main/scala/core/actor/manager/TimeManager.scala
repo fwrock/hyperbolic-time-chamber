@@ -57,8 +57,8 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 40
-    val maxInstancesPerNode = Math.max(10, totalInstances / 8)
+    val totalInstances = 64
+    val maxInstancesPerNode = Math.max(8, totalInstances / 8)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -200,7 +200,7 @@ class TimeManager(
           )
         )
     }
-    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
+//    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
@@ -211,7 +211,7 @@ class TimeManager(
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
-    logInfo(s"Schedule event received: ${schedule.identify.get.id} at tick ${schedule.tick}")
+//    logInfo(s"Schedule event received: ${schedule.identify.get.id} at tick ${schedule.tick}")
     if (schedule.tick < localTickOffset) {
       log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
       return
@@ -232,7 +232,7 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-      logInfo(s"Finish event received: ${finish.identify.id}")
+//      logInfo(s"Finish event received: ${finish.identify.id}")
       runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
       advanceToNextTick()
@@ -292,15 +292,15 @@ class TimeManager(
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
     if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
-      logInfo(s"Send spontaneous event at tick $tick to pool actor ${identity.id}")
+//      logInfo(s"Send spontaneous event at tick $tick to pool actor ${identity.id}")
       sendSpontaneousEventPool(tick, identity)
     } else {
-      logInfo(s"Send spontaneous event at tick $tick to load balance actor ${identity.id}")
+//      logInfo(s"Send spontaneous event at tick $tick to load balance actor ${identity.id}")
       sendSpontaneousEventShard(tick, identity)
     }
 
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
-    getShardRef(identity.shardId) ! EntityEnvelopeEvent(
+    getShardRef(identity.classType) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
@@ -345,7 +345,7 @@ class TimeManager(
   }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
-    getShardRef(finishEvent.identify.shardId) ! EntityEnvelopeEvent(
+    getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )

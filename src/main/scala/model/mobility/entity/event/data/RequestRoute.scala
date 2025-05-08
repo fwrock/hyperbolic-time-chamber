@@ -6,4 +6,4 @@ import core.entity.event.data.BaseEventData
 case class RequestRoute(
   origin: String,
   destination: String
-)  extends BaseEventData
+) extends BaseEventData
