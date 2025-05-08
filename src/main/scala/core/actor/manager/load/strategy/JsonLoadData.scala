@@ -75,6 +75,8 @@ class JsonLoadData(private val properties: Properties)
 
     poolBatches = createBatches(poolActors)
 
+    totalBatchAmount = shardBatches.size + poolBatches.size
+
     self ! ProcessBatchesEvent()
 
     sendFinishLoadDataEvent()
@@ -94,7 +96,7 @@ class JsonLoadData(private val properties: Properties)
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     processBatchControl.put(event.batchId, true)
-    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/${shardBatches.size + poolBatches.size})")
+    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/$totalBatchAmount)")
     handleProcessBatches()
   }
 
@@ -111,7 +113,11 @@ class JsonLoadData(private val properties: Properties)
     actorsToCreate: Seq[ActorSimulationCreation]
   ): mutable.Queue[Seq[ActorSimulationCreation]] = {
     val batches = if (actorsToCreate.size < batchSize) {
-      Seq(actorsToCreate)
+      if (actorsToCreate.nonEmpty) {
+        Seq(actorsToCreate)
+      } else {
+        Seq()
+      }
     } else {
       actorsToCreate.grouped(batchSize).toSeq
     }
