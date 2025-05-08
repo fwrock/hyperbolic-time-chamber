@@ -8,6 +8,7 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
 case class CreateActorsEvent(
+  id: String,
   actors: Seq[ActorSimulationCreation],
   actorRef: ActorRef
 ) extends BaseEvent[DefaultBaseEventData]()

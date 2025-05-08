@@ -8,5 +8,6 @@ import scala.collection.mutable
 case class FinishLoadDataEvent(
   actorRef: ActorRef,
   amount: Long,
+  actorClassType: String,
   creators: mutable.Set[ActorRef]
 )

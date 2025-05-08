@@ -1,9 +1,9 @@
 package org.interscity.htc
 package model.mobility.collections
 
-import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
 
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 
 case class RoadInfo(roadType: String, name: Option[String], speedLimit: Option[Int])
 

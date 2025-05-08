@@ -9,7 +9,7 @@ import scala.collection.mutable
 
 case class InitializeData(
   data: Any,
-  shardId: String,
+  resourceId: String,
   timeManager: ActorRef,
   creatorManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef],

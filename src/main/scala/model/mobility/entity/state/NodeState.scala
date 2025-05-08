@@ -21,4 +21,8 @@ case class NodeState(
   signals: mutable.Map[String, SignalState] = mutable.Map.empty,
   busStops: mutable.Map[String, Identify] = mutable.Map.empty,
   subwayStations: mutable.Map[String, Identify] = mutable.Map.empty
-) extends BaseState(startTick = startTick, reporterType = reporterType, scheduleOnTimeManager = scheduleOnTimeManager)
+) extends BaseState(
+      startTick = startTick,
+      reporterType = reporterType,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    )

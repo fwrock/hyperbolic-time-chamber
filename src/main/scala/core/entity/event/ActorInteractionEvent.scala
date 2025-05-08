@@ -15,7 +15,8 @@ case class ActorInteractionEvent(
   actorClassType: String,
   eventType: String = "default",
   data: AnyRef,
-  actorType: String = CreationTypeEnum.LoadBalancedDistributed.toString
+  actorType: String = CreationTypeEnum.LoadBalancedDistributed.toString,
+  resourceId: String,
 ) {
 
   def toIdentity: Identify = Identify(

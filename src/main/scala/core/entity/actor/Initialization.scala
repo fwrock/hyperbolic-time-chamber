@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 case class Initialization(
   id: String,
-  shardId: String,
+  resourceId: String,
   classType: String,
   data: Any,
   timeManager: ActorRef,
@@ -22,7 +22,7 @@ case class Initialization(
   def toInitializeData: InitializeData =
     InitializeData(
       data = data,
-      shardId = shardId,
+      resourceId = resourceId,
       timeManager = timeManager,
       creatorManager = creatorManager,
       reporters = reporters,

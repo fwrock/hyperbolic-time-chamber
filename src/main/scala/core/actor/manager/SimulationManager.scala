@@ -82,7 +82,7 @@ class SimulationManager(
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
-    logInfo(s"Run simulation: \n$configuration")
+    logInfo(s"Run simulation")
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
   }

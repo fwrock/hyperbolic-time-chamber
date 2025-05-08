@@ -27,4 +27,8 @@ case class LinkState(
   currentSpeed: Double = 0.0,
   congestionFactor: Double = 1.0,
   registered: mutable.Set[LinkRegister] = mutable.Set()
-) extends BaseState(startTick = startTick, reporterType = reporterType, scheduleOnTimeManager = scheduleOnTimeManager)
+) extends BaseState(
+      startTick = startTick,
+      reporterType = reporterType,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    )

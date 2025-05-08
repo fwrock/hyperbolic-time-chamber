@@ -30,7 +30,7 @@ class Cashier(
           if (state.queue.nonEmpty) {
             val queued = state.queue.dequeue()
             state.clientInService = Some(queued.client)
-            sendMessageTo(queued.client.id, queued.client.shardId, StartClientServiceData())
+            sendMessageTo(queued.client.id, queued.client.classType, StartClientServiceData())
             state.status = Busy
             onFinishSpontaneous(Some(currentTick + serviceTime(queued.amountThings)))
           } else {
@@ -42,7 +42,7 @@ class Cashier(
             client =>
               sendMessageTo(
                 client.id,
-                client.shardId,
+                client.classType,
                 FinishClientServiceData()
               )
           )
@@ -89,7 +89,7 @@ class Cashier(
         ClientQueued(
           client = Identify(
             id = event.actorRefId,
-            shardId = event.shardRefId,
+            resourceId = event.shardRefId,
             classType = event.actorClassType,
             actorRef = event.actorPathRef
           ),

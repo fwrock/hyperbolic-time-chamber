@@ -17,4 +17,8 @@ case class GPSState(
   scheduleOnTimeManager: Boolean = false,
   cityMapPath: String = null,
   requests: mutable.Queue[(Identify, RequestRoute)] = mutable.Queue[(Identify, RequestRoute)]()
-) extends BaseState(startTick = startTick, reporterType = reporterType, scheduleOnTimeManager = scheduleOnTimeManager)
+) extends BaseState(
+      startTick = startTick,
+      reporterType = reporterType,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    )

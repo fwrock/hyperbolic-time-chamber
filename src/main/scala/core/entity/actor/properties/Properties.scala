@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.actor.properties
 
-import core.enumeration.{CreationTypeEnum, ReportTypeEnum}
+import core.enumeration.{ CreationTypeEnum, ReportTypeEnum }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Dependency
@@ -11,7 +11,7 @@ import scala.collection.mutable
 
 case class Properties(
   entityId: String = null,
-  shardId: String = null,
+  var resourceId: String = null,
   timeManager: ActorRef = null,
   creatorManager: ActorRef = null,
   reporters: mutable.Map[ReportTypeEnum, ActorRef] = null,

@@ -1,27 +1,27 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil}
+import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
 import java.util.UUID
 import scala.Long.MinValue
@@ -29,7 +29,7 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -57,10 +57,10 @@ abstract class BaseActor[T <: BaseState](
 
   protected var entityId: String =
     if (properties != null) properties.entityId else UUID.randomUUID().toString
-  protected var shardId: String =
-    if (properties != null) properties.shardId else UUID.randomUUID().toString
+  protected var shardId: String = getShardId
   protected var state: T = uninitialized
-  protected val dependencies: mutable.Map[String, Dependency] = if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
+  protected val dependencies: mutable.Map[String, Dependency] =
+    if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
 
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
@@ -84,7 +84,7 @@ abstract class BaseActor[T <: BaseState](
           logInfo(s"State: $state")
           startTick = state.getStartTick
         }
-        creatorManager ! StartEntityAckEvent(entityId =  entityId)
+        creatorManager ! StartEntityAckEvent(entityId = entityId)
         if (state != null && state.isSetScheduleOnTimeManager) {
           registerOnTimeManager()
         }
@@ -118,7 +118,6 @@ abstract class BaseActor[T <: BaseState](
   private def initialize(event: InitializeEvent): Unit =
     if (!isInitialized) {
       entityId = event.id
-      entityId = event.id
       timeManager = event.data.timeManager
       creatorManager = event.data.creatorManager
       state = JsonUtil.convertValue[T](event.data.data)
@@ -145,7 +144,7 @@ abstract class BaseActor[T <: BaseState](
         identify = Some(
           Identify(
             id = IdUtil.format(entityId),
-            shardId = IdUtil.format(shardId),
+            resourceId = IdUtil.format(properties.resourceId),
             classType = getClass.getName,
             actorRef = getSelfShard.path.toString,
             actorType = properties.actorType.toString
@@ -159,7 +158,7 @@ abstract class BaseActor[T <: BaseState](
         identify = Some(
           Identify(
             id = IdUtil.format(entityId),
-            shardId = IdUtil.format(shardId),
+            resourceId = IdUtil.format(properties.resourceId),
             classType = getClass.getName,
             actorRef = self.path.toString,
             actorType = properties.actorType.toString
@@ -209,13 +208,14 @@ abstract class BaseActor[T <: BaseState](
       ActorInteractionEvent(
         tick = currentTick,
         lamportTick = getLamportClock,
-        actorRefId = IdUtil.format(getActorId),
+        actorRefId = IdUtil.format(getEntityId),
         shardRefId = IdUtil.format(getShardId),
         actorClassType = getClass.getName,
         actorPathRef = self.path.name,
         data = data,
         eventType = eventType,
-        actorType = properties.actorType.toString
+        actorType = properties.actorType.toString,
+        resourceId = properties.resourceId
       )
     )
   }
@@ -229,13 +229,14 @@ abstract class BaseActor[T <: BaseState](
     pool ! ActorInteractionEvent(
       tick = currentTick,
       lamportTick = getLamportClock,
-      actorRefId = IdUtil.format(getActorId),
+      actorRefId = IdUtil.format(getEntityId),
       shardRefId = IdUtil.format(getShardId),
       actorClassType = getClass.getName,
       actorPathRef = self.path.name,
       data = data,
       eventType = eventType,
-      actorType = properties.actorType.toString
+      actorType = properties.actorType.toString,
+      resourceId = properties.resourceId
     )
   }
 
@@ -392,8 +393,8 @@ abstract class BaseActor[T <: BaseState](
       end = currentTick,
       actorRef = self,
       identify = Identify(
-        id = IdUtil.format(getActorId),
-        shardId = IdUtil.format(getShardId),
+        id = IdUtil.format(getEntityId),
+        resourceId = IdUtil.format(properties.resourceId),
         classType = getClass.getName,
         actorRef = getPath
       ),
@@ -408,8 +409,8 @@ abstract class BaseActor[T <: BaseState](
           actorRef = getPath,
           identify = Some(
             Identify(
-              id = IdUtil.format(getActorId),
-              shardId = IdUtil.format(getShardId),
+              id = IdUtil.format(getEntityId),
+              resourceId = IdUtil.format(properties.resourceId),
               classType = getClass.getName,
               actorRef = getPath
             )
@@ -435,15 +436,15 @@ abstract class BaseActor[T <: BaseState](
       actorRef = getPath,
       identify = Some(
         Identify(
-          id = getActorId,
-          shardId = getShardId,
+          id = getEntityId,
+          resourceId = IdUtil.format(properties.resourceId),
           classType = getClass.getName,
           actorRef = getPath
         )
       )
     )
 
-  protected def report(data: Any, label: String = null): Unit = {
+  protected def report(data: Any, label: String = null): Unit =
     report(
       event = ReportEvent(
         entityId = entityId,
@@ -453,7 +454,6 @@ abstract class BaseActor[T <: BaseState](
         label = label
       )
     )
-  }
 
   protected def report(event: ReportEvent): Unit = {
     val defaultReportType = ReportTypeEnum.valueOf(
@@ -513,7 +513,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The actor id
     */
-  protected def getActorId: String = entityId
+  protected def getEntityId: String = entityId
 
   protected def getPath: String = self.path.toString
 
@@ -528,7 +528,7 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The shard name
     */
-  protected def getShardId: String = properties.shardId.replace(":", "_").replace(";", "_")
+  protected def getShardId: String = getClass.getName
 
   /** Gets the actor reference of the shard region for a given class name.
     *
@@ -538,12 +538,12 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getShardRef(className: String): ActorRef =
-    ClusterSharding(context.system).shardRegion(className.replace(":", "_").replace(";", "_"))
+    ClusterSharding(context.system).shardRegion(className)
 
   protected def toIdentify: Identify =
     Identify(
-      id = getActorId,
-      shardId = getShardId,
+      id = getEntityId,
+      resourceId = IdUtil.format(properties.resourceId),
       classType = getClass.getName,
       actorRef = self.path.name
     )
