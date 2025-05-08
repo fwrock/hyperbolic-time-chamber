@@ -68,9 +68,9 @@ class CreatorLoadData(
   }
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
-    logInfo(
-      s"Received StartCreationEvent. Starting creation process for ${batchesToCreate(event.batchId).size} buffered actors."
-    )
+//    logInfo(
+//      s"Received StartCreationEvent. Starting creation process for ${batchesToCreate(event.batchId).size} buffered actors."
+//    )
 
     actorsToCreate(event.batchId) = batchesToCreate
       .get(event.batchId)
