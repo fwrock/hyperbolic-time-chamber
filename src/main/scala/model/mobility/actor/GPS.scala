@@ -29,8 +29,8 @@ class GPS(
   override def onInitialize(event: InitializeEvent): Unit =
     loadCityMap()
 
-  override def onStart(): Unit =
-    loadCityMap()
+//  override def onStart(): Unit =
+//    loadCityMap()
 
   private def loadCityMap(): Unit =
     if (state != null) {
@@ -114,6 +114,7 @@ class GPS(
       case (Some(originNode), Some(destinationNode)) =>
         cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
           case Some(path) =>
+            logInfo(s"${identify.id} - path size: ${path._2.size}")
             data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
           case _ =>
             data = ReceiveRoute()
