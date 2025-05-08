@@ -579,7 +579,7 @@ object Graph {
     jsonString: String,
     idExtractor: V => ID, // Função para extrair ID do nó V
     defaultWeightForUnweighted: W
-  ): Try[Graph[V, W, L]] =
+  ): Try[Graph[V, W, L  ]] =
     Try {
       // 1. Constrói o JavaType específico para JsonGraphRefFormat[V, ID, W, L]
       val graphFormatType: JavaType = JacksonConfig.buildGraphRefFormatType[V, ID, W, L]()
