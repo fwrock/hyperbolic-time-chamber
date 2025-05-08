@@ -36,20 +36,21 @@ class CreatorLoadData(
     ) {
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
-  private val initializeData = mutable.Map[String, Initialization]()
+  private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
   private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
   private var amountActors = 0
 
   private val actorsToCreate: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
 
   private val actorsBatches: mutable.Map[String, String] = mutable.Map.empty
+  private val batchesLoad: mutable.Map[String, ActorRef] = mutable.Map.empty
 
-  private val batchesToCreate: mutable.Map[String, (ActorRef, Seq[ActorSimulationCreation])] =
-    mutable.Map[String, (ActorRef, Seq[ActorSimulationCreation])]()
+  private val batchesToCreate: mutable.Map[String, Seq[ActorSimulationCreation]] =
+    mutable.Map[String, Seq[ActorSimulationCreation]]()
   private var currentBatch: String = _
 
-  private val CREATE_CHUNK_SIZE = 500
-  private val DELAY_BETWEEN_CHUNKS = 1000.milliseconds
+  private val CREATE_CHUNK_SIZE = 1000
+  private val DELAY_BETWEEN_CHUNKS = 50.milliseconds
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent  => handleCreateActors(event)
@@ -61,19 +62,19 @@ class CreatorLoadData(
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
-    batchesToCreate.put(event.id, (event.actorRef, event.actors))
-
+    batchesToCreate.put(event.id, event.actors)
+    batchesLoad.put(event.id, event.actorRef)
     self ! StartCreationEvent(batchId = event.id)
   }
 
   private def handleStartCreation(event: StartCreationEvent): Unit = {
     logInfo(
-      s"Received StartCreationEvent. Starting creation process for ${actorsBuffer.size} buffered actors."
+      s"Received StartCreationEvent. Starting creation process for ${batchesToCreate(event.batchId).size} buffered actors."
     )
 
     actorsToCreate(event.batchId) = batchesToCreate
       .get(event.batchId)
-      .map(_._2.distinctBy(_.actor.id))
+      .map(_.distinctBy(_.actor.id))
       .getOrElse(Seq.empty)
       .toList
 
@@ -94,7 +95,7 @@ class CreatorLoadData(
 
       chunk.foreach {
         actorCreation =>
-          initializeData(actorCreation.actor.id) = Initialization(
+          val initialization = Initialization(
             id = actorCreation.actor.id,
             resourceId = actorCreation.resourceId,
             classType = actorCreation.actor.typeActor,
@@ -104,6 +105,8 @@ class CreatorLoadData(
             reporters = reporters,
             dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
           )
+
+          addInitializeData(actorCreation.actor.id, batchId, initialization)
 
           addToInitializedAcknowledges(batchId, actorCreation.actor.id)
 
@@ -134,6 +137,15 @@ class CreatorLoadData(
     }
   }
 
+  private def addInitializeData(entityId: String, batchId: String, initialization: Initialization): Unit = {
+    initializeData.get(batchId) match {
+      case Some(data) =>
+        data.put(entityId, initialization)
+      case None =>
+        initializeData.put(batchId, mutable.Map(entityId -> initialization))
+    }
+  }
+
   private def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
     initializedAcknowledges.get(batchId) match {
       case Some(acknowledge) =>
@@ -151,8 +163,9 @@ class CreatorLoadData(
       case None =>
     }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
-    initializeData.get(event.entityId) match {
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+    val batchId = actorsBatches(event.entityId)
+    initializeData(batchId).get(event.entityId) match {
       case Some(data) =>
         val initializeEvent = InitializeEvent(
           id = data.id,
@@ -168,16 +181,17 @@ class CreatorLoadData(
             }
           )
         )
-        getShardRef(data.resourceId) ! EntityEnvelopeEvent(
+        getShardRef(data.classType) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = initializeEvent
         )
-        initializeData.remove(event.entityId)
+        initializeData(batchId).remove(event.entityId)
       case None =>
         log.warning(
           s"Received StartEntityAck for ${event.entityId}, but no initialization data found (maybe already processed or error?)."
         )
     }
+  }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
     val batchId = actorsBatches.getOrElse(event.entityId, "")
@@ -189,12 +203,13 @@ class CreatorLoadData(
     if (
       actorsToCreate(batchId).isEmpty && (!initializedAcknowledges.contains(
         batchId
-      ) || initializedAcknowledges(batchId).isEmpty)
+      ) || initializedAcknowledges(batchId).isEmpty) &&
+        initializeData(batchId).isEmpty
     ) {
-      logInfo(
-        s"All $amountActors actors created and acknowledged initialization. Sending FinishCreationEvent."
-      )
-      batchesToCreate(batchId)._1 ! FinishCreationEvent(
+//      logInfo(
+//        s"All actors created and acknowledged initialization from $batchId. Sending FinishCreationEvent."
+//      )
+      batchesLoad(batchId) ! FinishCreationEvent(
         actorRef = self,
         batchId = batchId,
         amount = amountActors

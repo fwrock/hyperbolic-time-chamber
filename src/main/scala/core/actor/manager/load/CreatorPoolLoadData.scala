@@ -44,8 +44,10 @@ class CreatorPoolLoadData(
 
   private val actorsBatches: mutable.Map[String, String] = mutable.Map.empty
 
-  private val batchesToCreate: mutable.Map[String, (ActorRef, Seq[ActorSimulationCreation])] =
-    mutable.Map[String, (ActorRef, Seq[ActorSimulationCreation])]()
+  private val batchesLoad: mutable.Map[String, ActorRef] = mutable.Map.empty
+
+  private val batchesToCreate: mutable.Map[String, Seq[ActorSimulationCreation]] =
+    mutable.Map[String, Seq[ActorSimulationCreation]]()
   private var currentBatch: String = _
 
   private val CREATE_CHUNK_SIZE = 50
@@ -59,7 +61,8 @@ class CreatorPoolLoadData(
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
-    batchesToCreate.put(event.id, (event.actorRef, event.actors))
+    batchesToCreate.put(event.id, event.actors)
+    batchesLoad.put(event.id, event.actorRef)
 
     self ! StartCreationEvent(batchId = event.id)
   }
@@ -69,7 +72,7 @@ class CreatorPoolLoadData(
 
     actorsToCreate(event.batchId) = batchesToCreate
       .get(event.batchId)
-      .map(_._2.distinctBy(_.actor.id))
+      .map(_.distinctBy(_.actor.id))
       .getOrElse(Seq.empty)
       .toList
 
@@ -154,10 +157,10 @@ class CreatorPoolLoadData(
         batchId
       ) || startedAcknowledges(batchId).isEmpty)
     ) {
-      logInfo(
-        s"All $amountActors pool actors created and acknowledged initialization. Sending FinishCreationEvent."
-      )
-      batchesToCreate(batchId)._1 ! FinishCreationEvent(
+//      logInfo(
+//        s"All pool actors created and acknowledged initialization from $batchId. Sending FinishCreationEvent."
+//      )
+      batchesLoad(batchId) ! FinishCreationEvent(
         actorRef = self,
         batchId = batchId,
         amount = amountActors
