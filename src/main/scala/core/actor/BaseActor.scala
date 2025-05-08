@@ -78,10 +78,10 @@ abstract class BaseActor[T <: BaseState](
     super.preStart()
     if (properties.data != null) {
       try {
-        logInfo(s"Starting actor $entityId: ${properties.data}")
+//        logInfo(s"Starting actor $entityId: ${properties.data}")
         state = JsonUtil.convertValue[T](properties.data)
         if (state != null) {
-          logInfo(s"State: $state")
+//          logInfo(s"State: $state")
           startTick = state.getStartTick
         }
         creatorManager ! StartEntityAckEvent(entityId = entityId)
@@ -188,7 +188,7 @@ abstract class BaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
-    logInfo(s"Sending message to $entityId: $data, $eventType")
+//    logInfo(s"Sending message to $entityId: $data, $eventType")
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {

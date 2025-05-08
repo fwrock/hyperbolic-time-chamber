@@ -96,7 +96,7 @@ class JsonLoadData(private val properties: Properties)
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     processBatchControl.put(event.batchId, true)
-    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/$totalBatchAmount)")
+//    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/$totalBatchAmount)")
     handleProcessBatches()
   }
 
@@ -130,7 +130,7 @@ class JsonLoadData(private val properties: Properties)
         _.self == true
       )
     ) {
-      logInfo(s"All data loaded and sent to creators: $amountActors")
+//      logInfo(s"All data loaded and sent to creators: $amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,

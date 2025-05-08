@@ -46,6 +46,7 @@ class Car(
       destination = state.destination
     )
     report(data = s"${state.gpsId}", label = "request route")
+    logInfo(s"Dependencies size: ${dependencies.size}")
     val dependency = getDependency(state.gpsId)
     sendMessageTo(
       entityId = dependency.id,
