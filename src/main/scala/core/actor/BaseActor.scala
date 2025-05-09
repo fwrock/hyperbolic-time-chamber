@@ -399,6 +399,7 @@ abstract class BaseActor[T <: BaseState](
         classType = getClass.getName,
         actorRef = getPath
       ),
+      scheduleTick = scheduleTick.map(_.toString),
       scheduleEvent = None,
       timeManager = currentTimeManager,
       destruct = destruct
