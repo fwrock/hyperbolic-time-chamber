@@ -5,15 +5,19 @@ import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.model.mobility.entity.model.model.Route
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData, ReceiveRoute }
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.system.database.redis.RedisClientManager
+
+import scala.collection.mutable
 
 abstract class Movable[T <: MovableState](
   private val properties: Properties
@@ -43,9 +47,16 @@ abstract class Movable[T <: MovableState](
     }
 
   private def handleReceiveRoute(data: ReceiveRoute): Unit = {
-    val updatedCost = data.cost
-    state.movableBestRoute = data.path
-    state.movableStatus = Ready
+    val redisManager = RedisClientManager()
+    redisManager.load(data.routeId).map(Route.parseFrom) match {
+      case Some(route) =>
+        val updatedCost = route.cost
+        state.movableBestRoute = Some(mutable.Queue(route.path.map(pair => (pair._1.get, pair._2.get)): _*))
+        state.movableStatus = Ready
+      case None =>
+        logError(s"Route not found in Redis: ${data.routeId}")
+        onFinishSpontaneous()
+    }
     enterLink()
   }
 
