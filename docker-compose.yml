@@ -1,5 +1,17 @@
 version: '3.8'
+
 services:
+  redis:
+    image: redis:latest
+    container_name: htc-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - hyperbolic-time-chamber-network
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
   node1:
     build: .
     container_name: node_1
@@ -13,6 +25,8 @@ services:
       CLUSTER_IP: node1
       CLUSTER_NAME: node1
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -32,6 +46,8 @@ services:
       CLUSTER_IP: node2
       CLUSTER_NAME: node2
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -51,6 +67,8 @@ services:
       CLUSTER_IP: node3
       CLUSTER_NAME: node3
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -70,6 +88,8 @@ services:
       CLUSTER_IP: node4
       CLUSTER_NAME: node4
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -89,6 +109,8 @@ services:
       CLUSTER_IP: node5
       CLUSTER_NAME: node5
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -108,6 +130,8 @@ services:
       CLUSTER_IP: node6
       CLUSTER_NAME: node6
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -127,6 +151,8 @@ services:
       CLUSTER_IP: node7
       CLUSTER_NAME: node7
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
@@ -146,13 +172,17 @@ services:
       CLUSTER_IP: node8
       CLUSTER_NAME: node8
       SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
+volumes:
+  redis_data:
+
 networks:
   hyperbolic-time-chamber-network:
     driver: bridge
-
