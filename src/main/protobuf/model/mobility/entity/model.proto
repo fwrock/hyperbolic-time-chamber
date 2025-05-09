@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package org.htc.protobuf.model.mobility.entity.model;
+
+import "core/entity/actor.proto";
+
+message IdentifyPair {
+  core.entity.Identify link = 1;
+  core.entity.Identify node = 2;
+}
+
+message Route {
+  double cost = 1;
+  repeated IdentifyPair path = 2;
+}
