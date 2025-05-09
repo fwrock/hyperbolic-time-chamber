@@ -9,8 +9,8 @@ resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
 // Apache Pekko
 val pekkoVersion = "1.1.3"
-val pekkoManagementVersion = "1.1.0"
-val jacksonVersion = "2.18.3"
+val pekkoManagementVersion = "1.1.1"
+val jacksonVersion = "2.19.0"
 val pekkoHttpVersion = "1.1.0"
 
 // Logs
@@ -27,6 +27,7 @@ val pekkoProtobuf = "1.0.3"
 // Connectors
 val cassandraConnectorsVersion = "1.1.0"
 val kafkaConnectorsVersion = "1.1.0"
+val jedisVersion = "6.0.0"
 
 lazy val root = (project in file("."))
   .settings(
@@ -63,6 +64,7 @@ lazy val root = (project in file("."))
 
       //Databases
       "org.apache.pekko" %% "pekko-connectors-cassandra" % cassandraConnectorsVersion,
+      "redis.clients" % "jedis" % jedisVersion,
 
       // Jackson
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
