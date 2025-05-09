@@ -35,7 +35,7 @@ abstract class Movable[T <: MovableState](
       case Ready =>
         enterLink()
       case _ =>
-        logInfo(s"Event current status not handled ${state.movableStatus}")
+        logWarn(s"Event current status not handled ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
@@ -43,7 +43,7 @@ abstract class Movable[T <: MovableState](
       case d: ReceiveRoute => handleReceiveRoute(d)
       case d: LinkInfoData => handleLinkInfo(event, d)
       case _ =>
-        logInfo(s"Movable Event not handled: $event")
+        logWarn(s"Movable Event not handled: $event")
     }
 
   private def handleReceiveRoute(data: ReceiveRoute): Unit = {
@@ -65,7 +65,7 @@ abstract class Movable[T <: MovableState](
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
       case _ =>
-        logInfo(s"Event not handled: $event with data: $data")
+        logWarn(s"Event not handled: $event with data: $data")
     }
 
   protected def actHandleReceiveEnterLinkInfo(
@@ -109,7 +109,7 @@ abstract class Movable[T <: MovableState](
               actorType = LoadBalancedDistributed
             )
           case null =>
-            logInfo("Path item not handled")
+            logWarn("Path item not handled")
       case None if state.movableBestRoute.isEmpty =>
         report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
@@ -142,16 +142,16 @@ abstract class Movable[T <: MovableState](
             }
             state.movableCurrentPath = None
           case _ =>
-            logInfo("Path item not handled")
+            logWarn("Path item not handled")
       case None =>
-        logInfo("No link to leave")
+        logWarn("No link to leave")
 
   protected def getNextPath: Option[(Identify, Identify)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.dequeue)
       case None =>
-        logInfo("No path to follow")
+        logWarn("No path to follow")
         None
 
   protected def viewNextPath: Option[(Identify, Identify)] =
@@ -159,7 +159,7 @@ abstract class Movable[T <: MovableState](
       case Some(path) =>
         Some(path.head)
       case None =>
-        logInfo("No path to follow")
+        logWarn("No path to follow")
         None
 
   protected def getCurrentNode: Identify =
