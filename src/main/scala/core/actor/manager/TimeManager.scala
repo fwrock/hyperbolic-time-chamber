@@ -42,6 +42,7 @@ class TimeManager(
 
   private val registeredActors = mutable.Set[String]()
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
+  private val scheduledTicksOnFinish = mutable.Set[Tick]()
   private val runningEvents = mutable.Set[Identify]()
   private var timeManagersPool: ActorRef = _
 
@@ -200,7 +201,6 @@ class TimeManager(
           )
         )
     }
-//    logInfo(s"Broadcasting next global tick $nextTick to local time managers")
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
@@ -211,11 +211,6 @@ class TimeManager(
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
-//    logInfo(s"Schedule event received: ${schedule.identify.get.id} at tick ${schedule.tick}")
-    if (schedule.tick < localTickOffset) {
-      log.warning(s"Schedule event for past tick ${schedule.tick}, event=$schedule ignored")
-      return
-    }
     countScheduled += 1
     scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
@@ -232,7 +227,7 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-//      logInfo(s"Finish event received: ${finish.identify.id}")
+      finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
       runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
       advanceToNextTick()
@@ -265,6 +260,7 @@ class TimeManager(
 
   private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
     if (parentManager.isDefined && runningEvents.isEmpty) {
+      scheduledTicksOnFinish.clear()
       parentManager.get ! LocalTimeReportEvent(
         tick = localTickOffset,
         hasScheduled = hasScheduled,
@@ -292,10 +288,8 @@ class TimeManager(
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
     if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
-//      logInfo(s"Send spontaneous event at tick $tick to pool actor ${identity.id}")
       sendSpontaneousEventPool(tick, identity)
     } else {
-//      logInfo(s"Send spontaneous event at tick $tick to load balance actor ${identity.id}")
       sendSpontaneousEventShard(tick, identity)
     }
 
@@ -318,6 +312,7 @@ class TimeManager(
     val newTick = nextTick
     if (localTickOffset < simulationDuration) {
       localTickOffset = newTick
+      scheduledTicksOnFinish.clear()
     } else {
       terminateSimulation()
     }
@@ -327,8 +322,14 @@ class TimeManager(
     if (runningEvents.isEmpty) {
       return (scheduledActors.nonEmpty, runningEvents.isEmpty) match {
         case (true, true) =>
-          scheduledActors.keys.minOption.getOrElse(localTickOffset + 1)
-        case _ => localTickOffset + 1
+          val newScheduled = scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
+          val currentScheduled = scheduledActors.keys.minOption.getOrElse(localTickOffset + 1)
+            if (newScheduled < currentScheduled) {
+              newScheduled
+            } else {
+              currentScheduled
+            }
+        case _ => scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
       }
     }
     localTickOffset
