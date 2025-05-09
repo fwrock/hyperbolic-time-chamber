@@ -11,6 +11,7 @@ case class FinishEvent(
   actorRef: ActorRef,
   identify: Identify,
   end: Tick,
+  scheduleTick: Option[String] = None,
   scheduleEvent: Option[ScheduleEvent] = None,
   timeManager: ActorRef = null,
   destruct: Boolean = false

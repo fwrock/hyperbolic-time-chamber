@@ -1,9 +1,6 @@
 package org.interscity.htc
 package system.database.redis
 
-import com.google.protobuf.ByteString
-import io.lettuce.core.*
-import io.lettuce.core.api.sync.*
 import redis.clients.jedis.Jedis
 
 class RedisClientManager {

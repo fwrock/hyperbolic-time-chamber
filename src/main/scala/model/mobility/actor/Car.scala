@@ -1,8 +1,9 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
+
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
@@ -12,7 +13,7 @@ import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
@@ -59,22 +60,28 @@ class Car(
 
   private def requestSignalState(): Unit = {
     report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
-    state.movableStatus = WaitingSignalState
-    getCurrentNode match
-      case node =>
-        getNextLink match
-          case link =>
-            report(data = s"${node.id} -> ${link.id}", label = "request signal state")
-            sendMessageTo(
-              entityId = node.id,
-              shardId = node.classType,
-              RequestSignalStateData(
-                targetLinkId = link.id
-              ),
-              EventTypeEnum.RequestSignalState.toString
-            )
-          case null =>
-      case null =>
+    if (state.destination == state.currentPath.map(p => p._2.actorId).orNull || state.bestRoute.isEmpty) {
+      report(data = s"${state.movableStatus} -> $Finished", "travel finished")
+      state.movableStatus = Finished
+      onFinishSpontaneous()
+    } else {
+      state.movableStatus = WaitingSignalState
+      getCurrentNode match
+        case node =>
+          getNextLink match
+            case link =>
+              report(data = s"${node.id} -> ${link.id}", label = "request signal state")
+              sendMessageTo(
+                entityId = node.id,
+                shardId = node.classType,
+                RequestSignalStateData(
+                  targetLinkId = link.id
+                ),
+                EventTypeEnum.RequestSignalState.toString
+              )
+            case null =>
+        case null =>
+    }
   }
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
