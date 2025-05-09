@@ -146,7 +146,6 @@ class TimeManager(
 
   private def stopSimulation(): Unit = {
     isStopped = true
-    printState()
     terminateSimulation()
   }
 
@@ -280,11 +279,13 @@ class TimeManager(
         advanceToNextTick()
         reportGlobalTimeManager()
 
-  private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
+  private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
+    logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
     actorsRef.foreach {
       actor =>
         sendSpontaneousEvent(tick, actor)
     }
+  }
 
   private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
     if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
@@ -350,13 +351,6 @@ class TimeManager(
       finishEvent.identify.id,
       DestructEvent(tick = localTickOffset, actorRef = getPath)
     )
-
-  private def printState(): Unit = {
-    logInfo(s"runningEvents: ${runningEvents.size}")
-    logInfo(s"scheduledActors: ${scheduledActors.size}")
-    logInfo(s"localTickOffset: $localTickOffset")
-    logInfo(s"tickOffset: $tickOffset")
-  }
 
   private def printSimulationDuration(): Unit = {
     val duration = System.currentTimeMillis() - startTime
