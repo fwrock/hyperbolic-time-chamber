@@ -117,7 +117,6 @@ class GPS(
     redisManager.load(routeId) match
       case Some(route) =>
         data = ReceiveRoute(routeId = routeId)
-        logInfo(s"route:${request.origin}-${request.destination} - route already exists in Redis")
       case None =>
         val origin = cityMap.vertices.find(_.id == request.origin)
         val destination = cityMap.vertices.find(_.id == request.destination)
@@ -125,7 +124,6 @@ class GPS(
           case (Some(originNode), Some(destinationNode)) =>
             cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
               case Some(path) =>
-                logInfo(s"${identify.id} - path size: ${path._2.size}")
                 val route = Route(cost = path._1, path = convertPath(path._2).toList)
                 redisManager.save(routeId, route.toByteArray)
                 data = ReceiveRoute(routeId = routeId)
