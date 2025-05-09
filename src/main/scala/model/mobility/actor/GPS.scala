@@ -5,17 +5,20 @@ import core.actor.BaseActor
 import model.mobility.entity.state.GPSState
 
 import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.model.mobility.entity.model.model.{IdentifyPair, Route}
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+import org.interscity.htc.system.database.redis.RedisClientManager
 
+import java.util.UUID
 import scala.collection.mutable
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 import scala.compiletime.uninitialized
 
 class GPS(
@@ -25,6 +28,8 @@ class GPS(
     ) {
 
   private var cityMap: Graph[NodeGraph, Double, EdgeGraph] = uninitialized
+
+  private val redisManager = RedisClientManager()
 
   override def onInitialize(event: InitializeEvent): Unit =
     loadCityMap()
@@ -107,20 +112,28 @@ class GPS(
     }
 
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
-    val origin = cityMap.vertices.find(_.id == request.origin)
-    val destination = cityMap.vertices.find(_.id == request.destination)
+    val routeId = UUID.nameUUIDFromBytes(s"route:${request.origin}-${request.destination}".getBytes).toString
     var data = ReceiveRoute()
-    (origin, destination) match {
-      case (Some(originNode), Some(destinationNode)) =>
-        cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
-          case Some(path) =>
-            logInfo(s"${identify.id} - path size: ${path._2.size}")
-            data = ReceiveRoute(cost = path._1, path = Some(convertPath(path._2)))
+    redisManager.load(routeId) match
+      case Some(route) =>
+        data = ReceiveRoute(routeId = routeId)
+        logInfo(s"route:${request.origin}-${request.destination} - route already exists in Redis")
+      case None =>
+        val origin = cityMap.vertices.find(_.id == request.origin)
+        val destination = cityMap.vertices.find(_.id == request.destination)
+        (origin, destination) match {
+          case (Some(originNode), Some(destinationNode)) =>
+            cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
+              case Some(path) =>
+                logInfo(s"${identify.id} - path size: ${path._2.size}")
+                val route = Route(cost = path._1, path = convertPath(path._2).toList)
+                redisManager.save(routeId, route.toByteArray)
+                data = ReceiveRoute(routeId = routeId)
+              case _ =>
+                data = ReceiveRoute()
           case _ =>
             data = ReceiveRoute()
-      case _ =>
-        data = ReceiveRoute()
-    }
+        }
     sendMessageTo(
       entityId = identify.id,
       shardId = identify.classType,
@@ -131,8 +144,8 @@ class GPS(
 
   private def convertPath(
     path: List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
-  ): mutable.Queue[(Identify, Identify)] = {
-    val convertedPath = mutable.Queue[(Identify, Identify)]()
+  ): mutable.Queue[IdentifyPair] = {
+    val convertedPath = mutable.Queue[IdentifyPair]()
     path.foreach {
       case (edge, node) =>
         val edgeId = Identify(
@@ -147,7 +160,7 @@ class GPS(
           classType = node.classType,
           actorType = CreationTypeEnum.LoadBalancedDistributed.toString
         )
-        convertedPath.enqueue((edgeId, nodeId))
+        convertedPath.enqueue(IdentifyPair(link = Some(edgeId), node = Some(nodeId)))
     }
     convertedPath
   }
