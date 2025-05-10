@@ -27,9 +27,9 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-25-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -50,7 +50,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -71,7 +71,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -92,7 +92,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -113,7 +113,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -134,7 +134,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -155,7 +155,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
@@ -176,7 +176,7 @@ services:
       REDIS_PORT: 6379
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     networks:
       - hyperbolic-time-chamber-network
 
