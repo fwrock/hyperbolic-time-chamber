@@ -5,16 +5,16 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.SpeedUtil
-import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
+import org.interscity.htc.model.mobility.util.{GPSUtil, SpeedUtil}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+
+import scala.collection.mutable
 
 class Car(
   private val properties: Properties
@@ -40,21 +40,24 @@ class Car(
     }
 
   override def requestRoute(): Unit = {
-    report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
-    state.movableStatus = RouteWaiting
-    val data = RequestRoute(
-      origin = state.origin,
-      destination = state.destination
-    )
-    report(data = s"${state.gpsId}", label = "request route")
-    val dependency = getDependency(state.gpsId)
-    sendMessageTo(
-      entityId = dependency.id,
-      shardId = dependency.classType,
-      data = data,
-      eventType = EventTypeEnum.RequestRoute.toString,
-      actorType = CreationTypeEnum.valueOf(dependency.actorType)
-    )
+    try {
+      report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
+      state.movableStatus = RouteWaiting
+      val route = GPSUtil.calcRoute(
+        originId = state.origin,
+        destinationId = state.destination
+      )
+      val updatedCost = route.cost
+      state.movableBestRoute = Some(mutable.Queue(route.path.map(pair => (pair._1.get, pair._2.get)): _*))
+      state.movableStatus = Ready
+      enterLink()
+    } catch {
+      case e: Exception =>
+        logError(s"Error on request route: ${e.getMessage}")
+        e.printStackTrace()
+        state.movableStatus = Finished
+        onFinishSpontaneous()
+    }
   }
 
   private def requestSignalState(): Unit = {
