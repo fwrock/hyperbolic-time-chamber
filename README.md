@@ -1,125 +1,90 @@
 # HTC-Simulator (Hyperbolic Time Chamber Simulator)
 
-**An Actor-Based Discrete Event Simulator Using Scala and Akka**
+**An Actor-Based Multi-Agent Discrete Event Simulator Using Scala and Apache Pekko**
 
 Inspired by the legendary "Hyperbolic Time Chamber" from Dragon Ball, HTC-Simulator is a powerful discrete event simulator that leverages the power of actor-based programming with Scala and Akka.
 
 ## Current Features:
 
 * **Simulation Time Management:** Precise control over the flow of time within the simulation.
+* **Simulation Load Data:** Ability to load simulation data from various sources, including JSON files.
 * **Event Coordination:** Efficient orchestration of interactions between different entities (actors) in the simulation.
+* **Reporting:** Generation of detailed reports on simulation results.
+* **Snapshot:** Ability to capture the simulation state at specific moments for later analysis or restoration.
+* **Distributed Simulation:** Support for running simulations across multiple nodes or clusters for enhanced performance and scalability.
 
 ## Features Under Development:
 
-* **Reporting:** Generation of detailed reports on simulation results.
 * **Digital Twin:** Creation of digital replicas of real-world systems for simulation and analysis.
 * **Dataflow:** Support for real-time data stream processing within the simulation.
-* **Snapshot:** Ability to capture the simulation state at specific moments for later analysis or restoration.
 * **Machine Learning:** Integration of machine learning algorithms for predictive analysis and decision-making within the simulation.
+* **Graphical User Interface (GUI):** A user-friendly interface for easier interaction with the simulator.
+
 
 ## Input Data:
 
 ### Simulation Configuration:
 
-To start a new simulation, you need to provide a JSON configuration file with the simulation details, including the name, description, start date, end date, time unit, and time step.
+To start a new simulation, you need to provide a JSON configuration file with the simulation details:
 
 ```json
 {
   "simulation": {
     "name": "HTC-Simulator",
-    "description": "A powerful discrete event simulator based on actors using Scala and Akka.",
-    "start": "2021-09-01T00:00:00Z",
+    "description": "A powerful discrete event simulator based on actors using Scala and Apache Pekko.",
+    "start": "2025-01-27T00:00:00.000",
     "timeUnit": "seconds",
     "timeStep": 1,
     "duration": 30,
     "actorsDataSources": [
       {
-        "type": "Actor1",
+        "id": "htcid:resource:simulation-model-name:1",
+        "classType": "com.example.Actor1",
+        "creationType": "LoadBalancedDistributed",
         "dataSource": {
           "type": "json",
-          "path": "data/actor1.json"
-        }
-      },
-      {
-        "type": "Actor2",
-        "dataSource": {
-          "type": "json",
-          "path": "data/actor2.xml"
-        }
-      },
-      {
-        "type": "Actor3",
-        "dataSource": {
-          "type": "json",
-          "path": "data/actor1.json"
-        }
-      },
-      {
-        "type": "Actor4",
-        "dataSource": {
-          "type": "mongo",
-          "host": "localhost",
-          "port": 27017,
-          "database": "actors",
-          "collection": "actor4",
-          "query": {
-            "name": "Actor4"
+          "info": {
+            "path": "data/actor1.json"
           }
         }
       },
       {
-        "type": "Actor5",
+        "id": "htcid:resource:simulation-model-name:2",
+        "classType": "com.example.Actor2",
+        "creationType": "PoolDistributed",
         "dataSource": {
-          "type": "cassandra",
-          "host": "localhost",
-          "port": 9042,
-          "keyspace": "actors",
-          "table": "actor5",
-          "query": {
-            "name": "Actor5"
+          "type": "json",
+          "info": {
+            "path": "data/actor2.json"
           }
         }
       }
     ]
-  },
-  "output": [
-    {
-      "type": "console"
-    },
-    {
-      "type": "json",
-      "path": "output/simulation.json"
-    },
-    {
-      "type": "xml",
-      "path": "output/simulation.xml"
-    },
-    {
-      "type": "csv",
-      "path": "output/simulation.csv"
-    },
-    {
-      "type": "mongo",
-      "host": "localhost",
-      "port": 27017,
-      "database": "output",
-      "collection": "simulation"
-    }
-  ]
+  }
 }
 ```
 
 ### Actor Data Sources
 
-Each actor in the simulation is defined by a specific type and a corresponding data source. Actor data can be provided in different formats, such as JSON, XML, MongoDB, Cassandra, etc.
+Each actor in the simulation is defined by a specific type and a corresponding data source. Actor data can be provided in JSON format. You can define the actor's properties, dependencies, and other configurations in the JSON files. Each file should contain an array of n actors definitions.
+The actor data source is defined in the simulation configuration file under `actorsDataSources`. Each actor's data source includes an ID, class type, creation type, and a reference to the JSON file containing the actor's data. 
+
+The `creationType` can be either `LoadBalancedDistributed` or `PoolDistributed`, depending on how you want to manage the actor's lifecycle and distribution across nodes:
+- **LoadBalancedDistributed:** This type allows the actor to be distributed across multiple nodes in a load-balanced manner. It is suitable for scenarios where you want to evenly distribute the workload among available nodes.
+- **PoolDistributed:** This type allows you to create a pool of actor instances that can be used to handle requests. It is useful for scenarios where you want to limit the number of active instances and control resource usage.
+
+The `dependencies` field allows you to specify other actors that this actor depends on. This is useful for establishing relationships between different actors in the simulation.
+The `data` field contains the actor's properties and configuration. You can define various properties, including primitive types and nested objects.
 **data/actor1.json:**
 ```json
 [
     {
+      "id": "htcid:actor:simulation-model-name:actor-type:1",
       "name": "Actor1",
-      "type": "ActorType1",
+      "typeActor": "com.example.actor.ActorType1",
+      "creationType": "LoadBalancedDistributed",
       "data": {
-        "type": "DataType1",
+        "dataType": "com.example.data.DataType1",
         "content": {
           "property1": 10,
           "property2": 20,
@@ -127,50 +92,54 @@ Each actor in the simulation is defined by a specific type and a corresponding d
             "subProperty1": 30,
             "subProperty2": 40
           }
+        }
+      },
+      "dependencies": {
+        "example": {
+          "id":  "htcid:actor:simulation-model-name:actor-type:2",
+          "resourceId": "htcid:resource:simulation-model-name:2",
+          "classType": "com.example.Actor2",
+          "actorType": "PoolDistributed"
         }
       }
     }
 ]
 ```
-**data/actor2.xml:**
-```xml
-<actors>
-    <actor>
-      <name>Actor1</name>
-      <type>ActorType2</type>
-      <data>
-        <type>DataType2</type>
-        <content>
-          <property1>50</property1>
-          <property2>60</property2>
-          <objectProperty>
-            <subProperty1>70</subProperty1>
-            <subProperty2>80</subProperty2>
-          </objectProperty>
-        </content>
-      </data>
-    </actor>
-</actors>
-```
-**data/actor3.json:**
+**data/actor2.json:**
 
 ```json
 [
-    {
-      "name": "Actor1",
-      "type": "ActorType3",
-      "data": {
-        "type": "Default",
-        "content": {
-          "property1": 10,
-          "property2": 20,
-          "objectProperty": {
-            "subProperty1": 30,
-            "subProperty2": 40
-          }
+  {
+    "id": "htcid:actor:simulation-model-name:actor-type:2",
+    "name": "Actor2",
+    "typeActor": "com.example.actor.ActorType2",
+    "creationType": "PoolDistributed",
+    "poolConfiguration": {
+      "roundRobinPool": 0,
+      "totalInstances": 1,
+      "maxInstancesPerNode": 1,
+      "allowLocalRoutes": true
+    },
+    "data": {
+      "dataType": "com.example.data.DataType2",
+      "content": {
+        "property1": 10,
+        "property2": 20,
+        "objectProperty": {
+          "subProperty1": 30,
+          "subProperty2": 40
         }
       }
+    },
+    "dependencies": {
+      "example": {
+        "id":  "htcid:actor:simulation-model-name:actor-type:1",
+        "resourceId": "htcid:resource:simulation-model-name:1",
+        "classType": "com.example.actor.Actor1",
+        "actorType": "LoadBalancedDistributed"
+      }
     }
+  }
 ]
 ```
 
