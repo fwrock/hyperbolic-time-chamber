@@ -5,17 +5,14 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.{GPSUtil, SpeedUtil}
-import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.system.database.redis.RedisClientManager
 
 import scala.collection.mutable
 
@@ -61,19 +58,6 @@ class Car(
         state.movableStatus = Finished
         onFinishSpontaneous()
     }
-//    val data = RequestRoute(
-//      origin = state.origin,
-//      destination = state.destination
-//    )
-//    report(data = s"${state.gpsId}", label = "request route")
-//    val dependency = getDependency(state.gpsId)
-//    sendMessageTo(
-//      entityId = dependency.id,
-//      shardId = dependency.classType,
-//      data = data,
-//      eventType = EventTypeEnum.RequestRoute.toString,
-//      actorType = CreationTypeEnum.valueOf(dependency.actorType)
-//    )
   }
 
   private def requestSignalState(): Unit = {
