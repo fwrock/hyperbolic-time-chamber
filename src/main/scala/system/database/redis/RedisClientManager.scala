@@ -9,15 +9,12 @@ class RedisClientManager {
 
   private val client = new Jedis(redisHost, redisPort)
 
-  def save(key: String, value: Array[Byte]): Unit = {
+  def save(key: String, value: Array[Byte]): Unit =
     client.set(key.getBytes, value)
-  }
 
-  def load(key: String): Option[Array[Byte]] = {
+  def load(key: String): Option[Array[Byte]] =
     Option(client.get(key.getBytes))
-  }
-  
-  def closeConnection(): Unit = {
+
+  def closeConnection(): Unit =
     client.close()
-  }
 }
