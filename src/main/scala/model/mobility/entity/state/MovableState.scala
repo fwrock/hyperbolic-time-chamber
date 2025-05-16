@@ -14,8 +14,8 @@ abstract class MovableState(
   val startTick: Long,
   val reporterType: ReportTypeEnum = null,
   val scheduleOnTimeManager: Boolean = true,
-  var movableBestRoute: Option[mutable.Queue[(Identify, Identify)]] = None,
-  var movableCurrentPath: Option[(Identify, Identify)] = None,
+  var movableBestRoute: Option[mutable.Queue[(String, String)]] = None,
+  var movableCurrentPath: Option[(String, String)] = None,
   var movableCurrentNode: String = null,
   val origin: String,
   val destination: String,
@@ -35,14 +35,14 @@ abstract class MovableState(
 
   def updateStatus(newStatus: MovableStatusEnum): Unit = movableStatus = newStatus
 
-  def getBestRoute: Option[mutable.Queue[(Identify, Identify)]] = movableBestRoute
+  def getBestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
 
-  def updateBestRoute(newBestRoute: Option[mutable.Queue[(Identify, Identify)]]): Unit =
+  def updateBestRoute(newBestRoute: Option[mutable.Queue[(String, String)]]): Unit =
     movableBestRoute = newBestRoute
 
-  def getCurrentPath: Option[(Identify, Identify)] = movableCurrentPath
+  def getCurrentPath: Option[(String, String)] = movableCurrentPath
 
-  def updateCurrentPath(newCurrentPath: Option[(Identify, Identify)]): Unit =
+  def updateCurrentPath(newCurrentPath: Option[(String, String)]): Unit =
     movableCurrentPath = newCurrentPath
 
   def getCurrentNode: String = movableCurrentNode

@@ -5,20 +5,20 @@ import core.actor.BaseActor
 import model.mobility.entity.state.GPSState
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.model.mobility.entity.model.model.{IdentifyPair, Route}
+import org.htc.protobuf.model.mobility.entity.model.model.{ IdentifyPair, Route }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
-import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
+import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
 import org.interscity.htc.system.database.redis.RedisClientManager
 
 import java.util.UUID
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 import scala.compiletime.uninitialized
 
 class GPS(
@@ -34,30 +34,10 @@ class GPS(
   override def onInitialize(event: InitializeEvent): Unit =
     loadCityMap()
 
-//  override def onStart(): Unit =
-//    loadCityMap()
+  override def onStart(): Unit =
+    loadCityMap()
 
-  private def loadCityMap(): Unit =
-    if (state != null) {
-      logInfo(s"Starting actor $entityId: ${properties.data}")
-      val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
-      logInfo(s"Loading city map from json file: ${state.cityMapPath}")
-      Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-        state.cityMapPath,
-        nodeGraphIdExtractor,
-        0.0
-      ) match {
-        case Success(graph) =>
-          cityMap = graph
-          logInfo("City map loaded successfully")
-          logInfo(s"Nodes amount: ${cityMap.vertices.size}")
-        case Failure(e) =>
-          logError(s"Error on load and process city map from json file: ${e.getMessage}")
-          e.printStackTrace()
-      }
-    } else {
-      logError(s"State is null, GPS cannot be initialized")
-    }
+  private def loadCityMap(): Unit = {}
 
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>
     current.euclideanDistance(goal)
@@ -112,7 +92,8 @@ class GPS(
     }
 
   private def handleRequestRoute(identify: Identify, request: RequestRoute): Unit = {
-    val routeId = UUID.nameUUIDFromBytes(s"route:${request.origin}-${request.destination}".getBytes).toString
+    val routeId =
+      UUID.nameUUIDFromBytes(s"route:${request.origin}-${request.destination}".getBytes).toString
     var data = ReceiveRoute()
     redisManager.load(routeId) match
       case Some(route) =>

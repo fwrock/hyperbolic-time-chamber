@@ -4,11 +4,15 @@ package core.util
 import com.fasterxml.jackson.core.`type`.TypeReference
 
 import scala.io.Source
-import com.fasterxml.jackson.databind.{ DeserializationFeature, ObjectMapper }
+import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.databind.`type`.TypeFactory
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.google.protobuf.ByteString
+
+import java.io.InputStream
+
+import scala.jdk.CollectionConverters._
 
 object JsonUtil {
 
@@ -65,4 +69,48 @@ object JsonUtil {
 
   def jsonToObject[T](json: String, clazz: Class[T]): T =
     mapper.readValue(json, clazz)
+
+  def fromJsonListStream[A](jsonStream: InputStream)(implicit elementManifest: Manifest[A]): List[A] = {
+    val typeFactory = TypeFactory.defaultInstance()
+
+    // 1. Construir o JavaType para java.util.List<A>
+    //    elementManifest.runtimeClass fornecerá a classe de 'A' (ex: ActorSimulation.class)
+    val javaListType: JavaType = typeFactory.constructCollectionType(
+      classOf[java.util.List[_]], // Alvo: java.util.List genérico
+      elementManifest.runtimeClass // Classe dos elementos
+    )
+
+    // 2. Desserializar para uma java.util.List<A>
+    val javaList: java.util.List[A] = mapper.readValue(jsonStream, javaListType)
+
+    // 3. Converter a lista Java para uma lista Scala imutável
+    javaList.asScala.toList
+  }
+
+  // fromJsonStream genérico (com a mesma ressalva para construção de JavaType para genéricos complexos)
+  def fromJsonStream[T](jsonStream: InputStream)(implicit m: Manifest[T]): T = {
+    val typeFactory = TypeFactory.defaultInstance()
+    val javaType: JavaType = if (m.runtimeClass == classOf[List[_]] && m.typeArguments.length == 1) {
+      // Para List[SpecificType], vamos usar a abordagem de desserializar para java.util.List e converter
+      // (se T é List[SpecificType], m.typeArguments.head.runtimeClass é SpecificType.class)
+      typeFactory.constructCollectionType(classOf[java.util.List[_]], m.typeArguments.head.runtimeClass)
+    } else if (m.runtimeClass == classOf[Seq[_]] && m.typeArguments.length == 1) {
+      // Similar para Seq[SpecificType]
+      typeFactory.constructCollectionType(classOf[java.util.List[_]], m.typeArguments.head.runtimeClass)
+    } else if (m.runtimeClass.isArray && m.typeArguments.nonEmpty) {
+      typeFactory.constructArrayType(m.typeArguments.head.runtimeClass)
+    }
+    else {
+      typeFactory.constructType(m.runtimeClass)
+    }
+
+    val result = mapper.readValue(jsonStream, javaType)
+
+    // Se o tipo T original era um Scala List/Seq e desserializamos para java.util.List, convertemos agora.
+    if ((m.runtimeClass == classOf[List[_]] || m.runtimeClass == classOf[Seq[_]]) && m.typeArguments.length == 1 && result.isInstanceOf[java.util.List[_]]) {
+      result.asInstanceOf[java.util.List[Any]].asScala.toList.asInstanceOf[T] // Cuidado com 'Any' aqui, idealmente o tipo do elemento seria usado
+    } else {
+      result.asInstanceOf[T]
+    }
+  }
 }
