@@ -10,9 +10,11 @@ import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, FinishLoadDataEvent, LoadDataSourceEvent, ProcessBatchesEvent }
 
+import java.io.{ BufferedInputStream, File, FileInputStream }
 import java.util.UUID
 import scala.compiletime.uninitialized
 import scala.collection.mutable
+import scala.util.Using
 
 class JsonLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
@@ -47,9 +49,14 @@ class JsonLoadData(private val properties: Properties)
   }
 
   override protected def load(source: ActorDataSource): Unit = {
-    val content = JsonUtil.readJsonFile(source.dataSource.info("path").asInstanceOf[String])
     sourceClassType = source.classType
-    val actors = JsonUtil.fromJsonList[ActorSimulation](content)
+    val filePath = source.dataSource.info("path").asInstanceOf[String]
+
+    val actors: List[ActorSimulation] =
+      Using(new BufferedInputStream(new FileInputStream(new File(filePath)))) {
+        inputStream =>
+          JsonUtil.fromJsonListStream[ActorSimulation](inputStream)
+      }.get
 
     val actorsToCreate = actors.map(
       actor =>
@@ -96,7 +103,6 @@ class JsonLoadData(private val properties: Properties)
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     processBatchControl.put(event.batchId, true)
-//    logInfo(s"Total batches created: (${processBatchControl.values.count(_.self == true)}/$totalBatchAmount)")
     handleProcessBatches()
   }
 
@@ -130,7 +136,6 @@ class JsonLoadData(private val properties: Properties)
         _.self == true
       )
     ) {
-//      logInfo(s"All data loaded and sent to creators: $amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,

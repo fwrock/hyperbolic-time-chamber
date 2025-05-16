@@ -5,16 +5,16 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.SpeedUtil
-import org.interscity.htc.model.mobility.entity.event.data.RequestRoute
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+
+import scala.collection.mutable
 
 class Car(
   private val properties: Properties
@@ -40,45 +40,73 @@ class Car(
     }
 
   override def requestRoute(): Unit = {
-    report(data = s"${state.movableStatus} -> $RouteWaiting", "change status")
-    state.movableStatus = RouteWaiting
-    val data = RequestRoute(
-      origin = state.origin,
-      destination = state.destination
-    )
-    report(data = s"${state.gpsId}", label = "request route")
-    val dependency = getDependency(state.gpsId)
-    sendMessageTo(
-      entityId = dependency.id,
-      shardId = dependency.classType,
-      data = data,
-      eventType = EventTypeEnum.RequestRoute.toString,
-      actorType = CreationTypeEnum.valueOf(dependency.actorType)
-    )
+    if (state.movableStatus == Finished) {
+      logWarn(s"Carro ${getEntityId} já está no estado Finished. Não pode solicitar nova rota.")
+      return
+    }
+    try {
+      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
+      state.movableStatus = RouteWaiting
+
+      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+        case Some((cost, pathQueue)) =>
+          state.bestCost = cost
+          state.movableBestRoute = Some(pathQueue)
+          state.movableStatus = Ready
+          state.movableCurrentPath = None
+          report(data = s"Rota calculada com ${pathQueue.size} segmentos. Custo: $cost. Status: ${state.movableStatus}", "route_calculated")
+          if (pathQueue.nonEmpty) {
+            enterLink()
+          } else {
+            logWarn(s"Rota calculada é vazia para ${getEntityId} de ${state.origin} para ${state.destination}.")
+            state.movableStatus = Finished
+            onFinishSpontaneous()
+          }
+
+        case None =>
+          logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
+          state.movableStatus = Finished // Ou um estado de erro específico
+          onFinishSpontaneous()
+      }
+    } catch {
+      case e: Exception =>
+        logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
+        state.movableStatus = Finished
+        onFinishSpontaneous()
+    }
   }
 
   private def requestSignalState(): Unit = {
     report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
-    if (state.destination == state.currentPath.map(p => p._2.actorId).orNull || state.bestRoute.isEmpty) {
+    if (
+      state.destination == state.currentPath
+        .map(
+          p => p._2.actorId
+        )
+        .orNull || state.bestRoute.isEmpty
+    ) {
       report(data = s"${state.movableStatus} -> $Finished", "travel finished")
       state.movableStatus = Finished
       onFinishSpontaneous()
     } else {
       state.movableStatus = WaitingSignalState
       getCurrentNode match
-        case node =>
-          getNextLink match
-            case link =>
-              report(data = s"${node.id} -> ${link.id}", label = "request signal state")
-              sendMessageTo(
-                entityId = node.id,
-                shardId = node.classType,
-                RequestSignalStateData(
-                  targetLinkId = link.id
-                ),
-                EventTypeEnum.RequestSignalState.toString
-              )
-            case null =>
+        case nodeId =>
+          CityMapUtil.nodesById.get(nodeId) match
+            case Some(node) =>
+              getNextLink match
+                case linkId =>
+                  report(data = s"${nodeId} -> ${linkId}", label = "request signal state")
+                  sendMessageTo(
+                    entityId = node.id,
+                    shardId = node.classType,
+                    RequestSignalStateData(
+                      targetLinkId = linkId
+                    ),
+                    EventTypeEnum.RequestSignalState.toString
+                  )
+                case null =>
+            case None =>
         case null =>
     }
   }

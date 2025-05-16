@@ -145,14 +145,14 @@ class SubwayStation(
 
   private def convertLineRouteToPath(
     line: String
-  ): mutable.Queue[(Identify, Identify)] = {
-    val route = mutable.Queue[(Identify, Identify)]()
+  ): mutable.Queue[(String, String)] = {
+    val route = mutable.Queue[(String, String)]()
     val lineRoute = state.linesRoute(line)
     for (i <- 0 until lineRoute.size - 1)
       route.enqueue(
         (
-          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._1.nodeId)),
-          IdentifyUtil.fromDependency(getDependency(lineRoute(i)._2))
+          lineRoute(i)._2,
+          lineRoute(i)._1.nodeId
         )
       )
     route

@@ -6,7 +6,7 @@ import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEve
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{ IdUtil, JsonUtil }
+import core.util.{ IdUtil, JsonUtil, StringUtil }
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
@@ -188,7 +188,6 @@ abstract class BaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
-//    logInfo(s"Sending message to $entityId: $data, $eventType")
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -202,7 +201,7 @@ abstract class BaseActor[T <: BaseState](
     data: AnyRef,
     eventType: String = "default"
   ): Unit = {
-    val shardingRegion = getShardRef(IdUtil.format(shardId))
+    val shardingRegion = getShardRef(IdUtil.format(StringUtil.getModelClassName(shardId)))
 
     shardingRegion ! EntityEnvelopeEvent(
       IdUtil.format(entityId),
@@ -211,7 +210,7 @@ abstract class BaseActor[T <: BaseState](
         lamportTick = getLamportClock,
         actorRefId = IdUtil.format(getEntityId),
         shardRefId = IdUtil.format(getShardId),
-        actorClassType = getClass.getName,
+        actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
         actorPathRef = self.path.name,
         data = data,
         eventType = eventType,
@@ -232,7 +231,7 @@ abstract class BaseActor[T <: BaseState](
       lamportTick = getLamportClock,
       actorRefId = IdUtil.format(getEntityId),
       shardRefId = IdUtil.format(getShardId),
-      actorClassType = getClass.getName,
+      actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
       actorPathRef = self.path.name,
       data = data,
       eventType = eventType,
@@ -396,7 +395,7 @@ abstract class BaseActor[T <: BaseState](
       identify = Identify(
         id = IdUtil.format(getEntityId),
         resourceId = IdUtil.format(properties.resourceId),
-        classType = getClass.getName,
+        classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
         actorRef = getPath
       ),
       scheduleTick = scheduleTick.map(_.toString),
@@ -413,7 +412,7 @@ abstract class BaseActor[T <: BaseState](
             Identify(
               id = IdUtil.format(getEntityId),
               resourceId = IdUtil.format(properties.resourceId),
-              classType = getClass.getName,
+              classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
               actorRef = getPath
             )
           )
@@ -440,7 +439,7 @@ abstract class BaseActor[T <: BaseState](
         Identify(
           id = getEntityId,
           resourceId = IdUtil.format(properties.resourceId),
-          classType = getClass.getName,
+          classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
           actorRef = getPath
         )
       )
@@ -546,7 +545,7 @@ abstract class BaseActor[T <: BaseState](
     Identify(
       id = getEntityId,
       resourceId = IdUtil.format(properties.resourceId),
-      classType = getClass.getName,
+      classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
       actorRef = self.path.name
     )
 }

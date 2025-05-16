@@ -4,7 +4,7 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, IdUtil }
+import core.util.{ ActorCreatorUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
@@ -137,14 +137,17 @@ class CreatorLoadData(
     }
   }
 
-  private def addInitializeData(entityId: String, batchId: String, initialization: Initialization): Unit = {
+  private def addInitializeData(
+    entityId: String,
+    batchId: String,
+    initialization: Initialization
+  ): Unit =
     initializeData.get(batchId) match {
       case Some(data) =>
         data.put(entityId, initialization)
       case None =>
         initializeData.put(batchId, mutable.Map(entityId -> initialization))
     }
-  }
 
   private def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
     initializedAcknowledges.get(batchId) match {
@@ -181,7 +184,7 @@ class CreatorLoadData(
             }
           )
         )
-        getShardRef(data.classType) ! EntityEnvelopeEvent(
+        getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(
           entityId = event.entityId,
           event = initializeEvent
         )
@@ -204,7 +207,7 @@ class CreatorLoadData(
       actorsToCreate(batchId).isEmpty && (!initializedAcknowledges.contains(
         batchId
       ) || initializedAcknowledges(batchId).isEmpty) &&
-        initializeData(batchId).isEmpty
+      initializeData(batchId).isEmpty
     ) {
 //      logInfo(
 //        s"All actors created and acknowledged initialization from $batchId. Sending FinishCreationEvent."

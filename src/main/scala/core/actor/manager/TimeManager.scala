@@ -15,7 +15,7 @@ import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.util.ManagerConstantsUtil
+import org.interscity.htc.core.util.{ ManagerConstantsUtil, StringUtil }
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
 
 import scala.collection.mutable
@@ -295,7 +295,7 @@ class TimeManager(
     }
 
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
-    getShardRef(identity.classType) ! EntityEnvelopeEvent(
+    getShardRef(StringUtil.getModelClassName(identity.classType)) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
@@ -325,11 +325,11 @@ class TimeManager(
         case (true, true) =>
           val newScheduled = scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
           val currentScheduled = scheduledActors.keys.minOption.getOrElse(localTickOffset + 1)
-            if (newScheduled < currentScheduled) {
-              newScheduled
-            } else {
-              currentScheduled
-            }
+          if (newScheduled < currentScheduled) {
+            newScheduled
+          } else {
+            currentScheduled
+          }
         case _ => scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
       }
     }

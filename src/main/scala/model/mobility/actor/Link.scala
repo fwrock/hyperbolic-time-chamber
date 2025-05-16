@@ -48,30 +48,40 @@ class Link(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: EnterLinkData    => handleEnterLink(event, d)
-      case d: LeaveLinkData    => handleLeaveLink(event, d)
+      case d: EnterLinkData => handleEnterLink(event, d)
+      case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
         logWarn("Event not handled")
     }
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
-    val dataLink = LinkInfoData(
-      linkLength = state.length,
-      linkCapacity = state.capacity,
-      linkNumberOfCars = state.registered.size,
-      linkFreeSpeed = state.freeSpeed,
-      linkLanes = state.lanes
-    )
-    state.registered.add(
-      LinkRegister(
-        actorId = data.actorId,
-        shardId = data.shardId,
-        actorType = data.actorType,
-        actorSize = data.actorSize,
-        actorCreationType = data.actorCreationType
+    val dataLink = if (state == null) {
+      LinkInfoData(
+        linkCapacity = Int.MaxValue,
+        linkFreeSpeed = 50,
+        linkLanes = 1,
       )
-    )
-    report(data = (data.actorId, state.registered.size), "registered cars")
+    } else {
+      LinkInfoData(
+        linkLength = state.length,
+        linkCapacity = state.capacity,
+        linkNumberOfCars = state.registered.size,
+        linkFreeSpeed = state.freeSpeed,
+        linkLanes = state.lanes
+      )
+    }
+    if (state != null) {
+      state.registered.add(
+        LinkRegister(
+          actorId = data.actorId,
+          shardId = data.shardId,
+          actorType = data.actorType,
+          actorSize = data.actorSize,
+          actorCreationType = data.actorCreationType
+        )
+      )
+      report(data = (data.actorId, state.registered.size), "registered cars")
+    }
     report(data = event.actorRefId, "send enter link info")
     sendMessageTo(
       entityId = event.actorRefId,
