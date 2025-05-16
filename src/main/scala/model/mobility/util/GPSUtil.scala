@@ -1,80 +1,54 @@
-package org.interscity.htc
-package model.mobility.util
+package org.interscity.htc.model.mobility.util
 
-import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.model.mobility.entity.model.model.{IdentifyPair, Route}
-import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.collections.graph.Edge
+// Importa NodeGraph e EdgeGraph do novo pacote em Model.scala
 import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
-import org.interscity.htc.model.mobility.util.CityMapUtil.cityMap
-import org.interscity.htc.system.database.redis.RedisClientManager
-
-import java.util.UUID
 import scala.collection.mutable
 
 object GPSUtil {
 
-  def calcRoute(redisManager: RedisClientManager, originId: String, destinationId: String): Route = {
-    val routeId = UUID.nameUUIDFromBytes(s"route:${originId}-${destinationId}".getBytes).toString
-    redisManager.load(routeId) match
-      case Some(route) =>
-        Route.parseFrom(route)
-      case None =>
-        val origin = cityMap.vertices.find(_.id == originId)
-        val destination = cityMap.vertices.find(_.id == destinationId)
-        (origin, destination) match {
-          case (Some(originNode), Some(destinationNode)) =>
-            cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
-              case Some(path) =>
-                val route = Route(cost = path._1, path = convertPath(path._2).toList)
-                redisManager.save(routeId, route.toByteArray)
-                route
-              case _ =>
-                throw Exception()
-          case _ =>
-            throw Exception()
-        }
-  }
+  /**
+   * Calcula a rota entre dois nós usando A*.
+   * Retorna o custo e uma fila de pares (ID da aresta (EdgeGraph), ID do nó de destino).
+   *
+   * @param originId ID do nó de origem.
+   * @param destinationId ID do nó de destino.
+   * @return Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
+   */
+  def calcRoute(originId: String, destinationId: String): Option[(Double, mutable.Queue[(String, String)])] = {
+    // Busca nós de origem e destino usando o mapa de consulta rápida O(1)
+    val originNodeOpt = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
 
-  def calcRoute(originId: String, destinationId: String): Route = {
-    val origin = cityMap.vertices.find(_.id == originId)
-    val destination = cityMap.vertices.find(_.id == destinationId)
-    (origin, destination) match {
+    (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
-          case Some(path) =>
-            val route = Route(cost = path._1, path = convertPath(path._2).toList)
-            route
-          case _ =>
-            throw Exception()
-      case _ =>
-        throw Exception()
+        // Usa o A* da classe Graph, que retorna (Custo, Lista de (Aresta, NóDestino))
+        CityMapUtil.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match {
+          case Some((cost, path)) => // path é List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
+            val routeQueue = mutable.Queue[(String, String)]()
+            path.foreach { case (edgeObject, targetNodeOfEdgeInPath) =>
+              // Armazena o ID do EdgeGraph (label da aresta) e o ID do nó de destino dessa aresta no caminho
+              routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
+            }
+            Some((cost, routeQueue))
+          case None =>
+            System.err.println(s"GPSUtil: Nenhuma rota encontrada de $originId para $destinationId.")
+            None // Nenhuma rota encontrada pelo A*
+        }
+      case (None, _) =>
+        System.err.println(s"GPSUtil: Nó de origem $originId não encontrado no mapa.")
+        None // Nó de origem não encontrado
+      case (_, None) =>
+        System.err.println(s"GPSUtil: Nó de destino $destinationId não encontrado no mapa.")
+        None // Nó de destino não encontrado
     }
   }
 
-  private def convertPath(
-                           path: List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
-                         ): mutable.Queue[IdentifyPair] = {
-    val convertedPath = mutable.Queue[IdentifyPair]()
-    path.foreach {
-      case (edge, node) =>
-        val edgeId = Identify(
-          id = edge.label.id,
-          resourceId = edge.label.resourceId,
-          classType = edge.label.classType,
-          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
-        )
-        val nodeId = Identify(
-          id = node.id,
-          resourceId = node.resourceId,
-          classType = node.classType,
-          actorType = CreationTypeEnum.LoadBalancedDistributed.toString
-        )
-        convertedPath.enqueue(IdentifyPair(link = Some(edgeId), node = Some(nodeId)))
-    }
-    convertedPath
-  }
-
+  /**
+   * Função heurística para o A*. Usa a distância Euclidiana.
+   * @param current Nó atual.
+   * @param goal Nó objetivo.
+   * @return Distância heurística.
+   */
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>
     current.euclideanDistance(goal)
 }

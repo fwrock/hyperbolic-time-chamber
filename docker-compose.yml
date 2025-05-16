@@ -27,8 +27,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -49,8 +49,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -71,8 +71,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -93,8 +93,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -115,8 +115,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -137,8 +137,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -159,8 +159,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
@@ -181,8 +181,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: node1
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_ile-de-france-004-random/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
     networks:
