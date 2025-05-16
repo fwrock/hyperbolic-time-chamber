@@ -61,20 +61,20 @@ class Subway(
     )
     state.currentPath match
       case Some((node, _)) =>
-        val station = retrieveSubwayStationFromNodeId(node.id)
-        station match
-          case Some(stationId) =>
-            val dependency = getDependency(stationId)
-            sendMessageTo(
-              dependency.id,
-              dependency.classType,
-              data = SubwayRequestPassengerData(
-                line = state.line,
-                availableSpace = availableSpace
-              )
-            )
-          case None =>
-            logInfo("No has bus stop to load passenger")
+//        val station = retrieveSubwayStationFromNodeId(node.id)
+//        station match
+//          case Some(stationId) =>
+//            val dependency = getDependency(stationId)
+//            sendMessageTo(
+//              dependency.id,
+//              dependency.classType,
+//              data = SubwayRequestPassengerData(
+//                line = state.line,
+//                availableSpace = availableSpace
+//              )
+//            )
+//          case None =>
+//            logInfo("No has bus stop to load passenger")
       case None =>
         logInfo("No path to load passenger")
   }
@@ -82,22 +82,22 @@ class Subway(
   private def requestUnloadPeopleData(): Unit =
     state.currentPath match
       case Some((node, _)) =>
-        val busStop = retrieveSubwayStationFromNodeId(node.id)
-        busStop match
-          case Some(busStopId) =>
-            state.passengers.foreach {
-              person =>
-                sendMessageTo(
-                  person._2.id,
-                  person._2.classType,
-                  data = SubwayRequestUnloadPassengerData(
-                    nodeId = node.id,
-                    nodeRef = getActorRef(node.actorRef)
-                  )
-                )
-            }
-          case None =>
-            logInfo("No has bus stop to unload passenger")
+//        val busStop = retrieveSubwayStationFromNodeId(node.id)
+//        busStop match
+//          case Some(busStopId) =>
+//            state.passengers.foreach {
+//              person =>
+//                sendMessageTo(
+//                  person._2.id,
+//                  person._2.classType,
+//                  data = SubwayRequestUnloadPassengerData(
+//                    nodeId = node.id,
+//                    nodeRef = getActorRef(node.actorRef)
+//                  )
+//                )
+//            }
+//          case None =>
+//            logInfo("No has bus stop to unload passenger")
       case None =>
         logInfo("No path to unload passenger")
 
@@ -149,7 +149,7 @@ class Subway(
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
-  override def getNextPath: Option[(Identify, Identify)] =
+  override def getNextPath: Option[(String, String)] =
     state.movableBestRoute match
       case Some(path) =>
         if state.currentPathPosition < path.size then

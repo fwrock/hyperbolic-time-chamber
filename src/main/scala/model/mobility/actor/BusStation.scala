@@ -103,10 +103,11 @@ class BusStation(
       dependencies
     )
 
-  private def calcBusBestRoute(): mutable.Queue[(Identify, Identify)] = {
-    val bestRoute = mutable.Queue[(Identify, Identify)]()
-    bestRoute ++= getTotalRoute(state.goingRoute.get)
-    bestRoute ++= getTotalRoute(state.returningRoute.get)
+  private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
+    val bestRoute = mutable.Queue[(String, String)]()
+//    bestRoute ++= getTotalRoute(state.goingRoute.get)
+//    bestRoute ++= getTotalRoute(state.returningRoute.get)
+    bestRoute
   }
 
   private def getTotalRoute(

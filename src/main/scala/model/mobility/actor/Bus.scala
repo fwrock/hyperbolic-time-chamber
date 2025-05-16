@@ -123,7 +123,7 @@ class Bus(
     }
   }
 
-  override def getNextPath: Option[(Identify, Identify)] =
+  override def getNextPath: Option[(String, String)] =
     state.movableBestRoute match
       case Some(path) =>
         if state.currentPathPosition < path.size then
@@ -137,40 +137,40 @@ class Bus(
         None
 
   private def requestSignalState(): Unit = {
-    state.movableStatus = WaitingSignalState
-    viewNextPath match
-      case Some(item) =>
-        (item._1, item._2) match
-          case (node, link) =>
-            sendMessageTo(
-              node.id,
-              node.classType,
-              RequestSignalStateData(
-                targetLinkId = link.id
-              ),
-              EventTypeEnum.RequestSignalState.toString
-            )
-      case None => ???
+//    state.movableStatus = WaitingSignalState
+//    viewNextPath match
+//      case Some(item) =>
+//        (item._1, item._2) match
+//          case (node, link) =>
+//            sendMessageTo(
+//              node.id,
+//              node.classType,
+//              RequestSignalStateData(
+//                targetLinkId = link.id
+//              ),
+//              EventTypeEnum.RequestSignalState.toString
+//            )
+//      case None => ???
   }
 
   private def requestLoadPassenger(): Unit = {
     state.movableStatus = WaitingLoadPassenger
     state.currentPath match
-      case Some((node, _)) =>
-        val busStop = retrieveBusStopFromNodeId(node.id)
-        busStop match
-          case Some(busStopId) =>
-            val dependency = dependencies(busStopId)
-            sendMessageTo(
-              dependency.id,
-              dependency.classType,
-              data = BusRequestPassengerData(
-                label = state.label,
-                availableSpace = state.capacity - state.people.size
-              )
-            )
-          case None =>
-            logInfo("No has bus stop to load passenger")
+//      case Some((node, _)) =>
+//        val busStop = retrieveBusStopFromNodeId(node.id)
+//        busStop match
+//          case Some(busStopId) =>
+//            val dependency = dependencies(busStopId)
+//            sendMessageTo(
+//              dependency.id,
+//              dependency.classType,
+//              data = BusRequestPassengerData(
+//                label = state.label,
+//                availableSpace = state.capacity - state.people.size
+//              )
+//            )
+//          case None =>
+//            logInfo("No has bus stop to load passenger")
       case None =>
         logInfo("No path to load passenger")
   }
@@ -178,23 +178,23 @@ class Bus(
   private def requestUnloadPeopleData(): Unit = {
     state.movableStatus = WaitingUnloadPassenger
     state.currentPath match
-      case Some((node, _)) =>
-        val busStop = retrieveBusStopFromNodeId(node.id)
-        busStop match
-          case Some(busStopId) =>
-            state.people.foreach {
-              person =>
-                sendMessageTo(
-                  person._2.id,
-                  person._2.classType,
-                  data = BusRequestUnloadPassengerData(
-                    nodeId = node.id,
-                    nodeRef = getActorRef(node.actorRef)
-                  )
-                )
-            }
-          case None =>
-            logInfo("No has bus stop to unload passenger")
+//      case Some((node, _)) =>
+//        val busStop = retrieveBusStopFromNodeId(node.id)
+//        busStop match
+//          case Some(busStopId) =>
+//            state.people.foreach {
+//              person =>
+//                sendMessageTo(
+//                  person._2.id,
+//                  person._2.classType,
+//                  data = BusRequestUnloadPassengerData(
+//                    nodeId = node.id,
+//                    nodeRef = getActorRef(node.actorRef)
+//                  )
+//                )
+//            }
+//          case None =>
+//            logInfo("No has bus stop to unload passenger")
       case None =>
         logInfo("No path to unload passenger")
   }
