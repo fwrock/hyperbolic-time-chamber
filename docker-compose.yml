@@ -1,23 +1,25 @@
 version: '3.8'
 
+x-node_base: &node_template
+  image: uxhabam/hyperbolic-time-chamber:latest
+  volumes:
+    - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
+  environment:
+    REDIS_HOST: 127.0.0.1
+    REDIS_PORT: 6379
+    HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+    HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+  deploy:
+    resources:
+      limits:
+        memory: 64G
+        cpus: '14.0'
+      reservations:
+        memory: 32G
+        cpus: '10.0'
+
 services:
-  x-node_base: &node_template
-    image: uxhabam/hyperbolic-time-chamber:latest
-    volumes:
-      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
-    environment:
-      REDIS_HOST: 127.0.0.1
-      REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
-    deploy:
-      resources:
-        limits:
-          memory: 64G
-          cpus: '14.0'
-        reservations:
-          memory: 32G
-          cpus: '10.0'
+
   redis:
     image: redis:latest
     container_name: htc-redis
