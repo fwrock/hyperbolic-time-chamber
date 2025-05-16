@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   x-node_base: &node_template
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     environment:
@@ -36,7 +36,7 @@ services:
           memory: 4G
 
   node1:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
     container_name: node_1
     hostname: node1
     network_mode: host
