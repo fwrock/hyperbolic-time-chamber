@@ -143,6 +143,51 @@ The `data` field contains the actor's properties and configuration. You can defi
 ]
 ```
 
+## Implementing a Simulation Model:
+
+To implement a simulation model, you need to create a class that extends the `SimulationModel` trait. This class will define the behavior of your simulation and how actors interact with each other.
+
+### Example Actor Model State:
+
+```scala
+package org.interscity.htc.model.example.state
+
+case class ExampleState(
+  property1: Int,
+  property2: String,
+  objectProperty: ExampleObject
+) extends BaseState
+```
+
+### Example Actor Model:
+
+```scala
+package org.interscity.htc.model.example.actor
+
+import org.interscity.htc.model.example.state.ExampleState
+
+class Example extends BaseActor[ExampleState] {
+  
+  override def onStart(): Unit = {
+    // This method is called when the actor starts
+  }
+  
+  override def onInitialized(): Unit = {
+    // This method is called when the actor is initialized
+  }
+  
+  override def actSpontaneous((event: SpontaneousEvent): Unit = {
+    // Handle spontaneous events (spontaneous events are events that occur without any external trigger by Time Manager)
+  }
+
+  def actInteractWith(event: ActorInteractionEvent): Unit = {
+    // Handle interaction events (interaction events are events that occur as a result of interactions with other actors)
+  }
+  
+}
+
+
+````
 
 ## Getting Started:
 
