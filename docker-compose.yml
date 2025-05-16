@@ -8,8 +8,8 @@ services:
     environment:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
     deploy:
       resources:
         limits:
@@ -47,8 +47,8 @@ services:
       SEED_PORT_1600_TCP_ADDR: 127.0.0.1  # ajustar conforme o host
       REDIS_HOST: 127.0.0.1  # Ajustar para host se redis também for host
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     deploy:
