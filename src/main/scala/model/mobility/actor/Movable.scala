@@ -15,6 +15,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.mobility.util.CityMapUtil
 import org.interscity.htc.system.database.redis.RedisClientManager
 
 import scala.collection.mutable
@@ -51,7 +52,9 @@ abstract class Movable[T <: MovableState](
     redisManager.load(data.routeId).map(Route.parseFrom) match {
       case Some(route) =>
         val updatedCost = route.cost
-        state.movableBestRoute = Some(mutable.Queue(route.path.map(pair => (pair._1.get, pair._2.get)): _*))
+        state.movableBestRoute = Some(
+          mutable.Queue()
+        )
         state.movableStatus = Ready
       case None =>
         logError(s"Route not found in Redis: ${data.routeId}")
@@ -89,15 +92,15 @@ abstract class Movable[T <: MovableState](
     onFinishSpontaneous()
   }
 
-  protected def enterLink(): Unit =
-    state.movableCurrentPath match
-      case Some(item) =>
-        (item._1, item._2) match
-          case (link, node) =>
-            report(data = link.id, "enter link")
+  protected def enterLink(): Unit = {
+    state.movableCurrentPath match {
+      case Some((linkEdgeGraphId, nextNodeId)) =>
+        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
+          case Some(edgeLabel) =>
+            report(data = edgeLabel.id, "enter link")
             sendMessageTo(
-              entityId = link.id,
-              shardId = link.classType,
+              entityId = edgeLabel.id,
+              shardId = edgeLabel.classType,
               data = EnterLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,
@@ -108,25 +111,30 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
-          case null =>
-            logWarn("Path item not handled")
+          case None =>
+            report (data = s"${state.movableStatus} -> $Finished", "change status")
+            state.movableStatus = Finished
+            onFinishSpontaneous()
+        }
       case None if state.movableBestRoute.isEmpty =>
         report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
         onFinishSpontaneous()
       case None =>
         state.movableCurrentPath = getNextPath
-        enterLink()
+        enterLink ()
+    }
+  }
 
   protected def leavingLink(): Unit =
-    state.movableCurrentPath match
-      case Some(item) =>
-        (item._1, item._2) match
-          case (link, node) =>
-            report(data = link.id, "leaving link")
+    state.movableCurrentPath match {
+      case Some((linkEdgeGraphId, nextNodeId)) =>
+        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
+          case Some(edgeLabel) =>
+            report(data = edgeLabel.id, "leaving link")
             sendMessageTo(
-              entityId = link.id,
-              shardId = link.classType,
+              entityId = edgeLabel.id,
+              shardId = edgeLabel.classType,
               data = LeaveLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,
@@ -138,15 +146,17 @@ abstract class Movable[T <: MovableState](
               actorType = LoadBalancedDistributed
             )
             if (state.movableBestRoute.isEmpty) {
-              onFinish(node.id)
+              onFinish(nextNodeId)
             }
             state.movableCurrentPath = None
           case _ =>
             logWarn("Path item not handled")
+        }
       case None =>
         logWarn("No link to leave")
+    }
 
-  protected def getNextPath: Option[(Identify, Identify)] =
+  protected def getNextPath: Option[(String, String)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.dequeue)
@@ -154,7 +164,7 @@ abstract class Movable[T <: MovableState](
         logWarn("No path to follow")
         None
 
-  protected def viewNextPath: Option[(Identify, Identify)] =
+  protected def viewNextPath: Option[(String, String)] =
     state.movableBestRoute match
       case Some(path) =>
         Some(path.head)
@@ -162,14 +172,14 @@ abstract class Movable[T <: MovableState](
         logWarn("No path to follow")
         None
 
-  protected def getCurrentNode: Identify =
+  protected def getCurrentNode: String =
     state.movableCurrentPath match
       case Some(item) =>
         item._2
       case None =>
         null
 
-  protected def getNextLink: Identify =
+  protected def getNextLink: String =
     viewNextPath match
       case Some(item) =>
         item._1
