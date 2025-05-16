@@ -125,10 +125,10 @@ object ActorCreatorUtil {
     timeManager: ActorRef,
     creatorManager: ActorRef
   ): ActorRef = {
-    val clazz = Class.forName(actorClassName)
+    val clazz = Class.forName(StringUtil.getModelClassName(actorClassName))
     val sharding = ClusterSharding(system)
 
-    val shardName = actorClassName
+    val shardName = StringUtil.getModelClassName(actorClassName)
 
     if (!sharding.shardTypeNames.contains(shardName)) {
       system.log.info(
