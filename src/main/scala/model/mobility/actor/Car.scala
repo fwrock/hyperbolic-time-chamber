@@ -45,7 +45,7 @@ class Car(
       return
     }
     try {
-      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
+//      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
 
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
@@ -54,7 +54,7 @@ class Car(
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
-          report(data = s"Rota calculada com ${pathQueue.size} segmentos. Custo: $cost. Status: ${state.movableStatus}", "route_calculated")
+//          report(data = s"Rota calculada com ${pathQueue.size} segmentos. Custo: $cost. Status: ${state.movableStatus}", "route_calculated")
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
@@ -77,7 +77,7 @@ class Car(
   }
 
   private def requestSignalState(): Unit = {
-    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
+//    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
     if (
       state.destination == state.currentPath
         .map(
@@ -85,9 +85,10 @@ class Car(
         )
         .orNull || state.bestRoute.isEmpty
     ) {
-      report(data = s"${state.movableStatus} -> $Finished", "travel finished")
+//      report(data = s"${state.movableStatus} -> $Finished", "travel finished")
       state.movableStatus = Finished
       onFinishSpontaneous()
+      selfDestruct()
     } else {
       state.movableStatus = WaitingSignalState
       getCurrentNode match
@@ -96,7 +97,7 @@ class Car(
             case Some(node) =>
               getNextLink match
                 case linkId =>
-                  report(data = s"${nodeId} -> ${linkId}", label = "request signal state")
+//                  report(data = s"${nodeId} -> ${linkId}", label = "request signal state")
                   sendMessageTo(
                     entityId = node.id,
                     shardId = node.classType,
@@ -113,7 +114,7 @@ class Car(
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
-      report(data = s"${state.movableStatus} -> $WaitingSignal", "change status")
+//      report(data = s"${state.movableStatus} -> $WaitingSignal", "change status")
       state.movableStatus = WaitingSignal
       onFinishSpontaneous(Some(data.nextTick))
     } else {
@@ -121,7 +122,7 @@ class Car(
     }
 
   override def leavingLink(): Unit = {
-    report(data = s"${state.movableStatus} -> $Ready", "change status")
+//    report(data = s"${state.movableStatus} -> $Ready", "change status")
     state.movableStatus = Ready
     super.leavingLink()
   }
@@ -131,7 +132,7 @@ class Car(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
-    report(data = state.distance, "traveled distance")
+//    report(data = state.distance, "traveled distance")
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -146,11 +147,11 @@ class Car(
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
-    report(
-      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
-      label = "(time, length, free speed, speed)"
-    )
-    report(data = s"${state.movableStatus} -> $Moving", "change status")
+//    report(
+//      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
+//      label = "(time, length, free speed, speed)"
+//    )
+//    report(data = s"${state.movableStatus} -> $Moving", "change status")
     state.movableStatus = Moving
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }

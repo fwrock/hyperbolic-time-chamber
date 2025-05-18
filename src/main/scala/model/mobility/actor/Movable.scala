@@ -82,7 +82,7 @@ abstract class Movable[T <: MovableState](
   ): Unit = {}
 
   protected def onFinish(nodeId: String): Unit = {
-    report(data = s"${state.movableStatus} -> $Finished", "change status")
+//    report(data = s"${state.movableStatus} -> $Finished", "change status")
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -97,7 +97,7 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
-            report(data = edgeLabel.id, "enter link")
+//            report(data = edgeLabel.id, "enter link")
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
@@ -112,12 +112,13 @@ abstract class Movable[T <: MovableState](
               actorType = LoadBalancedDistributed
             )
           case None =>
-            report (data = s"${state.movableStatus} -> $Finished", "change status")
+//            report (data = s"${state.movableStatus} -> $Finished", "change status")
             state.movableStatus = Finished
             onFinishSpontaneous()
+            selfDestruct()
         }
       case None if state.movableBestRoute.isEmpty =>
-        report(data = s"${state.movableStatus} -> $Finished", "change status")
+//        report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
         onFinishSpontaneous()
       case None =>
@@ -131,7 +132,7 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
-            report(data = edgeLabel.id, "leaving link")
+//            report(data = edgeLabel.id, "leaving link")
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
