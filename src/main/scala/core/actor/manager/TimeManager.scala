@@ -280,7 +280,9 @@ class TimeManager(
         reportGlobalTimeManager()
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
+    if (tick % 500 == 0) {
+      logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
+    }
     actorsRef.foreach {
       actor =>
         sendSpontaneousEvent(tick, actor)
