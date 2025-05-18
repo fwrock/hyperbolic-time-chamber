@@ -105,8 +105,8 @@ class GPS(
           case (Some(originNode), Some(destinationNode)) =>
             cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match
               case Some(path) =>
-                val route = Route(cost = path._1, path = convertPath(path._2).toList)
-                redisManager.save(routeId, route.toByteArray)
+//                val route = Route(cost = path._1, path = convertPath(path._2).toList)
+//                redisManager.save(routeId, route.toByteArray)
                 data = ReceiveRoute(routeId = routeId)
               case _ =>
                 data = ReceiveRoute()

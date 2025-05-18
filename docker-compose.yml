@@ -1,192 +1,230 @@
-version: '3.8'
-
+---
 services:
+
   redis:
     image: redis:latest
     container_name: htc-redis
+    # Se quiser usar modo host no redis, descomente a linha abaixo e remova ports:
+    # network_mode: host
     ports:
       - '6379:6379'
-    networks:
-      - hyperbolic-time-chamber-network
-    restart: unless-stopped
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 4G
 
   node1:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
     container_name: node_1
     hostname: node1
-    ports:
-      - '1600:1600'
-      - "2551:2551"
-      - "8558:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1600
-      CLUSTER_IP: node1
+      CLUSTER_IP: 127.0.0.1  # ou IP do host
       CLUSTER_NAME: node1
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1  # ajustar conforme o host
+      REDIS_HOST: 127.0.0.1  # Ajustar para host se redis também for host
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
+      MANAGEMENT_HTTP_PORT: 8558
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
     volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 110G
+          cpus: '14.0'
+        reservations:
+          memory: 80G
+          cpus: '10.0'
 
   node2:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_2
     hostname: node2
-    ports:
-      - '1601:1601'
-      - "2552:2551"
-      - "8559:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1601
-      CLUSTER_IP: node2
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node2
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8559
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node3:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_3
     hostname: node3
-    ports:
-      - '1602:1602'
-      - "2553:2551"
-      - "8560:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1602
-      CLUSTER_IP: node3
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node3
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8560
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node4:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_4
     hostname: node4
-    ports:
-      - '1603:1603'
-      - "2554:2551"
-      - "8561:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1603
-      CLUSTER_IP: node4
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node4
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8561
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node5:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_5
     hostname: node5
-    ports:
-      - '1604:1604'
-      - "2555:2551"
-      - "8562:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1604
-      CLUSTER_IP: node5
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node5
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8562
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node6:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_6
     hostname: node6
-    ports:
-      - '1605:1605'
-      - "2556:2551"
-      - "8563:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1605
-      CLUSTER_IP: node6
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node6
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8563
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node7:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_7
     hostname: node7
-    ports:
-      - '1606:1606'
-      - "2557:2551"
-      - "8564:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1606
-      CLUSTER_IP: node7
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node7
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8564
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
   node8:
-    build: .
+    image: uxhabam/hyperbolic-time-chamber:latest
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_8
     hostname: node8
-    ports:
-      - '1607:1607'
-      - "2558:2551"
-      - "8565:8558"
+    network_mode: host
     environment:
       CLUSTER_PORT: 1607
-      CLUSTER_IP: node8
+      CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node8
-      SEED_PORT_1600_TCP_ADDR: node1
-      REDIS_HOST: redis
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8565
+      REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/smart_mobility_idf-25-random-htcid/data/city_map.json
-    volumes:
-      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
-    networks:
-      - hyperbolic-time-chamber-network
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random/data/city_map.json
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '14.0'
+        reservations:
+          memory: 32G
+          cpus: '10.0'
 
 volumes:
   redis_data:

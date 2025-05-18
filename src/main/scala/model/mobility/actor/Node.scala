@@ -72,13 +72,13 @@ class Node(
       case Some(identify) =>
         state.signals.get(identify.id) match
           case Some(signalState) =>
-            report(
-              data = SignalStateData(
-                phase = signalState.state,
-                nextTick = signalState.nextTick
-              ),
-              "send signal state"
-            )
+//            report(
+//              data = SignalStateData(
+//                phase = signalState.state,
+//                nextTick = signalState.nextTick
+//              ),
+//              "send signal state"
+//            )
             sendMessageTo(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
@@ -90,13 +90,13 @@ class Node(
               actorType = LoadBalancedDistributed
             )
           case None =>
-            report(
-              data = SignalStateData(
-                phase = Green,
-                nextTick = currentTick
-              ),
-              "send signal state"
-            )
+//            report(
+//              data = SignalStateData(
+//                phase = Green,
+//                nextTick = currentTick
+//              ),
+//              "send signal state"
+//            )
             sendMessageTo(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
@@ -108,13 +108,13 @@ class Node(
               actorType = LoadBalancedDistributed
             )
       case None =>
-        report(
-          data = SignalStateData(
-            phase = Green,
-            nextTick = currentTick
-          ),
-          "send signal state"
-        )
+//        report(
+//          data = SignalStateData(
+//            phase = Green,
+//            nextTick = currentTick
+//          ),
+//          "send signal state"
+//        )
         sendMessageTo(
           entityId = event.actorRefId,
           shardId = event.shardRefId,
