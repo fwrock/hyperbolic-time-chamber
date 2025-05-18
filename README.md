@@ -1,5 +1,7 @@
 # HTC-Simulator (Hyperbolic Time Chamber Simulator)
 
+![image](https://github.com/user-attachments/assets/dddd6245-f4bd-43fc-8888-6ef73d01a221)
+
 **An Actor-Based Multi-Agent Discrete Event Simulator Using Scala and Apache Pekko**
 
 Inspired by the legendary "Hyperbolic Time Chamber" from Dragon Ball, HTC-Simulator is a powerful discrete event simulator that leverages the power of actor-based programming with Scala and Akka.
