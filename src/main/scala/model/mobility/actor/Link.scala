@@ -80,9 +80,9 @@ class Link(
           actorCreationType = data.actorCreationType
         )
       )
-      report(data = (data.actorId, state.registered.size), "registered cars")
+//      report(data = (data.actorId, state.registered.size), "registered cars")
     }
-    report(data = event.actorRefId, "send enter link info")
+//    report(data = event.actorRefId, "send enter link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
@@ -94,7 +94,7 @@ class Link(
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     state.registered.filterInPlace(_.actorId != data.actorId)
-    report(data = (data.actorId, state.registered.size), "remove registered cars")
+//    report(data = (data.actorId, state.registered.size), "remove registered cars")
     val dataLink = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,
@@ -102,7 +102,7 @@ class Link(
       linkFreeSpeed = state.freeSpeed,
       linkLanes = state.lanes
     )
-    report(data = event.actorRefId, "send leaving link info")
+//    report(data = event.actorRefId, "send leaving link info")
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,

@@ -372,8 +372,9 @@ abstract class BaseActor[T <: BaseState](
   /** Called when the actor is finished. This method is called when the actor finishes processing
     * messages. It calls the onDestruct method.
     */
-  protected def selfDestruct(): Unit =
-    self ! DestructEvent(currentTick, currentTimeManager.path.toString)
+  protected def selfDestruct(): Unit = {
+    context.stop(self)
+  }
 
   /** Finishes the actor. This method is called when the actor finishes processing messages. It
     * calls the onDestruct method.

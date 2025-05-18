@@ -168,6 +168,65 @@ case class Graph[V, W, L] private (
     }
   }
 
+  def aStarEdgeTargetsOptimized(startNode: V, goalNode: V, heuristic: (V, V) => Double)
+                               (implicit num: Numeric[W]): Option[(Double, List[(Edge[V, W, L], V)])] = {
+    if (!contains(startNode) || !contains(goalNode)) return None
+    val weightToDouble: W => Double = num.toDouble(_)
+
+    val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
+    val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
+    val cameFrom = mutable.Map[V, V]()
+    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val closedSet = mutable.Set[V]() // Conjunto fechado
+
+    gScore(startNode) = 0.0
+    fScore(startNode) = heuristic(startNode, goalNode)
+    openSet.enqueue((fScore(startNode), startNode))
+
+    while (openSet.nonEmpty) {
+      val (currentFScore, current) = openSet.dequeue() // Pega fScore real da fila
+
+      // Se o fScore na fila é maior que o fScore conhecido para este nó,
+      // significa que é uma entrada "stale" (obsoleta) porque já encontramos um caminho melhor
+      // e o re-enfileiramos. Podemos pular esta entrada.
+      // Isso ajuda se a PriorityQueue não tem decrease-key e acumula duplicatas.
+      if (currentFScore > fScore(current)) {
+        // Continue para a próxima iteração (em Scala, isso pode ser feito não fazendo nada aqui
+        // e deixando o loop continuar, ou usando uma estrutura de loop que suporte `continue`)
+        // Para este while, podemos apenas deixar o if não ter um else e o loop continua.
+      } else if (current == goalNode) {
+        // Objetivo alcançado!
+        return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (gScore(goalNode), path))
+      } else {
+        // Processa o nó 'current' apenas se ele não foi processado de forma ótima antes.
+        // Adicionar ao closedSet aqui é uma abordagem. Alguns o fazem após expandir vizinhos.
+        // Se já estiver no closedSet, significa que já o processamos.
+        // No entanto, com a verificação de fScore "stale" acima, e a heurística consistente,
+        // o closedSet pode ser mais para evitar re-expandir vizinhos de nós já otimamente processados.
+        // A forma mais simples é: se já está no closedSet, já fizemos o melhor por ele.
+        if (!closedSet.contains(current)) { // Apenas processa se não estiver fechado
+          closedSet.add(current) // Marca como processado/fechado
+
+          neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
+            // Não precisa verificar closedSet para o vizinho aqui,
+            // pois se um caminho melhor for encontrado para ele,
+            // ele será (re)adicionado à openSet. A verificação de closedSet no início
+            // do loop cuidará de pular vizinhos já processados quando eles se tornarem 'current'.
+            val tentativeGScore = gScore(current) + weightToDouble(edgeInfoObj.weight)
+            if (tentativeGScore < gScore(neighbor)) {
+              cameFrom(neighbor) = current
+              gScore(neighbor) = tentativeGScore
+              val newFScoreForNeighbor = tentativeGScore + heuristic(neighbor, goalNode)
+              fScore(neighbor) = newFScoreForNeighbor // Atualiza o fScore conhecido
+              openSet.enqueue((newFScoreForNeighbor, neighbor))
+            }
+          }
+        }
+      }
+    }
+    None // Caminho não encontrado
+  }
+
   // --- Métodos de Reconstrução de Caminho ---
   private def reconstructEdgeTargetTuplePath(
                                               cameFrom: mutable.Map[V, V],
