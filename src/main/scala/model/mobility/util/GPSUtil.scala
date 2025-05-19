@@ -22,7 +22,7 @@ object GPSUtil {
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
         // Usa o A* da classe Graph, que retorna (Custo, Lista de (Aresta, NóDestino))
-        CityMapUtil.cityMap.aStarEdgeTargets(originNode, destinationNode, heuristicFunc) match {
+        CityMapUtil.cityMap.aStarEdgeTargetsOptimized(originNode, destinationNode, heuristicFunc) match {
           case Some((cost, path)) => // path é List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach { case (edgeObject, targetNodeOfEdgeInPath) =>
