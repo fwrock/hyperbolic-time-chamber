@@ -144,7 +144,7 @@ class Car(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    val velcoty = linkDensitySpeed(
+    val velocity = linkDensitySpeed(
       length = data.linkLength,
       capacity = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -152,7 +152,7 @@ class Car(
       lanes = data.linkLanes
     )
 
-    val time = data.linkLength / velcoty
+    val time = data.linkLength / velocity
 //    report(
 //      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
 //      label = "(time, length, free speed, speed)"
