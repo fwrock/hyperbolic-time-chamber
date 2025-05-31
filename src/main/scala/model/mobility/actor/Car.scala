@@ -13,6 +13,7 @@ import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignal
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+import org.interscity.htc.system.database.redis.RedisClientManager
 
 import scala.collection.mutable
 
@@ -48,7 +49,9 @@ class Car(
 //      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
 
-      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      val redisClientManager = RedisClientManager()
+
+      GPSUtil.calcRoute(redisManager = redisClientManager, originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
@@ -68,6 +71,7 @@ class Car(
           state.movableStatus = Finished // Ou um estado de erro específico
           onFinishSpontaneous()
       }
+      redisClientManager.closeConnection()
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
@@ -140,13 +144,15 @@ class Car(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    val time = linkDensitySpeed(
+    val velocity = linkDensitySpeed(
       length = data.linkLength,
       capacity = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
       freeSpeed = data.linkFreeSpeed,
       lanes = data.linkLanes
     )
+
+    val time = data.linkLength / velocity
 //    report(
 //      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
 //      label = "(time, length, free speed, speed)"
