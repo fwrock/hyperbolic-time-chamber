@@ -69,6 +69,15 @@ object JsonUtil {
 
   def jsonToObject[T](json: String, clazz: Class[T]): T =
     mapper.readValue(json, clazz)
+    
+  def writeJsonBytes[T](data: T): Array[Byte] = {
+    mapper.writeValueAsBytes(data)
+  }
+  
+  def fromJsonBytes[T](data: Array[Byte])(implicit m: Manifest[T]): T = {
+    val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
+    mapper.readValue[T](data, javaType)
+  }
 
   def fromJsonListStream[A](jsonStream: InputStream)(implicit elementManifest: Manifest[A]): List[A] = {
     val typeFactory = TypeFactory.defaultInstance()
