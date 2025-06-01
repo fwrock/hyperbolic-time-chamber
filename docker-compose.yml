@@ -11,12 +11,12 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 16G
-        reservations:
-          memory: 4G
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 16G
+#        reservations:
+#          memory: 4G
 
   node1:
     image: uxhabam/hyperbolic-time-chamber:1.6.0
