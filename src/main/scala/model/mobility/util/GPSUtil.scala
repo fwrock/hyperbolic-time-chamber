@@ -11,11 +11,10 @@ import scala.collection.mutable
 object GPSUtil {
 
   def calcRoute(redisManager: RedisClientManager, originId: String, destinationId: String): Option[(Double, mutable.Queue[(String, String)])] = {
-
     val routeId = UUID.nameUUIDFromBytes(s"route:${originId}-${destinationId}".getBytes).toString
     redisManager.load(routeId) match
-      case Some(route) =>
-        Some(JsonUtil.fromJsonBytes[(Double, mutable.Queue[(String, String)])](route))
+      case Some(routeBytes) =>
+        JsonUtil.fromJsonBytes[(Double, mutable.Queue[(String, String)])](routeBytes)
       case None =>
         val originNodeOpt = CityMapUtil.nodesById.get(originId)
         val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
