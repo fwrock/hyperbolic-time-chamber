@@ -49,9 +49,7 @@ class Car(
 //      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
 
-      val redisClientManager = RedisClientManager()
-
-      GPSUtil.calcRoute(redisManager = redisClientManager, originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(redisManager = GPSUtil.redisManager, originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
@@ -71,7 +69,6 @@ class Car(
           state.movableStatus = Finished // Ou um estado de erro específico
           onFinishSpontaneous()
       }
-      redisClientManager.closeConnection()
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
