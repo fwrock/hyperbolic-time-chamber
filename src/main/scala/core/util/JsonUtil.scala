@@ -73,10 +73,17 @@ object JsonUtil {
   def writeJsonBytes[T](data: T): Array[Byte] = {
     mapper.writeValueAsBytes(data)
   }
-  
-  def fromJsonBytes[T](data: Array[Byte])(implicit m: Manifest[T]): T = {
-    val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
-    mapper.readValue[T](data, javaType)
+
+  def fromJsonBytes[T](data: Array[Byte])(implicit m: Manifest[T]): Option[T] = {
+    try {
+      val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
+      val result = mapper.readValue[T](data, javaType)
+      Option(result) // evita Some(null)
+    } catch {
+      case e: Exception =>
+        System.err.println(s"Erro ao desserializar JSON: ${e.getMessage}")
+        None
+    }
   }
 
   def fromJsonListStream[A](jsonStream: InputStream)(implicit elementManifest: Manifest[A]): List[A] = {
