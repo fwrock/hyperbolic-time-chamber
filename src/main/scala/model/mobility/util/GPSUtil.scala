@@ -10,11 +10,6 @@ import scala.collection.mutable
 
 object GPSUtil {
 
-  lazy val redisManager = {
-    RedisClientManager()
-  }
-
-
   def calcRoute(redisManager: RedisClientManager, originId: String, destinationId: String): Option[(Double, mutable.Queue[(String, String)])] = {
 
     val routeId = UUID.nameUUIDFromBytes(s"route:${originId}-${destinationId}".getBytes).toString

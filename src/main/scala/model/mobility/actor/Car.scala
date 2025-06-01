@@ -13,7 +13,7 @@ import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignal
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.system.database.redis.RedisClientManager
+import org.interscity.htc.system.database.redis.{RedisClient, RedisClientManager}
 
 import scala.collection.mutable
 
@@ -48,8 +48,9 @@ class Car(
     try {
 //      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
+      val redisManager = RedisClient.instance
 
-      GPSUtil.calcRoute(redisManager = GPSUtil.redisManager, originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(redisManager = redisManager, originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
