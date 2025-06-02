@@ -21,7 +21,8 @@ class RedisClientManager {
   def load(key: String): Option[Array[Byte]] = {
     val jedis = pool.getResource
     try {
-      Option(jedis.get(key.getBytes))
+      val value = jedis.get(key.getBytes)
+      Option(value)
     } finally {
       jedis.close()
     }
