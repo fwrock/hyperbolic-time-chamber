@@ -30,8 +30,8 @@ services:
       REDIS_HOST: 127.0.0.1  # Ajustar para host se redis também for host
       REDIS_PORT: 6379
       MANAGEMENT_HTTP_PORT: 8558
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_2M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_2M/data/city_map.json
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
 #    deploy:

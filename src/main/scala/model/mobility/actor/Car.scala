@@ -7,7 +7,7 @@ import model.mobility.entity.state.CarState
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil}
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, GPSUtilWithCache, SpeedUtil}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
@@ -48,9 +48,7 @@ class Car(
     try {
 //      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
-      val redisManager = RedisClient.instance
-
-      GPSUtil.calcRoute(redisManager = redisManager, originId = state.origin, destinationId = state.destination) match {
+      GPSUtilWithCache.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
@@ -142,7 +140,7 @@ class Car(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    val velocity = linkDensitySpeed(
+    val speed = linkDensitySpeed(
       length = data.linkLength,
       capacity = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -150,13 +148,11 @@ class Car(
       lanes = data.linkLanes
     )
 
-    val time = data.linkLength / velocity
-//    report(
-//      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
-//      label = "(time, length, free speed, speed)"
-//    )
-//    report(data = s"${state.movableStatus} -> $Moving", "change status")
+    val time = data.linkLength / speed
     state.movableStatus = Moving
+    if (time.isNaN || time.isInfinite || time < 0) {
+      logError(s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}")
+    }
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }
