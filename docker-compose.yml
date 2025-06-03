@@ -18,8 +18,9 @@ services:
 #          memory: 4G
 
   node1:
-    image: uxhabam/hyperbolic-time-chamber:1.6.0
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     container_name: node_1
+    cpuset: "0-6,56-62"
     hostname: node1
     network_mode: host
     environment:
@@ -30,8 +31,8 @@ services:
       REDIS_HOST: 127.0.0.1  # Ajustar para host se redis também for host
       REDIS_PORT: 6379
       MANAGEMENT_HTTP_PORT: 8558
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_2M/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_2M/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/data/city_map.json
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
 #    deploy:

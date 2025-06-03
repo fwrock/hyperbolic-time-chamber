@@ -48,7 +48,7 @@ class Car(
     try {
 //      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
-      GPSUtilWithCache.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
