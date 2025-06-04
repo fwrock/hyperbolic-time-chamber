@@ -126,7 +126,7 @@ services:
 #          cpus: '10.0'
 #
   node5:
-    image: uxhabam/hyperbolic-time-chamber:latest
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_5
@@ -153,7 +153,7 @@ services:
 #          cpus: '10.0'
 
   node6:
-    image: uxhabam/hyperbolic-time-chamber:latest
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_6
@@ -180,7 +180,7 @@ services:
 #          cpus: '10.0'
 
   node7:
-    image: uxhabam/hyperbolic-time-chamber:latest
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_7
@@ -207,7 +207,7 @@ services:
 #          cpus: '10.0'
 
   node8:
-    image: uxhabam/hyperbolic-time-chamber:latest
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_8
