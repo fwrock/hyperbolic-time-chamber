@@ -45,7 +45,7 @@ services:
 #          cpus: '10.0'
 
   node2:
-    image: uxhabam/hyperbolic-time-chamber:latest
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
     volumes:
       - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
     container_name: node_2
@@ -71,59 +71,59 @@ services:
 #          memory: 32G
 #          cpus: '10.0'
 
-#  node3:
-#    image: uxhabam/hyperbolic-time-chamber:latest
-#    volumes:
-#      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
-#    container_name: node_3
-#    cpuset: "14-20,70-76"
-#    hostname: node3
-#    network_mode: host
-#    environment:
-#      CLUSTER_PORT: 1602
-#      CLUSTER_IP: 127.0.0.1
-#      CLUSTER_NAME: node3
-#      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
-#      MANAGEMENT_HTTP_PORT: 8560
-#      REDIS_HOST: 127.0.0.1
-#      REDIS_PORT: 6379
-#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/simulation.json
-#      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/data/city_map.json
-##    deploy:
-##      resources:
-##        limits:
-##          memory: 64G
-##          cpus: '14.0'
-##        reservations:
-##          memory: 32G
-##          cpus: '10.0'
-#
-#  node4:
-#    image: uxhabam/hyperbolic-time-chamber:latest
-#    volumes:
-#      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
-#    container_name: node_4
-#    cpuset: "21-27,77-83"
-#    hostname: node4
-#    network_mode: host
-#    environment:
-#      CLUSTER_PORT: 1603
-#      CLUSTER_IP: 127.0.0.1
-#      CLUSTER_NAME: node4
-#      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
-#      MANAGEMENT_HTTP_PORT: 8561
-#      REDIS_HOST: 127.0.0.1
-#      REDIS_PORT: 6379
-#      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/simulation.json
-#      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/data/city_map.json
-##    deploy:
-##      resources:
-##        limits:
-##          memory: 64G
-##          cpus: '14.0'
-##        reservations:
-##          memory: 32G
-##          cpus: '10.0'
+  node3:
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
+    container_name: node_3
+    cpuset: "14-20,70-76"
+    hostname: node3
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1602
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node3
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8560
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/data/city_map.json
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 64G
+#          cpus: '14.0'
+#        reservations:
+#          memory: 32G
+#          cpus: '10.0'
+
+  node4:
+    image: uxhabam/hyperbolic-time-chamber:1.7.0
+    volumes:
+      - /home/fwrocha/phd/simulator/htc:/app/hyperbolic-time-chamber
+    container_name: node_4
+    cpuset: "21-27,77-83"
+    hostname: node4
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1603
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node4
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8561
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_1_5M_random_segmented/data/city_map.json
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 64G
+#          cpus: '14.0'
+#        reservations:
+#          memory: 32G
+#          cpus: '10.0'
 #
 #  node5:
 #    image: uxhabam/hyperbolic-time-chamber:latest
