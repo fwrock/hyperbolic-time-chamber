@@ -13,9 +13,6 @@ import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignal
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.system.database.redis.RedisClientManager
-
-import scala.collection.mutable
 
 class Car(
   private val properties: Properties
@@ -42,36 +39,27 @@ class Car(
 
   override def requestRoute(): Unit = {
     if (state.movableStatus == Finished) {
-      logWarn(s"Carro ${getEntityId} já está no estado Finished. Não pode solicitar nova rota.")
       return
     }
     try {
-//      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
-
-      val redisClientManager = RedisClientManager()
-
-      GPSUtil.calcRoute(redisManager = redisClientManager, originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
-//          report(data = s"Rota calculada com ${pathQueue.size} segmentos. Custo: $cost. Status: ${state.movableStatus}", "route_calculated")
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            logWarn(s"Rota calculada é vazia para ${getEntityId} de ${state.origin} para ${state.destination}.")
             state.movableStatus = Finished
             onFinishSpontaneous()
           }
-
         case None =>
           logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
-          state.movableStatus = Finished // Ou um estado de erro específico
+          state.movableStatus = Finished
           onFinishSpontaneous()
       }
-      redisClientManager.closeConnection()
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
@@ -81,15 +69,13 @@ class Car(
   }
 
   private def requestSignalState(): Unit = {
-//    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
     if (
       state.destination == state.currentPath
         .map(
           p => p._2.actorId
         )
-        .orNull || state.bestRoute.isEmpty
+        .orNull || state.movableBestRoute.isEmpty
     ) {
-//      report(data = s"${state.movableStatus} -> $Finished", "travel finished")
       state.movableStatus = Finished
       onFinishSpontaneous()
       selfDestruct()
@@ -144,7 +130,7 @@ class Car(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    val velocity = linkDensitySpeed(
+    val speed = linkDensitySpeed(
       length = data.linkLength,
       capacity = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -152,13 +138,11 @@ class Car(
       lanes = data.linkLanes
     )
 
-    val time = data.linkLength / velocity
-//    report(
-//      data = (time, data.linkLength, data.linkFreeSpeed, data.linkLength / time),
-//      label = "(time, length, free speed, speed)"
-//    )
-//    report(data = s"${state.movableStatus} -> $Moving", "change status")
+    val time = data.linkLength / speed
     state.movableStatus = Moving
+    if (time.isNaN || time.isInfinite || time < 0) {
+      logError(s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}")
+    }
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }
 }
