@@ -32,8 +32,10 @@ abstract class Movable[T <: MovableState](
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match
       case Start =>
+        logInfo("Starting Movable actor")
         requestRoute()
       case Ready =>
+        logInfo("Movable actor is ready to enter link")
         enterLink()
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
@@ -82,7 +84,6 @@ abstract class Movable[T <: MovableState](
   ): Unit = {}
 
   protected def onFinish(nodeId: String): Unit = {
-//    report(data = s"${state.movableStatus} -> $Finished", "change status")
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -97,7 +98,6 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
-//            report(data = edgeLabel.id, "enter link")
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
@@ -111,17 +111,19 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
+            logInfo(s"Entering link $linkEdgeGraphId to node $nextNodeId")
           case None =>
-//            report (data = s"${state.movableStatus} -> $Finished", "change status")
             state.movableStatus = Finished
+            logInfo("No edge label found for link, finishing.")
             onFinishSpontaneous()
             selfDestruct()
         }
       case None if state.movableBestRoute.isEmpty =>
-//        report(data = s"${state.movableStatus} -> $Finished", "change status")
         state.movableStatus = Finished
+        logInfo("No current path and no best route available, finishing.")
         onFinishSpontaneous()
       case None =>
+        logInfo("No current path, but best route available, entering link.")
         state.movableCurrentPath = getNextPath
         enterLink ()
     }
@@ -132,7 +134,6 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
-//            report(data = edgeLabel.id, "leaving link")
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
@@ -147,6 +148,7 @@ abstract class Movable[T <: MovableState](
               actorType = LoadBalancedDistributed
             )
             if (state.movableBestRoute.isEmpty) {
+              logWarn("No best route available to continue")
               onFinish(nextNodeId)
             }
             state.movableCurrentPath = None

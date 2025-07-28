@@ -7,15 +7,12 @@ import model.mobility.entity.state.CarState
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, GPSUtilWithCache, SpeedUtil}
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.system.database.redis.{RedisClient, RedisClientManager}
-
-import scala.collection.mutable
 
 class Car(
   private val properties: Properties
@@ -42,11 +39,9 @@ class Car(
 
   override def requestRoute(): Unit = {
     if (state.movableStatus == Finished) {
-      logWarn(s"Carro ${getEntityId} já está no estado Finished. Não pode solicitar nova rota.")
       return
     }
     try {
-//      report(data = s"${state.movableStatus} -> $RouteWaiting", "change_status_request_route")
       state.movableStatus = RouteWaiting
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
@@ -54,18 +49,15 @@ class Car(
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
-//          report(data = s"Rota calculada com ${pathQueue.size} segmentos. Custo: $cost. Status: ${state.movableStatus}", "route_calculated")
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            logWarn(s"Rota calculada é vazia para ${getEntityId} de ${state.origin} para ${state.destination}.")
             state.movableStatus = Finished
             onFinishSpontaneous()
           }
-
         case None =>
           logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
-          state.movableStatus = Finished // Ou um estado de erro específico
+          state.movableStatus = Finished
           onFinishSpontaneous()
       }
     } catch {
@@ -77,15 +69,13 @@ class Car(
   }
 
   private def requestSignalState(): Unit = {
-//    report(data = s"${state.movableStatus} -> $WaitingSignalState", "change status")
     if (
       state.destination == state.currentPath
         .map(
           p => p._2.actorId
         )
-        .orNull || state.bestRoute.isEmpty
+        .orNull || state.movableBestRoute.isEmpty
     ) {
-//      report(data = s"${state.movableStatus} -> $Finished", "travel finished")
       state.movableStatus = Finished
       onFinishSpontaneous()
       selfDestruct()
