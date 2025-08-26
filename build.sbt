@@ -8,10 +8,11 @@ ThisBuild / scalaVersion := "3.3.5"
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
 // Apache Pekko
-val pekkoVersion = "1.1.3"
+val pekkoVersion = "1.1.5"
 val pekkoManagementVersion = "1.1.1"
-val jacksonVersion = "2.19.0"
-val pekkoHttpVersion = "1.1.0"
+val jacksonVersion = "2.19.2"
+val pekkoHttpVersion = "1.2.0"
+val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
 val logbackVersion = "1.5.18"
@@ -20,14 +21,14 @@ val logbackVersion = "1.5.18"
 val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
-val kryoVersion = "1.2.1"
-val protobufVersion = "4.30.2"
+val kryoVersion = "1.3.0"
+val protobufVersion = "4.32.0"
 val pekkoProtobuf = "1.0.3"
 
 // Connectors
 val cassandraConnectorsVersion = "1.1.0"
 val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "6.0.0"
+val jedisVersion = "6.1.0"
 
 lazy val root = (project in file("."))
   .settings(
@@ -63,6 +64,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
 
       //Databases
+      "org.apache.pekko" %% "pekko-persistence-cassandra" % pekkoCassandraPersistenceVersion,
       "org.apache.pekko" %% "pekko-connectors-cassandra" % cassandraConnectorsVersion,
       "redis.clients" % "jedis" % jedisVersion,
 
@@ -80,7 +82,7 @@ lazy val root = (project in file("."))
       // Protobuf
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.1",
+      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
@@ -89,7 +91,7 @@ lazy val root = (project in file("."))
 
       // Faker
       "com.github.javafaker" % "javafaker" % "1.0.2",
-      "com.typesafe" % "config" % "1.4.3",
+      "com.typesafe" % "config" % "1.4.4",
 
       // Test
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,

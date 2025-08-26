@@ -4,7 +4,8 @@ services:
   redis:
     image: redis:latest
     container_name: htc-redis
-    network_mode: host
+    networks:
+      - htc-network
     ports:
       - '6379:6379'
     volumes:
@@ -17,12 +18,35 @@ services:
 #        reservations:
 #          memory: 4G
 
+  cassandra:
+    image: cassandra:latest
+    container_name: htc-cassandra-db
+    ports:
+      - "9042:9042"
+    networks:
+      - htc-network
+    # Adicionar o datacenter é uma boa prática
+    environment:
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+
+  ds-studio:
+    image: datastax/dse-studio:latest
+    container_name: htc-ds-studio
+    ports:
+      - "9091:9091"
+    depends_on:
+      - cassandra
+    networks:
+      - htc-network
   node1:
     build: .
     container_name: node_1
 #    cpuset: "0-6,56-62"
     hostname: node1
-    network_mode: host
+    networks:
+      - htc-network
     environment:
       CLUSTER_PORT: 1600
       CLUSTER_IP: 127.0.0.1  # ou IP do host
@@ -237,5 +261,5 @@ volumes:
   redis_data:
 
 networks:
-  hyperbolic-time-chamber-network:
+  htc-network:
     driver: bridge
