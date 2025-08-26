@@ -6,5 +6,5 @@ import org.interscity.htc.system.entity.event.BaseEvent
 case class CreateEntityEvent(
   table: String,
   columns: List[String],
-  values: List[String]
+  values: List[Any]
 ) extends BaseEvent
