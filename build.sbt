@@ -47,6 +47,7 @@ lazy val root = (project in file("."))
       // Apache Pekko
       "org.apache.pekko" %% "pekko-actor" % pekkoVersion,
       "org.apache.pekko" %% "pekko-persistence" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-persistence-query" % pekkoVersion,
       "org.apache.pekko" %% "pekko-actor-typed" % pekkoVersion,
       "org.apache.pekko" %% "pekko-cluster-sharding-typed" % pekkoVersion,
       "org.apache.pekko" %% "pekko-management" % pekkoManagementVersion,

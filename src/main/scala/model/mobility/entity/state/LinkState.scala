@@ -24,8 +24,8 @@ case class LinkState(
   permLanes: Double = 1.0,
   typeLink: String = "normal",
   modes: List[String] = List("car"),
-  currentSpeed: Double = 0.0,
-  congestionFactor: Double = 1.0,
+  var currentSpeed: Double = 0.0,
+  var congestionFactor: Double = 1.0,
   registered: mutable.Set[LinkRegister] = mutable.Set()
 ) extends BaseState(
       startTick = startTick,

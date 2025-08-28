@@ -22,6 +22,8 @@ import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.enumeration.TimePolicyEnum
+import org.interscity.htc.core.actor.manager.time.protocol.{ AdvanceToTick, TickCompleted }
 
 import java.util.UUID
 import scala.Long.MinValue
@@ -68,6 +70,14 @@ abstract class BaseActor[T <: BaseState](
   protected var creatorManager: ActorRef =
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
+
+  // Política de tempo para registro no LTM correto
+  protected var timePolicy: TimePolicyEnum.TimePolicyEnum = 
+    if (properties != null && properties.timePolicy.isDefined) {
+      properties.timePolicy.get
+    } else {
+      TimePolicyEnum.autoDetect(getClass.getName)
+    }
 
   override def persistenceId: String = s"${getClass.getName}-${self.path.name}"
 
@@ -152,6 +162,7 @@ abstract class BaseActor[T <: BaseState](
           )
         )
       )
+      logDebug(s"Ator $entityId registrado com política de tempo: $timePolicy")
     } else {
       timeManager ! RegisterActorEvent(
         startTick = startTick,
@@ -166,6 +177,7 @@ abstract class BaseActor[T <: BaseState](
           )
         )
       )
+      logDebug(s"Ator $entityId registrado com política de tempo: $timePolicy")
     }
 
   protected def onInitialize(event: InitializeEvent): Unit = ()
@@ -291,6 +303,36 @@ abstract class BaseActor[T <: BaseState](
     save(event)
   }
 
+  /**
+   * Handles AdvanceToTick event for TimeStepped simulation paradigm
+   */
+  private def handleAdvanceToTick(event: AdvanceToTick): Unit = {
+    if (timePolicy == TimePolicyEnum.TimeSteppedSimulation) {
+      currentTick = event.targetTick
+      try {
+        actAdvanceToTick(event)
+      } catch {
+        case e: Exception =>
+          logError(s"Erro durante AdvanceToTick para tick ${event.targetTick}: ${e.getMessage}", e)
+      } finally {
+        // Sempre confirmar completamento do tick
+        currentTimeManager ! TickCompleted(event.targetTick, getEntityId)
+      }
+    } else {
+      logWarn(s"Recebido AdvanceToTick mas política de tempo é $timePolicy, não TimeStepped")
+    }
+  }
+
+  /**
+   * This method is called when the actor receives an AdvanceToTick event in TimeStepped mode.
+   * Override this method to implement time-stepped behavior.
+   * @param event The AdvanceToTick event
+   */
+  protected def actAdvanceToTick(event: AdvanceToTick): Unit = {
+    // Default implementation - subclasses should override
+    logDebug(s"AdvanceToTick para tick ${event.targetTick} - implementação padrão")
+  }
+
   /** This method is called when the actor receives an interaction event. It should be overridden by
     * the actor to handle the interaction event.
     * @param event
@@ -324,6 +366,7 @@ abstract class BaseActor[T <: BaseState](
     case event: EntityEnvelopeEvent           => handleEnvelopeEvent(event)
     case event: InitializeEvent               => initialize(event)
     case event: ShardRegion.StartEntity       => handleStartEntity(event)
+    case event: AdvanceToTick                 => handleAdvanceToTick(event)
     case SaveSnapshotSuccess(metadata)        =>
     case SaveSnapshotFailure(metadata, cause) =>
     case event                                => handleEvent(event)
@@ -510,6 +553,21 @@ abstract class BaseActor[T <: BaseState](
     *   The time manager actor reference
     */
   protected def getTimeManager: ActorRef = timeManager
+
+  /** Gets the time policy for this actor.
+    * @return
+    *   The time policy
+    */
+  protected def getTimePolicy: TimePolicyEnum.TimePolicyEnum = timePolicy
+
+  /** Sets the time policy for this actor (should be used carefully).
+    * @param policy
+    *   The new time policy
+    */
+  protected def setTimePolicy(policy: TimePolicyEnum.TimePolicyEnum): Unit = {
+    timePolicy = policy
+    logInfo(s"Política de tempo alterada para: $policy")
+  }
 
   /** Gets the actor id.
     * @return

@@ -8,5 +8,7 @@ final case class LinkInfoData(
   linkCapacity: Double = 0,
   linkNumberOfCars: Int = 0,
   linkFreeSpeed: Double = 0,
-  linkLanes: Int = 0
+  linkLanes: Int = 0,
+  linkCurrentSpeed: Option[Double] = None,
+  linkCongestionFactor: Option[Double] = None
 ) extends BaseEventData
