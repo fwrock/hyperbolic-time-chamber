@@ -8,9 +8,11 @@ import core.enumeration.TimePolicyEnum
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil, SpeedUtil }
+import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil, SpeedUtil, TrafficModels }
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
+import org.interscity.htc.model.mobility.entity.event.micro.{ProvideMicroContext, MyMicroIntention}
+import org.interscity.htc.model.mobility.entity.state.micro.{MicroVehicleContext, MicroVehicleIntention}
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum._
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
@@ -18,12 +20,11 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalP
 import scala.collection.mutable
 
 /**
- * TimeStepped version of Car actor for mobility simulation
+ * TimeStepped version of Car actor for mobility simulation with microscopic support
  * 
- * This version operates under TimeStepped_LTM management:
- * - Responds to AdvanceToTick events instead of SpontaneousEvent
- * - Processes movement synchronously with other mobility actors
- * - Maintains state between ticks for continuous movement
+ * This version operates under TimeStepped_LTM management and supports both:
+ * - Mesoscopic simulation (original TimeStepped behavior)
+ * - Microscopic simulation with IDM and MOBIL models
  */
 class TimeSteppedCar(
   private val properties: Properties
@@ -35,6 +36,10 @@ class TimeSteppedCar(
   private var movementPlan: Option[MovementPlan] = None
   private var signalWaitingUntil: Option[Long] = None
   private var lastProcessedTick: Long = 0
+  
+  // Microscopic simulation state
+  private var inMicroSimulation: Boolean = false
+  private var currentMicroContext: Option[MicroVehicleContext] = None
 
   case class MovementPlan(
     linkId: String,
@@ -243,6 +248,7 @@ class TimeSteppedCar(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
+      case d: ProvideMicroContext => handleMicroContext(event, d)
       case _ => super.actInteractWith(event)
     }
 
@@ -274,6 +280,11 @@ class TimeSteppedCar(
     state.distance += data.linkLength
     logDebug(s"Carro ${getEntityId} saiu do link, distância total: ${state.distance}")
     
+    // Exit microscopic simulation if we were in it
+    if (inMicroSimulation) {
+      exitMicroSimulation()
+    }
+    
     // In TimeStepped mode, we don't schedule events, just update state
     // The next movement will be processed in the next tick
   }
@@ -282,36 +293,53 @@ class TimeSteppedCar(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    // Calculate speed and travel time
-    val speed = SpeedUtil.linkDensitySpeed(
-      length = data.linkLength,
-      capacity = data.linkCapacity,
-      numberOfCars = data.linkNumberOfCars,
-      freeSpeed = data.linkFreeSpeed,
-      lanes = data.linkLanes
-    )
-
-    val travelTime = if (speed > 0) data.linkLength / speed else Double.MaxValue
+    // Check if this link uses microscopic simulation
+    val linkUsesMS = checkIfLinkUsesMicroscopicSimulation(data)
     
-    if (travelTime.isNaN || travelTime.isInfinite || travelTime < 0) {
-      logError(s"Tempo de viagem inválido calculado para link ${data}: ${travelTime}")
-      state.movableStatus = Finished
-      return
+    if (linkUsesMS) {
+      // Enter microscopic simulation mode
+      inMicroSimulation = true
+      state.movableStatus = Moving
+      logDebug(s"Car ${getEntityId} entrando em modo de simulação microscópica no link ${event.actorRefId}")
+      
+      // In microscopic simulation, movement is handled by sub-ticks
+      // Don't create movement plan or schedule end time
+      movementPlan = None
+    } else {
+      // Standard mesoscopic simulation
+      inMicroSimulation = false
+      
+      // Calculate speed and travel time
+      val speed = SpeedUtil.linkDensitySpeed(
+        length = data.linkLength,
+        capacity = data.linkCapacity,
+        numberOfCars = data.linkNumberOfCars,
+        freeSpeed = data.linkFreeSpeed,
+        lanes = data.linkLanes
+      )
+
+      val travelTime = if (speed > 0) data.linkLength / speed else Double.MaxValue
+      
+      if (travelTime.isNaN || travelTime.isInfinite || travelTime < 0) {
+        logError(s"Tempo de viagem inválido calculado para link ${data}: ${travelTime}")
+        state.movableStatus = Finished
+        return
+      }
+
+      // Create movement plan
+      val estimatedEndTick = lastProcessedTick + Math.ceil(travelTime).toLong
+      movementPlan = Some(MovementPlan(
+        linkId = event.actorRefId,
+        startTick = lastProcessedTick,
+        estimatedEndTick = estimatedEndTick,
+        travelTime = travelTime
+      ))
+      
+      state.movableStatus = Moving
+      
+      logDebug(s"Carro ${getEntityId} entrou no link (meso), velocidade: ${speed.formatted("%.2f")}, " +
+               s"tempo de viagem: ${travelTime.formatted("%.2f")}, chegada estimada: tick ${estimatedEndTick}")
     }
-
-    // Create movement plan
-    val estimatedEndTick = lastProcessedTick + Math.ceil(travelTime).toLong
-    movementPlan = Some(MovementPlan(
-      linkId = event.actorRefId,
-      startTick = lastProcessedTick,
-      estimatedEndTick = estimatedEndTick,
-      travelTime = travelTime
-    ))
-    
-    state.movableStatus = Moving
-    
-    logDebug(s"Carro ${getEntityId} entrou no link, velocidade: ${speed.formatted("%.2f")}, " +
-             s"tempo de viagem: ${travelTime.formatted("%.2f")}, chegada estimada: tick ${estimatedEndTick}")
   }
 
   /**
@@ -326,6 +354,7 @@ class TimeSteppedCar(
       "currentDistance" -> state.distance,
       "reachedDestination" -> state.movableReachedDestination,
       "lastProcessedTick" -> lastProcessedTick,
+      "inMicroSimulation" -> inMicroSimulation,
       "movementPlan" -> movementPlan.map(p => Map(
         "linkId" -> p.linkId,
         "startTick" -> p.startTick,
@@ -334,6 +363,162 @@ class TimeSteppedCar(
       )),
       "signalWaitingUntil" -> signalWaitingUntil
     )
+  }
+
+  /**
+   * Handle microscopic simulation context from LinkActor
+   */
+  private def handleMicroContext(event: ActorInteractionEvent, data: ProvideMicroContext): Unit = {
+    currentMicroContext = Some(data.context)
+    inMicroSimulation = true
+    
+    logDebug(s"Car ${getEntityId} recebeu contexto micro para sub-tick ${data.subTick}")
+    
+    // Calculate intentions using IDM and MOBIL models
+    val intention = calculateMicroIntention(data.context)
+    
+    // Send intention back to LinkActor
+    sendMessageTo(
+      entityId = event.actorRefId,
+      shardId = event.shardRefId,
+      data = MyMicroIntention(intention, data.subTick),
+      eventType = "MyMicroIntention",
+      actorType = org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+    )
+  }
+
+  /**
+   * Calculate micro intentions using IDM and MOBIL models
+   */
+  private def calculateMicroIntention(context: MicroVehicleContext): MicroVehicleIntention = {
+    // Create a temporary MicroVehicleState from CarState for calculations
+    val tempVehicleState = createTempMicroVehicleState(context)
+    
+    // Calculate longitudinal acceleration using IDM
+    val idmAcceleration = TrafficModels.calculateIDMAcceleration(tempVehicleState, context.leader)
+    
+    // Evaluate lane change opportunities using MOBIL
+    val desiredLaneChange = evaluateLaneChangeDesire(tempVehicleState, context)
+    
+    MicroVehicleIntention(
+      vehicleId = getEntityId,
+      desiredAcceleration = idmAcceleration,
+      desiredLaneChange = desiredLaneChange
+    )
+  }
+
+  /**
+   * Create temporary MicroVehicleState from CarState for model calculations
+   */
+  private def createTempMicroVehicleState(context: MicroVehicleContext): org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState = {
+    org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState(
+      vehicleId = getEntityId,
+      speed = estimateCurrentSpeed(context),
+      position = estimateCurrentPosition(context),
+      acceleration = 0.0, // Will be calculated
+      lane = context.currentLane,
+      actorRef = self,
+      
+      // Use CarState parameters
+      maxAcceleration = state.maxAcceleration,
+      desiredDeceleration = state.desiredDeceleration,
+      desiredSpeed = state.desiredSpeed,
+      timeHeadway = state.timeHeadway,
+      minimumGap = state.minimumGap,
+      politenessFactor = state.politenessFactor,
+      laneChangeThreshold = state.laneChangeThreshold,
+      maxSafeDeceleration = state.maxSafeDeceleration
+    )
+  }
+
+  /**
+   * Estimate current speed based on context
+   */
+  private def estimateCurrentSpeed(context: MicroVehicleContext): Double = {
+    // In a real implementation, this would be maintained as part of the micro state
+    // For now, estimate based on leader or use desired speed
+    context.leader match {
+      case Some(leader) =>
+        // Adjust speed based on leader
+        math.min(leader.speed * 0.9, state.desiredSpeed)
+      case None =>
+        // No leader, can drive at desired speed (limited by speed limit)
+        math.min(state.desiredSpeed, context.speedLimit)
+    }
+  }
+
+  /**
+   * Estimate current position based on context
+   */
+  private def estimateCurrentPosition(context: MicroVehicleContext): Double = {
+    // In a real implementation, this would be maintained as part of the micro state
+    // For now, estimate based on follower or assume middle of link
+    context.follower match {
+      case Some(follower) =>
+        follower.position + 20.0 // Assume 20m ahead of follower
+      case None =>
+        10.0 // Near beginning of link
+    }
+  }
+
+  /**
+   * Evaluate lane change desire using MOBIL model
+   */
+  private def evaluateLaneChangeDesire(
+    vehicle: org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState,
+    context: MicroVehicleContext
+  ): Option[Int] = {
+    
+    val currentLane = context.currentLane
+    val possibleLanes = List(
+      if (currentLane > 0) Some(currentLane - 1) else None, // Left lane
+      if (currentLane < 3) Some(currentLane + 1) else None // Right lane (assuming max 4 lanes)
+    ).flatten
+    
+    // Evaluate each possible lane change
+    for (targetLane <- possibleLanes) {
+      val (targetLeader, targetFollower) = targetLane match {
+        case lane if lane == currentLane - 1 => (context.leftLeader, context.leftFollower)
+        case lane if lane == currentLane + 1 => (context.rightLeader, context.rightFollower)
+        case _ => (None, None)
+      }
+      
+      // Check if lane change is beneficial and safe
+      if (TrafficModels.evaluateLaneChange(
+        vehicle = vehicle,
+        targetLane = targetLane,
+        currentLeader = context.leader,
+        targetLeader = targetLeader,
+        targetFollower = targetFollower
+      ) && TrafficModels.hasAdequateGap(vehicle, targetLeader, targetFollower)) {
+        return Some(targetLane)
+      }
+    }
+    
+    None // No beneficial lane change found
+  }
+
+  /**
+   * Check if the link uses microscopic simulation
+   * This could be based on link properties, configuration, or other criteria
+   */
+  private def checkIfLinkUsesMicroscopicSimulation(linkData: LinkInfoData): Boolean = {
+    // For now, this is a placeholder
+    // In a real implementation, this could be:
+    // - Based on link ID patterns (e.g., links starting with "micro_")
+    // - Configuration parameter
+    // - Link metadata
+    // - Traffic density thresholds
+    false // Default to mesoscopic for backward compatibility
+  }
+
+  /**
+   * Exit microscopic simulation mode
+   */
+  private def exitMicroSimulation(): Unit = {
+    inMicroSimulation = false
+    currentMicroContext = None
+    logDebug(s"Car ${getEntityId} saindo do modo de simulação microscópica")
   }
 }
 
