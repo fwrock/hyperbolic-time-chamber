@@ -607,4 +607,16 @@ abstract class BaseActor[T <: BaseState](
       classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
       actorRef = self.path.name
     )
+
+  protected def getStatistics: Map[String, Any] = Map(
+    "entityId" -> entityId,
+    "shardId" -> shardId,
+    "classType" -> getClass.getName,
+    "currentTick" -> currentTick,
+    "lamportClock" -> getLamportClock,
+    "state" -> (if (state != null) state.toString else "null"),
+    "dependencies" -> dependencies.keys.mkString(","),
+    "reporters" -> (if (reporters != null) reporters.keys.mkString(",") else "null"),
+    "timePolicy" -> timePolicy.toString,
+  )
 }

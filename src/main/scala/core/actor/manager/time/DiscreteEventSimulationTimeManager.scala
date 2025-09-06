@@ -1,17 +1,18 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.Tick
-import core.actor.manager.time.protocol._
+import core.actor.manager.time.protocol.*
 import core.entity.control.ScheduledActors
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
 import org.htc.protobuf.core.entity.event.control.execution.StartSimulationTimeEvent
-import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum.DiscreteEventSimulation
+import org.interscity.htc.core.enumeration.{CreationTypeEnum, LocalTimeManagerTypeEnum}
 import org.interscity.htc.core.util.StringUtil
 
 import scala.collection.mutable
@@ -33,9 +34,8 @@ class DiscreteEventSimulationTimeManager(
       actorId = s"DiscreteEventSimulationTimeManager-${System.nanoTime()}"
     ) {
 
-  override def ltmType: String = "DiscreteEventSimulation"
+  override def ltmType: LocalTimeManagerTypeEnum = DiscreteEventSimulation
 
-  // Estado específico do DES
   private val registeredActors = mutable.Set[String]()
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
   private val runningEvents = mutable.Set[Identify]()
@@ -69,11 +69,10 @@ class DiscreteEventSimulationTimeManager(
    * Verifica se pode avançar até o tempo especificado
    */
   override protected def canAdvanceToTime(targetTime: Tick): Boolean = {
-    // DES pode avançar se não há eventos rodando ou se o próximo evento é <= targetTime
     if (runningEvents.nonEmpty) {
-      false // Não pode avançar enquanto há eventos em execução
+      false
     } else if (scheduledActors.isEmpty) {
-      true // Pode avançar se não há eventos agendados
+      true
     } else {
       val nextEventTime = scheduledActors.keys.min
       nextEventTime <= targetTime
@@ -274,19 +273,6 @@ class DiscreteEventSimulationTimeManager(
     logInfo(s"  Duração: ${duration}ms")
     logInfo(s"  Atores registrados: ${registeredActors.size}")
     logInfo(s"  Eventos pendentes: ${getQueueSize()}")
-  }
-
-  /**
-   * Obtém estatísticas do DES para debug
-   */
-  def getStatistics: String = {
-    s"""DES_LTM Statistics:
-       |  Current Time: $currentLocalTime
-       |  Registered Actors: ${registeredActors.size}
-       |  Scheduled Events: ${scheduledActors.size}
-       |  Running Events: ${runningEvents.size}
-       |  Queue Size: ${getQueueSize()}
-       |  Is Active: $isActive""".stripMargin
   }
 }
 

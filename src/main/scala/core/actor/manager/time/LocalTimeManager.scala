@@ -2,28 +2,29 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.types.Tick
-import core.actor.manager.time.protocol._
+import core.actor.manager.time.protocol.*
 import core.actor.manager.BaseManager
 import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent }
-import org.htc.protobuf.core.entity.event.control.execution.{ PauseSimulationEvent => ProtoPauseSimulationEvent, ResumeSimulationEvent => ProtoResumeSimulationEvent, StopSimulationEvent => ProtoStopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.StartSimulationTimeEvent
+import org.htc.protobuf.core.entity.event.control.execution.{PauseSimulationEvent as ProtoPauseSimulationEvent, ResumeSimulationEvent as ProtoResumeSimulationEvent, StopSimulationEvent as ProtoStopSimulationEvent}
+import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum
 
-// Eventos de status - definidos localmente para evitar problemas de dependência circular
 case class RequestStatusEvent() extends Serializable
 case class StatusResponseEvent(
-  ltmType: String,
+  ltmType: LocalTimeManagerTypeEnum,
   currentTime: Tick,
   queueSize: Int,
   isActive: Boolean
 ) extends Serializable
 
 /**
- * Trait base para todos os LocalTimeManagers (LTMs)
+ * Base Trait for the all LocalTimeManagers (LTMs)
  * 
- * Define a interface de comunicação padrão com o GlobalTimeManager
- * e fornece a estrutura básica para diferentes paradigmas de simulação.
+ * This class define a default communication interface with the GlobalTimeManager.
+ * Furthermore, provide a basic structure for different simulations paradigms
  */
 abstract class LocalTimeManager(
   protected val globalTimeManager: ActorRef,
@@ -35,14 +36,13 @@ abstract class LocalTimeManager(
       actorId = actorId
     ) {
 
-  // Estado comum de todos os LTMs
+
   protected var currentLocalTime: Tick = 0
   protected var isRegisteredWithGTM: Boolean = false
   protected var isSimulationActive: Boolean = false
   protected var lastGrantedTime: Tick = 0
 
-  // Tipo do LTM - deve ser sobrescrito por cada implementação
-  def ltmType: String
+  def ltmType: LocalTimeManagerTypeEnum
 
   override def onStart(): Unit = {
     super.onStart()
@@ -50,11 +50,11 @@ abstract class LocalTimeManager(
   }
 
   /**
-   * Registra este LTM com o GlobalTimeManager
+   * Register this LTM into GlobalTimeManager
    */
   private def registerWithGlobalTimeManager(): Unit = {
-    logInfo(s"Registrando LTM do tipo '$ltmType' com o GlobalTimeManager")
-    globalTimeManager ! RegisterLTMEvent(ltmType, self)
+    logInfo(s"Register LTM kind '$ltmType' into GlobalTimeManager")
+    globalTimeManager ! TimeManagerRegisterEvent(self, ltmType)
   }
 
   /**
@@ -66,12 +66,10 @@ abstract class LocalTimeManager(
    * Receive básico para todos os LTMs - lida com o protocolo de sincronização
    */
   private def baseTimeManagementReceive: Receive = {
-    // Confirmação de registro
     case confirm: LTMRegistrationConfirmEvent => 
       handleRegistrationConfirm(confirm)
-    
-    // Protocolo de sincronização de 4 fases
-    case request: TimeRequestEvent => 
+
+    case request: TimeRequestEvent =>
       handleTimeRequest(request)
     
     case propose: TimeProposeEvent => 
@@ -242,9 +240,7 @@ abstract class LocalTimeManager(
    * Retorna o tamanho da fila/número de eventos pendentes
    */
   protected def getQueueSize(): Int
-
-  // ==================== HOOKS PARA SUBCLASSES ====================
-
+  
   /**
    * Chamado quando o registro com o GTM é completado
    */

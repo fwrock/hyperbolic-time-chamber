@@ -2,7 +2,7 @@ package org.interscity.htc
 package examples
 
 import core.actor.manager.{ GlobalTimeManager, TimeManagerRouter }
-import core.actor.manager.time.{ DiscreteEventSimulationTimeManager, TimeSteppedSimulationTimeManager, OptimisticSimulationTimeManager }
+import core.actor.manager.time.{ DiscreteEventSimulationTimeManager, TimeSteppedTimeManager, OptimisticTimeWindowTimeManager }
 import core.enumeration.TimePolicyEnum
 import core.types.Tick
 import model.mobility.actor.{ TimeSteppedCar, TimeSteppedLink }

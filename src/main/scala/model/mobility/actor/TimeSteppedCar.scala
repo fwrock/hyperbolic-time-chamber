@@ -1,20 +1,20 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
-import core.actor.manager.time.protocol.{ AdvanceToTick, TickCompleted }
+import core.actor.manager.time.protocol.{AdvanceToTick, TickCompleted}
 import core.enumeration.TimePolicyEnum
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil, SpeedUtil, TrafficModels }
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil, TrafficModels}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.mobility.entity.event.micro.{ProvideMicroContext, MyMicroIntention}
-import org.interscity.htc.model.mobility.entity.state.micro.{MicroVehicleContext, MicroVehicleIntention}
+import org.interscity.htc.model.mobility.entity.event.micro.{MyMicroIntention, ProvideMicroContext}
+import org.interscity.htc.model.mobility.entity.state.micro.{MicroVehicleContext, MicroVehicleIntention, MicroVehicleState}
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum._
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 import scala.collection.mutable
@@ -410,8 +410,8 @@ class TimeSteppedCar(
   /**
    * Create temporary MicroVehicleState from CarState for model calculations
    */
-  private def createTempMicroVehicleState(context: MicroVehicleContext): org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState = {
-    org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState(
+  private def createTempMicroVehicleState(context: MicroVehicleContext): MicroVehicleState = {
+    MicroVehicleState(
       vehicleId = getEntityId,
       speed = estimateCurrentSpeed(context),
       position = estimateCurrentPosition(context),
@@ -465,8 +465,8 @@ class TimeSteppedCar(
    * Evaluate lane change desire using MOBIL model
    */
   private def evaluateLaneChangeDesire(
-    vehicle: org.interscity.htc.model.mobility.entity.state.micro.MicroVehicleState,
-    context: MicroVehicleContext
+                                        vehicle: MicroVehicleState,
+                                        context: MicroVehicleContext
   ): Option[Int] = {
     
     val currentLane = context.currentLane

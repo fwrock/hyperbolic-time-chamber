@@ -74,7 +74,7 @@ class TimeManagerRouter(
     // 3. Criar pool de TimeSteppedSimulationTimeManagers usando SmallestMailboxPool
     val timeSteppedRouter = context.actorOf(
       SmallestMailboxPool(poolSizePerParadigm).props(
-        TimeSteppedSimulationTimeManager.props(globalTimeManager, simulationDuration, simulationManager, stepSize = 1)
+        TimeSteppedTimeManager.props(globalTimeManager, simulationDuration, simulationManager, stepSize = 1)
       ),
       name = "TimeSteppedSimulationPool"
     )
@@ -83,7 +83,7 @@ class TimeManagerRouter(
     // 4. Criar pool de OptimisticSimulationTimeManagers usando RoundRobinPool
     val optimisticRouter = context.actorOf(
       RoundRobinPool(poolSizePerParadigm).props(
-        OptimisticSimulationTimeManager.props(globalTimeManager, simulationDuration, simulationManager, windowSize = 100)
+        OptimisticTimeWindowTimeManager.props(globalTimeManager, simulationDuration, simulationManager, windowSize = 100)
       ),
       name = "OptimisticSimulationPool"
     )
@@ -185,21 +185,6 @@ class TimeManagerRouter(
    * Obtém referência para o GlobalTimeManager (para debug/teste)
    */
   def getGlobalTimeManager: ActorRef = globalTimeManager
-
-  /**
-   * Retorna estatísticas do router
-   */
-  def getStatistics: String = {
-    val poolStats = localTimeManagerRouters.map { case (policy, router) =>
-      s"    $policy: Pool de $poolSizePerParadigm instâncias (${router.path.name})"
-    }.mkString("\n")
-    
-    s"""TimeManagerRouter Statistics:
-       |  Initialized: $isInitialized
-       |  Global Time Manager: ${if (globalTimeManager != null) globalTimeManager.path.name else "null"}
-       |  Local Time Manager Routers: ${localTimeManagerRouters.size} tipos
-       |$poolStats""".stripMargin
-  }
 }
 
 object TimeManagerRouter {

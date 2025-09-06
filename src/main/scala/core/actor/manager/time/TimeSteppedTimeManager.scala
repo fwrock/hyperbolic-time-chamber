@@ -1,25 +1,26 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.entity.event.{ EntityEnvelopeEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, SpontaneousEvent}
 import core.types.Tick
-import core.actor.manager.time.protocol._
+import core.actor.manager.time.protocol.*
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.core.entity.event.control.execution.{ RegisterActorEvent, StartSimulationTimeEvent }
-import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.htc.protobuf.core.entity.event.control.execution.{RegisterActorEvent, StartSimulationTimeEvent}
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum.TimeStepped
+import org.interscity.htc.core.enumeration.{CreationTypeEnum, LocalTimeManagerTypeEnum}
 import org.interscity.htc.core.util.StringUtil
 
 import scala.collection.mutable
 
 /**
- * TimeSteppedSimulationTimeManager - Gerenciador de tempo para simulação sincronizada por passos.
+ * TimeSteppedSimulationTimeManager - Time Manager for simulation synchronized by steps.
  * 
- * Coordena atores que avançam em passos de tempo fixos e sincronizados,
- * ideal para simulações de mobilidade e sistemas que requerem coordenação temporal.
+ * This actor is responsible for manage another actors that advance time in fixed steps and synchronized.
+ * Each actor must report when it has completed processing for the current step before the simulation can advance.
  */
-class TimeSteppedSimulationTimeManager(
+class TimeSteppedTimeManager(
   override val globalTimeManager: ActorRef,
   override val simulationDuration: Tick,
   override val simulationManager: ActorRef,
@@ -31,9 +32,8 @@ class TimeSteppedSimulationTimeManager(
       actorId = s"TimeSteppedSimulationTimeManager-${System.nanoTime()}"
     ) {
 
-  override def ltmType: String = "TimeSteppedSimulation"
+  override def ltmType: LocalTimeManagerTypeEnum = TimeStepped
 
-  // Estado específico do Time-Stepped
   private val registeredActors = mutable.Map[String, TimeSteppedActorInfo]()
   private val tickBarrier = mutable.Map[Tick, TickBarrierInfo]()
   private var currentProcessingTick: Option[Tick] = None
@@ -305,31 +305,14 @@ class TimeSteppedSimulationTimeManager(
       logDebug(s"Ator $actorId marcado como inativo")
     }
   }
-
-  /**
-   * Obtém estatísticas do TimeStepped para debug
-   */
-  def getStatistics: String = {
-    val activeActors = registeredActors.values.count(_.isActive)
-    val inactiveActors = registeredActors.size - activeActors
-    
-    s"""TimeStepped_LTM Statistics:
-       |  Current Time: $currentLocalTime
-       |  Step Size: $stepSize
-       |  Active Actors: $activeActors
-       |  Inactive Actors: $inactiveActors
-       |  Current Processing Tick: ${currentProcessingTick.getOrElse("None")}
-       |  Active Barriers: ${tickBarrier.size}
-       |  Is Active: $isActive""".stripMargin
-  }
 }
 
-object TimeSteppedSimulationTimeManager {
+object TimeSteppedTimeManager {
   def props(
     globalTimeManager: ActorRef,
     simulationDuration: Tick,
     simulationManager: ActorRef,
     stepSize: Tick = 1
   ): Props =
-    Props(classOf[TimeSteppedSimulationTimeManager], globalTimeManager, simulationDuration, simulationManager, stepSize)
+    Props(classOf[TimeSteppedTimeManager], globalTimeManager, simulationDuration, simulationManager, stepSize)
 }

@@ -2,10 +2,12 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.types.Tick
-import core.actor.manager.time.protocol._
+import core.actor.manager.time.protocol.*
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.htc.protobuf.core.entity.event.control.execution.{ RegisterActorEvent, StartSimulationTimeEvent }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.htc.protobuf.core.entity.event.control.execution.{RegisterActorEvent, StartSimulationTimeEvent}
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum.OptimisticTimeWindow
 
 import scala.collection.mutable
 
@@ -23,7 +25,7 @@ import scala.collection.mutable
  * NOTA: Esta é uma implementação esqueleto para demonstrar a arquitetura.
  * A implementação completa requer algoritmos sofisticados de simulação otimística.
  */
-class OptimisticSimulationTimeManager(
+class OptimisticTimeWindowTimeManager(
   override val globalTimeManager: ActorRef,
   override val simulationDuration: Tick,
   override val simulationManager: ActorRef,
@@ -35,7 +37,7 @@ class OptimisticSimulationTimeManager(
       actorId = s"OptimisticSimulationTimeManager-${System.nanoTime()}"
     ) {
 
-  override def ltmType: String = "OptimisticSimulation"
+  override def ltmType: LocalTimeManagerTypeEnum = OptimisticTimeWindow
 
   // Estado específico do Time Window (placeholder para implementação futura)
   private val registeredActors = mutable.Set[String]()
@@ -271,29 +273,14 @@ class OptimisticSimulationTimeManager(
     logInfo(s"  Eventos otimísticos pendentes: ${optimisticEvents.size}")
     logInfo(s"  Pontos de rollback salvos: ${rollbackPoints.size}")
   }
-
-  /**
-   * Obtém estatísticas do TimeWindow para debug
-   */
-  def getStatistics: String = {
-    s"""TimeWindow_LTM Statistics:
-       |  Current Time: $currentLocalTime
-       |  Window: [$currentWindowStart, $currentWindowEnd)
-       |  Window Size: $windowSize
-       |  Registered Actors: ${registeredActors.size}
-       |  Optimistic Events: ${optimisticEvents.size}
-       |  Rollback Points: ${rollbackPoints.size}
-       |  Is Active: $isActive
-       |  Status: IMPLEMENTAÇÃO ESQUELETO""".stripMargin
-  }
 }
 
-object OptimisticSimulationTimeManager {
+object OptimisticTimeWindowTimeManager {
   def props(
     globalTimeManager: ActorRef,
     simulationDuration: Tick,
     simulationManager: ActorRef,
     windowSize: Tick = 100
   ): Props =
-    Props(classOf[OptimisticSimulationTimeManager], globalTimeManager, simulationDuration, simulationManager, windowSize)
+    Props(classOf[OptimisticTimeWindowTimeManager], globalTimeManager, simulationDuration, simulationManager, windowSize)
 }

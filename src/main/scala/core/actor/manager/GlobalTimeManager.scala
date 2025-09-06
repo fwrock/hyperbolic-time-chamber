@@ -288,13 +288,14 @@ class GlobalTimeManager(
   /**
    * Retorna estatísticas do GlobalTimeManager para debug
    */
-  def getStatistics: String = {
-    s"""GlobalTimeManager Statistics:
-       |  Global Time: $globalTime
-       |  Lower Bound Time Stamp: $lowerBoundTimeStamp
-       |  Registered LocalTimeManagers: ${localTimeManagers.size}
-       |  Current Phase: $synchronizationPhase
-       |  Simulation Running: $isSimulationRunning""".stripMargin
+  override def getStatistics: Map[String, Any] = {
+    Map(
+      "GlobalTime" -> globalTime,
+      "LowerBoundTimeStamp" -> lowerBoundTimeStamp,
+      "RegisteredLocalTimeManagers" -> localTimeManagers.size,
+      "CurrentPhase" -> synchronizationPhase.toString,
+      "IsSimulationRunning" -> isSimulationRunning
+    )
   }
 }
 

@@ -1,22 +1,23 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
+import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.types.Tick
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.entity.control.{ LocalTimeManagerTickInfo, ScheduledActors }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.entity.control.{LocalTimeManagerInfo, ScheduledActors}
 import core.entity.state.DefaultState
 
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.util.{ ManagerConstantsUtil, StringUtil }
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.enumeration.{CreationTypeEnum, LocalTimeManagerTypeEnum}
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum.DiscreteEventSimulation
+import org.interscity.htc.core.util.{ManagerConstantsUtil, StringUtil}
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 
@@ -44,34 +45,40 @@ class TimeManager(
   private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
   private val scheduledTicksOnFinish = mutable.Set[Tick]()
   private val runningEvents = mutable.Set[Identify]()
-  private var timeManagersPool: ActorRef = _
+
+  private val localTimeManagerPools = mutable.Map[LocalTimeManagerTypeEnum, ActorRef]()
 
   private var countScheduled = 0
 
-  private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
+  private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerInfo] = mutable.Map()
 
   override def onStart(): Unit =
     if (parentManager.isEmpty) {
-      createTimeManagersPool()
+      createTimeManagerPools()
     } else {
-      parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
+      parentManager.get ! TimeManagerRegisterEvent(actorRef = self, localTimeManagerType = DiscreteEventSimulation)
     }
 
-  private def createTimeManagersPool(): Unit = {
-    val totalInstances = 64
-    val maxInstancesPerNode = Math.max(8, totalInstances / 8)
-    timeManagersPool = context.actorOf(
-      ClusterRouterPool(
-        RoundRobinPool(0),
-        ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
+  private def createTimeManagerPools(): Unit = {
+    LocalTimeManagerTypeEnum.values.foreach {
+      localTimeManagerType =>
+        val totalInstances = 64
+        val maxInstancesPerNode = Math.max(8, totalInstances / 8)
+        val pool = context.actorOf(
+          ClusterRouterPool(
+            RoundRobinPool(0),
+            ClusterRouterPoolSettings(
+              totalInstances = totalInstances,
+              maxInstancesPerNode = maxInstancesPerNode,
+              allowLocalRoutees = true
+            )
+          ).props(TimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))),
+          name = POOL_TIME_MANAGER_ACTOR_NAME
         )
-      ).props(TimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))),
-      name = POOL_TIME_MANAGER_ACTOR_NAME
-    )
-    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+        localTimeManagerPools.put(localTimeManagerType, pool)
+        // Arrumar evento de registro preciso mandar logo todos os pools
+        simulationManager ! TimeManagerRegisterEvent(actorRef = pool, localTimeManagerType = localTimeManagerType)
+    }
   }
 
   override def handleEvent: Receive = {
@@ -93,7 +100,7 @@ class TimeManager(
   private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
     localTimeManagers.put(
       timeManagerRegisterEvent.actorRef,
-      LocalTimeManagerTickInfo(
+      LocalTimeManagerInfo(
         tick = localTickOffset
       )
     )
@@ -171,7 +178,7 @@ class TimeManager(
     if (parentManager.isEmpty) {
       localTimeManagers.update(
         localManager,
-        LocalTimeManagerTickInfo(
+        LocalTimeManagerInfo(
           tick = tick,
           hasSchedule = hasScheduled,
           isProcessed = true
@@ -195,7 +202,7 @@ class TimeManager(
       timeManager =>
         localTimeManagers.update(
           timeManager,
-          LocalTimeManagerTickInfo(
+          LocalTimeManagerInfo(
             tick = nextTick
           )
         )
@@ -280,9 +287,9 @@ class TimeManager(
         reportGlobalTimeManager()
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-//    if (tick % 500 == 0) {
-    logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
-//    }
+    if (tick % 500 == 0) {
+      logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
+    }
     actorsRef.foreach {
       actor =>
         sendSpontaneousEvent(tick, actor)
