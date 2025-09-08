@@ -3,7 +3,7 @@ package model.mobility.actor
 
 import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
-import core.actor.manager.time.protocol.{ AdvanceToTick, TickCompleted }
+import core.entity.event.control.simulation.{ AdvanceToTick, TickCompleted }
 import core.enumeration.TimePolicyEnum
 
 import org.htc.protobuf.core.entity.actor.Identify

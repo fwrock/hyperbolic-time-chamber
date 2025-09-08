@@ -3,7 +3,7 @@ package model.mobility.actor
 
 import core.actor.BaseActor
 import model.mobility.entity.state.LinkState
-import core.actor.manager.time.protocol.{ AdvanceToTick, TickCompleted }
+import core.entity.event.control.simulation.{ AdvanceToTick, TickCompleted }
 import core.enumeration.TimePolicyEnum
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent

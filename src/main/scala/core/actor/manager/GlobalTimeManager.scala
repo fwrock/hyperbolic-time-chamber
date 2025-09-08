@@ -1,305 +1,284 @@
 package org.interscity.htc
 package core.actor.manager
 
-import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
+import core.actor.manager.base.BaseTimeManager
+import core.entity.event.SpontaneousEvent
 import core.types.Tick
-import core.actor.manager.time.protocol._
-import core.actor.manager.time.LocalTimeManager
+import core.entity.control.LocalTimeManagerInfo
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.entity.state.DefaultState
-
-import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
-import org.interscity.htc.core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.RoundRobinPool
+import org.htc.protobuf.core.entity.event.control.execution._
+import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 
 /**
- * GlobalTimeManager (GTM) - Coordenador central do tempo global na simulação multi-paradigma.
+ * Global Time Manager - Central coordinator for distributed time management.
  * 
- * Responsabilidades:
- * - Manter uma lista de LocalTimeManagers (LTMs) registrados
- * - Implementar o protocolo de sincronização de 4 fases
- * - Ser a autoridade sobre o tempo global (LBTS - Lower Bound Time Stamp)
- * - Coordenar o avanço de tempo entre diferentes paradigmas
+ * The GlobalTimeManager serves as the master coordinator for all Local Time Managers
+ * in the Hyperbolic Time Chamber simulation system. It manages the global simulation
+ * clock, coordinates time advancement across different simulation paradigms, and
+ * creates distributed pools of Local Time Managers using Apache Pekko clustering.
+ * 
+ * Key responsibilities include:
+ * - Creating and managing pools of Local Time Managers by type (DES, TimeStepped, Optimistic)
+ * - Coordinating global time advancement across all LTMs
+ * - Broadcasting time synchronization events
+ * - Collecting and aggregating time reports from LTMs
+ * - Managing simulation lifecycle at the global level
+ * 
+ * The GlobalTimeManager uses native Pekko ClusterRouterPool for efficient distribution
+ * of LTM instances across cluster nodes, providing both scalability and fault tolerance.
+ * 
+ * @param simulationDuration Maximum duration of the simulation in ticks
+ * @param simulationManager Reference to the main simulation manager
+ * 
+ * @author Hyperbolic Time Chamber Team
+ * @version 1.4.0
+ * @since 1.0.0
  */
 class GlobalTimeManager(
-  val simulationDuration: Tick,
-  val simulationManager: ActorRef
-) extends BaseManager[DefaultState](
-      timeManager = null,
+  simulationDuration: Tick,
+  simulationManager: ActorRef
+) extends BaseTimeManager(
+      simulationDuration = simulationDuration,
+      simulationManager = simulationManager,
       actorId = GLOBAL_TIME_MANAGER_ACTOR_NAME
     ) {
 
-  // Estado interno do GlobalTimeManager
-  private var globalTime: Tick = 0
-  private var lowerBoundTimeStamp: Tick = 0  // Lower Bound Time Stamp
-  private var isSimulationRunning: Boolean = false
+  /**
+   * Map of Local Time Manager pools organized by their type.
+   * Each entry contains a ClusterRouterPool ActorRef for the specific LTM type.
+   */
+  private val localTimeManagerPools = mutable.Map[LocalTimeManagerTypeEnum, ActorRef]()
   
-  // Registro de LocalTimeManagers
+  /**
+   * Map of registered Local Time Managers with their coordination information.
+   * Contains ActorRef to LocalTimeManagerInfo mappings for active LTMs.
+   */
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerInfo] = mutable.Map()
-  
-  // Protocolo de sincronização de 4 fases
-  private var synchronizationPhase: SynchronizationPhase = SynchronizationPhase.Idle
-  private val phaseResponses: mutable.Set[ActorRef] = mutable.Set()
 
-  case class LocalTimeManagerInfo(
-    managerType: String,  // "DiscreteEventSimulation", "TimeSteppedSimulation", "OptimisticSimulation"
-    currentTime: Tick,
-    proposedTime: Option[Tick] = None,
-    isReady: Boolean = false
-  )
-
-  sealed trait SynchronizationPhase
-  object SynchronizationPhase {
-    case object Idle extends SynchronizationPhase
-    case object RequestTime extends SynchronizationPhase
-    case object ProposeTime extends SynchronizationPhase
-    case object GrantTime extends SynchronizationPhase
-    case object Acknowledge extends SynchronizationPhase
-  }
-
+  /**
+   * Called when the Global Time Manager starts up.
+   * 
+   * Performs parent class initialization and creates Local Time Manager pools
+   * for all supported simulation paradigms.
+   */
   override def onStart(): Unit = {
-    logInfo("GlobalTimeManager iniciado - Aguardando registros de LocalTimeManagers")
-  }
-
-  override def handleEvent: Receive = {
-    case start: StartSimulationTimeEvent => startSimulation(start)
-    case register: RegisterLTMEvent => registerLocalTimeManager(register)
-    
-    // Protocolo de sincronização de 4 fases
-    case request: TimeRequestEvent => handleTimeRequest(request)
-    case propose: TimeProposeEvent => handleTimePropose(propose)
-    case ack: TimeAcknowledgeEvent => handleTimeAcknowledge(ack)
-    
-    case StopSimulationEvent => stopSimulation()
-    case _ => logWarn("Evento não tratado no GTM")
+    super.onStart()
+    createLocalTimeManagerPools()
   }
 
   /**
-   * Registra um novo LocalTimeManager no GlobalTimeManager
+   * Cria pools para cada tipo de Local Time Manager
    */
-  private def registerLocalTimeManager(register: RegisterLTMEvent): Unit = {
-    val managerInfo = LocalTimeManagerInfo(
-      managerType = register.ltmType,
-      currentTime = globalTime
+  private def createLocalTimeManagerPools(): Unit = {
+    LocalTimeManagerTypeEnum.values.foreach { localTimeManagerType =>
+      val totalInstances = 64
+      val maxInstancesPerNode = Math.max(8, totalInstances / 8)
+      
+      val pool = context.actorOf(
+        ClusterRouterPool(
+          RoundRobinPool(0),
+          ClusterRouterPoolSettings(
+            totalInstances = totalInstances,
+            maxInstancesPerNode = maxInstancesPerNode,
+            allowLocalRoutees = true
+          )
+        ).props(createLocalTimeManagerProps(localTimeManagerType)),
+        name = s"$POOL_TIME_MANAGER_ACTOR_NAME-${localTimeManagerType.toString}"
+      )
+      
+      localTimeManagerPools.put(localTimeManagerType, pool)
+      
+      // Registrar pool com SimulationManager
+      simulationManager ! TimeManagerRegisterEvent(
+        actorRef = pool,
+        localTimeManagerType = localTimeManagerType
+      )
+      
+      logInfo(s"Pool created for ${localTimeManagerType}: ${pool.path}")
+    }
+  }
+
+  /**
+   * Creates Props for a specific Local Time Manager type.
+   * 
+   * This factory method creates the appropriate Props object for instantiating
+   * Local Time Managers based on their type. Each LTM type has different
+   * constructor parameters and capabilities.
+   * 
+   * @param ltmType The type of Local Time Manager to create Props for
+   * @return Props object configured for the specific LTM implementation
+   */
+  private def createLocalTimeManagerProps(ltmType: LocalTimeManagerTypeEnum): Props = {
+    ltmType match {
+      case LocalTimeManagerTypeEnum.DiscreteEventSimulation =>
+        DiscreteEventSimulationTimeManager.props(simulationDuration, simulationManager, self)
+      case LocalTimeManagerTypeEnum.TimeStepped =>
+        TimeSteppedTimeManager.props(simulationDuration, simulationManager, self)
+      case LocalTimeManagerTypeEnum.OptimisticTimeWindow =>
+        OptimisticTimeWindowTimeManager.props(simulationDuration, simulationManager, self)
+    }
+  }
+
+  /**
+   * Specific event receiver for Global Time Manager.
+   * 
+   * Handles events specific to global time coordination including:
+   * - LTM registration events from newly created Local Time Managers
+   * - Local time reports from LTMs for synchronization
+   * 
+   * @return Partial function for handling GTM-specific events
+   */
+  override protected def specificReceive: Receive = {
+    case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
+      registerLocalTimeManager(timeManagerRegisterEvent)
+    case localTimeReport: LocalTimeReportEvent =>
+      handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+  }
+
+  /**
+   * Registers a Local Time Manager with the Global Time Manager.
+   * 
+   * Adds the LTM to the coordination registry and initializes its
+   * tracking information for time synchronization.
+   * 
+   * @param event The registration event containing LTM details
+   */
+  private def registerLocalTimeManager(event: TimeManagerRegisterEvent): Unit = {
+    localTimeManagers.put(
+      event.actorRef,
+      LocalTimeManagerInfo(
+        tick = localTickOffset,
+        localTimeManagerType = event.localTimeManagerType
+      )
     )
-    
-    localTimeManagers.put(sender(), managerInfo)
-    logInfo(s"LocalTimeManager registrado: ${register.ltmType} - Total: ${localTimeManagers.size}")
-    
-    // Responder com confirmação de registro
-    sender() ! LTMRegistrationConfirmEvent(globalTime)
+    logInfo(s"Registered Local Time Manager: ${event.localTimeManagerType}")
   }
 
   /**
-   * Inicia a simulação e o protocolo de sincronização
+   * Handle para relatórios de Local Time Managers
    */
-  private def startSimulation(start: StartSimulationTimeEvent): Unit = {
-    globalTime = start.startTick
-    lowerBoundTimeStamp = start.startTick
-    isSimulationRunning = true
-    
-    logInfo(s"Simulação iniciada no tempo global: $globalTime")
-    
-    // Iniciar primeira rodada de sincronização
-    if (localTimeManagers.nonEmpty) {
-      startSynchronizationCycle()
-    }
-  }
-
-  /**
-   * Para a simulação
-   */
-  private def stopSimulation(): Unit = {
-    isSimulationRunning = false
-    
-    // Notificar todos os LocalTimeManagers para parar
-    localTimeManagers.keys.foreach { manager =>
-      manager ! StopSimulationEvent
-    }
-    
-    logInfo(s"Simulação finalizada no tempo global: $globalTime")
-    context.stop(self)
-  }
-
-  /**
-   * FASE 1: Request Time - Solicita tempo atual de todos os LocalTimeManagers
-   */
-  private def startSynchronizationCycle(): Unit = {
-    if (!isSimulationRunning || localTimeManagers.isEmpty) return
-    
-    synchronizationPhase = SynchronizationPhase.RequestTime
-    phaseResponses.clear()
-    
-    logDebug(s"Iniciando ciclo de sincronização - Fase 1: RequestTime (tempo global: $globalTime)")
-    
-    // Solicitar tempo atual de todos os LocalTimeManagers
-    localTimeManagers.keys.foreach { manager =>
-      manager ! TimeRequestEvent(globalTime)
+  private def handleLocalTimeReport(
+    localManager: ActorRef,
+    tick: Tick,
+    hasScheduled: Boolean
+  ): Unit = {
+    localTimeManagers.get(localManager) match {
+      case Some(info) =>
+        localTimeManagers.update(
+          localManager,
+          info.copy(
+            tick = tick,
+            hasSchedule = hasScheduled,
+            isProcessed = true
+          )
+        )
+        
+        // Se todos os LTMs processaram, calcular próximo tempo global
+        if (localTimeManagers.values.forall(_.isProcessed)) {
+          calculateAndBroadcastNextGlobalTick()
+        }
+        
+      case None =>
+        logWarn(s"A report received from Local Time Manager was not registered: $localManager")
     }
   }
 
   /**
-   * FASE 2: Processa respostas da solicitação de tempo
+   * Calculates the next global time for broadcast local time managers ticks
    */
-  private def handleTimeRequest(request: TimeRequestEvent): Unit = {
-    if (synchronizationPhase != SynchronizationPhase.RequestTime) {
-      logWarn(s"Recebido TimeRequestEvent fora da fase RequestTime")
-      return
-    }
-
-    val timeManager = sender()
-    phaseResponses.add(timeManager)
-    
-    // Atualizar informações do LocalTimeManager
-    localTimeManagers.get(timeManager).foreach { info =>
-      localTimeManagers.update(timeManager, info.copy(currentTime = globalTime))
-    }
-
-    // Se todos responderam, ir para próxima fase
-    if (phaseResponses.size == localTimeManagers.size) {
-      proceedToProposePhase()
-    }
-  }
-
-  /**
-   * FASE 3: Propose Time - Calcula LowerBoundTimeStamp e propõe novo tempo
-   */
-  private def proceedToProposePhase(): Unit = {
-    synchronizationPhase = SynchronizationPhase.ProposeTime
-    phaseResponses.clear()
-    
-    // Calcular Lower Bound Time Stamp
-    val currentTimes = localTimeManagers.values.map(_.currentTime)
-    lowerBoundTimeStamp = if (currentTimes.nonEmpty) currentTimes.min else globalTime
-    
-    // Determinar próximo tempo global
-    val nextGlobalTime = calculateNextGlobalTime()
-    
-    logDebug(s"Fase 2: ProposeTime - LowerBoundTimeStamp: $lowerBoundTimeStamp, Próximo tempo: $nextGlobalTime")
-    
-    // Propor novo tempo para todos os LocalTimeManagers
-    localTimeManagers.keys.foreach { manager =>
-      manager ! TimeProposeEvent(nextGlobalTime, lowerBoundTimeStamp)
-    }
-  }
-
-  /**
-   * FASE 4: Processa propostas de tempo dos LocalTimeManagers
-   */
-  private def handleTimePropose(propose: TimeProposeEvent): Unit = {
-    if (synchronizationPhase != SynchronizationPhase.ProposeTime) {
-      logWarn(s"Recebido TimeProposeEvent fora da fase ProposeTime")
-      return
-    }
-
-    val timeManager = sender()
-    phaseResponses.add(timeManager)
-    
-    // Atualizar proposta do LocalTimeManager
-    localTimeManagers.get(timeManager).foreach { info =>
-      localTimeManagers.update(timeManager, info.copy(proposedTime = Some(propose.proposedTime)))
-    }
-
-    // Se todos responderam, ir para fase de concessão
-    if (phaseResponses.size == localTimeManagers.size) {
-      proceedToGrantPhase()
-    }
-  }
-
-  /**
-   * FASE 5: Grant Time - Concede tempo para avanço
-   */
-  private def proceedToGrantPhase(): Unit = {
-    synchronizationPhase = SynchronizationPhase.GrantTime
-    phaseResponses.clear()
-    
-    // Determinar tempo final baseado nas propostas
-    val proposedTimes = localTimeManagers.values.flatMap(_.proposedTime)
-    val grantedTime = if (proposedTimes.nonEmpty) proposedTimes.min else globalTime + 1
-    
-    // Verificar se simulação deve continuar
-    if (grantedTime >= globalTime + simulationDuration) {
-      stopSimulation()
-      return
-    }
-    
-    globalTime = grantedTime
-    
-    logDebug(s"Fase 3: GrantTime - Tempo concedido: $grantedTime")
-    
-    // Conceder tempo para todos os LocalTimeManagers
-    localTimeManagers.keys.foreach { manager =>
-      manager ! GrantTimeAdvanceEvent(grantedTime)
-    }
-  }
-
-  /**
-   * FASE 6: Processa acknowledgments dos LocalTimeManagers
-   */
-  private def handleTimeAcknowledge(ack: TimeAcknowledgeEvent): Unit = {
-    if (synchronizationPhase != SynchronizationPhase.GrantTime) {
-      logWarn(s"Recebido TimeAcknowledgeEvent fora da fase GrantTime")
-      return
-    }
-
-    val timeManager = sender()
-    phaseResponses.add(timeManager)
-    
-    logDebug(s"Acknowledgment recebido do LocalTimeManager: ${localTimeManagers.get(timeManager).map(_.managerType).getOrElse("unknown")}")
-
-    // Se todos acknowledgaram, completar ciclo
-    if (phaseResponses.size == localTimeManagers.size) {
-      completeSynchronizationCycle()
-    }
-  }
-
-  /**
-   * Completa o ciclo de sincronização e inicia o próximo
-   */
-  private def completeSynchronizationCycle(): Unit = {
-    synchronizationPhase = SynchronizationPhase.Idle
-    
-    logDebug(s"Ciclo de sincronização completo no tempo global: $globalTime")
-    
-    // Aguardar um pouco antes do próximo ciclo (para permitir processamento)
-    import scala.concurrent.duration._
-    context.system.scheduler.scheduleOnce(1.millisecond, self, "START_NEXT_CYCLE")(context.dispatcher)
-  }
-
-  override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    if (event.tick == 0 && isSimulationRunning) {
-      startSynchronizationCycle()
+  private def calculateAndBroadcastNextGlobalTick(): Unit = {
+    val scheduledLTMs = localTimeManagers.values.filter(_.hasSchedule)
+    val nextTick = if (scheduledLTMs.nonEmpty) {
+      scheduledLTMs.map(_.tick).min
     } else {
-      logDebug(s"Evento espontâneo não tratado: ${event.tick}")
+      localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+    }
+    
+    localTickOffset = nextTick
+    tickOffset = nextTick - initialTick
+    
+    logDebug(s"Next global time: $localTickOffset")
+    
+    localTimeManagers.keys.foreach { ltm =>
+      localTimeManagers.get(ltm).foreach { info =>
+        localTimeManagers.update(ltm, info.copy(isProcessed = false))
+      }
+    }
+    
+    notifyLocalTimeManagers(UpdateGlobalTimeEvent(localTickOffset))
+  }
+
+  /**
+   * Notifica todos os Local Time Managers
+   */
+  private def notifyLocalTimeManagers(event: Any): Unit = {
+    localTimeManagers.keys.foreach { ltm =>
+      ltm ! event
+    }
+  }
+
+  override protected def onSimulationStart(start: StartSimulationTimeEvent): Unit = {
+    logInfo(s"Global Time Manager started at tick ${start.startTick}")
+    notifyLocalTimeManagers(start)
+  }
+
+  override protected def onSimulationPause(): Unit = {
+    notifyLocalTimeManagers(PauseSimulationEvent)
+  }
+
+  override protected def onSimulationResume(): Unit = {
+    notifyLocalTimeManagers(ResumeSimulationEvent)
+  }
+
+  override protected def onSimulationStop(): Unit = {
+    notifyLocalTimeManagers(StopSimulationEvent)
+  }
+
+  override protected def getLabel: String = "GlobalTimeManager"
+
+  override def actSpontaneous(spontaneous: SpontaneousEvent): Unit = {
+    if (isRunning) {
+      logDebug(s"Spontaneous event received in Global Time Manager: ${spontaneous.tick}")
     }
   }
 
   /**
-   * Calcula o próximo tempo global baseado no estado atual dos LocalTimeManagers
-   */
-  private def calculateNextGlobalTime(): Tick = {
-    // Por enquanto, avanço incremental simples
-    // Pode ser refinado baseado nas necessidades específicas dos LocalTimeManagers
-    globalTime + 1
-  }
-
-  /**
-   * Retorna estatísticas do GlobalTimeManager para debug
+   * Returns statistics about the Global Time Manager.
+   * 
+   * Provides comprehensive metrics about the global time coordination state
+   * including current time, registered LTMs, active pools, and running status.
+   * 
+   * @return Map containing key performance and state metrics
    */
   override def getStatistics: Map[String, Any] = {
     Map(
-      "GlobalTime" -> globalTime,
-      "LowerBoundTimeStamp" -> lowerBoundTimeStamp,
-      "RegisteredLocalTimeManagers" -> localTimeManagers.size,
-      "CurrentPhase" -> synchronizationPhase.toString,
-      "IsSimulationRunning" -> isSimulationRunning
+      "currentGlobalTime" -> localTickOffset,
+      "registeredLTMs" -> localTimeManagers.size,
+      "ltmPools" -> localTimeManagerPools.keys.map(_.toString).toList,
+      "isRunning" -> isRunning
     )
   }
 }
 
+/**
+ * Companion object for GlobalTimeManager containing factory methods.
+ */
 object GlobalTimeManager {
+  
+  /**
+   * Creates Props for GlobalTimeManager actor instantiation.
+   * 
+   * @param simulationDuration Maximum duration of the simulation in ticks
+   * @param simulationManager Reference to the main simulation manager
+   * @return Props object for creating GlobalTimeManager actors
+   */
   def props(
     simulationDuration: Tick,
     simulationManager: ActorRef

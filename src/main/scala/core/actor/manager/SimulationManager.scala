@@ -14,8 +14,10 @@ import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, 
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
-import core.actor.manager.TimeManagerRouter
 
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum
+
+import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class SimulationManager(
@@ -26,7 +28,7 @@ class SimulationManager(
     ) {
 
   private var timeSingletonManager: ActorRef = uninitialized
-  private var poolTimeManager: ActorRef = uninitialized
+  private val poolTimeManagers = mutable.Map[LocalTimeManagerTypeEnum, ActorRef]()
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
@@ -68,17 +70,22 @@ class SimulationManager(
   }
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
-    poolTimeManager = event.actorRef
+    poolTimeManagers.put(event.localTimeManagerType, event.actorRef)
+    logInfo(s"Pool TimeManager registrado: ${event.localTimeManagerType} - Total: ${poolTimeManagers.size}")
     startLoadData()
   }
 
   private def startLoadData(): Unit =
-    if (poolTimeManager != null && reporters != null) {
-      loadManager = createSingletonLoadManager()
-      createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
-        actorRef = selfProxy,
-        actorsDataSources = configuration.actorsDataSources
-      )
+    if (poolTimeManagers.nonEmpty && reporters != null) {
+      // Usar pool DiscreteEventSimulation como padrão para LoadDataManager por compatibilidade
+      val defaultPool = poolTimeManagers.get(LocalTimeManagerTypeEnum.DiscreteEventSimulation)
+      if (defaultPool.isDefined) {
+        loadManager = createSingletonLoadManager(defaultPool.get)
+        createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
+          actorRef = selfProxy,
+          actorsDataSources = configuration.actorsDataSources
+        )
+      }
     }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
@@ -90,9 +97,9 @@ class SimulationManager(
 
   private def createSingletonTimeManager(): ActorRef =
     createSingletonManager(
-      manager = TimeManagerRouter.props(
+      manager = GlobalTimeManager.props(
         simulationDuration = configuration.duration,
-        simulationManager = getSelfProxy
+        simulationManager = getSelfProxy,
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
@@ -109,7 +116,7 @@ class SimulationManager(
       terminateMessage = StopSimulationEvent()
     )
 
-  private def createSingletonLoadManager(): ActorRef =
+  private def createSingletonLoadManager(poolTimeManager: ActorRef): ActorRef =
     createSingletonManager(
       manager = LoadDataManager.props(
         timeSingletonManager = timeSingletonManager,

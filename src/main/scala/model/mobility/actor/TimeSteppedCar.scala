@@ -3,7 +3,7 @@ package model.mobility.actor
 
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
-import core.actor.manager.time.protocol.{AdvanceToTick, TickCompleted}
+import core.entity.event.control.simulation.{AdvanceToTick, TickCompleted}
 import core.enumeration.TimePolicyEnum
 
 import org.interscity.htc.core.entity.actor.properties.Properties

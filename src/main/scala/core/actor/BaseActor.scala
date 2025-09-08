@@ -23,7 +23,7 @@ import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 import org.interscity.htc.core.enumeration.TimePolicyEnum
-import org.interscity.htc.core.actor.manager.time.protocol.{ AdvanceToTick, TickCompleted }
+import org.interscity.htc.core.entity.event.control.simulation.{ AdvanceToTick, TickCompleted }
 
 import java.util.UUID
 import scala.Long.MinValue
