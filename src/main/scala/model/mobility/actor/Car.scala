@@ -45,7 +45,7 @@ class Car(
       state.movableStatus = RouteWaiting
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
-          state.bestCost = cost
+          state.bestCost = cost // Car específico: armazena o custo da melhor rota
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
