@@ -7,6 +7,8 @@ import org.apache.pekko.actor.ActorRef
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.{PreparedStatement, SimpleStatement}
 import com.typesafe.config.Config
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 import java.time.LocalDateTime
 import scala.collection.mutable
@@ -33,6 +35,13 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
   private val buffer = mutable.ListBuffer[ReportEvent]()
   private var session: Option[CqlSession] = None
   private var insertStatement: Option[PreparedStatement] = None
+  
+  // JSON mapper para converter dados para JSON
+  private val objectMapper = {
+    val mapper = new ObjectMapper()
+    mapper.registerModule(DefaultScalaModule)
+    mapper
+  }
 
   override def preStart(): Unit = {
     super.preStart()
@@ -120,17 +129,26 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
             val createdAt = java.time.Instant.now()
             val timestamp = java.time.Instant.ofEpochMilli(report.timestamp)
             
+            // Converter dados para JSON em vez de toString
+            val dataJson = try {
+              objectMapper.writeValueAsString(report.data)
+            } catch {
+              case e: Exception =>
+                logError(s"Failed to convert data to JSON, falling back to toString: ${e.getMessage}", e)
+                report.data.toString
+            }
+            
             cqlSession.execute(preparedStmt.bind(
               uuid,                                    // id
               createdAt,                              // created_at
-              report.data.toString,                   // data
+              dataJson,                               // data (now as JSON)
               report.entityId,                        // node_id
               report.label,                           // report_type
               "simulation_" + System.currentTimeMillis(), // simulation_id
               timestamp                               // timestamp
             ))
           }
-          logDebug(s"Flushed ${buffer.size} reports to Cassandra")
+          logDebug(s"Flushed ${buffer.size} reports to Cassandra as JSON")
           buffer.clear()
         } catch {
           case e: Exception =>
