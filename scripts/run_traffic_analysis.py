@@ -37,11 +37,11 @@ def run_cassandra_analysis(limit: int = None):
     try:
         # Conectar ao Cassandra
         logger.info("🔌 Conectando ao Cassandra...")
-        cassandra_source = CassandraDataSource(CASSANDRA_CONFIG)
+        cassandra_source = CassandraDataSource()
         
         # Carregar dados
         logger.info(f"📊 Carregando dados (limite: {limit})...")
-        data = cassandra_source.get_vehicle_flows(limit=limit)
+        data = cassandra_source.get_vehicle_flow_data(limit=limit)
         
         if data.empty:
             logger.warning("⚠️ Nenhum dado encontrado no Cassandra")
