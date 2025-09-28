@@ -118,25 +118,26 @@ class CassandraDataSource:
             
             data = []
             for row in rows:
-                # Parse data - it's a HashMap string format, not JSON
+                # Parse data - should be JSON now (after Scala code fix)
                 data_str = row.data if isinstance(row.data, str) else str(row.data)
                 
-                # Parse HashMap format: HashMap(key -> value, key2 -> value2, ...)
-                report_data = {}
-                if data_str.startswith('HashMap(') and data_str.endswith(')'):
-                    # Remove HashMap( and )
-                    content = data_str[8:-1]
-                    # Split by ", " but be careful with -> in values
-                    pairs = content.split(', ')
-                    for pair in pairs:
-                        if ' -> ' in pair:
-                            key, value = pair.split(' -> ', 1)
-                            report_data[key.strip()] = value.strip()
-                else:
-                    # Try JSON parsing as fallback
-                    try:
-                        report_data = json.loads(data_str)
-                    except:
+                # Try JSON parsing first (new format)
+                try:
+                    report_data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    # Fallback: Parse HashMap format for old data
+                    report_data = {}
+                    if data_str.startswith('HashMap(') and data_str.endswith(')'):
+                        # Remove HashMap( and )
+                        content = data_str[8:-1]
+                        # Split by ", " but be careful with -> in values
+                        pairs = content.split(', ')
+                        for pair in pairs:
+                            if ' -> ' in pair:
+                                key, value = pair.split(' -> ', 1)
+                                report_data[key.strip()] = value.strip()
+                        logger.debug(f"Parsed HashMap format for backward compatibility")
+                    else:
                         logger.warning(f"Could not parse data: {data_str[:100]}...")
                         continue
                 
