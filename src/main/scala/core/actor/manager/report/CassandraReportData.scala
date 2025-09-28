@@ -1,38 +1,106 @@
 package org.interscity.htc
 package core.actor.manager.report
 
-import core.entity.event.control.report.ReportEvent
+import org.interscity.htc.core.entity.event.control.report.ReportEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
-import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.system.database.database.CreateEntityEvent
-import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CASSANDRA_ENTITY_MANAGER_REPORT_DATA_ACTOR_NAME_PREFIX
-import org.interscity.htc.system.database.cassandra.actor.CassandraEntityManager
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.{PreparedStatement, SimpleStatement}
+import com.typesafe.config.Config
 
 import java.time.LocalDateTime
 import scala.collection.mutable
-import scala.compiletime.uninitialized
+import scala.util.{Failure, Success, Try}
 
-class CassandraReportData(
-  override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
-) extends ReportData(
+class CassandraReportData(override val reportManager: ActorRef, override val startRealTime: LocalDateTime)
+    extends ReportData(
       id = "cassandra-report-manager",
       reportManager = reportManager,
       startRealTime = startRealTime
     ) {
 
-  private var driver: ActorRef = uninitialized
-
-  private val databaseSource = Some(
-    config.getString("htc.report-manager.cassandra.database-source")
-  ).getOrElse("default")
-  private val batchSize =
-    Some(config.getInt("htc.report-manager.cassandra.batch-size")).getOrElse(1000)
+  private val keyspace = Some(config.getString("htc.report-manager.cassandra.keyspace"))
+    .getOrElse("htc_reports")
+  private val table = Some(config.getString("htc.report-manager.cassandra.table"))
+    .getOrElse("simulation_reports")
+  private val batchSize = Some(config.getInt("htc.report-manager.cassandra.batch-size"))
+    .getOrElse(1000)
+  private val hosts = Some(config.getString("htc.report-manager.cassandra.hosts"))
+    .getOrElse("127.0.0.1:9042")
+  private val datacenter = Some(config.getString("htc.report-manager.cassandra.datacenter"))
+    .getOrElse("datacenter1")
 
   private val buffer = mutable.ListBuffer[ReportEvent]()
+  private var session: Option[CqlSession] = None
+  private var insertStatement: Option[PreparedStatement] = None
+
+  override def preStart(): Unit = {
+    super.preStart()
+    initializeCassandra()
+  }
+
+  private def initializeCassandra(): Unit = {
+    try {
+      val sessionBuilder = CqlSession.builder()
+        .addContactPoint(java.net.InetSocketAddress.createUnresolved(hosts.split(":")(0), hosts.split(":")(1).toInt))
+        .withLocalDatacenter(datacenter)
+        
+      session = Some(sessionBuilder.build())
+      
+      // Certifica que a tabela existe
+      createTableIfNotExists()
+      
+      // Prepara a statement de inserção
+      val insertQuery = s"""
+        INSERT INTO $keyspace.$table (
+          id, created_at, data, node_id, report_type, simulation_id, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      """
+      insertStatement = session.map(_.prepare(insertQuery))
+      
+      logInfo(s"Cassandra Report Data initialized - keyspace: $keyspace, table: $table")
+    } catch {
+      case e: Exception =>
+        logError(s"Failed to initialize Cassandra connection: ${e.getMessage}", e)
+    }
+  }
+
+  private def createTableIfNotExists(): Unit = {
+    session.foreach { cqlSession =>
+      try {
+        val createTableQuery = s"""
+          CREATE TABLE IF NOT EXISTS $keyspace.$table (
+            id UUID PRIMARY KEY,
+            created_at TIMESTAMP,
+            data TEXT,
+            node_id TEXT,
+            report_type TEXT,
+            simulation_id TEXT,
+            timestamp TIMESTAMP
+          )
+        """
+        // Tenta criar a tabela, mas não falha se já existir
+        try {
+          cqlSession.execute(createTableQuery)
+        } catch {
+          case _: Exception => // Tabela já existe, continua
+        }
+        
+        // Criar índices se não existirem
+        try {
+          cqlSession.execute(s"CREATE INDEX IF NOT EXISTS idx_report_type ON $keyspace.$table (report_type)")
+          cqlSession.execute(s"CREATE INDEX IF NOT EXISTS idx_simulation_id ON $keyspace.$table (simulation_id)")
+        } catch {
+          case _: Exception => // Índices já existem, continua
+        }
+        
+        logInfo(s"Table $keyspace.$table verified/created successfully")
+      } catch {
+        case e: Exception =>
+          logError(s"Failed to create table: ${e.getMessage}", e)
+      }
+    }
+  }
 
   override def onReport(event: ReportEvent): Unit = {
     buffer += event
@@ -42,50 +110,43 @@ class CassandraReportData(
   }
 
   private def flushBuffer(): Unit = {
-    buffer.foreach {
-      report =>
-        val fields = report.getClass.getDeclaredFields.map(_.getName)
-        val values = report.productIterator.toList.map(_.toString)
-        driver ! CreateEntityEvent(
-          table = "report",
-          columns = fields,
-          values = values
-        )
+    if (buffer.isEmpty) return
+    
+    (session, insertStatement) match {
+      case (Some(cqlSession), Some(preparedStmt)) =>
+        try {
+          buffer.foreach { report =>
+            val uuid = java.util.UUID.randomUUID()
+            val createdAt = java.time.Instant.now()
+            val timestamp = java.time.Instant.ofEpochMilli(report.timestamp)
+            
+            cqlSession.execute(preparedStmt.bind(
+              uuid,                                    // id
+              createdAt,                              // created_at
+              report.data.toString,                   // data
+              report.entityId,                        // node_id
+              report.label,                           // report_type
+              "simulation_" + System.currentTimeMillis(), // simulation_id
+              timestamp                               // timestamp
+            ))
+          }
+          logDebug(s"Flushed ${buffer.size} reports to Cassandra")
+          buffer.clear()
+        } catch {
+          case e: Exception =>
+            logError(s"Failed to flush reports to Cassandra: ${e.getMessage}", e)
+            // Não limpa o buffer em caso de erro para tentar novamente
+        }
+      case _ =>
+        logError("Cassandra session or prepared statement not available")
     }
-    buffer.clear()
   }
 
-  override def postStop(): Unit =
+  override def postStop(): Unit = {
     if (buffer.nonEmpty) {
       flushBuffer()
     }
-
-  private def getDriver: ActorRef =
-    if (driver == null) {
-      driver = createDriver()
-      driver
-    } else {
-      driver
-    }
-
-  private def createDriver(): ActorRef = {
-    val totalInstances = Some(
-      config.getInt(s"htc.databases.cassandra.${databaseSource}.actor.number-of-instances")
-    ).getOrElse(8)
-    val maxInstancesPerNode = Some(
-      config.getInt(s"htc.databases.cassandra.${databaseSource}.actor.number-of-instances-per-node")
-    ).getOrElse(1)
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(CassandraEntityManager.props(databaseSource, null)),
-      name = POOL_CASSANDRA_ENTITY_MANAGER_REPORT_DATA_ACTOR_NAME_PREFIX
-    )
+    session.foreach(_.close())
+    super.postStop()
   }
-
 }

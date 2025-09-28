@@ -37,6 +37,8 @@ services:
   ds-studio:
     image: datastax/dse-studio:latest
     container_name: htc-ds-studio
+    environment:
+      - DS_LICENSE=accept
     ports:
       - "9091:9091"
     depends_on:
