@@ -19,6 +19,9 @@ warnings.filterwarnings('ignore')
 import matplotlib
 matplotlib.use('Agg')
 
+from .id_mapper import IDMapper
+from .individual_comparator import IndividualComparator
+
 logger = logging.getLogger(__name__)
 
 class SimulatorComparator:
@@ -38,6 +41,10 @@ class SimulatorComparator:
         
         # Comparison results storage
         self.comparison_results = {}
+        
+        # Initialize ID mapper and individual comparator
+        self.id_mapper = IDMapper()
+        self.individual_comparator = IndividualComparator(output_path, self.id_mapper)
     
     def compare_traffic_flows(self, htc_data: pd.DataFrame, ref_data: pd.DataFrame) -> Dict[str, Any]:
         """
@@ -64,6 +71,10 @@ class SimulatorComparator:
             }
         }
         
+        # Build ID mappings
+        logger.info("🗂️ Construindo mapeamentos de IDs...")
+        self._build_id_mappings(htc_data, ref_data, comparison)
+        
         # Time-based comparison
         comparison['temporal_analysis'] = self._compare_temporal_patterns(htc_data, ref_data)
         
@@ -76,11 +87,56 @@ class SimulatorComparator:
         # Statistical similarity
         comparison['statistical_similarity'] = self._calculate_statistical_similarity(htc_data, ref_data)
         
-        # Overall similarity score
+        # Individual comparisons
+        logger.info("🎯 Executando comparações individuais...")
+        comparison['individual_vehicle_comparison'] = self.individual_comparator.compare_individual_vehicles(htc_data, ref_data)
+        comparison['individual_link_comparison'] = self.individual_comparator.compare_individual_links(htc_data, ref_data)
+        
+        # Overall similarity score (including individual results)
         comparison['overall_similarity'] = self._calculate_overall_similarity(comparison)
         
         self.comparison_results = comparison
         return comparison
+    
+    def _build_id_mappings(self, htc_data: pd.DataFrame, ref_data: pd.DataFrame, comparison: Dict[str, Any]):
+        """
+        Build ID mappings between HTC and reference simulators
+        
+        Args:
+            htc_data: HTC data
+            ref_data: Reference data
+            comparison: Comparison dictionary to update
+        """
+        # Get unique IDs
+        htc_cars = set(htc_data['car_id'].dropna().astype(str)) if not htc_data.empty else set()
+        ref_cars = set(ref_data['car_id'].dropna().astype(str)) if not ref_data.empty else set()
+        
+        htc_links = set(htc_data['link_id'].dropna().astype(str)) if 'link_id' in htc_data.columns and not htc_data.empty else set()
+        ref_links = set(ref_data['link_id'].dropna().astype(str)) if 'link_id' in ref_data.columns and not ref_data.empty else set()
+        
+        # Build mappings
+        htc_to_ref_cars, ref_to_htc_cars = self.id_mapper.build_car_mapping(htc_cars, ref_cars)
+        htc_to_ref_links, ref_to_htc_links = self.id_mapper.build_link_mapping(htc_links, ref_links)
+        
+        # Add mapping statistics to comparison
+        comparison['id_mapping'] = {
+            'cars': {
+                'htc_total': len(htc_cars),
+                'ref_total': len(ref_cars),
+                'mapped_pairs': len(htc_to_ref_cars),
+                'htc_unmapped': len(htc_cars) - len(htc_to_ref_cars),
+                'ref_unmapped': len(ref_cars) - len(htc_to_ref_cars),
+                'mapping_rate': len(htc_to_ref_cars) / max(len(htc_cars), len(ref_cars)) if max(len(htc_cars), len(ref_cars)) > 0 else 0
+            },
+            'links': {
+                'htc_total': len(htc_links),
+                'ref_total': len(ref_links),
+                'mapped_pairs': len(htc_to_ref_links),
+                'htc_unmapped': len(htc_links) - len(htc_to_ref_links),
+                'ref_unmapped': len(ref_links) - len(htc_to_ref_links),
+                'mapping_rate': len(htc_to_ref_links) / max(len(htc_links), len(ref_links)) if max(len(htc_links), len(ref_links)) > 0 else 0
+            }
+        }
     
     def _compare_temporal_patterns(self, htc_data: pd.DataFrame, ref_data: pd.DataFrame) -> Dict[str, Any]:
         """Compare temporal patterns between simulators"""
@@ -239,19 +295,19 @@ class SimulatorComparator:
         temporal = comparison.get('temporal_analysis', {})
         if 'temporal_correlation' in temporal:
             scores.append(max(0, temporal['temporal_correlation']))
-            weights.append(0.3)
+            weights.append(0.2)  # Reduced weight
         
         # Link usage similarity
         link = comparison.get('link_analysis', {})
         if 'usage_similarity' in link:
             scores.append(max(0, link['usage_similarity']))
-            weights.append(0.3)
+            weights.append(0.2)  # Reduced weight
         
         # Event distribution similarity
         events = comparison.get('event_analysis', {})
         if 'event_distribution_similarity' in events:
             scores.append(max(0, events['event_distribution_similarity']))
-            weights.append(0.2)
+            weights.append(0.15)
         
         # Statistical similarities
         stats_sim = comparison.get('statistical_similarity', {})
@@ -261,14 +317,33 @@ class SimulatorComparator:
         
         if 'vehicle_count_similarity' in stats_sim:
             scores.append(max(0, stats_sim['vehicle_count_similarity']))
-            weights.append(0.1)
+            weights.append(0.05)
+        
+        # Individual vehicle comparison
+        individual_vehicles = comparison.get('individual_vehicle_comparison', {})
+        if individual_vehicles.get('summary', {}).get('average_similarity') is not None:
+            scores.append(max(0, individual_vehicles['summary']['average_similarity']))
+            weights.append(0.2)  # Significant weight for individual vehicles
+        
+        # Individual link comparison
+        individual_links = comparison.get('individual_link_comparison', {})
+        if individual_links.get('summary', {}).get('average_similarity') is not None:
+            scores.append(max(0, individual_links['summary']['average_similarity']))
+            weights.append(0.1)  # Weight for individual links
         
         if scores and weights:
+            # Normalize weights to sum to 1
+            total_weight = sum(weights)
+            if total_weight > 0:
+                weights = [w / total_weight for w in weights]
+            
             # Weighted average
             overall_score = np.average(scores, weights=weights)
             
             # Classification
-            if overall_score >= 0.8:
+            if overall_score >= 0.9:
+                classification = "Excelente Similaridade"
+            elif overall_score >= 0.8:
                 classification = "Muito Similar"
             elif overall_score >= 0.6:
                 classification = "Similar"
@@ -287,11 +362,22 @@ class SimulatorComparator:
                     'link_usage': scores[1] if len(scores) > 1 else 0,
                     'event_distribution': scores[2] if len(scores) > 2 else 0,
                     'volume': scores[3] if len(scores) > 3 else 0,
-                    'vehicle_count': scores[4] if len(scores) > 4 else 0
+                    'vehicle_count': scores[4] if len(scores) > 4 else 0,
+                    'individual_vehicles': scores[5] if len(scores) > 5 else 0,
+                    'individual_links': scores[6] if len(scores) > 6 else 0
+                },
+                'component_weights': {
+                    'temporal': weights[0] if len(weights) > 0 else 0,
+                    'link_usage': weights[1] if len(weights) > 1 else 0,
+                    'event_distribution': weights[2] if len(weights) > 2 else 0,
+                    'volume': weights[3] if len(weights) > 3 else 0,
+                    'vehicle_count': weights[4] if len(weights) > 4 else 0,
+                    'individual_vehicles': weights[5] if len(weights) > 5 else 0,
+                    'individual_links': weights[6] if len(weights) > 6 else 0
                 }
             }
         else:
-            return {'score': 0.0, 'classification': 'Impossível Comparar', 'individual_scores': {}}
+            return {'score': 0.0, 'classification': 'Impossível Comparar', 'individual_scores': {}, 'component_weights': {}}
     
     def generate_comparison_report(self) -> str:
         """Generate detailed comparison report"""
@@ -313,6 +399,13 @@ class SimulatorComparator:
         with open(summary_file, 'w') as f:
             f.write(summary)
         
+        # Save individual comparison results
+        if 'individual_vehicle_comparison' in self.comparison_results and 'individual_link_comparison' in self.comparison_results:
+            self.individual_comparator.save_individual_results(
+                self.comparison_results['individual_vehicle_comparison'],
+                self.comparison_results['individual_link_comparison']
+            )
+        
         logger.info(f"✅ Relatórios salvos em: {self.output_path}")
         return summary
     
@@ -329,6 +422,20 @@ class SimulatorComparator:
 - **HTC Simulator**: {results['data_summary']['htc_records']} eventos, {results['data_summary']['htc_vehicles']} veículos
 - **Simulador Referência**: {results['data_summary']['ref_records']} eventos, {results['data_summary']['ref_vehicles']} veículos
 
+## 🗂️ Mapeamento de IDs
+
+### Veículos:
+- **Total HTC**: {results.get('id_mapping', {}).get('cars', {}).get('htc_total', 0)}
+- **Total Referência**: {results.get('id_mapping', {}).get('cars', {}).get('ref_total', 0)}
+- **Pares Mapeados**: {results.get('id_mapping', {}).get('cars', {}).get('mapped_pairs', 0)}
+- **Taxa de Mapeamento**: {results.get('id_mapping', {}).get('cars', {}).get('mapping_rate', 0):.1%}
+
+### Links:
+- **Total HTC**: {results.get('id_mapping', {}).get('links', {}).get('htc_total', 0)}
+- **Total Referência**: {results.get('id_mapping', {}).get('links', {}).get('ref_total', 0)}
+- **Pares Mapeados**: {results.get('id_mapping', {}).get('links', {}).get('mapped_pairs', 0)}
+- **Taxa de Mapeamento**: {results.get('id_mapping', {}).get('links', {}).get('mapping_rate', 0):.1%}
+
 ## 🎯 Score de Similaridade Geral
 
 **Score**: {results['overall_similarity']['score']:.3f}
@@ -340,8 +447,40 @@ class SimulatorComparator:
 - **Distribuição de Eventos**: {results['overall_similarity']['individual_scores'].get('event_distribution', 0):.3f}
 - **Volume**: {results['overall_similarity']['individual_scores'].get('volume', 0):.3f}
 - **Contagem de Veículos**: {results['overall_similarity']['individual_scores'].get('vehicle_count', 0):.3f}
+- **🚗 Veículos Individuais**: {results['overall_similarity']['individual_scores'].get('individual_vehicles', 0):.3f}
+- **🛣️ Links Individuais**: {results['overall_similarity']['individual_scores'].get('individual_links', 0):.3f}
 
-## ⏰ Análise Temporal
+## 🚗 Análise Individual de Veículos
+
+"""
+
+        # Add individual vehicle stats if available
+        vehicle_comp = results.get('individual_vehicle_comparison', {})
+        if vehicle_comp:
+            vehicle_summary = vehicle_comp.get('summary', {})
+            summary += f"""- **Veículos Comparados**: {vehicle_comp.get('total_compared', 0)}
+- **Similaridade Média**: {vehicle_summary.get('average_similarity', 0):.3f}
+- **Alta Similaridade (≥0.8)**: {vehicle_summary.get('high_similarity_count', 0)}
+- **Baixa Similaridade (<0.4)**: {vehicle_summary.get('low_similarity_count', 0)}
+
+"""
+
+        summary += f"""## 🛣️ Análise Individual de Links
+
+"""
+
+        # Add individual link stats if available
+        link_comp = results.get('individual_link_comparison', {})
+        if link_comp:
+            link_summary = link_comp.get('summary', {})
+            summary += f"""- **Links Comparados**: {link_comp.get('total_compared', 0)}
+- **Similaridade Média**: {link_summary.get('average_similarity', 0):.3f}
+- **Alta Similaridade (≥0.8)**: {link_summary.get('high_similarity_count', 0)}
+- **Baixa Similaridade (<0.4)**: {link_summary.get('low_similarity_count', 0)}
+
+"""
+
+        summary += f"""## ⏰ Análise Temporal
 
 - **Correlação Temporal**: {results['temporal_analysis'].get('temporal_correlation', 0):.3f}
 
@@ -349,7 +488,7 @@ class SimulatorComparator:
 - **HTC**: {results['temporal_analysis']['time_ranges']['htc']['start']:.1f} - {results['temporal_analysis']['time_ranges']['htc']['end']:.1f} (duração: {results['temporal_analysis']['time_ranges']['htc']['duration']:.1f})
 - **Referência**: {results['temporal_analysis']['time_ranges']['ref']['start']:.1f} - {results['temporal_analysis']['time_ranges']['ref']['end']:.1f} (duração: {results['temporal_analysis']['time_ranges']['ref']['duration']:.1f})
 
-## 🛣️ Análise de Links
+## 🛣️ Análise de Links (Agregada)
 
 - **Links Comuns**: {results['link_analysis'].get('common_links', 0)}
 - **Links Únicos HTC**: {results['link_analysis'].get('htc_unique_links', 0)}
@@ -372,16 +511,33 @@ class SimulatorComparator:
 
         # Add conclusion based on score
         score = results['overall_similarity']['score']
-        if score >= 0.8:
-            summary += "✅ **EXCELENTE**: Os simuladores produzem resultados muito similares. A validação foi bem-sucedida."
+        if score >= 0.9:
+            summary += "✅ **EXCELENTE**: Os simuladores produzem resultados praticamente idênticos. Validação excepcional."
+        elif score >= 0.8:
+            summary += "✅ **MUITO BOM**: Os simuladores são muito similares com diferenças mínimas. Validação bem-sucedida."
         elif score >= 0.6:
             summary += "✅ **BOM**: Os simuladores são similares com algumas diferenças menores. Validação satisfatória."
         elif score >= 0.4:
-            summary += "⚠️ **MODERADO**: Há diferenças significativas que devem ser investigadas."
+            summary += "⚠️ **MODERADO**: Há diferenças significativas que devem ser investigadas. Revisão recomendada."
         elif score >= 0.2:
             summary += "❌ **PREOCUPANTE**: Grandes diferenças entre os simuladores. Revisão necessária."
         else:
             summary += "❌ **CRÍTICO**: Simuladores produzem resultados muito diferentes. Investigação urgente necessária."
+        
+        # Add mapping quality assessment
+        car_mapping_rate = results.get('id_mapping', {}).get('cars', {}).get('mapping_rate', 0)
+        link_mapping_rate = results.get('id_mapping', {}).get('links', {}).get('mapping_rate', 0)
+        
+        summary += f"""
+
+### 🎯 Qualidade do Mapeamento:
+"""
+        if car_mapping_rate >= 0.8 and link_mapping_rate >= 0.8:
+            summary += "✅ **EXCELENTE mapeamento de IDs** - Alta correspondência entre simuladores."
+        elif car_mapping_rate >= 0.6 and link_mapping_rate >= 0.6:
+            summary += "✅ **BOM mapeamento de IDs** - Maioria dos elementos mapeados com sucesso."
+        else:
+            summary += "⚠️ **ATENÇÃO no mapeamento** - Muitos elementos não puderam ser mapeados entre simuladores."
         
         return summary
     
@@ -398,6 +554,13 @@ class SimulatorComparator:
         
         # Create comparison bar charts
         self._create_comparison_bars()
+        
+        # Create individual visualizations
+        if 'individual_vehicle_comparison' in self.comparison_results and 'individual_link_comparison' in self.comparison_results:
+            self.individual_comparator.create_individual_visualizations(
+                self.comparison_results['individual_vehicle_comparison'],
+                self.comparison_results['individual_link_comparison']
+            )
         
         logger.info("✅ Visualizações criadas com sucesso")
     

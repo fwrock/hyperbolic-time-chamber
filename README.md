@@ -34,6 +34,13 @@ Um simulador multi-agente baseado em atores usando Scala e Apache Pekko, com sis
 - ✅ **Visualizações comparativas** (radar charts, bar charts)
 - ✅ **Relatórios detalhados** de validação
 
+### 🗄️ **Sistema de Gerenciamento de Banco** 🆕
+- ✅ **Scripts de gerenciamento Cassandra** automatizados
+- ✅ **Limpeza de dados** entre simulações
+- ✅ **Verificação de estado** do banco
+- ✅ **Workflow integrado** para simulações limpas
+- ✅ **Inicialização automática** de schema
+
 ## 🏗️ **Arquitetura do Sistema**
 
 ```
@@ -193,6 +200,47 @@ scripts/output/comparison/
   }
 }
 ```
+
+---
+
+## 🗄️ **Gerenciamento do Cassandra**
+
+### **Scripts de Controle:**
+
+```bash
+# Subir Cassandra
+./manage_cassandra.sh start
+
+# Limpar dados antigos (recomendado antes de cada simulação)
+./manage_cassandra.sh clean
+
+# Verificar estado atual dos dados
+./check_cassandra_data.sh
+
+# Reset completo (limpar tudo)
+./manage_cassandra.sh reset
+
+# Workflow automatizado
+./simulation_workflow.sh clean
+```
+
+### **Workflow de Simulação Limpa:**
+
+```bash
+# 1. Limpar dados antigos
+./manage_cassandra.sh clean
+
+# 2. Verificar se está limpo
+./check_cassandra_data.sh
+
+# 3. Executar simulação
+./build-and-run.sh
+
+# 4. Analisar resultados
+./run_traffic_analysis.sh
+```
+
+📖 **[Ver Guia Completo de Gerenciamento do Cassandra](docs/CASSANDRA_MANAGEMENT_GUIDE.md)**
 
 ---
 
