@@ -49,6 +49,21 @@ class Car(
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
+          
+          // Registra o início da jornada do carro
+          report(
+            data = Map(
+              "event_type" -> "journey_started",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "route_cost" -> cost,
+              "route_length" -> pathQueue.size,
+              "tick" -> currentTick
+            ),
+            label = "vehicle_flow"
+          )
+          
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
@@ -117,11 +132,45 @@ class Car(
     super.leavingLink()
   }
 
+  override protected def onFinish(nodeId: String): Unit = {
+    // Registra a finalização da jornada do carro
+    report(
+      data = Map(
+        "event_type" -> "journey_completed",
+        "car_id" -> getEntityId,
+        "origin" -> state.origin,
+        "destination" -> state.destination,
+        "final_node" -> nodeId,
+        "reached_destination" -> (state.destination == nodeId),
+        "total_distance" -> state.distance,
+        "best_cost" -> state.bestCost,
+        "tick" -> currentTick
+      ),
+      label = "vehicle_flow"
+    )
+    
+    super.onFinish(nodeId)
+  }
+
   override def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
+    
+    // Registra a saída do carro do link
+    report(
+      data = Map(
+        "event_type" -> "leave_link",
+        "car_id" -> getEntityId,
+        "link_id" -> event.actorRefId, // ID do link vem do evento
+        "link_length" -> data.linkLength,
+        "total_distance" -> state.distance,
+        "tick" -> currentTick
+      ),
+      label = "vehicle_flow"
+    )
+    
 //    report(data = state.distance, "traveled distance")
     onFinishSpontaneous(Some(currentTick + 1))
   }
@@ -140,6 +189,25 @@ class Car(
 
     val time = data.linkLength / speed
     state.movableStatus = Moving
+    
+    // Registra a entrada do carro no link
+    report(
+      data = Map(
+        "event_type" -> "enter_link",
+        "car_id" -> getEntityId,
+        "link_id" -> event.actorRefId, // ID do link vem do evento
+        "link_length" -> data.linkLength,
+        "link_capacity" -> data.linkCapacity,
+        "cars_in_link" -> data.linkNumberOfCars,
+        "free_speed" -> data.linkFreeSpeed,
+        "calculated_speed" -> speed,
+        "travel_time" -> time,
+        "lanes" -> data.linkLanes,
+        "tick" -> currentTick
+      ),
+      label = "vehicle_flow"
+    )
+    
     if (time.isNaN || time.isInfinite || time < 0) {
       logError(s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}")
     }
