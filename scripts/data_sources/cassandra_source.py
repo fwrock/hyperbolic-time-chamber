@@ -69,7 +69,8 @@ class CassandraDataSource:
             self.session = self.cluster.connect(self.keyspace)
             logger.info(f"Connected to Cassandra at {self.hosts}:{self.port}")
         except Exception as e:
-            logger.error(f"Failed to connect to Cassandra: {e}")
+            logger.error(f"Failed to connect to Cassandra: {type(e).__name__}: {str(e)}")
+            logger.error(f"Connection details - Hosts: {self.hosts}, Port: {self.port}, Keyspace: {self.keyspace}")
             raise
     
     def get_vehicle_flow_data(self, 
@@ -117,8 +118,27 @@ class CassandraDataSource:
             
             data = []
             for row in rows:
-                # Parse report_data JSON
-                report_data = json.loads(row.report_data) if isinstance(row.report_data, str) else row.report_data
+                # Parse data - it's a HashMap string format, not JSON
+                data_str = row.data if isinstance(row.data, str) else str(row.data)
+                
+                # Parse HashMap format: HashMap(key -> value, key2 -> value2, ...)
+                report_data = {}
+                if data_str.startswith('HashMap(') and data_str.endswith(')'):
+                    # Remove HashMap( and )
+                    content = data_str[8:-1]
+                    # Split by ", " but be careful with -> in values
+                    pairs = content.split(', ')
+                    for pair in pairs:
+                        if ' -> ' in pair:
+                            key, value = pair.split(' -> ', 1)
+                            report_data[key.strip()] = value.strip()
+                else:
+                    # Try JSON parsing as fallback
+                    try:
+                        report_data = json.loads(data_str)
+                    except:
+                        logger.warning(f"Could not parse data: {data_str[:100]}...")
+                        continue
                 
                 # Filter by event types if specified
                 if event_types and report_data.get('event_type') not in event_types:
