@@ -1,0 +1,17 @@
+{
+  "name": "scenario_sao_paulo_deterministic",
+  "description": "Cenário determinístico de São Paulo com random seed fixo",
+  "randomSeed": 12345,
+  "startTick": 0,
+  "startRealTime": "2025-01-01T00:00:00",
+  "timeUnit": "seconds",
+  "timeStep": 1,
+  "duration": 86400,
+  "actorsDataSources": [
+    {
+      "id": "vehicle_data",
+      "classType": "VehicleActor",
+      "filePath": "simulations/input/cenario_sao_paulo_2500/data/vehicles.json"
+    }
+  ]
+}

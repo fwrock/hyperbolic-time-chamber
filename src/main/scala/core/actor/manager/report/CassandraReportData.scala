@@ -63,7 +63,15 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
         } catch {
           case _: Exception => "sim"
         }
-        s"${simulationName}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString.take(8)}"
+        
+        // 🎲 Usar RandomSeedManager para ID determinístico se disponível
+        try {
+          core.actor.manager.RandomSeedManager.deterministicSimulationId(simulationName)
+        } catch {
+          case _: Exception => 
+            // Fallback para método não-determinístico se RandomSeedManager não estiver inicializado
+            s"${simulationName}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString.take(8)}"
+        }
       })
     
     logInfo(s"🆔 Simulation ID for this execution: $baseId")
@@ -167,7 +175,12 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
       case (Some(cqlSession), Some(preparedStmt)) =>
         try {
           buffer.foreach { report =>
-            val uuid = java.util.UUID.randomUUID()
+            // 🎲 Usar UUID determinístico se RandomSeedManager estiver inicializado
+            val uuid = try {
+              java.util.UUID.fromString(core.actor.manager.RandomSeedManager.deterministicUUID())
+            } catch {
+              case _: Exception => java.util.UUID.randomUUID() // Fallback
+            }
             val createdAt = java.time.Instant.now()
             val timestamp = java.time.Instant.ofEpochMilli(report.timestamp)
             

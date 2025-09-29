@@ -14,5 +14,6 @@ case class Simulation(
   timeUnit: String,
   timeStep: Long,
   duration: Tick,
+  randomSeed: Option[Long] = None,  // 🆕 SEED PARA REPRODUTIBILIDADE
   actorsDataSources: List[ActorDataSource]
 )
