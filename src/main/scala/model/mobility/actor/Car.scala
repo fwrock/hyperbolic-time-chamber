@@ -158,12 +158,26 @@ class Car(
   ): Unit = {
     state.distance += data.linkLength
     
-    // Registra a saída do carro do link
+    // Evento específico: left link (compatível com simulador de referência)
+    report(
+      data = Map(
+        "time" -> currentTick,
+        "type" -> "left link",
+        "person" -> getEntityId,
+        "link" -> event.actorRefId,
+        "vehicle" -> getEntityId,
+        "action" -> "ok",
+        "tick" -> currentTick
+      ),
+      label = "traffic_events"
+    )
+    
+    // Registra a saída do carro do link (dados detalhados)
     report(
       data = Map(
         "event_type" -> "leave_link",
         "car_id" -> getEntityId,
-        "link_id" -> event.actorRefId, // ID do link vem do evento
+        "link_id" -> event.actorRefId,
         "link_length" -> data.linkLength,
         "total_distance" -> state.distance,
         "tick" -> currentTick
@@ -190,12 +204,26 @@ class Car(
     val time = data.linkLength / speed
     state.movableStatus = Moving
     
-    // Registra a entrada do carro no link
+    // Evento específico: entered link (compatível com simulador de referência)
+    report(
+      data = Map(
+        "time" -> currentTick,
+        "type" -> "entered link",
+        "person" -> getEntityId,
+        "link" -> event.actorRefId,
+        "vehicle" -> getEntityId,
+        "action" -> "ok",
+        "tick" -> currentTick
+      ),
+      label = "traffic_events"
+    )
+    
+    // Registra a entrada do carro no link (dados detalhados)
     report(
       data = Map(
         "event_type" -> "enter_link",
         "car_id" -> getEntityId,
-        "link_id" -> event.actorRefId, // ID do link vem do evento
+        "link_id" -> event.actorRefId,
         "link_length" -> data.linkLength,
         "link_capacity" -> data.linkCapacity,
         "cars_in_link" -> data.linkNumberOfCars,

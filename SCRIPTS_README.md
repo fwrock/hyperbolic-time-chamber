@@ -202,7 +202,51 @@ Após executar a análise:
 
 ---
 
-## 📞 Suporte
+## � Comparação de Simuladores
+
+### Script de Comparação HTC vs Referência
+
+```bash
+# Comparação básica (HTC via Cassandra vs XML de referência)
+python scripts/compare_simulators.py events.xml --htc-cassandra sim_id_001
+
+# Comparação com análise de reprodutibilidade automática
+python scripts/compare_simulators.py events.xml --htc-cassandra sim_id_001 --additional-htc-sims sim_002 sim_003
+
+# Usando arquivos CSV do HTC
+python scripts/compare_simulators.py events.xml --htc-csv data.csv
+
+# Análise de reprodutibilidade pura
+python scripts/compare_simulators.py --reproducibility --cassandra-sims sim_001 sim_002 sim_003
+```
+
+### ⚠️ Importante - ID da Simulação no Cassandra
+
+**Para usar dados do Cassandra, você DEVE informar o ID da simulação:**
+
+```bash
+# ✅ CORRETO - especifica o ID da simulação
+--htc-cassandra sim_id_001
+
+# ❌ INCORRETO - não funcionará
+--htc-cassandra
+```
+
+O ID da simulação é necessário para:
+- Identificar dados específicos no Cassandra
+- Garantir consistência na análise
+- Permitir comparações reproduzíveis
+
+### Recursos da Comparação
+
+- **🎯 Foco em TICK**: Análise temporal baseada exclusivamente no tempo lógico da simulação
+- **📊 Reprodutibilidade**: Detecção automática de múltiplas execuções (3+)
+- **📈 Métricas Científicas**: Análise de determinismo e consistência
+- **🔬 Validação**: Rejeição automática de análises sem dados de tick
+
+---
+
+## �📞 Suporte
 
 Para dúvidas ou problemas:
 1. Execute `./run_traffic_analysis.sh test` para diagnóstico
