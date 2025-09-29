@@ -1,0 +1,621 @@
+---
+# Docker Compose para Google Cloud Platform
+# VM: n2-highmem-88 (88 vCPUs, 352GB RAM)
+# Configuração: 6 nós HTC + 3 nós Cassandra + Redis + Monitoramento
+# Distribuição: Cassandra(48 vCPUs, 120GB) + HTC(36 vCPUs, 216GB) + Redis(4 vCPUs, 8GB) + Overhead(8GB)
+
+services:
+
+  # ============================================
+  # INFRAESTRUTURA DE DADOS
+  # ============================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: htc-redis
+    hostname: redis-master
+    networks:
+      - htc-cluster-network
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 6gb
+      --maxmemory-policy allkeys-lru
+      --save 300 10000
+      --appendonly yes
+      --appendfsync everysec
+      --stop-writes-on-bgsave-error no
+      --tcp-keepalive 300
+      --timeout 300
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 6G
+          cpus: '2.0'
+    sysctls:
+      - net.core.somaxconn=65535
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  # ============================================
+  # CLUSTER CASSANDRA (3 NODOS)
+  # ============================================
+
+  cassandra-seed:
+    image: cassandra:4.1
+    container_name: cassandra-seed
+    hostname: cassandra-seed
+    networks:
+      - htc-cluster-network
+    ports:
+      - "9042:9042"
+      - "7199:7199"  # JMX
+    environment:
+      - CASSANDRA_CLUSTER_NAME=HTC_Production_Cluster
+      - CASSANDRA_DC=gcp-us-central1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_SEEDS=cassandra-seed
+      - MAX_HEAP_SIZE=32G
+      - HEAP_NEWSIZE=8G
+      - CASSANDRA_NUM_TOKENS=16
+      - CASSANDRA_CONCURRENT_READS=64
+      - CASSANDRA_CONCURRENT_WRITES=256
+      - CASSANDRA_CONCURRENT_COUNTER_WRITES=64
+      - JVM_OPTS=-Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.load_ring_state=false
+    volumes:
+      - cassandra_seed_data:/var/lib/cassandra
+      - ./cassandra-init:/docker-entrypoint-initdb.d
+      - ./cassandra-config/cassandra-production.yaml:/etc/cassandra/cassandra.yaml
+      - ./cassandra-config/jvm-production.options:/etc/cassandra/jvm.options
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -E '^UN.*cassandra-seed'"]
+      interval: 30s
+      timeout: 20s
+      retries: 15
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          memory: 40G
+          cpus: '16.0'
+        reservations:
+          memory: 32G
+          cpus: '12.0'
+    sysctls:
+      - net.core.rmem_max=268435456
+      - net.core.wmem_max=268435456
+      - net.ipv4.tcp_rmem=8192 131072 268435456
+      - net.ipv4.tcp_wmem=8192 131072 268435456
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 1000000
+        hard: 1000000
+      nproc: 65536
+    restart: unless-stopped
+
+  cassandra-node2:
+    image: cassandra:4.1
+    container_name: cassandra-node2
+    hostname: cassandra-node2
+    networks:
+      - htc-cluster-network
+    ports:
+      - "9043:9042"
+      - "7200:7199"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=HTC_Production_Cluster
+      - CASSANDRA_DC=gcp-us-central1
+      - CASSANDRA_RACK=rack2
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_SEEDS=cassandra-seed
+      - MAX_HEAP_SIZE=32G
+      - HEAP_NEWSIZE=8G
+      - CASSANDRA_NUM_TOKENS=16
+      - CASSANDRA_CONCURRENT_READS=64
+      - CASSANDRA_CONCURRENT_WRITES=256
+      - CASSANDRA_CONCURRENT_COUNTER_WRITES=64
+      - JVM_OPTS=-Dcassandra.skip_wait_for_gossip_to_settle=0
+    volumes:
+      - cassandra_node2_data:/var/lib/cassandra
+      - ./cassandra-config/cassandra-production.yaml:/etc/cassandra/cassandra.yaml
+      - ./cassandra-config/jvm-production.options:/etc/cassandra/jvm.options
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -E '^UN.*cassandra-node2'"]
+      interval: 30s
+      timeout: 20s
+      retries: 15
+      start_period: 300s
+    depends_on:
+      cassandra-seed:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 40G
+          cpus: '16.0'
+        reservations:
+          memory: 32G
+          cpus: '12.0'
+    sysctls:
+      - net.core.rmem_max=268435456
+      - net.core.wmem_max=268435456
+      - net.ipv4.tcp_rmem=8192 131072 268435456
+      - net.ipv4.tcp_wmem=8192 131072 268435456
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 1000000
+        hard: 1000000
+      nproc: 65536
+    restart: unless-stopped
+
+  cassandra-node3:
+    image: cassandra:4.1
+    container_name: cassandra-node3
+    hostname: cassandra-node3
+    networks:
+      - htc-cluster-network
+    ports:
+      - "9044:9042"
+      - "7201:7199"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=HTC_Production_Cluster
+      - CASSANDRA_DC=gcp-us-central1
+      - CASSANDRA_RACK=rack3
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_SEEDS=cassandra-seed
+      - MAX_HEAP_SIZE=32G
+      - HEAP_NEWSIZE=8G
+      - CASSANDRA_NUM_TOKENS=16
+      - CASSANDRA_CONCURRENT_READS=64
+      - CASSANDRA_CONCURRENT_WRITES=256
+      - CASSANDRA_CONCURRENT_COUNTER_WRITES=64
+      - JVM_OPTS=-Dcassandra.skip_wait_for_gossip_to_settle=0
+    volumes:
+      - cassandra_node3_data:/var/lib/cassandra
+      - ./cassandra-config/cassandra-production.yaml:/etc/cassandra/cassandra.yaml
+      - ./cassandra-config/jvm-production.options:/etc/cassandra/jvm.options
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -E '^UN.*cassandra-node3'"]
+      interval: 30s
+      timeout: 20s
+      retries: 15
+      start_period: 300s
+    depends_on:
+      cassandra-seed:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 40G
+          cpus: '16.0'
+        reservations:
+          memory: 32G
+          cpus: '12.0'
+    sysctls:
+      - net.core.rmem_max=268435456
+      - net.core.wmem_max=268435456
+      - net.ipv4.tcp_rmem=8192 131072 268435456
+      - net.ipv4.tcp_wmem=8192 131072 268435456
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 1000000
+        hard: 1000000
+      nproc: 65536
+    restart: unless-stopped
+
+  # ============================================
+  # CLUSTER HTC APPLICATION (6 NODOS)
+  # ============================================
+
+  htc-node1:
+    build: .
+    container_name: htc-node1
+    hostname: htc-node1
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1600:1600"
+      - "8558:8558"
+    depends_on:
+      cassandra-seed:
+        condition: service_healthy
+      cassandra-node2:
+        condition: service_healthy
+      cassandra-node3:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      # Cluster Configuration
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: htc-node1
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      CLUSTER_SEED_NODES: "htc-node1:1600,htc-node2:1601,htc-node3:1602"
+      
+      # Infrastructure
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      CASSANDRA_KEYSPACE_REPLICATION: "{'class': 'NetworkTopologyStrategy', 'gcp-us-central1': 3}"
+      
+      # Management
+      MANAGEMENT_HTTP_PORT: 8558
+      
+      # Simulation Configuration
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      
+      # JVM Optimizations for High Performance
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:InitiatingHeapOccupancyPercent=25
+        -XX:G1MixedGCCountTarget=4
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -XX:+UseLargePages
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.cluster.seed-nodes.1="pekko://htc-production-cluster@htc-node2:1601"
+        -Dpekko.cluster.seed-nodes.2="pekko://htc-production-cluster@htc-node3:1602"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-factor=4.0
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.1="cassandra-node2:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.2="cassandra-node3:9042"
+        -Dpekko.persistence.cassandra.journal.write-timeout=60s
+        -Dpekko.persistence.cassandra.journal.read-timeout=30s
+        -Dpekko.persistence.cassandra.snapshot.write-timeout=60s
+        -Dpekko.persistence.cassandra.snapshot.read-timeout=30s
+        -Dpekko.persistence.cassandra.events-by-tag.write-timeout=60s
+        -Dpekko.persistence.cassandra.events-by-tag.read-timeout=30s
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000
+      nproc: 65536
+    restart: unless-stopped
+
+  htc-node2:
+    build: .
+    container_name: htc-node2
+    hostname: htc-node2
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1601:1601"
+      - "8559:8559"
+    depends_on:
+      htc-node1:
+        condition: service_started
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: htc-node2
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      CLUSTER_SEED_NODES: "htc-node1:1600,htc-node2:1601,htc-node3:1602"
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      MANAGEMENT_HTTP_PORT: 8559
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:InitiatingHeapOccupancyPercent=25
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.cluster.seed-nodes.1="pekko://htc-production-cluster@htc-node2:1601"
+        -Dpekko.cluster.seed-nodes.2="pekko://htc-production-cluster@htc-node3:1602"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.1="cassandra-node2:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.2="cassandra-node3:9042"
+        -Dpekko.persistence.cassandra.journal.write-timeout=60s
+        -Dpekko.persistence.cassandra.journal.read-timeout=30s
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  htc-node3:
+    build: .
+    container_name: htc-node3
+    hostname: htc-node3
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1602:1602"
+      - "8560:8560"
+    depends_on:
+      htc-node1:
+        condition: service_started
+    environment:
+      CLUSTER_PORT: 1602
+      CLUSTER_IP: htc-node3
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      CLUSTER_SEED_NODES: "htc-node1:1600,htc-node2:1601,htc-node3:1602"
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      MANAGEMENT_HTTP_PORT: 8560
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.cluster.seed-nodes.1="pekko://htc-production-cluster@htc-node2:1601"
+        -Dpekko.cluster.seed-nodes.2="pekko://htc-production-cluster@htc-node3:1602"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.1="cassandra-node2:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.2="cassandra-node3:9042"
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  htc-node4:
+    build: .
+    container_name: htc-node4
+    hostname: htc-node4
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1603:1603"
+      - "8561:8561"
+    depends_on:
+      htc-node1:
+        condition: service_started
+    environment:
+      CLUSTER_PORT: 1603
+      CLUSTER_IP: htc-node4
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      MANAGEMENT_HTTP_PORT: 8561
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.1="cassandra-node2:9042"
+        -Dpekko.persistence.cassandra.journal.contact-points.2="cassandra-node3:9042"
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  htc-node5:
+    build: .
+    container_name: htc-node5
+    hostname: htc-node5
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1604:1604"
+      - "8562:8562"
+    depends_on:
+      htc-node1:
+        condition: service_started
+    environment:
+      CLUSTER_PORT: 1604
+      CLUSTER_IP: htc-node5
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      MANAGEMENT_HTTP_PORT: 8562
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  htc-node6:
+    build: .
+    container_name: htc-node6
+    hostname: htc-node6
+    networks:
+      - htc-cluster-network
+    ports:
+      - "1605:1605"
+      - "8563:8563"
+    depends_on:
+      htc-node1:
+        condition: service_started
+    environment:
+      CLUSTER_PORT: 1605
+      CLUSTER_IP: htc-node6
+      CLUSTER_NAME: htc-production-cluster
+      SEED_PORT_1600_TCP_ADDR: htc-node1
+      REDIS_HOST: redis-master
+      REDIS_PORT: 6379
+      CASSANDRA_HOSTS: "cassandra-seed:9042,cassandra-node2:9042,cassandra-node3:9042"
+      MANAGEMENT_HTTP_PORT: 8563
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/HTC_1M/data/city_map.json
+      JAVA_OPTS: >
+        -server
+        -Xms6g -Xmx32g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32m
+        -XX:+UseNUMA
+        -XX:+AlwaysPreTouch
+        -Dpekko.cluster.seed-nodes.0="pekko://htc-production-cluster@htc-node1:1600"
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-min=4
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=24
+        -Dpekko.persistence.cassandra.journal.contact-points.0="cassandra-seed:9042"
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 38G
+          cpus: '6.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  # ============================================
+  # FERRAMENTAS DE MONITORAMENTO
+  # ============================================
+
+  ds-studio:
+    image: datastax/dse-studio:latest
+    container_name: htc-ds-studio
+    environment:
+      - DS_LICENSE=accept
+    ports:
+      - "9091:9091"
+    depends_on:
+      cassandra-seed:
+        condition: service_healthy
+    networks:
+      - htc-cluster-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+
+volumes:
+  redis_data:
+  cassandra_seed_data:
+  cassandra_node2_data:
+  cassandra_node3_data:
+
+networks:
+  htc-cluster-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
+
+# =================================================
+# RESOURCE ALLOCATION SUMMARY
+# =================================================
+# Total vCPUs: 88
+# Total RAM: 352GB
+#
+# Redis: 4 vCPUs, 6GB RAM
+# Cassandra (3 nodes): 48 vCPUs, 120GB RAM (16 vCPUs, 40GB each)
+# HTC Nodes (6 nodes): 36 vCPUs, 228GB RAM (6 vCPUs, 38GB each)
+# DS Studio: 2 vCPUs, 4GB RAM
+# System Reserve: ~8GB RAM for OS and Docker
+#
+# Distribution:
+# - 54.5% resources for Cassandra (data layer)
+# - 40.9% resources for HTC application (compute layer)  
+# - 4.5% resources for Redis (cache layer)
+# - 2.3% resources for monitoring tools

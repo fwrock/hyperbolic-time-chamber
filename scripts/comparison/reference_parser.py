@@ -39,14 +39,41 @@ class ReferenceSimulatorParser:
             return pd.DataFrame()
         
         try:
-            # Parse XML file
-            tree = ET.parse(self.xml_file_path)
-            root = tree.getroot()
-            
             events_data = []
             
-            # Parse each event
-            for event in root.findall('.//event'):
+            # Read file line by line since it may not have proper XML root
+            with open(self.xml_file_path, 'r', encoding='utf-8') as file:
+                for line_num, line in enumerate(file, 1):
+                    line = line.strip()
+                    if not line or not line.startswith('<event'):
+                        continue
+                    
+                    try:
+                        # Parse individual event element
+                        event = ET.fromstring(line)
+                        event_data = {
+                            'time': float(event.get('time', 0)),
+                            'type': event.get('type', ''),
+                            'person': event.get('person', ''),
+                            'link': event.get('link', ''),
+                            'vehicle': event.get('vehicle', ''),
+                            'actType': event.get('actType', ''),
+                            'legMode': event.get('legMode', ''),
+                            'action': event.get('action', '')
+                        }
+                        events_data.append(event_data)
+                    except ET.ParseError as e:
+                        logger.warning(f"⚠️ Failed to parse line {line_num}: {e}")
+                        continue
+                    
+                    # Progress logging for large files
+                    if len(events_data) % 100000 == 0:
+                        logger.info(f"📊 Processados {len(events_data)} eventos...")
+                    
+                    # Remove the artificial limit - process ALL events
+                    # if len(events_data) >= 50000:
+                    #     logger.info(f"📊 Limiting to first {len(events_data)} events for memory efficiency")
+                    #     break
                 event_data = {
                     'time': float(event.get('time', 0)),
                     'type': event.get('type', ''),

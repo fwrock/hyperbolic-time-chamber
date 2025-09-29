@@ -1,0 +1,100 @@
+---
+services:
+
+  redis:
+    image: redis:alpine
+    container_name: htc-redis
+    networks:
+      - htc-network
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 300 100
+      --stop-writes-on-bgsave-error no
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: htc-cassandra-db
+    ports:
+      - "9042:9042"
+    networks:
+      - htc-network
+    environment:
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_SEEDS=cassandra
+      - CASSANDRA_CLUSTER_NAME=htc_cluster
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=256M
+      - JVM_OPTS=-Dcassandra.skip_wait_for_gossip_to_settle=0
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      - ./cassandra-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces' | grep -q 'system'"]
+      interval: 45s
+      timeout: 20s
+      retries: 8
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          cpus: '1.0'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  node1:
+    build: .
+    container_name: node_1
+    hostname: node1
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - htc-network
+    environment:
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: node1
+      CLUSTER_NAME: node1
+      SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MANAGEMENT_HTTP_PORT: 8558
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/cenario_sao_paulo_2500/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/cenario_sao_paulo_2500/data/city_map.json
+      # JVM com configurações mínimas
+      JAVA_OPTS: >
+        -Xms1g -Xmx2g 
+        -XX:+UseG1GC 
+        -XX:MaxGCPauseMillis=200
+        -Dpekko.persistence.cassandra.journal.write-timeout=60s
+        -Dpekko.persistence.cassandra.journal.read-timeout=30s
+    volumes:
+      - /home/dean/PhD/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+          cpus: '2.0'
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  cassandra_data:
+
+networks:
+  htc-network:
+    driver: bridge

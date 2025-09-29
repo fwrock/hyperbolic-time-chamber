@@ -114,10 +114,15 @@ class CassandraDataSource:
         
         try:
             logger.info(f"Executing query: {query}")
+            if limit is None:
+                logger.info("🚀 Carregando TODOS os dados do Cassandra (sem limite)...")
+            else:
+                logger.info(f"📊 Carregando até {limit} registros...")
+                
             rows = self.session.execute(query)
             
             data = []
-            for row in rows:
+            for i, row in enumerate(rows):
                 # Parse data - should be JSON now (after Scala code fix)
                 data_str = row.data if isinstance(row.data, str) else str(row.data)
                 
@@ -154,11 +159,27 @@ class CassandraDataSource:
                     **report_data  # Unpack report_data fields
                 }
                 data.append(record)
+                
+                # Progress logging for large datasets
+                if (i + 1) % 10000 == 0:
+                    logger.info(f"📊 Processados {i + 1} registros...")
             
             df = pd.DataFrame(data)
             if not df.empty:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df = df.sort_values('timestamp')
+                try:
+                    # Convert timestamps safely
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                    # Remove rows with invalid timestamps
+                    invalid_count = df['timestamp'].isna().sum()
+                    if invalid_count > 0:
+                        logger.warning(f"⚠️ Removed {invalid_count} records with invalid timestamps")
+                        df = df.dropna(subset=['timestamp'])
+                    
+                    df = df.sort_values('timestamp')
+                except Exception as e:
+                    logger.error(f"Error converting timestamps: {e}")
+                    # Continue without timestamp sorting if conversion fails
+                    pass
                 
             logger.info(f"Retrieved {len(df)} records")
             return df

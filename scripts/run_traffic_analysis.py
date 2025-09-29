@@ -98,6 +98,73 @@ def run_analysis(data, source_type: str, logger):
         logger.info("🔍 Iniciando análise de tráfego...")
         analyzer = TrafficAnalyzer()
         
+        # Executar análises
+        analysis_results = analyzer.analyze_traffic_flow(data)
+        
+        # Visualizações
+        logger.info("📊 Gerando visualizações...")
+        visualizer = TrafficVisualizer(data)
+        
+        # Criar visualizações padrão
+        timeline_fig = visualizer.create_traffic_flow_timeline()
+        distribution_fig = visualizer.create_vehicle_distribution()
+        patterns_fig = visualizer.create_mobility_patterns()
+        
+        # Gerar relatórios
+        logger.info("📝 Gerando relatórios...")
+        report_generator = TrafficReportGenerator()
+        
+        # Relatório JSON detalhado
+        json_report_path = report_generator.generate_detailed_report(
+            analysis_results, 
+            OUTPUT_PATH / "traffic_analysis_report.json"
+        )
+        
+        # Relatório Markdown
+        md_report_path = report_generator.generate_summary_report(
+            analysis_results,
+            OUTPUT_PATH / "traffic_summary.md"
+        )
+        
+        # Dashboard HTML
+        dashboard_path = report_generator.generate_html_dashboard(
+            analysis_results,
+            [timeline_fig, distribution_fig, patterns_fig],
+            OUTPUT_PATH / "traffic_dashboard.html"
+        )
+        
+        # 🆕 GERAR PDF ACADÊMICO
+        logger.info("📄 Gerando PDF acadêmico para artigo...")
+        try:
+            from visualization.academic_viz import create_academic_pdf_report
+            
+            academic_pdfs = create_academic_pdf_report(
+                'traffic',
+                data=data,
+                analysis_results=analysis_results,
+                output_path=OUTPUT_PATH / "academic_reports",
+                filename="traffic_analysis_academic.pdf"
+            )
+            
+            for pdf_path in academic_pdfs:
+                logger.info(f"📄 PDF acadêmico gerado: {pdf_path}")
+                
+        except ImportError as e:
+            logger.warning(f"⚠️ Dependências para PDF não encontradas: {e}")
+            logger.info("💡 Para gerar PDFs, instale: pip install matplotlib seaborn plotly kaleido")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao gerar PDF acadêmico: {e}")
+        
+        # Log dos arquivos gerados
+        logger.info("✅ Análise concluída! Arquivos gerados:")
+        logger.info(f"  📋 Relatório detalhado: {json_report_path}")
+        logger.info(f"  📝 Resumo: {md_report_path}")
+        logger.info(f"  📊 Dashboard: {dashboard_path}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro durante análise: {e}")
+        raise
+        
         # Análises básicas
         summary = analyzer.basic_statistics(data)
         logger.info(f"📈 Estatísticas básicas calculadas")
