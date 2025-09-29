@@ -32,6 +32,48 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
   private val datacenter = Some(config.getString("htc.report-manager.cassandra.datacenter"))
     .getOrElse("datacenter1")
 
+  // 🆕 SIMULATION ID ÚNICO POR EXECUÇÃO - Cached with lazy evaluation
+  private lazy val simulationId: String = {
+    // 1. Prioridade: simulation.json (configuração específica da simulação)
+    val simulationConfigId = try {
+      val simulationConfig = core.util.SimulationUtil.loadSimulationConfig()
+      simulationConfig.id
+    } catch {
+      case _: Exception => None
+    }
+    
+    // 2. Fallback: Variável de ambiente
+    val envSimId = sys.env.get("HTC_SIMULATION_ID")
+    
+    // 3. Fallback: Configuração application.conf
+    val configSimId = try {
+      Some(config.getString("htc.simulation.id"))
+    } catch {
+      case _: Exception => None
+    }
+    
+    // 4. Fallback: Geração automática
+    val baseId = simulationConfigId
+      .orElse(envSimId)
+      .orElse(configSimId)
+      .getOrElse({
+        // Usar nome da simulação se disponível para ID mais semântico
+        val simulationName = try {
+          core.util.SimulationUtil.loadSimulationConfig().name.replaceAll("[^a-zA-Z0-9_-]", "_")
+        } catch {
+          case _: Exception => "sim"
+        }
+        s"${simulationName}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString.take(8)}"
+      })
+    
+    logInfo(s"🆔 Simulation ID for this execution: $baseId")
+    logInfo(s"📁 Source: ${if (simulationConfigId.isDefined) "simulation.json" 
+                         else if (envSimId.isDefined) "environment variable" 
+                         else if (configSimId.isDefined) "application.conf" 
+                         else "auto-generated"}")
+    baseId
+  }
+
   private val buffer = mutable.ListBuffer[ReportEvent]()
   private var session: Option[CqlSession] = None
   private var insertStatement: Option[PreparedStatement] = None
@@ -144,7 +186,7 @@ class CassandraReportData(override val reportManager: ActorRef, override val sta
               dataJson,                               // data (now as JSON)
               report.entityId,                        // node_id
               report.label,                           // report_type
-              "simulation_" + System.currentTimeMillis(), // simulation_id
+              simulationId,                           // simulation_id (ÚNICO POR EXECUÇÃO)
               timestamp                               // timestamp
             ))
           }

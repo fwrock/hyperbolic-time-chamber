@@ -20,6 +20,7 @@ from data_sources.cassandra_source import CassandraDataSource
 from data_sources.file_sources import CSVDataSource
 from comparison.reference_parser import ReferenceSimulatorParser
 from comparison.simulator_comparator import SimulatorComparator
+from analysis.general_metrics import GeneralTrafficMetrics
 
 def setup_logging():
     """Configura o sistema de logging"""
@@ -127,6 +128,48 @@ def run_comparison(htc_data: pd.DataFrame, ref_data: pd.DataFrame, output_path: 
     # Create visualizations
     comparator.create_comparison_visualizations()
     
+    # 🆕 ANÁLISE DE MÉTRICAS GERAIS
+    logger.info("📊 Gerando análise de métricas gerais...")
+    try:
+        # Criar analisador de métricas gerais
+        metrics_analyzer = GeneralTrafficMetrics(
+            output_dir=str(comparison_output / "general_metrics")
+        )
+        
+        # Analisar dados do HTC
+        logger.info("📈 Analisando métricas do HTC...")
+        htc_metrics = metrics_analyzer.calculate_all_metrics(htc_data)
+        htc_plots = metrics_analyzer.generate_all_plots(htc_data, htc_metrics)
+        htc_report = metrics_analyzer.save_metrics_report(htc_metrics, "htc_metrics.json")
+        
+        logger.info("📊 MÉTRICAS GERAIS - HTC:")
+        metrics_analyzer.print_summary_report(htc_metrics)
+        
+        # Analisar dados de referência
+        logger.info("📈 Analisando métricas da referência...")
+        ref_metrics_analyzer = GeneralTrafficMetrics(
+            output_dir=str(comparison_output / "reference_metrics")
+        )
+        ref_metrics = ref_metrics_analyzer.calculate_all_metrics(ref_data)
+        ref_plots = ref_metrics_analyzer.generate_all_plots(ref_data, ref_metrics)
+        ref_report = ref_metrics_analyzer.save_metrics_report(ref_metrics, "reference_metrics.json")
+        
+        logger.info("📊 MÉTRICAS GERAIS - REFERÊNCIA:")
+        ref_metrics_analyzer.print_summary_report(ref_metrics)
+        
+        # Adicionar métricas aos resultados
+        results['htc_metrics'] = htc_metrics
+        results['reference_metrics'] = ref_metrics
+        results['htc_plots'] = htc_plots
+        results['reference_plots'] = ref_plots
+        
+        logger.info(f"✅ Análise de métricas concluída!")
+        logger.info(f"📁 Gráficos HTC salvos em: {comparison_output / 'general_metrics'}")
+        logger.info(f"📁 Gráficos Referência salvos em: {comparison_output / 'reference_metrics'}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na análise de métricas gerais: {e}")
+    
     # 🆕 GERAR PDF ACADÊMICO
     logger.info("📄 Gerando PDF acadêmico para artigo...")
     try:
@@ -190,24 +233,55 @@ def create_sample_xml(output_path: Path):
 
 def main():
     """Função principal"""
-    parser = argparse.ArgumentParser(description="Comparador de Simuladores HTC vs Referência")
+    parser = argparse.ArgumentParser(
+        description="Comparador de Simuladores HTC vs Referência",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemplos de uso:
+
+  # Comparação tradicional HTC vs Referência
+  python compare_simulators.py events.xml --htc-cassandra
+
+  # Análise de reprodutibilidade (redireciona para script específico)
+  python compare_simulators.py --reproducibility --cassandra-sims sim_001 sim_002
+
+  # Criar amostra XML para testes
+  python compare_simulators.py --create-sample
+        """
+    )
     
-    parser.add_argument('reference_xml', nargs='?', help='Arquivo XML com eventos do simulador de referência')
+    # Grupos mutuamente exclusivos para diferentes tipos de análise
+    mode_group = parser.add_mutually_exclusive_group(required=False)
+    mode_group.add_argument('--reproducibility', action='store_true',
+                           help='Executar análise de reprodutibilidade')
+    mode_group.add_argument('--create-sample', action='store_true',
+                           help='Criar arquivo XML de exemplo e sair')
     
-    # HTC data source options
+    # Argumento posicional para modo tradicional
+    parser.add_argument('reference_xml', nargs='?', 
+                       help='Arquivo XML com eventos do simulador de referência (modo tradicional)')
+    
+    # HTC data source options (para modo tradicional)
     htc_group = parser.add_mutually_exclusive_group()
     htc_group.add_argument('--htc-cassandra', action='store_true', 
                           help='Usar dados do HTC via Cassandra')
     htc_group.add_argument('--htc-csv', type=str, metavar='FILE',
                           help='Usar dados do HTC via arquivo CSV')
     
+    # Reprodutibilidade options
+    repro_group = parser.add_mutually_exclusive_group()
+    repro_group.add_argument('--cassandra-sims', nargs='+', metavar='SIM_ID',
+                            help='IDs das simulações no Cassandra para análise de reprodutibilidade')
+    repro_group.add_argument('--csv-files', nargs='+', metavar='FILE',
+                            help='Arquivos CSV para análise de reprodutibilidade')
+    repro_group.add_argument('--xml-files', nargs='+', metavar='FILE',
+                            help='Arquivos XML para análise de reprodutibilidade')
+    
     # Optional parameters
-    parser.add_argument('--limit', type=int, default=1000,
-                       help='Limite de registros do Cassandra (default: 1000)')
+    parser.add_argument('--limit', type=int, default=999999999,
+                       help='Limite de registros do Cassandra (default: todos)')
     parser.add_argument('--output', type=str, 
                        help='Diretório de saída (default: scripts/output)')
-    parser.add_argument('--create-sample', action='store_true',
-                       help='Criar arquivo XML de exemplo e sair')
     
     args = parser.parse_args()
     
@@ -221,18 +295,52 @@ def main():
         create_sample_xml(output_path)
         return 0
     
+    # Handle reproducibility analysis
+    if args.reproducibility:
+        logger.info("� Redirecionando para análise de reprodutibilidade...")
+        
+        # Build command for reproducibility script
+        repro_script = SCRIPT_DIR / "reproducibility_analysis.py"
+        cmd_parts = ["python", str(repro_script)]
+        
+        # Add appropriate arguments
+        if args.cassandra_sims:
+            cmd_parts.extend(["--cassandra-sims"] + args.cassandra_sims)
+        elif args.csv_files:
+            cmd_parts.extend(["--csv-files"] + args.csv_files)
+        elif args.xml_files:
+            cmd_parts.extend(["--xml-files"] + args.xml_files)
+        else:
+            logger.error("❌ Para análise de reprodutibilidade, especifique:")
+            logger.error("   --cassandra-sims SIM_ID1 SIM_ID2 ...")
+            logger.error("   --csv-files file1.csv file2.csv ...")
+            logger.error("   --xml-files file1.xml file2.xml ...")
+            return 1
+        
+        # Add optional parameters
+        if args.limit != 999999999:
+            cmd_parts.extend(["--limit", str(args.limit)])
+        if args.output:
+            cmd_parts.extend(["--output", args.output])
+        
+        # Execute reproducibility script
+        import subprocess
+        try:
+            logger.info(f"🚀 Executando: {' '.join(cmd_parts)}")
+            result = subprocess.run(cmd_parts, capture_output=False)
+            return result.returncode
+        except Exception as e:
+            logger.error(f"❌ Erro ao executar análise de reprodutibilidade: {e}")
+            return 1
+    
     logger.info("🚀 Iniciando Comparador de Simuladores...")
     logger.info(f"📁 Diretório de saída: {output_path}")
     
     try:
-        # Create sample XML if requested
-        if args.create_sample:
-            create_sample_xml(output_path)
-            return 0
-            
-        # Validate required arguments for comparison
+        # Validate required arguments for traditional comparison
         if not args.reference_xml:
-            logger.error("❌ Arquivo XML de referência é obrigatório")
+            logger.error("❌ Arquivo XML de referência é obrigatório para comparação tradicional")
+            logger.error("💡 Use --reproducibility para análise de reprodutibilidade")
             return 1
         
         if not args.htc_cassandra and not args.htc_csv:
@@ -253,6 +361,29 @@ def main():
         
         if results:
             logger.info("🎉 Comparação concluída com sucesso!")
+            
+            # Exibir resumo das métricas geradas
+            print("\n" + "="*80)
+            print("📊 RESUMO DOS ARQUIVOS GERADOS")
+            print("="*80)
+            
+            if 'htc_plots' in results:
+                print(f"\n📈 GRÁFICOS HTC ({len(results['htc_plots'])} arquivos):")
+                for plot_file in results['htc_plots']:
+                    print(f"  • {plot_file}")
+            
+            if 'reference_plots' in results:
+                print(f"\n📈 GRÁFICOS REFERÊNCIA ({len(results['reference_plots'])} arquivos):")
+                for plot_file in results['reference_plots']:
+                    print(f"  • {plot_file}")
+            
+            print(f"\n📁 Todos os arquivos salvos em: {output_path}")
+            print(f"🔍 Verifique os subdiretórios:")
+            print(f"  • comparison/ - Análise comparativa")
+            print(f"  • general_metrics/ - Métricas gerais HTC")
+            print(f"  • reference_metrics/ - Métricas gerais Referência")
+            print("="*80 + "\n")
+            
             return 0
         else:
             logger.error("❌ Falha na comparação")

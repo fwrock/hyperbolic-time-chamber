@@ -24,7 +24,7 @@ object GPSUtil {
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        CityMapUtil.cityMap.aStarEdgeTargetsOptimized(originNode, destinationNode, heuristicFunc) match {
+        CityMapUtil.cityMap.dijkstraEdgeTargetsOptimized(originNode, destinationNode) match {
           case Some((cost, path)) => // path é List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach { case (edgeObject, targetNodeOfEdgeInPath) =>
