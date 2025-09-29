@@ -127,6 +127,29 @@ def run_comparison(htc_data: pd.DataFrame, ref_data: pd.DataFrame, output_path: 
     # Create visualizations
     comparator.create_comparison_visualizations()
     
+    # 🆕 GERAR PDF ACADÊMICO
+    logger.info("📄 Gerando PDF acadêmico para artigo...")
+    try:
+        from visualization.academic_viz import create_academic_pdf_report
+        
+        academic_pdfs = create_academic_pdf_report(
+            'comparison',
+            comparison_results=results,
+            htc_data=htc_data,
+            reference_data=ref_data,
+            output_path=comparison_output / "academic_reports",
+            filename="simulator_comparison_academic.pdf"
+        )
+        
+        for pdf_path in academic_pdfs:
+            logger.info(f"📄 PDF acadêmico gerado: {pdf_path}")
+            
+    except ImportError as e:
+        logger.warning(f"⚠️ Dependências para PDF não encontradas: {e}")
+        logger.info("💡 Para gerar PDFs, instale: pip install matplotlib seaborn plotly kaleido")
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao gerar PDF acadêmico: {e}")
+    
     # Print summary
     logger.info("="*80)
     logger.info("🎯 COMPARAÇÃO CONCLUÍDA!")

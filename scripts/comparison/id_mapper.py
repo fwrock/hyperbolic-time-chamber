@@ -110,15 +110,29 @@ class IDMapper:
         htc_base_ids = {}  # base_id -> original_htc_id
         ref_base_ids = {}  # base_id -> original_ref_id
         
+        logger.info("   🔄 Processando IDs do HTC...")
+        processed = 0
         for htc_id in htc_car_ids:
             base_id = self.extract_base_car_id(htc_id, 'htc')
             if base_id:
                 htc_base_ids[base_id] = htc_id
+            
+            processed += 1
+            if processed % 1000 == 0:
+                progress = (processed / len(htc_car_ids)) * 100
+                logger.info(f"     HTC: {processed}/{len(htc_car_ids)} ({progress:.1f}%)")
         
+        logger.info("   🔄 Processando IDs de referência...")
+        processed = 0
         for ref_id in ref_car_ids:
             base_id = self.extract_base_car_id(ref_id, 'reference')
             if base_id:
                 ref_base_ids[base_id] = ref_id
+            
+            processed += 1
+            if processed % 1000 == 0:
+                progress = (processed / len(ref_car_ids)) * 100
+                logger.info(f"     Ref: {processed}/{len(ref_car_ids)} ({progress:.1f}%)")
         
         # Create bidirectional mapping
         htc_to_ref = {}

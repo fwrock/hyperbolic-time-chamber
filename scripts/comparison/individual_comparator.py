@@ -45,11 +45,20 @@ class IndividualComparator:
         vehicle_comparisons = {}
         
         # Get mapped vehicle pairs
+        total_vehicles = len(self.id_mapper.htc_to_ref_cars)
+        logger.info(f"   📊 Total de veículos a comparar: {total_vehicles}")
+        
+        processed = 0
         for htc_id, ref_id in self.id_mapper.htc_to_ref_cars.items():
             vehicle_comparison = self._compare_single_vehicle(htc_data, ref_data, htc_id, ref_id)
             if vehicle_comparison:
                 base_id = self.id_mapper.normalize_htc_car_id(htc_id)
                 vehicle_comparisons[base_id] = vehicle_comparison
+            
+            processed += 1
+            if processed % 100 == 0 or processed == total_vehicles:
+                progress = (processed / total_vehicles) * 100
+                logger.info(f"   🔄 Progresso: {processed}/{total_vehicles} ({progress:.1f}%) veículos processados")
         
         # Calculate summary statistics
         summary = self._calculate_vehicle_summary(vehicle_comparisons)
@@ -88,8 +97,22 @@ class IndividualComparator:
         time_col_htc = 'tick' if 'tick' in htc_vehicle.columns else 'timestamp'
         time_col_ref = 'tick' if 'tick' in ref_vehicle.columns else 'time'
         
-        htc_vehicle = htc_vehicle.sort_values(time_col_htc)
-        ref_vehicle = ref_vehicle.sort_values(time_col_ref)
+        # Convert time columns to numeric for sorting
+        try:
+            if time_col_htc in htc_vehicle.columns:
+                htc_vehicle[time_col_htc] = pd.to_numeric(htc_vehicle[time_col_htc], errors='coerce')
+            if time_col_ref in ref_vehicle.columns:
+                ref_vehicle[time_col_ref] = pd.to_numeric(ref_vehicle[time_col_ref], errors='coerce')
+                
+            # Remove rows with invalid time values
+            htc_vehicle = htc_vehicle.dropna(subset=[time_col_htc])
+            ref_vehicle = ref_vehicle.dropna(subset=[time_col_ref])
+            
+            htc_vehicle = htc_vehicle.sort_values(time_col_htc)
+            ref_vehicle = ref_vehicle.sort_values(time_col_ref)
+        except Exception as e:
+            logger.warning(f"⚠️ Error sorting by time for {htc_id}: {e}")
+            # Continue without sorting if there's an error
         
         comparison = {
             'htc_id': htc_id,
@@ -260,11 +283,23 @@ class IndividualComparator:
         link_comparisons = {}
         
         # Get mapped link pairs
-        for htc_id, ref_id in self.id_mapper.htc_to_ref_links.items():
-            link_comparison = self._compare_single_link(htc_data, ref_data, htc_id, ref_id)
-            if link_comparison:
-                base_id = self.id_mapper.normalize_htc_link_id(htc_id)
-                link_comparisons[base_id] = link_comparison
+        if hasattr(self.id_mapper, 'htc_to_ref_links') and self.id_mapper.htc_to_ref_links:
+            total_links = len(self.id_mapper.htc_to_ref_links)
+            logger.info(f"   📊 Total de links a comparar: {total_links}")
+            
+            processed = 0
+            for htc_id, ref_id in self.id_mapper.htc_to_ref_links.items():
+                link_comparison = self._compare_single_link(htc_data, ref_data, htc_id, ref_id)
+                if link_comparison:
+                    base_id = self.id_mapper.normalize_htc_link_id(htc_id)
+                    link_comparisons[base_id] = link_comparison
+                
+                processed += 1
+                if processed % 50 == 0 or processed == total_links:
+                    progress = (processed / total_links) * 100
+                    logger.info(f"   🔄 Progresso: {processed}/{total_links} ({progress:.1f}%) links processados")
+        else:
+            logger.info("   ⚠️ Nenhum mapeamento de links encontrado, pulando comparação de links")
         
         # Calculate summary statistics
         summary = self._calculate_link_summary(link_comparisons)
@@ -480,3 +515,44 @@ class IndividualComparator:
         
         plt.savefig(self.output_path / filename, dpi=300, bbox_inches='tight')
         plt.close()
+    
+    def generate_academic_pdf(self, individual_results: Dict[str, Any]) -> Path:
+        """
+        Gera PDF acadêmico com comparação individual
+        
+        Args:
+            individual_results: Resultados da comparação individual
+            
+        Returns:
+            Path para o PDF gerado
+        """
+        logger.info("📄 Gerando PDF acadêmico para comparação individual...")
+        
+        try:
+            # Import acadêmico (pode falhar se dependências não estiverem instaladas)
+            import sys
+            sys.path.append(str(self.output_path.parent.parent))
+            from visualization.academic_viz import create_academic_pdf_report
+            
+            # Gerar PDF
+            pdf_paths = create_academic_pdf_report(
+                'individual',
+                individual_results=individual_results,
+                output_path=self.output_path / "academic_reports",
+                filename="individual_comparison_academic.pdf"
+            )
+            
+            if pdf_paths:
+                logger.info(f"✅ PDF acadêmico gerado: {pdf_paths[0]}")
+                return pdf_paths[0]
+            else:
+                logger.warning("⚠️ Nenhum PDF foi gerado")
+                return None
+                
+        except ImportError as e:
+            logger.warning(f"⚠️ Dependências para PDF não encontradas: {e}")
+            logger.info("💡 Para gerar PDFs, instale: pip install matplotlib seaborn plotly kaleido")
+            return None
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao gerar PDF acadêmico: {e}")
+            return None
