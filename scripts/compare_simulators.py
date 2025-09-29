@@ -10,6 +10,7 @@ import pandas as pd
 import argparse
 import logging
 from datetime import datetime
+from typing import List
 
 # Adiciona o diretório scripts ao PYTHONPATH
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -21,6 +22,7 @@ from data_sources.file_sources import CSVDataSource
 from comparison.reference_parser import ReferenceSimulatorParser
 from comparison.simulator_comparator import SimulatorComparator
 from analysis.general_metrics import GeneralTrafficMetrics
+from analysis.reproducibility_analyzer import ReproducibilityAnalyzer
 
 def setup_logging():
     """Configura o sistema de logging"""
@@ -43,7 +45,10 @@ def load_htc_data(source_type: str, **kwargs) -> pd.DataFrame:
     if source_type == 'cassandra':
         logger.info("🔌 Carregando dados do HTC via Cassandra...")
         cassandra_source = CassandraDataSource()
-        data = cassandra_source.get_vehicle_flow_data(limit=kwargs.get('limit'))
+        data = cassandra_source.get_vehicle_flow_data(
+            limit=kwargs.get('limit', 999999999),
+            simulation_id=kwargs.get('simulation_id')
+        )
         
     elif source_type == 'csv':
         logger.info(f"📁 Carregando dados do HTC via CSV...")
@@ -58,11 +63,62 @@ def load_htc_data(source_type: str, **kwargs) -> pd.DataFrame:
         return pd.DataFrame()
     
     if not data.empty:
-        logger.info(f"✅ HTC: Carregados {len(data)} registros, {data['car_id'].nunique()} veículos")
+        sim_info = f" (sim_id: {kwargs.get('simulation_id')})" if kwargs.get('simulation_id') else ""
+        logger.info(f"✅ HTC{sim_info}: Carregados {len(data)} registros, {data['car_id'].nunique()} veículos")
     else:
         logger.warning("⚠️ Nenhum dado encontrado no HTC")
     
     return data
+
+def run_reproducibility_analysis(datasets: List[pd.DataFrame], run_names: List[str], output_path: Path) -> dict:
+    """
+    Executa análise de reprodutibilidade focada em TICK para comparação científica
+    
+    Args:
+        datasets: Lista de DataFrames com dados das execuções
+        run_names: Nomes das execuções 
+        output_path: Caminho para salvar resultados
+        
+    Returns:
+        Resultados da análise de reprodutibilidade
+    """
+    logger = logging.getLogger(__name__)
+    
+    if len(datasets) < 2:
+        logger.error("❌ São necessárias pelo menos 2 execuções para análise de reprodutibilidade")
+        return {}
+    
+    logger.info(f"🔄 Iniciando análise de reprodutibilidade de {len(datasets)} execuções...")
+    
+    # Criar diretório de saída para reprodutibilidade
+    repro_output = output_path / "reproducibility_analysis"
+    repro_output.mkdir(parents=True, exist_ok=True)
+    
+    # Criar analisador de reprodutibilidade
+    analyzer = ReproducibilityAnalyzer(output_dir=str(repro_output))
+    
+    # Executar análise completa
+    analysis = analyzer.analyze_multiple_runs(datasets, run_names)
+    
+    # Gerar visualizações específicas para comparação de simuladores
+    viz_files = analyzer.create_reproducibility_visualizations(datasets, run_names, analysis)
+    
+    # Gerar relatório
+    report_file = analyzer.generate_reproducibility_report(analysis)
+    
+    # Imprimir resumo
+    analyzer.print_reproducibility_summary(analysis)
+    
+    # Adicionar informações específicas para comparação de simuladores
+    analysis['visualization_files'] = viz_files
+    analysis['report_file'] = report_file
+    analysis['output_directory'] = str(repro_output)
+    
+    logger.info(f"✅ Análise de reprodutibilidade concluída!")
+    logger.info(f"📁 Arquivos gerados em: {repro_output}")
+    logger.info(f"📄 Relatório: {report_file}")
+    
+    return analysis
 
 def load_reference_data(xml_file_path: str) -> pd.DataFrame:
     """
@@ -92,14 +148,17 @@ def load_reference_data(xml_file_path: str) -> pd.DataFrame:
     
     return data
 
-def run_comparison(htc_data: pd.DataFrame, ref_data: pd.DataFrame, output_path: Path) -> dict:
+def run_comparison(htc_data: pd.DataFrame, ref_data: pd.DataFrame, output_path: Path, 
+                  additional_runs: List[pd.DataFrame] = None, additional_names: List[str] = None) -> dict:
     """
-    Executa a comparação entre os simuladores
+    Executa a comparação entre os simuladores, incluindo análise de reprodutibilidade se houver múltiplas execuções
     
     Args:
         htc_data: Dados do HTC
         ref_data: Dados de referência
         output_path: Caminho para salvar resultados
+        additional_runs: Dados adicionais para análise de reprodutibilidade
+        additional_names: Nomes das execuções adicionais
         
     Returns:
         Resultados da comparação
@@ -121,6 +180,22 @@ def run_comparison(htc_data: pd.DataFrame, ref_data: pd.DataFrame, output_path: 
     
     # Run comparison
     results = comparator.compare_traffic_flows(htc_data, ref_data)
+    
+    # 🆕 ANÁLISE DE REPRODUTIBILIDADE (se houver múltiplas execuções)
+    if additional_runs and len(additional_runs) > 0:
+        logger.info("🔄 Executando análise de reprodutibilidade...")
+        
+        # Combinar todas as execuções
+        all_datasets = [htc_data, ref_data] + additional_runs
+        all_names = ['HTC_Primary', 'Reference_Primary'] + (additional_names or [f'Run_{i+3}' for i in range(len(additional_runs))])
+        
+        # Executar análise de reprodutibilidade
+        repro_results = run_reproducibility_analysis(all_datasets, all_names, comparison_output)
+        results['reproducibility_analysis'] = repro_results
+        
+        logger.info("🎯 Análise de reprodutibilidade concluída e integrada!")
+    else:
+        logger.info("ℹ️ Análise de reprodutibilidade não executada - apenas 2 datasets (HTC vs Referência)")
     
     # Generate report
     summary = comparator.generate_comparison_report()
@@ -240,9 +315,13 @@ def main():
 Exemplos de uso:
 
   # Comparação tradicional HTC vs Referência
-  python compare_simulators.py events.xml --htc-cassandra
+  python compare_simulators.py events.xml --htc-cassandra sim_id_001
 
-  # Análise de reprodutibilidade (redireciona para script específico)
+  # Comparação com análise de reprodutibilidade (múltiplas execuções HTC)
+  python compare_simulators.py events.xml --htc-cassandra sim_id_001 --additional-htc-sims sim_id_002 sim_id_003
+  
+  # Comparação com múltiplos arquivos de referência
+  python compare_simulators.py events.xml --htc-cassandra sim_id_001 --additional-ref-files ref2.xml ref3.xml  # Análise de reprodutibilidade pura (redireciona para script específico)
   python compare_simulators.py --reproducibility --cassandra-sims sim_001 sim_002
 
   # Criar amostra XML para testes
@@ -263,10 +342,18 @@ Exemplos de uso:
     
     # HTC data source options (para modo tradicional)
     htc_group = parser.add_mutually_exclusive_group()
-    htc_group.add_argument('--htc-cassandra', action='store_true', 
-                          help='Usar dados do HTC via Cassandra')
+    htc_group.add_argument('--htc-cassandra', type=str, metavar='SIM_ID',
+                          help='Usar dados do HTC via Cassandra (informar ID da simulação)')
     htc_group.add_argument('--htc-csv', type=str, metavar='FILE',
                           help='Usar dados do HTC via arquivo CSV')
+    
+    # Múltiplas execuções para análise de reprodutibilidade
+    parser.add_argument('--additional-htc-sims', nargs='+', metavar='SIM_ID',
+                       help='IDs adicionais de simulações HTC no Cassandra para análise de reprodutibilidade')
+    parser.add_argument('--additional-htc-csvs', nargs='+', metavar='FILE',
+                       help='Arquivos CSV adicionais do HTC para análise de reprodutibilidade')
+    parser.add_argument('--additional-ref-files', nargs='+', metavar='FILE',
+                       help='Arquivos XML adicionais de referência para análise de reprodutibilidade')
     
     # Reprodutibilidade options
     repro_group = parser.add_mutually_exclusive_group()
@@ -344,20 +431,69 @@ Exemplos de uso:
             return 1
         
         if not args.htc_cassandra and not args.htc_csv:
-            logger.error("❌ Deve especificar fonte de dados do HTC (--htc-cassandra ou --htc-csv)")
+            logger.error("❌ Deve especificar fonte de dados do HTC (--htc-cassandra SIM_ID ou --htc-csv FILE)")
             return 1
         
         # Load HTC data
         if args.htc_cassandra:
-            htc_data = load_htc_data('cassandra', limit=args.limit)
+            htc_data = load_htc_data('cassandra', limit=args.limit, simulation_id=args.htc_cassandra)
         else:
             htc_data = load_htc_data('csv', file_path=args.htc_csv)
         
         # Load reference data
         ref_data = load_reference_data(args.reference_xml)
         
+        # 🆕 CARREGAR EXECUÇÕES ADICIONAIS PARA REPRODUTIBILIDADE
+        additional_datasets = []
+        additional_names = []
+        
+        # Carregar simulações HTC adicionais do Cassandra
+        if args.additional_htc_sims:
+            logger.info(f"📊 Carregando {len(args.additional_htc_sims)} simulações HTC adicionais do Cassandra...")
+            for i, sim_id in enumerate(args.additional_htc_sims):
+                logger.info(f"🔌 Carregando simulação HTC {i+1}/{len(args.additional_htc_sims)}: {sim_id}")
+                additional_data = load_htc_data('cassandra', limit=args.limit, simulation_id=sim_id)
+                if not additional_data.empty:
+                    additional_datasets.append(additional_data)
+                    additional_names.append(f'HTC_{sim_id}')
+                else:
+                    logger.warning(f"⚠️ Simulação {sim_id} não contém dados válidos")
+        
+        # Carregar arquivos CSV HTC adicionais
+        if args.additional_htc_csvs:
+            logger.info(f"📁 Carregando {len(args.additional_htc_csvs)} arquivos CSV HTC adicionais...")
+            for i, csv_file in enumerate(args.additional_htc_csvs):
+                logger.info(f"📄 Carregando CSV HTC {i+1}/{len(args.additional_htc_csvs)}: {csv_file}")
+                additional_data = load_htc_data('csv', file_path=csv_file)
+                if not additional_data.empty:
+                    additional_datasets.append(additional_data)
+                    csv_name = Path(csv_file).stem
+                    additional_names.append(f'HTC_{csv_name}')
+                else:
+                    logger.warning(f"⚠️ Arquivo {csv_file} não contém dados válidos")
+        
+        # Carregar arquivos XML de referência adicionais
+        if args.additional_ref_files:
+            logger.info(f"📄 Carregando {len(args.additional_ref_files)} arquivos XML de referência adicionais...")
+            for i, xml_file in enumerate(args.additional_ref_files):
+                logger.info(f"📄 Carregando XML Ref {i+1}/{len(args.additional_ref_files)}: {xml_file}")
+                additional_data = load_reference_data(xml_file)
+                if not additional_data.empty:
+                    additional_datasets.append(additional_data)
+                    xml_name = Path(xml_file).stem
+                    additional_names.append(f'Ref_{xml_name}')
+                else:
+                    logger.warning(f"⚠️ Arquivo {xml_file} não contém dados válidos")
+        
+        # Informar sobre análise de reprodutibilidade
+        if additional_datasets:
+            logger.info(f"🔄 Serão analisadas {len(additional_datasets) + 2} execuções no total para reprodutibilidade")
+            logger.info(f"   • 1 execução HTC principal")
+            logger.info(f"   • 1 execução de referência principal") 
+            logger.info(f"   • {len(additional_datasets)} execuções adicionais")
+        
         # Run comparison
-        results = run_comparison(htc_data, ref_data, output_path)
+        results = run_comparison(htc_data, ref_data, output_path, additional_datasets, additional_names)
         
         if results:
             logger.info("🎉 Comparação concluída com sucesso!")
@@ -377,11 +513,56 @@ Exemplos de uso:
                 for plot_file in results['reference_plots']:
                     print(f"  • {plot_file}")
             
+            # 🆕 RESUMO DA ANÁLISE DE REPRODUTIBILIDADE
+            if 'reproducibility_analysis' in results:
+                repro_data = results['reproducibility_analysis']
+                viz_files = repro_data.get('visualization_files', [])
+                
+                print(f"\n� ANÁLISE DE REPRODUTIBILIDADE ({len(viz_files)} arquivos):")
+                print(f"  �📁 Diretório: {repro_data.get('output_directory', 'N/A')}")
+                print(f"  📄 Relatório: {repro_data.get('report_file', 'N/A')}")
+                
+                # Mostrar alguns arquivos principais
+                for viz_file in viz_files[:5]:  # Mostrar apenas os primeiros 5
+                    file_name = Path(viz_file).name
+                    print(f"  • {file_name}")
+                
+                if len(viz_files) > 5:
+                    print(f"  • ... e mais {len(viz_files) - 5} arquivos")
+                
+                # Resumo de métricas de reprodutibilidade se disponível
+                summary = repro_data.get('summary', {})
+                if summary:
+                    data_consistency = summary.get('data_consistency', {})
+                    event_cv = data_consistency.get('event_count_cv', float('inf'))
+                    vehicle_cv = data_consistency.get('vehicle_count_cv', float('inf'))
+                    
+                    print(f"\n🎯 MÉTRICAS DE REPRODUTIBILIDADE:")
+                    if event_cv != float('inf'):
+                        consistency_level = "Excelente" if event_cv < 0.01 else "Boa" if event_cv < 0.05 else "Moderada" if event_cv < 0.1 else "Baixa"
+                        print(f"  • Variação em eventos: CV = {event_cv:.4f} ({consistency_level})")
+                    
+                    if vehicle_cv != float('inf'):
+                        consistency_level = "Excelente" if vehicle_cv < 0.01 else "Boa" if vehicle_cv < 0.05 else "Moderada" if vehicle_cv < 0.1 else "Baixa"
+                        print(f"  • Variação em veículos: CV = {vehicle_cv:.4f} ({consistency_level})")
+                
+                # Análise baseada em TICK se disponível
+                temporal_patterns = repro_data.get('temporal_patterns', {})
+                tick_consistency = temporal_patterns.get('tick_consistency', {})
+                if tick_consistency:
+                    repro_scores = tick_consistency.get('reproducibility_score', {})
+                    overall_score = repro_scores.get('overall_tick_reproducibility', 0)
+                    
+                    score_level = "Excelente" if overall_score >= 0.9 else "Boa" if overall_score >= 0.8 else "Moderada" if overall_score >= 0.6 else "Baixa"
+                    print(f"  • Score de reprodutibilidade (TICK): {overall_score:.3f} ({score_level})")
+            
             print(f"\n📁 Todos os arquivos salvos em: {output_path}")
             print(f"🔍 Verifique os subdiretórios:")
             print(f"  • comparison/ - Análise comparativa")
             print(f"  • general_metrics/ - Métricas gerais HTC")
             print(f"  • reference_metrics/ - Métricas gerais Referência")
+            if 'reproducibility_analysis' in results:
+                print(f"  • reproducibility_analysis/ - Análise de reprodutibilidade (TICK-based)")
             print("="*80 + "\n")
             
             return 0

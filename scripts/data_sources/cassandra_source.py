@@ -92,8 +92,33 @@ class CassandraDataSource:
         Returns:
             DataFrame with vehicle flow data
         """
+        # Buscar tanto eventos de flow quanto eventos de tráfego
+        flow_data = self._get_data_by_type('vehicle_flow', simulation_id, start_time, end_time, limit)
+        traffic_data = self._get_data_by_type('traffic_events', simulation_id, start_time, end_time, limit)
+        
+        # Combinar os DataFrames
+        if not flow_data.empty and not traffic_data.empty:
+            combined_data = pd.concat([flow_data, traffic_data], ignore_index=True)
+        elif not flow_data.empty:
+            combined_data = flow_data
+        elif not traffic_data.empty:
+            combined_data = traffic_data
+        else:
+            combined_data = pd.DataFrame()
+            
+        return combined_data
+    
+    def _get_data_by_type(self, 
+                         report_type: str,
+                         simulation_id: str = None,
+                         start_time: datetime = None,
+                         end_time: datetime = None,
+                         limit: int = None) -> pd.DataFrame:
+        """
+        Helper method to retrieve data by report type
+        """
         query_parts = [f"SELECT * FROM {self.table}"]
-        conditions = ["report_type = 'vehicle_flow'"]
+        conditions = [f"report_type = '{report_type}'"]
         
         if simulation_id:
             conditions.append(f"simulation_id = '{simulation_id}'")
@@ -150,9 +175,9 @@ class CassandraDataSource:
                         logger.warning(f"Could not parse data: {data_str[:100]}...")
                         continue
                 
-                # Filter by event types if specified
-                if event_types and report_data.get('event_type') not in event_types:
-                    continue
+                # Filter by event types - not needed here as filtering is done at method level
+                # if event_types and report_data.get('event_type') not in event_types:
+                #     continue
                 
                 # Flatten the data structure
                 record = {

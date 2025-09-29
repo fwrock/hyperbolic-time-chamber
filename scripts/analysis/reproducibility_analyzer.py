@@ -276,42 +276,90 @@ class ReproducibilityAnalyzer:
         return summary
     
     def _analyze_temporal_reproducibility(self, datasets: List[pd.DataFrame], run_names: List[str]) -> Dict[str, Any]:
-        """Analisa reprodutibilidade dos padrões temporais"""
+        """Analisa reprodutibilidade dos padrões temporais baseada EXCLUSIVAMENTE em TICK"""
         temporal_analysis = {}
         
-        # Determinar coluna de tempo
-        time_col = 'tick' if any('tick' in df.columns for df in datasets) else 'timestamp'
+        # APENAS TICK é aceito para análise científica
+        if not any('tick' in df.columns for df in datasets):
+            self.logger.warning("⚠️ Nenhuma coluna 'tick' encontrada nos datasets")
+            self.logger.warning("🔬 Para análise científica de reprodutibilidade, é OBRIGATÓRIO usar TICK")
+            self.logger.warning("💡 TICK = tempo lógico da simulação (determinístico)")
+            self.logger.warning("❌ TIMESTAMP = tempo real de processamento (não científico)")
+            return {
+                'error': 'Coluna tick não encontrada',
+                'message': 'Análise de reprodutibilidade científica requer coluna tick',
+                'explanation': 'TICK representa o tempo lógico da simulação, essencial para reprodutibilidade'
+            }
         
-        if not any(time_col in df.columns for df in datasets):
-            return {}
+        self.logger.info("🕒 Análise temporal baseada EXCLUSIVAMENTE em TICK")
+        self.logger.info("🔬 TICK = Tempo lógico da simulação (medida científica correta)")
         
-        # Análise de fluxo horário para cada execução
+        # Análise de fluxo baseada em tick para reprodutibilidade científica
         hourly_flows = []
+        tick_patterns = []
         
         for i, df in enumerate(datasets):
-            if time_col in df.columns:
-                df_copy = df.copy()
+            if 'tick' not in df.columns:
+                self.logger.warning(f"⚠️ Dataset {run_names[i]} não possui coluna 'tick' - IGNORADO")
+                continue
                 
-                if time_col == 'tick':
-                    df_copy[time_col] = pd.to_numeric(df_copy[time_col], errors='coerce')
-                    df_copy = df_copy.dropna(subset=[time_col])
-                    df_copy['hour'] = (df_copy[time_col] // 3600).astype(int)
-                else:
-                    df_copy[time_col] = pd.to_datetime(df_copy[time_col], errors='coerce')
-                    df_copy = df_copy.dropna(subset=[time_col])
-                    df_copy['hour'] = df_copy[time_col].dt.hour
-                
-                hourly_flow = df_copy.groupby('hour').size()
-                hourly_flows.append({
-                    'run': run_names[i],
-                    'flow': hourly_flow.to_dict(),
-                    'peak_hour': hourly_flow.idxmax() if not hourly_flow.empty else None,
-                    'peak_volume': hourly_flow.max() if not hourly_flow.empty else 0
-                })
+            df_copy = df.copy()
+            
+            # Conversão e validação do tick
+            df_copy['tick'] = pd.to_numeric(df_copy['tick'], errors='coerce')
+            df_copy = df_copy.dropna(subset=['tick'])
+            
+            if df_copy.empty:
+                self.logger.warning(f"⚠️ Dataset {run_names[i]} não possui dados válidos de tick")
+                continue
+            
+            # Usar tick para análise temporal (tick é o tempo de simulação)
+            df_copy['simulation_hour'] = (df_copy['tick'] // 3600).astype(int)
+            df_copy['simulation_minute'] = ((df_copy['tick'] % 3600) // 60).astype(int)
+            
+            # Análise por tick específico para comparações precisas
+            tick_min = df_copy['tick'].min()
+            tick_max = df_copy['tick'].max()
+            duration = tick_max - tick_min
+            
+            tick_analysis = {
+                'run': run_names[i],
+                'tick_range': (tick_min, tick_max),
+                'total_simulation_duration': duration,
+                'events_per_tick_second': len(df_copy) / duration if duration > 0 else 0,
+                'total_events': len(df_copy),
+                'unique_ticks': df_copy['tick'].nunique(),
+                'tick_resolution': df_copy['tick'].diff().dropna().min() if len(df_copy) > 1 else 0
+            }
+            tick_patterns.append(tick_analysis)
+            
+            # Análise horária baseada em tick
+            hourly_flow = df_copy.groupby('simulation_hour').size()
+            hourly_flows.append({
+                'run': run_names[i],
+                'flow': hourly_flow.to_dict(),
+                'peak_hour': hourly_flow.idxmax() if not hourly_flow.empty else None,
+                'peak_volume': hourly_flow.max() if not hourly_flow.empty else 0
+            })
+        
+        if not tick_patterns:
+            return {
+                'error': 'Nenhum dataset válido com tick',
+                'message': 'Todos os datasets foram ignorados por não possuírem dados válidos de tick'
+            }
         
         if hourly_flows:
             temporal_analysis['hourly_flows'] = hourly_flows
             temporal_analysis['temporal_consistency'] = self._analyze_temporal_consistency(hourly_flows)
+            
+        if tick_patterns:
+            temporal_analysis['tick_patterns'] = tick_patterns
+            temporal_analysis['tick_consistency'] = self._analyze_tick_consistency(tick_patterns)
+            
+            # Log de informações importantes
+            self.logger.info(f"✅ Analisados {len(tick_patterns)} datasets com dados válidos de tick")
+            for tp in tick_patterns:
+                self.logger.info(f"   📊 {tp['run']}: {tp['total_events']} eventos, duração {tp['total_simulation_duration']:.1f} ticks")
         
         return temporal_analysis
     
@@ -358,6 +406,58 @@ class ReproducibilityAnalyzer:
                 consistency['mean_correlation'] = np.mean([c['correlation'] for c in correlations])
         
         return consistency
+    
+    def _analyze_tick_consistency(self, tick_patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analisa consistência dos padrões de tick para simulações determinísticas"""
+        tick_consistency = {}
+        
+        # Verificar consistência de duração da simulação
+        durations = [tp['total_simulation_duration'] for tp in tick_patterns]
+        tick_ranges = [tp['tick_range'] for tp in tick_patterns]
+        
+        tick_consistency['simulation_duration'] = {
+            'durations': durations,
+            'mean_duration': np.mean(durations),
+            'std_duration': np.std(durations),
+            'cv_duration': np.std(durations) / np.mean(durations) if np.mean(durations) > 0 else float('inf'),
+            'duration_variance': len(set(durations))  # Quantas durações diferentes
+        }
+        
+        # Verificar consistência dos intervalos de tick
+        start_ticks = [tr[0] for tr in tick_ranges]
+        end_ticks = [tr[1] for tr in tick_ranges]
+        
+        tick_consistency['tick_range_consistency'] = {
+            'start_ticks': start_ticks,
+            'end_ticks': end_ticks,
+            'consistent_start': len(set(start_ticks)) == 1,
+            'consistent_end': len(set(end_ticks)) == 1,
+            'start_tick_variance': np.std(start_ticks),
+            'end_tick_variance': np.std(end_ticks)
+        }
+        
+        # Verificar taxa de eventos por tick (indicador de determinismo)
+        events_per_tick = [tp['events_per_tick_second'] for tp in tick_patterns]
+        tick_consistency['event_rate_consistency'] = {
+            'events_per_tick_rates': events_per_tick,
+            'mean_rate': np.mean(events_per_tick),
+            'std_rate': np.std(events_per_tick),
+            'cv_rate': np.std(events_per_tick) / np.mean(events_per_tick) if np.mean(events_per_tick) > 0 else float('inf'),
+            'deterministic_threshold': 0.001  # CV < 0.001 indica alta reprodutibilidade
+        }
+        
+        # Score de reprodutibilidade baseado em tick
+        cv_duration = tick_consistency['simulation_duration']['cv_duration']
+        cv_rate = tick_consistency['event_rate_consistency']['cv_rate']
+        
+        # Score combinado (quanto menor o CV, melhor a reprodutibilidade)
+        tick_consistency['reproducibility_score'] = {
+            'duration_reproducibility': max(0, 1 - min(cv_duration, 1)),
+            'rate_reproducibility': max(0, 1 - min(cv_rate, 1)),
+            'overall_tick_reproducibility': max(0, 1 - min((cv_duration + cv_rate) / 2, 1))
+        }
+        
+        return tick_consistency
     
     def _analyze_spatial_reproducibility(self, datasets: List[pd.DataFrame], run_names: List[str]) -> Dict[str, Any]:
         """Analisa reprodutibilidade dos padrões espaciais"""
@@ -1433,13 +1533,28 @@ class ReproducibilityAnalyzer:
     def print_reproducibility_summary(self, analysis: Dict[str, Any]):
         """Imprime resumo da análise de reprodutibilidade"""
         print("\n" + "="*80)
-        print("🔄 RELATÓRIO DE REPRODUTIBILIDADE")
+        print("🔄 RELATÓRIO DE REPRODUTIBILIDADE (BASEADO EM TICK)")
         print("="*80)
+        
+        # Verificar se houve erro na análise temporal
+        temporal_data = analysis.get('temporal_patterns', {})
+        if 'error' in temporal_data:
+            print("\n❌ ERRO NA ANÁLISE TEMPORAL:")
+            print(f"  🚫 {temporal_data['message']}")
+            print(f"  💡 {temporal_data['explanation']}")
+            print("\n🔬 REQUISITOS PARA ANÁLISE CIENTÍFICA DE REPRODUTIBILIDADE:")
+            print("  • ✅ Coluna 'tick' OBRIGATÓRIA em todos os datasets")
+            print("  • ❌ Coluna 'timestamp' NÃO é aceita (tempo real ≠ tempo lógico)")
+            print("  • 🎯 TICK = Tempo lógico da simulação (determinístico)")
+            print("  • ⚠️ TIMESTAMP = Tempo de processamento (varia por infraestrutura)")
+            print("\n" + "="*80)
+            return
         
         summary = analysis.get('summary', {})
         print(f"\n📊 RESUMO GERAL:")
         print(f"  • Número de execuções analisadas: {summary.get('num_runs', 0)}")
         print(f"  • Execuções: {', '.join(summary.get('run_names', []))}")
+        print(f"  • ✅ Análise baseada EXCLUSIVAMENTE em TICK (tempo lógico)")
         
         # Consistência de dados
         data_consistency = summary.get('data_consistency', {})
@@ -1455,6 +1570,65 @@ class ReproducibilityAnalyzer:
             if vehicle_cv != float('inf'):
                 consistency_level = "Excelente" if vehicle_cv < 0.01 else "Boa" if vehicle_cv < 0.05 else "Moderada" if vehicle_cv < 0.1 else "Baixa"
                 print(f"  • Variação em número de veículos: CV = {vehicle_cv:.4f} ({consistency_level})")
+        
+        # NOVA SEÇÃO: Análise baseada em TICK (essencial para reprodutibilidade científica)
+        tick_consistency = temporal_data.get('tick_consistency', {})
+        if tick_consistency:
+            print(f"\n🕒 ANÁLISE BASEADA EM TICK (REPRODUTIBILIDADE CIENTÍFICA):")
+            
+            # Duração da simulação
+            duration_data = tick_consistency.get('simulation_duration', {})
+            if duration_data:
+                cv_duration = duration_data.get('cv_duration', float('inf'))
+                if cv_duration != float('inf'):
+                    duration_level = "Determinística" if cv_duration < 0.001 else "Excelente" if cv_duration < 0.01 else "Boa" if cv_duration < 0.05 else "Problemática"
+                    print(f"  • Consistência da duração da simulação: CV = {cv_duration:.6f} ({duration_level})")
+                    
+                    durations = duration_data.get('durations', [])
+                    if durations:
+                        print(f"    - Durações: {durations} ticks")
+                        print(f"    - Diferença máxima: {max(durations) - min(durations)} ticks")
+            
+            # Taxa de eventos por tick
+            rate_data = tick_consistency.get('event_rate_consistency', {})
+            if rate_data:
+                cv_rate = rate_data.get('cv_rate', float('inf'))
+                if cv_rate != float('inf'):
+                    rate_level = "Determinística" if cv_rate < 0.001 else "Excelente" if cv_rate < 0.01 else "Boa" if cv_rate < 0.05 else "Problemática"
+                    print(f"  • Consistência da taxa de eventos: CV = {cv_rate:.6f} ({rate_level})")
+                    
+                    threshold = rate_data.get('deterministic_threshold', 0.001)
+                    is_deterministic = cv_rate < threshold
+                    print(f"    - {'✅ DETERMINÍSTICA' if is_deterministic else '⚠️ NÃO DETERMINÍSTICA'} (threshold: {threshold})")
+            
+            # Score de reprodutibilidade
+            repro_scores = tick_consistency.get('reproducibility_score', {})
+            if repro_scores:
+                overall_score = repro_scores.get('overall_tick_reproducibility', 0)
+                duration_score = repro_scores.get('duration_reproducibility', 0)
+                rate_score = repro_scores.get('rate_reproducibility', 0)
+                
+                overall_level = "Excelente" if overall_score >= 0.9 else "Boa" if overall_score >= 0.8 else "Moderada" if overall_score >= 0.6 else "Baixa"
+                print(f"  • Score geral de reprodutibilidade: {overall_score:.3f} ({overall_level})")
+                print(f"    - Duração: {duration_score:.3f}")
+                print(f"    - Taxa de eventos: {rate_score:.3f}")
+            
+            # Consistência de intervalos de tick
+            tick_range_data = tick_consistency.get('tick_range_consistency', {})
+            if tick_range_data:
+                consistent_start = tick_range_data.get('consistent_start', False)
+                consistent_end = tick_range_data.get('consistent_end', False)
+                
+                print(f"  • Intervalos de tick:")
+                print(f"    - Início consistente: {'✅ SIM' if consistent_start else '❌ NÃO'}")
+                print(f"    - Fim consistente: {'✅ SIM' if consistent_end else '❌ NÃO'}")
+                
+                start_ticks = tick_range_data.get('start_ticks', [])
+                end_ticks = tick_range_data.get('end_ticks', [])
+                if start_ticks:
+                    print(f"    - Ticks de início: {start_ticks}")
+                if end_ticks:
+                    print(f"    - Ticks de fim: {end_ticks}")
         
         # Similaridade geral
         similarity_scores = analysis.get('similarity_scores', {})
@@ -1511,6 +1685,13 @@ class ReproducibilityAnalyzer:
                 print("     - Verificar determinismo do simulador")
                 print("     - Analisar fontes de aleatoriedade")
                 print("     - Validar configurações idênticas")
+        
+        # IMPORTANTE: Enfatizar que a análise é baseada apenas em TICK
+        print(f"\n🔬 METODOLOGIA CIENTÍFICA:")
+        print(f"  • ✅ Análise EXCLUSIVAMENTE baseada em TICK (tempo lógico da simulação)")
+        print(f"  • 🎯 TICK garante reprodutibilidade científica e determinismo")
+        print(f"  • ❌ TIMESTAMP não é considerado (varia com infraestrutura)")
+        print(f"  • 📈 Métricas de reprodutibilidade focam na lógica da simulação")
         
         print("\n" + "="*80)
     
