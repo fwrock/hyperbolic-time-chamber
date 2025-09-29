@@ -1,0 +1,73 @@
+{
+  "files": {
+    "file1": "/home/my_user/interscsimulator/output/base_scenario_1000/events.xml",
+    "file2": "/home/my_user/interscsimulator/output/base_scenario_1000_1/events.xml"
+  },
+  "basic_statistics": {
+    "event_counts": {
+      "file1": 137170,
+      "file2": 137170,
+      "difference": 0,
+      "match": true
+    },
+    "unique_persons": {
+      "file1": 1000,
+      "file2": 1000,
+      "difference": 0,
+      "match": true
+    },
+    "unique_vehicles": {
+      "file1": 1000,
+      "file2": 1000
+    },
+    "event_types": {
+      "file1": {
+        "entered link": 67085,
+        "left link": 66085,
+        "departure": 1000,
+        "actend": 1000,
+        "wait2link": 1000,
+        "PersonEntersVehicle": 1000
+      },
+      "file2": {
+        "entered link": 67085,
+        "left link": 66085,
+        "departure": 1000,
+        "actend": 1000,
+        "wait2link": 1000,
+        "PersonEntersVehicle": 1000
+      }
+    },
+    "time_range": {
+      "file1": {
+        "min": 155.0,
+        "max": 86398.0
+      },
+      "file2": {
+        "min": 155.0,
+        "max": 86398.0
+      }
+    }
+  },
+  "temporal_analysis": {
+    "common_times": 46608,
+    "unique_times_file1": 89,
+    "unique_times_file2": 88,
+    "temporal_overlap_ratio": 0.9962167361333761,
+    "identical_time_distribution": false
+  },
+  "event_sequence_analysis": {
+    "first_n_events_compared": 1000,
+    "exact_sequence_matches": 1000,
+    "sequence_match_ratio": 1.0,
+    "perfect_sequence_match": true
+  },
+  "exact_match_analysis": {
+    "identical_files": false,
+    "file1_hash": "fe93838d937830ff8031abe6070b50dc",
+    "file2_hash": "41e04808c32728dd3fd7dddae3ca9035",
+    "exact_match_ratio": 0.0
+  },
+  "determinism_score": 0.6990541840333441,
+  "conclusion": "PARCIALMENTE DETERMINÍSTICO"
+}

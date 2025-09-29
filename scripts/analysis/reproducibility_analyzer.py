@@ -15,6 +15,7 @@ from scipy import stats
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import warnings
 warnings.filterwarnings('ignore')
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 class ReproducibilityAnalyzer:
@@ -590,29 +591,39 @@ class ReproducibilityAnalyzer:
                                             datasets: List[pd.DataFrame],
                                             run_names: List[str],
                                             analysis: Dict[str, Any]) -> List[str]:
-        """Cria visualizações da análise de reprodutibilidade"""
+        """Cria visualizações da análise de reprodutibilidade em PNG e PDF separados"""
         generated_files = []
         
         try:
-            # 1. Comparação de métricas básicas
+            # 1. Comparação de métricas básicas (agrupado)
             basic_viz = self._plot_basic_metrics_comparison(datasets, run_names, analysis)
             if basic_viz:
-                generated_files.append(basic_viz)
+                generated_files.extend(basic_viz)
             
-            # 2. Análise temporal
+            # 2. Análise temporal (agrupado)
             temporal_viz = self._plot_temporal_reproducibility(datasets, run_names, analysis)
             if temporal_viz:
-                generated_files.append(temporal_viz)
+                generated_files.extend(temporal_viz)
             
-            # 3. Scores de similaridade
+            # 3. Scores de similaridade (agrupado)
             similarity_viz = self._plot_similarity_scores(analysis)
             if similarity_viz:
-                generated_files.append(similarity_viz)
+                generated_files.extend(similarity_viz)
             
-            # 4. Dashboard de reprodutibilidade
+            # 4. Dashboard de reprodutibilidade (agrupado)
             dashboard_viz = self._create_reproducibility_dashboard(datasets, run_names, analysis)
             if dashboard_viz:
-                generated_files.append(dashboard_viz)
+                generated_files.extend(dashboard_viz)
+            
+            # 5. NOVOS: Gráficos individuais para cada métrica
+            individual_viz = self._generate_individual_plots(datasets, run_names, analysis)
+            if individual_viz:
+                generated_files.extend(individual_viz)
+            
+            # 6. PDF consolidado com todos os gráficos
+            consolidated_pdf = self._create_consolidated_pdf_report(datasets, run_names, analysis)
+            if consolidated_pdf:
+                generated_files.append(consolidated_pdf)
             
         except Exception as e:
             self.logger.error(f"Erro ao gerar visualizações: {e}")
@@ -622,8 +633,8 @@ class ReproducibilityAnalyzer:
     def _plot_basic_metrics_comparison(self, 
                                      datasets: List[pd.DataFrame],
                                      run_names: List[str],
-                                     analysis: Dict[str, Any]) -> Optional[str]:
-        """Gera gráfico de comparação de métricas básicas"""
+                                     analysis: Dict[str, Any]) -> Optional[List[str]]:
+        """Gera gráfico de comparação de métricas básicas em PNG e PDF"""
         basic_metrics = analysis.get('basic_metrics', {})
         
         if not basic_metrics:
@@ -669,17 +680,26 @@ class ReproducibilityAnalyzer:
         
         plt.tight_layout()
         
-        viz_file = self.output_dir / 'basic_metrics_comparison.png'
-        plt.savefig(viz_file, dpi=300, bbox_inches='tight')
+        # Salvar em PNG
+        png_file = self.output_dir / 'basic_metrics_comparison.png'
+        plt.savefig(png_file, dpi=300, bbox_inches='tight')
+        
+        # Salvar em PDF
+        pdf_file = self.output_dir / 'basic_metrics_comparison.pdf'
+        plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+        
         plt.close()
+        
+        self.logger.info(f"📊 Gráfico de métricas básicas salvo: {png_file} e {pdf_file}")
+        return [str(png_file), str(pdf_file)]
         
         return str(viz_file)
     
     def _plot_temporal_reproducibility(self, 
                                      datasets: List[pd.DataFrame],
                                      run_names: List[str],
-                                     analysis: Dict[str, Any]) -> Optional[str]:
-        """Gera gráfico de reprodutibilidade temporal"""
+                                     analysis: Dict[str, Any]) -> Optional[List[str]]:
+        """Gera gráfico de reprodutibilidade temporal em PNG e PDF"""
         temporal_data = analysis.get('temporal_patterns', {})
         
         if not temporal_data.get('hourly_flows'):
@@ -765,14 +785,21 @@ class ReproducibilityAnalyzer:
         
         plt.tight_layout()
         
-        viz_file = self.output_dir / 'temporal_reproducibility.png'
-        plt.savefig(viz_file, dpi=300, bbox_inches='tight')
+        # Salvar em PNG
+        png_file = self.output_dir / 'temporal_reproducibility.png'
+        plt.savefig(png_file, dpi=300, bbox_inches='tight')
+        
+        # Salvar em PDF
+        pdf_file = self.output_dir / 'temporal_reproducibility.pdf'
+        plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+        
         plt.close()
         
-        return str(viz_file)
+        self.logger.info(f"📊 Gráfico temporal salvo: {png_file} e {pdf_file}")
+        return [str(png_file), str(pdf_file)]
     
-    def _plot_similarity_scores(self, analysis: Dict[str, Any]) -> Optional[str]:
-        """Gera gráfico dos scores de similaridade"""
+    def _plot_similarity_scores(self, analysis: Dict[str, Any]) -> Optional[List[str]]:
+        """Gera gráfico dos scores de similaridade em PNG e PDF"""
         similarity_data = analysis.get('similarity_scores', {})
         
         if not similarity_data:
@@ -838,17 +865,24 @@ class ReproducibilityAnalyzer:
         
         plt.tight_layout()
         
-        viz_file = self.output_dir / 'similarity_scores.png'
-        plt.savefig(viz_file, dpi=300, bbox_inches='tight')
+        # Salvar em PNG
+        png_file = self.output_dir / 'similarity_scores.png'
+        plt.savefig(png_file, dpi=300, bbox_inches='tight')
+        
+        # Salvar em PDF
+        pdf_file = self.output_dir / 'similarity_scores.pdf'
+        plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+        
         plt.close()
         
-        return str(viz_file)
+        self.logger.info(f"📊 Gráfico de similaridade salvo: {png_file} e {pdf_file}")
+        return [str(png_file), str(pdf_file)]
     
     def _create_reproducibility_dashboard(self, 
                                         datasets: List[pd.DataFrame],
                                         run_names: List[str],
-                                        analysis: Dict[str, Any]) -> Optional[str]:
-        """Cria dashboard de reprodutibilidade"""
+                                        analysis: Dict[str, Any]) -> Optional[List[str]]:
+        """Cria dashboard de reprodutibilidade em PNG e PDF"""
         fig = plt.figure(figsize=(20, 12))
         gs = fig.add_gridspec(3, 4, hspace=0.3, wspace=0.3)
         
@@ -874,12 +908,326 @@ class ReproducibilityAnalyzer:
         ax5 = fig.add_subplot(gs[2, :])
         self._add_similarity_overview_to_dashboard(ax5, analysis)
         
-        dashboard_file = self.output_dir / 'reproducibility_dashboard.png'
-        plt.savefig(dashboard_file, dpi=300, bbox_inches='tight')
+        # Salvar em PNG
+        png_file = self.output_dir / 'reproducibility_dashboard.png'
+        plt.savefig(png_file, dpi=300, bbox_inches='tight')
+        
+        # Salvar em PDF
+        pdf_file = self.output_dir / 'reproducibility_dashboard.pdf'
+        plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+        
         plt.close()
         
-        return str(dashboard_file)
+        self.logger.info(f"📊 Dashboard salvo: {png_file} e {pdf_file}")
+        return [str(png_file), str(pdf_file)]
     
+    def _generate_individual_plots(self, 
+                                 datasets: List[pd.DataFrame],
+                                 run_names: List[str],
+                                 analysis: Dict[str, Any]) -> List[str]:
+        """Gera gráficos individuais para cada métrica"""
+        generated_files = []
+        
+        try:
+            # 1. Gráficos individuais de métricas básicas
+            basic_individual = self._plot_individual_basic_metrics(datasets, run_names, analysis)
+            if basic_individual:
+                generated_files.extend(basic_individual)
+            
+            # 2. Gráficos individuais temporais
+            temporal_individual = self._plot_individual_temporal_charts(datasets, run_names, analysis)
+            if temporal_individual:
+                generated_files.extend(temporal_individual)
+            
+            # 3. Gráficos individuais de similaridade
+            similarity_individual = self._plot_individual_similarity_charts(analysis)
+            if similarity_individual:
+                generated_files.extend(similarity_individual)
+            
+            # 4. Gráficos de distribuições individuais
+            distribution_individual = self._plot_individual_distributions(datasets, run_names)
+            if distribution_individual:
+                generated_files.extend(distribution_individual)
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao gerar gráficos individuais: {e}")
+        
+        return generated_files
+    
+    def _plot_individual_basic_metrics(self, 
+                                     datasets: List[pd.DataFrame],
+                                     run_names: List[str],
+                                     analysis: Dict[str, Any]) -> List[str]:
+        """Gera gráficos individuais para cada métrica básica"""
+        generated_files = []
+        basic_metrics = analysis.get('basic_metrics', {})
+        
+        if not basic_metrics:
+            return generated_files
+        
+        for metric_key, metric_data in basic_metrics.items():
+            try:
+                # Criar gráfico individual para esta métrica
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                runs = [stat['run'] for stat in metric_data['run_statistics']]
+                means = [stat['mean'] for stat in metric_data['run_statistics']]
+                stds = [stat['std'] for stat in metric_data['run_statistics']]
+                
+                # Gráfico de barras com erro padrão
+                bars = ax.bar(runs, means, yerr=stds, capsize=5, alpha=0.7, 
+                             color=plt.cm.Set3(len(generated_files) % 12))
+                
+                # Configurar título e labels
+                metric_name = metric_data['metric_name']
+                cv = metric_data['cross_run_variability']['mean_cv']
+                if cv != float('inf'):
+                    title = f"{metric_name} (CV: {cv:.4f})"
+                else:
+                    title = metric_name
+                
+                ax.set_title(title, fontsize=14, fontweight='bold')
+                ax.set_ylabel('Valor Médio', fontsize=12)
+                ax.set_xlabel('Execução', fontsize=12)
+                ax.tick_params(axis='x', rotation=45)
+                ax.grid(True, alpha=0.3)
+                
+                # Adicionar valores nas barras
+                for bar, mean_val, std_val in zip(bars, means, stds):
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height + std_val * 0.1,
+                           f'{mean_val:.2f}', ha='center', va='bottom', fontsize=10)
+                
+                # Adicionar informações estatísticas
+                stats_text = f"Média: {np.mean(means):.2f}\nDesvio: {np.std(means):.4f}\nCV: {cv:.4f}"
+                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                       verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
+                
+                plt.tight_layout()
+                
+                # Salvar PNG
+                safe_name = metric_key.replace(' ', '_').replace('/', '_').lower()
+                png_file = self.output_dir / f'metric_{safe_name}.png'
+                plt.savefig(png_file, dpi=300, bbox_inches='tight')
+                
+                # Salvar PDF
+                pdf_file = self.output_dir / f'metric_{safe_name}.pdf'
+                plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+                
+                plt.close()
+                
+                generated_files.extend([str(png_file), str(pdf_file)])
+                self.logger.info(f"📊 Métrica individual salva: {metric_name} -> {safe_name}")
+                
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar gráfico para métrica {metric_key}: {e}")
+        
+        return generated_files
+    
+    def _plot_individual_temporal_charts(self, 
+                                        datasets: List[pd.DataFrame],
+                                        run_names: List[str],
+                                        analysis: Dict[str, Any]) -> List[str]:
+        """Gera gráficos temporais individuais"""
+        generated_files = []
+        temporal_data = analysis.get('temporal_patterns', {})
+        
+        if not temporal_data.get('hourly_flows'):
+            return generated_files
+        
+        try:
+            # 1. Gráfico individual: Fluxo horário
+            fig, ax = plt.subplots(figsize=(12, 8))
+            
+            hourly_flows = temporal_data['hourly_flows']
+            for i, hf in enumerate(hourly_flows):
+                flow_dict = hf['flow']
+                hours = sorted(flow_dict.keys())
+                flows = [flow_dict[h] for h in hours]
+                ax.plot(hours, flows, marker='o', label=hf['run'], alpha=0.8, linewidth=2)
+            
+            ax.set_xlabel('Hora do Dia', fontsize=12)
+            ax.set_ylabel('Número de Eventos', fontsize=12)
+            ax.set_title('Fluxo Horário por Execução', fontsize=14, fontweight='bold')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # Salvar PNG e PDF
+            png_file = self.output_dir / 'temporal_hourly_flow.png'
+            pdf_file = self.output_dir / 'temporal_hourly_flow.pdf'
+            plt.savefig(png_file, dpi=300, bbox_inches='tight')
+            plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            generated_files.extend([str(png_file), str(pdf_file)])
+            self.logger.info(f"📊 Gráfico temporal individual salvo: fluxo horário")
+            
+            # 2. Gráfico individual: Variabilidade horária
+            if len(hourly_flows) > 1:
+                fig, ax = plt.subplots(figsize=(12, 8))
+                
+                # Calcular variabilidade por hora
+                all_hours = set()
+                for hf in hourly_flows:
+                    all_hours.update(hf['flow'].keys())
+                
+                hours_sorted = sorted(all_hours)
+                hourly_cvs = []
+                
+                for hour in hours_sorted:
+                    flows_hour = []
+                    for hf in hourly_flows:
+                        if hour in hf['flow']:
+                            flows_hour.append(hf['flow'][hour])
+                    
+                    if len(flows_hour) > 1:
+                        cv = np.std(flows_hour) / np.mean(flows_hour) if np.mean(flows_hour) > 0 else 0
+                        hourly_cvs.append(cv)
+                    else:
+                        hourly_cvs.append(0)
+                
+                ax.bar(hours_sorted, hourly_cvs, alpha=0.7, color='orange')
+                ax.set_xlabel('Hora do Dia', fontsize=12)
+                ax.set_ylabel('Coeficiente de Variação', fontsize=12)
+                ax.set_title('Variabilidade Horária entre Execuções', fontsize=14, fontweight='bold')
+                ax.grid(True, alpha=0.3)
+                
+                # Linha de referência
+                ax.axhline(y=0.1, color='red', linestyle='--', alpha=0.7, label='CV = 0.1 (Limite)')
+                ax.legend()
+                
+                plt.tight_layout()
+                
+                png_file = self.output_dir / 'temporal_hourly_variability.png'
+                pdf_file = self.output_dir / 'temporal_hourly_variability.pdf'
+                plt.savefig(png_file, dpi=300, bbox_inches='tight')
+                plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                generated_files.extend([str(png_file), str(pdf_file)])
+                self.logger.info(f"📊 Gráfico temporal individual salvo: variabilidade horária")
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao gerar gráficos temporais individuais: {e}")
+        
+        return generated_files
+    
+    def _plot_individual_similarity_charts(self, analysis: Dict[str, Any]) -> List[str]:
+        """Gera gráficos individuais de similaridade"""
+        generated_files = []
+        similarity_data = analysis.get('similarity_scores', {})
+        
+        if not similarity_data:
+            return generated_files
+        
+        try:
+            # Gráfico individual: Scores gerais de similaridade
+            fig, ax = plt.subplots(figsize=(10, 8))
+            
+            comparisons = list(similarity_data.keys())
+            overall_scores = [data['overall_similarity_score'] for data in similarity_data.values()]
+            
+            bars = ax.bar(range(len(comparisons)), overall_scores, alpha=0.7, color='skyblue')
+            ax.set_xticks(range(len(comparisons)))
+            ax.set_xticklabels(comparisons, rotation=45, ha='right')
+            ax.set_ylabel('Score de Similaridade', fontsize=12)
+            ax.set_title('Scores Gerais de Similaridade', fontsize=14, fontweight='bold')
+            ax.set_ylim(0, 1)
+            ax.grid(True, alpha=0.3)
+            
+            # Linhas de referência
+            ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.7, label='Alta similaridade (0.8)')
+            ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.7, label='Similaridade moderada (0.6)')
+            ax.axhline(y=0.4, color='red', linestyle='--', alpha=0.7, label='Baixa similaridade (0.4)')
+            ax.legend()
+            
+            # Adicionar valores
+            for bar, score in zip(bars, overall_scores):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                       f'{score:.3f}', ha='center', va='bottom', fontsize=10)
+            
+            plt.tight_layout()
+            
+            png_file = self.output_dir / 'similarity_overall_scores.png'
+            pdf_file = self.output_dir / 'similarity_overall_scores.pdf'
+            plt.savefig(png_file, dpi=300, bbox_inches='tight')
+            plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            generated_files.extend([str(png_file), str(pdf_file)])
+            self.logger.info(f"📊 Gráfico de similaridade individual salvo: scores gerais")
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao gerar gráficos de similaridade individuais: {e}")
+        
+        return generated_files
+    
+    def _plot_individual_distributions(self, 
+                                     datasets: List[pd.DataFrame],
+                                     run_names: List[str]) -> List[str]:
+        """Gera gráficos individuais de distribuições"""
+        generated_files = []
+        
+        # Métricas para análise de distribuição
+        numeric_columns = ['calculated_speed', 'travel_time', 'traffic_density', 'distance']
+        
+        for column in numeric_columns:
+            # Verificar se a coluna existe em todos os datasets
+            if not all(column in df.columns for df in datasets):
+                continue
+                
+            try:
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                fig.suptitle(f'Distribuição de {column.replace("_", " ").title()}', fontsize=14, fontweight='bold')
+                
+                # Histograma
+                for i, (df, name) in enumerate(zip(datasets, run_names)):
+                    if column in df.columns and not df[column].isna().all():
+                        ax1.hist(df[column].dropna(), bins=50, alpha=0.6, label=name, density=True)
+                
+                ax1.set_xlabel(column.replace('_', ' ').title(), fontsize=12)
+                ax1.set_ylabel('Densidade', fontsize=12)
+                ax1.set_title('Histograma', fontsize=12)
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+                
+                # Box plot
+                data_for_boxplot = []
+                labels_for_boxplot = []
+                
+                for df, name in zip(datasets, run_names):
+                    if column in df.columns and not df[column].isna().all():
+                        data_for_boxplot.append(df[column].dropna().values)
+                        labels_for_boxplot.append(name)
+                
+                if data_for_boxplot:
+                    ax2.boxplot(data_for_boxplot, labels=labels_for_boxplot)
+                    ax2.set_ylabel(column.replace('_', ' ').title(), fontsize=12)
+                    ax2.set_title('Box Plot', fontsize=12)
+                    ax2.tick_params(axis='x', rotation=45)
+                    ax2.grid(True, alpha=0.3)
+                
+                plt.tight_layout()
+                
+                # Salvar PNG e PDF
+                safe_name = column.replace(' ', '_').lower()
+                png_file = self.output_dir / f'distribution_{safe_name}.png'
+                pdf_file = self.output_dir / f'distribution_{safe_name}.pdf'
+                plt.savefig(png_file, dpi=300, bbox_inches='tight')
+                plt.savefig(pdf_file, dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                generated_files.extend([str(png_file), str(pdf_file)])
+                self.logger.info(f"📊 Gráfico de distribuição individual salvo: {column}")
+                
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar gráfico de distribuição para {column}: {e}")
+        
+        return generated_files
+
     def _add_summary_to_dashboard(self, ax, analysis):
         """Adiciona resumo ao dashboard"""
         summary = analysis.get('summary', {})
@@ -1165,3 +1513,139 @@ class ReproducibilityAnalyzer:
                 print("     - Validar configurações idênticas")
         
         print("\n" + "="*80)
+    
+    def _create_consolidated_pdf_report(self, 
+                                      datasets: List[pd.DataFrame],
+                                      run_names: List[str],
+                                      analysis: Dict[str, Any]) -> Optional[str]:
+        """Cria um relatório PDF consolidado com todos os gráficos"""
+        pdf_file = self.output_dir / 'reproducibility_complete_report.pdf'
+        
+        try:
+            with PdfPages(pdf_file) as pdf:
+                # Página 1: Comparação de métricas básicas
+                fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+                fig.suptitle('Relatório de Reprodutibilidade - Métricas Básicas', fontsize=16, fontweight='bold')
+                
+                basic_metrics = analysis.get('basic_metrics', {})
+                metrics_plotted = 0
+                
+                for metric_key, metric_data in basic_metrics.items():
+                    if metrics_plotted >= 4:
+                        break
+                    
+                    ax = axes[metrics_plotted // 2, metrics_plotted % 2]
+                    
+                    runs = [stat['run'] for stat in metric_data['run_statistics']]
+                    means = [stat['mean'] for stat in metric_data['run_statistics']]
+                    stds = [stat['std'] for stat in metric_data['run_statistics']]
+                    
+                    bars = ax.bar(runs, means, yerr=stds, capsize=5, alpha=0.7)
+                    ax.set_title(f"{metric_data['metric_name']}")
+                    ax.set_ylabel('Valor Médio')
+                    ax.tick_params(axis='x', rotation=45)
+                    
+                    cv = metric_data['cross_run_variability']['mean_cv']
+                    if cv != float('inf'):
+                        ax.set_title(f"{metric_data['metric_name']} (CV: {cv:.3f})")
+                    
+                    metrics_plotted += 1
+                
+                for i in range(metrics_plotted, 4):
+                    axes[i // 2, i % 2].axis('off')
+                
+                plt.tight_layout()
+                pdf.savefig(fig, dpi=300, bbox_inches='tight')
+                plt.close(fig)
+                
+                # Página 2: Scores de similaridade
+                similarity_data = analysis.get('similarity_scores', {})
+                if similarity_data:
+                    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+                    fig.suptitle('Relatório de Reprodutibilidade - Scores de Similaridade', fontsize=16, fontweight='bold')
+                    
+                    comparisons = list(similarity_data.keys())
+                    overall_scores = [data['overall_similarity_score'] for data in similarity_data.values()]
+                    
+                    bars1 = ax1.bar(range(len(comparisons)), overall_scores, alpha=0.7, color='skyblue')
+                    ax1.set_xticks(range(len(comparisons)))
+                    ax1.set_xticklabels(comparisons, rotation=45, ha='right')
+                    ax1.set_ylabel('Score de Similaridade')
+                    ax1.set_title('Score Geral de Similaridade')
+                    ax1.set_ylim(0, 1)
+                    
+                    ax1.axhline(y=0.8, color='green', linestyle='--', alpha=0.7, label='Alta similaridade')
+                    ax1.legend()
+                    
+                    # Adicionar valores
+                    for bar, score in zip(bars1, overall_scores):
+                        height = bar.get_height()
+                        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                                f'{score:.3f}', ha='center', va='bottom', fontsize=9)
+                    
+                    # Outros gráficos simplificados para o PDF
+                    ax2.text(0.5, 0.5, 'Velocidade\n(Ver gráficos individuais)', ha='center', va='center', transform=ax2.transAxes)
+                    ax3.text(0.5, 0.5, 'Tempo de Viagem\n(Ver gráficos individuais)', ha='center', va='center', transform=ax3.transAxes)  
+                    ax4.text(0.5, 0.5, 'Densidade\n(Ver gráficos individuais)', ha='center', va='center', transform=ax4.transAxes)
+                    
+                    plt.tight_layout()
+                    pdf.savefig(fig, dpi=300, bbox_inches='tight')
+                    plt.close(fig)
+                
+                # Página 3: Resumo e recomendações
+                fig, ax = plt.subplots(figsize=(15, 12))
+                fig.suptitle('Relatório de Reprodutibilidade - Resumo Final', fontsize=16, fontweight='bold')
+                
+                # Criar texto de resumo
+                summary = analysis.get('summary', {})
+                text_content = []
+                text_content.append("📊 RESUMO GERAL:")
+                text_content.append(f"  • Número de execuções analisadas: {summary.get('num_runs', 0)}")
+                text_content.append(f"  • Execuções: {', '.join(summary.get('run_names', []))}")
+                text_content.append("")
+                
+                data_consistency = summary.get('data_consistency', {})
+                if data_consistency:
+                    text_content.append("📈 CONSISTÊNCIA DE DADOS:")
+                    event_cv = data_consistency.get('event_count_cv', float('inf'))
+                    vehicle_cv = data_consistency.get('vehicle_count_cv', float('inf'))
+                    
+                    if event_cv != float('inf'):
+                        text_content.append(f"  • Variação em número de eventos: CV = {event_cv:.4f}")
+                    if vehicle_cv != float('inf'):
+                        text_content.append(f"  • Variação em número de veículos: CV = {vehicle_cv:.4f}")
+                
+                # Adicionar scores de similaridade
+                if similarity_data:
+                    text_content.append("")
+                    text_content.append("🎯 SCORES DE SIMILARIDADE:")
+                    for comp, data in similarity_data.items():
+                        score = data['overall_similarity_score']
+                        text_content.append(f"  • {comp}: {score:.3f}")
+                
+                # Recomendações
+                text_content.append("")
+                text_content.append("🎯 RECOMENDAÇÕES:")
+                if data_consistency:
+                    max_cv = max([cv for cv in [event_cv, vehicle_cv] if cv != float('inf')])
+                    if max_cv < 0.01:
+                        text_content.append("  ✅ Excelente reprodutibilidade!")
+                    elif max_cv < 0.05:
+                        text_content.append("  ✅ Boa reprodutibilidade!")
+                    else:
+                        text_content.append("  ⚠️ Reprodutibilidade pode ser melhorada")
+                
+                ax.text(0.1, 0.9, '\n'.join(text_content), transform=ax.transAxes, 
+                       fontsize=12, verticalalignment='top', fontfamily='monospace')
+                ax.axis('off')
+                
+                plt.tight_layout()
+                pdf.savefig(fig, dpi=300, bbox_inches='tight')
+                plt.close(fig)
+            
+            self.logger.info(f"📑 Relatório PDF consolidado salvo: {pdf_file}")
+            return str(pdf_file)
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao criar PDF consolidado: {e}")
+            return None
