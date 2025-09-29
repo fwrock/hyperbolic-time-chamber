@@ -110,6 +110,10 @@ class CassandraDataSource:
         if limit:
             query_parts.append(f"LIMIT {limit}")
         
+        # Add ALLOW FILTERING for queries with non-primary key conditions
+        if any("simulation_id" in cond for cond in conditions):
+            query_parts.append("ALLOW FILTERING")
+        
         query = " ".join(query_parts)
         
         try:
@@ -166,20 +170,60 @@ class CassandraDataSource:
             
             df = pd.DataFrame(data)
             if not df.empty:
-                try:
-                    # Convert timestamps safely
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-                    # Remove rows with invalid timestamps
-                    invalid_count = df['timestamp'].isna().sum()
-                    if invalid_count > 0:
-                        logger.warning(f"⚠️ Removed {invalid_count} records with invalid timestamps")
-                        df = df.dropna(subset=['timestamp'])
-                    
-                    df = df.sort_values('timestamp')
-                except Exception as e:
-                    logger.error(f"Error converting timestamps: {e}")
-                    # Continue without timestamp sorting if conversion fails
-                    pass
+                # PRIORITY: Use tick as primary time reference for simulation analysis
+                # Timestamp is just execution metadata and causes false differences
+                if 'tick' in df.columns:
+                    logger.info("🎯 Using tick as primary time reference (simulation time)")
+                    # Keep original timestamp for reference but use tick for analysis
+                    df['execution_timestamp'] = df['timestamp']  # Preserve original
+                    # Convert tick to standardized simulation time starting from epoch
+                    base_time = pd.Timestamp('2025-01-01 00:00:00')
+                    df['timestamp'] = base_time + pd.to_timedelta(df['tick'], unit='s')
+                    logger.info(f"✅ Converted {len(df)} records using tick-based simulation time")
+                else:
+                    # Fallback to timestamp conversion only if tick is not available
+                    logger.warning("⚠️ No tick column found, falling back to timestamp conversion")
+                    try:
+                        # Convert timestamps safely
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                        
+                        # Filter out timestamps that are clearly invalid (before 2020 or after 2030)
+                        current_year = datetime.now().year
+                        min_year = 2020
+                        max_year = current_year + 10  # Allow some future dates but not centuries ahead
+                        
+                        # Count invalid timestamps before filtering
+                        if not df['timestamp'].isna().all():
+                            valid_timestamps = df['timestamp'].dropna()
+                            if not valid_timestamps.empty:
+                                # Check year range
+                                invalid_year_mask = (
+                                    (valid_timestamps.dt.year < min_year) | 
+                                    (valid_timestamps.dt.year > max_year)
+                                )
+                                
+                                # Update DataFrame to mark invalid years as NaT
+                                df.loc[df['timestamp'].dt.year < min_year, 'timestamp'] = pd.NaT
+                                df.loc[df['timestamp'].dt.year > max_year, 'timestamp'] = pd.NaT
+                        
+                        # Remove rows with invalid timestamps
+                        invalid_count = df['timestamp'].isna().sum()
+                        if invalid_count > 0:
+                            logger.warning(f"⚠️ Removed {invalid_count} records with invalid/unrealistic timestamps")
+                            df = df.dropna(subset=['timestamp'])
+                        
+                        # If we still have valid data, continue processing
+                        if not df.empty:
+                            logger.info(f"✅ {len(df)} records with valid timestamps remaining")
+                        else:
+                            logger.error("❌ No valid timestamp or tick data available")
+                            return pd.DataFrame()
+                    except Exception as e:
+                        logger.error(f"❌ Error processing timestamps: {e}")
+                        return pd.DataFrame()
+                
+                # Sort by timestamp (now either tick-based or real timestamp)
+                df = df.sort_values('timestamp')
                 
             logger.info(f"Retrieved {len(df)} records")
             return df
@@ -191,9 +235,15 @@ class CassandraDataSource:
     def get_simulation_ids(self) -> List[str]:
         """Get list of available simulation IDs"""
         try:
-            query = f"SELECT DISTINCT simulation_id FROM {self.table} WHERE report_type = 'vehicle_flow'"
+            # Note: DISTINCT on non-key columns requires ALLOW FILTERING
+            query = f"SELECT simulation_id FROM {self.table} WHERE report_type = 'vehicle_flow' ALLOW FILTERING"
             rows = self.session.execute(query)
-            return [row.simulation_id for row in rows if row.simulation_id]
+            # Manually deduplicate since DISTINCT might not work on simulation_id
+            unique_ids = set()
+            for row in rows:
+                if row.simulation_id:
+                    unique_ids.add(row.simulation_id)
+            return list(unique_ids)
         except Exception as e:
             logger.error(f"Error getting simulation IDs: {e}")
             return []

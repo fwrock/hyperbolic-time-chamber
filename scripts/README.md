@@ -1,52 +1,334 @@
-# Traffic Analysis System Documentation
+# Sistema de Análise de Tráfego HTC
 
-## Visão Geral
+Sistema completo para análise de simulações de tráfego do Hyperbolic Time Chamber (HTC), incluindo comparação com simuladores de referência e análise de reprodutibilidade.
 
-Este sistema oferece análise abrangente de dados de fluxo de veículos para o projeto Hyperbolic Time Chamber, permitindo gerar insights sobre padrões de tráfego urbano, identificar gargalos e avaliar a eficiência da rede viária.
+## 🎯 Funcionalidades
 
-## 🎯 Funcionalidades Principais
+### 1. Comparação de Simuladores
+- **HTC vs Referência**: Compara resultados entre HTC e simuladores de referência
+- **Múltiplas fontes**: Suporte a Cassandra, CSV e XML
+- **47 métricas**: Análise abrangente de métricas de tráfego
+- **Visualizações**: Gráficos e relatórios automáticos
+- **PDFs acadêmicos**: Relatórios prontos para publicação
 
-### Análises Disponíveis
-- **Heatmaps de tráfego** por horário e localização
-- **Gráficos densidade vs. velocidade** para análise de fluxo
-- **Análise de gargalos** na rede viária
-- **Padrões de mobilidade urbana** temporal
-- **Eficiência de rotas** calculadas pelo sistema
-- **Indicadores de performance** da rede de transporte
+### 2. Análise de Reprodutibilidade
+- **Múltiplas execuções**: Comparação estatística entre simulações
+- **Testes estatísticos**: Kolmogorov-Smirnov, Mann-Whitney U, ANOVA
+- **Scores de similaridade**: Quantificação da consistência
+- **Análise temporal**: Padrões de comportamento ao longo do tempo
+- **Validação científica**: Suporte para publicações acadêmicas
 
-### Fontes de Dados Suportadas
-- **Cassandra**: Dados em tempo real do sistema de persistência
-- **CSV**: Arquivos de dados exportados
-- **JSON**: Dados estruturados em formato JSON
+### 3. Métricas Gerais de Tráfego
+- **Estatísticas básicas**: Contagens, velocidades, tempos
+- **Métricas de distância**: Quilometragem, distribuições espaciais
+- **Análise temporal**: Padrões de movimento, duração de viagens
+- **Densidade de tráfego**: Ocupação de vias, congestionamentos
+- **Performance**: Throughput, eficiência, delays
+- **Qualidade de serviço**: Experiência do usuário, satisfação
+- **Segurança**: Indicadores de risco, eventos críticos
 
-### Formatos de Saída
-- **Relatórios HTML** interativos com visualizações
-- **Relatórios PDF** para apresentação
-- **Arquivos JSON** para integração com outros sistemas
-- **Visualizações interativas** em Plotly/Bokeh
-- **Dashboards** executivos
+## 🚀 Como Usar
 
-## 🚀 Início Rápido
-
-### 1. Instalação das Dependências
+### Método 1: Script de Ajuda (Recomendado)
 
 ```bash
-# No diretório do projeto
-cd scripts/
-pip install -r requirements.txt
+# Mostrar todas as opções disponíveis
+./scripts/analysis_helper.sh help
+
+# Verificar status do sistema
+./scripts/analysis_helper.sh status
+
+# Instalar dependências
+./scripts/analysis_helper.sh install-deps
 ```
 
-### 2. Execução via Script Principal
-
+#### Comparação Tradicional
 ```bash
-# Análise básica usando Cassandra
-python run_analysis.py
+# HTC (Cassandra) vs Referência (XML)
+./scripts/analysis_helper.sh compare-cassandra reference_events.xml
 
-# Análise com parâmetros específicos
-python run_analysis.py --source cassandra --simulation-id sim_001 --limit 10000
+# HTC (CSV) vs Referência (XML)
+./scripts/analysis_helper.sh compare-csv htc_data.csv reference_events.xml
+```
 
-# Análise usando arquivos CSV
-python run_analysis.py --source csv --data-path ../data/
+#### Análise de Reprodutibilidade
+```bash
+# Múltiplas simulações via Cassandra
+./scripts/analysis_helper.sh repro-cassandra sim_001 sim_002 sim_003
+
+# Múltiplos arquivos CSV
+./scripts/analysis_helper.sh repro-csv run1.csv run2.csv run3.csv
+
+# Múltiplos arquivos XML
+./scripts/analysis_helper.sh repro-xml events1.xml events2.xml
+```
+
+#### Análises Independentes
+```bash
+# Métricas gerais via Cassandra
+./scripts/analysis_helper.sh metrics-cassandra 50000
+
+# Métricas gerais via CSV
+./scripts/analysis_helper.sh metrics-csv data.csv
+```
+
+### Método 2: Scripts Diretos
+
+#### Comparação de Simuladores
+```bash
+cd scripts
+
+# Tradicional: HTC vs Referência
+python compare_simulators.py reference_events.xml --htc-cassandra
+python compare_simulators.py reference_events.xml --htc-csv htc_data.csv
+
+# Criar arquivo de exemplo
+python compare_simulators.py --create-sample
+```
+
+#### Análise de Reprodutibilidade
+```bash
+cd scripts
+
+# Via Cassandra
+python reproducibility_analysis.py --cassandra-sims sim_001 sim_002 sim_003
+
+# Via arquivos CSV
+python reproducibility_analysis.py --csv-files run1.csv run2.csv run3.csv
+
+# Via arquivos XML
+python reproducibility_analysis.py --xml-files events1.xml events2.xml
+
+# Criar configuração de exemplo
+python reproducibility_analysis.py --create-config
+```
+
+## 📊 Tipos de Análise
+
+### 1. Métricas Básicas (7 métricas)
+- Total de registros
+- Veículos únicos
+- Tempo de simulação
+- Registros por veículo
+- Distribuição temporal
+- Primeira/última atividade
+- Taxa de atividade
+
+### 2. Métricas de Distância (8 métricas)
+- Total de quilômetros
+- Distância média por veículo
+- Distribuição de distâncias
+- Máxima distância percorrida
+- Densidade espacial
+- Padrões de movimento
+- Eficiência de rotas
+- Cobertura geográfica
+
+### 3. Métricas de Velocidade (7 métricas)
+- Velocidade média geral
+- Velocidade por veículo
+- Distribuição de velocidades
+- Velocidade máxima/mínima
+- Variabilidade de velocidade
+- Padrões de aceleração
+- Eficiência energética
+
+### 4. Métricas Temporais (8 métricas)
+- Duração média de viagens
+- Tempos de parada
+- Padrões de horário de pico
+- Distribuição temporal
+- Sincronização de movimentos
+- Periodicidade
+- Consistência temporal
+- Eficiência de cronograma
+
+### 5. Métricas de Densidade (6 métricas)
+- Densidade média de tráfego
+- Picos de congestionamento
+- Distribuição espacial
+- Ocupação de vias
+- Fluidez do tráfego
+- Pontos de gargalo
+
+### 6. Métricas de Performance (6 métricas)
+- Throughput do sistema
+- Eficiência global
+- Tempo de resposta
+- Capacidade utilizada
+- Delays e atrasos
+- Otimização de recursos
+
+### 7. Métricas de Qualidade (5 métricas)
+- Experiência do usuário
+- Satisfação de viagem
+- Confiabilidade
+- Previsibilidade
+- Qualidade de serviço
+
+## 📁 Estrutura de Saída
+
+```
+output/
+├── comparison/                     # Comparação tradicional
+│   ├── comparison_report.json
+│   ├── similarity_analysis.png
+│   ├── general_metrics/           # Métricas HTC
+│   │   ├── htc_metrics.json
+│   │   ├── basic_metrics.png
+│   │   ├── distance_metrics.png
+│   │   └── ...
+│   ├── reference_metrics/         # Métricas Referência
+│   │   ├── reference_metrics.json
+│   │   ├── basic_metrics.png
+│   │   └── ...
+│   └── academic_reports/          # PDFs para publicação
+│       └── simulator_comparison_academic.pdf
+├── reproducibility/               # Análise de reprodutibilidade
+│   ├── reproducibility_report.json
+│   ├── reproducibility_dashboard.png
+│   ├── similarity_scores.png
+│   ├── temporal_reproducibility.png
+│   └── basic_metrics_comparison.png
+└── standalone_metrics/            # Análises independentes
+    ├── cassandra_metrics.json
+    ├── csv_metrics.json
+    └── ...
+```
+
+## 🔧 Configuração
+
+### Dependências Python
+```bash
+pip install pandas matplotlib seaborn numpy scipy scikit-learn cassandra-driver plotly kaleido
+```
+
+### Cassandra (Docker)
+```bash
+# Iniciar cluster Cassandra
+docker-compose up -d cassandra
+
+# Verificar conectividade
+docker exec -it cassandra cqlsh -e "DESCRIBE KEYSPACES;"
+```
+
+### Variáveis de Ambiente
+```bash
+# Configurações opcionais
+export HTC_CASSANDRA_HOST=localhost
+export HTC_CASSANDRA_PORT=9042
+export HTC_OUTPUT_PATH=./output
+```
+
+## 📈 Interpretação dos Resultados
+
+### Scores de Similaridade
+- **≥ 0.8**: Alta similaridade (excelente)
+- **≥ 0.6**: Similaridade moderada (boa)
+- **< 0.6**: Baixa similaridade (investigar)
+
+### Coeficiente de Variação (CV)
+- **< 0.05**: Boa reprodutibilidade
+- **< 0.1**: Reprodutibilidade moderada
+- **≥ 0.1**: Baixa reprodutibilidade (revisar)
+
+### Testes Estatísticos
+- **p-value > 0.05**: Simulações estatisticamente similares
+- **p-value ≤ 0.05**: Diferenças significativas detectadas
+
+## 🔬 Para Publicações Científicas
+
+### Documentação de Métricas
+Ver `docs/metrics_documentation.md` para:
+- Definições matemáticas completas
+- Fórmulas de cálculo
+- Referências bibliográficas
+- Guidelines para citação
+
+### PDFs Acadêmicos
+O sistema gera automaticamente:
+- Relatórios formatados para artigos
+- Gráficos em alta resolução
+- Tabelas de resultados
+- Análises estatísticas
+
+### Reprodutibilidade
+- Validação de determinismo
+- Análises de consistência
+- Testes de confiabilidade
+- Métricas de qualidade científica
+
+## 🐛 Troubleshooting
+
+### Erro de Conexão Cassandra
+```bash
+# Verificar se o Cassandra está rodando
+docker ps | grep cassandra
+
+# Reiniciar se necessário
+docker-compose restart cassandra
+```
+
+### Dependências Python
+```bash
+# Verificar status
+./scripts/analysis_helper.sh status
+
+# Reinstalar se necessário
+./scripts/analysis_helper.sh install-deps
+```
+
+### Logs Detalhados
+```bash
+# Executar com logs verbose
+python compare_simulators.py --verbose reference.xml --htc-cassandra
+```
+
+## 📝 Exemplos Práticos
+
+### Cenário 1: Validação de Nova Versão
+```bash
+# Comparar versão atual vs anterior
+./scripts/analysis_helper.sh repro-cassandra sim_v1.0 sim_v1.1
+
+# Análise detalhada se houver diferenças
+./scripts/analysis_helper.sh metrics-cassandra
+```
+
+### Cenário 2: Publicação Científica
+```bash
+# Comparação completa para artigo
+./scripts/analysis_helper.sh compare-cassandra reference_matsim.xml
+
+# Verificar reprodutibilidade (3 execuções)
+./scripts/analysis_helper.sh repro-cassandra sim_001 sim_002 sim_003
+```
+
+### Cenário 3: Análise de Performance
+```bash
+# Métricas de uma simulação específica
+./scripts/analysis_helper.sh metrics-cassandra 100000
+
+# Comparação de diferentes configurações
+./scripts/analysis_helper.sh repro-csv config1.csv config2.csv config3.csv
+```
+
+## 🤝 Contribuindo
+
+Para adicionar novas métricas ou funcionalidades:
+
+1. **Métricas**: Editar `analysis/general_metrics.py`
+2. **Comparações**: Editar `comparison/simulator_comparator.py`
+3. **Reprodutibilidade**: Editar `analysis/reproducibility_analyzer.py`
+4. **Documentação**: Atualizar `docs/metrics_documentation.md`
+
+## 📞 Suporte
+
+Para dúvidas ou problemas:
+1. Verificar logs em `logs/application.log`
+2. Executar `./scripts/analysis_helper.sh status`
+3. Consultar documentação em `docs/`
+4. Revisar exemplos em `scripts/output/`
 
 # Pular visualizações (mais rápido)
 python run_analysis.py --skip-viz

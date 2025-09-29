@@ -27,7 +27,7 @@ show_help() {
     echo "OPÇÕES:"
     echo "  -c, --cassandra          Usar dados do HTC via Cassandra"
     echo "  -f, --csv FILE           Usar dados do HTC via arquivo CSV"
-    echo "  -l, --limit NUM          Limite de registros do Cassandra (padrão: 1000)"
+    echo "  -l, --limit NUM          Limite de registros do Cassandra (padrão: todos)"
     echo "  -o, --output DIR         Diretório de saída"
     echo "  -s, --sample             Criar arquivo XML de exemplo"
     echo "  -h, --help               Mostrar esta ajuda"
@@ -115,7 +115,7 @@ main() {
     USE_CASSANDRA=false
     CSV_FILE=""
     XML_FILE=""
-    LIMIT=1000
+    LIMIT=999999999  # Limite muito alto para pegar todos os registros
     OUTPUT_DIR=""
     CREATE_SAMPLE=false
     
