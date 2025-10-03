@@ -45,12 +45,11 @@ class Car(
       state.movableStatus = RouteWaiting
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
-          state.bestCost = cost // Car específico: armazena o custo da melhor rota
+          state.bestCost = cost
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
-          
-          // Registra o início da jornada do carro
+
           report(
             data = Map(
               "event_type" -> "journey_started",
@@ -102,7 +101,6 @@ class Car(
             case Some(node) =>
               getNextLink match
                 case linkId =>
-//                  report(data = s"${nodeId} -> ${linkId}", label = "request signal state")
                   sendMessageTo(
                     entityId = node.id,
                     shardId = node.classType,
@@ -119,7 +117,6 @@ class Car(
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
-//      report(data = s"${state.movableStatus} -> $WaitingSignal", "change status")
       state.movableStatus = WaitingSignal
       onFinishSpontaneous(Some(data.nextTick))
     } else {
@@ -127,13 +124,11 @@ class Car(
     }
 
   override def leavingLink(): Unit = {
-//    report(data = s"${state.movableStatus} -> $Ready", "change status")
     state.movableStatus = Ready
     super.leavingLink()
   }
 
   override protected def onFinish(nodeId: String): Unit = {
-    // Registra a finalização da jornada do carro
     report(
       data = Map(
         "event_type" -> "journey_completed",
@@ -157,22 +152,7 @@ class Car(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
-    
-    // Evento específico: left link (compatível com simulador de referência)
-    report(
-      data = Map(
-        "time" -> currentTick,
-        "type" -> "left link",
-        "person" -> getEntityId,
-        "link" -> event.actorRefId,
-        "vehicle" -> getEntityId,
-        "action" -> "ok",
-        "tick" -> currentTick
-      ),
-      label = "traffic_events"
-    )
-    
-    // Registra a saída do carro do link (dados detalhados)
+
     report(
       data = Map(
         "event_type" -> "leave_link",
@@ -185,7 +165,6 @@ class Car(
       label = "vehicle_flow"
     )
     
-//    report(data = state.distance, "traveled distance")
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -203,22 +182,7 @@ class Car(
 
     val time = data.linkLength / speed
     state.movableStatus = Moving
-    
-    // Evento específico: entered link (compatível com simulador de referência)
-    report(
-      data = Map(
-        "time" -> currentTick,
-        "type" -> "entered link",
-        "person" -> getEntityId,
-        "link" -> event.actorRefId,
-        "vehicle" -> getEntityId,
-        "action" -> "ok",
-        "tick" -> currentTick
-      ),
-      label = "traffic_events"
-    )
-    
-    // Registra a entrada do carro no link (dados detalhados)
+
     report(
       data = Map(
         "event_type" -> "enter_link",
