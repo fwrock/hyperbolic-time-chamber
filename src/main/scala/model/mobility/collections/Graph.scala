@@ -268,7 +268,7 @@ case class Graph[V, W, L] private (
     None // Caminho não encontrado
   }
 
-  /** Dijkstra otimizado para encontrar o caminho mais curto entre dois nós. */
+    /** Dijkstra otimizado para encontrar o caminho mais curto entre dois nós. */
   def dijkstraEdgeTargetsOptimized(startNode: V, goalNode: V)(implicit
                                                               num: Numeric[W]
   ): Option[(Double, List[(Edge[V, W, L], V)])] = {
@@ -296,14 +296,46 @@ case class Graph[V, W, L] private (
         visited.add(current)
         
         neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          if (!visited.contains(neighbor)) {
-            val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
-            if (newDistance < distances(neighbor)) {
-              distances(neighbor) = newDistance
-              cameFrom(neighbor) = current
-              priorityQueue.enqueue((newDistance, neighbor))
-            }
+          if (!visited.contains(neighbor)) {/* Lines 300-306 omitted */}
+        }
+      }
+    }
+    
+    None // Caminho não encontrado
+  }
+
+  /** 
+   * Encontra o caminho com menor número de arestas/links entre dois nós usando BFS.
+   * Similar à função digraph:get_short_path/3 do Erlang.
+   * Retorna o número de hops e o caminho como lista de tuplas (Aresta, Nó destino).
+   */
+  def shortestPathByHops(startNode: V, goalNode: V): Option[(Int, List[(Edge[V, W, L], V)])] = {
+    if (!contains(startNode) || !contains(goalNode)) return None
+    if (startNode == goalNode) return Some((0, List.empty))
+    
+    val queue = mutable.Queue[(V, Int)]() // (nó atual, distância em hops)
+    val visited = mutable.Set[V]()
+    val cameFrom = mutable.Map[V, V]()
+    
+    queue.enqueue((startNode, 0))
+    visited.add(startNode)
+    
+    while (queue.nonEmpty) {
+      val (current, hops) = queue.dequeue()
+      
+      // Verifica todos os vizinhos do nó atual
+      neighbors(current).foreach { case (neighbor, _) =>
+        if (!visited.contains(neighbor)) {
+          visited.add(neighbor)
+          cameFrom(neighbor) = current
+          
+          if (neighbor == goalNode) {
+            // Objetivo encontrado! Reconstrói o caminho
+            return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode)
+              .map(path => (hops + 1, path))
           }
+          
+          queue.enqueue((neighbor, hops + 1))
         }
       }
     }
