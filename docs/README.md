@@ -118,7 +118,6 @@ Welcome to the comprehensive documentation for the Hyperbolic Time Chamber (HTC)
 - **Scala**: 3.3.5+ (managed by SBT)
 - **SBT**: 1.9.0+ for building the Scala application
 - **Docker**: 20.10+ and Docker Compose 2.0+
-- **Python**: 3.8+ for analysis scripts
 
 ### **🌐 Optional Components**
 - **Kubernetes**: For production cluster deployment

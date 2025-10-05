@@ -386,17 +386,8 @@ sbt test
 # Integration tests
 sbt it:test
 
-# Performance benchmarks
-./scripts/run_benchmarks.sh
-```
-
-### **📊 Sample Data Generation**
-```bash
-# Generate larger sample datasets
-./scripts/generate_sample_data.sh --vehicles 1000 --duration 7200
-
-# Run comparison tests
-./run_comparison.sh --sample
+# Check test coverage
+sbt clean coverage test coverageReport
 ```
 
 ---
@@ -445,10 +436,6 @@ docker compose logs cassandra
 # Problem: Out of disk space
 df -h
 docker system prune -a
-```
-
-# Problem: Python version
-python3 --version  # Must be 3.8+
 ```
 
 ### **🔧 System Optimization**
