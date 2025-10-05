@@ -558,7 +558,7 @@ docker volume prune -f
 docker system prune -f
 
 # Clean workspace
-rm -rf logs/* target/* scripts/output/*
+rm -rf logs/* target/* simulation_output/*
 
 # Restart fresh
 docker compose up -d

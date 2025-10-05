@@ -352,7 +352,7 @@ Ideas for extending this example.
 examples/basic/my_new_example/
 ├── README.md                  # From template
 ├── config/simulation.json     # Basic configuration
-├── scripts/run.sh            # Execution script
+├── run.sh                     # Execution script
 └── docs/scenario_description.md
 ```
 
