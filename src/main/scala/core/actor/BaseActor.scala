@@ -56,7 +56,15 @@ abstract class BaseActor[T <: BaseState](
   protected var currentTick: Tick = 0
 
   protected var entityId: String =
-    if (properties != null) properties.entityId else UUID.randomUUID().toString
+    if (properties != null) properties.entityId 
+    else {
+      // 🎲 Usar UUID determinístico se RandomSeedManager estiver disponível
+      try {
+        core.actor.manager.RandomSeedManager.deterministicUUID()
+      } catch {
+        case _: Exception => UUID.randomUUID().toString // Fallback
+      }
+    }
   protected var shardId: String = getShardId
   protected var state: T = uninitialized
   protected val dependencies: mutable.Map[String, Dependency] =
