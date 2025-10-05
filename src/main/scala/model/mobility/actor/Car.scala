@@ -66,19 +66,17 @@ class Car(
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            state.movableStatus = Finished
-            onFinishSpontaneous()
+            // Carro já está no destino
+            onFinish(state.origin)
           }
         case None =>
           logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
-          state.movableStatus = Finished
-          onFinishSpontaneous()
+          onFinish(state.origin)
       }
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
-        state.movableStatus = Finished
-        onFinishSpontaneous()
+        onFinish(state.origin)
     }
   }
 
@@ -90,8 +88,13 @@ class Car(
         )
         .orNull || state.movableBestRoute.isEmpty
     ) {
-      state.movableStatus = Finished
-      onFinishSpontaneous()
+      val currentNodeId = getCurrentNode
+      if (currentNodeId != null) {
+        onFinish(currentNodeId)
+      } else {
+        state.movableStatus = Finished
+        onFinishSpontaneous()
+      }
       selfDestruct()
     } else {
       state.movableStatus = WaitingSignalState
