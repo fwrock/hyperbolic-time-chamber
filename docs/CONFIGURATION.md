@@ -318,7 +318,7 @@ Single instance actors for specialized use cases.
 {
   "reporting": {
     "enabled": true,
-    "outputDirectory": "scripts/output",
+    "outputDirectory": "simulation_output",
     "formats": ["json", "csv", "xml"],
     "realTimeUpdates": true,
     "aggregationInterval": 60,          // seconds
