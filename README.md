@@ -1,336 +1,492 @@
-# 🚀 Hyperbolic Time Chamber - Traffic Analysis & Simulator Comparison
+# 🚀 Hyperbolic Time Chamber - Complete Documentation
 
 ![HTC Banner](https://github.com/user-attachments/assets/dddd6245-f4bd-43fc-8888-6ef73d01a221)
 
-**Sistema completo de análise de tráfego e validação de simuladores para pesquisa em mobilidade urbana**
+**A comprehensive multi-agent traffic simulation framework for general-purpose mobility research**
 
-Um simulador multi-agente baseado em atores usando Scala e Apache Pekko, com sistema avançado de análise e comparação de resultados.
+A distributed, event-driven multi-agent system built with Scala and Apache Pekko, featuring a mesoscopic mobility model implementation for urban traffic simulation and analysis.
 
 ---
 
-## 🎯 **Funcionalidades Principais**
+## 📚 **Documentation Index**
 
-### 🏗️ **Simulador HTC (Core)**
-- ✅ **Simulação baseada em eventos discretos** com atores Scala/Pekko
-- ✅ **Gestão precisa do tempo** de simulação
-- ✅ **Carregamento de dados** flexível (JSON, CSV)
-- ✅ **Coordenação de eventos** distribuída
-- ✅ **Sistema de relatórios** automatizado
-- ✅ **Snapshots** do estado da simulação
-- ✅ **Simulação distribuída** multi-nós
+### 🏗️ **Core Documentation**
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
+- **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first simulation
+- **[Configuration Guide](docs/CONFIGURATION.md)** - Complete configuration reference
+- **[Scenario Creation](docs/SCENARIO_CREATION.md)** - How to create simulation scenarios
 
-### 📊 **Sistema de Análise de Tráfego**
-- ✅ **Múltiplas fontes de dados** (Cassandra, CSV)
-- ✅ **Métricas avançadas** de fluxo de tráfego
-- ✅ **Visualizações interativas** com Plotly
-- ✅ **Relatórios automatizados** (JSON + Markdown)
-- ✅ **Dashboard web** integrado
+### 🔧 **Development & Operation**
+- **[API Reference](docs/API_REFERENCE.md)** - Actor system and event documentation
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Contributing and extending the system
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
-### 🔬 **Sistema de Comparação de Simuladores** 🆕
-- ✅ **Comparação HTC vs Simuladores de Referência** (MATSim/SUMO)
-- ✅ **Parsing de eventos XML** automático
-- ✅ **Análise estatística de similaridade** multi-métrica
-- ✅ **Score automático de validação** (0.0 - 1.0)
-- ✅ **Visualizações comparativas** (radar charts, bar charts)
-- ✅ **Relatórios detalhados** de validação
+### 📊 **Analysis & Research**
+- **[Academic Usage](docs/ACADEMIC_USAGE.md)** - Research and publication guidelines
 
-### 🗄️ **Sistema de Gerenciamento de Banco** 🆕
-- ✅ **Scripts de gerenciamento Cassandra** automatizados
-- ✅ **Limpeza de dados** entre simulações
-- ✅ **Verificação de estado** do banco
-- ✅ **Workflow integrado** para simulações limpas
-- ✅ **Inicialização automática** de schema
+### 🔍 **Examples & Tutorials**
+- **[Examples](docs/examples/)** - Learning examples and tutorials
 
-## 🏗️ **Arquitetura do Sistema**
+---
+
+## 🎯 **What is Hyperbolic Time Chamber?**
+
+The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simulation framework designed for:
+
+### **🏢 Core Capabilities**
+- **Multi-Agent Simulation**: Actor-based architecture using Apache Pekko
+- **Mesoscopic Mobility Model**: Built-in implementation for urban traffic simulation
+- **Distributed Computing**: Horizontal scaling across multiple nodes
+- **Event-Driven Design**: Discrete event simulation with precise time management
+- **Flexible Data Sources**: JSON, CSV, and database input support
+
+### **📊 Analysis & Research**
+- **Traffic Flow Analysis**: Comprehensive traffic pattern analysis
+- **Performance Metrics**: Detailed performance and scalability measurements
+- **Academic Research**: Publication-ready analysis and validation capabilities
+- **Extensible Framework**: Support for custom mobility models and scenarios
+
+### **� Extensibility**
+- **Plugin Architecture**: Easy integration of new actor types
+- **Custom Events**: Support for domain-specific event types
+- **Reporting Framework**: Flexible data collection and analysis
+- **API Integration**: REST and gRPC interfaces for external systems
+
+---
+
+## 🚀 **Quick Start**
+
+```bash
+cd hyperbolic-time-chamber
+
+# Run tests
+sbt test
+
+# Format code
+sbt scalafmt
+
+# Check for issues
+sbt scalafix --check
+```
+
+### **Project Standards:**
+- **Scala Version**: 3.3.5
+- **Build Tool**: SBT 1.x
+- **Code Style**: Scalafmt with standard configuration
+- **Testing**: ScalaTest with coverage reports
+- **Documentation**: ScalaDoc for API documentation
+
+**For detailed development guidelines, see [Developer Guide](docs/DEVELOPER_GUIDE.md)**
+
+### **Contributing Guidelines:**
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/new-feature`)
+3. Commit your changes (`git commit -am 'Add new feature'`)
+4. Push to the branch (`git push origin feature/new-feature`)
+5. Open a Pull Request
+
+---
+
+## 🎓 **Academic Usage**
+
+This system was developed for research in **urban mobility** and **traffic simulation**.
+
+**For citation:**
+```bibtex
+@software{hyperbolic_time_chamber,
+  title={Hyperbolic Time Chamber: Multi-Agent Traffic Simulation Framework},
+  author={[Your Name]},
+  year={2025},
+  url={https://github.com/fwrock/hyperbolic-time-chamber},
+  note={Multi-agent simulation system with mesoscopic mobility model}
+}
+```
+
+**For detailed academic usage guidelines, see [Academic Usage](docs/ACADEMIC_USAGE.md)**
+
+---
+
+## 📄 **License**
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## 🌟 **Key Features Summary**
+
+✨ **Core Advantages:**
+- 🏗️ **Actor-based architecture** with horizontal scaling
+- ⚡ **High-performance** discrete event simulation
+- 🚗 **Built-in mesoscopic model** for realistic traffic simulation
+- 🗄️ **Time-series data storage** with Cassandra integration
+- 🔧 **Flexible configuration** and scenario management
+- 📊 **Comprehensive reporting** and analysis capabilities
+- 🐳 **Docker deployment** for easy setup and scaling
+
+🚀 **Use Cases:**
+- **Urban Traffic Analysis**: City-scale traffic simulation and optimization
+- **Transportation Research**: Academic research and validation studies  
+- **Policy Evaluation**: Impact assessment of transportation policies
+- **Infrastructure Planning**: Network design and capacity analysis
+- **Algorithm Development**: Testing new mobility and routing algorithms
+
+---
+
+**🎉 Ready for large-scale traffic simulation and urban mobility research!**
+
+*Inspired by the legendary "Hyperbolic Time Chamber" from Dragon Ball, where 1 day = 1 year of training, our simulator allows for accelerated time analysis of traffic patterns and urban mobility scenarios.*
+```
+
+**For detailed setup instructions, see [Getting Started](docs/GETTING_STARTED.md)**
+
+---
+
+## 🏗️ **System Architecture Overview**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Hyperbolic Time Chamber                 │
+├─────────────────────────────────────────────────────────────┤
+│  🎯 Core Simulator (Scala/Pekko)                          │
+│  ├── Simulation Manager     ── Orchestrates simulation     │
+│  ├── Time Manager          ── Manages simulation time     │
+│  ├── Load Manager          ── Handles data loading        │
+│  ├── Report Manager        ── Collects and stores data    │
+│  └── Actor System          ── Multi-agent simulation      │
+├─────────────────────────────────────────────────────────────┤
+│  🗄️ Data Layer                                           │
+│  ├── Apache Cassandra      ── Time-series data storage    │
+│  ├── Configuration Files   ── JSON/HOCON configuration    │
+│  └── Docker Services       ── Containerized deployment    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**For detailed architecture information, see [Architecture Overview](docs/ARCHITECTURE.md)**
+
+---
+│   └── build.sbt                 # Build configuration
+
+---
+
+## 🚀 **How to Use**
+
+### **📋 Management Interface**
+```bash
+# Complete system manager with menu interface
+./htc-manager.sh
+
+# Manager features:
+# ✅ Automatic optimized initialization
+# ✅ Complete system diagnostics  
+# ✅ Cassandra management
+# ✅ Performance monitoring
+# ✅ Cleanup and maintenance
+```
+
+### **⚡ Quick Start**
+```bash
+# Auto-detect resources and apply best configuration
+./start-optimized.sh
+
+# With included diagnostics
+./diagnose.sh && ./start-optimized.sh
+```
+
+### **1. Running Simulations**
+
+```bash
+# Build and run the simulator
+sbt compile
+sbt run
+
+# Run with Docker
+docker-compose up
+
+# Run specific simulation scenario
+sbt "run --scenario examples/basic_scenario.json"
+```
+
+### **2. Managing Cassandra Database**
+
+```bash
+# Cassandra management script
+./manage_cassandra.sh
+
+# Check database status
+./manage_cassandra.sh status
+
+# Clean database between simulations
+./manage_cassandra.sh clean
+
+# Initialize database schema
+./manage_cassandra.sh init
+```
+
+### **3. Configuration**
+
+```bash
+# Copy and edit configuration
+cp src/main/resources/application.conf my-config.conf
+
+# Run with custom configuration
+sbt "run -Dconfig.file=my-config.conf"
+
+# Edit Docker configuration
+vim docker-compose.yml
+```
+
+### **4. Development**
+
+```bash
+# Run tests
+sbt test
+
+# Generate documentation
+sbt doc
+
+# Format code
+sbt scalafmt
+
+# Check code quality
+sbt scalafix
+```
+
+---
+
+## 🏗️ **Project Structure**
 
 ```
 hyperbolic-time-chamber/
 ├── 🎯 Core Simulator (Scala/Pekko)
-│   ├── src/main/scala/           # Código principal do simulador
-│   ├── src/main/resources/       # Configurações
+│   ├── src/main/scala/           # Main simulator code
+│   ├── src/main/resources/       # Configuration files
+│   ├── src/main/protobuf/        # Protocol Buffers definitions
 │   └── build.sbt                 # Build configuration
-│
-├── 📊 Sistema de Análise Python
-│   ├── scripts/
-│   │   ├── run_traffic_analysis.py    # Análise principal
-│   │   ├── data_sources/              # Conectores de dados
-│   │   │   ├── cassandra_source.py    # Integração Cassandra
-│   │   │   └── file_sources.py        # Leitura CSV/JSON
-│   │   ├── analytics/                 # Engine de métricas
-│   │   │   └── traffic_analyzer.py    # Cálculos avançados
-│   │   └── visualization/             # Sistema de visualização
-│   │       ├── traffic_visualizer.py  # Gráficos e dashboard
-│   │       └── academic_viz.py        # PDFs acadêmicos 🆕
-│   │
-│   ├── 🔬 Sistema de Comparação
-│   │   ├── compare_simulators.py      # Script principal
-│   │   └── comparison/                # Framework de comparação
-│   │       ├── reference_parser.py    # Parser XML (MATSim/SUMO)
-│   │       ├── simulator_comparator.py # Engine de comparação
-│   │       ├── id_mapper.py           # Mapeamento de IDs
-│   │       └── individual_comparator.py # Comparação individual
-│   │
-│   └── output/                        # Resultados e relatórios
-│       └── academic_reports/          # PDFs acadêmicos 🆕
-│
-├── 🚀 Scripts de Execução
-│   ├── run_traffic_analysis.sh        # Executor de análise
-│   ├── run_comparison.sh              # Executor de comparação
-│   ├── generate_academic_pdfs.sh      # Gerador de PDFs 🆕
-│   └── run_individual_comparison.py   # Comparação individual 🆕
-│
-└── 📚 Documentação
-    ├── docs/COMPARISON_GUIDE.md        # Guia de comparação
-    ├── docs/CASSANDRA_MANAGEMENT_GUIDE.md # Guia do Cassandra
-    └── docs/                          # Documentação técnica
+├── 📁 Docker Infrastructure
+│   ├── docker-compose.yml        # Service orchestration
+│   ├── Dockerfile                # Container definition
+│   └── cassandra-config/         # Cassandra configuration
+├── 🔧 Management Scripts
+│   ├── htc-manager.sh            # Main management interface
+│   ├── manage_cassandra.sh       # Database management
+│   ├── build-and-run.sh          # Build and run script
+│   └── run.sh                    # Simple run script
+├── � Documentation
+│   └── docs/                     # Complete documentation
+└── 📊 Configuration
+    ├── cassandra-init/           # Database initialization
+    └── logs/                     # Log files
 ```
 
 ---
 
-## 🚀 **Como Usar**
+## 🎯 **Core Features**
 
-### **📋 Interface de Gerenciamento Unificada (Recomendada)**
-```bash
-# Gerenciador completo com interface de menu
-./htc-manager.sh
+### **🏗️ Simulator Core**
+- ✅ **Discrete Event Simulation** with Scala/Pekko actors
+- ✅ **Precise Time Management** for simulation
+- ✅ **Flexible Data Loading** (JSON, CSV)
+- ✅ **Distributed Event Coordination**
+- ✅ **Automated Reporting System**
+- ✅ **Simulation State Snapshots**
+- ✅ **Multi-node Distributed Simulation**
 
-# Funcionalidades do gerenciador:
-# ✅ Inicialização otimizada automática
-# ✅ Diagnósticos completos do sistema  
-# ✅ Análise de tráfego e comparação
-# ✅ Geração de PDFs acadêmicos
-# ✅ Gerenciamento do Cassandra
-# ✅ Monitor de performance
-# ✅ Limpeza e manutenção
+### **🚗 Mesoscopic Mobility Model**
+- ✅ **Built-in Traffic Flow Model** for urban scenarios
+- ✅ **Vehicle Behavior Modeling** with configurable parameters
+- ✅ **Route Choice and Navigation** algorithms
+- ✅ **Traffic Signal Integration** and timing optimization
+- ✅ **Multi-modal Transportation** support
+
+### **🗄️ Database Management**
+- ✅ **Apache Cassandra Integration** for time-series data
+- ✅ **Automated Schema Management**
+- ✅ **Data Cleanup** between simulations
+- ✅ **Performance Monitoring** and optimization
+- ✅ **Backup and Recovery** procedures
+
+---
+
+## � **Simulation Outputs**
+
+### **Data Storage:**
+```
+Cassandra Tables:
+├── � simulation_events         # All simulation events
+├── � vehicle_states           # Vehicle position and status
+├── �️ link_flows               # Traffic flow on network links
+├── ⏱️ time_aggregated_data      # Time-based aggregations
+└── � performance_metrics      # System performance data
 ```
 
-### **⚡ Inicialização Rápida**
-```bash
-# Auto-detecta recursos e aplica melhor configuração
-./start-optimized.sh
+### **Generated Reports:**
+```
+simulation_output/
+├── 📋 simulation_summary.json   # Complete simulation data
+├── 📝 performance_report.md     # Performance analysis
+├── 📊 network_statistics.json   # Network-level metrics
+└── 📈 time_series_data.csv     # Temporal data for analysis
+```
+---
 
-# Com diagnóstico incluído
-./diagnose.sh && ./start-optimized.sh
+## 🗄️ **Database Management**
+
+### **Cassandra Control Scripts:**
+
+```bash
+# Start Cassandra
+./manage_cassandra.sh start
+
+# Clean old data (recommended before each simulation)
+./manage_cassandra.sh clean
+
+# Check current data status
+./manage_cassandra.sh status
+
+# Complete reset (clean everything)
+./manage_cassandra.sh reset
+
+# Automated workflow
+./manage_cassandra.sh init
 ```
 
-### **1. Análise de Tráfego**
+### **Clean Simulation Workflow:**
 
 ```bash
-# Análise usando dados do Cassandra
-./run_traffic_analysis.sh
+# 1. Clean old data
+./manage_cassandra.sh clean
 
-# Análise usando arquivo CSV
-./run_traffic_analysis.sh --source csv --file data/traffic_data.csv
+# 2. Start new simulation
+sbt run
 
-# Especificar diretório de saída
-./run_traffic_analysis.sh --output /custom/path
-```
+# 3. Monitor progress
+./manage_cassandra.sh status
 
-### 2. **Comparação de Simuladores** 🆕
-
-```bash
-# Comparar HTC (Cassandra) vs Simulador de Referência
-./run_comparison.sh --cassandra reference_events.xml
-
-# Comparar HTC (CSV) vs Simulador de Referência  
-./run_comparison.sh --csv data/htc_output.csv reference_events.xml
-
-# Criar dados de exemplo para teste
-./run_comparison.sh --sample
-
-# Usar limite maior de dados
-./run_comparison.sh --cassandra --limit 5000 reference_events.xml
-```
-
-### 3. **Gerar PDFs Acadêmicos** 🆕
-
-```bash
-# Gerar PDFs para artigos científicos (alta qualidade 300 DPI)
-./generate_academic_pdfs.sh
-
-# Opções específicas:
-./generate_academic_pdfs.sh traffic      # PDF de análise de tráfego
-./generate_academic_pdfs.sh comparison   # PDF de comparação
-./generate_academic_pdfs.sh individual   # PDF de comparação individual
-./generate_academic_pdfs.sh all          # Todos os PDFs
-
-# Listar PDFs existentes
-./generate_academic_pdfs.sh list
-```
-
-### 4. **Comparação Individual de Veículos** 🆕
-
-```bash
-# Comparação individual com dados de exemplo
-./run_individual_comparison.py --create-sample
-
-# Comparação usando Cassandra
-./run_individual_comparison.py --htc-cassandra reference_events.xml
-
-# Comparação usando CSV
-./run_individual_comparison.py --htc-csv data.csv reference_events.xml
-```
-
-### 3. **Ver Ajuda**
-
-```bash
-# Help da análise
-./run_traffic_analysis.sh --help
-
-# Help da comparação
-./run_comparison.sh --help
+# 4. Export results
+./manage_cassandra.sh export
 ```
 
 ---
 
-## 📊 **Métricas de Comparação**
+## ⚙️ **Configuration**
 
-### 🔍 **Análises Realizadas:**
+### **Main Configuration Files:**
+- `src/main/resources/application.conf` - Main simulator configuration
+- `src/main/resources/application-local.conf` - Local development settings
+- `docker-compose.yml` - Docker services configuration
+- `cassandra-config/cassandra.yaml` - Cassandra database settings
 
-1. **⏰ Padrões Temporais**
-   - Correlação temporal entre simuladores
-   - Distribuição de eventos ao longo do tempo
-   - Detecção de picos de tráfego
+### **Key Configuration Sections:**
 
-2. **🛣️ Uso de Links/Rotas**
-   - Frequência de utilização por link
-   - Distribuição espacial do tráfego
-   - Similaridade de rotas utilizadas
-
-3. **🚗 Comportamento dos Veículos**
-   - Tipos de eventos gerados
-   - Padrões de movimento
-   - Distribuição de ações dos veículos
-
-4. **📈 Métricas Estatísticas**
-   - **Cosine Similarity**: Similaridade vetorial
-   - **Jensen-Shannon Divergence**: Diferença entre distribuições
-   - **Correlação de Pearson**: Correlação linear
-   - **Score Geral**: Média ponderada das métricas
-
-### 🎯 **Interpretação do Score de Similaridade:**
-
-| Score | Classificação | Interpretação | Status |
-|-------|---------------|---------------|--------|
-| 0.9-1.0 | Excelente | Simuladores muito similares | ✅ |
-| 0.8-0.9 | Boa | Boa correspondência | ✅ |
-| 0.7-0.8 | Moderada | Similaridade aceitável | ⚠️ |
-| 0.6-0.7 | Baixa | Diferenças notáveis | ⚠️ |
-| <0.6 | Pouco Similar | Diferenças significativas | ❌ |
-
----
-
-## 📈 **Outputs Gerados**
-
-### **Análise de Tráfego:**
-```
-scripts/output/
-├── 📋 traffic_analysis_report.json    # Dados completos
-├── 📝 traffic_summary.md              # Relatório resumido
-├── 📊 traffic_dashboard.html           # Dashboard interativo
-├── 📈 visualizations/                  # Gráficos
-│   ├── traffic_flow_timeline.png
-│   ├── vehicle_distribution.png
-│   └── link_usage_heatmap.png
-└── 📄 academic_reports/               # PDFs acadêmicos 🆕
-    └── traffic_analysis_academic.pdf
+#### **Simulation Settings:**
+```hocon
+simulation {
+  time {
+    start = "06:00:00"
+    end = "09:00:00"
+    step = 1  # seconds
+  }
+  
+  actors {
+    vehicle-count = 1000
+    max-concurrent = 100
+  }
+  
+  network {
+    file = "scenarios/network.json"
+    validation = true
+  }
+}
 ```
 
-### **Comparação de Simuladores:**
-```
-scripts/output/comparison/
-├── 📋 simulator_comparison_report.json # Dados detalhados
-├── 📝 comparison_summary.md            # Relatório de similaridade
-├── 📊 similarity_radar.png             # Radar chart comparativo
-├── 📈 data_comparison.png              # Gráficos distribuição
-└── 📄 academic_reports/               # PDFs acadêmicos 🆕
-    └── simulator_comparison_academic.pdf
-```
-
-### **Comparação Individual:**
-```
-scripts/output/individual/
-├── 📋 individual_comparison_report.json # Comparação detalhada
-├── 📊 vehicle_similarity_distribution.png # Distribuição de similaridade
-├── 📈 link_similarity_distribution.png    # Links comparados
-└── 📄 academic_reports/                   # PDFs acadêmicos 🆕
-    └── individual_comparison_academic.pdf
+#### **Database Settings:**
+```hocon
+cassandra {
+  hosts = ["127.0.0.1"]
+  port = 9042
+  keyspace = "htc_simulation"
+  replication-factor = 1
+}
 ```
 
-## 📄 **PDFs Acadêmicos para Artigos** 🆕
-
-### **Características dos PDFs:**
-- ✅ **Alta qualidade**: 300 DPI para publicação
-- ✅ **Fontes acadêmicas**: Times New Roman (compatível LaTeX)
-- ✅ **Cores otimizadas**: Para impressão e escala de cinza
-- ✅ **Formato padrão**: A4, layout acadêmico profissional
-- ✅ **Multi-página**: Cada PDF contém múltiplas análises
-
-### **Conteúdo dos PDFs:**
-
-#### **📊 PDF de Análise de Tráfego:**
-- Página 1: Fluxo temporal de tráfego
-- Página 2: Distribuição de veículos por link
-- Página 3: Heatmap de uso de links
-- Página 4: Métricas de performance
-
-#### **🔬 PDF de Comparação de Simuladores:**
-- Página 1: Radar chart de similaridade
-- Página 2: Comparação temporal
-- Página 3: Comparação de links
-- Página 4: Métricas estatísticas
-- Página 5: Box plots de distribuições
-
-#### **🎯 PDF de Comparação Individual:**
-- Página 1: Similaridade de veículos
-- Página 2: Jornadas comparadas
-- Página 3: Estatísticas de mapeamento
-
-### **Exemplo de Relatório JSON:**
-```json
-{
-  "overall_similarity": {
-    "score": 0.869,
-    "classification": "Boa similaridade"
-  },
-  "temporal_analysis": {
-    "correlation": 0.94,
-    "js_divergence": 0.12
-  },
-  "link_analysis": {
-    "common_links": 15,
-    "usage_similarity": 0.87
+#### **Performance Tuning:**
+```hocon
+akka {
+  actor {
+    default-dispatcher {
+      type = "Dispatcher"
+      executor = "fork-join-executor"
+      fork-join-executor {
+        parallelism-min = 8
+        parallelism-max = 64
+      }
+    }
   }
 }
 ```
 
 ---
 
-## 🗄️ **Gerenciamento do Cassandra**
+## 🚀 **Performance & Scaling**
 
-### **Scripts de Controle:**
+### **System Requirements:**
+- **Minimum**: 4 GB RAM, 2 CPU cores
+- **Recommended**: 16 GB RAM, 8 CPU cores
+- **Large Scale**: 32+ GB RAM, 16+ CPU cores
 
+### **Scaling Guidelines:**
+- **Small scenarios**: < 1,000 vehicles, single node
+- **Medium scenarios**: 1,000-10,000 vehicles, 2-4 nodes
+- **Large scenarios**: 10,000+ vehicles, 4+ nodes
+
+### **Performance Monitoring:**
 ```bash
-# Subir Cassandra
-./manage_cassandra.sh start
+# Monitor system resources
+htop
 
-# Limpar dados antigos (recomendado antes de cada simulação)
-./manage_cassandra.sh clean
+# Monitor Cassandra performance
+./manage_cassandra.sh metrics
 
-# Verificar estado atual dos dados
-./check_cassandra_data.sh
+# Monitor JVM performance
+jstat -gc $(pgrep java)
 
-# Reset completo (limpar tudo)
-./manage_cassandra.sh reset
-
-# Workflow automatizado
-./simulation_workflow.sh clean
+# Monitor simulation progress
+tail -f logs/simulation.log
 ```
 
-### **Workflow de Simulação Limpa:**
+---
 
+## 🔧 **Development & Contributing**
+
+### **Setting up Development Environment:**
 ```bash
-# 1. Limpar dados antigos
+# Install dependencies
+sudo apt-get install openjdk-11-jdk sbt docker.io
+
+# Clone repository
+git clone https://github.com/fwrock/hyperbolic-time-chamber.git
+cd hyperbolic-time-chamber
+
+# Run tests
+sbt test
+
+# Format code
+sbt scalafmt
+
+# Check for issues
+sbt scalafix --check
+```
+
+### **Project Standards:**
+- **Scala Version**: 3.3.5
+- **Build Tool**: SBT 1.x
+- **Code Style**: Scalafmt with standard configuration
+- **Testing**: ScalaTest with coverage reports
+- **Documentation**: ScalaDoc for API documentation
+
+**For detailed development guidelines, see [Developer Guide](docs/DEVELOPER_GUIDE.md)**
+
+---
 ./manage_cassandra.sh clean
 
 # 2. Verificar se está limpo
