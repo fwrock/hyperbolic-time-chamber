@@ -5,7 +5,6 @@ import core.actor.BaseActor
 import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.model.mobility.entity.model.model.Route
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
@@ -13,10 +12,9 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute}
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.util.CityMapUtil
-import org.interscity.htc.system.database.redis.RedisClientManager
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil}
 
 import scala.collection.mutable
 
@@ -27,43 +25,54 @@ abstract class Movable[T <: MovableState](
       properties = properties
     ) {
 
-  protected def requestRoute(): Unit = {}
+  protected def requestRoute(): Unit = {
+    if (state.movableStatus == Finished) {
+      return
+    }
+    try {
+      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+        case Some((cost, pathQueue)) =>
+          state.movableBestRoute = Some(pathQueue)
+          state.movableStatus = Ready
+          state.movableCurrentPath = None
+          if (pathQueue.nonEmpty) {
+            enterLink()
+          } else {
+            state.movableStatus = Finished
+            logInfo("No path available between origin and destination, finishing.")
+            onFinishSpontaneous()
+          }
+        case None =>
+          logError(s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}.")
+          state.movableStatus = Finished
+          onFinishSpontaneous()
+      }
+    } catch {
+      case e: Exception =>
+        logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
+        state.movableStatus = Finished
+        onFinishSpontaneous()
+    }
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match
       case Start =>
-        logInfo("Starting Movable actor")
         requestRoute()
       case Ready =>
-        logInfo("Movable actor is ready to enter link")
         enterLink()
+      case Finished =>
+        onFinishSpontaneous()
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: ReceiveRoute => handleReceiveRoute(d)
       case d: LinkInfoData => handleLinkInfo(event, d)
       case _ =>
         logWarn(s"Movable Event not handled: $event")
     }
-
-  private def handleReceiveRoute(data: ReceiveRoute): Unit = {
-    val redisManager = RedisClientManager()
-    redisManager.load(data.routeId).map(Route.parseFrom) match {
-      case Some(route) =>
-        val updatedCost = route.cost
-        state.movableBestRoute = Some(
-          mutable.Queue()
-        )
-        state.movableStatus = Ready
-      case None =>
-        logError(s"Route not found in Redis: ${data.routeId}")
-        onFinishSpontaneous()
-    }
-    enterLink()
-  }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
     EventTypeEnum.valueOf(event.eventType) match {
@@ -111,21 +120,25 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
-            logInfo(s"Entering link $linkEdgeGraphId to node $nextNodeId")
           case None =>
             state.movableStatus = Finished
-            logInfo("No edge label found for link, finishing.")
+            logWarn("No edge label found for link, finishing.")
             onFinishSpontaneous()
             selfDestruct()
         }
       case None if state.movableBestRoute.isEmpty =>
         state.movableStatus = Finished
-        logInfo("No current path and no best route available, finishing.")
+        logWarn("No current path and no best route available, finishing.")
         onFinishSpontaneous()
       case None =>
-        logInfo("No current path, but best route available, entering link.")
-        state.movableCurrentPath = getNextPath
-        enterLink ()
+        getNextPath match {
+          case Some(nextPath) =>
+            state.movableCurrentPath = Some(nextPath)
+            enterLink()
+          case None =>
+            state.movableStatus = Finished
+            onFinishSpontaneous()
+        }
     }
   }
 
@@ -161,16 +174,22 @@ abstract class Movable[T <: MovableState](
 
   protected def getNextPath: Option[(String, String)] =
     state.movableBestRoute match
-      case Some(path) =>
-        Some(path.dequeue)
+      case Some(path) if path.nonEmpty =>
+        Some(path.dequeue())
+      case Some(_) =>
+        logDebug("Path queue is empty, trajectory completed")
+        None
       case None =>
         logWarn("No path to follow")
         None
 
   protected def viewNextPath: Option[(String, String)] =
     state.movableBestRoute match
-      case Some(path) =>
+      case Some(path) if path.nonEmpty =>
         Some(path.head)
+      case Some(_) =>
+        logDebug("Path queue is empty, no next path available")
+        None
       case None =>
         logWarn("No path to follow")
         None

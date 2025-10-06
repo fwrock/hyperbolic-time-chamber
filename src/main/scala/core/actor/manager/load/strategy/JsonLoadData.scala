@@ -110,7 +110,12 @@ class JsonLoadData(private val properties: Properties)
     creator: ActorRef,
     actorsToCreate: Seq[ActorSimulationCreation]
   ): Unit = {
-    val batchId = UUID.randomUUID().toString
+    // 🎲 Usar UUID determinístico para batch ID
+    val batchId = try {
+      core.actor.manager.RandomSeedManager.deterministicUUID()
+    } catch {
+      case _: Exception => UUID.randomUUID().toString
+    }
     processBatchControl.put(batchId, false)
     creator ! CreateActorsEvent(id = batchId, actors = actorsToCreate, actorRef = self)
   }
