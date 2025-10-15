@@ -134,11 +134,11 @@ javac -version
 
 # Install correct version (Ubuntu/Debian)
 sudo apt update
-sudo apt install openjdk-11-jdk
+sudo apt install openjdk-21-jdk
 
 # Set JAVA_HOME
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-echo 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64' >> ~/.bashrc
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc
 
 # Switch between versions (if multiple installed)
 sudo update-alternatives --config java
@@ -150,11 +150,11 @@ sudo update-alternatives --config java
 Error: JAVA_HOME is not defined correctly
 
 # Solution
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 export PATH=$PATH:$JAVA_HOME/bin
 
 # Make permanent
-echo 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64' >> ~/.bashrc
+echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc
 echo 'export PATH=$PATH:$JAVA_HOME/bin' >> ~/.bashrc
 source ~/.bashrc
 ```

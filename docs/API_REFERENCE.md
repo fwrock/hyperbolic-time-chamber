@@ -20,7 +20,7 @@ The HTC API is organized around these core concepts:
 
 ### **🏗️ BaseActor<T>**
 
-The foundation class for all simulation actors.
+The foundation class for all simulation actors in the Hyperbolic Time Chamber framework.
 
 ```scala
 abstract class BaseActor[T <: BaseState](
@@ -29,81 +29,284 @@ abstract class BaseActor[T <: BaseState](
   extends ActorSerializable with ActorLogging with Stash
 ```
 
-#### **Key Methods**
+#### **📋 Overview**
 
-##### **Lifecycle Methods**
+BaseActor provides the essential infrastructure for all simulation entities, including:
+- **State Management**: Immutable state with persistence support
+- **Event Handling**: Processing of spontaneous and interaction events
+- **Time Management**: Integration with the simulation time system
+- **Communication**: Message passing with other actors
+- **Lifecycle Management**: Initialization, execution, and destruction phases
+
+---
+
+#### **🔄 Lifecycle Methods**
+
+##### **Actor Initialization**
 ```scala
-// Called during actor initialization
-protected def onInitialize(event: InitializeEvent): Unit
+// Called during actor startup before message processing begins
+protected def onStart(): Unit = ()
 
-// Called after initialization completes
-protected def onFinishInitialize(): Unit
+// Called during actor initialization with configuration data
+protected def onInitialize(event: InitializeEvent): Unit = ()
 
-// Called when actor is being destroyed
-protected def onDestruct(event: DestructEvent): Unit
+// Called when actor is being destroyed/stopped
+protected def onDestruct(event: DestructEvent): Unit = {}
+
+// Manually stop the actor
+protected def selfDestruct(): Unit
 ```
 
-##### **Event Handling**
+**Usage Example:**
 ```scala
-// Handle spontaneous (internal) events
-protected def actSpontaneous(event: SpontaneousEvent): Unit
-
-// Handle interaction events from other actors
-def actInteractWith(event: ActorInteractionEvent): Unit
+class CarActor(properties: Properties) extends BaseActor[CarState](properties) {
+  
+  override def onInitialize(event: InitializeEvent): Unit = {
+    // Set up initial state
+    logInfo("Car actor initialized")
+    // Register with traffic management systems
+    registerWithTrafficSystem()
+  }
+  
+  override def onDestruct(event: DestructEvent): Unit = {
+    // Clean up resources
+    logInfo("Car actor stopping")
+    unregisterFromTrafficSystem()
+  }
+}
 ```
 
-##### **Time Management**
+---
+
+#### **📨 Event Handling Methods**
+
+##### **Spontaneous Events**
+```scala
+// Handle internal/self-triggered events from the time manager
+protected def actSpontaneous(event: SpontaneousEvent): Unit = ()
+
+// Trigger a spontaneous event on yourself
+protected def selfSpontaneous(): Unit
+
+// Signal completion of spontaneous event processing
+protected def onFinishSpontaneous(
+  scheduleTick: Option[Tick] = None,
+  destruct: Boolean = false
+): Unit
+```
+
+**Usage Example:**
+```scala
+override def actSpontaneous(event: SpontaneousEvent): Unit = {
+  state.status match {
+    case "moving" =>
+      updatePosition()
+      // Schedule next movement in 1 time unit
+      onFinishSpontaneous(scheduleTick = Some(getCurrentTick + 1))
+    
+    case "waiting" =>
+      checkForGreenLight()
+      onFinishSpontaneous(scheduleTick = Some(getCurrentTick + 5))
+    
+    case _ =>
+      onFinishSpontaneous() // No rescheduling
+  }
+}
+```
+
+##### **Actor Interaction Events**
+```scala
+// Handle events from other actors
+def actInteractWith(event: ActorInteractionEvent): Unit = ()
+
+// Send message to another actor by entity ID
+protected def sendMessageTo(
+  entityId: String,
+  shardId: String = null,
+  data: AnyRef,
+  eventType: String = "default",
+  actorType: CreationTypeEnum = LoadBalancedDistributed
+): Unit
+```
+
+**Usage Example:**
+```scala
+override def actInteractWith(event: ActorInteractionEvent): Unit = {
+  event.data match {
+    case trafficSignalData: TrafficSignalData =>
+      if (trafficSignalData.isGreen) {
+        startMoving()
+      } else {
+        stopAtIntersection()
+      }
+    
+    case emergencyAlert: EmergencyAlert =>
+      pullOver()
+      
+    case _ =>
+      logWarn(s"Unknown interaction event: ${event.data}")
+  }
+}
+
+// Example of sending a message
+private def requestRouteCalculation(): Unit = {
+  sendMessageTo(
+    entityId = "route-calculator-1",
+    data = RouteRequest(origin = currentPosition, destination = targetDestination),
+    eventType = "route_request"
+  )
+}
+```
+
+---
+
+#### **⏰ Time Management Methods**
+
 ```scala
 // Get current simulation time
-protected def getCurrentTick: Tick
+protected def getCurrentTick: Tick = currentTick
 
-// Schedule future event
-protected def scheduleEvent(tick: Tick, event: BaseEvent[_]): Unit
+// Schedule an event at a specific future time
+protected def scheduleEvent(tick: Tick): Unit
 
-// Get Lamport clock value
-protected def getLamportClock: Tick
+// Get Lamport clock for distributed time synchronization
+private def getLamportClock: Long
+
+// Update Lamport clock when receiving messages
+private def updateLamportClock(otherClock: Long): Unit
 ```
 
-##### **State Management**
+**Usage Example:**
 ```scala
-// Get current actor state
-protected def getState: T
-
-// Update actor state
-protected def setState(newState: T): Unit
-
-// Save state snapshot
-protected def save(event: BaseEvent[_]): Unit
+private def scheduleNextAction(): Unit = {
+  val nextActionTime = getCurrentTick + calculateDelay()
+  scheduleEvent(nextActionTime)
+  logInfo(s"Next action scheduled for tick $nextActionTime")
+}
 ```
 
-##### **Communication**
+---
+
+#### **🗄️ State Management Methods**
+
 ```scala
-// Send event to another actor
-protected def sendEvent(targetActor: ActorRef, event: BaseEvent[_]): Unit
+// Access the current actor state (implicit through state variable)
+protected var state: T
 
-// Broadcast event to multiple actors
-protected def broadcastEvent(actors: Set[ActorRef], event: BaseEvent[_]): Unit
-
-// Get actor reference by ID
-protected def getActorRef(actorId: String): ActorRef
+// State persistence and recovery (automatic via Pekko Persistence)
+private def save(event: Any): Unit
+def receiveRecover: Receive
 ```
 
-##### **Utilities**
+**Usage Example:**
 ```scala
-// Log information message
-protected def logInfo(message: String): Unit
-
-// Log warning message
-protected def logWarn(message: String): Unit
-
-// Log error message
-protected def logError(message: String, throwable: Throwable = null): Unit
-
-// Get configuration value
-protected def getConfig[T](key: String, default: T): T
+// State is accessed directly as a protected variable
+private def updateCarPosition(newPosition: Position): Unit = {
+  state = state.copy(
+    position = newPosition,
+    lastUpdate = getCurrentTick
+  )
+  // State automatically persisted through event sourcing
+}
 ```
 
-#### **Properties Configuration**
+---
+
+#### **📡 Communication and Messaging Methods**
+
+```scala
+// Get actor reference by path
+protected def getActorRef(path: String): ActorRef
+
+// Get actor pool reference for PoolDistributed actors
+protected def getActorPoolRef(entityId: String): ActorSelection
+
+// Get dependency actor information
+protected def getDependency(entityId: String): Dependency
+
+// Get shard region reference for distributed actors
+protected def getShardRef(className: String): ActorRef
+protected def getSelfShard: ActorRef
+```
+
+**Usage Example:**
+```scala
+private def communicateWithTrafficLight(): Unit = {
+  val trafficLightDep = getDependency("traffic-light-1")
+  sendMessageTo(
+    entityId = trafficLightDep.id,
+    data = VehicleApproachingData(vehicleId = getEntityId, speed = state.speed)
+  )
+}
+```
+
+---
+
+#### **📊 Reporting and Logging Methods**
+
+##### **Data Reporting**
+```scala
+// Report data with optional label
+protected def report(data: Any, label: String = null): Unit
+
+// Report with full event structure
+protected def report(event: ReportEvent): Unit
+
+// Simple data reporting
+protected def report(data: Any): Unit
+```
+
+##### **Logging**
+```scala
+// Standard logging methods
+protected def logInfo(eventInfo: String): Unit
+protected def logDebug(eventInfo: String): Unit
+protected def logWarn(eventInfo: String): Unit
+protected def logError(eventInfo: String): Unit
+protected def logError(eventInfo: String, throwable: Throwable): Unit
+```
+
+**Usage Example:**
+```scala
+private def reportVehicleMetrics(): Unit = {
+  // Report position and speed data
+  report(
+    data = VehicleMetrics(
+      position = state.position,
+      speed = state.speed,
+      fuel = state.fuelLevel
+    ),
+    label = "vehicle_metrics"
+  )
+}
+
+private def handleError(operation: String, error: Throwable): Unit = {
+  logError(s"Failed to $operation", error)
+  // Report error for analysis
+  report(ErrorReport(operation = operation, error = error.getMessage))
+}
+```
+
+---
+
+#### **🔧 Utility Methods**
+
+```scala
+// Actor identification
+protected def getEntityId: String
+protected def getPath: String
+protected def getShardId: String
+
+// Actor references and managers
+protected def getTimeManager: ActorRef
+
+// Create identity object for actor registration
+protected def toIdentify: Identify
+```
+
+---
+
+#### **⚙️ Properties Configuration**
 ```scala
 case class Properties(
   entityId: String,                                    // Unique actor identifier
@@ -116,6 +319,225 @@ case class Properties(
   dependencies: mutable.Map[String, Dependency] = mutable.Map() // Actor dependencies
 )
 ```
+
+---
+
+#### **📚 Complete Implementation Example**
+
+Here's a comprehensive example showing how to implement a traffic light actor using BaseActor methods:
+
+```scala
+package org.interscity.htc.model.mobility.actor
+
+import org.interscity.htc.core.actor.BaseActor
+import org.interscity.htc.core.entity.event.{SpontaneousEvent, ActorInteractionEvent}
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.entity.event.control.execution.DestructEvent
+
+// State definition
+case class TrafficLightState(
+  currentPhase: String = "red",     // red, yellow, green
+  phaseDuration: Int = 30,          // seconds in current phase
+  phaseStartTick: Long = 0,         // when current phase started
+  intersectionId: String = "",      // associated intersection
+  override val startTick: Long = 0  // actor start time
+) extends BaseState(startTick)
+
+// Traffic light actor implementation
+class TrafficLightActor(properties: Properties) 
+  extends BaseActor[TrafficLightState](properties) {
+  
+  // 1. LIFECYCLE METHODS
+  override def onInitialize(event: InitializeEvent): Unit = {
+    logInfo(s"Traffic light ${getEntityId} initializing at intersection ${state.intersectionId}")
+    
+    // Register with intersection controller
+    val intersectionDep = getDependency(state.intersectionId)
+    sendMessageTo(
+      entityId = intersectionDep.id,
+      data = TrafficLightRegistrationData(lightId = getEntityId),
+      eventType = "register_light"
+    )
+    
+    // Schedule first phase change
+    scheduleNextPhaseChange()
+  }
+  
+  override def onDestruct(event: DestructEvent): Unit = {
+    logInfo(s"Traffic light ${getEntityId} shutting down")
+    
+    // Notify intersection of shutdown
+    val intersectionDep = getDependency(state.intersectionId)
+    sendMessageTo(
+      entityId = intersectionDep.id,
+      data = TrafficLightShutdownData(lightId = getEntityId),
+      eventType = "light_shutdown"
+    )
+  }
+  
+  // 2. EVENT HANDLING METHODS
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    state.currentPhase match {
+      case "red" =>
+        changePhase("green")
+        reportPhaseChange()
+        scheduleNextPhaseChange()
+        
+      case "green" =>
+        changePhase("yellow")
+        reportPhaseChange()
+        // Yellow phase is shorter
+        onFinishSpontaneous(scheduleTick = Some(getCurrentTick + 5))
+        
+      case "yellow" =>
+        changePhase("red")
+        reportPhaseChange()
+        scheduleNextPhaseChange()
+        
+      case _ =>
+        logError(s"Unknown phase: ${state.currentPhase}")
+        onFinishSpontaneous()
+    }
+  }
+  
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    event.data match {
+      case emergencyRequest: EmergencyVehicleRequest =>
+        handleEmergencyRequest(emergencyRequest)
+        
+      case phaseRequest: PhaseChangeRequest =>
+        handlePhaseChangeRequest(phaseRequest)
+        
+      case statusQuery: StatusQuery =>
+        respondWithStatus(event.actorRefId, statusQuery)
+        
+      case _ =>
+        logWarn(s"Unknown interaction data: ${event.data}")
+    }
+  }
+  
+  // 3. BUSINESS LOGIC METHODS
+  private def changePhase(newPhase: String): Unit = {
+    val oldPhase = state.currentPhase
+    state = state.copy(
+      currentPhase = newPhase,
+      phaseStartTick = getCurrentTick
+    )
+    
+    logInfo(s"Phase changed from $oldPhase to $newPhase at tick ${getCurrentTick}")
+    
+    // Notify nearby vehicles
+    notifyVehiclesOfPhaseChange(newPhase)
+  }
+  
+  private def scheduleNextPhaseChange(): Unit = {
+    val nextTick = getCurrentTick + state.phaseDuration
+    onFinishSpontaneous(scheduleTick = Some(nextTick))
+    logDebug(s"Next phase change scheduled for tick $nextTick")
+  }
+  
+  private def handleEmergencyRequest(request: EmergencyVehicleRequest): Unit = {
+    logInfo(s"Emergency vehicle request received: ${request.vehicleId}")
+    
+    if (state.currentPhase != "green") {
+      // Override current phase for emergency vehicle
+      changePhase("green")
+      reportPhaseChange(isEmergencyOverride = true)
+      
+      // Schedule return to normal operation
+      val emergencyDuration = 15 // seconds
+      onFinishSpontaneous(scheduleTick = Some(getCurrentTick + emergencyDuration))
+    }
+  }
+  
+  private def notifyVehiclesOfPhaseChange(newPhase: String): Unit = {
+    // Get all vehicles in range (from dependencies or spatial queries)
+    val nearbyVehicles = findNearbyVehicles()
+    
+    nearbyVehicles.foreach { vehicleId =>
+      sendMessageTo(
+        entityId = vehicleId,
+        data = TrafficSignalData(
+          lightId = getEntityId,
+          phase = newPhase,
+          timeRemaining = state.phaseDuration
+        ),
+        eventType = "signal_update"
+      )
+    }
+  }
+  
+  // 4. REPORTING AND MONITORING
+  private def reportPhaseChange(isEmergencyOverride: Boolean = false): Unit = {
+    report(
+      data = TrafficLightPhaseReport(
+        lightId = getEntityId,
+        intersectionId = state.intersectionId,
+        phase = state.currentPhase,
+        phaseStartTick = state.phaseStartTick,
+        isEmergencyOverride = isEmergencyOverride
+      ),
+      label = "phase_change"
+    )
+  }
+  
+  private def respondWithStatus(requesterId: String, query: StatusQuery): Unit = {
+    val statusResponse = TrafficLightStatusResponse(
+      lightId = getEntityId,
+      currentPhase = state.currentPhase,
+      phaseStartTick = state.phaseStartTick,
+      nextPhaseChangeTick = state.phaseStartTick + state.phaseDuration,
+      isOperational = true
+    )
+    
+    sendMessageTo(
+      entityId = requesterId,
+      data = statusResponse,
+      eventType = "status_response"
+    )
+  }
+  
+  // 5. UTILITY METHODS
+  private def findNearbyVehicles(): List[String] = {
+    // Implementation would query spatial index or use dependency relationships
+    dependencies.values
+      .filter(_.classType.contains("Car"))
+      .map(_.id)
+      .toList
+  }
+}
+
+// Supporting data classes
+case class TrafficLightRegistrationData(lightId: String)
+case class TrafficLightShutdownData(lightId: String)
+case class EmergencyVehicleRequest(vehicleId: String, priority: Int)
+case class PhaseChangeRequest(requestedPhase: String, reason: String)
+case class StatusQuery(requesterId: String)
+case class TrafficSignalData(lightId: String, phase: String, timeRemaining: Int)
+case class TrafficLightPhaseReport(
+  lightId: String,
+  intersectionId: String,
+  phase: String,
+  phaseStartTick: Long,
+  isEmergencyOverride: Boolean
+)
+case class TrafficLightStatusResponse(
+  lightId: String,
+  currentPhase: String,
+  phaseStartTick: Long,
+  nextPhaseChangeTick: Long,
+  isOperational: Boolean
+)
+```
+
+This example demonstrates:
+- **Lifecycle Management**: Proper initialization and cleanup
+- **Event Processing**: Handling both spontaneous and interaction events
+- **Time Management**: Scheduling future events and phase changes
+- **State Management**: Immutable state updates
+- **Communication**: Messaging with vehicles and intersection controllers
+- **Reporting**: Data collection for analysis
+- **Error Handling**: Logging and graceful error management
 
 ---
 

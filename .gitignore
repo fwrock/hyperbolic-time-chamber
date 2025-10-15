@@ -111,3 +111,5 @@ analytics_output/
 *.temp
 .cache/
 logs/
+
+.github/copilot-instructions.md

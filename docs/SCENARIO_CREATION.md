@@ -43,7 +43,7 @@ Let's start with a basic four-way intersection scenario:
     "actorsDataSources": [
       {
         "id": "intersection-controller",
-        "classType": "com.htc.traffic.IntersectionActor",
+        "classType": "mobility.actor.Node",
         "creationType": "Simple",
         "dataSource": {
           "type": "json",
