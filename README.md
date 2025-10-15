@@ -59,6 +59,9 @@ The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simu
 ```bash
 cd hyperbolic-time-chamber
 
+# Build and run (recommended)
+./build-and-run.sh
+
 # Run tests
 sbt test
 
@@ -71,6 +74,7 @@ sbt scalafix --check
 
 ### **Project Standards:**
 - **Scala Version**: 3.3.5
+- **Java Version**: 21+
 - **Build Tool**: SBT 1.x
 - **Code Style**: Scalafmt with standard configuration
 - **Testing**: ScalaTest with coverage reports

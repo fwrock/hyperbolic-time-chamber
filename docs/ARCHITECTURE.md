@@ -109,10 +109,10 @@ Manages data collection and export:
 │  └── Supports serialization and persistence               │
 ├─────────────────────────────────────────────────────────────┤
 │  Domain-Specific Actors                                   │
-│  ├── VehicleActor: Represents individual vehicles         │
-│  ├── IntersectionActor: Models traffic intersections      │
-│  ├── SignalActor: Traffic signal control logic           │
-│  ├── RouteActor: Route planning and optimization          │
+│  ├── Car: Represents individual vehicles (mobility.actor.Car)     │
+│  ├── Node: Models network intersections (mobility.actor.Node)     │
+│  ├── Link: Road segments connecting nodes (mobility.actor.Link)   │
+│  ├── GPS: Optional tracking actors (mobility.actor.GPS)           │
 │  └── Custom actors for specific simulation needs          │
 ├─────────────────────────────────────────────────────────────┤
 │  Actor Creation Patterns                                   │
