@@ -5,6 +5,7 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil}
@@ -50,6 +51,7 @@ class Car(
           state.movableStatus = Ready
           state.movableCurrentPath = None
 
+          // Reporta o início da jornada
           report(
             data = Map(
               "event_type" -> "journey_started",
@@ -60,23 +62,137 @@ class Car(
               "route_length" -> pathQueue.size,
               "tick" -> currentTick
             ),
-            label = "vehicle_flow"
+            label = "journey_started"
           )
+          state.eventCount += 1
+          
+          // Reporta detalhes completos da rota planejada
+          report(
+            data = Map(
+              "event_type" -> "route_planned",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "route_cost" -> cost,
+              "route_length" -> pathQueue.size,
+              "route_links" -> pathQueue.map(_._1).mkString(","), // Lista de links do caminho
+              "route_nodes" -> pathQueue.map(_._2).mkString(","), // Lista de nós do caminho
+              "tick" -> currentTick
+            ),
+            label = "route_planned"
+          )
+          state.eventCount += 1
           
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
             // Carro já está no destino
-            onFinish(state.origin)
+            // Reporta journey_completed para chegada imediata
+            report(
+              data = Map(
+                "event_type" -> "journey_completed",
+                "car_id" -> getEntityId,
+                "origin" -> state.origin,
+                "destination" -> state.destination,
+                "final_node" -> state.origin,
+                "reached_destination" -> (state.destination == state.origin),
+                "completion_reason" -> "already_at_destination",
+                "total_distance" -> state.distance,
+                "best_cost" -> cost,
+                "tick" -> currentTick
+              ),
+              label = "journey_completed"
+            )
+            state.eventCount += 1
+            
+            // Reporta estatísticas finais de eventos
+            report(
+              data = Map(
+                "event_type" -> "vehicle_event_count",
+                "car_id" -> getEntityId,
+                "total_events" -> state.eventCount,
+                "tick" -> currentTick
+              ),
+              label = "vehicle_event_count"
+            )
+            
+            // Não chamar onFinish aqui, implementar diretamente
+            state.movableStatus = Finished
+            onFinishSpontaneous()
           }
         case None =>
           logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
-          onFinish(state.origin)
+          
+          // Reporta journey_completed para falha de rota
+          report(
+            data = Map(
+              "event_type" -> "journey_completed",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "final_node" -> state.origin,
+              "reached_destination" -> false,
+              "completion_reason" -> "route_calculation_failed",
+              "total_distance" -> state.distance,
+              "best_cost" -> state.bestCost,
+              "tick" -> currentTick
+            ),
+            label = "journey_completed"
+          )
+          state.eventCount += 1
+          
+          // Reporta estatísticas finais de eventos
+          report(
+            data = Map(
+              "event_type" -> "vehicle_event_count",
+              "car_id" -> getEntityId,
+              "total_events" -> state.eventCount,
+              "tick" -> currentTick
+            ),
+            label = "vehicle_event_count"
+          )
+          
+          // Não chamar onFinish aqui, implementar diretamente
+          state.movableStatus = Finished
+          onFinishSpontaneous()
       }
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
-        onFinish(state.origin)
+        
+        // Reporta journey_completed para exceção
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> state.origin,
+            "reached_destination" -> false,
+            "completion_reason" -> "exception_during_route_request",
+            "error_message" -> e.getMessage,
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
+        state.eventCount += 1
+        
+        // Reporta estatísticas finais de eventos
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
+        
+        // Não chamar onFinish aqui, implementar diretamente
+        state.movableStatus = Finished
+        onFinishSpontaneous()
     }
   }
 
@@ -90,9 +206,70 @@ class Car(
     ) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
-        onFinish(currentNodeId)
+        // Reporta journey_completed para chegada ao destino
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> currentNodeId,
+            "reached_destination" -> (state.destination == currentNodeId),
+            "completion_reason" -> "reached_destination_or_end_of_route",
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
+        state.eventCount += 1
+        
+        // Reporta estatísticas finais de eventos
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
+        
+        // Não chamar onFinish aqui, implementar diretamente
+        state.movableStatus = Finished
+        onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
+        
+        // Reporta journey_completed para fim sem nó atual
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> "unknown",
+            "reached_destination" -> false,
+            "completion_reason" -> "no_current_node",
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
+        state.eventCount += 1
+        
+        // Reporta estatísticas finais de eventos
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
+        
         onFinishSpontaneous()
       }
       selfDestruct()
@@ -132,6 +309,7 @@ class Car(
   }
 
   override protected def onFinish(nodeId: String): Unit = {
+    // Reporta evento de conclusão da jornada
     report(
       data = Map(
         "event_type" -> "journey_completed",
@@ -144,10 +322,31 @@ class Car(
         "best_cost" -> state.bestCost,
         "tick" -> currentTick
       ),
-      label = "vehicle_flow"
+      label = "journey_completed"
+    )
+    state.eventCount += 1
+    
+    // Reporta estatísticas finais de eventos para este veículo (como no outro simulador)
+    report(
+      data = Map(
+        "event_type" -> "vehicle_event_count",
+        "car_id" -> getEntityId,
+        "total_events" -> state.eventCount,
+        "tick" -> currentTick
+      ),
+      label = "vehicle_event_count"
     )
     
-    super.onFinish(nodeId)
+    // Implementar lógica da classe pai sem chamar super
+    if (state.destination == nodeId) {
+      state.movableReachedDestination = true
+      state.movableStatus = Finished
+    } else {
+      state.movableStatus = Finished
+    }
+    
+    // Finalizar o ator
+    onFinishSpontaneous()
   }
 
   override def actHandleReceiveLeaveLinkInfo(
@@ -165,8 +364,9 @@ class Car(
         "total_distance" -> state.distance,
         "tick" -> currentTick
       ),
-      label = "vehicle_flow"
+      label = "leave_link"
     )
+    state.eventCount += 1
     
     onFinishSpontaneous(Some(currentTick + 1))
   }
@@ -200,8 +400,9 @@ class Car(
         "lanes" -> data.linkLanes,
         "tick" -> currentTick
       ),
-      label = "vehicle_flow"
+      label = "enter_link"
     )
+    state.eventCount += 1
     
     if (time.isNaN || time.isInfinite || time < 0) {
       logError(s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}")
