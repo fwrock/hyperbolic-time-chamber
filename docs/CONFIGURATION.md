@@ -14,6 +14,8 @@ HTC uses a hierarchical configuration system with multiple layers:
 4. **🗄️ Database Configuration** (Cassandra/Redis) - Storage settings
 5. **🌍 Environment Variables** - Runtime overrides
 
+**⚡ Performance Note:** For optimal simulation performance, prefer pre-configured JSON files over Cassandra database connections, which can slow down simulations.
+
 ---
 
 ## 🎯 **Simulation Configuration**
@@ -85,7 +87,7 @@ HTC uses a hierarchical configuration system with multiple layers:
   "actorsDataSources": [
     {
       "id": "vehicle-fleet-1",             // Unique identifier
-      "classType": "com.htc.traffic.VehicleActor", // Actor class
+      "classType": "mobility.actor.Car",   // Actor class (mobility model)
       "creationType": "LoadBalancedDistributed",   // Distribution strategy
       "poolConfiguration": {               // Pool-specific settings
         "minInstances": 10,

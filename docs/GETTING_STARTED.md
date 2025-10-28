@@ -19,11 +19,14 @@ Before starting, ensure your system meets the minimum requirements:
 
 #### **Essential Dependencies**
 ```bash
-# Java Development Kit 11+
-java -version  # Should show 11+ (OpenJDK or Oracle)
+# Java Development Kit 21+
+java -version  # Should show 21+ (OpenJDK or Oracle)
 
 # Scala Build Tool (SBT)
 sbt --version  # Should show 1.9.0+
+
+# Scala
+scala --version  # Should show 3.3.5+
 
 # Docker and Docker Compose
 docker --version         # Should show 20.10+
@@ -75,12 +78,12 @@ drwxr-xr-x  cassandra-init/
 # Check Java version
 java -version
 
-# If Java 11+ is not installed (Ubuntu/Debian):
+# If Java 21+ is not installed (Ubuntu/Debian):
 sudo apt update
-sudo apt install openjdk-11-jdk
+sudo apt install openjdk-21-jdk
 
 # Set JAVA_HOME (add to ~/.bashrc)
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 export PATH=$PATH:$JAVA_HOME/bin
 ```
 
@@ -134,23 +137,26 @@ docker compose version
 
 ## 🏃‍♂️ **Quick Start**
 
-### **Option 1: One-Click Start (Recommended)**
+### **Recommended: Build and Run Script**
 ```bash
-# Automated setup with optimal configuration
-./htc-manager.sh
+# The easiest way to run the application
+./build-and-run.sh
 
-# This will:
-# 1. Check system requirements
-# 2. Start services with optimal settings
-# 3. Initialize database schema
-# 4. Show management menu
+# This script will:
+# 1. Clean the project
+# 2. Generate the assembly
+# 3. Create Docker image
+# 4. Start the simulation
 ```
 
-### **Option 2: Manual Step-by-Step**
+### **Alternative: Manual Step-by-Step**
 
-#### **Step 1: Start Infrastructure Services**
+#### **Step 1: Start Infrastructure Services (Optional)**
 ```bash
-# Start Cassandra and Redis
+# Note: For better performance, prefer pre-configured JSON over Cassandra
+# Cassandra connection can slow down the simulation
+
+# If you need Cassandra and Redis:
 docker compose up -d cassandra redis
 
 # Wait for services to be ready
@@ -160,142 +166,185 @@ docker compose logs -f cassandra
 # Press Ctrl+C when ready
 ```
 
-#### **Step 2: Initialize Database**
-```bash
-# Run database initialization
-./manage_cassandra.sh start
-
-# Verify database is ready
-./check_cassandra_data.sh
-```
-
-#### **Step 3: Build and Run Simulation**
+#### **Step 2: Build and Run**
 ```bash
 # Build the Scala application
 sbt compile
 
-# Run with Docker Compose
-docker compose up -d
-
-# Check logs
-docker compose logs -f node1
+# Or use the complete build script
+./build-and-run.sh
 ```
 
 ---
 
 ## 🎯 **Your First Simulation**
 
-### **1. Create a Simple Configuration**
+### **1. Understanding the Mobility Model**
 
-Create a basic simulation configuration file:
+The HTC implements a specific mobility model with three main actor types:
+
+#### **🚗 Car Actor**
+Cars represent vehicles moving through the network:
+```json
+{
+  "id": "htcaid:car;trip_1",
+  "name": "Car Trip 1",
+  "typeActor": "mobility.actor.Car",
+  "data": {
+    "dataType": "model.mobility.entity.state.CarState",
+    "content": {
+      "startTick": 154,
+      "origin": "htcaid:node;60609822",
+      "destination": "htcaid:node;4922987596",
+      "linkOrigin": "htcaid:link;2067",
+      "scheduleOnTimeManager": true
+    }
+  },
+  "dependencies": {
+    "from_node": {
+      "id": "htcaid:node;60609822",
+      "resourceId": "htcrid:node;5",
+      "classType": "mobility.actor.Node",
+      "actorType": "LoadBalancedDistributed"
+    },
+    "to_node": {
+      "id": "htcaid:node;4922987596",
+      "resourceId": "htcrid:node;4",
+      "classType": "mobility.actor.Node",
+      "actorType": "LoadBalancedDistributed"
+    }
+  }
+}
+```
+
+#### **📍 Node Actor**
+Nodes represent intersections or points in the network:
+```json
+{
+  "id": "htcaid:node;1001568643",
+  "name": "Node1001568643",
+  "typeActor": "mobility.actor.Node",
+  "data": {
+    "dataType": "mobility.entity.state.NodeState",
+    "content": {
+      "startTick": 0,
+      "latitude": "-7347433.28816257",
+      "longitude": "-2852981.6323715686",
+      "scheduleOnTimeManager": false
+    }
+  },
+  "dependencies": {}
+}
+```
+
+#### **🛣️ Link Actor**
+Links represent road segments connecting nodes:
+```json
+{
+  "id": "htcaid:link;1",
+  "name": "Link1",
+  "typeActor": "mobility.actor.Link",
+  "data": {
+    "dataType": "model.mobility.entity.state.LinkState",
+    "content": {
+      "startTick": 0,
+      "from_node": "htcaid:node;394923340",
+      "to_node": "htcaid:node;2033271141",
+      "length": 13.539593517363432,
+      "lanes": 1,
+      "freeSpeed": 4.166666666666667,
+      "capacity": 600.0,
+      "modes": ["car"],
+      "linkType": "residential",
+      "scheduleOnTimeManager": false
+    }
+  },
+  "dependencies": {
+    "from_node": {
+      "id": "htcaid:node;394923340",
+      "resourceId": "htcrid:node;3",
+      "classType": "mobility.actor.Node",
+      "actorType": "LoadBalancedDistributed"
+    },
+    "to_node": {
+      "id": "htcaid:node;2033271141",
+      "resourceId": "htcrid:node;2",
+      "classType": "mobility.actor.Node",
+      "actorType": "LoadBalancedDistributed"
+    }
+  }
+}
+```
+
+### **2. Map Structure**
+The simulation uses a graph-based map structure:
+```json
+{
+  "nodes": [
+    {
+      "id": "htcaid:node;1001568643",
+      "classType": "mobility.actor.Node",
+      "resourceId": "htcrid:node;1",
+      "latitude": "-7347433.28816257",
+      "longitude": "-2852981.6323715686"
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "htcaid:node;394923340",
+      "target_id": "htcaid:node;2033271141",
+      "weight": 13.539593517363432,
+      "label": {
+        "id": "htcaid:link;1",
+        "resourceId": "htcrid:link;1",
+        "classType": "mobility.actor.Link",
+        "length": 13.539593517363432
+      }
+    }
+  ],
+  "directed": true
+}
+```
+
+### **3. Creating Your First Simulation**
+
+Create a simple configuration with your data files:
 ```bash
 mkdir -p data/examples
-cat > data/examples/basic_simulation.json << 'EOF'
-{
-  "simulation": {
-    "name": "Basic Traffic Simulation",
-    "description": "A simple example simulation",
-    "startTick": 0,
-    "startRealTime": "2025-01-27T08:00:00.000",
-    "timeUnit": "seconds",
+
+# Use pre-configured JSON files for better performance
+# (Avoid Cassandra connections as they can slow the simulation)
     "timeStep": 1,
     "duration": 3600,
     "randomSeed": 42,
     "actorsDataSources": [
       {
-        "id": "basic-vehicles",
-        "classType": "com.htc.traffic.VehicleActor",
-        "creationType": "LoadBalancedDistributed",
-        "dataSource": {
-          "type": "json",
-          "info": {
-            "path": "data/examples/vehicles.json"
-          }
-        }
-      }
-    ]
-  }
-}
-EOF
+# Use pre-configured JSON files for better performance
+# (Avoid Cassandra connections as they can slow the simulation)
+
+# Run your simulation
+./build-and-run.sh
 ```
 
-### **2. Create Sample Vehicle Data**
-```bash
-cat > data/examples/vehicles.json << 'EOF'
-[
-  {
-    "id": "vehicle_001",
-    "name": "Car 1",
-    "typeActor": "com.htc.traffic.VehicleActor",
-    "data": {
-      "dataType": "vehicle",
-      "content": {
-        "startTime": 0,
-        "route": ["link_1", "link_2", "link_3"],
-        "vehicleType": "car",
-        "maxSpeed": 50.0
-      }
-    }
-  },
-  {
-    "id": "vehicle_002", 
-    "name": "Car 2",
-    "typeActor": "com.htc.traffic.VehicleActor",
-    "data": {
-      "dataType": "vehicle",
-      "content": {
-        "startTime": 30,
-        "route": ["link_2", "link_3", "link_4"],
-        "vehicleType": "car",
-        "maxSpeed": 45.0
-      }
-    }
-  }
-]
-EOF
-```
+### **4. Custom Mobility Models**
 
-### **3. Run the Simulation**
-```bash
-# Set simulation configuration
-export SIMULATION_CONFIG_PATH=data/examples/basic_simulation.json
-
-# Run simulation
-docker compose up node1
-
-# Monitor progress in another terminal
-docker compose logs -f node1
-```
-
-### **4. Monitor Simulation**
-```bash
-# Wait for simulation to complete (look for "Simulation finished" in logs)
-
-# Check database for simulation results
-./manage_cassandra.sh status
-
-# View Cassandra data
-docker exec -it cassandra-container cqlsh
-```
-
-Expected Cassandra keyspace and tables:
-```sql
-USE htc_simulation;
-DESCRIBE TABLES;
-
--- Expected tables:
--- simulation_events
--- vehicle_states  
--- link_flows
--- time_aggregated_data
-```
+You can create your own mobility models beyond the default car/node/link structure. The framework is designed to be extensible, allowing you to implement custom actor types and behaviors specific to your research needs.
 
 ---
 
 ## 📊 **Understanding the Results**
 
-### **📋 Simulation Data Structure**
-The simulation stores data in Cassandra with the following structure:
+### **📋 Data Storage Options**
+
+#### **Recommended: JSON Files (Better Performance)**
+For optimal simulation performance, use pre-configured JSON files instead of Cassandra:
+```bash
+# Your simulation data will be processed directly from JSON files
+# This avoids database connection overhead that can slow simulations
+```
+
+#### **Optional: Cassandra Database**
+If you need persistent storage, the simulation can store data in Cassandra:
 
 **simulation_events** table:
 ```sql
@@ -307,22 +356,15 @@ SELECT * FROM simulation_events LIMIT 5;
 SELECT * FROM vehicle_states LIMIT 5;
 ```
 
-### **📈 Querying Results**
-Access your simulation data directly through Cassandra:
+### **📈 Monitoring Your Simulation**
 ```bash
-# Enter Cassandra shell
-docker exec -it cassandra-container cqlsh
+# Monitor simulation progress
+./build-and-run.sh
 
-# Use simulation keyspace
-USE htc_simulation;
+# Check logs for simulation status
+docker compose logs -f
 
-# Count total events
-SELECT COUNT(*) FROM simulation_events;
-
-# View recent vehicle states
-SELECT * FROM vehicle_states 
-WHERE timestamp > '2025-01-27 08:00:00' 
-LIMIT 10;
+# Look for completion messages and performance metrics
 ```
 
 ---
@@ -348,16 +390,22 @@ LIMIT 10;
 }
 ```
 
-### **🎭 Actor Types**
-- **VehicleActor**: Individual vehicles with routing behavior
-- **IntersectionActor**: Traffic intersections with signal control
-- **SignalActor**: Traffic signal timing control
-- **Custom actors**: Your own domain-specific actors
+### **🎭 Actor Types in Mobility Model**
+- **mobility.actor.Car**: Individual vehicles with origin-destination routing
+- **mobility.actor.Node**: Network intersections with GPS coordinates
+- **mobility.actor.Link**: Road segments with capacity and speed limits
+- **mobility.actor.GPS**: Optional GPS tracking actors
+- **Custom actors**: Your own domain-specific mobility models
 
-### **🚀 Creation Types**
+### **🏗️ Actor Creation Patterns**
 - **LoadBalancedDistributed**: Automatically distributed across cluster nodes
 - **PoolDistributed**: Fixed pools of actors per node
 - **Simple**: Single instance actors
+
+### **🔧 Performance Tips**
+- Use pre-configured JSON files instead of Cassandra for faster simulations
+- GPS dependencies are optional and can be omitted
+- Consider your map size and actor count for optimal performance
 
 ---
 
@@ -470,10 +518,6 @@ sudo sysctl -p
 2. **👨‍💻 Read [Developer Guide](DEVELOPER_GUIDE.md)** to contribute or extend
 3. **🚀 Review [Deployment Guide](DEPLOYMENT.md)** for production setups
 
-### **🔬 Research**
-1. **📝 See [Academic Usage](ACADEMIC_USAGE.md)** for research guidelines
-2. **🆚 Explore [Simulator Comparison](SIMULATOR_COMPARISON.md)** for validation
-3. **📈 Review [Benchmarks](BENCHMARKS.md)** for performance analysis
 
 ---
 

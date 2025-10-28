@@ -24,6 +24,7 @@ case class CarState(
   var lastNode: String,
   var digitalRails: Boolean = false,
   var distance: Double = 0,
+  var eventCount: Int = 0, // Contador de eventos gerados por este veículo
   override val actorType: ActorTypeEnum,
   override val size: Double,
   var status: MovableStatusEnum = Start,

@@ -29,8 +29,9 @@ A comprehensive guide for developers who want to contribute to, extend, or build
 ### **📋 Prerequisites**
 
 ```bash
+```bash
 # Required tools
-java --version    # JDK 11+ (OpenJDK recommended)
+java --version    # JDK 21+ (OpenJDK recommended)
 sbt --version     # SBT 1.9.0+
 docker --version  # Docker 20.10+
 git --version     # Git 2.30+
@@ -39,6 +40,7 @@ git --version     # Git 2.30+
 # - IntelliJ IDEA with Scala plugin
 # - VS Code with Metals extension
 # - Vim/Neovim with coc-metals
+```
 ```
 
 ### **🏗️ Project Setup**
@@ -51,9 +53,12 @@ cd hyperbolic-time-chamber
 # Setup development environment
 ./dev-setup.sh
 
-# Verify setup
+# Build and run (recommended approach)
+./build-and-run.sh
+
+# Or verify setup manually
 sbt test
-docker compose up -d cassandra redis
+docker compose up -d cassandra redis  # Optional: prefer JSON for performance
 ./diagnose.sh
 ```
 
@@ -96,6 +101,50 @@ hyperbolic-time-chamber/
 ├── scripts/                           # Development and deployment scripts
 ├── examples/                          # Example scenarios
 └── docker/                           # Docker configurations
+```
+
+---
+
+## 🚀 **Development Workflow**
+
+### **🔧 Build and Run**
+
+The easiest way to build and run the application:
+
+```bash
+# Complete build, assembly, and Docker image creation
+./build-and-run.sh
+
+# This script will:
+# 1. Clean the project
+# 2. Generate the assembly JAR
+# 3. Create Docker image
+# 4. Start the simulation
+```
+
+### **⚡ Performance Tips**
+
+- **Prefer JSON over Cassandra**: Use pre-configured JSON files instead of Cassandra database connections for better simulation performance
+- **Cassandra Performance**: Database connections can slow down simulations significantly
+- **GPS Dependencies**: GPS actors are optional and can be omitted for better performance
+
+### **🔄 Manual Development Commands**
+
+```bash
+# Compile only
+sbt compile
+
+# Run tests
+sbt test
+
+# Clean and compile
+sbt clean compile
+
+# Create assembly JAR
+sbt assembly
+
+# Run specific test
+sbt "testOnly *VehicleActorSpec"
 ```
 
 ---
