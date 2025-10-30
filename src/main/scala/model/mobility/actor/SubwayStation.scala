@@ -1,27 +1,27 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
-import model.mobility.entity.state.{ SubwayState, SubwayStationState }
+import core.actor.{BaseActor, SimulationBaseActor}
+import model.mobility.entity.state.{SubwayState, SubwayStationState}
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, IdentifyUtil, JsonUtil }
-import org.interscity.htc.model.mobility.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
+import org.interscity.htc.core.util.{ActorCreatorUtil, IdentifyUtil, JsonUtil}
+import org.interscity.htc.model.mobility.entity.event.data.subway.{RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData}
 import org.interscity.htc.model.mobility.entity.state.enumeration.SubwayStationStateEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
-import org.interscity.htc.model.mobility.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
+import org.interscity.htc.model.mobility.entity.state.enumeration.SubwayStationStateEnum.{Start, Working}
+import org.interscity.htc.model.mobility.entity.state.model.{RoutePathItem, SubwayInformation, SubwayLineInformation}
 
 import scala.collection.mutable
 
 class SubwayStation(
-  private val properties: Properties
-) extends BaseActor[SubwayStationState](
+  private val properties: SimulationBaseProperties
+) extends SimulationBaseActor[SubwayStationState](
       properties = properties
     ) {
 

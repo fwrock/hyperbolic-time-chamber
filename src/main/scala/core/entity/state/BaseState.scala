@@ -3,27 +3,12 @@ package core.entity.state
 
 import core.types.Tick
 
-import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum.DiscreteEventSimulation
+import org.interscity.htc.core.enumeration.{ LocalTimeManagerTypeEnum, ReportTypeEnum }
 
 /** Base class for all states.
   *
   * @param startTick
   *   the tick when the state started
   */
-abstract class BaseState(
-  startTick: Tick = Long.MinValue,
-  reporterType: ReportTypeEnum = null,
-  scheduleOnTimeManager: Boolean = true
-) {
-
-  /** Gets the tick when the state started.
-    *
-    * @return
-    *   the tick when the state started
-    */
-  def getStartTick: Tick = startTick
-
-  def getReporterType: ReportTypeEnum = reporterType
-
-  def isSetScheduleOnTimeManager: Boolean = scheduleOnTimeManager
-}
+abstract class BaseState

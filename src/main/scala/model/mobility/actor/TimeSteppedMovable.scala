@@ -1,51 +1,51 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.{BaseActor, SimulationBaseActor}
 import model.mobility.entity.state.MovableState
-import core.entity.event.control.simulation.{ AdvanceToTick, TickCompleted }
+import core.entity.event.control.simulation.{AdvanceToTick, TickCompleted}
 import core.enumeration.TimePolicyEnum
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.model.mobility.entity.model.model.Route
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData, ReceiveRoute }
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData, ReceiveRoute}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.CityMapUtil
 import org.interscity.htc.system.database.redis.RedisClientManager
 
 import scala.collection.mutable
 
-/**
- * TimeStepped version of Movable base class
- * 
- * This class adapts the original Movable class to work with TimeStepped simulation:
- * - Responds to AdvanceToTick instead of SpontaneousEvent
- * - Maintains state between ticks
- * - Coordinates with TimeStepped_LTM for synchronization
- */
+/** TimeStepped version of Movable base class
+  *
+  * This class adapts the original Movable class to work with TimeStepped simulation:
+  *   - Responds to AdvanceToTick instead of SpontaneousEvent
+  *   - Maintains state between ticks
+  *   - Coordinates with TimeStepped_LTM for synchronization
+  */
 abstract class TimeSteppedMovable[T <: MovableState](
-  private val properties: Properties
+  private val properties: SimulationBaseProperties
 )(implicit m: Manifest[T])
-    extends BaseActor[T](
+    extends SimulationBaseActor[T](
       properties = properties.copy(timePolicy = Some(TimePolicyEnum.TimeSteppedSimulation))
     ) {
 
   protected def requestRoute(): Unit = {}
 
-  /**
-   * TimeStepped version of spontaneous event handling
-   * This should not be called in TimeStepped mode, but provided for compatibility
-   */
+  /** TimeStepped version of spontaneous event handling This should not be called in TimeStepped
+    * mode, but provided for compatibility
+    */
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
-    logWarn(s"TimeSteppedMovable recebeu SpontaneousEvent, mas deveria usar AdvanceToTick. Status: ${state.movableStatus}")
-    
+    logWarn(
+      s"TimeSteppedMovable recebeu SpontaneousEvent, mas deveria usar AdvanceToTick. Status: ${state.movableStatus}"
+    )
+
     // For compatibility, we can handle some basic cases
     state.movableStatus match {
       case Start =>
@@ -59,13 +59,12 @@ abstract class TimeSteppedMovable[T <: MovableState](
     }
   }
 
-  /**
-   * TimeStepped behavior - this should be overridden by subclasses
-   */
+  /** TimeStepped behavior - this should be overridden by subclasses
+    */
   override def actAdvanceToTick(event: AdvanceToTick): Unit = {
     val targetTick = event.targetTick
     logDebug(s"TimeSteppedMovable ${getEntityId} processando tick $targetTick")
-    
+
     // Default implementation - subclasses should override
     state.movableStatus match {
       case Start =>
@@ -111,20 +110,18 @@ abstract class TimeSteppedMovable[T <: MovableState](
   protected def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = {
+  ): Unit =
     // Default implementation - subclasses should override for TimeStepped behavior
     logDebug(s"TimeSteppedMovable ${getEntityId} entrou no link: ${data.linkLength}m")
-  }
 
   protected def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = {
+  ): Unit =
     // Default implementation - subclasses should override for TimeStepped behavior
     logDebug(s"TimeSteppedMovable ${getEntityId} saiu do link: ${data.linkLength}m")
-  }
 
-  protected def onFinish(nodeId: String): Unit = {
+  protected def onFinish(nodeId: String): Unit =
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -133,9 +130,8 @@ abstract class TimeSteppedMovable[T <: MovableState](
       state.movableStatus = Finished
       logInfo(s"TimeSteppedMovable ${getEntityId} finalizou no nó: $nodeId")
     }
-  }
 
-  protected def enterLink(): Unit = {
+  protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
@@ -153,20 +149,25 @@ abstract class TimeSteppedMovable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
-            logDebug(s"TimeSteppedMovable ${getEntityId} entrando no link $linkEdgeGraphId para nó $nextNodeId")
+            logDebug(
+              s"TimeSteppedMovable ${getEntityId} entrando no link $linkEdgeGraphId para nó $nextNodeId"
+            )
           case None =>
             state.movableStatus = Finished
             logWarn(s"Edge label não encontrado para link $linkEdgeGraphId, finalizando.")
         }
       case None if state.movableBestRoute.isEmpty =>
         state.movableStatus = Finished
-        logDebug(s"TimeSteppedMovable ${getEntityId} sem caminho atual e sem melhor rota, finalizando.")
+        logDebug(
+          s"TimeSteppedMovable ${getEntityId} sem caminho atual e sem melhor rota, finalizando."
+        )
       case None =>
-        logDebug(s"TimeSteppedMovable ${getEntityId} sem caminho atual, mas com melhor rota disponível.")
+        logDebug(
+          s"TimeSteppedMovable ${getEntityId} sem caminho atual, mas com melhor rota disponível."
+        )
         state.movableCurrentPath = getNextPath
         enterLink()
     }
-  }
 
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
@@ -186,9 +187,9 @@ abstract class TimeSteppedMovable[T <: MovableState](
               EventTypeEnum.LeaveLink.toString,
               actorType = LoadBalancedDistributed
             )
-            
+
             logDebug(s"TimeSteppedMovable ${getEntityId} saindo do link $linkEdgeGraphId")
-            
+
             if (state.movableBestRoute.isEmpty) {
               logDebug(s"TimeSteppedMovable ${getEntityId} sem melhor rota para continuar")
               onFinish(nextNodeId)
@@ -241,10 +242,9 @@ abstract class TimeSteppedMovable[T <: MovableState](
         null
     }
 
-  /**
-   * Get current movable statistics for reporting
-   */
-  def getMovableStatistics: Map[String, Any] = {
+  /** Get current movable statistics for reporting
+    */
+  def getMovableStatistics: Map[String, Any] =
     Map(
       "entityId" -> getEntityId,
       "status" -> state.movableStatus.toString,
@@ -252,9 +252,10 @@ abstract class TimeSteppedMovable[T <: MovableState](
       "destination" -> state.destination,
       "currentDistance" -> 0.0,
       "reachedDestination" -> state.movableReachedDestination,
-      "currentPath" -> state.movableCurrentPath.map(p => s"${p._1} -> ${p._2}"),
+      "currentPath" -> state.movableCurrentPath.map(
+        p => s"${p._1} -> ${p._2}"
+      ),
       "routeLength" -> state.movableBestRoute.map(_.size).getOrElse(0),
       "timePolicy" -> getTimePolicy.toString
     )
-  }
 }

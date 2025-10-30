@@ -1,24 +1,23 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
-
+import core.actor.{BaseActor, SimulationBaseActor}
 import model.mobility.entity.state.TrafficSignalState
 
-import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
 import org.interscity.htc.core.entity.event.SpontaneousEvent
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
-import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
-import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.model.mobility.entity.state.enumeration.{EventTypeEnum, TrafficSignalPhaseStateEnum}
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import org.interscity.htc.model.mobility.entity.state.model.{Phase, SignalState}
 
 import scala.collection.mutable
 
 class TrafficSignal(
-  private val properties: Properties
-) extends BaseActor[TrafficSignalState](
+  private val properties: SimulationBaseProperties
+) extends SimulationBaseActor[TrafficSignalState](
       properties = properties
     ) {
 

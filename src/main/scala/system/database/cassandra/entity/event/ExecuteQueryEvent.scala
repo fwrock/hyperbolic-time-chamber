@@ -7,7 +7,6 @@ case class QuerySuccess(result: Seq[Map[String, AnyRef]])
 
 case object WriteSuccess
 
-
 case class ExecuteQueryEvent(
   query: String
 ) extends BaseEvent()

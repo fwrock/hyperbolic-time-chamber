@@ -1,21 +1,21 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.{BaseActor, SimulationBaseActor}
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.actor.properties.Properties
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
-import org.interscity.htc.model.mobility.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
+import org.interscity.htc.model.mobility.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData}
 import org.interscity.htc.model.mobility.entity.state.BusStopState
 
 import scala.collection.mutable
 
 class BusStop(
-  private val properties: Properties
-) extends BaseActor[BusStopState](
+  private val properties: SimulationBaseProperties
+) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
 

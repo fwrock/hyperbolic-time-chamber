@@ -1,26 +1,26 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.{BaseActor, SimulationBaseActor}
 import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
+import model.mobility.entity.event.data.{EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData}
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
-import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
+import org.interscity.htc.model.mobility.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
 
 class Link(
-  private val properties: Properties
-) extends BaseActor[LinkState](
+  private val properties: SimulationBaseProperties
+) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
 
@@ -59,7 +59,7 @@ class Link(
       LinkInfoData(
         linkCapacity = Int.MaxValue,
         linkFreeSpeed = 50,
-        linkLanes = 1,
+        linkLanes = 1
       )
     } else {
       LinkInfoData(

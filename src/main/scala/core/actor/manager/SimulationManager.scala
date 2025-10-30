@@ -6,16 +6,15 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import core.util.SimulationUtil.loadSimulationConfig
 
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
+import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent}
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
-
-import org.interscity.htc.core.enumeration.LocalTimeManagerTypeEnum
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
+import org.interscity.htc.core.enumeration.{LocalTimeManagerTypeEnum, ReportTypeEnum}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -23,15 +22,15 @@ import scala.compiletime.uninitialized
 class SimulationManager(
   val simulationPath: String = null
 ) extends BaseManager[DefaultState](
-      actorId = SIMULATION_MANAGER_ACTOR_NAME,
-      timeManager = null
+      actorId = SIMULATION_MANAGER_ACTOR_NAME
     ) {
 
-  private var timeSingletonManager: ActorRef = uninitialized
-  private val poolTimeManagers = mutable.Map[LocalTimeManagerTypeEnum, ActorRef]()
+  private var globalTimeManager: ActorRef = uninitialized
+  private val localTimeManagers = mutable.Map[LocalTimeManagerTypeEnum, ActorRef]()
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
   private var configuration: Simulation = uninitialized
+  private var reporters: mutable.Map[ReportTypeEnum, ActorRef] = uninitialized
   private var selfProxy: ActorRef = null
 
   override def handleEvent: Receive = {
@@ -70,15 +69,18 @@ class SimulationManager(
   }
 
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
-    poolTimeManagers.put(event.localTimeManagerType, event.actorRef)
-    logInfo(s"Pool TimeManager registrado: ${event.localTimeManagerType} - Total: ${poolTimeManagers.size}")
-    startLoadData()
+    localTimeManagers.put(event.localTimeManagerType, event.actorRef)
+    logInfo(
+      s"Pool TimeManager registered: ${event.localTimeManagerType} - Total: ${localTimeManagers.size}"
+    )
+    if (localTimeManagers.size == LocalTimeManagerTypeEnum.values.length) {
+      startLoadData()
+    }
   }
 
   private def startLoadData(): Unit =
-    if (poolTimeManagers.nonEmpty && reporters != null) {
-      // Usar pool DiscreteEventSimulation como padrão para LoadDataManager por compatibilidade
-      val defaultPool = poolTimeManagers.get(LocalTimeManagerTypeEnum.DiscreteEventSimulation)
+    if (localTimeManagers.nonEmpty && reporters != null) {
+      val defaultPool = localTimeManagers.get(LocalTimeManagerTypeEnum.DiscreteEventSimulation)
       if (defaultPool.isDefined) {
         loadManager = createSingletonLoadManager(defaultPool.get)
         createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
@@ -91,15 +93,15 @@ class SimulationManager(
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
     logInfo(s"Run simulation")
-    timeSingletonManager = createSingletonTimeManager()
+    globalTimeManager = createSingletonGlobalTimeManager()
     reportManager = createSingletonReportManager()
   }
 
-  private def createSingletonTimeManager(): ActorRef =
+  private def createSingletonGlobalTimeManager(): ActorRef =
     createSingletonManager(
       manager = GlobalTimeManager.props(
         simulationDuration = configuration.duration,
-        simulationManager = getSelfProxy,
+        simulationManager = getSelfProxy
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
@@ -116,13 +118,14 @@ class SimulationManager(
       terminateMessage = StopSimulationEvent()
     )
 
-  private def createSingletonLoadManager(poolTimeManager: ActorRef): ActorRef =
+  private def createSingletonLoadManager(defaultLocalTimeManager: ActorRef): ActorRef =
     createSingletonManager(
       manager = LoadDataManager.props(
-        timeSingletonManager = timeSingletonManager,
-        poolTimeManager = poolTimeManager,
+        globalTimeManager = globalTimeManager,
+        defaultLocalTimeManager = defaultLocalTimeManager,
         simulationManager = selfProxy,
-        poolReporters = reporters
+        poolReporters = reporters,
+        localTimeManagers = localTimeManagers
       ),
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

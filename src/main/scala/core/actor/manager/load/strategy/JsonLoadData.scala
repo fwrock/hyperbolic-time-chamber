@@ -2,21 +2,21 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{ IdUtil, JsonUtil }
+import core.util.{IdUtil, JsonUtil}
 
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
+import org.interscity.htc.core.entity.actor.properties.{DefaultBaseProperties, Properties}
+import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, FinishLoadDataEvent, LoadDataSourceEvent, ProcessBatchesEvent }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, FinishLoadDataEvent, LoadDataSourceEvent, ProcessBatchesEvent}
 
-import java.io.{ BufferedInputStream, File, FileInputStream }
+import java.io.{BufferedInputStream, File, FileInputStream}
 import java.util.UUID
 import scala.compiletime.uninitialized
 import scala.collection.mutable
 import scala.util.Using
 
-class JsonLoadData(private val properties: Properties)
+class JsonLoadData(private val properties: DefaultBaseProperties)
     extends LoadDataStrategy(properties = properties) {
 
   private var managerRef: ActorRef = uninitialized
@@ -110,12 +110,12 @@ class JsonLoadData(private val properties: Properties)
     creator: ActorRef,
     actorsToCreate: Seq[ActorSimulationCreation]
   ): Unit = {
-    // 🎲 Usar UUID determinístico para batch ID
-    val batchId = try {
-      core.actor.manager.RandomSeedManager.deterministicUUID()
-    } catch {
-      case _: Exception => UUID.randomUUID().toString
-    }
+    val batchId =
+      try
+        core.actor.manager.RandomSeedManager.deterministicUUID()
+      catch {
+        case _: Exception => UUID.randomUUID().toString
+      }
     processBatchControl.put(batchId, false)
     creator ! CreateActorsEvent(id = batchId, actors = actorsToCreate, actorRef = self)
   }

@@ -1,28 +1,28 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.{BaseActor, SimulationBaseActor}
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
-import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRouteData, RequestRouteData }
-import org.interscity.htc.model.mobility.entity.state.{ BusState, BusStationState }
-import org.interscity.htc.model.mobility.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
+import org.interscity.htc.core.util.{ActorCreatorUtil, JsonUtil}
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRouteData, RequestRouteData}
+import org.interscity.htc.model.mobility.entity.state.{BusState, BusStationState}
+import org.interscity.htc.model.mobility.entity.state.enumeration.BusStationStateEnum.{Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.RequestRoute
-import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.mobility.entity.state.model.{BusInformation, RoutePathItem, SubRoutePair}
 
 import scala.collection.mutable
 
 class BusStation(
-  protected val properties: Properties
-) extends BaseActor[BusStationState](
+  protected val properties: SimulationBaseProperties
+) extends SimulationBaseActor[BusStationState](
       properties = properties
     ) {
 

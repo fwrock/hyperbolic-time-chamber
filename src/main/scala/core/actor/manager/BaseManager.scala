@@ -5,20 +5,18 @@ import core.actor.BaseActor
 import core.entity.state.BaseState
 
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.util.{ ActorCreatorUtil, DistributedUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.interscity.htc.core.entity.actor.properties.{BaseProperties, ManagerBaseProperties, Properties}
+import org.interscity.htc.core.util.{ActorCreatorUtil, DistributedUtil}
 
 import scala.collection.mutable
 
 abstract class BaseManager[T <: BaseState](
   actorId: String = null,
-  timeManager: ActorRef = null
 )(implicit m: Manifest[T])
     extends BaseActor[T](
-      properties = Properties(
-        entityId = actorId,
-        timeManager = timeManager
+      properties = ManagerBaseProperties(
+        entityId = actorId
       )
     ) {
 

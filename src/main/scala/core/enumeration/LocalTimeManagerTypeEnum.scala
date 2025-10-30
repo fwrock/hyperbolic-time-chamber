@@ -2,8 +2,7 @@ package org.interscity.htc
 package core.enumeration
 
 enum LocalTimeManagerTypeEnum {
-  case
-    DiscreteEventSimulation,
+  case DiscreteEventSimulation,
     TimeStepped,
     OptimisticTimeWindow,
 }

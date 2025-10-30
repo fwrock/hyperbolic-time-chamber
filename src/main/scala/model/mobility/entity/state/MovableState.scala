@@ -2,9 +2,9 @@ package org.interscity.htc
 package model.mobility.entity.state
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.entity.state.BaseState
+import org.interscity.htc.core.entity.state.{BaseState, SimulationBaseState}
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
+import org.interscity.htc.model.mobility.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.RouteWaiting
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
@@ -25,7 +25,7 @@ abstract class MovableState(
   var movableReachedDestination: Boolean = false,
   val actorType: ActorTypeEnum,
   val size: Double
-) extends BaseState(
+) extends SimulationBaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager

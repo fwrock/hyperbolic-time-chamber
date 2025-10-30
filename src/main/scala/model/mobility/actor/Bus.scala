@@ -2,27 +2,27 @@ package org.interscity.htc
 package model.mobility.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
-import org.interscity.htc.model.mobility.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
+import org.interscity.htc.model.mobility.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.BusState
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, WaitingLoadPassenger, WaitingSignal, WaitingSignalState, WaitingUnloadPassenger}
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
-import org.interscity.htc.model.mobility.util.{ BusUtil, SpeedUtil }
+import org.interscity.htc.model.mobility.util.{BusUtil, SpeedUtil}
 import org.interscity.htc.model.mobility.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
 
 import scala.collection.mutable
 
 class Bus(
-  private val properties: Properties
+  private val properties: SimulationBaseProperties
 ) extends Movable[BusState](
       properties = properties
     ) {

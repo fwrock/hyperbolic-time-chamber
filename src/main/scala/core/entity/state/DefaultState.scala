@@ -8,4 +8,4 @@ import core.types.Tick
   * @param startTick
   *   the tick when the state started
   */
-case class DefaultState(startTick: Tick) extends BaseState(startTick = startTick)
+case class DefaultState() extends BaseState

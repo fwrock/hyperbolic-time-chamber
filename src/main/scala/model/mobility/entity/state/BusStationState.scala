@@ -2,11 +2,11 @@ package org.interscity.htc
 package model.mobility.entity.state
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.entity.state.BaseState
+import org.interscity.htc.core.entity.state.{BaseState, SimulationBaseState}
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.state.enumeration.BusStationStateEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.BusStationStateEnum.Start
-import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.mobility.entity.state.model.{BusInformation, RoutePathItem, SubRoutePair}
 
 import scala.collection.mutable
 
@@ -27,4 +27,4 @@ case class BusStationState(
   ),
   returningBestCost: Double = Double.MaxValue,
   var status: BusStationStateEnum = Start
-) extends BaseState(startTick = startTick)
+) extends SimulationBaseState(startTick = startTick)

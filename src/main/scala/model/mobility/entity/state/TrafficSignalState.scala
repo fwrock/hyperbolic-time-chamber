@@ -3,8 +3,8 @@ package model.mobility.entity.state
 
 import core.types.Tick
 
-import org.interscity.htc.core.entity.state.BaseState
-import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.core.entity.state.{BaseState, SimulationBaseState}
+import org.interscity.htc.model.mobility.entity.state.model.{Phase, SignalState}
 
 import scala.collection.mutable
 
@@ -15,4 +15,4 @@ case class TrafficSignalState(
   nodes: List[String],
   phases: List[Phase],
   signalStates: mutable.Map[String, SignalState]
-) extends BaseState(startTick = startTick)
+) extends SimulationBaseState(startTick = startTick)

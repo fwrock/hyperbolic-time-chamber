@@ -19,7 +19,6 @@ class ReportManager(
   simulationManager: ActorRef,
   startRealTime: LocalDateTime
 ) extends BaseManager[DefaultState](
-      timeManager = timeManager,
       actorId = "report-manager"
     ) {
 

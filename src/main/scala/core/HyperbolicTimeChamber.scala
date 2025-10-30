@@ -17,14 +17,17 @@ object HyperbolicTimeChamber {
   def start(): Unit = {
     val system = ActorSystem("hyperbolic-time-chamber")
 
-    // 🎲 Inicializar RandomSeedManager com configuração da simulação
     try {
       val simulationConfig = SimulationUtil.loadSimulationConfig()
       actor.manager.RandomSeedManager.initialize(simulationConfig)
-      system.log.info(s"🎲 RandomSeedManager inicializado com seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}")
+      system.log.info(
+        s"🎲 RandomSeedManager inicializado com seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}"
+      )
     } catch {
       case e: Exception =>
-        system.log.warning(s"⚠️ Não foi possível carregar configuração da simulação para RandomSeedManager: ${e.getMessage}")
+        system.log.warning(
+          s"⚠️ Não foi possível carregar configuração da simulação para RandomSeedManager: ${e.getMessage}"
+        )
         system.log.warning("🎲 RandomSeedManager será inicializado sob demanda")
     }
 

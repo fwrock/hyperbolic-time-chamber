@@ -3,18 +3,18 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, IdUtil, StringUtil }
+import org.apache.pekko.actor.{ActorRef, Props}
+import core.util.{ActorCreatorUtil, IdUtil, StringUtil}
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartCreationEvent}
+import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, DefaultBaseProperties, Properties}
+import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk }
+import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk}
 import org.interscity.htc.core.entity.event.data.InitializeData
 
 import scala.collection.mutable
@@ -24,14 +24,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class CreatorLoadData(
   private val creatorProperties: CreatorProperties
 ) extends BaseActor[DefaultState](
-      properties = Properties(
-        entityId = creatorProperties.entityId,
-        resourceId = creatorProperties.shardId,
-        creatorManager = creatorProperties.creatorManager,
-        timeManager = creatorProperties.timeManager,
-        reporters = creatorProperties.reporters,
-        data = creatorProperties.data,
-        actorType = creatorProperties.actorType
+      properties = DefaultBaseProperties(
+        entityId = creatorProperties.entityId
       )
     ) {
 
@@ -100,9 +94,9 @@ class CreatorLoadData(
             resourceId = actorCreation.resourceId,
             classType = actorCreation.actor.typeActor,
             data = actorCreation.actor.data.content,
-            timeManager = timeManager,
+            timeManager = creatorProperties.timeManager,
             creatorManager = self,
-            reporters = reporters,
+            reporters = creatorProperties.reporters,
             dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
           )
 
@@ -115,7 +109,7 @@ class CreatorLoadData(
             resourceId = actorCreation.resourceId,
             actorClassName = actorCreation.actor.typeActor,
             entityId = actorCreation.actor.id,
-            timeManager = timeManager,
+            timeManager = creatorProperties.timeManager,
             creatorManager = self
           )
 

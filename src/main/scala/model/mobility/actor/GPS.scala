@@ -1,29 +1,29 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.{BaseActor, SimulationBaseActor}
 import model.mobility.entity.state.GPSState
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.model.mobility.entity.model.model.{ IdentifyPair, Route }
-import org.interscity.htc.core.entity.actor.properties.Properties
+import org.htc.protobuf.model.mobility.entity.model.model.{IdentifyPair, Route}
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.collections.Graph
 import org.interscity.htc.model.mobility.collections.graph.Edge
-import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRoute, RequestRoute }
-import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.mobility.entity.event.data.{ReceiveRoute, RequestRoute}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
 import org.interscity.htc.system.database.redis.RedisClientManager
 
 import java.util.UUID
 import scala.collection.mutable
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 import scala.compiletime.uninitialized
 
 class GPS(
-  private val properties: Properties
-) extends BaseActor[GPSState](
+  private val properties: SimulationBaseProperties
+) extends SimulationBaseActor[GPSState](
       properties = properties
     ) {
 

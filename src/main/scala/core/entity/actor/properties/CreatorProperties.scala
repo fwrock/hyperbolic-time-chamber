@@ -17,4 +17,7 @@ case class CreatorProperties(
   reporters: mutable.Map[ReportTypeEnum, ActorRef] = null,
   data: Any = null,
   actorType: CreationTypeEnum = Simple
+) extends BaseProperties(
+        entityId = entityId,
+        actorType = actorType
 )

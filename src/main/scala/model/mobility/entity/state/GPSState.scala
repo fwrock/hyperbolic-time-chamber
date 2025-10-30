@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.entity.state
 
-import core.entity.state.BaseState
+import core.entity.state.{BaseState, SimulationBaseState}
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.enumeration.ReportTypeEnum
@@ -17,7 +17,7 @@ case class GPSState(
   scheduleOnTimeManager: Boolean = false,
   cityMapPath: String = null,
   requests: mutable.Queue[(Identify, RequestRoute)] = mutable.Queue[(Identify, RequestRoute)]()
-) extends BaseState(
+) extends SimulationBaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager

@@ -14,19 +14,19 @@ import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Prop
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, LoadNextEvent }
 import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
-import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.enumeration.{ LocalTimeManagerTypeEnum, ReportTypeEnum }
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class LoadDataManager(
-  val timeSingletonManager: ActorRef,
-  val poolTimeManager: ActorRef,
-  val simulationManager: ActorRef,
-  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+                       val globalTimeManager: ActorRef,
+                       val defaultLocalTimeManager: ActorRef,
+                       val simulationManager: ActorRef,
+                       val reporters: mutable.Map[ReportTypeEnum, ActorRef],
+                       val localTimeManagers: mutable.Map[LocalTimeManagerTypeEnum, ActorRef]
 ) extends BaseManager[DefaultState](
-      timeManager = timeSingletonManager,
       actorId = "load-data-manager"
     ) {
 
@@ -41,9 +41,6 @@ class LoadDataManager(
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
-
-  override def onStart(): Unit =
-    reporters = poolReporters
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent       => loadData(event)
@@ -81,7 +78,7 @@ class LoadDataManager(
             context.system,
             source.dataSource.sourceType.clazz,
             properties = Properties(
-              timeManager = poolTimeManager
+              timeManager = defaultLocalTimeManager
             )
           )
           loaders.put(loader, false)
@@ -110,7 +107,7 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-load-data",
             loadDataManager = getSelfProxy,
-            timeManager = poolTimeManager,
+            timeManager = defaultLocalTimeManager,
             reporters = reporters
           )
         )
@@ -135,7 +132,7 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-pool-load-data",
             loadDataManager = getSelfProxy,
-            timeManager = poolTimeManager,
+            timeManager = defaultLocalTimeManager,
             reporters = reporters
           )
         )
@@ -180,16 +177,18 @@ class LoadDataManager(
 
 object LoadDataManager {
   def props(
-    timeSingletonManager: ActorRef,
-    poolTimeManager: ActorRef,
+    globalTimeManager: ActorRef,
+    defaultLocalTimeManager: ActorRef,
     simulationManager: ActorRef,
-    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+    localTimeManagers: mutable.Map[LocalTimeManagerTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[LoadDataManager],
-      timeSingletonManager,
-      poolTimeManager,
+      globalTimeManager,
+      defaultLocalTimeManager,
       simulationManager,
-      poolReporters
+      poolReporters,
+      localTimeManagers
     )
 }

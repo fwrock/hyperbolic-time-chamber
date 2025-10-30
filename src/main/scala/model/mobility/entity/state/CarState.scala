@@ -28,17 +28,17 @@ case class CarState(
   override val actorType: ActorTypeEnum,
   override val size: Double,
   var status: MovableStatusEnum = Start,
-  
+
   // Parâmetros para simulação microscópica (personalidade do motorista)
-  maxAcceleration: Double = 2.0,        // aceleração máxima (m/s²)
-  desiredDeceleration: Double = 3.0,     // desaceleração desejada (m/s²)
-  desiredSpeed: Double = 30.0,           // velocidade desejada (m/s)
-  timeHeadway: Double = 1.5,             // tempo de headway (s)
-  minimumGap: Double = 2.0,              // gap mínimo (m)
-  politenessFactor: Double = 0.2,        // fator de polidez para troca de faixa
-  laneChangeThreshold: Double = 0.1,     // limiar para troca de faixa (m/s²)
-  maxSafeDeceleration: Double = 4.0,     // desaceleração máxima segura (m/s²)
-  aggressiveness: Double = 0.5           // nível de agressividade do motorista (0.0 a 1.0)
+  maxAcceleration: Double = 2.0, // aceleração máxima (m/s²)
+  desiredDeceleration: Double = 3.0, // desaceleração desejada (m/s²)
+  desiredSpeed: Double = 30.0, // velocidade desejada (m/s)
+  timeHeadway: Double = 1.5, // tempo de headway (s)
+  minimumGap: Double = 2.0, // gap mínimo (m)
+  politenessFactor: Double = 0.2, // fator de polidez para troca de faixa
+  laneChangeThreshold: Double = 0.1, // limiar para troca de faixa (m/s²)
+  maxSafeDeceleration: Double = 4.0, // desaceleração máxima segura (m/s²)
+  aggressiveness: Double = 0.5 // nível de agressividade do motorista (0.0 a 1.0)
 ) extends MovableState(
       startTick = startTick,
       reporterType = reporterType,

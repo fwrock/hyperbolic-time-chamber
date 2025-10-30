@@ -2,14 +2,14 @@ package org.interscity.htc
 package model.mobility.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
-import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.interscity.htc.core.entity.actor.properties.{Properties, SimulationBaseProperties}
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
+import org.interscity.htc.model.mobility.entity.event.data.subway.{SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import org.interscity.htc.model.mobility.entity.state.SubwayState
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Moving, Ready, Start, Stopped, WaitingLoadPassenger}
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 import org.interscity.htc.model.mobility.util.SubwayUtil
 import org.interscity.htc.model.mobility.util.SubwayUtil.timeToNextStation
@@ -17,7 +17,7 @@ import org.interscity.htc.model.mobility.util.SubwayUtil.timeToNextStation
 import scala.collection.mutable
 
 class Subway(
-  private val properties: Properties
+  private val properties: SimulationBaseProperties
 ) extends Movable[SubwayState](
       properties = properties
     ) {

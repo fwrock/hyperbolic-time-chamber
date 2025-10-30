@@ -8,7 +8,6 @@ import scala.collection.mutable
 
 class MachineLearningManager(timeManager: ActorRef)
     extends BaseManager[DefaultState](
-      timeManager = timeManager,
       actorId = "machine-learning-manager"
     ) {
 
