@@ -111,7 +111,6 @@ abstract class LocalTimeManager(
     case e: UpdateGlobalTimeEvent     => syncWithGlobalTime(e.tick)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
-    // Events specific to the LTM implementation type
     case event => handleSpecificEvent(event)
   }
 
