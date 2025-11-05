@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 
 import model.mobility.entity.state.TrafficSignalState
 
@@ -18,7 +18,7 @@ import scala.collection.mutable
 
 class TrafficSignal(
   private val properties: Properties
-) extends BaseActor[TrafficSignalState](
+) extends SimulationBaseActor[TrafficSignalState](
       properties = properties
     ) {
 

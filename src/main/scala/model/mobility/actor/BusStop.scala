@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -15,7 +15,7 @@ import scala.collection.mutable
 
 class BusStop(
   private val properties: Properties
-) extends BaseActor[BusStopState](
+) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
 

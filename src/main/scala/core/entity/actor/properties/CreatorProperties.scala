@@ -12,7 +12,7 @@ case class CreatorProperties(
   entityId: String = null,
   shardId: String = null,
   loadDataManager: ActorRef = null,
-  timeManager: ActorRef = null,
+  timeManagers: mutable.Map[String, ActorRef] = null,
   creatorManager: ActorRef = null,
   reporters: mutable.Map[ReportTypeEnum, ActorRef] = null,
   data: Any = null,

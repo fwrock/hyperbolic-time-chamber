@@ -26,13 +26,15 @@ class CreatorPoolLoadData(
       properties = Properties(
         entityId = creatorProperties.entityId,
         resourceId = creatorProperties.shardId,
-        creatorManager = creatorProperties.creatorManager,
-        timeManager = creatorProperties.timeManager,
-        reporters = creatorProperties.reporters,
-        data = creatorProperties.data,
-        actorType = creatorProperties.actorType
+        data = creatorProperties.data
       )
     ) {
+
+  // Fields needed for actor creation (not for simulation)
+  private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
+  private val creatorManager: ActorRef = creatorProperties.creatorManager
+  private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] = 
+    creatorProperties.reporters
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
@@ -102,7 +104,7 @@ class CreatorPoolLoadData(
             entityId = IdUtil.format(actorCreation.actor.id),
             poolConfiguration = actorCreation.actor.poolConfiguration,
             resourceId = IdUtil.format(actorCreation.resourceId),
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = self,
             reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,

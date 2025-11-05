@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
@@ -21,7 +21,7 @@ import scala.collection.mutable
 abstract class Movable[T <: MovableState](
   private val properties: Properties
 )(implicit m: Manifest[T])
-    extends BaseActor[T](
+    extends SimulationBaseActor[T](
       properties = properties
     ) {
 
