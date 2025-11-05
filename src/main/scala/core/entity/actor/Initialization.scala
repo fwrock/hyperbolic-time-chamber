@@ -13,7 +13,7 @@ case class Initialization(
   resourceId: String,
   classType: String,
   data: Any,
-  timeManager: ActorRef,
+  timeManagers: mutable.Map[String, ActorRef],
   creatorManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
   dependencies: mutable.Map[String, actor.Dependency] = mutable.Map[String, actor.Dependency]()
@@ -23,11 +23,11 @@ case class Initialization(
     InitializeData(
       data = data,
       resourceId = resourceId,
-      timeManager = timeManager,
       creatorManager = creatorManager,
       reporters = reporters,
       dependencies = dependencies.map {
         case (label, dep) => dep.id -> dep
-      }
+      },
+      timeManagers = timeManagers
     )
 }

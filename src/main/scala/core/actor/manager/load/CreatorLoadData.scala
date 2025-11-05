@@ -27,13 +27,15 @@ class CreatorLoadData(
       properties = Properties(
         entityId = creatorProperties.entityId,
         resourceId = creatorProperties.shardId,
-        creatorManager = creatorProperties.creatorManager,
-        timeManager = creatorProperties.timeManager,
-        reporters = creatorProperties.reporters,
-        data = creatorProperties.data,
-        actorType = creatorProperties.actorType
+        data = creatorProperties.data
       )
     ) {
+
+  // Fields needed for actor creation (not for simulation)
+  private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
+  private val creatorManager: ActorRef = creatorProperties.creatorManager
+  private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] = 
+    creatorProperties.reporters
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
@@ -100,7 +102,7 @@ class CreatorLoadData(
             resourceId = actorCreation.resourceId,
             classType = actorCreation.actor.typeActor,
             data = actorCreation.actor.data.content,
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = self,
             reporters = reporters,
             dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
@@ -115,7 +117,7 @@ class CreatorLoadData(
             resourceId = actorCreation.resourceId,
             actorClassName = actorCreation.actor.typeActor,
             entityId = actorCreation.actor.id,
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = self
           )
 
@@ -176,12 +178,12 @@ class CreatorLoadData(
           data = InitializeData(
             data = data.data,
             resourceId = data.resourceId,
-            timeManager = data.timeManager,
             creatorManager = data.creatorManager,
             reporters = data.reporters,
             dependencies = data.dependencies.map {
               case (_, dep) => IdUtil.format(dep.id) -> dep
-            }
+            },
+            timeManagers = data.timeManagers
           )
         )
         getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(

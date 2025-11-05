@@ -18,9 +18,16 @@ abstract class BaseManager[T <: BaseState](
     extends BaseActor[T](
       properties = Properties(
         entityId = actorId,
-        timeManager = timeManager
+        resourceId = "",
+        timeManagers = if (timeManager != null) mutable.Map("discrete-event" -> timeManager) else mutable.Map.empty,
+        creatorManager = null,
+        reporters = mutable.Map.empty
       )
     ) {
+
+  // Managers may need access to reporters
+  protected var reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] = null
+  protected var timeManagerRef: ActorRef = timeManager
 
   protected def createSingletonManager(
     manager: Props,

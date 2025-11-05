@@ -81,7 +81,11 @@ class LoadDataManager(
             context.system,
             source.dataSource.sourceType.clazz,
             properties = Properties(
-              timeManager = poolTimeManager
+              entityId = s"loader-${source.dataSource.hashCode()}",
+              resourceId = "",
+              timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+              creatorManager = null,
+              reporters = mutable.Map.empty
             )
           )
           loaders.put(loader, false)
@@ -110,7 +114,7 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-load-data",
             loadDataManager = getSelfProxy,
-            timeManager = poolTimeManager,
+            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters
           )
         )
@@ -135,7 +139,7 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-pool-load-data",
             loadDataManager = getSelfProxy,
-            timeManager = poolTimeManager,
+            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters
           )
         )

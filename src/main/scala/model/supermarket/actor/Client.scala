@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.supermarket.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.supermarket.entity.state.ClientState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -11,7 +11,7 @@ import org.interscity.htc.model.supermarket.entity.event.data.{ FinishClientServ
 
 class Client(
   val properties: Properties
-) extends BaseActor[ClientState](
+) extends SimulationBaseActor[ClientState](
       properties = properties
     ) {
 

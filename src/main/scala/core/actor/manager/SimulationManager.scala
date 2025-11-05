@@ -89,10 +89,9 @@ class SimulationManager(
 
   private def createSingletonTimeManager(): ActorRef =
     createSingletonManager(
-      manager = TimeManager.props(
+      manager = GlobalTimeManager.props(
         simulationDuration = configuration.duration,
-        simulationManager = getSelfProxy,
-        parentManager = None
+        simulationManager = getSelfProxy
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

@@ -122,7 +122,7 @@ object ActorCreatorUtil {
     actorClassName: String,
     entityId: String,
     resourceId: String,
-    timeManager: ActorRef,
+    timeManagers: mutable.Map[String, ActorRef],
     creatorManager: ActorRef
   ): ActorRef = {
     val clazz = Class.forName(StringUtil.getModelClassName(actorClassName))
@@ -142,7 +142,7 @@ object ActorCreatorUtil {
           Properties(
             entityId = entityId,
             resourceId = resourceId,
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = creatorManager,
             actorType = CreationTypeEnum.LoadBalancedDistributed
           )
@@ -249,7 +249,7 @@ object ActorCreatorUtil {
     entityId: String,
     poolConfiguration: PoolDistributedConfiguration,
     resourceId: String,
-    timeManager: ActorRef,
+    timeManagers: mutable.Map[String, ActorRef],
     creatorManager: ActorRef,
     reporters: mutable.Map[ReportTypeEnum, ActorRef],
     data: Any,
@@ -271,7 +271,7 @@ object ActorCreatorUtil {
           Properties(
             entityId = entityId,
             resourceId = resourceId,
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = creatorManager,
             reporters = reporters,
             data = data,

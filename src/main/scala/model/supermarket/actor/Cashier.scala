@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.supermarket.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -15,7 +15,7 @@ import org.interscity.htc.model.supermarket.util.CashierUtil.serviceTime
 
 class Cashier(
   val properties: Properties
-) extends BaseActor[CashierState](
+) extends SimulationBaseActor[CashierState](
       properties = properties
     ) {
 

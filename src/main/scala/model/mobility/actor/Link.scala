@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
@@ -20,7 +20,7 @@ import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnection
 
 class Link(
   private val properties: Properties
-) extends BaseActor[LinkState](
+) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
 

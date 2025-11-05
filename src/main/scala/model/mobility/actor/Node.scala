@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 
 import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
@@ -27,7 +27,7 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalP
 
 class Node(
   private val properties: Properties
-) extends BaseActor[NodeState](
+) extends SimulationBaseActor[NodeState](
       properties = properties
     ) {
 
