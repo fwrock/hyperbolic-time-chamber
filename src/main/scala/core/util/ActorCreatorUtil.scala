@@ -123,7 +123,8 @@ object ActorCreatorUtil {
     entityId: String,
     resourceId: String,
     timeManagers: mutable.Map[String, ActorRef],
-    creatorManager: ActorRef
+    creatorManager: ActorRef,
+    reporters: mutable.Map[ReportTypeEnum, ActorRef] = mutable.Map.empty
   ): ActorRef = {
     val clazz = Class.forName(StringUtil.getModelClassName(actorClassName))
     val sharding = ClusterSharding(system)
@@ -144,6 +145,7 @@ object ActorCreatorUtil {
             resourceId = resourceId,
             timeManagers = timeManagers,
             creatorManager = creatorManager,
+            reporters = reporters,
             actorType = CreationTypeEnum.LoadBalancedDistributed
           )
         ),

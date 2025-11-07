@@ -55,12 +55,16 @@ class CreatorLoadData(
   private val DELAY_BETWEEN_CHUNKS = 50.milliseconds
 
   override def handleEvent: Receive = {
-    case event: CreateActorsEvent  => handleCreateActors(event)
+    case event: CreateActorsEvent  => 
+      logInfo(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
+      handleCreateActors(event)
     case event: StartCreationEvent => handleStartCreation(event)
     case event: ProcessNextCreateChunk =>
       handleProcessNextCreateChunk(event.batchId) // Novo handler
     case event: ShardRegion.StartEntityAck => handleInitialize(event)
-    case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
+    case event: InitializeEntityAckEvent   => 
+      logInfo(s"Received InitializeEntityAckEvent for ${event.entityId}")
+      handleFinishInitialization(event)
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
@@ -118,7 +122,8 @@ class CreatorLoadData(
             actorClassName = actorCreation.actor.typeActor,
             entityId = actorCreation.actor.id,
             timeManagers = timeManagers,
-            creatorManager = self
+            creatorManager = self,
+            reporters = reporters
           )
 
           shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)

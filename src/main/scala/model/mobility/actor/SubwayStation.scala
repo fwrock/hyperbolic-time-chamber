@@ -25,7 +25,8 @@ class SubwayStation(
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit =
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
     val node = getDependency(state.nodeId)
     sendMessageTo(
       node.id,
@@ -34,6 +35,7 @@ class SubwayStation(
         lines = state.lines.keys.toSeq
       )
     )
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.status match

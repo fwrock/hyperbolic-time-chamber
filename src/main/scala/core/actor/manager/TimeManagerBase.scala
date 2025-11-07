@@ -50,6 +50,9 @@ abstract class TimeManagerBase(
     case _: PauseSimulationEvent         => if (isRunning) pauseSimulation()
     case _: ResumeSimulationEvent        => resumeSimulation()
     case _: StopSimulationEvent          => stopSimulation()
+    case msg                             => 
+      // Ignore Pekko persistence internal messages and other unhandled messages
+      logDebug(s"Ignoring unhandled message: ${msg.getClass.getSimpleName}")
   }
 
   /** Handles spontaneous events. Subclasses override to implement specific behavior.

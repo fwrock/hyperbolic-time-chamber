@@ -19,7 +19,8 @@ class BusStop(
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit =
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
     val dependency = getDependency(state.nodeId)
     sendMessageTo(
       dependency.id,
@@ -28,6 +29,7 @@ class BusStop(
         label = state.label
       )
     )
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

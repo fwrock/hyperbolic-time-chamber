@@ -68,9 +68,13 @@ class LoadDataManager(
     getSelfProxy ! LoadNextEvent()
   }
 
-  private def handleLoadNext(): Unit =
+  private def handleLoadNext(): Unit = {
+    logInfo(s"handleLoadNext called. sourcesToCreate keys: ${sourcesToCreate.keys.mkString(", ")}")
+    logInfo(s"sourcesInCreation: ${sourcesInCreation.mkString(", ")}")
+    
     sourcesToCreate.foreach {
       (key, queue) =>
+        logInfo(s"Checking key=$key, queue.nonEmpty=${queue.nonEmpty}, !sourcesInCreation.contains(key)=${!sourcesInCreation.contains(key)}")
         if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
           val source = queue.dequeue()
           sourcesInCreation.add(key)
@@ -97,6 +101,7 @@ class LoadDataManager(
           )
         }
     }
+  }
 
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = amountDataSources
@@ -154,18 +159,23 @@ class LoadDataManager(
     loaders(actorRef) = true
     logInfo(s"Total loaded data: ${loaders.values.count(_.self == true)}/${loaders.size}")
     sourcesInCreation.remove(event.actorClassType)
+    logInfo(s"Removed ${event.actorClassType} from sourcesInCreation. Remaining: ${sourcesInCreation.mkString(", ")}")
 
     actorRef ! DestructEvent(actorRef = getPath)
 
+    logInfo(s"Sending LoadNextEvent to process remaining sources")
     getSelfProxy ! LoadNextEvent()
 
     if (isAllDataLoaded) {
+      logInfo(s"All data loaded! Sending FinishLoadDataEvent to SimulationManager")
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,
         actorClassType = null,
         creators = mutable.Set()
       )
+    } else {
+      logInfo(s"Not all data loaded yet. isAllDataLoaded=${isAllDataLoaded}")
     }
   }
 
