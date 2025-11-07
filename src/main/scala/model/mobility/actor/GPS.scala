@@ -31,8 +31,10 @@ class GPS(
 
   private val redisManager = RedisClientManager()
 
-  override def onInitialize(event: InitializeEvent): Unit =
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
     loadCityMap()
+  }
 
   override def onStart(): Unit =
     loadCityMap()

@@ -177,6 +177,14 @@ abstract class SimulationBaseActor[T <: BaseState](
         registerOnTimeManager()
       }
     }
+    // Send ack to the creator that initialization finished
+    try {
+      // InitializeEvent.actorRef is the creator/loader that requested initialization
+      event.actorRef ! org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent(entityId = entityId)
+      logInfo(s"Sent InitializeEntityAckEvent for $entityId to creator")
+    } catch {
+      case e: Exception => logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
+    }
   }
 
   /** Sends a message to another simulation actor.
@@ -314,7 +322,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         id = IdUtil.format(getEntityId),
         resourceId = IdUtil.format(properties.resourceId),
         classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
-        actorRef = getPath
+        actorRef = getPath,
+        actorType = properties.actorType.toString
       ),
       scheduleTick = scheduleTick.map(_.toString),
       scheduleEvent = None,
@@ -331,7 +340,8 @@ abstract class SimulationBaseActor[T <: BaseState](
               id = IdUtil.format(getEntityId),
               resourceId = IdUtil.format(properties.resourceId),
               classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
-              actorRef = getPath
+              actorRef = getPath,
+              actorType = properties.actorType.toString
             )
           )
         )
@@ -354,7 +364,8 @@ abstract class SimulationBaseActor[T <: BaseState](
           id = getEntityId,
           resourceId = IdUtil.format(properties.resourceId),
           classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
-          actorRef = getPath
+          actorRef = getPath,
+          actorType = properties.actorType.toString
         )
       )
     )

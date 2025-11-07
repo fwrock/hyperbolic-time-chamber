@@ -35,14 +35,15 @@ class GlobalTimeManager(
   private var selfProxy: ActorRef = null
   private var timeManagersPool: ActorRef = _
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
+  @volatile private var isTerminated = false
 
   override def onStart(): Unit = {
     createTimeManagersPool()
   }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 64
-    val maxInstancesPerNode = Math.max(8, totalInstances / 8)
+    val totalInstances = 8  // Reduced from 64 to reduce log spam
+    val maxInstancesPerNode = Math.max(4, totalInstances / 2)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -60,6 +61,7 @@ class GlobalTimeManager(
       ),
       name = POOL_TIME_MANAGER_ACTOR_NAME
     )
+    // Don't register the router - let each instance register itself
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
   }
 
@@ -69,7 +71,7 @@ class GlobalTimeManager(
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
-      handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+      handleLocalTimeReport(localTimeReport)
     case event => super.handleEvent(event)
   }
 
@@ -116,27 +118,41 @@ class GlobalTimeManager(
   }
 
   private def registerTimeManager(event: TimeManagerRegisterEvent): Unit = {
+    val isNew = !localTimeManagers.contains(event.actorRef)
     localTimeManagers.put(
       event.actorRef,
       LocalTimeManagerTickInfo(tick = localTickOffset)
     )
+    if (isNew) {
+      logInfo(s"Registered LocalTimeManager: ${event.actorRef.path.name} - Total registered: ${localTimeManagers.size}")
+    }
   }
 
-  private def handleLocalTimeReport(
-    localManager: ActorRef,
-    tick: Tick,
-    hasScheduled: Boolean
-  ): Unit = {
+  private def handleLocalTimeReport(report: LocalTimeReportEvent): Unit = {
+    val manager = sender()
+
+    if (!localTimeManagers.contains(manager)) {
+      logWarn(s"Received report from unregistered manager: ${manager.path}")
+      return
+    }
+
     localTimeManagers.update(
-      localManager,
+      manager,
       LocalTimeManagerTickInfo(
-        tick = tick,
-        hasSchedule = hasScheduled,
+        tick = report.tick,
+        hasSchedule = report.hasScheduled,
         isProcessed = true
       )
     )
+
+    val processedCount = localTimeManagers.values.count(_.isProcessed)
+    val totalCount = localTimeManagers.size
+
     if (localTimeManagers.values.forall(_.isProcessed)) {
+      logDebug(s"All $totalCount managers reported, calculating next tick")
       calculateAndBroadcastNextGlobalTick()
+    } else {
+      logDebug(s"Waiting for more reports: $processedCount/$totalCount processed")
     }
   }
 
@@ -151,6 +167,12 @@ class GlobalTimeManager(
     localTickOffset = nextTick
     tickOffset = nextTick - initialTick
     
+    // Check if simulation should terminate
+    if (localTickOffset - initialTick >= simulationDuration) {
+      terminateSimulation()
+      return
+    }
+    
     localTimeManagers.keys.foreach { timeManager =>
       localTimeManagers.update(
         timeManager,
@@ -162,9 +184,8 @@ class GlobalTimeManager(
   }
 
   private def notifyLocalManagers(event: Any): Unit = {
-    localTimeManagers.keys.foreach { localManager =>
-      localManager ! event
-    }
+    // Broadcast to all routees in the pool
+    timeManagersPool ! org.apache.pekko.routing.Broadcast(event)
   }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
@@ -183,10 +204,13 @@ class GlobalTimeManager(
     }
   }
 
-  private def terminateSimulation(): Unit = {
-    printSimulationDuration()
-    logInfo("Global simulation terminated")
-    notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent())
+  private def terminateSimulation(): Unit = synchronized {
+    if (!isTerminated) {
+      isTerminated = true
+      printSimulationDuration()
+      logInfo("Global simulation terminated")
+      notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent())
+    }
   }
 
   private def getSelfProxy: ActorRef = {

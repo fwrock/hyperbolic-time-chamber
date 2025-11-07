@@ -30,10 +30,11 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
 
-  override def onInitialize(event: InitializeEvent): Unit =
-    super.onStart()
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
 //    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
 //    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
+  }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =
     sendMessageTo(

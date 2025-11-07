@@ -36,26 +36,17 @@ class LocalDiscreteEventTimeManager(
     * @param tick The tick to process
     */
   protected def processTick(tick: Tick): Unit = {
-    if (runningEvents.isEmpty) {
-      // All events at current tick completed, advance to next
-      advanceToNextTick()
-    } else {
-      // Still processing events at current tick, wait for completion
-      reportGlobalTimeManager(hasScheduled = scheduledActors.nonEmpty)
+    // Process all events scheduled for this tick
+    scheduledActors.get(tick).foreach { actorsSet =>
+      sendSpontaneousEvent(tick, actorsSet)
     }
-  }
-
-  override protected def advanceToNextTick(): Unit = {
+    scheduledActors.remove(tick)
+    scheduledTicksOnFinish.remove(tick)
+    
+    // After processing, check if we need to advance
     if (runningEvents.isEmpty) {
-      nextTick match {
-        case Some(tick) =>
-          localTickOffset = tick
-          processNextEventTick(tick)
-          reportGlobalTimeManager(hasScheduled = true)
-        case None =>
-          // No more events scheduled
-          reportGlobalTimeManager(hasScheduled = false)
-      }
+      // All events at current tick completed, report to global and wait
+      super.advanceToNextTick()
     }
   }
 }

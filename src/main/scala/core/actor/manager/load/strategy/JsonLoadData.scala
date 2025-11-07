@@ -36,12 +36,19 @@ class JsonLoadData(private val properties: Properties)
   private val processBatchControl = mutable.Map[String, Boolean]()
 
   override def handleEvent: Receive = {
-    case event: LoadDataSourceEvent => load(event)
-    case _: ProcessBatchesEvent     => handleProcessBatches()
-    case event: FinishCreationEvent => handleFinishCreation(event)
+    case event: LoadDataSourceEvent => 
+      logInfo(s"Received LoadDataSourceEvent for ${event.actorDataSource.dataSource}")
+      load(event)
+    case _: ProcessBatchesEvent     => 
+      logInfo("Received ProcessBatchesEvent")
+      handleProcessBatches()
+    case event: FinishCreationEvent => 
+      logInfo(s"Received FinishCreationEvent for batch ${event.batchId}")
+      handleFinishCreation(event)
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
+    logInfo("Starting load process")
     managerRef = event.managerRef
     creatorRef = event.creatorRef
     creatorPoolRef = event.creatorPoolRef
@@ -90,14 +97,17 @@ class JsonLoadData(private val properties: Properties)
   }
 
   private def handleProcessBatches(): Unit = {
+    logInfo(s"Processing batches: shardBatches=${shardBatches.size}, poolBatches=${poolBatches.size}")
     if (shardBatches.nonEmpty) {
       val batch = shardBatches.dequeue()
+      logInfo(s"Sending shard batch with ${batch.size} actors")
       sendToCreator(creatorRef, batch)
-    }
-    if (poolBatches.nonEmpty) {
+    } else if (poolBatches.nonEmpty) {
       val batch = poolBatches.dequeue()
+      logInfo(s"Sending pool batch with ${batch.size} actors")
       sendToCreator(creatorPoolRef, batch)
     }
+    logInfo(s"Calling sendFinishLoadDataEvent, processBatchControl=${processBatchControl}")
     sendFinishLoadDataEvent()
   }
 
@@ -117,6 +127,7 @@ class JsonLoadData(private val properties: Properties)
       case _: Exception => UUID.randomUUID().toString
     }
     processBatchControl.put(batchId, false)
+    logInfo(s"Sending CreateActorsEvent to creator with ${actorsToCreate.size} actors, batchId=$batchId")
     creator ! CreateActorsEvent(id = batchId, actors = actorsToCreate, actorRef = self)
   }
 
@@ -135,12 +146,13 @@ class JsonLoadData(private val properties: Properties)
     mutable.Queue(batches: _*)
   }
 
-  private def sendFinishLoadDataEvent(): Unit =
+  private def sendFinishLoadDataEvent(): Unit = {
+    val allBatchesProcessed = processBatchControl.values.forall(_.self == true)
+    logInfo(s"Checking finish conditions: shardBatches.isEmpty=${shardBatches.isEmpty}, poolBatches.isEmpty=${poolBatches.isEmpty}, allBatchesProcessed=$allBatchesProcessed")
     if (
-      shardBatches.isEmpty && poolBatches.isEmpty && processBatchControl.values.forall(
-        _.self == true
-      )
+      shardBatches.isEmpty && poolBatches.isEmpty && allBatchesProcessed
     ) {
+      logInfo(s"Sending FinishLoadDataEvent with amount=$amountActors")
       managerRef ! FinishLoadDataEvent(
         actorRef = self,
         amount = amountActors,
@@ -148,4 +160,5 @@ class JsonLoadData(private val properties: Properties)
         creators = creators
       )
     }
+  }
 }

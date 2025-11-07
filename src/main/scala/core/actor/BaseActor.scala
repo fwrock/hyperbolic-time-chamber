@@ -11,12 +11,10 @@ import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 
 import java.util.UUID
-import scala.collection.mutable
 import scala.compiletime.uninitialized
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -141,7 +139,12 @@ abstract class BaseActor[T <: BaseState](
     case snapshot: SnapshotOffer =>
       state = snapshot.snapshot.asInstanceOf[T]
       logInfo(s"Recovered state: $state")
-    case _ => receive
+    case _: org.apache.pekko.persistence.RecoveryCompleted =>
+      // Recovery completed - this is normal Pekko Persistence lifecycle
+      ()
+    case event => 
+      // During recovery, just log - don't process events meant for normal operation
+      logDebug(s"Ignoring event during recovery: ${event.getClass.getSimpleName}")
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =

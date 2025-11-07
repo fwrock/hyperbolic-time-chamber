@@ -36,9 +36,11 @@ abstract class LocalTimeManagerBase(
 
   protected var countScheduled = 0
   private var selfProxy: ActorRef = null
+  @volatile private var isTerminated = false
 
   override def onStart(): Unit = {
     if (parentManager.nonEmpty) {
+      // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
   }
@@ -50,6 +52,9 @@ abstract class LocalTimeManagerBase(
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
     case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
+    case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>
+      stopSimulation()
+      terminateSimulation()
     case event                           => super.handleEvent(event)
   }
 
@@ -81,8 +86,8 @@ abstract class LocalTimeManagerBase(
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
       runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
+      // Report to global and wait for next tick (don't advance locally)
       advanceToNextTick()
-      reportGlobalTimeManager(hasScheduled = true)
     } else {
       finish.timeManager ! finish
     }
@@ -96,24 +101,16 @@ abstract class LocalTimeManagerBase(
   }
 
   override protected def onSpontaneousEvent(spontaneous: SpontaneousEvent): Unit = {
-    if (isRunning) {
-      if (localTickOffset - initialTick >= simulationDuration) {
-        terminateSimulation()
-      } else {
-        processTick(spontaneous.tick)
-      }
+    if (isRunning && !isTerminated) {
+      processTick(spontaneous.tick)
     }
   }
 
   private def syncWithGlobalTime(globalTick: Tick): Unit = {
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
-    if (isRunning) {
-      if (localTickOffset - initialTick >= simulationDuration) {
-        terminateSimulation()
-      } else {
-        processTick(localTickOffset)
-      }
+    if (isRunning && !isTerminated) {
+      processTick(localTickOffset)
     }
   }
 
@@ -126,8 +123,12 @@ abstract class LocalTimeManagerBase(
   protected def advanceToNextTick(): Unit = {
     if (runningEvents.isEmpty) {
       nextTick match {
-        case Some(tick) => processNextEventTick(tick)
-        case None       => terminateSimulation()
+        case Some(tick) => 
+          // Report to global and wait for sync instead of advancing locally
+          reportGlobalTimeManager(hasScheduled = true)
+        case None => 
+          // No more events scheduled locally, report and wait
+          reportGlobalTimeManager(hasScheduled = false)
       }
     }
   }
@@ -161,11 +162,18 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
+    if (identity.actorType.isEmpty) {
+      logWarn(s"Actor identity has empty actorType: $identity")
+      return
+    }
+    
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>
         sendSpontaneousEventShard(tick, identity)
       case CreationTypeEnum.PoolDistributed =>
         sendSpontaneousEventPool(tick, identity)
+      case _ =>
+        logWarn(s"Unknown creation type: ${identity.actorType} for actor ${identity.id}")
     }
   }
 
@@ -182,17 +190,23 @@ abstract class LocalTimeManagerBase(
     actorRef ! SpontaneousEvent(tick = tick, actorRef = self)
   }
 
-  private def terminateSimulation(): Unit = {
-    printSimulationDuration()
-    logInfo("Local simulation terminated")
-    reportGlobalTimeManager(hasScheduled = false)
+  private def terminateSimulation(): Unit = synchronized {
+    if (!isTerminated) {
+      isTerminated = true
+      printSimulationDuration()
+      logInfo("Local simulation terminated")
+      reportGlobalTimeManager(hasScheduled = false)
+    }
   }
 
   protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit = {
     if (parentManager.nonEmpty) {
+      // Report the NEXT tick we want to process (not current tick)
+      val reportTick = if (hasScheduled) nextTick.getOrElse(localTickOffset) else localTickOffset
       parentManager.get ! LocalTimeReportEvent(
-        tick = localTickOffset,
-        hasScheduled = hasScheduled
+        tick = reportTick,
+        hasScheduled = hasScheduled,
+        actorRef = self.path.toString
       )
     }
   }
