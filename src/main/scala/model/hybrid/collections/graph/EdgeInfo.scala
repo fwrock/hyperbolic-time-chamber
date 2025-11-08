@@ -1,4 +1,4 @@
 package org.interscity.htc
-package model.mobility.collections.graph
+package model.hybrid.collections.graph
 
 case class EdgeInfo[W, L](weight: W, label: L)
