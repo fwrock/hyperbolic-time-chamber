@@ -6,10 +6,10 @@ import core.types.Tick
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.state.MovableState
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
-import org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Bus
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.Start
+import org.interscity.htc.model.hybrid.entity.state.MovableState
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.ActorTypeEnum.Bus
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 
 import scala.collection.mutable

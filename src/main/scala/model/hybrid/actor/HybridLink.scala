@@ -17,10 +17,10 @@ import org.interscity.htc.model.hybrid.micro.manager.LinkMicroTimeManager
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.model.hybrid.micro.lane.{LaneChangeModel, MobilLaneChange}
 
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import org.interscity.htc.model.mobility.entity.event.data._
-import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
+import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 
 /** HybridLink actor supporting both MESO and MICRO simulation modes.
   * 
