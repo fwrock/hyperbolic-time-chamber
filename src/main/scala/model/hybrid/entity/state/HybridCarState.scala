@@ -120,33 +120,3 @@ case class HybridCarState(
     else None  // In MESO mode, velocity is aggregate
   }
 }
-
-object HybridCarState {
-  /** Create a hybrid car state from traditional CarState (for migration) */
-  def fromCarState(carState: org.interscity.htc.model.mobility.entity.state.CarState): HybridCarState = {
-    HybridCarState(
-      startTick = carState.startTick,
-      reporterType = carState.reporterType,
-      scheduleOnTimeManager = carState.scheduleOnTimeManager,
-      name = carState.name,
-      origin = carState.origin,
-      destination = carState.destination,
-      // Convert RoutePathItem to (String, String)
-      bestRoute = carState.bestRoute.map(queue => 
-        queue.map { case (from, to) => (from.actorId, to.actorId) }
-      ),
-      bestCost = carState.bestCost,
-      currentNode = carState.currentNode,
-      // Convert RoutePathItem to (String, String)
-      currentPath = carState.currentPath.map { case (from, to) => (from.actorId, to.actorId) },
-      lastNode = carState.lastNode,
-      digitalRails = carState.digitalRails,
-      distance = carState.distance,
-      eventCount = carState.eventCount,
-      actorType = carState.actorType,
-      size = carState.size,
-      status = carState.status,
-      currentSimulationMode = SimulationModeEnum.MESO
-    )
-  }
-}
