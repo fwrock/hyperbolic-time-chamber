@@ -7,7 +7,7 @@ import core.types.Tick
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.state.model.SignalState
+import org.interscity.htc.model.hybrid.entity.state.model.SignalState
 
 import scala.collection.mutable
 

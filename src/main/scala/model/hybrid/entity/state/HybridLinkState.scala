@@ -5,7 +5,7 @@ import core.types.Tick
 import core.entity.state.BaseState
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
+import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{LaneConfig, VehicleInLane}
 

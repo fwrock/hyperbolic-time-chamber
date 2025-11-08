@@ -5,17 +5,17 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.model.mobility.actor.Movable
-import org.interscity.htc.model.mobility.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
-import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum._
-import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.mobility.util.{BusUtil, SpeedUtil}
-import org.interscity.htc.model.mobility.util.BusUtil.loadPersonTime
-import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.actor.Movable
+import org.interscity.htc.model.hybrid.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
+import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+import org.interscity.htc.model.hybrid.util.{BusUtil, SpeedUtil}
+import org.interscity.htc.model.hybrid.util.BusUtil.loadPersonTime
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{HybridBusState, MicroBusState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
@@ -397,7 +397,7 @@ class HybridBus(
     */
   private def getCurrentLinkLength: Double = {
     currentLinkId.flatMap { linkId =>
-      org.interscity.htc.model.mobility.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
+      org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(1000.0)
   }
 }

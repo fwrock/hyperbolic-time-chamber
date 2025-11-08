@@ -4,9 +4,9 @@ package model.hybrid.entity.state
 import core.types.Tick
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.state.MovableState
-import org.interscity.htc.model.mobility.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.Start
+import org.interscity.htc.model.hybrid.entity.state.MovableState
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ActorTypeEnum, MovableStatusEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.MicroCarState
 
