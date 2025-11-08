@@ -1,0 +1,208 @@
+{
+  "scenario": {
+    "name": "Hybrid Micro-Meso Simple Test",
+    "description": "Cenário mínimo para testar criação de atores híbridos",
+    "version": "1.0",
+    "author": "HTC Development Team"
+  },
+  "simulation": {
+    "startTick": 0,
+    "endTick": 1000,
+    "tickDuration": 1.0
+  },
+  "actors": [
+    {
+      "id": "htcaid:node;origin",
+      "typeActor": "mobility.actor.Node",
+      "data": {
+        "dataType": "model.mobility.entity.state.NodeState",
+        "content": {
+          "latitude": -23.5505,
+          "longitude": -46.6333,
+          "links": ["htcaid:link;test_link"],
+          "connections": {},
+          "signals": {},
+          "busStops": {},
+          "subwayStations": {}
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:node;destination",
+      "typeActor": "mobility.actor.Node",
+      "data": {
+        "dataType": "model.mobility.entity.state.NodeState",
+        "content": {
+          "latitude": -23.5606,
+          "longitude": -46.6434,
+          "links": ["htcaid:link;test_link"],
+          "connections": {},
+          "signals": {},
+          "busStops": {},
+          "subwayStations": {}
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:link;test_link_meso",
+      "typeActor": "hybrid.actor.HybridLink",
+      "data": {
+        "dataType": "model.hybrid.entity.state.HybridLinkState",
+        "content": {
+          "from": "htcaid:node;origin",
+          "to": "htcaid:node;destination",
+          "length": 1000.0,
+          "lanes": 2,
+          "speedLimit": 50.0,
+          "freeSpeed": 50.0,
+          "capacity": 1500,
+          "congestionFactor": 1.0,
+          "currentSpeed": 50.0,
+          "simulationMode": "MESO",
+          "registered": []
+        }
+      },
+      "dependencies": {
+        "from_node": {
+          "id": "htcaid:node;origin",
+          "classType": "mobility.actor.Node"
+        },
+        "to_node": {
+          "id": "htcaid:node;destination",
+          "classType": "mobility.actor.Node"
+        }
+      }
+    },
+    {
+      "id": "htcaid:car;test_hybrid_car",
+      "typeActor": "hybrid.actor.HybridCar",
+      "data": {
+        "dataType": "model.hybrid.entity.state.HybridCarState",
+        "content": {
+          "startTick": 10,
+          "origin": "htcaid:node;origin",
+          "destination": "htcaid:node;destination",
+          "actorType": "CAR",
+          "size": 4.5,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "status": "START",
+          "bestRoute": null,
+          "currentNode": "htcaid:node;origin",
+          "distance": 0.0,
+          "eventCount": 0
+        }
+      },
+      "dependencies": {
+        "from_node": {
+          "id": "htcaid:node;origin",
+          "classType": "mobility.actor.Node"
+        },
+        "to_node": {
+          "id": "htcaid:node;destination",
+          "classType": "mobility.actor.Node"
+        }
+      }
+    },
+    {
+      "id": "htcaid:bus;test_hybrid_bus",
+      "typeActor": "hybrid.actor.HybridBus",
+      "data": {
+        "dataType": "model.hybrid.entity.state.HybridBusState",
+        "content": {
+          "startTick": 5,
+          "label": "TEST_BUS_LINE",
+          "capacity": 80,
+          "numberOfPorts": 2,
+          "origin": "htcaid:node;origin",
+          "destination": "htcaid:node;destination",
+          "busStops": {},
+          "people": {},
+          "actorType": "BUS",
+          "size": 12.0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "status": "START",
+          "bestRoute": null,
+          "currentNode": "htcaid:node;origin",
+          "distance": 0.0,
+          "eventCount": 0
+        }
+      },
+      "dependencies": {
+        "from_node": {
+          "id": "htcaid:node;origin",
+          "classType": "mobility.actor.Node"
+        },
+        "to_node": {
+          "id": "htcaid:node;destination",
+          "classType": "mobility.actor.Node"
+        }
+      }
+    },
+    {
+      "id": "htcaid:bicycle;test_hybrid_bicycle",
+      "typeActor": "hybrid.actor.HybridBicycle",
+      "data": {
+        "dataType": "model.hybrid.entity.state.HybridBicycleState",
+        "content": {
+          "startTick": 15,
+          "origin": "htcaid:node;origin",
+          "destination": "htcaid:node;destination",
+          "actorType": "BICYCLE",
+          "size": 2.0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "status": "START",
+          "bestRoute": null,
+          "currentNode": "htcaid:node;origin",
+          "distance": 0.0,
+          "eventCount": 0
+        }
+      },
+      "dependencies": {
+        "from_node": {
+          "id": "htcaid:node;origin",
+          "classType": "mobility.actor.Node"
+        },
+        "to_node": {
+          "id": "htcaid:node;destination",
+          "classType": "mobility.actor.Node"
+        }
+      }
+    },
+    {
+      "id": "htcaid:motorcycle;test_hybrid_motorcycle",
+      "typeActor": "hybrid.actor.HybridMotorcycle",
+      "data": {
+        "dataType": "model.hybrid.entity.state.HybridMotorcycleState",
+        "content": {
+          "startTick": 8,
+          "origin": "htcaid:node;origin",
+          "destination": "htcaid:node;destination",
+          "actorType": "MOTORCYCLE",
+          "size": 2.5,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "status": "START",
+          "bestRoute": null,
+          "currentNode": "htcaid:node;origin",
+          "distance": 0.0,
+          "eventCount": 0
+        }
+      },
+      "dependencies": {
+        "from_node": {
+          "id": "htcaid:node;origin",
+          "classType": "mobility.actor.Node"
+        },
+        "to_node": {
+          "id": "htcaid:node;destination",
+          "classType": "mobility.actor.Node"
+        }
+      }
+    }
+  ]
+}
