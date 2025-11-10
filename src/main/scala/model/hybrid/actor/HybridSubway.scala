@@ -8,7 +8,7 @@ import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, Spontaneous
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
-import org.interscity.htc.model.hybrid.entity.state.SubwayState
+import org.interscity.htc.model.hybrid.entity.state.HybridSubwayState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
 import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
 import org.interscity.htc.model.hybrid.util.SubwayUtil
@@ -151,14 +151,14 @@ class HybridSubway(
 
   override def getNextPath: Option[(String, String)] =
     state.movableBestRoute match
-      case Some(path) =>
-        if state.currentPathPosition < path.size then
-          val nextPath = path(state.currentPathPosition)
+      case Some(routePath) =>
+        if state.currentPathPosition < routePath.size then
+          val nextPath = routePath(state.currentPathPosition)
           state.currentPathPosition += 1
           Some(nextPath)
         else
           state.currentPathPosition = 0
-          Some(path(state.currentPathPosition))
+          Some(routePath(state.currentPathPosition))
       case None =>
         None
 
@@ -166,7 +166,7 @@ class HybridSubway(
     if isEndNodeState then
       state.nodeState.isLoaded = false
       state.nodeState.isUnloaded = false
-      onFinishSpontaneous(Some(currentTick + state.stopTime))
+      onFinishSpontaneous(Some(currentTick + state.stopTime), destruct = false)
 
   private def isEndNodeState: Boolean =
     state.nodeState.isLoaded && state.nodeState.isUnloaded

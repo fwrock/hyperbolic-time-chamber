@@ -2,8 +2,9 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import org.interscity.htc.model.hybrid.entity.state.*
 
-import model.mobility.entity.state.TrafficSignalState
+import org.interscity.htc.model.hybrid.entity.state.HybridTrafficSignalState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent

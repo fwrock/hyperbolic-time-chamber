@@ -2,11 +2,12 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import model.mobility.entity.state.NodeState
-import model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.hybrid.entity.state.HybridNodeState
+import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -67,15 +68,15 @@ class HybridNode(
   private def handleRequestSignalState(
     event: ActorInteractionEvent,
     data: RequestSignalStateData
-  ): Unit =
-    state.connections.get(data.targetLinkId) match
+  ): Unit = {
+    state.connections.get(data.targetLinkId) match {
       case Some(identify) =>
-        state.signals.get(identify.id) match
-          case Some(signalState) =>
+        state.signals.get(identify.id) match {
+          case Some(sig) =>
 //            report(
 //              data = SignalStateData(
-//                phase = signalState.state,
-//                nextTick = signalState.nextTick
+//                phase = sig.state,
+//                nextTick = sig.nextTick
 //              ),
 //              "send signal state"
 //            )
@@ -83,8 +84,8 @@ class HybridNode(
               entityId = event.actorRefId,
               shardId = event.shardRefId,
               data = SignalStateData(
-                phase = signalState.state,
-                nextTick = signalState.nextTick
+                phase = sig.state,
+                nextTick = sig.nextTick
               ),
               eventType = EventTypeEnum.ReceiveSignalState.toString,
               actorType = LoadBalancedDistributed
@@ -107,6 +108,7 @@ class HybridNode(
               eventType = EventTypeEnum.ReceiveSignalState.toString,
               actorType = LoadBalancedDistributed
             )
+        }
       case None =>
 //        report(
 //          data = SignalStateData(
@@ -125,6 +127,8 @@ class HybridNode(
           eventType = EventTypeEnum.ReceiveSignalState.toString,
           actorType = LoadBalancedDistributed
         )
+    }
+  }
 
   private def handleReceiveSignalChangeStatus(
     event: ActorInteractionEvent,

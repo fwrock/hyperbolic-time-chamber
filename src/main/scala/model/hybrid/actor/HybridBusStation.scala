@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -13,7 +14,7 @@ import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralAr
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.hybrid.entity.event.data.{ ReceiveRouteData, RequestRouteData }
-import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
+import org.interscity.htc.model.hybrid.entity.state.{ HybridBusState, HybridBusStationState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.RequestRoute
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
@@ -88,7 +89,7 @@ class HybridBusStation(
       entityId = bus.actorId,
       getTimeManager,
       toJson(
-        BusState(
+        HybridBusState(
           startTick = currentTick,
           busStops = state.busStops,
           capacity = bus.capacity,

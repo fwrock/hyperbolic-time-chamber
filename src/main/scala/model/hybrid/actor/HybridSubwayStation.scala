@@ -2,7 +2,8 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
-import model.mobility.entity.state.{ SubwayState, SubwayStationState }
+import org.interscity.htc.model.hybrid.entity.state.*
+import org.interscity.htc.model.hybrid.entity.state.{ HybridSubwayState, HybridSubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -72,9 +73,9 @@ class HybridSubwayStation(
     data: SubwayRequestPassengerData
   ): Unit =
     state.people.get(data.line) match {
-      case Some(people) =>
-        val peopleToLoad = people.take(data.availableSpace)
-        state.people.put(data.line, people.drop(data.availableSpace))
+      case Some(peopleQueue) =>
+        val peopleToLoad = peopleQueue.take(data.availableSpace)
+        state.people.put(data.line, peopleQueue.drop(data.availableSpace))
         sendLoadPeopleToSubway(peopleToLoad, event, data)
       case None =>
         sendLoadPeopleToSubway(mutable.Seq(), event, data)
@@ -102,13 +103,13 @@ class HybridSubwayStation(
     lines.keys.foreach {
       line =>
         state.subways.get(line) match
-          case Some(subways) =>
-            if (subways.nonEmpty && state.garage) {
-              val subway = subways.dequeue()
+          case Some(subwayQueue) =>
+            if (subwayQueue.nonEmpty && state.garage) {
+              val subway = subwayQueue.dequeue()
               val actorRef = createSubway(subway)
               dependencies(subway.actorId) = Dependency(subway.actorId, classOf[HybridSubway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
-              onFinishSpontaneous(Some(lines(line).nextTick))
+              onFinishSpontaneous(Some(lines(line).nextTick), destruct = false)
             }
           case None =>
             logInfo(s"Subway not found for line $line")
@@ -121,7 +122,7 @@ class HybridSubwayStation(
       entityId = subway.actorId,
       getTimeManager,
       toJson(
-        SubwayState(
+        HybridSubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
           numberOfPorts = subway.numberOfPorts,

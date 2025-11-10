@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import model.mobility.entity.state.CarState
+import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Dependency
