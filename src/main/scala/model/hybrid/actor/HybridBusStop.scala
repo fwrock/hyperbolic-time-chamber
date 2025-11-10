@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -9,7 +10,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
-import org.interscity.htc.model.hybrid.entity.state.BusStopState
+import org.interscity.htc.model.hybrid.entity.state.HybridBusStopState
 
 import scala.collection.mutable
 
