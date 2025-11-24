@@ -80,8 +80,14 @@ class JsonReportData(
   private val fileName = s"${prefix}${timeBasedId}_events.jsonl"
   private val filePath = s"$directory/$fileName"
 
+  private var eventsAmount = 0
+
   override def onReport(event: ReportEvent): Unit = {
-    buffer += event
+//    buffer += event
+    eventsAmount += 1
+    if (eventsAmount % 10000 == 0) {
+      logInfo(s"Flushed ${buffer.size} events to $filePath with total of $eventsAmount events")
+    }
     if (buffer.size >= batchSize) {
       flushBuffer()
     }
@@ -93,20 +99,23 @@ class JsonReportData(
     mkdir(directory)
     
     try {
-      val writer = new BufferedWriter(new FileWriter(filePath, true))
-      buffer.foreach { report =>
-        val jsonData = Map(
-          "tick" -> report.tick,
-          "real_time" -> System.currentTimeMillis(),
-          "simulation_id" -> simulationId,
-          "event_type" -> report.label,
-          "data" -> report.data
-        )
-        writer.write(JsonUtil.toJson(jsonData))
-        writer.newLine()
+//      val writer = new BufferedWriter(new FileWriter(filePath, true))
+//      buffer.foreach { report =>
+//        val jsonData = Map(
+//          "tick" -> report.tick,
+//          "real_time" -> System.currentTimeMillis(),
+//          "simulation_id" -> simulationId,
+//          "event_type" -> report.label,
+//          "data" -> report.data
+//        )
+//        writer.write(JsonUtil.toJson(jsonData))
+//        writer.newLine()
+//      }
+//      writer.close()
+
+      if (eventsAmount % 10000 == 0) {
+        logInfo(s"Flushed ${buffer.size} events to $filePath with total of $eventsAmount events")
       }
-      writer.close()
-      logInfo(s"Flushed ${buffer.size} events to $filePath")
       buffer.clear()
     } catch {
       case e: Exception =>

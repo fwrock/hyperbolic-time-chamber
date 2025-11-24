@@ -11,10 +11,10 @@ HTC uses a hierarchical configuration system with multiple layers:
 1. **📄 Application Configuration** (`application.conf`) - Core system settings
 2. **🎯 Simulation Configuration** (JSON) - Simulation-specific parameters
 3. **🐳 Docker Configuration** (`docker-compose.yml`) - Infrastructure settings
-4. **🗄️ Database Configuration** (Cassandra/Redis) - Storage settings
+4. **💾 Storage Configuration** (Redis/Local Files) - Caching and persistence
 5. **🌍 Environment Variables** - Runtime overrides
 
-**⚡ Performance Note:** For optimal simulation performance, prefer pre-configured JSON files over Cassandra database connections, which can slow down simulations.
+**⚡ Performance Note:** The system uses file-based reporting (JSON/CSV) and local snapshots for optimal performance. No external database required for persistence.
 
 ---
 
@@ -925,6 +925,86 @@ net.core.netdev_max_backlog = 5000
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
 ```
+
+---
+
+---
+
+## 💾 **Persistence & Snapshots**
+
+### **📸 Snapshot Configuration**
+
+The system uses **local file-based snapshots** for actor state persistence. This provides fast recovery without external database dependencies.
+
+#### **Default Configuration**
+```hocon
+pekko {
+  persistence {
+    journal {
+      plugin = "pekko.persistence.journal.inmem"
+      auto-start-journals = ["pekko.persistence.journal.inmem"]
+    }
+    snapshot-store {
+      plugin = "pekko.persistence.snapshot-store.local"
+      auto-start-snapshot-stores = ["pekko.persistence.snapshot-store.local"]
+    }
+  }
+  
+  # Snapshot directory
+  persistence.snapshot-store.local {
+    dir = "/app/hyperbolic-time-chamber/snapshots"
+  }
+}
+```
+
+#### **Snapshot Behavior**
+- **Interval**: Actors save snapshots every 10,000 events (configurable in `BaseActor.scala`)
+- **Storage**: Local filesystem (not Cassandra)
+- **Purpose**: Fast recovery after actor restart or system failure
+- **Performance**: Higher intervals = better performance, lower = faster recovery
+
+#### **Customizing Snapshot Interval**
+
+In `BaseActor.scala`:
+```scala
+// Default: snapshot every 10,000 events
+private val snapShotInterval = 10000
+
+// For more frequent snapshots (slower performance):
+private val snapShotInterval = 1000
+
+// For less frequent snapshots (better performance):
+private val snapShotInterval = 50000
+```
+
+### **📁 File-Based Reporting**
+
+The system generates reports in JSON and CSV formats:
+
+```hocon
+htc {
+  report-manager {
+    default-strategy = "json"
+    enabled-strategies = ["csv", "json"]
+    
+    csv {
+      directory = "/app/hyperbolic-time-chamber/output/reports/csv"
+      batch-size = 1000
+    }
+    
+    json {
+      directory = "/app/hyperbolic-time-chamber/output/reports/json"
+      batch-size = 1000
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ **No Database Required**: Eliminates Cassandra dependency
+- ✅ **Better Performance**: Faster than database writes
+- ✅ **Easy Analysis**: Standard formats for data science tools
+- ✅ **Portable**: Simple file copying for data sharing
 
 ---
 

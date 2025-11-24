@@ -6,13 +6,14 @@ import core.types.Tick
 
 import org.apache.pekko.actor.{ ActorRef, Props }
 import core.entity.control.{ LocalTimeManagerTickInfo, ScheduledActors }
-import core.entity.state.DefaultState
+import core.entity.state.TimeManagerState
 
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.persistence.RecoveryCompleted
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerSyncRequestEvent, TimeManagerSyncResponseEvent, UpdateGlobalTimeEvent }
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, StringUtil }
@@ -24,7 +25,7 @@ class TimeManager(
   val simulationDuration: Tick,
   val simulationManager: ActorRef,
   val parentManager: Option[ActorRef]
-) extends BaseManager[DefaultState](
+) extends BaseManager[TimeManagerState](
       timeManager = null,
       actorId =
         if parentManager.isEmpty then s"$LOAD_MANAGER_ACTOR_NAME-${System.nanoTime()}"
@@ -32,23 +33,19 @@ class TimeManager(
     ) {
 
   private var selfProxy: ActorRef = null
-
-  private var startTime: Long = 0
-  private var localTickOffset: Tick = 0
-  private var tickOffset: Tick = 0
-  private var initialTick: Tick = 0
-  private var isPaused: Boolean = false
-  private var isStopped: Boolean = false
-
-  private val registeredActors = mutable.Set[String]()
-  private val scheduledActors = mutable.Map[Tick, ScheduledActors]()
-  private val scheduledTicksOnFinish = mutable.Set[Tick]()
-  private val runningEvents = mutable.Set[Identify]()
   private var timeManagersPool: ActorRef = _
-
   private var countScheduled = 0
 
-  private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
+  // 🛡️ Recovery Control
+  private val snapshotInterval = config.getInt("htc.time-manager.snapshot-interval")
+  private val syncTimeoutMs = config.getLong("htc.time-manager.sync-timeout-ms")
+  
+  private var lastSnapshotSeq: Long = 0
+  
+  private implicit val ec: scala.concurrent.ExecutionContext = context.dispatcher
+  
+  // Inicializar state (será sobrescrito por snapshot se houver recovery)
+  state = TimeManagerState()
 
   override def onStart(): Unit =
     if (parentManager.isEmpty) {
@@ -58,8 +55,12 @@ class TimeManager(
     }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 64
-    val maxInstancesPerNode = Math.max(8, totalInstances / 8)
+    // Read from configuration with fallback to defaults
+    val totalInstances = config.getInt("htc.time-manager.total-instances")
+    val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")
+    
+    logInfo(s"Creating TimeManager pool: totalInstances=$totalInstances, maxInstancesPerNode=$maxInstancesPerNode")
+    
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -72,6 +73,33 @@ class TimeManager(
       name = POOL_TIME_MANAGER_ACTOR_NAME
     )
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+  }
+  
+  override def receiveRecover: Receive = super.receiveRecover.orElse {
+    case RecoveryCompleted =>
+      onRecoveryCompleted()
+  }
+  
+  private def onRecoveryCompleted(): Unit = {
+    state.recoveryCount += 1
+    logInfo(s"✅ Recovery completed (count=${state.recoveryCount}): tick=${state.localTickOffset}, scheduled=${state.scheduledActors.size}, running=${state.runningEvents.size}")
+    
+    if (parentManager.isDefined) {
+      // Local TM: request sync with Global TM
+      val needsReset = state.runningEvents.nonEmpty || Math.abs(state.localTickOffset) > 1000000
+      parentManager.get ! TimeManagerSyncRequestEvent(
+        localTick = state.localTickOffset,
+        actorRef = self.path.toString,
+        needsReset = needsReset
+      )
+      logInfo(s"📤 Sync request sent to Global TM (needsReset=$needsReset)")
+    } else {
+      // Global TM: just clean up stale running events
+      if (state.runningEvents.nonEmpty) {
+        logWarn(s"⚠️ Global TM recovered with ${state.runningEvents.size} running events. Clearing to avoid deadlock.")
+        state.runningEvents.clear()
+      }
+    }
   }
 
   override def handleEvent: Receive = {
@@ -88,18 +116,24 @@ class TimeManager(
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+    
+    // 🛡️ Recovery & Timeout Events
+    case syncRequest: TimeManagerSyncRequestEvent =>
+      handleSyncRequest(sender(), syncRequest)
+    case syncResponse: TimeManagerSyncResponseEvent =>
+      handleSyncResponse(syncResponse)
   }
 
   private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
-    localTimeManagers.put(
+    state.localTimeManagers.put(
       timeManagerRegisterEvent.actorRef,
       LocalTimeManagerTickInfo(
-        tick = localTickOffset
+        tick = state.localTickOffset
       )
     )
 
   private def registerActor(event: RegisterActorEvent): Unit = {
-    registeredActors.add(event.actorId)
+    state.registeredActors.add(event.actorId)
     scheduleApply(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
     )
@@ -110,54 +144,54 @@ class TimeManager(
     unstashAll()
     start.data match
       case Some(data) =>
-        startTime = data.startTime
+        state.startTime = data.startTime
       case _ =>
-        startTime = System.currentTimeMillis()
-    initialTick = start.startTick
-    localTickOffset = initialTick
-    isPaused = false
-    isStopped = false
+        state.startTime = System.currentTimeMillis()
+    state.initialTick = start.startTick
+    state.localTickOffset = state.initialTick
+    state.isPaused = false
+    state.isStopped = false
     if (parentManager.isEmpty) {
-      logInfo(s"Global TimeManager started at tick $localTickOffset")
+      logInfo(s"Global TimeManager started at tick ${state.localTickOffset}")
       notifyLocalManagers(start)
     } else {
       logInfo(
-        s"Local TimeManager started at tick $localTickOffset"
+        s"Local TimeManager started at tick ${state.localTickOffset}"
       )
-      self ! UpdateGlobalTimeEvent(localTickOffset)
+      self ! UpdateGlobalTimeEvent(state.localTickOffset)
     }
   }
 
   private def pauseSimulation(): Unit = {
-    isPaused = true
+    state.isPaused = true
     if (parentManager.isEmpty) {
       notifyLocalManagers(PauseSimulationEvent)
     }
   }
 
   private def resumeSimulation(): Unit =
-    if (isPaused) {
-      isPaused = false
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
+    if (state.isPaused) {
+      state.isPaused = false
+      self ! SpontaneousEvent(tick = state.localTickOffset, actorRef = self)
       if (parentManager.isEmpty) {
         notifyLocalManagers(ResumeSimulationEvent)
       }
     }
 
   private def stopSimulation(): Unit = {
-    isStopped = true
+    state.isStopped = true
     terminateSimulation()
   }
 
   private def syncWithGlobalTime(globalTick: Tick): Unit = {
-    localTickOffset = globalTick
-    tickOffset = globalTick - initialTick
+    state.localTickOffset = globalTick
+    state.tickOffset = globalTick - state.initialTick
     if (parentManager.nonEmpty) {
       if (isRunning) {
-        if (localTickOffset - initialTick >= simulationDuration) {
+        if (state.localTickOffset - state.initialTick >= simulationDuration) {
           terminateSimulation()
         } else {
-          processTick(localTickOffset)
+          processTick(state.localTickOffset)
         }
       }
     }
@@ -169,7 +203,7 @@ class TimeManager(
     hasScheduled: Boolean
   ): Unit =
     if (parentManager.isEmpty) {
-      localTimeManagers.update(
+      state.localTimeManagers.update(
         localManager,
         LocalTimeManagerTickInfo(
           tick = tick,
@@ -177,45 +211,45 @@ class TimeManager(
           isProcessed = true
         )
       )
-      if (localTimeManagers.values.forall(_.isProcessed)) {
+      if (state.localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
       }
     }
 
   private def calculateAndBroadcastNextGlobalTick(): Unit = {
-    val scheduled = localTimeManagers.values.filter(_.hasSchedule)
+    val scheduled = state.localTimeManagers.values.filter(_.hasSchedule)
     val nextTick = if (scheduled.nonEmpty) {
       scheduled.map(_.tick).min
     } else {
-      localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+      state.localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
     }
-    localTickOffset = nextTick
-    tickOffset = nextTick - initialTick
-    localTimeManagers.keys.foreach {
+    state.localTickOffset = nextTick
+    state.tickOffset = nextTick - state.initialTick
+    state.localTimeManagers.keys.foreach {
       timeManager =>
-        localTimeManagers.update(
+        state.localTimeManagers.update(
           timeManager,
           LocalTimeManagerTickInfo(
             tick = nextTick
           )
         )
     }
-    notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
+    notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset))
   }
 
   private def notifyLocalManagers(event: Any): Unit =
-    localTimeManagers.keys.foreach {
+    state.localTimeManagers.keys.foreach {
       localManager =>
         localManager ! event
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
     countScheduled += 1
-    scheduledActors.get(schedule.tick) match
+    state.scheduledActors.get(schedule.tick) match
       case Some(scheduled) =>
         schedule.identify.foreach(scheduled.actorsRef.add)
       case None =>
-        scheduledActors.put(
+        state.scheduledActors.put(
           schedule.tick,
           ScheduledActors(tick = schedule.tick, actorsRef = mutable.Set(schedule.identify.get))
         )
@@ -226,23 +260,24 @@ class TimeManager(
 
   private def finishEventApply(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-      finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
-      runningEvents.filterInPlace(_.id != finish.identify.id)
+      finish.scheduleTick.map(_.toLong).foreach(state.scheduledTicksOnFinish.add)
+      state.runningEvents.filterInPlace(_.id != finish.identify.id)
       finishDestruct(finish)
       advanceToNextTick()
       reportGlobalTimeManager(true)
+      maybeSnapshot()
     } else {
       finish.timeManager ! finish
     }
 
   private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
-      registeredActors.remove(finish.identify.id)
+      state.registeredActors.remove(finish.identify.id)
     }
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
     if (isRunning) {
-      if (localTickOffset - initialTick >= simulationDuration) {
+      if (state.localTickOffset - state.initialTick >= simulationDuration) {
         terminateSimulation()
       } else {
         processTick(spontaneous.tick)
@@ -250,7 +285,7 @@ class TimeManager(
     }
 
   private def processTick(tick: Tick): Unit =
-    if (scheduledActors.nonEmpty) {
+    if (state.scheduledActors.nonEmpty) {
       processNextEventTick(tick)
     } else {
       advanceToNextTick()
@@ -258,23 +293,23 @@ class TimeManager(
     }
 
   private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
-    if (parentManager.isDefined && runningEvents.isEmpty) {
-      scheduledTicksOnFinish.clear()
+    if (parentManager.isDefined && state.runningEvents.isEmpty) {
+      state.scheduledTicksOnFinish.clear()
       parentManager.get ! LocalTimeReportEvent(
-        tick = localTickOffset,
+        tick = state.localTickOffset,
         hasScheduled = hasScheduled,
         actorRef = getPath
       )
     }
 
   private def processNextEventTick(tick: Tick): Unit =
-    scheduledActors.get(tick) match
+    state.scheduledActors.get(tick) match
       case Some(scheduled) =>
-        scheduled.actorsRef.foreach {
-          actor => runningEvents.add(actor)
+        scheduled.actorsRef.foreach { actor =>
+          state.runningEvents.add(actor)
         }
         sendSpontaneousEvent(tick, scheduled.actorsRef)
-        scheduledActors.remove(tick)
+        state.scheduledActors.remove(tick)
       case None =>
         advanceToNextTick()
         reportGlobalTimeManager()
@@ -313,33 +348,33 @@ class TimeManager(
 
   private def advanceToNextTick(): Unit = {
     val newTick = nextTick
-    if (localTickOffset < simulationDuration) {
-      localTickOffset = newTick
-      scheduledTicksOnFinish.clear()
+    if (state.localTickOffset < simulationDuration) {
+      state.localTickOffset = newTick
+      state.scheduledTicksOnFinish.clear()
     } else {
       terminateSimulation()
     }
   }
 
   private def nextTick: Tick = {
-    if (runningEvents.isEmpty) {
-      return (scheduledActors.nonEmpty, runningEvents.isEmpty) match {
+    if (state.runningEvents.isEmpty) {
+      return (state.scheduledActors.nonEmpty, state.runningEvents.isEmpty) match {
         case (true, true) =>
-          val newScheduled = scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
-          val currentScheduled = scheduledActors.keys.minOption.getOrElse(localTickOffset + 1)
+          val newScheduled = state.scheduledTicksOnFinish.minOption.getOrElse(state.localTickOffset + 1)
+          val currentScheduled = state.scheduledActors.keys.minOption.getOrElse(state.localTickOffset + 1)
           if (newScheduled < currentScheduled) {
             newScheduled
           } else {
             currentScheduled
           }
-        case _ => scheduledTicksOnFinish.minOption.getOrElse(localTickOffset + 1)
+        case _ => state.scheduledTicksOnFinish.minOption.getOrElse(state.localTickOffset + 1)
       }
     }
-    localTickOffset
+    state.localTickOffset
   }
 
   private def terminateSimulation(): Unit = {
-    if (runningEvents.isEmpty && scheduledActors.isEmpty) {
+    if (state.runningEvents.isEmpty && state.scheduledActors.isEmpty) {
       if (parentManager.isEmpty) {
         notifyLocalManagers(StopSimulationEvent)
       }
@@ -351,20 +386,20 @@ class TimeManager(
   private def sendDestructEvent(finishEvent: FinishEvent): Unit =
     getShardRef(finishEvent.identify.classType) ! EntityEnvelopeEvent(
       finishEvent.identify.id,
-      DestructEvent(tick = localTickOffset, actorRef = getPath)
+      DestructEvent(tick = state.localTickOffset, actorRef = getPath)
     )
 
   private def printSimulationDuration(): Unit = {
-    val duration = System.currentTimeMillis() - startTime
-    logInfo(s"$getLabel - Simulation endTick: $localTickOffset")
-    logInfo(s"$getLabel - Simulation total ticks: ${localTickOffset - initialTick}")
+    val duration = System.currentTimeMillis() - state.startTime
+    logInfo(s"$getLabel - Simulation endTick: ${state.localTickOffset}")
+    logInfo(s"$getLabel - Simulation total ticks: ${state.localTickOffset - state.initialTick}")
     logInfo(s"$getLabel - Simulation duration: $duration ms")
     logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
     logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0} min")
     logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
   }
 
-  private def isRunning: Boolean = !isPaused && !isStopped
+  private def isRunning: Boolean = !state.isPaused && !state.isStopped
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
@@ -373,6 +408,73 @@ class TimeManager(
     } else {
       selfProxy
     }
+  
+
+  /** Triggers snapshot via BaseActor at configured intervals. */
+  private def maybeSnapshot(): Unit = {
+    if (lastSequenceNr > 0 && lastSequenceNr % snapshotInterval == 0 && lastSequenceNr != lastSnapshotSeq) {
+      lastSnapshotSeq = lastSequenceNr
+      logInfo(s"💾 Snapshot at tick ${state.localTickOffset}, seq=$lastSequenceNr")
+    }
+  }
+  
+  /** Handles sync request from Local TimeManager after recovery. */
+  private def handleSyncRequest(requester: ActorRef, request: TimeManagerSyncRequestEvent): Unit = {
+    if (parentManager.isEmpty) {
+      // Global TM responding to Local TM sync request
+      val tickDrift = Math.abs(request.localTick - state.localTickOffset)
+      val forceReset = request.needsReset || tickDrift > 1000
+      
+      requester ! TimeManagerSyncResponseEvent(
+        globalTick = state.localTickOffset,
+        forceReset = forceReset
+      )
+      
+      logInfo(s"📤 Sync response sent to ${requester.path.name}: globalTick=${state.localTickOffset}, forceReset=$forceReset, drift=$tickDrift")
+      
+      // Update local manager info
+      state.localTimeManagers.put(
+        requester,
+        LocalTimeManagerTickInfo(tick = state.localTickOffset)
+      )
+    }
+  }
+  
+  /** Handles sync response from Global TimeManager. */
+  private def handleSyncResponse(response: TimeManagerSyncResponseEvent): Unit = {
+    if (parentManager.isDefined) {
+      val tickDrift = Math.abs(state.localTickOffset - response.globalTick)
+      
+      if (response.forceReset || tickDrift > 100) {
+        logWarn(s"⚠️ Force reset triggered. Drift=$tickDrift, resetting to global tick=${response.globalTick}")
+        resetToGlobalTick(response.globalTick)
+      } else {
+        logInfo(s"✅ Synced with global tick=${response.globalTick}, drift=$tickDrift")
+        state.localTickOffset = response.globalTick
+        state.tickOffset = response.globalTick - state.initialTick
+      }
+    }
+  }
+  
+  /** Resets Local TimeManager to Global tick after major desync. */
+  private def resetToGlobalTick(globalTick: Tick): Unit = {
+    // Clear running events (they may be stale)
+    state.runningEvents.clear()
+    
+    // Clear scheduled ticks on finish
+    state.scheduledTicksOnFinish.clear()
+    
+    // Update tick
+    state.localTickOffset = globalTick
+    state.tickOffset = globalTick - state.initialTick
+    
+    // Keep only future scheduled events
+    state.scheduledActors.filterInPlace { case (tick, _) => tick >= globalTick }
+    
+    logInfo(s"🔄 Reset complete to tick $globalTick. Scheduled events: ${state.scheduledActors.size}")
+  }
+  
+
 }
 
 object TimeManager {

@@ -10,7 +10,7 @@ sbt clean
 echo "📦 Step 2: Compiling and generating JAR..."
 sbt assembly
 
-JAR_FILE="target/scala-${SCALA_VERSION}/${PROJECT_NAME}-1.5.0.jar"
+JAR_FILE="target/scala-${SCALA_VERSION}/${PROJECT_NAME}-1.7.2.jar"
 
 if [[ ! -f "$JAR_FILE" ]]; then
     echo "❌ Error: JAR not found at $JAR_FILE"

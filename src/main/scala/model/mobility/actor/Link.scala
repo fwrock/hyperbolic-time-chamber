@@ -91,6 +91,20 @@ class Link(
   }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    // 🛡️ PROTECTION: If state is null, actor wasn't properly initialized
+    if (state == null) {
+      logError(s"⚠️ CRITICAL: Link state is NULL in handleLeaveLink! Actor: ${data.actorId}. This should never happen after snapshot cleanup.")
+      // Send dummy response to avoid blocking the caller
+      sendMessageTo(
+        entityId = event.actorRefId,
+        shardId = event.shardRefId,
+        data = LinkInfoData(linkCapacity = Int.MaxValue, linkFreeSpeed = 50, linkLanes = 1),
+        eventType = EventTypeEnum.ReceiveLeaveLinkInfo.toString,
+        actorType = LoadBalancedDistributed
+      )
+      return
+    }
+    
     state.registered.filterInPlace(_.actorId != data.actorId)
     val dataLink = LinkInfoData(
       linkLength = state.length,

@@ -49,7 +49,9 @@ abstract class BaseActor[T <: BaseState](
 
   protected val config = ConfigFactory.load()
   private var isInitialized: Boolean = false
-  private val snapShotInterval = 1000
+  // Snapshot interval: save state every N events (local filesystem, not Cassandra)
+  // Higher values = better performance, lower values = faster recovery
+  private val snapShotInterval = 10000  // Increased from 1000 for better performance
 
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
@@ -269,6 +271,16 @@ abstract class BaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
+    // 🛡️ PROTECTION: Ignore old ticks after recovery
+    // 🛡️ PROTECTION: Reject old ticks (time going backwards = desync problem)
+    if (event.tick < currentTick) {
+      logWarn(s"⚠️ Received OLD tick ${event.tick}, current is $currentTick. Ignoring (likely after TimeManager recovery).")
+      // Respond immediately to unblock TimeManager
+      onFinishSpontaneous()
+      return
+    }
+    
+    // Tick à frente é NORMAL - ator estava dormindo/desagendado e acordou depois
     currentTick = event.tick
     currentTimeManager = event.actorRef
     try actSpontaneous(event)
@@ -341,8 +353,13 @@ abstract class BaseActor[T <: BaseState](
     persist(event) {
       e =>
         context.system.eventStream.publish(e)
-        if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-          saveSnapshot(state)
+        // Snapshots desabilitados para atores de sharding (LoadBalancedDistributed)
+        // Eles dependem de InitializeEvent no journal (inmem) e snapshot-after=0
+        // Snapshots habilitados apenas para managers (PoolDistributed, Singleton)
+        if (properties != null && properties.actorType != LoadBalancedDistributed) {
+          if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+            saveSnapshot(state)
+        }
     }
 
   def receiveCommand: Receive = receive
@@ -350,7 +367,7 @@ abstract class BaseActor[T <: BaseState](
   def receiveRecover: Receive = {
     case snapshot: SnapshotOffer =>
       state = snapshot.snapshot.asInstanceOf[T]
-      logInfo(s"Recovered state: $state")
+      // Log recovery apenas para debug, removido para evitar poluição de logs
     case _ => receive
   }
 

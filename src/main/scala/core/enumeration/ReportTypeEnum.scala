@@ -1,10 +1,11 @@
 package org.interscity.htc
 package core.enumeration
 
-import org.interscity.htc.core.actor.manager.report.{ CassandraReportData, CsvReportData, JsonReportData, ReportData }
+import org.interscity.htc.core.actor.manager.report.{ CsvReportData, JsonReportData, ReportData }
 
 enum ReportTypeEnum(val clazz: Class[? <: ReportData]) {
   case csv extends ReportTypeEnum(classOf[CsvReportData])
   case json extends ReportTypeEnum(classOf[JsonReportData])
-  case cassandra extends ReportTypeEnum(classOf[CassandraReportData])
+  // DEPRECATED: Cassandra support removed - use JSON or CSV instead
+  // CassandraReportData code moved to .deprecated file
 }

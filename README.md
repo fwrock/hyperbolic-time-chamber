@@ -122,7 +122,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 - 🏗️ **Actor-based architecture** with horizontal scaling
 - ⚡ **High-performance** discrete event simulation
 - 🚗 **Built-in mesoscopic model** for realistic traffic simulation
-- 🗄️ **Time-series data storage** with Cassandra integration
+- 📁 **File-based reporting** with JSON and CSV output
 - 🔧 **Flexible configuration** and scenario management
 - 📊 **Comprehensive reporting** and analysis capabilities
 - 🐳 **Docker deployment** for easy setup and scaling
