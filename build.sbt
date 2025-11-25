@@ -1,7 +1,7 @@
 import sbt.Keys.libraryDependencies
 import scala.collection.Seq
 
-ThisBuild / version := "1.4.0"
+ThisBuild / version := "1.9.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
@@ -26,7 +26,6 @@ val protobufVersion = "4.32.0"
 val pekkoProtobuf = "1.0.3"
 
 // Connectors
-val cassandraConnectorsVersion = "1.1.0"
 val kafkaConnectorsVersion = "1.1.0"
 val jedisVersion = "6.1.0"
 
@@ -34,7 +33,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    assembly / assemblyJarName := "hyperbolic-time-chamber-1.5.0.jar",
+    assembly / assemblyJarName := "hyperbolic-time-chamber-1.9.0.jar",
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
       case PathList("META-INF", _*) => MergeStrategy.discard
@@ -64,8 +63,6 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-connectors-kafka" % kafkaConnectorsVersion,
 
       //Databases
-      "org.apache.pekko" %% "pekko-persistence-cassandra" % pekkoCassandraPersistenceVersion,
-      "org.apache.pekko" %% "pekko-connectors-cassandra" % cassandraConnectorsVersion,
       "redis.clients" % "jedis" % jedisVersion,
 
       // Jackson

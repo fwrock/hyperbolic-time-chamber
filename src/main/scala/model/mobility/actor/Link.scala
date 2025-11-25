@@ -59,7 +59,7 @@ class Link(
       LinkInfoData(
         linkCapacity = Int.MaxValue,
         linkFreeSpeed = 50,
-        linkLanes = 1,
+        linkLanes = 1
       )
     } else {
       LinkInfoData(

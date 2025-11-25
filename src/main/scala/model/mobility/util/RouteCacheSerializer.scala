@@ -2,9 +2,9 @@ package org.interscity.htc
 package model.mobility.util
 
 import com.esotericsoftware.kryo.kryo5.Kryo
-import com.esotericsoftware.kryo.kryo5.io.{Input, Output}
+import com.esotericsoftware.kryo.kryo5.io.{ Input, Output }
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.{ ByteArrayInputStream, ByteArrayOutputStream }
 import scala.collection.mutable
 import scala.util.Try
 
@@ -34,12 +34,12 @@ object RouteCacheSerializer {
     output.getBuffer
   }
 
-  def deserialize(bytes: Array[Byte]): Option[Option[(Double, List[(String, String)])]] = {
+  def deserialize(bytes: Array[Byte]): Option[Option[(Double, List[(String, String)])]] =
     Try {
       val input = new Input(new ByteArrayInputStream(bytes))
-      val data = kryo.get().readClassAndObject(input).asInstanceOf[Option[(Double, List[(String, String)])]]
+      val data =
+        kryo.get().readClassAndObject(input).asInstanceOf[Option[(Double, List[(String, String)])]]
       input.close()
       Some(data)
     }.getOrElse(None) // Retorna None se a desserialização falhar
-  }
 }

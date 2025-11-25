@@ -17,7 +17,7 @@ object SpeedUtil {
   }
 
   /*
-  *link_density_speed(Id, Length, Capacity, NumberCars, Freespeed, _Lanes) ->
+   *link_density_speed(Id, Length, Capacity, NumberCars, Freespeed, _Lanes) ->
 
 	Alpha = 1,
 	Beta = 1,
@@ -28,5 +28,5 @@ object SpeedUtil {
 
 	Time = (Length / Speed) + 1,
 	{Id, round(Time), round(Length)}.
-  * */
+   * */
 }
