@@ -63,3 +63,20 @@ message TimeManagerRegisterEvent {
 message UpdateGlobalTimeEvent {
   uint64 tick = 1;
 }
+
+message TimeManagerSyncRequestEvent {
+  uint64 localTick = 1;
+  string actorRef = 2;
+  bool needsReset = 3;
+}
+
+message TimeManagerSyncResponseEvent {
+  uint64 globalTick = 1;
+  bool forceReset = 2;
+}
+
+message ActorTimeoutEvent {
+  uint64 tick = 1;
+  Identify actorIdentity = 2;
+  uint64 timeoutMs = 3;
+}

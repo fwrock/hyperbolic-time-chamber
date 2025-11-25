@@ -6,15 +6,15 @@ import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData}
+import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil}
+import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil }
 
 import scala.collection.mutable
 
@@ -29,7 +29,7 @@ abstract class Movable[T <: MovableState](
     if (state.movableStatus == Finished) {
       return
     }
-    try {
+    try
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.movableBestRoute = Some(pathQueue)
@@ -43,11 +43,13 @@ abstract class Movable[T <: MovableState](
             onFinishSpontaneous()
           }
         case None =>
-          logError(s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}.")
+          logError(
+            s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}."
+          )
           state.movableStatus = Finished
           onFinishSpontaneous()
       }
-    } catch {
+    catch {
       case e: Exception =>
         logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
         state.movableStatus = Finished
@@ -102,7 +104,7 @@ abstract class Movable[T <: MovableState](
     onFinishSpontaneous()
   }
 
-  protected def enterLink(): Unit = {
+  protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
@@ -140,7 +142,6 @@ abstract class Movable[T <: MovableState](
             onFinishSpontaneous()
         }
     }
-  }
 
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {

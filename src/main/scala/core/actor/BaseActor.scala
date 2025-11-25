@@ -56,12 +56,12 @@ abstract class BaseActor[T <: BaseState](
   protected var currentTick: Tick = 0
 
   protected var entityId: String =
-    if (properties != null) properties.entityId 
+    if (properties != null) properties.entityId
     else {
       // 🎲 Usar UUID determinístico se RandomSeedManager estiver disponível
-      try {
+      try
         core.actor.manager.RandomSeedManager.deterministicUUID()
-      } catch {
+      catch {
         case _: Exception => UUID.randomUUID().toString // Fallback
       }
     }
@@ -269,6 +269,13 @@ abstract class BaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
+    if (event.tick < currentTick) {
+      logWarn(
+        s"Received OLD tick ${event.tick}, current is $currentTick. Ignoring (likely after TimeManager recovery)."
+      )
+      onFinishSpontaneous()
+      return
+    }
     currentTick = event.tick
     currentTimeManager = event.actorRef
     try actSpontaneous(event)
@@ -380,9 +387,8 @@ abstract class BaseActor[T <: BaseState](
   /** Called when the actor is finished. This method is called when the actor finishes processing
     * messages. It calls the onDestruct method.
     */
-  protected def selfDestruct(): Unit = {
+  protected def selfDestruct(): Unit =
     context.stop(self)
-  }
 
   /** Finishes the actor. This method is called when the actor finishes processing messages. It
     * calls the onDestruct method.

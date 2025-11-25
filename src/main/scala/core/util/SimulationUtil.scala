@@ -39,11 +39,12 @@ object SimulationUtil {
       .foreach {
         source =>
           // 🎲 Usar UUID determinístico para shard initiator
-          val initiatorId = try {
-            s"${core.actor.manager.RandomSeedManager.deterministicUUID()}-shard-initiator"
-          } catch {
-            case _: Exception => s"${UUID.randomUUID().toString}-shard-initiator"
-          }
+          val initiatorId =
+            try
+              s"${core.actor.manager.RandomSeedManager.deterministicUUID()}-shard-initiator"
+            catch {
+              case _: Exception => s"${UUID.randomUUID().toString}-shard-initiator"
+            }
           val shardRegion = createShardRegion(
             system,
             source.classType,

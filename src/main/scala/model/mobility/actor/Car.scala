@@ -1,18 +1,18 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, SpeedUtil}
+import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil, SpeedUtil }
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
@@ -65,7 +65,7 @@ class Car(
             label = "journey_started"
           )
           state.eventCount += 1
-          
+
           // Reporta detalhes completos da rota planejada
           report(
             data = Map(
@@ -82,7 +82,7 @@ class Car(
             label = "route_planned"
           )
           state.eventCount += 1
-          
+
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
@@ -104,7 +104,7 @@ class Car(
               label = "journey_completed"
             )
             state.eventCount += 1
-            
+
             // Reporta estatísticas finais de eventos
             report(
               data = Map(
@@ -115,14 +115,16 @@ class Car(
               ),
               label = "vehicle_event_count"
             )
-            
+
             // Não chamar onFinish aqui, implementar diretamente
             state.movableStatus = Finished
             onFinishSpontaneous()
           }
         case None =>
-          logError(s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}.")
-          
+          logError(
+            s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}."
+          )
+
           // Reporta journey_completed para falha de rota
           report(
             data = Map(
@@ -140,7 +142,7 @@ class Car(
             label = "journey_completed"
           )
           state.eventCount += 1
-          
+
           // Reporta estatísticas finais de eventos
           report(
             data = Map(
@@ -151,7 +153,7 @@ class Car(
             ),
             label = "vehicle_event_count"
           )
-          
+
           // Não chamar onFinish aqui, implementar diretamente
           state.movableStatus = Finished
           onFinishSpontaneous()
@@ -159,7 +161,7 @@ class Car(
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
-        
+
         // Reporta journey_completed para exceção
         report(
           data = Map(
@@ -178,7 +180,7 @@ class Car(
           label = "journey_completed"
         )
         state.eventCount += 1
-        
+
         // Reporta estatísticas finais de eventos
         report(
           data = Map(
@@ -189,14 +191,14 @@ class Car(
           ),
           label = "vehicle_event_count"
         )
-        
+
         // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
     }
   }
 
-  private def requestSignalState(): Unit = {
+  private def requestSignalState(): Unit =
     if (
       state.destination == state.currentPath
         .map(
@@ -223,7 +225,7 @@ class Car(
           label = "journey_completed"
         )
         state.eventCount += 1
-        
+
         // Reporta estatísticas finais de eventos
         report(
           data = Map(
@@ -234,13 +236,13 @@ class Car(
           ),
           label = "vehicle_event_count"
         )
-        
+
         // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
-        
+
         // Reporta journey_completed para fim sem nó atual
         report(
           data = Map(
@@ -258,7 +260,7 @@ class Car(
           label = "journey_completed"
         )
         state.eventCount += 1
-        
+
         // Reporta estatísticas finais de eventos
         report(
           data = Map(
@@ -269,7 +271,7 @@ class Car(
           ),
           label = "vehicle_event_count"
         )
-        
+
         onFinishSpontaneous()
       }
       selfDestruct()
@@ -293,7 +295,6 @@ class Car(
             case None =>
         case null =>
     }
-  }
 
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
     if (data.phase == Red) {
@@ -325,7 +326,7 @@ class Car(
       label = "journey_completed"
     )
     state.eventCount += 1
-    
+
     // Reporta estatísticas finais de eventos para este veículo (como no outro simulador)
     report(
       data = Map(
@@ -336,7 +337,7 @@ class Car(
       ),
       label = "vehicle_event_count"
     )
-    
+
     // Implementar lógica da classe pai sem chamar super
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
@@ -344,7 +345,7 @@ class Car(
     } else {
       state.movableStatus = Finished
     }
-    
+
     // Finalizar o ator
     onFinishSpontaneous()
   }
@@ -367,7 +368,7 @@ class Car(
       label = "leave_link"
     )
     state.eventCount += 1
-    
+
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -403,9 +404,11 @@ class Car(
       label = "enter_link"
     )
     state.eventCount += 1
-    
+
     if (time.isNaN || time.isInfinite || time < 0) {
-      logError(s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}")
+      logError(
+        s"Invalid time calculated for link ${data} with length ${data.linkLength} and velocity $speed, current tick $currentTick. ${(currentTick + Math.ceil(time).toLong)}"
+      )
     }
     onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
   }

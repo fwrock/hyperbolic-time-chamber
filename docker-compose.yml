@@ -12,35 +12,10 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
-  cassandra:
-    image: cassandra:latest
-    container_name: htc-cassandra-db
-    ports:
-      - "9042:9042"
-    networks:
-      - htc-network
-    environment:
-      - CASSANDRA_DC=datacenter1
-      - CASSANDRA_RACK=rack1
-      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
-      - CASSANDRA_SEEDS=cassandra
-    volumes:
-      - cassandra_data:/var/lib/cassandra
-      - ./cassandra-init:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces'"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
   node1:
     build: .
     container_name: node_1
     hostname: node1
-    depends_on:
-      cassandra:
-        condition: service_healthy
     networks:
       - htc-network
     environment:

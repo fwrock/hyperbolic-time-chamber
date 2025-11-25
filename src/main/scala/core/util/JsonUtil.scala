@@ -69,17 +69,18 @@ object JsonUtil {
 
   def jsonToObject[T](json: String, clazz: Class[T]): T =
     mapper.readValue(json, clazz)
-    
-  def writeJsonBytes[T](data: T): Array[Byte] = {
+
+  def writeJsonBytes[T](data: T): Array[Byte] =
     mapper.writeValueAsBytes(data)
-  }
 
   def fromJsonBytes[T](data: Array[Byte])(implicit m: Manifest[T]): T = {
     val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
     mapper.readValue[T](data, javaType)
   }
 
-  def fromJsonListStream[A](jsonStream: InputStream)(implicit elementManifest: Manifest[A]): List[A] = {
+  def fromJsonListStream[A](
+    jsonStream: InputStream
+  )(implicit elementManifest: Manifest[A]): List[A] = {
     val typeFactory = TypeFactory.defaultInstance()
 
     // 1. Construir o JavaType para java.util.List<A>
@@ -99,25 +100,39 @@ object JsonUtil {
   // fromJsonStream genérico (com a mesma ressalva para construção de JavaType para genéricos complexos)
   def fromJsonStream[T](jsonStream: InputStream)(implicit m: Manifest[T]): T = {
     val typeFactory = TypeFactory.defaultInstance()
-    val javaType: JavaType = if (m.runtimeClass == classOf[List[_]] && m.typeArguments.length == 1) {
-      // Para List[SpecificType], vamos usar a abordagem de desserializar para java.util.List e converter
-      // (se T é List[SpecificType], m.typeArguments.head.runtimeClass é SpecificType.class)
-      typeFactory.constructCollectionType(classOf[java.util.List[_]], m.typeArguments.head.runtimeClass)
-    } else if (m.runtimeClass == classOf[Seq[_]] && m.typeArguments.length == 1) {
-      // Similar para Seq[SpecificType]
-      typeFactory.constructCollectionType(classOf[java.util.List[_]], m.typeArguments.head.runtimeClass)
-    } else if (m.runtimeClass.isArray && m.typeArguments.nonEmpty) {
-      typeFactory.constructArrayType(m.typeArguments.head.runtimeClass)
-    }
-    else {
-      typeFactory.constructType(m.runtimeClass)
-    }
+    val javaType: JavaType =
+      if (m.runtimeClass == classOf[List[_]] && m.typeArguments.length == 1) {
+        // Para List[SpecificType], vamos usar a abordagem de desserializar para java.util.List e converter
+        // (se T é List[SpecificType], m.typeArguments.head.runtimeClass é SpecificType.class)
+        typeFactory.constructCollectionType(
+          classOf[java.util.List[_]],
+          m.typeArguments.head.runtimeClass
+        )
+      } else if (m.runtimeClass == classOf[Seq[_]] && m.typeArguments.length == 1) {
+        // Similar para Seq[SpecificType]
+        typeFactory.constructCollectionType(
+          classOf[java.util.List[_]],
+          m.typeArguments.head.runtimeClass
+        )
+      } else if (m.runtimeClass.isArray && m.typeArguments.nonEmpty) {
+        typeFactory.constructArrayType(m.typeArguments.head.runtimeClass)
+      } else {
+        typeFactory.constructType(m.runtimeClass)
+      }
 
     val result = mapper.readValue(jsonStream, javaType)
 
     // Se o tipo T original era um Scala List/Seq e desserializamos para java.util.List, convertemos agora.
-    if ((m.runtimeClass == classOf[List[_]] || m.runtimeClass == classOf[Seq[_]]) && m.typeArguments.length == 1 && result.isInstanceOf[java.util.List[_]]) {
-      result.asInstanceOf[java.util.List[Any]].asScala.toList.asInstanceOf[T] // Cuidado com 'Any' aqui, idealmente o tipo do elemento seria usado
+    if (
+      (m.runtimeClass == classOf[List[_]] || m.runtimeClass == classOf[
+        Seq[_]
+      ]) && m.typeArguments.length == 1 && result.isInstanceOf[java.util.List[_]]
+    ) {
+      result
+        .asInstanceOf[java.util.List[Any]]
+        .asScala
+        .toList
+        .asInstanceOf[T] // Cuidado com 'Any' aqui, idealmente o tipo do elemento seria usado
     } else {
       result.asInstanceOf[T]
     }
