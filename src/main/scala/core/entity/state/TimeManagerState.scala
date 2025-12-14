@@ -28,5 +28,6 @@ case class TimeManagerState(
   runningEvents: mutable.Set[Identify] = mutable.Set[Identify](),
   var timeManagersPool: ActorRef = null,
   var countScheduled: Long = 0,
+  var countDestruction: Long = 0,
   localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
 ) extends BaseState(startTick = 0)

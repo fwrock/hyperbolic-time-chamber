@@ -75,8 +75,16 @@ message TimeManagerSyncResponseEvent {
   bool forceReset = 2;
 }
 
+message TimeManagerDelaySyncEvent {
+  uint64 tick = 1;
+}
+
 message ActorTimeoutEvent {
   uint64 tick = 1;
   Identify actorIdentity = 2;
   uint64 timeoutMs = 3;
+}
+
+message ActorDestructionLotEvent {
+  uint64 amount = 1;
 }

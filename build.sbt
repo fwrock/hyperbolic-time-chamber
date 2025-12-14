@@ -1,7 +1,7 @@
 import sbt.Keys.libraryDependencies
 import scala.collection.Seq
 
-ThisBuild / version := "1.9.0"
+ThisBuild / version := "1.12.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
@@ -27,13 +27,14 @@ val pekkoProtobuf = "1.0.3"
 
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "6.1.0"
+val jedisVersion = "7.1.0"
+val levelDBVersion = "1.8"
 
 lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    assembly / assemblyJarName := "hyperbolic-time-chamber-1.9.0.jar",
+    assembly / assemblyJarName := "hyperbolic-time-chamber-1.12.0.jar",
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
       case PathList("META-INF", _*) => MergeStrategy.discard
@@ -64,6 +65,7 @@ lazy val root = (project in file("."))
 
       //Databases
       "redis.clients" % "jedis" % jedisVersion,
+      "org.fusesource.leveldbjni" % "leveldbjni-all" % levelDBVersion,
 
       // Jackson
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
@@ -88,7 +90,7 @@ lazy val root = (project in file("."))
 
       // Faker
       "com.github.javafaker" % "javafaker" % "1.0.2",
-      "com.typesafe" % "config" % "1.4.4",
+      "com.typesafe" % "config" % "1.4.5",
 
       // Test
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
