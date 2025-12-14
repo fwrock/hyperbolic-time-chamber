@@ -97,7 +97,7 @@ class JsonReportData(
     mkdir(directory)
 
     try {
-      val writer = new BufferedWriter(new FileWriter(filePath, true))
+//      val writer = new BufferedWriter(new FileWriter(filePath, true))
       buffer.foreach {
         report =>
           val jsonData = Map(
@@ -107,10 +107,10 @@ class JsonReportData(
             "event_type" -> report.label,
             "data" -> report.data
           )
-          writer.write(JsonUtil.toJson(jsonData))
-          writer.newLine()
+//          writer.write(JsonUtil.toJson(jsonData))
+//          writer.newLine()
       }
-      writer.close()
+//      writer.close()
       logInfo(s"Flushed ${buffer.size} events to $filePath")
       buffer.clear()
     } catch {

@@ -12,7 +12,7 @@ import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSet
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ActorDestructionLotEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerDelaySyncEvent, UpdateGlobalTimeEvent}
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.{ManagerConstantsUtil, StringUtil}
@@ -76,6 +76,12 @@ class TimeManager(
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+    case timeManagerDelaySyncEvent: TimeManagerDelaySyncEvent =>
+      if (parentManager.isEmpty) {
+        calculateAndBroadcastNextGlobalTick()
+      }
+    case actorDestructionLotEvent: ActorDestructionLotEvent =>
+      onActorDestructionLot(actorDestructionLotEvent)
   }
 
   private def registerTimeManager(timeManagerRegisterEvent: TimeManagerRegisterEvent): Unit =
@@ -91,6 +97,11 @@ class TimeManager(
     scheduleApply(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
     )
+  }
+
+  private def onActorDestructionLot (event: ActorDestructionLotEvent): Unit = {
+    state.countDestruction += event.amount
+    logInfo(s"Total destroyed actors: ${state.countDestruction}")
   }
 
   private def startSimulation(start: StartSimulationTimeEvent): Unit = {
@@ -226,6 +237,11 @@ class TimeManager(
   private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
       state.registeredActors.remove(finish.identify.id)
+      state.countDestruction += 1
+      if (state.countDestruction % 1000 == 0) {
+        reportDestroyedGlobalTimeManager()
+      }
+      sendDestructEvent(finish)
     }
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
@@ -252,6 +268,13 @@ class TimeManager(
         tick = state.localTickOffset,
         hasScheduled = hasScheduled,
         actorRef = getPath
+      )
+    }
+
+  private def reportDestroyedGlobalTimeManager(): Unit =
+    if (parentManager.isDefined) {
+      parentManager.get ! ActorDestructionLotEvent(
+        amount = state.countDestruction
       )
     }
 
