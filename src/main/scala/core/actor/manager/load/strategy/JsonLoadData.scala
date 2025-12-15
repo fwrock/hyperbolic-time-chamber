@@ -66,17 +66,14 @@ class JsonLoadData(private val properties: Properties)
     this.sourceId = source.id
     this.sourceFilePath = source.dataSource.info("path").asInstanceOf[String]
 
-    // Auto-envia mensagem para iniciar o processo de forma limpa
     self ! StartLoadingFile
   }
 
-  // 2. Abertura do Arquivo (IO Assíncrono)
   private def openFileAndStart(): Unit = {
     logInfo(s"Abrindo arquivo: $sourceFilePath")
 
     Future {
       val is = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
-      // Cria o parser mas não lê os objetos ainda
       val (parser, iter) = JsonStreamingUtil.createParser(is)
       (is, iter)
     }.onComplete {
@@ -93,7 +90,6 @@ class JsonLoadData(private val properties: Properties)
     }
   }
 
-  // 3. Leitura Assíncrona (O Coração da Solução)
   private def readNextChunkAsync(): Unit = {
     Future {
       this.synchronized {
@@ -143,28 +139,22 @@ class JsonLoadData(private val properties: Properties)
       creatorPoolRef ! CreateActorsEvent(id = batchId, actors = poolDistributed, actorRef = self)
     }
 
-    // Se a lista veio vazia ou tudo era null (edge case), pede mais.
-    // Senão, espera o Ack (Backpressure).
     if (activeBatches.isEmpty) {
       self ! ProcessNextChunk
     }
   }
 
-  // 5. Backpressure (Controle de Fluxo)
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     activeBatches.remove(event.batchId)
 
-    // Só lê do disco se o cluster terminou de digerir o pedaço anterior
     if (activeBatches.isEmpty) {
       self ! ProcessNextChunk
     }
   }
 
-  // 6. Limpeza
   private def finishLoading(): Unit = {
     logInfo(s"Fim do arquivo. Total: $totalLoadedActors")
 
-    // Fecha o arquivo com segurança
     if (currentInputStream != null) {
       try currentInputStream.close() catch { case _: Exception => }
       currentInputStream = null

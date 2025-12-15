@@ -6,9 +6,11 @@ import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ForwardRoute, RequestEnterLink, EnterLinkConfirm}
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
 import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
+import model.mobility.entity.event.data.vehicle.{RequestEnterLinkData, EnterLinkConfirmData}
+import model.mobility.util.SpeedUtil
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -46,13 +48,72 @@ class Link(
       EventTypeEnum.RequestRoute.toString
     )
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit =
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    // Only log important events at INFO level
+    if (event.eventType.contains("RequestEnterLink")) {
+      logDebug(s"Link ${getEntityId} received event: ${event.eventType} with data type: ${event.data.getClass.getSimpleName}")
+    }
+    
     event.data match {
-      case d: EnterLinkData => handleEnterLink(event, d)
+      case d: RequestEnterLinkData => handleRequestEnterLink(event, d)  // Event-driven
+      case d: EnterLinkData => handleEnterLink(event, d)  // Legacy tick-driven
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
-        logWarn("Event not handled")
+        logWarn(s"Event not handled: ${event.eventType}")
     }
+  }
+  
+  /** Event-driven: Calculate travel time and confirm entry with prediction */
+  private def handleRequestEnterLink(event: ActorInteractionEvent, data: RequestEnterLinkData): Unit = {
+    val vehicle = event.toIdentity
+    
+    logDebug(s"Link ${getEntityId} processing RequestEnterLink from ${vehicle.id}")
+    
+    // Calculate speed based on current occupancy (mesoscopic model)
+    val currentSpeed = SpeedUtil.linkDensitySpeed(
+      length = state.length,
+      capacity = state.capacity,
+      numberOfCars = state.registered.size,
+      freeSpeed = state.freeSpeed,
+      lanes = state.lanes
+    )
+    
+    // Calculate travel time in ticks (assuming 1 tick = 1 second)
+    // travelTime = distance / speed (convert km/h to m/s)
+    val speedMs = currentSpeed / 3.6  // km/h to m/s
+    val travelTimeSeconds = if (speedMs > 0) state.length / speedMs else Double.MaxValue
+    val travelTimeTicks = Math.max(1L, travelTimeSeconds.toLong)
+    
+    logDebug(s"Link ${getEntityId}: cars=${state.registered.size}, speed=$currentSpeed km/h, travelTime=$travelTimeTicks ticks")
+    
+    // Register vehicle with expected leave time
+    state.registered.add(
+      LinkRegister(
+        actorId = vehicle.id,
+        shardId = event.shardRefId,
+        actorType = org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Car,
+        actorSize = 1.0,  // Default size
+        actorCreationType = CreationTypeEnum.LoadBalancedDistributed
+      )
+    )
+    
+    // Get signal prediction if signal exists
+    val signalPrediction = None  // TODO: Request from traffic signal
+    
+    // Confirm entry with calculated travel time
+    sendMessageTo(
+      vehicle.id,
+      vehicle.classType,
+      data = EnterLinkConfirmData(
+        linkId = getEntityId,
+        entryTick = data.entryTick,
+        baseTravelTime = travelTimeTicks,
+        destinationNode = data.destinationNode,
+        signalState = signalPrediction
+      ),
+      eventType = EventTypeEnum.EnterLinkConfirm.toString
+    )
+  }
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     val dataLink = if (state == null) {
