@@ -13,7 +13,7 @@ import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ActorDestructionLotEvent, DestructEvent, LocalTimeReportEvent, PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent, TimeManagerDelaySyncEvent, UpdateGlobalTimeEvent}
-import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
+import org.interscity.htc.core.entity.event.control.execution.{TimeManagerRegisterEvent, UpdateGlobalTimeWindow, LocalTimeWindowReport}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.{ManagerConstantsUtil, StringUtil}
 import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
@@ -32,6 +32,30 @@ class TimeManager(
     ) {
 
   state = TimeManagerState()
+  
+  // Load lookahead configuration
+  private val lookaheadWindow: Tick = try {
+    config.getInt("htc.time-manager.lookahead-window")
+  } catch {
+    case _: Exception => 1 // Default to conservative (no lookahead)
+  }
+  state.lookaheadWindow = lookaheadWindow
+  
+  // Load metrics configuration
+  private val metricsLogInterval: Tick = try {
+    config.getInt("htc.time-manager.metrics-log-interval")
+  } catch {
+    case _: Exception => 500 // Default: log every 500 ticks
+  }
+  
+  // Load window configuration
+  private val windowSize: Tick = try {
+    config.getInt("htc.time-manager.window-size")
+  } catch {
+    case _: Exception => 1 // Default: no window (tick-by-tick)
+  }
+  state.windowSize = windowSize
+  state.windowExecutionEnabled = windowSize > 1
 
   private var selfProxy: ActorRef = null
 
@@ -47,6 +71,12 @@ class TimeManager(
     val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")
 
     logInfo(s"Creating TimeManager pool: totalInstances=$totalInstances, maxInstancesPerNode=$maxInstancesPerNode")
+    logInfo(s"Lookahead optimization: window=${state.lookaheadWindow} ticks")
+    if (state.windowExecutionEnabled) {
+      logInfo(s"Window-based execution: windowSize=${state.windowSize} ticks (Strategy 2 - reduces barriers by ${state.windowSize}x)")
+    } else {
+      logInfo(s"Window-based execution: DISABLED (using tick-by-tick synchronization)")
+    }
 
     state.timeManagersPool = context.actorOf(
       ClusterRouterPool(
@@ -72,10 +102,13 @@ class TimeManager(
     case ResumeSimulationEvent           => resumeSimulation()
     case StopSimulationEvent             => stopSimulation()
     case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
+    case w: UpdateGlobalTimeWindow       => syncWithGlobalTimeWindow(w.windowStart, w.windowEnd)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+    case windowReport: LocalTimeWindowReport =>
+      handleLocalTimeWindowReport(sender(), windowReport.windowEnd, windowReport.hasScheduled)
     case timeManagerDelaySyncEvent: TimeManagerDelaySyncEvent =>
       if (parentManager.isEmpty) {
         calculateAndBroadcastNextGlobalTick()
@@ -116,9 +149,24 @@ class TimeManager(
     state.localTickOffset = state.initialTick
     state.isPaused = false
     state.isStopped = false
+    // Initialize window state
+    if (state.windowExecutionEnabled) {
+      state.currentWindowStart = state.initialTick
+      state.currentWindowEnd = Math.min(state.initialTick + state.windowSize, simulationDuration)
+    }
+    // Initialize metrics tracking
+    val now = System.currentTimeMillis()
+    state.simulationStartWallTime = now
+    state.lastMetricsTick = state.initialTick
+    state.lastMetricsTime = now
+    state.ticksProcessedSinceLastMetric = 0
     if (parentManager.isEmpty) {
       logInfo(s"Global TimeManager started at tick ${state.localTickOffset}")
-      notifyLocalManagers(start)
+      if (state.windowExecutionEnabled) {
+        notifyLocalManagers(UpdateGlobalTimeWindow(state.currentWindowStart, state.currentWindowEnd))
+      } else {
+        notifyLocalManagers(start)
+      }
     } else {
       logInfo(
         s"Local TimeManager started at tick ${state.localTickOffset}"
@@ -161,6 +209,23 @@ class TimeManager(
       }
     }
   }
+  
+  private def syncWithGlobalTimeWindow(windowStart: Tick, windowEnd: Tick): Unit = {
+    state.currentWindowStart = windowStart
+    state.currentWindowEnd = windowEnd
+    state.localTickOffset = windowStart
+    state.tickOffset = windowStart - state.initialTick
+    
+    if (parentManager.nonEmpty) {
+      if (isRunning) {
+        if (windowEnd >= simulationDuration) {
+          terminateSimulation()
+        } else {
+          processWindow(windowStart, windowEnd)
+        }
+      }
+    }
+  }
 
   private def handleLocalTimeReport(
     localManager: ActorRef,
@@ -178,6 +243,25 @@ class TimeManager(
       )
       if (state.localTimeManagers.values.forall(_.isProcessed)) {
         calculateAndBroadcastNextGlobalTick()
+      }
+    }
+  
+  private def handleLocalTimeWindowReport(
+    localManager: ActorRef,
+    windowEnd: Tick,
+    hasScheduled: Boolean
+  ): Unit =
+    if (parentManager.isEmpty) {
+      state.localTimeManagers.update(
+        localManager,
+        LocalTimeManagerTickInfo(
+          tick = windowEnd,
+          hasSchedule = hasScheduled,
+          isProcessed = true
+        )
+      )
+      if (state.localTimeManagers.values.forall(_.isProcessed)) {
+        calculateAndBroadcastNextWindow()
       }
     }
 
@@ -200,6 +284,37 @@ class TimeManager(
         )
     }
     notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset))
+  }
+  
+  private def calculateAndBroadcastNextWindow(): Unit = {
+    val scheduled = state.localTimeManagers.values.filter(_.hasSchedule)
+    val nextWindowStart = if (scheduled.nonEmpty) {
+      scheduled.map(_.tick).min
+    } else {
+      state.localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+    }
+    
+    val nextWindowEnd = Math.min(
+      nextWindowStart + state.windowSize,
+      simulationDuration
+    )
+    
+    state.currentWindowStart = nextWindowStart
+    state.currentWindowEnd = nextWindowEnd
+    state.localTickOffset = nextWindowStart
+    state.tickOffset = nextWindowStart - state.initialTick
+    
+    state.localTimeManagers.keys.foreach {
+      timeManager =>
+        state.localTimeManagers.update(
+          timeManager,
+          LocalTimeManagerTickInfo(
+            tick = nextWindowStart
+          )
+        )
+    }
+    
+    notifyLocalManagers(UpdateGlobalTimeWindow(nextWindowStart, nextWindowEnd))
   }
 
   private def notifyLocalManagers(event: Any): Unit =
@@ -246,6 +361,11 @@ class TimeManager(
 
   override def actSpontaneous(spontaneous: SpontaneousEvent): Unit =
     if (isRunning) {
+      // Initialize wall time on first tick (for Local TMs)
+      if (state.simulationStartWallTime == 0) {
+        state.simulationStartWallTime = System.currentTimeMillis()
+      }
+      
       if (state.localTickOffset - state.initialTick >= simulationDuration) {
         terminateSimulation()
       } else {
@@ -259,6 +379,35 @@ class TimeManager(
     } else {
       advanceToNextTick()
       reportGlobalTimeManager()
+    }
+  
+  private def processWindow(windowStart: Tick, windowEnd: Tick): Unit = {
+    var currentTick = windowStart
+    var hasProcessedEvents = false
+    
+    while (currentTick < windowEnd && isRunning) {
+      state.localTickOffset = currentTick
+      
+      if (state.scheduledActors.contains(currentTick)) {
+        processNextEventTick(currentTick)
+        hasProcessedEvents = true
+      }
+      
+      currentTick += 1
+    }
+    
+    state.localTickOffset = windowEnd
+    reportWindowCompletion(windowEnd, hasProcessedEvents)
+  }
+  
+  private def reportWindowCompletion(windowEnd: Tick, hasScheduled: Boolean): Unit =
+    if (parentManager.isDefined && state.runningEvents.isEmpty) {
+      state.scheduledTicksOnFinish.clear()
+      parentManager.get ! LocalTimeWindowReport(
+        windowEnd = windowEnd,
+        hasScheduled = hasScheduled || state.scheduledActors.nonEmpty,
+        actorRef = getPath
+      )
     }
 
   private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
@@ -284,49 +433,135 @@ class TimeManager(
         scheduled.actorsRef.foreach {
           actor => state.runningEvents.add(actor)
         }
+        state.totalActorWakeups += scheduled.actorsRef.size
         sendSpontaneousEvent(tick, scheduled.actorsRef)
         state.scheduledActors.remove(tick)
       case None =>
+        state.idleTicksCount += 1
         advanceToNextTick()
         reportGlobalTimeManager()
 
   private def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    if (tick % 500 == 0) {
-      logInfo(s"Send spontaneous at tick $tick to ${actorsRef.size} actors")
+    val safeHorizon = calculateSafeHorizon(tick)
+    state.totalSpontaneousEventsSent += actorsRef.size
+    
+    // Progress logging every 100 ticks (Local TM only - they process actual ticks)
+    // Log only from first Local TM to avoid spam (they all process same tick range)
+    if (parentManager.isDefined && tick % 500 == 0 && actorsRef.nonEmpty) {
+      val lookaheadTicks = safeHorizon - tick
+      val progress = (tick.toDouble / simulationDuration * 100).toInt
+      val windowInfo = if (state.windowExecutionEnabled) f"Win:${state.windowSize}%2d" else "Win:OFF"
+      
+      // Throughput metrics
+      val nowMs = System.currentTimeMillis()
+      val elapsedMs = Math.max(1, nowMs - state.simulationStartWallTime)  // Avoid division by zero
+      val elapsedSec = elapsedMs / 1000.0
+      val ticksProcessed = Math.max(1, tick - state.initialTick)  // Avoid division by zero
+      val throughput = if (elapsedSec > 0.1) (ticksProcessed / elapsedSec).toInt else 0  // Wait at least 100ms
+      
+      // Efficiency metrics
+      val avgActorsPerTick = state.totalActorWakeups / ticksProcessed
+      val idleRatio = Math.min(100, (state.idleTicksCount.toDouble / ticksProcessed * 100).toInt)  // Cap at 100%
+      
+      // ETA calculation
+      val remainingTicks = simulationDuration - tick
+      val etaSec = if (throughput > 0) remainingTicks / throughput else 0
+      val etaMin = etaSec / 60
+      val etaStr = if (etaMin > 60) f"${etaMin/60}%.1fh" else if (etaMin > 1) f"${etaMin}%.0fm" else f"${etaSec}%.0fs"
+      
+      logInfo(f"⏱️  TICK $tick%5d/$simulationDuration ($progress%3d%%) | $windowInfo | Active:${actorsRef.size}%4d (avg:$avgActorsPerTick) | Idle:$idleRatio%2d%% | LA:+$lookaheadTicks | ⚡$throughput%5d t/s | ⏳$etaStr%6s")
     }
+    
     actorsRef.foreach {
       actor =>
-        sendSpontaneousEvent(tick, actor)
+        sendSpontaneousEvent(tick, actor, safeHorizon)
     }
   }
 
-  private def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
+  private def sendSpontaneousEvent(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit =
     if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
-      sendSpontaneousEventPool(tick, identity)
+      sendSpontaneousEventPool(tick, identity, safeHorizon)
     } else {
-      sendSpontaneousEventShard(tick, identity)
+      sendSpontaneousEventShard(tick, identity, safeHorizon)
     }
 
-  private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit =
+  private def sendSpontaneousEventShard(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit =
     getShardRef(StringUtil.getModelClassName(identity.classType)) ! EntityEnvelopeEvent(
       identity.id,
       SpontaneousEvent(
         tick = tick,
-        actorRef = self
+        actorRef = self,
+        safeHorizon = safeHorizon
       )
     )
 
-  private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit =
+  private def sendSpontaneousEventPool(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit =
     getActorPoolRef(identity.id) ! SpontaneousEvent(
       tick = tick,
-      actorRef = self
+      actorRef = self,
+      safeHorizon = safeHorizon
     )
+
+  /** Log throughput metrics (ticks per second) */
+  private def logThroughputMetrics(currentTick: Tick): Unit = {
+    if (metricsLogInterval <= 0 || parentManager.isDefined) {
+      return // Metrics disabled or local TM (only global logs)
+    }
+    
+    val ticksSinceLastLog = currentTick - state.lastMetricsTick
+    
+    if (ticksSinceLastLog >= metricsLogInterval) {
+      val currentTime = System.currentTimeMillis()
+      val elapsedTimeMs = currentTime - state.lastMetricsTime
+      
+      if (elapsedTimeMs > 0) {
+        val ticksPerSecond = (ticksSinceLastLog * 1000.0) / elapsedTimeMs
+        val totalTicksProcessed = currentTick - state.initialTick
+        val totalElapsedMs = currentTime - state.startTime
+        val avgTicksPerSecond = if (totalElapsedMs > 0) {
+          (totalTicksProcessed * 1000.0) / totalElapsedMs
+        } else {
+          0.0
+        }
+        
+        logInfo(f"Throughput: $ticksPerSecond%.2f ticks/s (instant), $avgTicksPerSecond%.2f ticks/s (avg) | " +
+                f"Tick: $currentTick | Total ticks: $totalTicksProcessed | " +
+                f"Elapsed: ${totalElapsedMs/1000.0}%.1f s")
+      }
+      
+      // Reset metrics for next interval
+      state.lastMetricsTick = currentTick
+      state.lastMetricsTime = currentTime
+      state.ticksProcessedSinceLastMetric = 0
+    }
+  }
+
+  /** Calculate the safe horizon for speculative execution
+    * Actors can safely advance up to this tick without external synchronization
+    */
+  private def calculateSafeHorizon(currentTick: Tick): Tick = {
+    if (state.lookaheadWindow <= 1) {
+      return currentTick // No lookahead, conservative mode
+    }
+    
+    // Calculate horizon based on next scheduled events
+    val nextScheduledTick = state.scheduledActors.keys.minOption.getOrElse(currentTick + state.lookaheadWindow)
+    val horizon = Math.min(
+      currentTick + state.lookaheadWindow,
+      nextScheduledTick
+    )
+    
+    // Never exceed simulation duration
+    Math.min(horizon, simulationDuration)
+  }
 
   private def advanceToNextTick(): Unit = {
     val newTick = nextTick
     if (state.localTickOffset < simulationDuration) {
       state.localTickOffset = newTick
       state.scheduledTicksOnFinish.clear()
+      // Log throughput metrics periodically
+      logThroughputMetrics(newTick)
     } else {
       terminateSimulation()
     }
@@ -366,13 +601,15 @@ class TimeManager(
     )
 
   private def printSimulationDuration(): Unit = {
-    val duration = System.currentTimeMillis() - state.startTime
-    logInfo(s"$getLabel - Simulation endTick: ${state.localTickOffset}")
-    logInfo(s"$getLabel - Simulation total ticks: ${state.localTickOffset - state.initialTick}")
-    logInfo(s"$getLabel - Simulation duration: $duration ms")
-    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
-    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0} min")
-    logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0 / 60.0 / 60.0} h")
+    val duration = System.currentTimeMillis() - state.simulationStartWallTime
+    if (duration > 0) {  // Only print if timing was initialized
+      logInfo(s"$getLabel - Simulation endTick: ${state.localTickOffset}")
+      logInfo(s"$getLabel - Simulation total ticks: ${state.localTickOffset - state.initialTick}")
+      logInfo(s"$getLabel - Simulation duration: $duration ms")
+      logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
+      val throughput = if (duration > 0) ((state.localTickOffset - state.initialTick) * 1000.0 / duration).toInt else 0
+      logInfo(s"$getLabel - Average throughput: $throughput ticks/s")
+    }
   }
 
   private def isRunning: Boolean = !state.isPaused && !state.isStopped

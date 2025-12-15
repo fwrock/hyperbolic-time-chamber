@@ -21,16 +21,63 @@ class Car(
       properties = properties
     ) {
 
+  /** Event-driven: Override to use event-driven model */
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Moving =>
-        requestSignalState()
+        // Arrival event - we scheduled this when entering link
+        handleArriveAtNode(currentTick, getCurrentNode)
+        
+      case RouteWaiting =>
+        // Event-driven: waiting for EnterLinkConfirm async message
+        super.actSpontaneous(event)
+        
       case WaitingSignal =>
+        // Legacy signal handling
         leavingLink()
+        
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
-      case _ => super.actSpontaneous(event)
+        
+      case _ => 
+        // Delegate to Movable for Start, Ready, Finished
+        super.actSpontaneous(event)
     }
+
+  /** Car-specific lookahead optimization
+    * Cars can advance through multiple states when:
+    * 1. Moving through link (if no traffic signals ahead)
+    * 2. Stopped/waiting states with known duration
+    */
+  override def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
+    val safeHorizon = event.effectiveSafeHorizon
+
+    state.movableStatus match {
+      case Moving =>
+        // Moving state: if we know travel time and no signals, could skip ahead
+        // For now, conservative: still need signal coordination
+        requestSignalState()
+
+      case WaitingSignal =>
+        // Could potentially batch signal checks within horizon
+        leavingLink()
+
+      case Stopped =>
+        // Stopped: if we have a known wait duration <= lookahead window
+        // we could skip ahead, but need to ensure no external events
+        val waitDuration = 1 // Current fixed wait
+        if (currentTick + waitDuration <= safeHorizon) {
+          // Safe to advance
+          currentTick += waitDuration
+          onFinishSpontaneous(Some(currentTick))
+        } else {
+          onFinishSpontaneous(Some(currentTick + 1))
+        }
+
+      case _ =>
+        super.actSpontaneousWithLookahead(event)
+    }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

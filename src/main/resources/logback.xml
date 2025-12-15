@@ -13,16 +13,42 @@
 <!--        </encoder>-->
 <!--    </appender>-->
 
-    <!-- Define o appender para console -->
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- Define o appender síncrono para console (base) -->
+    <appender name="STDOUT-SYNC" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>[%date{ISO8601}] [%level] [%thread] %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
+    <!-- 
+        AsyncAppender: Wraps STDOUT with async processing
+        - queueSize: 10000 eventos (alto para evitar drops durante picos)
+        - discardingThreshold: 0 (nunca descarta logs, mesmo sob pressão)
+        - neverBlock: false (bloqueia se queue encher, evita perder logs críticos)
+        - includeCallerData: false (performance - não captura stack trace)
+    -->
+    <appender name="ASYNC-STDOUT" class="ch.qos.logback.classic.AsyncAppender">
+        <!-- Queue size para suportar burst de logs durante simulações grandes -->
+        <queueSize>10000</queueSize>
+        
+        <!-- Não descartar logs, mesmo sob pressão (0 = sempre loga) -->
+        <discardingThreshold>0</discardingThreshold>
+        
+        <!-- Bloquear se queue encher (garante que logs críticos não sejam perdidos) -->
+        <!-- Para performance máxima, mudar para true, mas pode perder logs -->
+        <neverBlock>false</neverBlock>
+        
+        <!-- Desabilitar caller data para performance (não precisa de stack traces) -->
+        <includeCallerData>false</includeCallerData>
+        
+        <!-- Appender base que fará o I/O real -->
+        <appender-ref ref="STDOUT-SYNC" />
+    </appender>
+
     <!-- Define o nível de log geral da aplicação -->
     <root level="INFO">
 <!--        <appender-ref ref="FILE" />-->
-        <appender-ref ref="STDOUT" />
+        <!-- Usar ASYNC em vez de STDOUT direto -->
+        <appender-ref ref="ASYNC-STDOUT" />
     </root>
 </configuration>

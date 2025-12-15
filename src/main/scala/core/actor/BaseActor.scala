@@ -54,10 +54,21 @@ abstract class BaseActor[T <: BaseState](
   } catch {
     case _: Exception => 1000
   }
+  
+  // Load window execution configuration
+  windowExecutionEnabled = try {
+    config.getInt("htc.time-manager.window-size") > 1
+  } catch {
+    case _: Exception => false
+  }
 
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
+  
+  // Window-based execution state
+  private var currentWindowEnd: Tick = 0
+  private var windowExecutionEnabled: Boolean = false
 
   protected var entityId: String =
     if (properties != null) properties.entityId
@@ -89,10 +100,8 @@ abstract class BaseActor[T <: BaseState](
     super.preStart()
     if (properties.data != null) {
       try {
-//        logInfo(s"Starting actor $entityId: ${properties.data}")
         state = JsonUtil.convertValue[T](properties.data)
         if (state != null) {
-//          logInfo(s"State: $state")
           startTick = state.getStartTick
         }
         creatorManager ! StartEntityAckEvent(entityId = entityId)
@@ -114,7 +123,7 @@ abstract class BaseActor[T <: BaseState](
       creatorManager ! InitializeEntityAckEvent(
         entityId = entityId
       )
-//      persist(event) { e =>
+//      persistAsync(event) { e =>
 //        context.system.eventStream.publish(e)
 //        saveSnapshot(state)
 //      }
@@ -276,21 +285,70 @@ abstract class BaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
-    if (event.tick < currentTick) {
-      logWarn(
-        s"Received OLD tick ${event.tick}, current is $currentTick. Ignoring (likely after TimeManager recovery)."
-      )
-      onFinishSpontaneous()
-      return
+    // Don't ignore old ticks - in event-driven model with distributed actors,
+    // asynchronous messages (EnterLinkConfirm, ArriveAtNode) arrive with timing offsets
+    // Only update currentTick if event is newer (allow tick to stay same or advance)
+    if (event.tick > currentTick) {
+      currentTick = event.tick
     }
-    currentTick = event.tick
     currentTimeManager = event.actorRef
+    
+    // Check if lookahead is enabled
+    if (event.hasLookahead) {
+      // Actor can process multiple ticks up to safe horizon
+      actSpontaneousWithLookahead(event)
+    } else if (windowExecutionEnabled && currentWindowEnd > currentTick) {
+      // Window-based execution: process ticks within window
+      actSpontaneousWithWindow(event)
+    } else {
+      // Conservative mode: single tick execution
+      try actSpontaneous(event)
+      catch
+        case e: Exception =>
+          e.printStackTrace()
+          onFinishSpontaneous()
+    }
+    save(event)
+  }
+  
+  /** Execute spontaneous logic within a time window.
+    * Processes multiple ticks up to window boundary.
+    * Can be combined with lookahead for maximum efficiency.
+    */
+  protected def actSpontaneousWithWindow(event: SpontaneousEvent): Unit = {
+    val effectiveHorizon = if (event.hasLookahead) {
+      Math.min(event.effectiveSafeHorizon, currentWindowEnd)
+    } else {
+      currentWindowEnd
+    }
+    
+    // Execute ticks within window
+    while (currentTick < effectiveHorizon) {
+      try {
+        actSpontaneous(event.copy(tick = currentTick))
+      } catch {
+        case e: Exception =>
+          e.printStackTrace()
+          onFinishSpontaneous()
+          return
+      }
+      currentTick += 1
+    }
+    
+    // Report completion at window end (aggregate FinishEvent)
+    onFinishSpontaneous(Some(currentTick))
+  }
+  
+  /** Execute spontaneous logic with lookahead optimization.
+    * Subclasses can override to implement multi-tick processing.
+    * Default implementation falls back to single tick execution.
+    */
+  protected def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
     try actSpontaneous(event)
     catch
       case e: Exception =>
         e.printStackTrace()
         onFinishSpontaneous()
-    save(event)
   }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
