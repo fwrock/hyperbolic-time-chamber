@@ -12,5 +12,9 @@ import core.types.Tick
   */
 case class UpdateGlobalTimeWindow(
   windowStart: Tick,
-  windowEnd: Tick
+  windowEnd: Tick,
+  totalEventsAmount: Long,
+  totalActorsAmount: Long,
+  startTime: Long = 0,
+  isStart: Boolean = false
 )

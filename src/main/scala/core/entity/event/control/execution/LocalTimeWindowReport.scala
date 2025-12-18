@@ -15,5 +15,7 @@ import core.types.Tick
 case class LocalTimeWindowReport(
   windowEnd: Tick,
   hasScheduled: Boolean,
-  actorRef: String
+  actorRef: String,
+  eventsAmount: Long = 0,
+  actorsAmount: Long = 0
 )

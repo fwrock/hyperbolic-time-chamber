@@ -29,7 +29,7 @@ object GPSUtil {
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        CityMapUtil.cityMap.shortestPathByHops(originNode, destinationNode) match {
+        CityMapUtil.cityMap.aStarEdgeTargetsOptimized(originNode, destinationNode, heuristicFunc) match {
           case Some((cost, path)) => // path é List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach {

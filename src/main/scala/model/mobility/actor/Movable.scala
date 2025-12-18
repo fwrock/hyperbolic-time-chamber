@@ -136,6 +136,19 @@ abstract class Movable[T <: MovableState](
     
     logDebug(s"Vehicle ${getEntityId} entered link ${data.linkId}, will arrive at ${data.destinationNode} at tick $arrivalTick (current=$currentTick, travel=${data.baseTravelTime})")
     
+    // Report enter_link event (event-driven model)
+//    report(
+//      data = Map(
+//        "event_type" -> "enter_link",
+//        "car_id" -> getEntityId,
+//        "link_id" -> data.linkId,
+//        "travel_time" -> data.baseTravelTime,
+//        "arrival_tick" -> arrivalTick,
+//        "tick" -> currentTick
+//      ),
+//      label = "enter_link"
+//    )
+    
     // Schedule arrival event (single event, not continuous polling)
     // This is the key to event-driven: we know when we'll arrive
     onFinishSpontaneous(Some(arrivalTick))
@@ -154,8 +167,8 @@ abstract class Movable[T <: MovableState](
     // Check if reached destination
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
-      state.movableStatus = Finished
-      onFinishSpontaneous()
+      // Call onFinish to trigger journey_completed report
+      onFinish(nodeId)
       return
     }
     
@@ -166,8 +179,8 @@ abstract class Movable[T <: MovableState](
         state.movableStatus = Ready
         enterLinkEventDriven()  // Event-driven entry
       case None =>
-        state.movableStatus = Finished
-        onFinishSpontaneous()
+        // End of route but not at destination
+        onFinish(nodeId)
     }
   }
 

@@ -20,6 +20,8 @@ message LocalTimeReportEvent {
   uint64 tick = 1;
   bool hasScheduled = 2;
   string actorRef = 3;
+  uint64 eventsAmount = 4;
+  uint64 actorsAmount = 5;
 }
 
 message RemoteTimeReportEvent {
@@ -62,6 +64,8 @@ message TimeManagerRegisterEvent {
 
 message UpdateGlobalTimeEvent {
   uint64 tick = 1;
+  uint64 totalEventsAmount = 2;
+  uint64 totalActorsAmount = 3;
 }
 
 message TimeManagerSyncRequestEvent {
