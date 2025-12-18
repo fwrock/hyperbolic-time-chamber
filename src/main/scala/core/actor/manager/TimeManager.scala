@@ -101,14 +101,14 @@ class TimeManager(
     case PauseSimulationEvent            => if (isRunning) pauseSimulation()
     case ResumeSimulationEvent           => resumeSimulation()
     case StopSimulationEvent             => stopSimulation()
-    case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
-    case w: UpdateGlobalTimeWindow       => syncWithGlobalTimeWindow(w.windowStart, w.windowEnd)
+    case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick, e.totalEventsAmount)
+    case w: UpdateGlobalTimeWindow       => syncWithGlobalTimeWindow(w.windowStart, w.windowEnd, w.totalEventsAmount, w.startTime, w.isStart)
     case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
-      handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled)
+      handleLocalTimeReport(sender(), localTimeReport.tick, localTimeReport.hasScheduled, localTimeReport.eventsAmount)
     case windowReport: LocalTimeWindowReport =>
-      handleLocalTimeWindowReport(sender(), windowReport.windowEnd, windowReport.hasScheduled)
+      handleLocalTimeWindowReport(sender(), windowReport.windowEnd, windowReport.hasScheduled, windowReport.eventsAmount)
     case timeManagerDelaySyncEvent: TimeManagerDelaySyncEvent =>
       if (parentManager.isEmpty) {
         calculateAndBroadcastNextGlobalTick()
@@ -163,7 +163,16 @@ class TimeManager(
     if (parentManager.isEmpty) {
       logInfo(s"Global TimeManager started at tick ${state.localTickOffset}")
       if (state.windowExecutionEnabled) {
-        notifyLocalManagers(UpdateGlobalTimeWindow(state.currentWindowStart, state.currentWindowEnd))
+        notifyLocalManagers(
+          UpdateGlobalTimeWindow(
+            state.currentWindowStart,
+            state.currentWindowEnd,
+            totalEventsAmount = state.totalEventsAmount,
+            totalActorsAmount = state.totalActorsAmount,
+            startTime = state.startTime,
+            isStart = true
+          )
+        )
       } else {
         notifyLocalManagers(start)
       }
@@ -171,7 +180,7 @@ class TimeManager(
       logInfo(
         s"Local TimeManager started at tick ${state.localTickOffset}"
       )
-      self ! UpdateGlobalTimeEvent(state.localTickOffset)
+      self ! UpdateGlobalTimeEvent(state.localTickOffset, totalEventsAmount = state.totalEventsAmount)
     }
   }
 
@@ -196,9 +205,10 @@ class TimeManager(
     terminateSimulation()
   }
 
-  private def syncWithGlobalTime(globalTick: Tick): Unit = {
+  private def syncWithGlobalTime(globalTick: Tick, totalEventsAmount: Long): Unit = {
     state.localTickOffset = globalTick
     state.tickOffset = globalTick - state.initialTick
+    state.totalEventsAmount = totalEventsAmount
     if (parentManager.nonEmpty) {
       if (isRunning) {
         if (state.localTickOffset - state.initialTick >= simulationDuration) {
@@ -210,12 +220,15 @@ class TimeManager(
     }
   }
   
-  private def syncWithGlobalTimeWindow(windowStart: Tick, windowEnd: Tick): Unit = {
+  private def syncWithGlobalTimeWindow(windowStart: Tick, windowEnd: Tick, totalEventsAmount: Long, startTime: Long, isStart: Boolean): Unit = {
     state.currentWindowStart = windowStart
     state.currentWindowEnd = windowEnd
     state.localTickOffset = windowStart
     state.tickOffset = windowStart - state.initialTick
-    
+    state.totalEventsAmount = totalEventsAmount
+    if (isStart) {
+      state.startTime = startTime
+    }
     if (parentManager.nonEmpty) {
       if (isRunning) {
         if (windowEnd >= simulationDuration) {
@@ -230,9 +243,11 @@ class TimeManager(
   private def handleLocalTimeReport(
     localManager: ActorRef,
     tick: Tick,
-    hasScheduled: Boolean
+    hasScheduled: Boolean,
+    amountEvents: Long
   ): Unit =
     if (parentManager.isEmpty) {
+      state.totalEventsAmount += amountEvents
       state.localTimeManagers.update(
         localManager,
         LocalTimeManagerTickInfo(
@@ -249,9 +264,11 @@ class TimeManager(
   private def handleLocalTimeWindowReport(
     localManager: ActorRef,
     windowEnd: Tick,
-    hasScheduled: Boolean
+    hasScheduled: Boolean,
+    eventsAmount: Long
   ): Unit =
     if (parentManager.isEmpty) {
+      state.totalEventsAmount += eventsAmount
       state.localTimeManagers.update(
         localManager,
         LocalTimeManagerTickInfo(
@@ -283,16 +300,16 @@ class TimeManager(
           )
         )
     }
-    notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset))
+    notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset, totalEventsAmount = state.totalEventsAmount))
   }
   
   private def calculateAndBroadcastNextWindow(): Unit = {
-    val scheduled = state.localTimeManagers.values.filter(_.hasSchedule)
-    val nextWindowStart = if (scheduled.nonEmpty) {
-      scheduled.map(_.tick).min
-    } else {
-      state.localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
-    }
+    // FIX: Ensure windows are contiguous (no tick skipping)
+    // Previous bug: nextWindowStart = min(scheduledTicks) could skip ticks
+    // Example: if window 1 is [0,2500) and next scheduled tick is 3000,
+    //          we must NOT skip ticks 2500-2999
+    // Solution: Always start next window where current window ended
+    val nextWindowStart = state.currentWindowEnd
     
     val nextWindowEnd = Math.min(
       nextWindowStart + state.windowSize,
@@ -314,7 +331,7 @@ class TimeManager(
         )
     }
     
-    notifyLocalManagers(UpdateGlobalTimeWindow(nextWindowStart, nextWindowEnd))
+    notifyLocalManagers(UpdateGlobalTimeWindow(nextWindowStart, nextWindowEnd, state.totalEventsAmount, state.totalActorsAmount, state.startTime))
   }
 
   private def notifyLocalManagers(event: Any): Unit =
@@ -345,6 +362,7 @@ class TimeManager(
       finishDestruct(finish)
       advanceToNextTick()
       reportGlobalTimeManager(true)
+      state.eventsAmount += finish.eventsAmount
     } else {
       finish.timeManager ! finish
     }
@@ -406,18 +424,24 @@ class TimeManager(
       parentManager.get ! LocalTimeWindowReport(
         windowEnd = windowEnd,
         hasScheduled = hasScheduled || state.scheduledActors.nonEmpty,
-        actorRef = getPath
+        actorRef = getPath,
+        eventsAmount = state.eventsAmount
       )
+      state.eventsAmount = 0
     }
 
   private def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
     if (parentManager.isDefined && state.runningEvents.isEmpty) {
       state.scheduledTicksOnFinish.clear()
+
       parentManager.get ! LocalTimeReportEvent(
         tick = state.localTickOffset,
         hasScheduled = hasScheduled,
-        actorRef = getPath
+        actorRef = getPath,
+        eventsAmount = state.eventsAmount,
       )
+
+      state.eventsAmount = 0
     }
 
   private def reportDestroyedGlobalTimeManager(): Unit =
@@ -478,12 +502,14 @@ class TimeManager(
     }
   }
 
-  private def sendSpontaneousEvent(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit =
+  private def sendSpontaneousEvent(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit = {
+    state.eventsAmount += 1
     if (identity.actorType == CreationTypeEnum.PoolDistributed.toString) {
       sendSpontaneousEventPool(tick, identity, safeHorizon)
     } else {
       sendSpontaneousEventShard(tick, identity, safeHorizon)
     }
+  }
 
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify, safeHorizon: Tick = -1): Unit =
     getShardRef(StringUtil.getModelClassName(identity.classType)) ! EntityEnvelopeEvent(
@@ -601,12 +627,21 @@ class TimeManager(
     )
 
   private def printSimulationDuration(): Unit = {
-    val duration = System.currentTimeMillis() - state.simulationStartWallTime
-    if (duration > 0) {  // Only print if timing was initialized
+    val duration = System.currentTimeMillis() - state.startTime
+    if (duration > 0) {
       logInfo(s"$getLabel - Simulation endTick: ${state.localTickOffset}")
       logInfo(s"$getLabel - Simulation total ticks: ${state.localTickOffset - state.initialTick}")
-      logInfo(s"$getLabel - Simulation duration: $duration ms")
-      logInfo(s"$getLabel - Simulation duration: ${duration / 1000.0} s")
+      val seconds =  duration / 1000.0
+      val minutes = duration / 1000.0 / 60.0
+      val hours = duration / 1000.0 / 60.0 / 60.0
+      logInfo(f"${getLabel} - Simulation duration: $duration%d ms (${seconds}%.1f s, ${minutes}%.2f min, ${hours}%.2f h)")
+      logInfo(s"$getLabel - Total spontaneous events sent: ${state.totalSpontaneousEventsSent}")
+      logInfo(s"$getLabel - Total actor wakeups: ${state.totalActorWakeups}")
+      logInfo(s"$getLabel - Total destroyed actors: ${state.countDestruction}")
+      logInfo(s"$getLabel - Total simulation: ${state.totalEventsAmount} m")
+      logInfo(s"$getLabel - Total simulation: ${state.totalEventsAmount / seconds} m/s")
+      logInfo(s"$getLabel - Total simulation: ${state.totalEventsAmount / minutes} m/min")
+      logInfo(s"$getLabel - Total simulation: ${state.totalEventsAmount / hours} m/h")
       val throughput = if (duration > 0) ((state.localTickOffset - state.initialTick) * 1000.0 / duration).toInt else 0
       logInfo(s"$getLabel - Average throughput: $throughput ticks/s")
     }

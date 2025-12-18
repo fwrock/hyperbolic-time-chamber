@@ -18,7 +18,7 @@ import core.types.Tick
   *   number of ticks actors can advance speculatively
   */
 case class TimeManagerState(
-  var startTime: Long = 0,
+  var startTime: Long = -1,
   var localTickOffset: Tick = 0,
   var tickOffset: Tick = 0,
   var initialTick: Tick = 0,
@@ -46,5 +46,7 @@ case class TimeManagerState(
   var timeManagersPool: ActorRef = null,
   var countScheduled: Long = 0,
   var countDestruction: Long = 0,
-  localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
+  localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map(),
+  var actorsAmount: Long = 0,
+  var totalActorsAmount: Long = 0,
 ) extends BaseState(startTick = 0)

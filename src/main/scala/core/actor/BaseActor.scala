@@ -163,6 +163,8 @@ abstract class BaseActor[T <: BaseState](
 
   private def registerOnTimeManager(): Unit =
     if (properties.actorType == LoadBalancedDistributed) {
+      state.eventsAmount += 1
+      state.totalEventsAmount += 1
       timeManager ! RegisterActorEvent(
         startTick = startTick,
         actorId = entityId,
@@ -177,6 +179,8 @@ abstract class BaseActor[T <: BaseState](
         )
       )
     } else {
+      state.eventsAmount += 1
+      state.totalEventsAmount += 1
       timeManager ! RegisterActorEvent(
         startTick = startTick,
         actorId = entityId,
@@ -212,6 +216,8 @@ abstract class BaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
+    state.eventsAmount += 1
+    state.totalEventsAmount += 1
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -493,6 +499,13 @@ abstract class BaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
+    if (scheduleTick.isEmpty) {
+      state.eventsAmount += 1
+      state.totalEventsAmount += 1
+    } else {
+      state.eventsAmount += 2
+      state.totalEventsAmount += 2
+    }
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
@@ -505,7 +518,8 @@ abstract class BaseActor[T <: BaseState](
       scheduleTick = scheduleTick.map(_.toString),
       scheduleEvent = None,
       timeManager = currentTimeManager,
-      destruct = destruct
+      destruct = destruct,
+      eventsAmount = state.eventsAmount
     )
     scheduleTick.foreach(
       tick =>
@@ -522,6 +536,7 @@ abstract class BaseActor[T <: BaseState](
           )
         )
     )
+    state.eventsAmount = 0
   }
 
   /** Sends a spontaneous event to itself. This method is used to trigger a spontaneous event in the

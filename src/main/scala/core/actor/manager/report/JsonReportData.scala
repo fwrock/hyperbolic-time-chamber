@@ -80,8 +80,11 @@ class JsonReportData(
   private val buffer = mutable.ListBuffer[ReportEvent]()
   private var fileWriter: Option[BufferedWriter] = None
 
-  // Create readable filename
-  private val fileName = s"${prefix}${timeBasedId}_events.jsonl"
+  // FIX: Each JsonReportData instance must write to a UNIQUE file
+  // Multiple instances writing to the same file causes corrupted JSONL
+  // Solution: Include actor's unique ID in filename
+  private val actorUniqueId = java.util.UUID.randomUUID().toString.take(8)
+  private val fileName = s"${prefix}${timeBasedId}_${actorUniqueId}_events.jsonl"
   private val filePath = s"$directory/$fileName"
 
   override def onReport(event: ReportEvent): Unit = {
@@ -97,7 +100,7 @@ class JsonReportData(
     mkdir(directory)
 
     try {
-//      val writer = new BufferedWriter(new FileWriter(filePath, true))
+      val writer = new BufferedWriter(new FileWriter(filePath, true))
       buffer.foreach {
         report =>
           val jsonData = Map(
@@ -107,10 +110,10 @@ class JsonReportData(
             "event_type" -> report.label,
             "data" -> report.data
           )
-//          writer.write(JsonUtil.toJson(jsonData))
-//          writer.newLine()
+          writer.write(JsonUtil.toJson(jsonData))
+          writer.newLine()
       }
-//      writer.close()
+      writer.close()
       logInfo(s"Flushed ${buffer.size} events to $filePath")
       buffer.clear()
     } catch {

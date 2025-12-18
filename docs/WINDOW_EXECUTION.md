@@ -1,5 +1,9 @@
 # Window-Based Execution (Strategy 2) - Implementation Guide
 
+## ⚠️ Important Note
+
+**Fixed Bug (Dec 15, 2025):** A critical bug was fixed where windows could skip ticks, causing vehicles to never start. See [FIXES/WINDOW_TICK_SKIPPING_FIX.md](FIXES/WINDOW_TICK_SKIPPING_FIX.md) for details. Windows are now guaranteed to be contiguous with no gaps.
+
 ## Overview
 
 This document describes the **Window-Based Execution** (Strategy 2) - an advanced optimization that combines with the existing lookahead to further reduce synchronization barriers and increase throughput.

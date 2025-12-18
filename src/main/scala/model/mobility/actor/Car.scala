@@ -89,6 +89,20 @@ class Car(
     if (state.movableStatus == Finished) {
       return
     }
+    
+    // SEMPRE reporta journey_started, independente do resultado da rota
+//    report(
+//      data = Map(
+//        "event_type" -> "journey_started",
+//        "car_id" -> getEntityId,
+//        "origin" -> state.origin,
+//        "destination" -> state.destination,
+//        "tick" -> currentTick
+//      ),
+//      label = "journey_started"
+//    )
+    state.eventCount += 1
+    
     try {
       state.movableStatus = RouteWaiting
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
@@ -98,22 +112,7 @@ class Car(
           state.movableStatus = Ready
           state.movableCurrentPath = None
 
-          // Reporta o início da jornada
-//          report(
-//            data = Map(
-//              "event_type" -> "journey_started",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "route_cost" -> cost,
-//              "route_length" -> pathQueue.size,
-//              "tick" -> currentTick
-//            ),
-//            label = "journey_started"
-//          )
-          state.eventCount += 1
-
-          // Reporta detalhes completos da rota planejada
+          // Reporta detalhes completos da rota planejada (somente se rota foi calculada)
 //          report(
 //            data = Map(
 //              "event_type" -> "route_planned",
@@ -172,6 +171,24 @@ class Car(
             s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}."
           )
 
+          // Reporta route_planned com falha
+//          report(
+//            data = Map(
+//              "event_type" -> "route_planned",
+//              "car_id" -> getEntityId,
+//              "origin" -> state.origin,
+//              "destination" -> state.destination,
+//              "route_cost" -> Double.PositiveInfinity,
+//              "route_length" -> 0,
+//              "route_links" -> "",
+//              "route_nodes" -> "",
+//              "planning_result" -> "failed",
+//              "tick" -> currentTick
+//            ),
+//            label = "route_planned"
+//          )
+          state.eventCount += 1
+
           // Reporta journey_completed para falha de rota
 //          report(
 //            data = Map(
@@ -208,6 +225,25 @@ class Car(
     } catch {
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
+
+        // Reporta route_planned com exceção
+//        report(
+//          data = Map(
+//            "event_type" -> "route_planned",
+//            "car_id" -> getEntityId,
+//            "origin" -> state.origin,
+//            "destination" -> state.destination,
+//            "route_cost" -> Double.PositiveInfinity,
+//            "route_length" -> 0,
+//            "route_links" -> "",
+//            "route_nodes" -> "",
+//            "planning_result" -> "exception",
+//            "error_message" -> e.getMessage,
+//            "tick" -> currentTick
+//          ),
+//          label = "route_planned"
+//        )
+        state.eventCount += 1
 
         // Reporta journey_completed para exceção
 //        report(
