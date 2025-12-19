@@ -55,7 +55,6 @@ abstract class BaseActor[T <: BaseState](
     case _: Exception => 1000
   }
   
-  // Load window execution configuration
   windowExecutionEnabled = try {
     config.getInt("htc.time-manager.window-size") > 1
   } catch {
@@ -66,7 +65,6 @@ abstract class BaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
   
-  // Window-based execution state
   private var currentWindowEnd: Tick = 0
   private var windowExecutionEnabled: Boolean = false
 
@@ -291,23 +289,16 @@ abstract class BaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
-    // Don't ignore old ticks - in event-driven model with distributed actors,
-    // asynchronous messages (EnterLinkConfirm, ArriveAtNode) arrive with timing offsets
-    // Only update currentTick if event is newer (allow tick to stay same or advance)
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
     currentTimeManager = event.actorRef
     
-    // Check if lookahead is enabled
     if (event.hasLookahead) {
-      // Actor can process multiple ticks up to safe horizon
       actSpontaneousWithLookahead(event)
     } else if (windowExecutionEnabled && currentWindowEnd > currentTick) {
-      // Window-based execution: process ticks within window
       actSpontaneousWithWindow(event)
     } else {
-      // Conservative mode: single tick execution
       try actSpontaneous(event)
       catch
         case e: Exception =>
@@ -341,7 +332,6 @@ abstract class BaseActor[T <: BaseState](
       currentTick += 1
     }
     
-    // Report completion at window end (aggregate FinishEvent)
     onFinishSpontaneous(Some(currentTick))
   }
   

@@ -26,13 +26,10 @@ class JsonReportData(
   private val baseDirectory = Some(config.getString("htc.report-manager.json.directory"))
     .getOrElse("/tmp/reports/json")
 
-  // Create readable directory name with timestamp
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val timeBasedId = startRealTime.format(dateFormatter)
 
-  // Generate simulation ID using same logic as CassandraReportData
   private lazy val simulationId: String = {
-    // 1. Try simulation config
     val simulationConfigId =
       try {
         val simulationConfig = core.util.SimulationUtil.loadSimulationConfig()
@@ -41,10 +38,8 @@ class JsonReportData(
         case _: Exception => None
       }
 
-    // 2. Try environment variable
     val envSimId = sys.env.get("HTC_SIMULATION_ID")
 
-    // 3. Try application.conf
     val configSimId =
       try
         Some(config.getString("htc.simulation.id"))
@@ -52,7 +47,6 @@ class JsonReportData(
         case _: Exception => None
       }
 
-    // 4. Generate fallback ID
     simulationConfigId
       .orElse(envSimId)
       .orElse(configSimId)
@@ -80,9 +74,6 @@ class JsonReportData(
   private val buffer = mutable.ListBuffer[ReportEvent]()
   private var fileWriter: Option[BufferedWriter] = None
 
-  // FIX: Each JsonReportData instance must write to a UNIQUE file
-  // Multiple instances writing to the same file causes corrupted JSONL
-  // Solution: Include actor's unique ID in filename
   private val actorUniqueId = java.util.UUID.randomUUID().toString.take(8)
   private val fileName = s"${prefix}${timeBasedId}_${actorUniqueId}_events.jsonl"
   private val filePath = s"$directory/$fileName"

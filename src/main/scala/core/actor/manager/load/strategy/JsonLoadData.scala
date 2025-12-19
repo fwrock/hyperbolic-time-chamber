@@ -18,25 +18,19 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import scala.jdk.CollectionConverters.*
 
-// ==========================================
-// 3. Implementação do Ator
-// ==========================================
 class JsonLoadData(private val properties: Properties)
   extends LoadDataStrategy(properties = properties) {
 
   private implicit def ec: ExecutionContext = context.dispatcher
-  // Dispatcher de IO (Obrigatório ter no application.conf)
-  // Referências
+
   private var managerRef: ActorRef = _
   private var creatorRef: ActorRef = _
   private var creatorPoolRef: ActorRef = _
 
-  // --- ESTADO MUTÁVEL PRIVADO (Nunca sai deste ator) ---
   private var currentInputStream: InputStream = _
   private var currentIterator: Iterator[ActorSimulation] = _
   private var sourceFilePath: String = _
 
-  // Controle de Fluxo
   private val CHUNK_SIZE = 100
   private val activeBatches = mutable.Set[String]()
   private var totalLoadedActors = 0L
@@ -53,7 +47,6 @@ class JsonLoadData(private val properties: Properties)
     case event: FinishCreationEvent => handleFinishCreation(event)
   }
 
-  // 1. Inicialização
   override protected def load(event: LoadDataSourceEvent): Unit = {
     this.managerRef = event.managerRef
     this.creatorRef = event.creatorRef
@@ -70,7 +63,7 @@ class JsonLoadData(private val properties: Properties)
   }
 
   private def openFileAndStart(): Unit = {
-    logInfo(s"Abrindo arquivo: $sourceFilePath")
+    logInfo(s"Opening file: $sourceFilePath")
 
     Future {
       val is = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
@@ -85,7 +78,7 @@ class JsonLoadData(private val properties: Properties)
         self ! ProcessNextChunk
 
       case Failure(e) =>
-        logError(s"Erro fatal ao abrir $sourceFilePath", e)
+        logError(s"Fatal error to open $sourceFilePath", e)
         self ! CloseAndFinish
     }
   }
@@ -107,12 +100,11 @@ class JsonLoadData(private val properties: Properties)
           self ! CloseAndFinish
         }
       case Failure(e) =>
-        logError("Erro de I/O na leitura do JSON", e)
+        logError("Error of  I/O in JSON reading", e)
         self ! CloseAndFinish
     }
   }
 
-  // 4. Processamento dos Dados
   private def sendBatch(actors: List[ActorSimulation]): Unit = {
     totalLoadedActors += actors.size
 
@@ -153,7 +145,7 @@ class JsonLoadData(private val properties: Properties)
   }
 
   private def finishLoading(): Unit = {
-    logInfo(s"Fim do arquivo. Total: $totalLoadedActors")
+    logInfo(s"End of file, size: $totalLoadedActors")
 
     if (currentInputStream != null) {
       try currentInputStream.close() catch { case _: Exception => }
@@ -169,7 +161,6 @@ class JsonLoadData(private val properties: Properties)
     )
   }
 
-  // Garante fechamento se o ator for parado abruptamente
   override def postStop(): Unit = {
     if (currentInputStream != null) {
       try currentInputStream.close() catch { case _: Exception => }
