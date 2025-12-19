@@ -8,9 +8,12 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start }
+import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.mobility.entity.event.data.vehicle.{EnterLinkConfirmData, ArriveAtNodeData}
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, EnterLinkConfirm, ArriveAtNode }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start, Moving, RouteWaiting }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
@@ -25,6 +28,14 @@ abstract class Movable[T <: MovableState](
       properties = properties
     ) {
 
+  protected def updateStatus(newStatus: org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum): Unit = {
+    if (state.movableStatus != newStatus) {
+      logDebug(s"Vehicle ${getEntityId}: ${state.movableStatus} -> $newStatus at tick $currentTick")
+      state.movableStatus = newStatus
+      state.movableLastStateChange = currentTick
+    }
+  }
+
   protected def requestRoute(): Unit = {
     if (state.movableStatus == Finished) {
       return
@@ -33,10 +44,10 @@ abstract class Movable[T <: MovableState](
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.movableBestRoute = Some(pathQueue)
-          state.movableStatus = Ready
+          updateStatus(Ready)
           state.movableCurrentPath = None
           if (pathQueue.nonEmpty) {
-            enterLink()
+            enterLinkEventDriven()  // Event-driven
           } else {
             state.movableStatus = Finished
             logInfo("No path available between origin and destination, finishing.")
@@ -57,24 +68,129 @@ abstract class Movable[T <: MovableState](
     }
   }
 
+  /** Event-driven base implementation - no generic tick scheduling */
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match
       case Start =>
         requestRoute()
+
       case Ready =>
-        enterLink()
+        logInfo(s"Vehicle ${getEntityId} ready to enter link (event-driven)")
+        enterLinkEventDriven()
+        
+      case RouteWaiting =>
+        val waitingTime = currentTick - state.movableLastStateChange
+        if (waitingTime > 100) {  // 100 ticks timeout
+          logError(s"Vehicle ${getEntityId} stuck in RouteWaiting for $waitingTime ticks at tick $currentTick! Link may have failed to respond. Resetting...")
+          logError(s"  Current path: ${state.movableCurrentPath}")
+          logError(s"  Route: ${state.movableBestRoute.map(_.size).getOrElse(0)} segments remaining")
+          state.movableStatus = Ready
+          enterLinkEventDriven()
+        } else {
+          logDebug(s"Vehicle ${getEntityId} in RouteWaiting (waiting ${waitingTime} ticks for EnterLinkConfirm)")
+          onFinishSpontaneous()
+        }
+        
+      case Moving =>
+        val nodeId = getCurrentNode
+        if (nodeId != null) {
+          logDebug(s"Vehicle ${getEntityId} arrived at node $nodeId at tick $currentTick")
+          handleArriveAtNode(currentTick, nodeId)
+        } else {
+          logError(s"Vehicle ${getEntityId} in Moving state but has no current node!")
+          state.movableStatus = Finished
+          onFinishSpontaneous()
+        }
+        
       case Finished =>
         onFinishSpontaneous()
+        
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
 
+  /** Execute with lookahead: process status-dependent logic without external dependencies
+    * This allows vehicles to advance multiple ticks when in predictable states
+    */
+  override def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
+    val safeHorizon = event.effectiveSafeHorizon
+    val lookaheadTicks = safeHorizon - event.tick
+    
+    state.movableStatus match {
+      case Start | Finished =>
+        actSpontaneous(event)
+        
+      case Ready =>
+        actSpontaneous(event)
+        
+      case _ =>
+        actSpontaneous(event)
+    }
+  }
+
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: LinkInfoData => handleLinkInfo(event, d)
+      case d: EnterLinkConfirmData => handleEnterLinkConfirm(event, d)  // Event-driven
+      case d: LinkInfoData => handleLinkInfo(event, d)  // Legacy tick-driven
       case _ =>
         logWarn(s"Movable Event not handled: $event")
     }
+  
+  /** Event-driven: Handle link entry confirmation with travel time */
+  protected def handleEnterLinkConfirm(
+    event: ActorInteractionEvent,
+    data: EnterLinkConfirmData
+  ): Unit = {
+    logDebug(s"Vehicle ${getEntityId} received EnterLinkConfirm for link ${data.linkId}, travel time = ${data.baseTravelTime}")
+    
+    // Update state
+    updateStatus(Moving)
+    state.movableCurrentLink = data.linkId
+
+    val arrivalTick = currentTick + data.baseTravelTime
+    
+    logDebug(s"Vehicle ${getEntityId} entered link ${data.linkId}, will arrive at ${data.destinationNode} at tick $arrivalTick (current=$currentTick, travel=${data.baseTravelTime})")
+    
+    // Report enter_link event (event-driven model)
+//    report(
+//      data = Map(
+//        "event_type" -> "enter_link",
+//        "car_id" -> getEntityId,
+//        "link_id" -> data.linkId,
+//        "travel_time" -> data.baseTravelTime,
+//        "arrival_tick" -> arrivalTick,
+//        "tick" -> currentTick
+//      ),
+//      label = "enter_link"
+//    )
+
+    onFinishSpontaneous(Some(arrivalTick))
+    
+    state.movableNextScheduledTick = Some(arrivalTick)
+  }
+  
+  /** Event-driven: Handle arrival at node (scheduled event) */
+  protected def handleArriveAtNode(currentTick: Tick, nodeId: String): Unit = {
+    logDebug(s"Vehicle ${getEntityId} arrived at node $nodeId at tick $currentTick")
+    
+    // Leave current link
+    leavingLink()
+    
+    if (state.destination == nodeId) {
+      state.movableReachedDestination = true
+      onFinish(nodeId)
+      return
+    }
+    
+    getNextPath match {
+      case Some(nextPath) =>
+        state.movableCurrentPath = Some(nextPath)
+        updateStatus(Ready)
+        enterLinkEventDriven()  // Event-driven entry
+      case None =>
+        onFinish(nodeId)
+    }
+  }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
     EventTypeEnum.valueOf(event.eventType) match {
@@ -103,7 +219,50 @@ abstract class Movable[T <: MovableState](
     }
     onFinishSpontaneous()
   }
+  
+  /** Event-driven: Request link entry with travel time calculation */
+  protected def enterLinkEventDriven(): Unit =
+    state.movableCurrentPath match {
+      case Some((linkEdgeGraphId, nextNodeId)) =>
+        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
+          case Some(edgeLabel) =>
+            logDebug(s"Vehicle ${getEntityId} requesting entry to link ${edgeLabel.id} for node $nextNodeId")
+            sendMessageTo(
+              entityId = edgeLabel.id,
+              shardId = edgeLabel.classType,
+              data = model.mobility.entity.event.data.vehicle.RequestEnterLinkData(
+                vehicleId = getEntityId,
+                entryTick = currentTick,
+                destinationNode = nextNodeId
+              ),
+              eventType = org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.RequestEnterLink.toString,
+              actorType = LoadBalancedDistributed
+            )
+            updateStatus(RouteWaiting)
+            logDebug(s"Vehicle ${getEntityId} now waiting for EnterLinkConfirm")
+            onFinishSpontaneous()
+          case None =>
+            state.movableStatus = Finished
+            logWarn("No edge label found for link, finishing.")
+            onFinishSpontaneous()
+            selfDestruct()
+        }
+      case None if state.movableBestRoute.isEmpty =>
+        state.movableStatus = Finished
+        logWarn("No current path and no best route available, finishing.")
+        onFinishSpontaneous()
+      case None =>
+        getNextPath match {
+          case Some(nextPath) =>
+            state.movableCurrentPath = Some(nextPath)
+            enterLinkEventDriven()
+          case None =>
+            state.movableStatus = Finished
+            onFinishSpontaneous()
+        }
+    }
 
+  /** Legacy tick-driven entry (kept for backward compatibility) */
   protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>

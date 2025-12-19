@@ -2,151 +2,169 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{ IdUtil, JsonUtil }
+import core.util.{IdUtil, JsonStreamingUtil, JsonUtil}
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
+import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
 import org.interscity.htc.core.entity.configuration.ActorDataSource
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, FinishLoadDataEvent, LoadDataSourceEvent, ProcessBatchesEvent }
+import org.interscity.htc.core.entity.event.control.load.*
+import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
+import com.fasterxml.jackson.core.JsonParser
 
-import java.io.{ BufferedInputStream, File, FileInputStream }
+import java.io.{BufferedInputStream, File, FileInputStream, InputStream}
 import java.util.UUID
-import scala.compiletime.uninitialized
 import scala.collection.mutable
-import scala.util.Using
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
+import scala.jdk.CollectionConverters.*
 
 class JsonLoadData(private val properties: Properties)
-    extends LoadDataStrategy(properties = properties) {
+  extends LoadDataStrategy(properties = properties) {
 
-  private var managerRef: ActorRef = uninitialized
-  private var creatorRef: ActorRef = uninitialized
-  private var creatorPoolRef: ActorRef = uninitialized
+  private implicit def ec: ExecutionContext = context.dispatcher
 
-  private val batchSize: Int = 100
-  private var totalBatchAmount: Int = 0
-  private var currentBatchAmount: Int = 0
-  private var isSentAllDataToCreator = false
-  private var amountActors = 0L
+  private var managerRef: ActorRef = _
+  private var creatorRef: ActorRef = _
+  private var creatorPoolRef: ActorRef = _
+
+  private var currentInputStream: InputStream = _
+  private var currentIterator: Iterator[ActorSimulation] = _
+  private var sourceFilePath: String = _
+
+  private val CHUNK_SIZE = 100
+  private val activeBatches = mutable.Set[String]()
+  private var totalLoadedActors = 0L
+  private var sourceClassType: String = _
+  private var sourceId: String = _
   private val creators = mutable.Set[ActorRef]()
-  private var shardBatches: mutable.Queue[Seq[ActorSimulationCreation]] = uninitialized
-  private var poolBatches: mutable.Queue[Seq[ActorSimulationCreation]] = uninitialized
-  private var sourceClassType: String = uninitialized
-
-  private val processBatchControl = mutable.Map[String, Boolean]()
 
   override def handleEvent: Receive = {
     case event: LoadDataSourceEvent => load(event)
-    case _: ProcessBatchesEvent     => handleProcessBatches()
+    case StartLoadingFile           => openFileAndStart()
+    case ProcessNextChunk           => readNextChunkAsync() // O motor do loop
+    case ChunkLoaded(data)          => sendBatch(data)
+    case CloseAndFinish             => finishLoading()
     case event: FinishCreationEvent => handleFinishCreation(event)
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
-    managerRef = event.managerRef
-    creatorRef = event.creatorRef
-    creatorPoolRef = event.creatorPoolRef
+    this.managerRef = event.managerRef
+    this.creatorRef = event.creatorRef
+    this.creatorPoolRef = event.creatorPoolRef
     load(event.actorDataSource)
   }
 
   override protected def load(source: ActorDataSource): Unit = {
-    sourceClassType = source.classType
-    val filePath = source.dataSource.info("path").asInstanceOf[String]
+    this.sourceClassType = source.classType
+    this.sourceId = source.id
+    this.sourceFilePath = source.dataSource.info("path").asInstanceOf[String]
 
-    val actors: List[ActorSimulation] =
-      Using(new BufferedInputStream(new FileInputStream(new File(filePath)))) {
-        inputStream =>
-          JsonUtil.fromJsonListStream[ActorSimulation](inputStream)
-      }.get
-
-    val actorsToCreate = actors.map(
-      actor =>
-        ActorSimulationCreation(
-          resourceId = IdUtil.format(source.id),
-          actor = actor.copy(id = IdUtil.format(actor.id))
-        )
-    )
-
-    amountActors = actorsToCreate.size
-
-    val shardedActors = actorsToCreate.filter(
-      a =>
-        a.actor.creationType == null ||
-          a.actor.creationType == LoadBalancedDistributed
-    )
-
-    shardBatches = createBatches(shardedActors)
-
-    val poolActors = actorsToCreate.filter(
-      a => a.actor.creationType == PoolDistributed
-    )
-
-    poolBatches = createBatches(poolActors)
-
-    totalBatchAmount = shardBatches.size + poolBatches.size
-
-    self ! ProcessBatchesEvent()
-
-    sendFinishLoadDataEvent()
+    self ! StartLoadingFile
   }
 
-  private def handleProcessBatches(): Unit = {
-    if (shardBatches.nonEmpty) {
-      val batch = shardBatches.dequeue()
-      sendToCreator(creatorRef, batch)
+  private def openFileAndStart(): Unit = {
+    logInfo(s"Opening file: $sourceFilePath")
+
+    Future {
+      val is = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
+      val (parser, iter) = JsonStreamingUtil.createParser(is)
+      (is, iter)
+    }.onComplete {
+      case Success((is, iter)) =>
+        this.synchronized {
+          currentInputStream = is
+          currentIterator = iter
+        }
+        self ! ProcessNextChunk
+
+      case Failure(e) =>
+        logError(s"Fatal error to open $sourceFilePath", e)
+        self ! CloseAndFinish
     }
-    if (poolBatches.nonEmpty) {
-      val batch = poolBatches.dequeue()
-      sendToCreator(creatorPoolRef, batch)
+  }
+
+  private def readNextChunkAsync(): Unit = {
+    Future {
+      this.synchronized {
+        if (currentIterator != null && currentIterator.hasNext) {
+          currentIterator.take(CHUNK_SIZE).toList
+        } else {
+          List.empty
+        }
+      }
+    }.onComplete {
+      case Success(actors) =>
+        if (actors.nonEmpty) {
+          self ! ChunkLoaded(actors)
+        } else {
+          self ! CloseAndFinish
+        }
+      case Failure(e) =>
+        logError("Error of  I/O in JSON reading", e)
+        self ! CloseAndFinish
     }
-    sendFinishLoadDataEvent()
+  }
+
+  private def sendBatch(actors: List[ActorSimulation]): Unit = {
+    totalLoadedActors += actors.size
+
+    val actorsToCreate = actors.map(actor =>
+      ActorSimulationCreation(
+        resourceId = IdUtil.format(sourceId),
+        actor = actor.copy(id = IdUtil.format(actor.id))
+      )
+    )
+
+    val (poolDistributed, loadBalanced) = actorsToCreate.partition(_.actor.creationType == PoolDistributed)
+
+    if (loadBalanced.nonEmpty) {
+      val batchId = UUID.randomUUID().toString
+      activeBatches.add(batchId)
+      creators.add(creatorRef)
+      creatorRef ! CreateActorsEvent(id = batchId, actors = loadBalanced, actorRef = self)
+    }
+
+    if (poolDistributed.nonEmpty) {
+      val batchId = UUID.randomUUID().toString
+      activeBatches.add(batchId)
+      creators.add(creatorPoolRef)
+      creatorPoolRef ! CreateActorsEvent(id = batchId, actors = poolDistributed, actorRef = self)
+    }
+
+    if (activeBatches.isEmpty) {
+      self ! ProcessNextChunk
+    }
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    processBatchControl.put(event.batchId, true)
-    handleProcessBatches()
-  }
+    activeBatches.remove(event.batchId)
 
-  private def sendToCreator(
-    creator: ActorRef,
-    actorsToCreate: Seq[ActorSimulationCreation]
-  ): Unit = {
-    // 🎲 Usar UUID determinístico para batch ID
-    val batchId =
-      try
-        core.actor.manager.RandomSeedManager.deterministicUUID()
-      catch {
-        case _: Exception => UUID.randomUUID().toString
-      }
-    processBatchControl.put(batchId, false)
-    creator ! CreateActorsEvent(id = batchId, actors = actorsToCreate, actorRef = self)
-  }
-
-  private def createBatches(
-    actorsToCreate: Seq[ActorSimulationCreation]
-  ): mutable.Queue[Seq[ActorSimulationCreation]] = {
-    val batches = if (actorsToCreate.size < batchSize) {
-      if (actorsToCreate.nonEmpty) {
-        Seq(actorsToCreate)
-      } else {
-        Seq()
-      }
-    } else {
-      actorsToCreate.grouped(batchSize).toSeq
+    if (activeBatches.isEmpty) {
+      self ! ProcessNextChunk
     }
-    mutable.Queue(batches: _*)
   }
 
-  private def sendFinishLoadDataEvent(): Unit =
-    if (
-      shardBatches.isEmpty && poolBatches.isEmpty && processBatchControl.values.forall(
-        _.self == true
-      )
-    ) {
-      managerRef ! FinishLoadDataEvent(
-        actorRef = self,
-        amount = amountActors,
-        actorClassType = sourceClassType,
-        creators = creators
-      )
+  private def finishLoading(): Unit = {
+    logInfo(s"End of file, size: $totalLoadedActors")
+
+    if (currentInputStream != null) {
+      try currentInputStream.close() catch { case _: Exception => }
+      currentInputStream = null
+      currentIterator = null
     }
+
+    managerRef ! FinishLoadDataEvent(
+      actorRef = self,
+      amount = totalLoadedActors,
+      actorClassType = sourceClassType,
+      creators = creators
+    )
+  }
+
+  override def postStop(): Unit = {
+    if (currentInputStream != null) {
+      try currentInputStream.close() catch { case _: Exception => }
+    }
+    super.postStop()
+  }
 }
