@@ -27,7 +27,8 @@ abstract class MovableState(
   var movableReachedDestination: Boolean = false,
   val actorType: ActorTypeEnum,
   val size: Double,
-  var movableNextScheduledTick: Option[Tick] = None  // Event-driven: safe horizon
+  var movableNextScheduledTick: Option[Tick] = None,  // Event-driven: safe horizon
+  var movableLastStateChange: Tick = 0  // Track when status last changed (for timeout detection)
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

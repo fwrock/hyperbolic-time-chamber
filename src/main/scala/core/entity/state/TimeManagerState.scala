@@ -49,4 +49,12 @@ case class TimeManagerState(
   localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map(),
   var actorsAmount: Long = 0,
   var totalActorsAmount: Long = 0,
+  // Progress-based stall detection (not time-based)
+  var lastGlobalTickBroadcast: Long = 0,  // Wall time of last broadcast (for logging only)
+  var lastLocalReportReceived: Long = 0,  // Wall time of last report (for logging only)
+  var stallDetectionEnabled: Boolean = true,
+  var cyclesWithoutProgress: Int = 0,  // Count sync cycles with no tick advancement
+  var lastCompletedTick: Tick = 0,  // Last tick that all TMs completed
+  var eventsProcessedLastCycle: Long = 0,  // Events in last sync cycle
+  var totalEventsLastCheck: Long = 0  // Total events at last stall check
 ) extends BaseState(startTick = 0)

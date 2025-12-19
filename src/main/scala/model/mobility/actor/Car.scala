@@ -25,15 +25,12 @@ class Car(
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Moving =>
-        // Arrival event - we scheduled this when entering link
         handleArriveAtNode(currentTick, getCurrentNode)
         
       case RouteWaiting =>
-        // Event-driven: waiting for EnterLinkConfirm async message
         super.actSpontaneous(event)
         
       case WaitingSignal =>
-        // Legacy signal handling
         leavingLink()
         
       case Stopped =>
@@ -54,20 +51,14 @@ class Car(
 
     state.movableStatus match {
       case Moving =>
-        // Moving state: if we know travel time and no signals, could skip ahead
-        // For now, conservative: still need signal coordination
         requestSignalState()
 
       case WaitingSignal =>
-        // Could potentially batch signal checks within horizon
         leavingLink()
 
       case Stopped =>
-        // Stopped: if we have a known wait duration <= lookahead window
-        // we could skip ahead, but need to ensure no external events
-        val waitDuration = 1 // Current fixed wait
+        val waitDuration = 1
         if (currentTick + waitDuration <= safeHorizon) {
-          // Safe to advance
           currentTick += waitDuration
           onFinishSpontaneous(Some(currentTick))
         } else {
@@ -90,17 +81,16 @@ class Car(
       return
     }
     
-    // SEMPRE reporta journey_started, independente do resultado da rota
-//    report(
-//      data = Map(
-//        "event_type" -> "journey_started",
-//        "car_id" -> getEntityId,
-//        "origin" -> state.origin,
-//        "destination" -> state.destination,
-//        "tick" -> currentTick
-//      ),
-//      label = "journey_started"
-//    )
+    report(
+      data = Map(
+        "event_type" -> "journey_started",
+        "car_id" -> getEntityId,
+        "origin" -> state.origin,
+        "destination" -> state.destination,
+        "tick" -> currentTick
+      ),
+      label = "journey_started"
+    )
     state.eventCount += 1
     
     try {
@@ -112,55 +102,51 @@ class Car(
           state.movableStatus = Ready
           state.movableCurrentPath = None
 
-          // Reporta detalhes completos da rota planejada (somente se rota foi calculada)
-//          report(
-//            data = Map(
-//              "event_type" -> "route_planned",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "route_cost" -> cost,
-//              "route_length" -> pathQueue.size,
-//              "route_links" -> pathQueue.map(_._1).mkString(","), // Lista de links do caminho
-//              "route_nodes" -> pathQueue.map(_._2).mkString(","), // Lista de nós do caminho
-//              "tick" -> currentTick
-//            ),
-//            label = "route_planned"
-//          )
+          report(
+            data = Map(
+              "event_type" -> "route_planned",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "route_cost" -> cost,
+              "route_length" -> pathQueue.size,
+              "route_links" -> pathQueue.map(_._1).mkString(","), 
+              "route_nodes" -> pathQueue.map(_._2).mkString(","), 
+              "tick" -> currentTick
+            ),
+            label = "route_planned"
+          )
           state.eventCount += 1
 
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            // Carro já está no destino
-            // Reporta journey_completed para chegada imediata
-//            report(
-//              data = Map(
-//                "event_type" -> "journey_completed",
-//                "car_id" -> getEntityId,
-//                "origin" -> state.origin,
-//                "destination" -> state.destination,
-//                "final_node" -> state.origin,
-//                "reached_destination" -> (state.destination == state.origin),
-//                "completion_reason" -> "already_at_destination",
-//                "total_distance" -> state.distance,
-//                "best_cost" -> cost,
-//                "tick" -> currentTick
-//              ),
-//              label = "journey_completed"
-//            )
+            report(
+              data = Map(
+                "event_type" -> "journey_completed",
+                "car_id" -> getEntityId,
+                "origin" -> state.origin,
+                "destination" -> state.destination,
+                "final_node" -> state.origin,
+                "reached_destination" -> (state.destination == state.origin),
+                "completion_reason" -> "already_at_destination",
+                "total_distance" -> state.distance,
+                "best_cost" -> cost,
+                "tick" -> currentTick
+              ),
+              label = "journey_completed"
+            )
             state.eventCount += 1
 
-            // Reporta estatísticas finais de eventos
-//            report(
-//              data = Map(
-//                "event_type" -> "vehicle_event_count",
-//                "car_id" -> getEntityId,
-//                "total_events" -> state.eventCount,
-//                "tick" -> currentTick
-//              ),
-//              label = "vehicle_event_count"
-//            )
+            report(
+              data = Map(
+                "event_type" -> "vehicle_event_count",
+                "car_id" -> getEntityId,
+                "total_events" -> state.eventCount,
+                "tick" -> currentTick
+              ),
+              label = "vehicle_event_count"
+            )
 
             // Não chamar onFinish aqui, implementar diretamente
             state.movableStatus = Finished
@@ -171,54 +157,50 @@ class Car(
             s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}."
           )
 
-          // Reporta route_planned com falha
-//          report(
-//            data = Map(
-//              "event_type" -> "route_planned",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "route_cost" -> Double.PositiveInfinity,
-//              "route_length" -> 0,
-//              "route_links" -> "",
-//              "route_nodes" -> "",
-//              "planning_result" -> "failed",
-//              "tick" -> currentTick
-//            ),
-//            label = "route_planned"
-//          )
+          report(
+            data = Map(
+              "event_type" -> "route_planned",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "route_cost" -> Double.PositiveInfinity,
+              "route_length" -> 0,
+              "route_links" -> "",
+              "route_nodes" -> "",
+              "planning_result" -> "failed",
+              "tick" -> currentTick
+            ),
+            label = "route_planned"
+          )
           state.eventCount += 1
 
-          // Reporta journey_completed para falha de rota
-//          report(
-//            data = Map(
-//              "event_type" -> "journey_completed",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "final_node" -> state.origin,
-//              "reached_destination" -> false,
-//              "completion_reason" -> "route_calculation_failed",
-//              "total_distance" -> state.distance,
-//              "best_cost" -> state.bestCost,
-//              "tick" -> currentTick
-//            ),
-//            label = "journey_completed"
-//          )
+          report(
+            data = Map(
+              "event_type" -> "journey_completed",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "final_node" -> state.origin,
+              "reached_destination" -> false,
+              "completion_reason" -> "route_calculation_failed",
+              "total_distance" -> state.distance,
+              "best_cost" -> state.bestCost,
+              "tick" -> currentTick
+            ),
+            label = "journey_completed"
+          )
           state.eventCount += 1
 
-          // Reporta estatísticas finais de eventos
-//          report(
-//            data = Map(
-//              "event_type" -> "vehicle_event_count",
-//              "car_id" -> getEntityId,
-//              "total_events" -> state.eventCount,
-//              "tick" -> currentTick
-//            ),
-//            label = "vehicle_event_count"
-//          )
+          report(
+            data = Map(
+              "event_type" -> "vehicle_event_count",
+              "car_id" -> getEntityId,
+              "total_events" -> state.eventCount,
+              "tick" -> currentTick
+            ),
+            label = "vehicle_event_count"
+          )
 
-          // Não chamar onFinish aqui, implementar diretamente
           state.movableStatus = Finished
           onFinishSpontaneous()
       }
@@ -226,56 +208,52 @@ class Car(
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
 
-        // Reporta route_planned com exceção
-//        report(
-//          data = Map(
-//            "event_type" -> "route_planned",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "route_cost" -> Double.PositiveInfinity,
-//            "route_length" -> 0,
-//            "route_links" -> "",
-//            "route_nodes" -> "",
-//            "planning_result" -> "exception",
-//            "error_message" -> e.getMessage,
-//            "tick" -> currentTick
-//          ),
-//          label = "route_planned"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "route_planned",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "route_cost" -> Double.PositiveInfinity,
+            "route_length" -> 0,
+            "route_links" -> "",
+            "route_nodes" -> "",
+            "planning_result" -> "exception",
+            "error_message" -> e.getMessage,
+            "tick" -> currentTick
+          ),
+          label = "route_planned"
+        )
         state.eventCount += 1
 
-        // Reporta journey_completed para exceção
-//        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> state.origin,
-//            "reached_destination" -> false,
-//            "completion_reason" -> "exception_during_route_request",
-//            "error_message" -> e.getMessage,
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> state.origin,
+            "reached_destination" -> false,
+            "completion_reason" -> "exception_during_route_request",
+            "error_message" -> e.getMessage,
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
-//        report(
-//          data = Map(
-//            "event_type" -> "vehicle_event_count",
-//            "car_id" -> getEntityId,
-//            "total_events" -> state.eventCount,
-//            "tick" -> currentTick
-//          ),
-//          label = "vehicle_event_count"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
 
-        // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
     }
@@ -291,69 +269,64 @@ class Car(
     ) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
-        // Reporta journey_completed para chegada ao destino
-//        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> currentNodeId,
-//            "reached_destination" -> (state.destination == currentNodeId),
-//            "completion_reason" -> "reached_destination_or_end_of_route",
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> currentNodeId,
+            "reached_destination" -> (state.destination == currentNodeId),
+            "completion_reason" -> "reached_destination_or_end_of_route",
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
-//        report(
-//          data = Map(
-//            "event_type" -> "vehicle_event_count",
-//            "car_id" -> getEntityId,
-//            "total_events" -> state.eventCount,
-//            "tick" -> currentTick
-//          ),
-//          label = "vehicle_event_count"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
 
-        // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
 
-        // Reporta journey_completed para fim sem nó atual
-//        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> "unknown",
-//            "reached_destination" -> false,
-//            "completion_reason" -> "no_current_node",
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "journey_completed",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "final_node" -> "unknown",
+            "reached_destination" -> false,
+            "completion_reason" -> "no_current_node",
+            "total_distance" -> state.distance,
+            "best_cost" -> state.bestCost,
+            "tick" -> currentTick
+          ),
+          label = "journey_completed"
+        )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
-//        report(
-//          data = Map(
-//            "event_type" -> "vehicle_event_count",
-//            "car_id" -> getEntityId,
-//            "total_events" -> state.eventCount,
-//            "tick" -> currentTick
-//          ),
-//          label = "vehicle_event_count"
-//        )
+        report(
+          data = Map(
+            "event_type" -> "vehicle_event_count",
+            "car_id" -> getEntityId,
+            "total_events" -> state.eventCount,
+            "tick" -> currentTick
+          ),
+          label = "vehicle_event_count"
+        )
 
         onFinishSpontaneous()
       }
@@ -393,33 +366,31 @@ class Car(
   }
 
   override protected def onFinish(nodeId: String): Unit = {
-    // Reporta evento de conclusão da jornada
-//    report(
-//      data = Map(
-//        "event_type" -> "journey_completed",
-//        "car_id" -> getEntityId,
-//        "origin" -> state.origin,
-//        "destination" -> state.destination,
-//        "final_node" -> nodeId,
-//        "reached_destination" -> (state.destination == nodeId),
-//        "total_distance" -> state.distance,
-//        "best_cost" -> state.bestCost,
-//        "tick" -> currentTick
-//      ),
-//      label = "journey_completed"
-//    )
+    report(
+      data = Map(
+        "event_type" -> "journey_completed",
+        "car_id" -> getEntityId,
+        "origin" -> state.origin,
+        "destination" -> state.destination,
+        "final_node" -> nodeId,
+        "reached_destination" -> (state.destination == nodeId),
+        "total_distance" -> state.distance,
+        "best_cost" -> state.bestCost,
+        "tick" -> currentTick
+      ),
+      label = "journey_completed"
+    )
     state.eventCount += 1
 
-    // Reporta estatísticas finais de eventos para este veículo (como no outro simulador)
-//    report(
-//      data = Map(
-//        "event_type" -> "vehicle_event_count",
-//        "car_id" -> getEntityId,
-//        "total_events" -> state.eventCount,
-//        "tick" -> currentTick
-//      ),
-//      label = "vehicle_event_count"
-//    )
+    report(
+      data = Map(
+        "event_type" -> "vehicle_event_count",
+        "car_id" -> getEntityId,
+        "total_events" -> state.eventCount,
+        "tick" -> currentTick
+      ),
+      label = "vehicle_event_count"
+    )
 
     // Implementar lógica da classe pai sem chamar super
     if (state.destination == nodeId) {
@@ -439,17 +410,17 @@ class Car(
   ): Unit = {
     state.distance += data.linkLength
 
-//    report(
-//      data = Map(
-//        "event_type" -> "leave_link",
-//        "car_id" -> getEntityId,
-//        "link_id" -> event.actorRefId,
-//        "link_length" -> data.linkLength,
-//        "total_distance" -> state.distance,
-//        "tick" -> currentTick
-//      ),
-//      label = "leave_link"
-//    )
+    report(
+      data = Map(
+        "event_type" -> "leave_link",
+        "car_id" -> getEntityId,
+        "link_id" -> event.actorRefId,
+        "link_length" -> data.linkLength,
+        "total_distance" -> state.distance,
+        "tick" -> currentTick
+      ),
+      label = "leave_link"
+    )
     state.eventCount += 1
 
     onFinishSpontaneous(Some(currentTick + 1))
@@ -470,22 +441,22 @@ class Car(
     val time = data.linkLength / speed
     state.movableStatus = Moving
 
-//    report(
-//      data = Map(
-//        "event_type" -> "enter_link",
-//        "car_id" -> getEntityId,
-//        "link_id" -> event.actorRefId,
-//        "link_length" -> data.linkLength,
-//        "link_capacity" -> data.linkCapacity,
-//        "cars_in_link" -> data.linkNumberOfCars,
-//        "free_speed" -> data.linkFreeSpeed,
-//        "calculated_speed" -> speed,
-//        "travel_time" -> time,
-//        "lanes" -> data.linkLanes,
-//        "tick" -> currentTick
-//      ),
-//      label = "enter_link"
-//    )
+    report(
+      data = Map(
+        "event_type" -> "enter_link",
+        "car_id" -> getEntityId,
+        "link_id" -> event.actorRefId,
+        "link_length" -> data.linkLength,
+        "link_capacity" -> data.linkCapacity,
+        "cars_in_link" -> data.linkNumberOfCars,
+        "free_speed" -> data.linkFreeSpeed,
+        "calculated_speed" -> speed,
+        "travel_time" -> time,
+        "lanes" -> data.linkLanes,
+        "tick" -> currentTick
+      ),
+      label = "enter_link"
+    )
     state.eventCount += 1
 
     if (time.isNaN || time.isInfinite || time < 0) {

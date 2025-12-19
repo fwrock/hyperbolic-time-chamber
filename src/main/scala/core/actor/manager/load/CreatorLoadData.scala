@@ -72,9 +72,7 @@ class CreatorLoadData(
     case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
     case RetryPendingAcks => handleRetryPendingAcks()
 
-    // CORREÇÃO DO ERRO #2 (MatchError):
-    // Ignora mensagens internas do Pekko Persistence/Snapshot que vazam do BaseActor
-    case _ => // Ignora silenciamente RecoveryPermitGranted, LoadSnapshotResult, etc.
+    case _ => 
   }
 
   private def handleRetryPendingAcks(): Unit = {
@@ -112,8 +110,7 @@ class CreatorLoadData(
   }
 
   private def handleProcessNextCreateChunk(batchId: String): Unit = {
-    // CORREÇÃO DO ERRO #1 (NoSuchElementException):
-    // Usa .getOrElse para evitar crash se o batch já foi finalizado por uma race condition
+
     val currentActors = actorsToCreate.getOrElse(batchId, List.empty)
     val chunk = currentActors.take(CREATE_CHUNK_SIZE)
 
@@ -145,7 +142,6 @@ class CreatorLoadData(
         shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
       }
 
-      // Atualiza a lista de forma segura
       actorsToCreate(batchId) = actorsToCreate(batchId).drop(chunk.size)
 
       if (actorsToCreate(batchId).nonEmpty) {
@@ -156,7 +152,6 @@ class CreatorLoadData(
         )
       }
     } else {
-      // Se entrou aqui mas a lista está vazia ou nula, verifica se já acabou
       checkAndSendFinish(batchId)
     }
   }
@@ -181,12 +176,9 @@ class CreatorLoadData(
       case None =>
     }
 
-  // Handler CRÍTICO: Onde ocorria o key not found
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
-    // 1. Busca segura do batchId. Se não achar (Ack duplicado), retorna None.
     actorsBatches.get(event.entityId) match {
       case Some(batchId) =>
-        // 2. Busca segura dos dados de inicialização
         initializeData.get(batchId).flatMap(_.get(event.entityId)) match {
           case Some(data) =>
             val initializeEvent = InitializeEvent(
@@ -211,16 +203,13 @@ class CreatorLoadData(
             if (initializeData(batchId).isEmpty) initializeData.remove(batchId)
 
           case None =>
-          // Ack duplicado ou já processado. Ignora.
         }
       case None =>
-      // O batch já foi finalizado e limpo, mas chegou um Ack atrasado. Ignora.
     }
   }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
     val batchId = actorsBatches.getOrElse(event.entityId, "")
-    // Se batchId for vazio (não achou), o removeOf... lida com isso suavemente ou ignora
     if (batchId.nonEmpty) {
       removeOfInitializedAcknowledges(batchId, event.entityId)
       checkAndSendFinish(batchId)
@@ -228,13 +217,11 @@ class CreatorLoadData(
   }
 
   private def checkAndSendFinish(batchId: String): Unit = {
-    // Verificação defensiva: Se as chaves não existirem nos mapas, considera como "vazio/sucesso"
     val hasPendingCreation = actorsToCreate.get(batchId).exists(_.nonEmpty)
     val hasPendingAcks = initializedAcknowledges.get(batchId).exists(_.nonEmpty)
     val hasPendingInitData = initializeData.contains(batchId)
 
     if (!hasPendingCreation && !hasPendingAcks && !hasPendingInitData) {
-//      logInfo(s"Batch $batchId finalizado com sucesso. Notificando JsonLoadData.")
 
       batchesLoad.get(batchId).foreach { ref =>
         ref ! FinishCreationEvent(
@@ -244,13 +231,10 @@ class CreatorLoadData(
         )
       }
 
-      // Limpeza segura
       batchesLoad.remove(batchId)
       batchesToCreate.remove(batchId)
       actorsToCreate.remove(batchId)
 
-      // Limpeza reversa do mapa actorsBatches (pode ser pesado, mas necessário para não vazar memória)
-      // Se a performance cair aqui, podemos ignorar, pois actorsBatches é apenas String->String
       actorsBatches.filterInPlace((_, bId) => bId != batchId)
     }
   }
