@@ -95,17 +95,6 @@ sbt scalafix --check
 
 This system was developed for research in **urban mobility** and **traffic simulation**.
 
-**For citation:**
-```bibtex
-@software{hyperbolic_time_chamber,
-  title={Hyperbolic Time Chamber: Multi-Agent Traffic Simulation Framework},
-  author={Rocha, Francisco Wallison and Francesquini, Emilio and Cordeiro, Daniel},
-  year={2025},
-  url={https://github.com/fwrock/hyperbolic-time-chamber},
-  note={Multi-agent simulation system with mesoscopic mobility model}
-}
-```
-
 **For detailed academic usage guidelines, see [Academic Usage](docs/ACADEMIC_USAGE.md)**
 
 ---
