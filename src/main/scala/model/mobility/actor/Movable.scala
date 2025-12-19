@@ -6,18 +6,18 @@ import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.vehicle.{EnterLinkConfirmData, ArriveAtNodeData}
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo, EnterLinkConfirm, ArriveAtNode }
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start, Moving, RouteWaiting }
+import org.interscity.htc.model.mobility.entity.event.data.vehicle.{ArriveAtNodeData, EnterLinkConfirmData}
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ArriveAtNode, EnterLinkConfirm, ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Start}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
+import org.interscity.htc.model.mobility.entity.event.data.{EnterLinkData, LeaveLinkData}
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtil }
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, GPSUtilWithCache}
 
 import scala.collection.mutable
 
@@ -28,23 +28,15 @@ abstract class Movable[T <: MovableState](
       properties = properties
     ) {
 
-  protected def updateStatus(newStatus: org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum): Unit = {
-    if (state.movableStatus != newStatus) {
-      logDebug(s"Vehicle ${getEntityId}: ${state.movableStatus} -> $newStatus at tick $currentTick")
-      state.movableStatus = newStatus
-      state.movableLastStateChange = currentTick
-    }
-  }
-
   protected def requestRoute(): Unit = {
     if (state.movableStatus == Finished) {
       return
     }
     try
-      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      GPSUtilWithCache.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.movableBestRoute = Some(pathQueue)
-          updateStatus(Ready)
+          state.movableStatus = Ready
           state.movableCurrentPath = None
           if (pathQueue.nonEmpty) {
             enterLinkEventDriven()  // Event-driven
@@ -73,25 +65,22 @@ abstract class Movable[T <: MovableState](
     state.movableStatus match
       case Start =>
         requestRoute()
-
+        // requestRoute() handles transition to Ready and calls enterLinkEventDriven()
+        
       case Ready =>
+        // Should not normally reach here - Ready transitions happen in requestRoute()
+        // But if scheduled, try to enter link
         logInfo(s"Vehicle ${getEntityId} ready to enter link (event-driven)")
-        enterLinkEventDriven()
+        enterLinkEventDriven()  // Event-driven: request with travel time (calls onFinishSpontaneous internally)
         
       case RouteWaiting =>
-        val waitingTime = currentTick - state.movableLastStateChange
-        if (waitingTime > 100) {  // 100 ticks timeout
-          logError(s"Vehicle ${getEntityId} stuck in RouteWaiting for $waitingTime ticks at tick $currentTick! Link may have failed to respond. Resetting...")
-          logError(s"  Current path: ${state.movableCurrentPath}")
-          logError(s"  Route: ${state.movableBestRoute.map(_.size).getOrElse(0)} segments remaining")
-          state.movableStatus = Ready
-          enterLinkEventDriven()
-        } else {
-          logDebug(s"Vehicle ${getEntityId} in RouteWaiting (waiting ${waitingTime} ticks for EnterLinkConfirm)")
-          onFinishSpontaneous()
-        }
+        // Event-driven: Waiting for EnterLinkConfirm async message
+        // Just report finish without scheduling next tick
+        logDebug(s"Vehicle ${getEntityId} in RouteWaiting (waiting for EnterLinkConfirm), calling onFinishSpontaneous()")
+        onFinishSpontaneous()
         
       case Moving =>
+        // Event-driven: Vehicle is traveling on link, arrived at scheduled time
         val nodeId = getCurrentNode
         if (nodeId != null) {
           logDebug(s"Vehicle ${getEntityId} arrived at node $nodeId at tick $currentTick")
@@ -107,6 +96,7 @@ abstract class Movable[T <: MovableState](
         
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
+        // Conservative fallback - should not happen in event-driven model
         onFinishSpontaneous(Some(currentTick + 1))
 
   /** Execute with lookahead: process status-dependent logic without external dependencies
@@ -144,7 +134,7 @@ abstract class Movable[T <: MovableState](
     logDebug(s"Vehicle ${getEntityId} received EnterLinkConfirm for link ${data.linkId}, travel time = ${data.baseTravelTime}")
     
     // Update state
-    updateStatus(Moving)
+    state.movableStatus = Moving
     state.movableCurrentLink = data.linkId
 
     val arrivalTick = currentTick + data.baseTravelTime
@@ -185,7 +175,7 @@ abstract class Movable[T <: MovableState](
     getNextPath match {
       case Some(nextPath) =>
         state.movableCurrentPath = Some(nextPath)
-        updateStatus(Ready)
+        state.movableStatus = Ready
         enterLinkEventDriven()  // Event-driven entry
       case None =>
         onFinish(nodeId)
@@ -238,7 +228,7 @@ abstract class Movable[T <: MovableState](
               eventType = org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.RequestEnterLink.toString,
               actorType = LoadBalancedDistributed
             )
-            updateStatus(RouteWaiting)
+            state.movableStatus = RouteWaiting  // Reuse existing status instead of new WaitingLinkEntry
             logDebug(s"Vehicle ${getEntityId} now waiting for EnterLinkConfirm")
             onFinishSpontaneous()
           case None =>

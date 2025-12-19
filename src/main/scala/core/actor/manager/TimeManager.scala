@@ -242,47 +242,17 @@ class TimeManager(
     amountEvents: Long
   ): Unit =
     if (parentManager.isEmpty) {
-      try {
-        state.lastLocalReportReceived = System.currentTimeMillis()
-        state.totalEventsAmount += amountEvents
-        
-        val managerName = localManager.path.name
-        logDebug(s"Global TM received report from $managerName: tick=$tick, hasScheduled=$hasScheduled, events=$amountEvents")
-        
-        state.localTimeManagers.update(
-          localManager,
-          LocalTimeManagerTickInfo(
-            tick = tick,
-            hasSchedule = hasScheduled,
-            isProcessed = true
-          )
+      state.totalEventsAmount += amountEvents
+      state.localTimeManagers.update(
+        localManager,
+        LocalTimeManagerTickInfo(
+          tick = tick,
+          hasSchedule = hasScheduled,
+          isProcessed = true
         )
-        
-        val allProcessed = state.localTimeManagers.values.forall(_.isProcessed)
-        val pendingCount = state.localTimeManagers.values.count(!_.isProcessed)
-        
-        if (allProcessed) {
-          logDebug(s"All ${state.localTimeManagers.size} local TMs reported for tick $tick, advancing...")
-          calculateAndBroadcastNextGlobalTick()
-        } else {
-          logDebug(s"Waiting for $pendingCount more local TM reports (tick $tick)")
-          checkForStalledLocalManagers()
-        }
-      } catch {
-        case e: Exception =>
-          logError(s"CRITICAL: Exception in handleLocalTimeReport from ${localManager.path.name}", e)
-          state.localTimeManagers.update(
-            localManager,
-            LocalTimeManagerTickInfo(
-              tick = tick,
-              hasSchedule = false,
-              isProcessed = true
-            )
-          )
-          if (state.localTimeManagers.values.forall(_.isProcessed)) {
-            logWarn(s"Forcing global tick advancement after error recovery")
-            calculateAndBroadcastNextGlobalTick()
-          }
+      )
+      if (state.localTimeManagers.values.forall(_.isProcessed)) {
+        calculateAndBroadcastNextGlobalTick()
       }
     }
   
@@ -293,145 +263,39 @@ class TimeManager(
     eventsAmount: Long
   ): Unit =
     if (parentManager.isEmpty) {
-      try {
-        state.lastLocalReportReceived = System.currentTimeMillis()
-        state.totalEventsAmount += eventsAmount
-        
-        val managerName = localManager.path.name
-        logDebug(s"Global TM received window report from $managerName: windowEnd=$windowEnd, hasScheduled=$hasScheduled, events=$eventsAmount")
-        
+      state.totalEventsAmount += eventsAmount
+      state.localTimeManagers.update(
+        localManager,
+        LocalTimeManagerTickInfo(
+          tick = windowEnd,
+          hasSchedule = hasScheduled,
+          isProcessed = true
+        )
+      )
+      if (state.localTimeManagers.values.forall(_.isProcessed)) {
+        calculateAndBroadcastNextWindow()
+      }
+    }
+
+  private def calculateAndBroadcastNextGlobalTick(): Unit = {
+    val scheduled = state.localTimeManagers.values.filter(_.hasSchedule)
+    val nextTick = if (scheduled.nonEmpty) {
+      scheduled.map(_.tick).min
+    } else {
+      state.localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+    }
+    state.localTickOffset = nextTick
+    state.tickOffset = nextTick - state.initialTick
+    state.localTimeManagers.keys.foreach {
+      timeManager =>
         state.localTimeManagers.update(
-          localManager,
+          timeManager,
           LocalTimeManagerTickInfo(
-            tick = windowEnd,
-            hasSchedule = hasScheduled,
-            isProcessed = true
+            tick = nextTick
           )
         )
-        
-        val allProcessed = state.localTimeManagers.values.forall(_.isProcessed)
-        val pendingCount = state.localTimeManagers.values.count(!_.isProcessed)
-        
-        if (allProcessed) {
-          logDebug(s"All ${state.localTimeManagers.size} local TMs reported for window $windowEnd, advancing...")
-          calculateAndBroadcastNextWindow()
-        } else {
-          logDebug(s"Waiting for $pendingCount more local TM window reports (windowEnd $windowEnd)")
-          checkForStalledLocalManagers()
-        }
-      } catch {
-        case e: Exception =>
-          logError(s"CRITICAL: Exception in handleLocalTimeWindowReport from ${localManager.path.name}", e)
-          state.localTimeManagers.update(
-            localManager,
-            LocalTimeManagerTickInfo(
-              tick = windowEnd,
-              hasSchedule = false,
-              isProcessed = true
-            )
-          )
-          if (state.localTimeManagers.values.forall(_.isProcessed)) {
-            logWarn(s"Forcing global window advancement after error recovery")
-            calculateAndBroadcastNextWindow()
-          }
-      }
     }
-
-  /** Check for stalled local time managers based on lack of progress, not time
-    * Detects true deadlock by monitoring:
-    * 1. Multiple sync cycles without tick advancement
-    * 2. Zero events processed across all local TMs
-    * 3. All TMs stuck reporting the same tick repeatedly
-    */
-  private def checkForStalledLocalManagers(): Unit = {
-    if (!state.stallDetectionEnabled) return
-    
-    val currentTick = state.localTickOffset
-    val eventsThisCycle = state.totalEventsAmount - state.totalEventsLastCheck
-    val allProcessed = state.localTimeManagers.values.forall(_.isProcessed)
-    
-    val tickProgressed = currentTick > state.lastCompletedTick
-    val eventsHappened = eventsThisCycle > 0
-    
-    if (allProcessed) {
-      if (!tickProgressed && !eventsHappened) {
-        state.cyclesWithoutProgress += 1
-        
-        if (state.cyclesWithoutProgress >= 3) {
-          logError(s"DEADLOCK DETECTED: ${state.cyclesWithoutProgress} sync cycles with NO progress at tick $currentTick")
-          logError(s"  Events this cycle: $eventsThisCycle (total: ${state.totalEventsAmount})")
-          logError(s"  Tick stuck at: $currentTick (last completed: ${state.lastCompletedTick})")
-          
-          val pending = state.localTimeManagers.filter(!_._2.isProcessed)
-          if (pending.nonEmpty) {
-            logError(s"  ${pending.size} TMs pending:")
-            pending.foreach { case (manager, info) =>
-              logError(s"    - ${manager.path.name}: tick=${info.tick}, hasSchedule=${info.hasSchedule}")
-            }
-          } else {
-            logError(s"  All ${state.localTimeManagers.size} TMs reported, but no progress!")
-            state.localTimeManagers.foreach { case (manager, info) =>
-              logError(s"    - ${manager.path.name}: tick=${info.tick}, hasSchedule=${info.hasSchedule}")
-            }
-          }
-          
-          if (state.cyclesWithoutProgress >= 5) {
-            logError(s"CRITICAL: Forcing tick advancement after ${state.cyclesWithoutProgress} deadlock cycles")
-            state.localTickOffset += 1
-            state.cyclesWithoutProgress = 0
-            state.lastCompletedTick = state.localTickOffset
-            if (state.windowExecutionEnabled) {
-              calculateAndBroadcastNextWindow()
-            } else {
-              calculateAndBroadcastNextGlobalTick()
-            }
-          }
-        } else {
-          logWarn(s"No progress detected (cycle ${state.cyclesWithoutProgress}/3) at tick $currentTick, events=$eventsThisCycle")
-        }
-      } else {
-        if (state.cyclesWithoutProgress > 0) {
-          logInfo(s"Progress resumed after ${state.cyclesWithoutProgress} stalled cycles (tick: ${state.lastCompletedTick} -> $currentTick, events: +$eventsThisCycle)")
-        }
-        state.cyclesWithoutProgress = 0
-        state.lastCompletedTick = currentTick
-      }
-      
-      state.totalEventsLastCheck = state.totalEventsAmount
-    }
-  }
-  
-  private def calculateAndBroadcastNextGlobalTick(): Unit = {
-    try {
-      val scheduled = state.localTimeManagers.values.filter(_.hasSchedule)
-      val nextTick = if (scheduled.nonEmpty) {
-        scheduled.map(_.tick).min
-      } else {
-        state.localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
-      }
-      state.localTickOffset = nextTick
-      state.tickOffset = nextTick - state.initialTick
-      state.localTimeManagers.keys.foreach {
-        timeManager =>
-          state.localTimeManagers.update(
-            timeManager,
-            LocalTimeManagerTickInfo(
-              tick = nextTick
-            )
-          )
-      }
-      
-      // Update timestamp
-      state.lastGlobalTickBroadcast = System.currentTimeMillis()
-      logDebug(s"Broadcasting global tick ${state.localTickOffset} to ${state.localTimeManagers.size} local TMs")
-      
-      notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset, totalEventsAmount = state.totalEventsAmount))
-    } catch {
-      case e: Exception =>
-        logError(s"CRITICAL: Exception in calculateAndBroadcastNextGlobalTick at tick ${state.localTickOffset}", e)
-
-        state.localTickOffset += 1
-    }
+    notifyLocalManagers(UpdateGlobalTimeEvent(state.localTickOffset, totalEventsAmount = state.totalEventsAmount))
   }
   
   private def calculateAndBroadcastNextWindow(): Unit = {
@@ -461,14 +325,9 @@ class TimeManager(
   }
 
   private def notifyLocalManagers(event: Any): Unit =
-    state.localTimeManagers.keys.foreach { localManager =>
-      try {
+    state.localTimeManagers.keys.foreach {
+      localManager =>
         localManager ! event
-        state.countScheduled += 1
-      } catch {
-        case e: Exception =>
-          logError(s"CRITICAL: Failed to send event to local TM ${localManager.path.name}", e)
-      }
     }
 
   private def scheduleApply(schedule: ScheduleEvent): Unit = {
