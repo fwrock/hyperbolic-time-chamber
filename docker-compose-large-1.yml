@@ -1,0 +1,346 @@
+---
+services:
+
+  redis:
+    image: redis:latest
+    container_name: htc-redis
+    network_mode: host
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 4G
+  node1:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_1
+    depends_on:
+      - redis
+    hostname: node1
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node1
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      MANAGEMENT_HTTP_PORT: 8558
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node2:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_2
+    depends_on:
+      - redis
+    hostname: node2
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node2
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8559
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node3:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_3
+    depends_on:
+      - redis
+    hostname: node3
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1602
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node3
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8560
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIMESe MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node4:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_4
+    depends_on:
+      - redis
+    hostname: node4
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1603
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node4
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8561
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node5:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_5
+    depends_on:
+      - redis
+    hostname: node5
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1604
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node5
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8562
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node6:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_6
+    depends_on:
+      - redis
+    hostname: node6
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1605
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node6
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8563
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node7:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_7
+    depends_on:
+      - redis
+    hostname: node7
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1606
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node7
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8564
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+  node8:
+    image: uxhabam/hyperbolic-time-chamber:1.23.3
+    container_name: node_8
+    depends_on:
+      - redis
+    hostname: node8
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1607
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node8
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8565
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/carla_smart_mobility_idf_12_5M_random_segmented/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_LOOKAHEAD: 1
+      HTC_TIME_MANAGER_WINDOW_SIZE: 1
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_VERBOSE_LOGGING: true
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_CSV_INSTANCES: 8
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+    deploy:
+      resources:
+        limits:
+          memory: 37G
+        reservations:
+          memory: 25G
+
+volumes:
+  redis_data:

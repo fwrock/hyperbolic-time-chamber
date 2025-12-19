@@ -1,0 +1,279 @@
+---
+# Docker Compose - High Performance Configuration
+# Optimized for large-scale workloads with maximum throughput
+#
+# Hardware Requirements (per node):
+# - CPU: 16+ cores
+# - RAM: 128 GB
+# - Network: 10 Gbps+
+# - Disk: SSD NVMe
+
+services:
+
+  redis:
+    image: redis:latest
+    container_name: htc-redis-performance
+    network_mode: host
+    command: >
+      redis-server
+      --maxmemory 32gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-backlog 65535
+      --maxclients 100000
+      --tcp-keepalive 60
+      --timeout 0
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+          cpus: '4.0'
+        reservations:
+          memory: 32G
+          cpus: '4.0'
+
+  # Seed Node (Coordinator)
+  node-seed:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_seed_node
+    depends_on:
+      - redis
+    cpuset: "0-15,64-79"  # 16 cores + HT
+    hostname: seed-node
+    network_mode: host
+    environment:
+      # Cluster Configuration
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: seed-node
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8558
+      
+      # Redis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      
+      # Simulation
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/data/city_map.json
+      
+      # Time Manager Optimization
+      HTC_TIME_MANAGER_INSTANCES: 128
+      HTC_TIME_MANAGER_PER_NODE: 16
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      
+      # Report Manager
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+      
+      # JVM Performance Tuning
+      JAVA_OPTS: >-
+        -Xmx120G
+        -Xms120G
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=32M
+        -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled
+        -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch
+        -XX:InitiatingHeapOccupancyPercent=45
+        -XX:G1ReservePercent=15
+        -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60
+        -XX:ConcGCThreads=4
+        -XX:ParallelGCThreads=16
+        -XX:+UseNUMA
+        -XX:+DisableExplicitGC
+        -Dpekko.actor.default-dispatcher.throughput=500
+        -Dpekko.remote.artery.advanced.maximum-frame-size=2MiB
+        -Dpekko.cluster.sharding.buffer-size=100000
+        
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+    deploy:
+      resources:
+        limits:
+          memory: 124G
+          cpus: '16.0'
+        reservations:
+          memory: 120G
+          cpus: '15.0'
+
+  # Worker Node 1
+  node-worker-1:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_worker_1
+    depends_on:
+      - node-seed
+    cpuset: "16-31,80-95"  # 16 cores + HT
+    hostname: worker-1
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: worker-1
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8559
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 2048
+      HTC_TIME_MANAGER_PER_NODE: 256
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+      JAVA_OPTS: >-
+        -Xmx120G -Xms120G -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=32M -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch -XX:InitiatingHeapOccupancyPercent=45
+        -XX:G1ReservePercent=15 -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60 -XX:ConcGCThreads=4
+        -XX:ParallelGCThreads=16 -XX:+UseNUMA -XX:+DisableExplicitGC
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+    deploy:
+      resources:
+        limits:
+          memory: 124G
+          cpus: '16.0'
+        reservations:
+          memory: 120G
+          cpus: '15.0'
+
+  # Worker Node 2
+  node-worker-2:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_worker_2
+    depends_on:
+      - node-seed
+    cpuset: "32-47,96-111"  # 16 cores + HT
+    hostname: worker-2
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1602
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: worker-2
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8560
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 2048
+      HTC_TIME_MANAGER_PER_NODE: 256
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+      JAVA_OPTS: >-
+        -Xmx120G -Xms120G -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=32M -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch -XX:InitiatingHeapOccupancyPercent=45
+        -XX:G1ReservePercent=15 -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60 -XX:ConcGCThreads=4
+        -XX:ParallelGCThreads=16 -XX:+UseNUMA -XX:+DisableExplicitGC
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+    deploy:
+      resources:
+        limits:
+          memory: 124G
+          cpus: '16.0'
+        reservations:
+          memory: 120G
+          cpus: '15.0'
+
+  # Worker Node 3
+  node-worker-3:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_worker_3
+    depends_on:
+      - node-seed
+    cpuset: "48-63,112-127"  # 16 cores + HT
+    hostname: worker-3
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1603
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: worker-3
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8561
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/large_workload/data/city_map.json
+      HTC_TIME_MANAGER_INSTANCES: 2048
+      HTC_TIME_MANAGER_PER_NODE: 256
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_REPORT_JSON_INSTANCES: 64
+      HTC_REPORT_JSON_PER_NODE: 8
+      JAVA_OPTS: >-
+        -Xmx120G -Xms120G -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=32M -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch -XX:InitiatingHeapOccupancyPercent=45
+        -XX:G1ReservePercent=15 -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60 -XX:ConcGCThreads=4
+        -XX:ParallelGCThreads=16 -XX:+UseNUMA -XX:+DisableExplicitGC
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+    deploy:
+      resources:
+        limits:
+          memory: 124G
+          cpus: '16.0'
+        reservations:
+          memory: 120G
+          cpus: '15.0'
+
+volumes:
+  redis_data:
+
+# Performance Monitoring Commands:
+#
+# 1. Check cluster status:
+#    curl http://localhost:8558/cluster/members | jq
+#
+# 2. Monitor container stats:
+#    docker stats
+#
+# 3. Check GC logs (add to JAVA_OPTS):
+#    -Xlog:gc*:file=/app/hyperbolic-time-chamber/output/gc.log:time,uptime,level,tags
+#
+# 4. Profile with async-profiler:
+#    docker exec htc_worker_1 jcmd <pid> VM.unlock_commercial_features
+#    docker exec htc_worker_1 jcmd <pid> Profiler.start
+#
+# 5. Monitor network throughput:
+#    iftop -i eth0
+#
+# 6. Check Redis performance:
+#    redis-cli --latency
+#    redis-cli --stat

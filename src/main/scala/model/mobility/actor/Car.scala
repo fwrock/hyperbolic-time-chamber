@@ -21,16 +21,54 @@ class Car(
       properties = properties
     ) {
 
+  /** Event-driven: Override to use event-driven model */
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Moving =>
-        requestSignalState()
+        handleArriveAtNode(currentTick, getCurrentNode)
+        
+      case RouteWaiting =>
+        super.actSpontaneous(event)
+        
       case WaitingSignal =>
         leavingLink()
+        
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
-      case _ => super.actSpontaneous(event)
+        
+      case _ => 
+        // Delegate to Movable for Start, Ready, Finished
+        super.actSpontaneous(event)
     }
+
+  /** Car-specific lookahead optimization
+    * Cars can advance through multiple states when:
+    * 1. Moving through link (if no traffic signals ahead)
+    * 2. Stopped/waiting states with known duration
+    */
+  override def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
+    val safeHorizon = event.effectiveSafeHorizon
+
+    state.movableStatus match {
+      case Moving =>
+        requestSignalState()
+
+      case WaitingSignal =>
+        leavingLink()
+
+      case Stopped =>
+        val waitDuration = 1
+        if (currentTick + waitDuration <= safeHorizon) {
+          currentTick += waitDuration
+          onFinishSpontaneous(Some(currentTick))
+        } else {
+          onFinishSpontaneous(Some(currentTick + 1))
+        }
+
+      case _ =>
+        super.actSpontaneousWithLookahead(event)
+    }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -42,6 +80,19 @@ class Car(
     if (state.movableStatus == Finished) {
       return
     }
+    
+    report(
+      data = Map(
+        "event_type" -> "journey_started",
+        "car_id" -> getEntityId,
+        "origin" -> state.origin,
+        "destination" -> state.destination,
+        "tick" -> currentTick
+      ),
+      label = "journey_started"
+    )
+    state.eventCount += 1
+    
     try {
       state.movableStatus = RouteWaiting
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
@@ -51,22 +102,6 @@ class Car(
           state.movableStatus = Ready
           state.movableCurrentPath = None
 
-          // Reporta o início da jornada
-          report(
-            data = Map(
-              "event_type" -> "journey_started",
-              "car_id" -> getEntityId,
-              "origin" -> state.origin,
-              "destination" -> state.destination,
-              "route_cost" -> cost,
-              "route_length" -> pathQueue.size,
-              "tick" -> currentTick
-            ),
-            label = "journey_started"
-          )
-          state.eventCount += 1
-
-          // Reporta detalhes completos da rota planejada
           report(
             data = Map(
               "event_type" -> "route_planned",
@@ -75,8 +110,8 @@ class Car(
               "destination" -> state.destination,
               "route_cost" -> cost,
               "route_length" -> pathQueue.size,
-              "route_links" -> pathQueue.map(_._1).mkString(","), // Lista de links do caminho
-              "route_nodes" -> pathQueue.map(_._2).mkString(","), // Lista de nós do caminho
+              "route_links" -> pathQueue.map(_._1).mkString(","), 
+              "route_nodes" -> pathQueue.map(_._2).mkString(","), 
               "tick" -> currentTick
             ),
             label = "route_planned"
@@ -86,8 +121,6 @@ class Car(
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            // Carro já está no destino
-            // Reporta journey_completed para chegada imediata
             report(
               data = Map(
                 "event_type" -> "journey_completed",
@@ -105,7 +138,6 @@ class Car(
             )
             state.eventCount += 1
 
-            // Reporta estatísticas finais de eventos
             report(
               data = Map(
                 "event_type" -> "vehicle_event_count",
@@ -125,7 +157,23 @@ class Car(
             s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}."
           )
 
-          // Reporta journey_completed para falha de rota
+          report(
+            data = Map(
+              "event_type" -> "route_planned",
+              "car_id" -> getEntityId,
+              "origin" -> state.origin,
+              "destination" -> state.destination,
+              "route_cost" -> Double.PositiveInfinity,
+              "route_length" -> 0,
+              "route_links" -> "",
+              "route_nodes" -> "",
+              "planning_result" -> "failed",
+              "tick" -> currentTick
+            ),
+            label = "route_planned"
+          )
+          state.eventCount += 1
+
           report(
             data = Map(
               "event_type" -> "journey_completed",
@@ -143,7 +191,6 @@ class Car(
           )
           state.eventCount += 1
 
-          // Reporta estatísticas finais de eventos
           report(
             data = Map(
               "event_type" -> "vehicle_event_count",
@@ -154,7 +201,6 @@ class Car(
             label = "vehicle_event_count"
           )
 
-          // Não chamar onFinish aqui, implementar diretamente
           state.movableStatus = Finished
           onFinishSpontaneous()
       }
@@ -162,7 +208,24 @@ class Car(
       case e: Exception =>
         logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
 
-        // Reporta journey_completed para exceção
+        report(
+          data = Map(
+            "event_type" -> "route_planned",
+            "car_id" -> getEntityId,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "route_cost" -> Double.PositiveInfinity,
+            "route_length" -> 0,
+            "route_links" -> "",
+            "route_nodes" -> "",
+            "planning_result" -> "exception",
+            "error_message" -> e.getMessage,
+            "tick" -> currentTick
+          ),
+          label = "route_planned"
+        )
+        state.eventCount += 1
+
         report(
           data = Map(
             "event_type" -> "journey_completed",
@@ -181,7 +244,6 @@ class Car(
         )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
         report(
           data = Map(
             "event_type" -> "vehicle_event_count",
@@ -192,7 +254,6 @@ class Car(
           label = "vehicle_event_count"
         )
 
-        // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
     }
@@ -208,7 +269,6 @@ class Car(
     ) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
-        // Reporta journey_completed para chegada ao destino
         report(
           data = Map(
             "event_type" -> "journey_completed",
@@ -226,7 +286,6 @@ class Car(
         )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
         report(
           data = Map(
             "event_type" -> "vehicle_event_count",
@@ -237,13 +296,11 @@ class Car(
           label = "vehicle_event_count"
         )
 
-        // Não chamar onFinish aqui, implementar diretamente
         state.movableStatus = Finished
         onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
 
-        // Reporta journey_completed para fim sem nó atual
         report(
           data = Map(
             "event_type" -> "journey_completed",
@@ -261,7 +318,6 @@ class Car(
         )
         state.eventCount += 1
 
-        // Reporta estatísticas finais de eventos
         report(
           data = Map(
             "event_type" -> "vehicle_event_count",
@@ -310,7 +366,6 @@ class Car(
   }
 
   override protected def onFinish(nodeId: String): Unit = {
-    // Reporta evento de conclusão da jornada
     report(
       data = Map(
         "event_type" -> "journey_completed",
@@ -327,7 +382,6 @@ class Car(
     )
     state.eventCount += 1
 
-    // Reporta estatísticas finais de eventos para este veículo (como no outro simulador)
     report(
       data = Map(
         "event_type" -> "vehicle_event_count",
