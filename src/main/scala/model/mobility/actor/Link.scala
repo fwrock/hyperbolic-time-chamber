@@ -6,11 +6,9 @@ import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ForwardRoute, RequestEnterLink, EnterLinkConfirm}
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
 import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
-import model.mobility.entity.event.data.vehicle.{RequestEnterLinkData, EnterLinkConfirmData}
-import model.mobility.util.SpeedUtil
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -48,93 +46,17 @@ class Link(
       EventTypeEnum.RequestRoute.toString
     )
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
-    if (event.eventType.contains("RequestEnterLink")) {
-      logDebug(s"Link ${getEntityId} received event: ${event.eventType} with data type: ${event.data.getClass.getSimpleName}")
-    }
-    
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RequestEnterLinkData => handleRequestEnterLink(event, d)
-      case d: EnterLinkData => handleEnterLink(event, d) 
+      case d: EnterLinkData => handleEnterLink(event, d)
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
-        logWarn(s"Event not handled: ${event.eventType}")
+        logWarn("Event not handled")
     }
-  }
-  
-  /** Event-driven: Calculate travel time and confirm entry with prediction */
-  private def handleRequestEnterLink(event: ActorInteractionEvent, data: RequestEnterLinkData): Unit = {
-    val vehicle = event.toIdentity
-    
-    try {
-      logDebug(s"Link ${getEntityId} processing RequestEnterLink from ${vehicle.id} at tick $currentTick")
-      
-      val currentSpeed = SpeedUtil.linkDensitySpeed(
-        length = state.length,
-        capacity = state.capacity,
-        numberOfCars = state.registered.size,
-        freeSpeed = state.freeSpeed,
-        lanes = state.lanes
-      )
-      
-      val speedMs = currentSpeed / 3.6  // km/h to m/s
-      val travelTimeSeconds = if (speedMs > 0) state.length / speedMs else Double.MaxValue
-      val travelTimeTicks = Math.max(1L, travelTimeSeconds.toLong)
-      
-      logDebug(s"Link ${getEntityId}: cars=${state.registered.size}, speed=$currentSpeed km/h, travelTime=$travelTimeTicks ticks")
-      
-      state.registered.add(
-        LinkRegister(
-          actorId = vehicle.id,
-          shardId = event.shardRefId,
-          actorType = org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Car,
-          actorSize = 1.0,  // Default size
-          actorCreationType = CreationTypeEnum.LoadBalancedDistributed
-        )
-      )
-      
-      val signalPrediction = None  // TODO: Request from traffic signal
-      
-      sendMessageTo(
-        vehicle.id,
-        vehicle.classType,
-        data = EnterLinkConfirmData(
-          linkId = getEntityId,
-          entryTick = data.entryTick,
-          baseTravelTime = travelTimeTicks,
-          destinationNode = data.destinationNode,
-          signalState = signalPrediction
-        ),
-        eventType = EventTypeEnum.EnterLinkConfirm.toString
-      )
-      
-      logDebug(s"Link ${getEntityId} sent EnterLinkConfirm to ${vehicle.id}")
-      
-    } catch {
-      case e: Exception =>
-        logError(s"Link ${getEntityId} FAILED to process RequestEnterLink from ${vehicle.id}", e)
-        try {
-          sendMessageTo(
-            vehicle.id,
-            vehicle.classType,
-            data = EnterLinkConfirmData(
-              linkId = getEntityId,
-              entryTick = data.entryTick,
-              baseTravelTime = 10L,  // Default fallback travel time
-              destinationNode = data.destinationNode,
-              signalState = None
-            ),
-            eventType = EventTypeEnum.EnterLinkConfirm.toString
-          )
-          logWarn(s"Link ${getEntityId} sent fallback EnterLinkConfirm to ${vehicle.id} after error")
-        } catch {
-          case e2: Exception =>
-            logError(s"Link ${getEntityId} CRITICAL: Failed to send even fallback response to ${vehicle.id}!", e2)
-        }
-    }
-  }
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    model.mobility.util.LinkMessageStats.incrementEnterLink()
+    
     val dataLink = if (state == null) {
       LinkInfoData(
         linkCapacity = Int.MaxValue,
@@ -171,6 +93,8 @@ class Link(
   }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    model.mobility.util.LinkMessageStats.incrementLeaveLink()
+    
     state.registered.filterInPlace(_.actorId != data.actorId)
     val dataLink = LinkInfoData(
       linkLength = state.length,

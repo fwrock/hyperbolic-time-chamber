@@ -8,27 +8,6 @@ A distributed, event-driven multi-agent system built with Scala and Apache Pekko
 
 ---
 
-## 📚 **Documentation Index**
-
-### 🏗️ **Core Documentation**
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
-- **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first simulation
-- **[Configuration Guide](docs/CONFIGURATION.md)** - Complete configuration reference
-- **[Scenario Creation](docs/SCENARIO_CREATION.md)** - How to create simulation scenarios
-
-### 🔧 **Development & Operation**
-- **[API Reference](docs/API_REFERENCE.md)** - Actor system and event documentation
-- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Contributing and extending the system
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-
-### 📊 **Analysis & Research**
-- **[Academic Usage](docs/ACADEMIC_USAGE.md)** - Research and publication guidelines
-
-### 🔍 **Examples & Tutorials**
-- **[Examples](docs/examples/)** - Learning examples and tutorials
-
----
-
 ## 🎯 **What is Hyperbolic Time Chamber?**
 
 The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simulation framework designed for:
@@ -94,6 +73,17 @@ sbt scalafix --check
 ## 🎓 **Academic Usage**
 
 This system was developed for research in **urban mobility** and **traffic simulation**.
+
+**For citation:**
+```bibtex
+@software{hyperbolic_time_chamber,
+  title={Hyperbolic Time Chamber: Multi-Agent Traffic Simulation Framework},
+  author={Rocha, Francisco Wallison and Francesquini, Emilio and Cordeiro, Daniel},
+  year={2025},
+  url={https://github.com/fwrock/hyperbolic-time-chamber},
+  note={Multi-agent simulation system with mesoscopic mobility model}
+}
+```
 
 **For detailed academic usage guidelines, see [Academic Usage](docs/ACADEMIC_USAGE.md)**
 
