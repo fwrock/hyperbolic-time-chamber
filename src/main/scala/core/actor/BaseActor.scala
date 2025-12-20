@@ -1,27 +1,27 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.actor.{ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash}
-import core.entity.event.{ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
+import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil, StringUtil}
+import core.util.{ IdUtil, JsonUtil, StringUtil }
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.cluster.sharding.{ClusterSharding, ShardRegion}
-import org.apache.pekko.persistence.{DeleteMessagesSuccess, DeleteSnapshotsFailure, DeleteSnapshotsSuccess, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotMetadata, SnapshotOffer, SnapshotSelectionCriteria}
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
 import java.util.UUID
 import scala.Long.MinValue
@@ -29,7 +29,7 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext, Future }
 
 /** Base actor class that provides the basic structure for the actors in the system. All actors
   * should extend this class.
@@ -49,28 +49,16 @@ abstract class BaseActor[T <: BaseState](
 
   protected val config = ConfigFactory.load()
   private var isInitialized: Boolean = false
-  private val snapShotInterval = try {
-    config.getInt("htc.simulation.snapshot-interval")
-  } catch {
-    case _: Exception => 1000
-  }
-  
-  windowExecutionEnabled = try {
-    config.getInt("htc.time-manager.window-size") > 1
-  } catch {
-    case _: Exception => false
-  }
+  private val snapShotInterval = 10000000
 
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
-  
-  private var currentWindowEnd: Tick = 0
-  private var windowExecutionEnabled: Boolean = false
 
   protected var entityId: String =
     if (properties != null) properties.entityId
     else {
+      // 🎲 Usar UUID determinístico se RandomSeedManager estiver disponível
       try
         core.actor.manager.RandomSeedManager.deterministicUUID()
       catch {
@@ -98,8 +86,10 @@ abstract class BaseActor[T <: BaseState](
     super.preStart()
     if (properties.data != null) {
       try {
+//        logInfo(s"Starting actor $entityId: ${properties.data}")
         state = JsonUtil.convertValue[T](properties.data)
         if (state != null) {
+//          logInfo(s"State: $state")
           startTick = state.getStartTick
         }
         creatorManager ! StartEntityAckEvent(entityId = entityId)
@@ -115,16 +105,12 @@ abstract class BaseActor[T <: BaseState](
     onStart()
   }
 
-  private def onFinishInitialize(event: InitializeEvent): Unit =
+  private def onFinishInitialize(): Unit =
     if (!isInitialized && creatorManager != null) {
       isInitialized = true
       creatorManager ! InitializeEntityAckEvent(
         entityId = entityId
       )
-//      persistAsync(event) { e =>
-//        context.system.eventStream.publish(e)
-//        saveSnapshot(state)
-//      }
     }
 
   /** Starts the actor. This method is called on start the actor before starts processing messages.
@@ -152,17 +138,15 @@ abstract class BaseActor[T <: BaseState](
         if (state.isSetScheduleOnTimeManager) {
           registerOnTimeManager()
         }
-        onFinishInitialize(event)
+        onFinishInitialize()
       } else {
-        onFinishInitialize(event)
+        onFinishInitialize()
         context.stop(self)
       }
     }
 
   private def registerOnTimeManager(): Unit =
     if (properties.actorType == LoadBalancedDistributed) {
-      state.eventsAmount += 1
-      state.totalEventsAmount += 1
       timeManager ! RegisterActorEvent(
         startTick = startTick,
         actorId = entityId,
@@ -177,8 +161,6 @@ abstract class BaseActor[T <: BaseState](
         )
       )
     } else {
-      state.eventsAmount += 1
-      state.totalEventsAmount += 1
       timeManager ! RegisterActorEvent(
         startTick = startTick,
         actorId = entityId,
@@ -215,7 +197,6 @@ abstract class BaseActor[T <: BaseState](
   ): Unit = {
     lamportClock.increment()
     state.eventsAmount += 1
-    state.totalEventsAmount += 1
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -289,62 +270,21 @@ abstract class BaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
-    if (event.tick > currentTick) {
-      currentTick = event.tick
+    if (event.tick < currentTick) {
+      logWarn(
+        s"Received OLD tick ${event.tick}, current is $currentTick. Ignoring (likely after TimeManager recovery)."
+      )
+      onFinishSpontaneous()
+      return
     }
+    currentTick = event.tick
     currentTimeManager = event.actorRef
-    
-    if (event.hasLookahead) {
-      actSpontaneousWithLookahead(event)
-    } else if (windowExecutionEnabled && currentWindowEnd > currentTick) {
-      actSpontaneousWithWindow(event)
-    } else {
-      try actSpontaneous(event)
-      catch
-        case e: Exception =>
-          e.printStackTrace()
-          onFinishSpontaneous()
-    }
-    save(event)
-  }
-  
-  /** Execute spontaneous logic within a time window.
-    * Processes multiple ticks up to window boundary.
-    * Can be combined with lookahead for maximum efficiency.
-    */
-  protected def actSpontaneousWithWindow(event: SpontaneousEvent): Unit = {
-    val effectiveHorizon = if (event.hasLookahead) {
-      Math.min(event.effectiveSafeHorizon, currentWindowEnd)
-    } else {
-      currentWindowEnd
-    }
-    
-    // Execute ticks within window
-    while (currentTick < effectiveHorizon) {
-      try {
-        actSpontaneous(event.copy(tick = currentTick))
-      } catch {
-        case e: Exception =>
-          e.printStackTrace()
-          onFinishSpontaneous()
-          return
-      }
-      currentTick += 1
-    }
-    
-    onFinishSpontaneous(Some(currentTick))
-  }
-  
-  /** Execute spontaneous logic with lookahead optimization.
-    * Subclasses can override to implement multi-tick processing.
-    * Default implementation falls back to single tick execution.
-    */
-  protected def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
     try actSpontaneous(event)
     catch
       case e: Exception =>
         e.printStackTrace()
         onFinishSpontaneous()
+    save(event)
   }
 
   /** This method is called when the actor receives a spontaneous event. It should be overridden by
@@ -400,49 +340,24 @@ abstract class BaseActor[T <: BaseState](
     case event: EntityEnvelopeEvent           => handleEnvelopeEvent(event)
     case event: InitializeEvent               => initialize(event)
     case event: ShardRegion.StartEntity       => handleStartEntity(event)
-//    case SaveSnapshotSuccess(metadata)        => cleanSnapshot(metadata)
-//    case SaveSnapshotFailure(metadata, cause) => logWarn(s"Failed to save snapshot: $cause")
-//    case DeleteMessagesSuccess(_)             => ()
-//    case DeleteSnapshotsSuccess(_)            => ()
-//    case DeleteSnapshotsFailure(_, cause)     =>
-//      logWarn(s"Failed to clear old snapshots: $cause")
+    case SaveSnapshotSuccess(metadata)        =>
+    case SaveSnapshotFailure(metadata, cause) =>
     case event                                => handleEvent(event)
   }
 
   private def save(event: Any): Unit = ()
-//    persistAsync(event) {
+//    persist(event) {
 //      e =>
 //        context.system.eventStream.publish(e)
 //        if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
 //          saveSnapshot(state)
 //    }
 
-  private def cleanSnapshot(metadata: SnapshotMetadata): Unit = {
-    deleteMessages(metadata.sequenceNr)
-    deleteSnapshots(SnapshotSelectionCriteria(maxSequenceNr = metadata.sequenceNr - (snapShotInterval * 2)))
-  }
-
-  protected def deepCopyState(original: T): T = {
-    if (original == null) return original
-    try {
-      JsonUtil.convertValue[T](original)
-    } catch {
-      case _: Throwable => original
-    }
-  }
-
   def receiveCommand: Receive = receive
 
   def receiveRecover: Receive = {
     case snapshot: SnapshotOffer =>
       state = snapshot.snapshot.asInstanceOf[T]
-//      logInfo(s"Recovered state non-null: ${state != null}")
-//    case event: InitializeEvent =>
-//      state = JsonUtil.convertValue[T](event.data.data)
-//      if (event.data.dependencies != null) {
-//        dependencies.clear()
-//        dependencies ++= event.data.dependencies
-//      }
     case _ => receive
   }
 
@@ -466,7 +381,7 @@ abstract class BaseActor[T <: BaseState](
     */
   private def destruct(event: DestructEvent): Unit = {
     onDestruct(event)
-    selfDestruct()
+    context.stop(self)
   }
 
   /** Called when the actor is finished. This method is called when the actor finishes processing
@@ -491,11 +406,10 @@ abstract class BaseActor[T <: BaseState](
   ): Unit = {
     if (scheduleTick.isEmpty) {
       state.eventsAmount += 1
-      state.totalEventsAmount += 1
     } else {
       state.eventsAmount += 2
-      state.totalEventsAmount += 2
     }
+    state.totalEventsAmount += state.eventsAmount
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
