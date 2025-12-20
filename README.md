@@ -8,27 +8,6 @@ A distributed, event-driven multi-agent system built with Scala and Apache Pekko
 
 ---
 
-## 📚 **Documentation Index**
-
-### 🏗️ **Core Documentation**
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
-- **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first simulation
-- **[Configuration Guide](docs/CONFIGURATION.md)** - Complete configuration reference
-- **[Scenario Creation](docs/SCENARIO_CREATION.md)** - How to create simulation scenarios
-
-### 🔧 **Development & Operation**
-- **[API Reference](docs/API_REFERENCE.md)** - Actor system and event documentation
-- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Contributing and extending the system
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-
-### 📊 **Analysis & Research**
-- **[Academic Usage](docs/ACADEMIC_USAGE.md)** - Research and publication guidelines
-
-### 🔍 **Examples & Tutorials**
-- **[Examples](docs/examples/)** - Learning examples and tutorials
-
----
-
 ## 🎯 **What is Hyperbolic Time Chamber?**
 
 The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simulation framework designed for:
