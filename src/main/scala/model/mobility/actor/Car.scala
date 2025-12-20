@@ -1,18 +1,18 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil, GPSUtilWithCache, SpeedUtil}
+import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtilWithCache, SpeedUtil }
 import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState}
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 
 class Car(
@@ -21,54 +21,16 @@ class Car(
       properties = properties
     ) {
 
-  /** Event-driven: Override to use event-driven model */
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Moving =>
-        handleArriveAtNode(currentTick, getCurrentNode)
-        
-      case RouteWaiting =>
-        super.actSpontaneous(event)
-        
+        requestSignalState()
       case WaitingSignal =>
         leavingLink()
-        
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
-        
-      case _ => 
-        // Delegate to Movable for Start, Ready, Finished
-        super.actSpontaneous(event)
+      case _ => super.actSpontaneous(event)
     }
-
-  /** Car-specific lookahead optimization
-    * Cars can advance through multiple states when:
-    * 1. Moving through link (if no traffic signals ahead)
-    * 2. Stopped/waiting states with known duration
-    */
-  override def actSpontaneousWithLookahead(event: SpontaneousEvent): Unit = {
-    val safeHorizon = event.effectiveSafeHorizon
-
-    state.movableStatus match {
-      case Moving =>
-        requestSignalState()
-
-      case WaitingSignal =>
-        leavingLink()
-
-      case Stopped =>
-        val waitDuration = 1
-        if (currentTick + waitDuration <= safeHorizon) {
-          currentTick += waitDuration
-          onFinishSpontaneous(Some(currentTick))
-        } else {
-          onFinishSpontaneous(Some(currentTick + 1))
-        }
-
-      case _ =>
-        super.actSpontaneousWithLookahead(event)
-    }
-  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -81,6 +43,7 @@ class Car(
       return
     }
     
+    // Report journey started
 //    report(
 //      data = Map(
 //        "event_type" -> "journey_started",
@@ -102,6 +65,7 @@ class Car(
           state.movableStatus = Ready
           state.movableCurrentPath = None
 
+          // Report route planned
 //          report(
 //            data = Map(
 //              "event_type" -> "route_planned",
@@ -121,6 +85,7 @@ class Car(
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
+            // Car already at destination
 //            report(
 //              data = Map(
 //                "event_type" -> "journey_completed",
@@ -148,31 +113,13 @@ class Car(
 //              label = "vehicle_event_count"
 //            )
 
-            // Não chamar onFinish aqui, implementar diretamente
             state.movableStatus = Finished
             onFinishSpontaneous()
           }
         case None =>
           logError(
-            s"Falha ao calcular rota de ${state.origin} para ${state.destination} para o carro ${getEntityId}."
+            s"Failed to calculate route from ${state.origin} to ${state.destination} for car ${getEntityId}."
           )
-
-//          report(
-//            data = Map(
-//              "event_type" -> "route_planned",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "route_cost" -> Double.PositiveInfinity,
-//              "route_length" -> 0,
-//              "route_links" -> "",
-//              "route_nodes" -> "",
-//              "planning_result" -> "failed",
-//              "tick" -> currentTick
-//            ),
-//            label = "route_planned"
-//          )
-          state.eventCount += 1
 
 //          report(
 //            data = Map(
@@ -206,26 +153,8 @@ class Car(
       }
     } catch {
       case e: Exception =>
-        logError(s"Exceção durante a solicitação de rota para ${getEntityId}: ${e.getMessage}", e)
-//
-//        report(
-//          data = Map(
-//            "event_type" -> "route_planned",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "route_cost" -> Double.PositiveInfinity,
-//            "route_length" -> 0,
-//            "route_links" -> "",
-//            "route_nodes" -> "",
-//            "planning_result" -> "exception",
-//            "error_message" -> e.getMessage,
-//            "tick" -> currentTick
-//          ),
-//          label = "route_planned"
-//        )
-        state.eventCount += 1
-//
+        logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
+
 //        report(
 //          data = Map(
 //            "event_type" -> "journey_completed",
@@ -300,7 +229,7 @@ class Car(
         onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
-
+//
 //        report(
 //          data = Map(
 //            "event_type" -> "journey_completed",
@@ -392,7 +321,7 @@ class Car(
 //      label = "vehicle_event_count"
 //    )
 
-    // Implementar lógica da classe pai sem chamar super
+    // Implement parent class logic without calling super
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -400,7 +329,7 @@ class Car(
       state.movableStatus = Finished
     }
 
-    // Finalizar o ator
+    // Finish actor
     onFinishSpontaneous()
   }
 
