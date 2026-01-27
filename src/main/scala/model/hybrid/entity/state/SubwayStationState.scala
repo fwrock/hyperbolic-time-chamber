@@ -11,7 +11,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ SubwayInformation, S
 
 import scala.collection.mutable
 
-case class HybridSubwayStationState(
+case class SubwayStationState(
   startTick: Tick,
   name: String,
   nodeId: String,

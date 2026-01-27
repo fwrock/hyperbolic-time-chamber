@@ -4,7 +4,7 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import org.interscity.htc.model.hybrid.entity.state.*
 
-import org.interscity.htc.model.hybrid.entity.state.HybridTrafficSignalState
+import org.interscity.htc.model.hybrid.entity.state.TrafficSignalState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent
@@ -17,9 +17,9 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ Phase, SignalState }
 
 import scala.collection.mutable
 
-class HybridTrafficSignal(
+class TrafficSignal(
   private val properties: Properties
-) extends SimulationBaseActor[HybridTrafficSignalState](
+) extends SimulationBaseActor[TrafficSignalState](
       properties = properties
     ) {
 

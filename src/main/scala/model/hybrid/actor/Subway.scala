@@ -8,7 +8,7 @@ import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, Spontaneous
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
-import org.interscity.htc.model.hybrid.entity.state.HybridSubwayState
+import org.interscity.htc.model.hybrid.entity.state.SubwayState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
 import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
 import org.interscity.htc.model.hybrid.util.SubwayUtil
@@ -16,9 +16,9 @@ import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
 
 import scala.collection.mutable
 
-class HybridSubway(
+class Subway(
   private val properties: Properties
-) extends Movable[HybridSubwayState](
+) extends Movable[SubwayState](
       properties = properties
     ) {
 

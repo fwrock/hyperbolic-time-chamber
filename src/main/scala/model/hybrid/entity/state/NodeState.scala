@@ -10,7 +10,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.SignalState
 
 import scala.collection.mutable
 
-case class HybridNodeState(
+case class NodeState(
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
   scheduleOnTimeManager: Boolean = true,

@@ -3,7 +3,7 @@ package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
 import org.interscity.htc.model.hybrid.entity.state.*
-import org.interscity.htc.model.hybrid.entity.state.{ HybridSubwayState, HybridSubwayStationState }
+import org.interscity.htc.model.hybrid.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -20,9 +20,9 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, Subwa
 
 import scala.collection.mutable
 
-class HybridSubwayStation(
+class SubwayStation(
   private val properties: Properties
-) extends SimulationBaseActor[HybridSubwayStationState](
+) extends SimulationBaseActor[SubwayStationState](
       properties = properties
     ) {
 
@@ -107,7 +107,7 @@ class HybridSubwayStation(
             if (subwayQueue.nonEmpty && state.garage) {
               val subway = subwayQueue.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[HybridSubway].getName)
+              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick), destruct = false)
             }
@@ -118,11 +118,11 @@ class HybridSubwayStation(
   private def createSubway(subway: SubwayInformation): ActorRef =
     createShardedActorSeveralArgs(
       system = context.system,
-      actorClass = classOf[HybridSubway],
+      actorClass = classOf[Subway],
       entityId = subway.actorId,
       getTimeManager,
       toJson(
-        HybridSubwayState(
+        SubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
           numberOfPorts = subway.numberOfPorts,

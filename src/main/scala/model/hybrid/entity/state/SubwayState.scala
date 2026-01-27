@@ -13,7 +13,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, Subwa
 
 import scala.collection.mutable
 
-case class HybridSubwayState(
+case class SubwayState(
   override val startTick: Tick = 0,
   capacity: Int,
   numberOfPorts: Int,

@@ -5,20 +5,23 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.model.hybrid.actor.Movable
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.util.{GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-
-import org.interscity.htc.model.hybrid.entity.state.{HybridMotorcycleState, MicroMotorcycleState}
-import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
+import org.interscity.htc.model.hybrid.entity.state.{MicroMotorcycleState, MotorcycleState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.person._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
-/** HybridMotorcycle actor - NEW vehicle type for hybrid simulator.
+/** Motorcycle actor - NEW vehicle type for hybrid simulator.
   * 
-  * Motorcycles have unique advantages in traffic:
+  * NOW A PRIVATE VEHICLE ASSET (Person-Centric Model):
+  * - Passive (Parked) by default
+  * - Activated by Person via StartTrip message
+  * - Configured with person's DriverAttributes
+  * - Reports back with TripCompleted
   * - Higher acceleration than cars (3.5 m/s² vs 2.6 m/s²)
   * - Can filter between lanes (lane splitting)
   * - Smaller vehicle, more maneuverable (2.5m)
@@ -38,11 +41,11 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
   * 
   * @param properties Actor properties
   */
-class HybridMotorcycle(
+class Motorcycle(
   private val properties: Properties
-) extends Movable[HybridMotorcycleState](
+) extends Movable[MotorcycleState](
       properties = properties
-    ) {
+    ) with PrivateVehicle[MotorcycleState] {
   
   /** Car-following model with lower randomness (more predictable).
     */
@@ -60,7 +63,33 @@ class HybridMotorcycle(
     */
   private val aggressiveness: Double = 0.7 // Default aggressive behavior
   
+  // ===== PrivateVehicle Accessor Methods =====
+  
+  override protected def getVehicleStatus: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
+  override protected def setVehicleStatus(status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum): Unit = {
+    state.status = status
+  }
+  override protected def getActorCurrentTick: Tick = currentTick
+  override protected def getActorShardId: String = getShardId
+  override protected def getActorEntityId: String = getEntityId
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(nextTick)
+  override protected def getCurrentDistance: Double = state.distance
+  override protected def sendVehicleMessage(entityId: String, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum): Unit = {
+    sendMessageTo(entityId = entityId, shardId = shardId, data = data, eventType = eventType, actorType = actorType)
+  }
+  override protected def logVehicleInfo(message: String): Unit = logInfo(message)
+  override protected def logVehicleWarn(message: String): Unit = logWarn(message)
+  override protected def logVehicleDebug(message: String): Unit = logDebug(message)
+  
+  // ===== End Accessor Methods =====
+  
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    // Check if vehicle is parked (passive state)
+    if (state.status == Parked) {
+      onFinishSpontaneous(None)
+      return
+    }
+    
     state.status match {
       case Start =>
         requestRoute()
@@ -96,6 +125,10 @@ class HybridMotorcycle(
   }
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    if (handlePrivateVehicleEvent(event)) {
+      return
+    }
+    
     event.data match {
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData => handleMicroUpdate(event, d)
@@ -373,13 +406,42 @@ class HybridMotorcycle(
       org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(500.0)
   }
+  
+  // ========== PrivateVehicle abstract method implementations ==========
+  
+  /** Apply driver attributes to motorcycle physics.
+    */
+  override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
+    super.applyDriverAttributes(attrs)
+    
+    state.microState.foreach { micro =>
+      val updatedMicro = micro.copy(
+        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+        reactionTime = attrs.reactionTime,
+        minGap = micro.minGap * attrs.minGapFactor,
+        // Use driver aggressiveness directly for motorcycle
+        aggressiveness = attrs.aggressiveness,
+        maxAcceleration = micro.maxAcceleration * (0.9 + 0.2 * attrs.aggressiveness)
+      )
+      state.updateMicroState(updatedMicro)
+    }
+    
+    logInfo(s"Motorcycle ${getEntityId} configured with driver attributes: aggressiveness=${attrs.aggressiveness}")
+  }
+  
+  /** Override onFinish to use PrivateVehicle completion.
+    */
+  override protected def onFinish(nodeId: String): Unit = {
+    onFinishPrivateVehicle(nodeId)
+    finishJourney("onFinish_called", nodeId)
+  }
 }
 
-/** HybridMotorcycle companion object.
+/** Motorcycle companion object.
   */
-object HybridMotorcycle {
-  def apply(properties: Properties): HybridMotorcycle = {
-    new HybridMotorcycle(properties)
+object Motorcycle {
+  def apply(properties: Properties): Motorcycle = {
+    new Motorcycle(properties)
   }
   
   /** Create motorcycle with custom aggressiveness.
@@ -387,8 +449,8 @@ object HybridMotorcycle {
     * @param properties Actor properties
     * @param aggressiveness Aggressiveness factor [0.0 - 1.0]
     */
-  def withAggressiveness(properties: Properties, aggressiveness: Double): HybridMotorcycle = {
-    new HybridMotorcycle(properties) {
+  def withAggressiveness(properties: Properties, aggressiveness: Double): Motorcycle = {
+    new Motorcycle(properties) {
       val customAggressiveness: Double = math.max(0.0, math.min(1.0, aggressiveness))
     }
   }

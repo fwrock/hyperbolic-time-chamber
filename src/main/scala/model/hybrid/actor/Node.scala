@@ -6,7 +6,7 @@ import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.model.hybrid.entity.state.HybridNodeState
+import org.interscity.htc.model.hybrid.entity.state.NodeState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 
 import org.htc.protobuf.core.entity.actor.Dependency
@@ -26,9 +26,9 @@ import org.interscity.htc.model.hybrid.entity.event.data.{ ForwardRouteData, Rec
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
-class HybridNode(
+class Node(
   private val properties: Properties
-) extends SimulationBaseActor[HybridNodeState](
+) extends SimulationBaseActor[NodeState](
       properties = properties
     ) {
 

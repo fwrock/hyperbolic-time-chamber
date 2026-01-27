@@ -43,7 +43,7 @@ import scala.collection.mutable
   * @param currentSimulationMode Current mode (MESO or MICRO)
   * @param microState Optional microscopic state (active in MICRO links)
   */
-case class HybridCarState(
+case class CarState(
   // ========== Meso fields (inherited from CarState) ==========
   override val startTick: Tick,
   override val reporterType: ReportTypeEnum = null,

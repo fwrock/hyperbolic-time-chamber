@@ -8,7 +8,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ Phase, SignalState }
 
 import scala.collection.mutable
 
-case class HybridTrafficSignalState(
+case class TrafficSignalState(
   startTick: Tick,
   cycleDuration: Tick,
   offset: Tick,
