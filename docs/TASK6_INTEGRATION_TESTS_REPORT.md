@@ -35,22 +35,22 @@ Criar testes de integração para validar o funcionamento completo dos atores h�
 
 **Casos de Teste:**
 ```scala
-"HybridCar actor" should {
+"Car actor" should {
   "be instantiable with valid state"
   "have correct initial state values"
 }
 
-"HybridBus actor" should {
+"Bus actor" should {
   "be instantiable with valid state"
   "have bus-specific parameters"
 }
 
-"HybridBicycle actor" should {
+"Bicycle actor" should {
   "be instantiable with valid state"
   "have bicycle-specific parameters"
 }
 
-"HybridMotorcycle actor" should {
+"Motorcycle actor" should {
   "be instantiable with valid state"
   "have motorcycle-specific parameters"
 }
@@ -86,13 +86,13 @@ Criar testes de integração para validar o funcionamento completo dos atores h�
 
 **Casos de Teste:**
 ```scala
-"HybridCarState" should {
+"CarState" should {
   "transition from MESO to MICRO mode"
   "transition from MICRO back to MESO mode"
   "preserve non-micro state during transitions"
 }
 
-"HybridBusState" should {
+"BusState" should {
   "transition with bus-specific parameters"
 }
 

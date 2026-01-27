@@ -15,12 +15,20 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPha
 import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
-import org.interscity.htc.model.hybrid.entity.state.{HybridCarState, MicroCarState}
+import org.interscity.htc.model.hybrid.entity.state.{CarState, MicroCarState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.person._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
-/** HybridCar actor supporting both MESO and MICRO simulation modes.
+/** Car actor supporting both MESO and MICRO simulation modes.
+  * 
+  * NOW A PRIVATE VEHICLE ASSET (Person-Centric Model):
+  * - Passive (Parked) by default
+  * - Activated by Person via StartTrip message
+  * - Configured with person's DriverAttributes
+  * - Reports back with TripCompleted
   * 
   * Extends the base Car actor with microscopic simulation capabilities.
   * The simulation mode is determined by the link the car is traversing.
@@ -40,11 +48,11 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
   * 
   * @param properties Actor properties
   */
-class HybridCar(
+class Car(
   private val properties: Properties
-) extends Movable[HybridCarState](
+) extends Movable[CarState](
       properties = properties
-    ) {
+    ) with PrivateVehicle[CarState] {
   
   /** Car-following model for microscopic simulation.
     */
@@ -58,7 +66,34 @@ class HybridCar(
     */
   private var linkEntryTick: Option[Tick] = None
   
+  // ===== PrivateVehicle Accessor Methods =====
+  
+  override protected def getVehicleStatus: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
+  override protected def setVehicleStatus(status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum): Unit = {
+    state.status = status
+  }
+  override protected def getActorCurrentTick: Tick = currentTick
+  override protected def getActorShardId: String = getShardId
+  override protected def getActorEntityId: String = getEntityId
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(nextTick)
+  override protected def getCurrentDistance: Double = state.distance
+  override protected def sendVehicleMessage(entityId: String, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum): Unit = {
+    sendMessageTo(entityId = entityId, shardId = shardId, data = data, eventType = eventType, actorType = actorType)
+  }
+  override protected def logVehicleInfo(message: String): Unit = logInfo(message)
+  override protected def logVehicleWarn(message: String): Unit = logWarn(message)
+  override protected def logVehicleDebug(message: String): Unit = logDebug(message)
+  
+  // ===== End Accessor Methods =====
+  
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    // Check if vehicle is parked (passive state)
+    if (state.status == Parked) {
+      // Do nothing, wait for StartTrip from Person
+      onFinishSpontaneous(None) // Unregister from TimeManager
+      return
+    }
+    
     state.status match {
       case Moving =>
         if (state.isMicroMode) {
@@ -86,6 +121,11 @@ class HybridCar(
   }
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    // Handle PrivateVehicle events first (StartTrip, ParkVehicle)
+    if (handlePrivateVehicleEvent(event)) {
+      return
+    }
+    
     event.data match {
       case d: SignalStateData => handleSignalState(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
@@ -99,8 +139,18 @@ class HybridCar(
     if (state.status == Finished) {
       return
     }
+    
+    // Use trip origin/destination if set (from PrivateVehicle), otherwise use state
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    
+    if (origin == null || destination == null) {
+      logWarn(s"Car ${getEntityId} has null origin or destination")
+      return
+    }
+    
     try {
-      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.bestRoute = Some(pathQueue)
@@ -197,8 +247,11 @@ class HybridCar(
   }
   
   override protected def onFinish(nodeId: String): Unit = {
+    // Use PrivateVehicle trip completion (reports to Person)
+    onFinishPrivateVehicle(nodeId)
+    
+    // Also report journey statistics for analytics
     finishJourney("onFinish_called", nodeId)
-    onFinishSpontaneous()
   }
   
   /** Handle entering MICRO link.
@@ -422,12 +475,35 @@ class HybridCar(
       CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(1000.0) // Default fallback
   }
+  
+  // ========== PrivateVehicle abstract method implementations ==========
+  
+  /** Apply driver attributes to car physics (override from PrivateVehicle).
+    */
+  override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
+    super.applyDriverAttributes(attrs)
+    
+    // Apply to micro state if exists
+    state.microState.foreach { micro =>
+      val updatedMicro = micro.copy(
+        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+        reactionTime = attrs.reactionTime,
+        minGap = micro.minGap * attrs.minGapFactor,
+        // Aggressiveness affects acceleration (more aggressive = higher accel)
+        maxAcceleration = micro.maxAcceleration * (0.8 + 0.4 * attrs.aggressiveness)
+      )
+      state.updateMicroState(updatedMicro)
+    }
+    
+    logInfo(s"Car ${getEntityId} configured with driver attributes: " +
+      s"aggressiveness=${attrs.aggressiveness}, maxSpeedFactor=${attrs.maxSpeedFactor}")
+  }
 }
 
-/** HybridCar companion object.
+/** Car companion object.
   */
-object HybridCar {
-  def apply(properties: Properties): HybridCar = {
-    new HybridCar(properties)
+object Car {
+  def apply(properties: Properties): Car = {
+    new Car(properties)
   }
 }

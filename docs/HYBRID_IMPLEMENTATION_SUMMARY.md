@@ -90,9 +90,9 @@ trait MicroMovableState {
 ### 5. **Hybrid Wrapper States** (Task 5)
 **Files Created:**
 - `HybridLinkState.scala` - Link with MESO/MICRO mode flag
-- `HybridNodeState.scala` - Node with conflict zones for intersections
-- `HybridCarState.scala` - Car with mode switching
-- `HybridBusState.scala` - Bus with mode switching
+- `NodeState.scala` - Node with conflict zones for intersections
+- `CarState.scala` - Car with mode switching
+- `BusState.scala` - Bus with mode switching
 - `HybridBicycleMotorcycleState.scala` - Bicycle and Motorcycle wrappers
 
 **Key Pattern:**
@@ -262,7 +262,7 @@ ExecuteGlobalTick(tick)
 - `vehicleActors: Map[String, ActorRef]` - Vehicle actor references
 
 ### 10. **HybridLink Actor** (Task 10)
-**File:** `HybridLink.scala`
+**File:** `Link.scala`
 
 **Key Features:**
 - Extends `SimulationBaseActor[HybridLinkState]`

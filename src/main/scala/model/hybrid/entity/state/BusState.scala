@@ -43,7 +43,7 @@ import scala.collection.mutable
   * @param currentSimulationMode Current mode (MESO or MICRO)
   * @param microState Optional microscopic bus state
   */
-case class HybridBusState(
+case class BusState(
   // ========== Meso fields (inherited from BusState) ==========
   override val startTick: Tick,
   val label: String,

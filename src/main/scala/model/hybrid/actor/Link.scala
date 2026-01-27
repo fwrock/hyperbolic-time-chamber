@@ -3,26 +3,24 @@ package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
 import core.types.Tick
-import org.apache.pekko.actor.typed.ActorRef
 
+import org.apache.pekko.actor.typed.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
-
-import org.interscity.htc.model.hybrid.entity.state.HybridLinkState
+import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.micro.manager.LinkMicroTimeManager
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.model.hybrid.micro.lane.{LaneChangeModel, MobilLaneChange}
-
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
-import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 
-/** HybridLink actor supporting both MESO and MICRO simulation modes.
+/** Link actor supporting both MESO and MICRO simulation modes.
   * 
   * The simulation mode is determined by the link configuration (HybridLinkState.simulationMode).
   * ALL vehicles entering this link adopt its simulation mode.
@@ -40,9 +38,9 @@ import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
   * 
   * @param properties Actor properties
   */
-class HybridLink(
+class Link(
   private val properties: Properties
-) extends SimulationBaseActor[HybridLinkState](
+) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
   
@@ -66,7 +64,7 @@ class HybridLink(
       initializeMicroMode()
     }
     
-    logInfo(s"HybridLink initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+    logInfo(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
   
   /** Initialize microscopic simulation mode.
@@ -333,13 +331,13 @@ class HybridLink(
   }
 }
 
-/** HybridLink companion object.
+/** Link companion object.
   */
-object HybridLink {
+object Link {
   
-  /** Create HybridLink from properties.
+  /** Create Link from properties.
     */
-  def apply(properties: Properties): HybridLink = {
-    new HybridLink(properties)
+  def apply(properties: Properties): Link = {
+    new Link(properties)
   }
 }

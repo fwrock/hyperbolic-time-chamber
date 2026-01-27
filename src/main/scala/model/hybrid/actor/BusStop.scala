@@ -10,13 +10,13 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
-import org.interscity.htc.model.hybrid.entity.state.HybridBusStopState
+import org.interscity.htc.model.hybrid.entity.state.BusStopState
 
 import scala.collection.mutable
 
-class HybridBusStop(
+class BusStop(
   private val properties: Properties
-) extends SimulationBaseActor[HybridBusStopState](
+) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
 

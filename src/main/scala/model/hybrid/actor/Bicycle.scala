@@ -7,18 +7,23 @@ import core.types.Tick
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.actor.Movable
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.util.{GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-
-import org.interscity.htc.model.hybrid.entity.state.{HybridBicycleState, MicroBicycleState}
+import org.interscity.htc.model.hybrid.entity.state.{BicycleState, MicroBicycleState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data.person._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
+import org.interscity.htc.core.enumeration.CreationTypeEnum
 
-/** HybridBicycle actor - NEW vehicle type for hybrid simulator.
+/** Bicycle actor - NEW vehicle type for hybrid simulator.
   * 
-  * Bicycles are vulnerable road users with unique characteristics:
+  * NOW A PRIVATE VEHICLE ASSET (Person-Centric Model):
+  * - Passive (Parked) by default
+  * - Activated by Person via StartTrip message
+  * - Configured with person's DriverAttributes
+  * - Reports back with TripCompleted
   * - Low speeds (typically 15-25 km/h)
   * - Prefer bike lanes when available
   * - Can share lanes with cars if necessary
@@ -37,11 +42,11 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
   * 
   * @param properties Actor properties
   */
-class HybridBicycle(
+class Bicycle(
   private val properties: Properties
-) extends Movable[HybridBicycleState](
+) extends Movable[BicycleState](
       properties = properties
-    ) {
+    ) with PrivateVehicle[BicycleState] {
   
   /** Car-following model with bicycle parameters.
     */
@@ -55,7 +60,33 @@ class HybridBicycle(
     */
   private var linkEntryTick: Option[Tick] = None
   
+  // ===== PrivateVehicle Accessor Methods =====
+  
+  override protected def getVehicleStatus: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
+  override protected def setVehicleStatus(status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum): Unit = {
+    state.status = status
+  }
+  override protected def getActorCurrentTick: Tick = currentTick
+  override protected def getActorShardId: String = getShardId
+  override protected def getActorEntityId: String = getEntityId
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(nextTick)
+  override protected def getCurrentDistance: Double = state.distance
+  override protected def sendVehicleMessage(entityId: String, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum): Unit = {
+    sendMessageTo(entityId = entityId, shardId = shardId, data = data, eventType = eventType, actorType = actorType)
+  }
+  override protected def logVehicleInfo(message: String): Unit = logInfo(message)
+  override protected def logVehicleWarn(message: String): Unit = logWarn(message)
+  override protected def logVehicleDebug(message: String): Unit = logDebug(message)
+  
+  // ===== End Accessor Methods =====
+  
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    // Check if vehicle is parked (passive state)
+    if (state.status == Parked) {
+      onFinishSpontaneous(None)
+      return
+    }
+    
     state.status match {
       case Start =>
         requestRoute()
@@ -86,6 +117,10 @@ class HybridBicycle(
   }
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    if (handlePrivateVehicleEvent(event)) {
+      return
+    }
+    
     event.data match {
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData => handleMicroUpdate(event, d)
@@ -333,12 +368,38 @@ class HybridBicycle(
       org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(500.0)
   }
+  
+  // ========== PrivateVehicle abstract method implementations ==========
+  
+  /** Apply driver attributes to bicycle physics.
+    */
+  override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
+    super.applyDriverAttributes(attrs)
+    
+    state.microState.foreach { micro =>
+      val updatedMicro = micro.copy(
+        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+        reactionTime = attrs.reactionTime,
+        minGap = micro.minGap * attrs.minGapFactor
+      )
+      state.updateMicroState(updatedMicro)
+    }
+    
+    logInfo(s"Bicycle ${getEntityId} configured with driver attributes")
+  }
+  
+  /** Override onFinish to use PrivateVehicle completion.
+    */
+  override protected def onFinish(nodeId: String): Unit = {
+    onFinishPrivateVehicle(nodeId)
+    finishJourney("onFinish_called", nodeId)
+  }
 }
 
-/** HybridBicycle companion object.
+/** Bicycle companion object.
   */
-object HybridBicycle {
-  def apply(properties: Properties): HybridBicycle = {
-    new HybridBicycle(properties)
+object Bicycle {
+  def apply(properties: Properties): Bicycle = {
+    new Bicycle(properties)
   }
 }

@@ -26,7 +26,7 @@
    - Restrições de faixa (bus lanes)
    - Relatórios de ocupação (occupancy, passengers)
 
-3. ✅ **HybridBicycle.scala** (~380 linhas) **[NOVO TIPO]**
+3. ✅ **Bicycle.scala** (~380 linhas) **[NOVO TIPO]**
    - Estende `Movable[HybridBicycleState]`
    - Velocidade baixa (20 km/h típico)
    - Preferência por ciclovias (bike lanes)
@@ -34,7 +34,7 @@
    - Usuário vulnerável (gaps menores, comportamento defensivo)
    - Modo MESO: velocidade constante simplificada
 
-4. ✅ **HybridMotorcycle.scala** (~420 linhas) **[NOVO TIPO]**
+4. ✅ **Motorcycle.scala** (~420 linhas) **[NOVO TIPO]**
    - Estende `Movable[HybridMotorcycleState]`
    - Aceleração alta (3.5 m/s², maior que carro)
    - Capacidade de filtrar entre faixas (lane filtering/splitting)
@@ -445,7 +445,7 @@ Esta implementação oferece:
 **Descoberta Importante (Task 5):**
 Sistema já suporta atores híbridos **automaticamente** através de reflexão Java!
 - `Class.forName()` carrega qualquer classe dinamicamente
-- JSON `typeActor: "hybrid.actor.HybridCar"` → `org.interscity.htc.model.hybrid.actor.HybridCar`
+- JSON `typeActor: "hybrid.actor.HybridCar"` → `org.interscity.htc.model.hybrid.actor.Car`
 - **Não requer modificação de código de infraestrutura**
 
 **Arquivos de Task 5:**
@@ -455,8 +455,8 @@ Sistema já suporta atores híbridos **automaticamente** através de reflexão J
 **Arquivos prontos para uso:**
 - `HybridCar.scala`
 - `HybridBus.scala`
-- `HybridBicycle.scala`
-- `HybridMotorcycle.scala`
+- `Bicycle.scala`
+- `Motorcycle.scala`
 
 **Integração com Fase 1:**
 - Estados: HybridCarState, HybridBusState, HybridBicycleState, HybridMotorcycleState ✅

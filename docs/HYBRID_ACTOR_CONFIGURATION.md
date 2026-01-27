@@ -19,9 +19,9 @@ Para usar os atores híbridos, basta especificar o caminho completo da classe no
 ```json
 {
   "id": "htcaid:car;hybrid_car_1",
-  "typeActor": "hybrid.actor.HybridCar",
+  "typeActor": "hybrid.actor.Car",
   "data": {
-    "dataType": "model.hybrid.entity.state.HybridCarState",
+    "dataType": "model.hybrid.entity.state.CarState",
     "content": {
       "startTick": 10,
       "origin": "htcaid:node;60609822",
@@ -50,9 +50,9 @@ Para usar os atores híbridos, basta especificar o caminho completo da classe no
 ```json
 {
   "id": "htcaid:bus;hybrid_bus_1",
-  "typeActor": "hybrid.actor.HybridBus",
+  "typeActor": "hybrid.actor.Bus",
   "data": {
-    "dataType": "model.hybrid.entity.state.HybridBusState",
+    "dataType": "model.hybrid.entity.state.BusState",
     "content": {
       "startTick": 5,
       "label": "BUS_LINE_101",
@@ -90,7 +90,7 @@ Para usar os atores híbridos, basta especificar o caminho completo da classe no
 ```json
 {
   "id": "htcaid:bicycle;bike_1",
-  "typeActor": "hybrid.actor.HybridBicycle",
+  "typeActor": "hybrid.actor.Bicycle",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridBicycleState",
     "content": {
@@ -121,7 +121,7 @@ Para usar os atores híbridos, basta especificar o caminho completo da classe no
 ```json
 {
   "id": "htcaid:motorcycle;moto_1",
-  "typeActor": "hybrid.actor.HybridMotorcycle",
+  "typeActor": "hybrid.actor.Motorcycle",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridMotorcycleState",
     "content": {
@@ -158,7 +158,7 @@ Links determinam o modo de simulação (MESO ou MICRO):
 ```json
 {
   "id": "htcaid:link;suburb_road",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -193,7 +193,7 @@ Links determinam o modo de simulação (MESO ou MICRO):
 ```json
 {
   "id": "htcaid:link;downtown_main",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -236,7 +236,7 @@ Links determinam o modo de simulação (MESO ou MICRO):
 ```json
 {
   "id": "htcaid:link;bike_corridor",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -298,7 +298,7 @@ handleStartCreation() → handleProcessNextCreateChunk()
       │       actorClassName = "hybrid.actor.HybridCar"
       │   )
       ├─> StringUtil.getModelClassName() adiciona prefixo
-      │   → "org.interscity.htc.model.hybrid.actor.HybridCar"
+      │   → "org.interscity.htc.model.hybrid.actor.Car"
       ├─> Class.forName() carrega a classe
       └─> Props(clazz, Properties(...)) cria instância
 ```
@@ -328,7 +328,7 @@ JSON typeActor: "hybrid.actor.HybridCar"
   ↓
 StringUtil.getModelClassName()
   ↓
-"org.interscity.htc.model.hybrid.actor.HybridCar"
+"org.interscity.htc.model.hybrid.actor.Car"
   ↓
 Class.forName() → carrega HybridCar.class
   ↓
@@ -346,8 +346,8 @@ Ator registrado e pronto
 - **Prefix automático:** `org.interscity.htc.model.` é adicionado
 - **Exemplos:**
   - `"mobility.actor.Car"` → `org.interscity.htc.model.mobility.actor.Car`
-  - `"hybrid.actor.HybridCar"` → `org.interscity.htc.model.hybrid.actor.HybridCar`
-  - `"hybrid.actor.HybridBicycle"` → `org.interscity.htc.model.hybrid.actor.HybridBicycle`
+  - `"hybrid.actor.HybridCar"` → `org.interscity.htc.model.hybrid.actor.Car`
+  - `"hybrid.actor.HybridBicycle"` → `org.interscity.htc.model.hybrid.actor.Bicycle`
 
 ### dataType (JSON)
 - **Formato:** `model.<package>.<subpackage>.StateName`
@@ -366,7 +366,7 @@ Ator registrado e pronto
   "actors": [
     {
       "id": "htcaid:link;suburb_residential",
-      "typeActor": "hybrid.actor.HybridLink",
+      "typeActor": "hybrid.actor.Link",
       "data": {
         "dataType": "model.hybrid.entity.state.HybridLinkState",
         "content": {
@@ -381,7 +381,7 @@ Ator registrado e pronto
     },
     {
       "id": "htcaid:link;downtown_avenue",
-      "typeActor": "hybrid.actor.HybridLink",
+      "typeActor": "hybrid.actor.Link",
       "data": {
         "dataType": "model.hybrid.entity.state.HybridLinkState",
         "content": {
@@ -403,9 +403,9 @@ Ator registrado e pronto
     },
     {
       "id": "htcaid:car;commuter_1",
-      "typeActor": "hybrid.actor.HybridCar",
+      "typeActor": "hybrid.actor.Car",
       "data": {
-        "dataType": "model.hybrid.entity.state.HybridCarState",
+        "dataType": "model.hybrid.entity.state.CarState",
         "content": {
           "startTick": 10,
           "origin": "htcaid:node;home",
@@ -415,9 +415,9 @@ Ator registrado e pronto
     },
     {
       "id": "htcaid:bus;line_101",
-      "typeActor": "hybrid.actor.HybridBus",
+      "typeActor": "hybrid.actor.Bus",
       "data": {
-        "dataType": "model.hybrid.entity.state.HybridBusState",
+        "dataType": "model.hybrid.entity.state.BusState",
         "content": {
           "startTick": 5,
           "label": "LINE_101",
@@ -429,7 +429,7 @@ Ator registrado e pronto
     },
     {
       "id": "htcaid:bicycle;cyclist_1",
-      "typeActor": "hybrid.actor.HybridBicycle",
+      "typeActor": "hybrid.actor.Bicycle",
       "data": {
         "dataType": "model.hybrid.entity.state.HybridBicycleState",
         "content": {
@@ -441,7 +441,7 @@ Ator registrado e pronto
     },
     {
       "id": "htcaid:motorcycle;rider_1",
-      "typeActor": "hybrid.actor.HybridMotorcycle",
+      "typeActor": "hybrid.actor.Motorcycle",
       "data": {
         "dataType": "model.hybrid.entity.state.HybridMotorcycleState",
         "content": {

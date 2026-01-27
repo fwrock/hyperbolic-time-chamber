@@ -76,7 +76,7 @@ JSON typeActor Field
     ↓
 StringUtil.getModelClassName()
     ↓
-"org.interscity.htc.model.hybrid.actor.HybridCar"
+"org.interscity.htc.model.hybrid.actor.Car"
     ↓
 Class.forName() - carrega classe dinamicamente
     ↓
@@ -144,12 +144,12 @@ Actor instanciado e registrado ✅
   "simulation": { "startTick": 0, "endTick": 1000 },
   "actors": [
     // 2 Nodes (origin, destination)
-    // 1 HybridLink (MESO mode)
+    // 1 Link (MESO mode)
     // 4 Hybrid Vehicles:
-    //   - HybridCar (tick 10)
-    //   - HybridBus (tick 5)
-    //   - HybridBicycle (tick 15)
-    //   - HybridMotorcycle (tick 8)
+    //   - Car (tick 10)
+    //   - Bus (tick 5)
+    //   - Bicycle (tick 15)
+    //   - Motorcycle (tick 8)
   ]
 }
 ```

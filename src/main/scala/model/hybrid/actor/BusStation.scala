@@ -14,16 +14,16 @@ import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralAr
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.hybrid.entity.event.data.{ ReceiveRouteData, RequestRouteData }
-import org.interscity.htc.model.hybrid.entity.state.{ HybridBusState, HybridBusStationState }
+import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.RequestRoute
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
 
 import scala.collection.mutable
 
-class HybridBusStation(
+class BusStation(
   protected val properties: Properties
-) extends SimulationBaseActor[HybridBusStationState](
+) extends SimulationBaseActor[BusStationState](
       properties = properties
     ) {
 
@@ -37,7 +37,7 @@ class HybridBusStation(
         if (state.buses.nonEmpty) {
           val bus = state.buses.dequeue()
           val actorRef = createBus(bus)
-          val className = classOf[HybridBus].getName
+          val className = classOf[Bus].getName
           dependencies(bus.actorId) = Dependency(
             id = entityId,
             classType = className
@@ -72,7 +72,7 @@ class HybridBusStation(
       state.status = Ready
       val bus = state.buses.dequeue()
       val actorRef = createBus(bus)
-      val className = classOf[HybridBus].getName
+      val className = classOf[Bus].getName
       dependencies(bus.actorId) = Dependency(
         id = entityId,
         classType = className
@@ -85,11 +85,11 @@ class HybridBusStation(
   private def createBus(bus: BusInformation): ActorRef =
     createShardedActorSeveralArgs(
       system = context.system,
-      actorClass = classOf[HybridBus],
+      actorClass = classOf[Bus],
       entityId = bus.actorId,
       getTimeManager,
       toJson(
-        HybridBusState(
+        BusState(
           startTick = currentTick,
           busStops = state.busStops,
           capacity = bus.capacity,

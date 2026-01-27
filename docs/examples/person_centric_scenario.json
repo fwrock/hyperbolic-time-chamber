@@ -1,0 +1,422 @@
+{
+  "scenario": "person_centric_example",
+  "description": "Example scenario demonstrating person-centric model with multiple persons and vehicles",
+  "actors": [
+    {
+      "id": "htcaid:person;commuter_alice",
+      "typeActor": "hybrid.actor.Person",
+      "data": {
+        "dataType": "model.hybrid.entity.state.PersonState",
+        "content": {
+          "dailySchedule": [
+            {
+              "sequence": 0,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_1",
+              "endTime": "28800",
+              "arrivalLogistics": null
+            },
+            {
+              "sequence": 1,
+              "activityType": "Work",
+              "nodeId": "htcaid:node;office_downtown",
+              "endTime": "61200",
+              "arrivalLogistics": {
+                "mode": "car",
+                "vehicleId": "htcaid:car;alice_sedan",
+                "driverAttributes": {
+                  "aggressiveness": 0.6,
+                  "maxSpeedFactor": 1.1,
+                  "reactionTime": 0.9,
+                  "minGapFactor": 0.8
+                }
+              }
+            },
+            {
+              "sequence": 2,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_1",
+              "endTime": "79200",
+              "arrivalLogistics": {
+                "mode": "car",
+                "vehicleId": "htcaid:car;alice_sedan",
+                "driverAttributes": {
+                  "aggressiveness": 0.5,
+                  "maxSpeedFactor": 1.0,
+                  "reactionTime": 1.0,
+                  "minGapFactor": 1.0
+                }
+              }
+            }
+          ],
+          "currentActivityIndex": 0,
+          "ownedVehicles": {
+            "car": "htcaid:car;alice_sedan"
+          },
+          "currentTripVehicleId": null,
+          "currentTripStartTick": null,
+          "totalDistanceTraveled": 0.0,
+          "completedTrips": 0
+        }
+      },
+      "dependencies": {
+        "car": {
+          "id": "htcaid:car;alice_sedan",
+          "classType": "hybrid.actor.Car"
+        }
+      }
+    },
+    {
+      "id": "htcaid:person;cyclist_bob",
+      "typeActor": "hybrid.actor.Person",
+      "data": {
+        "dataType": "model.hybrid.entity.state.PersonState",
+        "content": {
+          "dailySchedule": [
+            {
+              "sequence": 0,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_2",
+              "endTime": "27000",
+              "arrivalLogistics": null
+            },
+            {
+              "sequence": 1,
+              "activityType": "Coffee",
+              "nodeId": "htcaid:node;cafe_main",
+              "endTime": "30600",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;bob_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.3,
+                  "maxSpeedFactor": 0.9,
+                  "reactionTime": 1.2,
+                  "minGapFactor": 1.0
+                }
+              }
+            },
+            {
+              "sequence": 2,
+              "activityType": "Work",
+              "nodeId": "htcaid:node;coworking_space",
+              "endTime": "57600",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;bob_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.3,
+                  "maxSpeedFactor": 0.9,
+                  "reactionTime": 1.2,
+                  "minGapFactor": 1.0
+                }
+              }
+            },
+            {
+              "sequence": 3,
+              "activityType": "Gym",
+              "nodeId": "htcaid:node;fitness_center",
+              "endTime": "64800",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;bob_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.4,
+                  "maxSpeedFactor": 1.0,
+                  "reactionTime": 1.0,
+                  "minGapFactor": 0.9
+                }
+              }
+            },
+            {
+              "sequence": 4,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_2",
+              "endTime": "72000",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;bob_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.3,
+                  "maxSpeedFactor": 0.9,
+                  "reactionTime": 1.2,
+                  "minGapFactor": 1.0
+                }
+              }
+            }
+          ],
+          "currentActivityIndex": 0,
+          "ownedVehicles": {
+            "bicycle": "htcaid:bicycle;bob_bike"
+          },
+          "currentTripVehicleId": null,
+          "currentTripStartTick": null,
+          "totalDistanceTraveled": 0.0,
+          "completedTrips": 0
+        }
+      },
+      "dependencies": {
+        "bicycle": {
+          "id": "htcaid:bicycle;bob_bike",
+          "classType": "hybrid.actor.Bicycle"
+        }
+      }
+    },
+    {
+      "id": "htcaid:person;biker_charlie",
+      "typeActor": "hybrid.actor.Person",
+      "data": {
+        "dataType": "model.hybrid.entity.state.PersonState",
+        "content": {
+          "dailySchedule": [
+            {
+              "sequence": 0,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_3",
+              "endTime": "25200",
+              "arrivalLogistics": null
+            },
+            {
+              "sequence": 1,
+              "activityType": "Work",
+              "nodeId": "htcaid:node;industrial_zone",
+              "endTime": "54000",
+              "arrivalLogistics": {
+                "mode": "motorcycle",
+                "vehicleId": "htcaid:motorcycle;charlie_sportbike",
+                "driverAttributes": {
+                  "aggressiveness": 0.9,
+                  "maxSpeedFactor": 1.3,
+                  "reactionTime": 0.7,
+                  "minGapFactor": 0.6
+                }
+              }
+            },
+            {
+              "sequence": 2,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_3",
+              "endTime": "64800",
+              "arrivalLogistics": {
+                "mode": "motorcycle",
+                "vehicleId": "htcaid:motorcycle;charlie_sportbike",
+                "driverAttributes": {
+                  "aggressiveness": 0.8,
+                  "maxSpeedFactor": 1.2,
+                  "reactionTime": 0.8,
+                  "minGapFactor": 0.7
+                }
+              }
+            }
+          ],
+          "currentActivityIndex": 0,
+          "ownedVehicles": {
+            "motorcycle": "htcaid:motorcycle;charlie_sportbike"
+          },
+          "currentTripVehicleId": null,
+          "currentTripStartTick": null,
+          "totalDistanceTraveled": 0.0,
+          "completedTrips": 0
+        }
+      },
+      "dependencies": {
+        "motorcycle": {
+          "id": "htcaid:motorcycle;charlie_sportbike",
+          "classType": "hybrid.actor.Motorcycle"
+        }
+      }
+    },
+    {
+      "id": "htcaid:person;multimodal_diana",
+      "typeActor": "hybrid.actor.Person",
+      "data": {
+        "dataType": "model.hybrid.entity.state.PersonState",
+        "content": {
+          "dailySchedule": [
+            {
+              "sequence": 0,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_4",
+              "endTime": "32400",
+              "arrivalLogistics": null
+            },
+            {
+              "sequence": 1,
+              "activityType": "Shopping",
+              "nodeId": "htcaid:node;mall_central",
+              "endTime": "39600",
+              "arrivalLogistics": {
+                "mode": "car",
+                "vehicleId": "htcaid:car;diana_suv",
+                "driverAttributes": {
+                  "aggressiveness": 0.4,
+                  "maxSpeedFactor": 0.95,
+                  "reactionTime": 1.1,
+                  "minGapFactor": 1.2
+                }
+              }
+            },
+            {
+              "sequence": 2,
+              "activityType": "Park",
+              "nodeId": "htcaid:node;city_park",
+              "endTime": "46800",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;diana_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.2,
+                  "maxSpeedFactor": 0.8,
+                  "reactionTime": 1.3,
+                  "minGapFactor": 1.1
+                }
+              }
+            },
+            {
+              "sequence": 3,
+              "activityType": "Home",
+              "nodeId": "htcaid:node;residential_4",
+              "endTime": "54000",
+              "arrivalLogistics": {
+                "mode": "bicycle",
+                "vehicleId": "htcaid:bicycle;diana_bike",
+                "driverAttributes": {
+                  "aggressiveness": 0.2,
+                  "maxSpeedFactor": 0.8,
+                  "reactionTime": 1.3,
+                  "minGapFactor": 1.1
+                }
+              }
+            }
+          ],
+          "currentActivityIndex": 0,
+          "ownedVehicles": {
+            "car": "htcaid:car;diana_suv",
+            "bicycle": "htcaid:bicycle;diana_bike"
+          },
+          "currentTripVehicleId": null,
+          "currentTripStartTick": null,
+          "totalDistanceTraveled": 0.0,
+          "completedTrips": 0
+        }
+      },
+      "dependencies": {
+        "car": {
+          "id": "htcaid:car;diana_suv",
+          "classType": "hybrid.actor.Car"
+        },
+        "bicycle": {
+          "id": "htcaid:bicycle;diana_bike",
+          "classType": "hybrid.actor.Bicycle"
+        }
+      }
+    },
+    {
+      "id": "htcaid:car;alice_sedan",
+      "typeActor": "hybrid.actor.Car",
+      "data": {
+        "dataType": "model.hybrid.entity.state.CarState",
+        "content": {
+          "status": "Parked",
+          "origin": null,
+          "destination": null,
+          "startTick": 0,
+          "distance": 0.0,
+          "eventCount": 0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "bestRoute": null,
+          "currentPath": null,
+          "reachedDestination": false,
+          "size": 4.5
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:bicycle;bob_bike",
+      "typeActor": "hybrid.actor.Bicycle",
+      "data": {
+        "dataType": "model.hybrid.entity.state.BicycleState",
+        "content": {
+          "status": "Parked",
+          "origin": null,
+          "destination": null,
+          "startTick": 0,
+          "distance": 0.0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "bestRoute": null,
+          "currentPath": null,
+          "reachedDestination": false,
+          "size": 2.0
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:motorcycle;charlie_sportbike",
+      "typeActor": "hybrid.actor.Motorcycle",
+      "data": {
+        "dataType": "model.hybrid.entity.state.MotorcycleState",
+        "content": {
+          "status": "Parked",
+          "origin": null,
+          "destination": null,
+          "startTick": 0,
+          "distance": 0.0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "bestRoute": null,
+          "currentPath": null,
+          "reachedDestination": false,
+          "size": 2.5
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:car;diana_suv",
+      "typeActor": "hybrid.actor.Car",
+      "data": {
+        "dataType": "model.hybrid.entity.state.CarState",
+        "content": {
+          "status": "Parked",
+          "origin": null,
+          "destination": null,
+          "startTick": 0,
+          "distance": 0.0,
+          "eventCount": 0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "bestRoute": null,
+          "currentPath": null,
+          "reachedDestination": false,
+          "size": 5.0
+        }
+      },
+      "dependencies": {}
+    },
+    {
+      "id": "htcaid:bicycle;diana_bike",
+      "typeActor": "hybrid.actor.Bicycle",
+      "data": {
+        "dataType": "model.hybrid.entity.state.BicycleState",
+        "content": {
+          "status": "Parked",
+          "origin": null,
+          "destination": null,
+          "startTick": 0,
+          "distance": 0.0,
+          "currentSimulationMode": "MESO",
+          "microState": null,
+          "bestRoute": null,
+          "currentPath": null,
+          "reachedDestination": false,
+          "size": 2.0
+        }
+      },
+      "dependencies": {}
+    }
+  ]
+}

@@ -16,9 +16,9 @@ model/hybrid/entity/state/
 ├── MicroBicycleState.scala               # Bicycle micro state
 ├── MicroMotorcycleState.scala            # Motorcycle micro state
 ├── HybridLinkState.scala                 # Link with mode flag
-├── HybridNodeState.scala                 # Node with conflict zones
-├── HybridCarState.scala                  # Car wrapper
-├── HybridBusState.scala                  # Bus wrapper
+├── NodeState.scala                 # Node with conflict zones
+├── CarState.scala                  # Car wrapper
+├── BusState.scala                  # Bus wrapper
 └── HybridBicycleMotorcycleState.scala    # Bicycle + Motorcycle wrappers
 ```
 
@@ -44,7 +44,7 @@ model/hybrid/micro/
 ### Actors
 ```
 model/hybrid/actor/
-└── HybridLink.scala                      # Hybrid link actor
+└── Link.scala                      # Hybrid link actor
 ```
 
 ---
@@ -296,7 +296,7 @@ UnregisterVehicle(vehicleId = "car_1")
 ```json
 {
   "id": "htcaid:link;downtown_main",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -326,7 +326,7 @@ UnregisterVehicle(vehicleId = "car_1")
 ```json
 {
   "id": "htcaid:link;suburb_road",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {

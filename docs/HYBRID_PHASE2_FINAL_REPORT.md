@@ -38,13 +38,13 @@ A **Fase 2** implementou com sucesso os **atores de veículos híbridos** para o
    - Gestão de passageiros (capacity tracking)
    - Restrições de faixa (bus lanes)
 
-3. **HybridBicycle.scala** (~380 linhas) **[NOVO TIPO]**
+3. **Bicycle.scala** (~380 linhas) **[NOVO TIPO]**
    - Estende `Movable[HybridBicycleState]`
    - Parâmetros: 2m, 1.0 m/s², 5.56 m/s (20 km/h)
    - Preferência por ciclovias
    - Usuário vulnerável (gaps menores)
 
-4. **HybridMotorcycle.scala** (~420 linhas) **[NOVO TIPO]**
+4. **Motorcycle.scala** (~420 linhas) **[NOVO TIPO]**
    - Estende `Movable[HybridMotorcycleState]`
    - Parâmetros: 2.5m, 3.5 m/s², 16.67 m/s (60 km/h)
    - Lane filtering capability
@@ -126,7 +126,7 @@ A **Fase 2** implementou com sucesso os **atores de veículos híbridos** para o
 ---
 
 ### ✅ Task 3: HybridBicycle Actor (NOVO)
-**Arquivo:** `src/main/scala/model/hybrid/actor/HybridBicycle.scala`
+**Arquivo:** `src/main/scala/model/hybrid/actor/Bicycle.scala`
 
 **Características:**
 - Primeiro veículo não-motorizado do sistema
@@ -140,7 +140,7 @@ A **Fase 2** implementou com sucesso os **atores de veículos híbridos** para o
 ---
 
 ### ✅ Task 4: HybridMotorcycle Actor (NOVO)
-**Arquivo:** `src/main/scala/model/hybrid/actor/HybridMotorcycle.scala`
+**Arquivo:** `src/main/scala/model/hybrid/actor/Motorcycle.scala`
 
 **Características:**
 - Primeiro veículo com lane filtering
@@ -440,8 +440,8 @@ Implementação realizada com suporte de:
 **Atores:**
 - `src/main/scala/model/hybrid/actor/HybridCar.scala`
 - `src/main/scala/model/hybrid/actor/HybridBus.scala`
-- `src/main/scala/model/hybrid/actor/HybridBicycle.scala`
-- `src/main/scala/model/hybrid/actor/HybridMotorcycle.scala`
+- `src/main/scala/model/hybrid/actor/Bicycle.scala`
+- `src/main/scala/model/hybrid/actor/Motorcycle.scala`
 
 **Testes:**
 - `src/test/scala/hybrid/HybridActorInstantiationTest.scala`

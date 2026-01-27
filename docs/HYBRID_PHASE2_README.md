@@ -12,8 +12,8 @@
 #### Atores (src/main/scala/model/hybrid/actor/)
 - `HybridCar.scala` - Carro híbrido (4.5m, 50 km/h)
 - `HybridBus.scala` - Ônibus híbrido (12m, 40 km/h, capacidade)
-- `HybridBicycle.scala` - Bicicleta híbrida (2m, 20 km/h, ciclovia)
-- `HybridMotorcycle.scala` - Motocicleta híbrida (2.5m, 60 km/h, filtering)
+- `Bicycle.scala` - Bicicleta híbrida (2m, 20 km/h, ciclovia)
+- `Motorcycle.scala` - Motocicleta híbrida (2.5m, 60 km/h, filtering)
 
 #### Testes (src/test/scala/hybrid/)
 - `HybridActorInstantiationTest.scala` - Instanciação (12 testes)
@@ -38,9 +38,9 @@
 ```json
 {
   "id": "htcaid:car;my_car",
-  "typeActor": "hybrid.actor.HybridCar",
+  "typeActor": "hybrid.actor.Car",
   "data": {
-    "dataType": "model.hybrid.entity.state.HybridCarState",
+    "dataType": "model.hybrid.entity.state.CarState",
     "content": {
       "startTick": 10,
       "origin": "htcaid:node;A",
@@ -56,7 +56,7 @@
 ```json
 {
   "id": "htcaid:link;suburb_road",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -75,7 +75,7 @@
 ```json
 {
   "id": "htcaid:link;downtown_avenue",
-  "typeActor": "hybrid.actor.HybridLink",
+  "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.HybridLinkState",
     "content": {
@@ -264,10 +264,10 @@ motorcycle.aggressiveness = 0.7  // [0.0-1.0]
 ```json
 {
   "actors": [
-    { "typeActor": "hybrid.actor.HybridCar", ... },
-    { "typeActor": "hybrid.actor.HybridBus", ... },
-    { "typeActor": "hybrid.actor.HybridBicycle", ... },
-    { "typeActor": "hybrid.actor.HybridMotorcycle", ... }
+    { "typeActor": "hybrid.actor.Car", ... },
+    { "typeActor": "hybrid.actor.Bus", ... },
+    { "typeActor": "hybrid.actor.Bicycle", ... },
+    { "typeActor": "hybrid.actor.Motorcycle", ... }
   ]
 }
 ```

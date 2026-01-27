@@ -47,7 +47,7 @@ import scala.collection.mutable
   * @param vehiclesByLane Vehicles organized by lane (for MICRO mode)
   * @param laneConfigurations Configuration for each lane
   */
-case class HybridLinkState(
+case class LinkState(
   // ========== Meso fields (inherited from LinkState) ==========
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
@@ -117,7 +117,7 @@ case class HybridLinkState(
   }
   
   /** Initialize lane structure for MICRO mode */
-  def initializeMicroLanes(): HybridLinkState = {
+  def initializeMicroLanes(): LinkState = {
     if (isMicroMode && vehiclesByLane.isEmpty) {
       val lanes = (0 until this.lanes).map { laneId =>
         laneId -> mutable.Queue.empty[VehicleInLane]
@@ -137,7 +137,7 @@ case class HybridLinkState(
   }
 }
 
-object HybridLinkState {
+object LinkState {
   /** Create a hybrid link in MESO mode (default, backward compatible) */
   def createMeso(
     startTick: Tick,
@@ -148,8 +148,8 @@ object HybridLinkState {
     speedLimit: Double,
     capacity: Double,
     freeSpeed: Double
-  ): HybridLinkState = {
-    HybridLinkState(
+  ): LinkState = {
+    LinkState(
       startTick = startTick,
       from = from,
       to = to,
@@ -175,8 +175,8 @@ object HybridLinkState {
     microTimeStep: Double = 0.1,
     microTicksPerGlobalTick: Int = 10,
     laneConfigs: List[LaneConfig] = List.empty
-  ): HybridLinkState = {
-    val state = HybridLinkState(
+  ): LinkState = {
+    val state = LinkState(
       startTick = startTick,
       from = from,
       to = to,

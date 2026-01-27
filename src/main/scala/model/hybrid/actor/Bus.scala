@@ -17,12 +17,12 @@ import org.interscity.htc.model.hybrid.util.{BusUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
-import org.interscity.htc.model.hybrid.entity.state.{HybridBusState, MicroBusState}
+import org.interscity.htc.model.hybrid.entity.state.{BusState, MicroBusState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 
-/** HybridBus actor supporting both MESO and MICRO simulation modes.
+/** Bus actor supporting both MESO and MICRO simulation modes.
   * 
   * Extends the base Bus actor with microscopic simulation capabilities.
   * Buses have unique characteristics:
@@ -44,9 +44,9 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
   * 
   * @param properties Actor properties
   */
-class HybridBus(
+class Bus(
   private val properties: Properties
-) extends Movable[HybridBusState](
+) extends Movable[BusState](
       properties = properties
     ) {
   
@@ -402,10 +402,10 @@ class HybridBus(
   }
 }
 
-/** HybridBus companion object.
+/** Bus companion object.
   */
-object HybridBus {
-  def apply(properties: Properties): HybridBus = {
-    new HybridBus(properties)
+object Bus {
+  def apply(properties: Properties): Bus = {
+    new Bus(properties)
   }
 }

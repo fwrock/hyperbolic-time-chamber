@@ -10,7 +10,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, Rout
 
 import scala.collection.mutable
 
-case class HybridBusStationState(
+case class BusStationState(
   startTick: Long,
   name: String,
   origin: String,
