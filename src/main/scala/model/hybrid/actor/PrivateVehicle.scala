@@ -9,6 +9,7 @@ import model.hybrid.entity.state.enumeration.MovableStatusEnum.{Parked, Start}
 import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData, ParkVehicleData}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.htc.protobuf.core.entity.actor.Identify
 
 /** Common trait for private vehicles (Car, Bicycle, Motorcycle).
   * 
@@ -24,9 +25,9 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 trait PrivateVehicle[T <: MovableState] {
   self: Movable[T] =>
   
-  /** Owner person ID (set when vehicle is created).
+  /** Owner person reference with id and classType (set when vehicle is activated).
     */
-  private var ownerPersonId: Option[String] = None
+  private var ownerPersonRef: Option[Identify] = None
   
   /** Current trip origin (override state's immutable origin).
     */
@@ -89,8 +90,11 @@ trait PrivateVehicle[T <: MovableState] {
     
     logVehicleInfo(s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}")
     
-    // Store owner and trip info
-    ownerPersonId = Some(data.personId)
+    // Store owner reference (complete Identify with id + classType)
+    ownerPersonRef = Some(Identify(
+      id = data.personId,
+      classType = event.actorClassType // Person's shard/classType from event sender
+    ))
     tripOrigin = Some(data.origin)
     tripDestination = Some(data.destination)
     driverAttributes = data.driverAttributes.validate()
@@ -133,17 +137,17 @@ trait PrivateVehicle[T <: MovableState] {
   /** Report trip completion back to Person.
     */
   protected def reportTripCompletion(reason: String, finalNode: String): Unit = {
-    ownerPersonId.foreach { personId =>
+    ownerPersonRef.foreach { personRef =>
       val travelTime = tripStartTick.map(start => getActorCurrentTick - start).getOrElse(0L)
       val distanceTraveled = getCurrentDistance - tripStartDistance
       
-      // Send TripCompleted message to Person
+      // Send TripCompleted message to Person using correct shard
       sendVehicleMessage(
-        entityId = personId,
-        shardId = getActorShardId, // Assume Person is on same shard (or lookup)
+        entityId = personRef.id,
+        shardId = personRef.classType, // Use Person's actual shard (from Identify)
         data = TripCompletedData(
           vehicleId = getActorEntityId,
-          personId = personId,
+          personId = personRef.id,
           distanceTraveled = distanceTraveled,
           travelTime = travelTime,
           finalNode = finalNode,
@@ -154,7 +158,7 @@ trait PrivateVehicle[T <: MovableState] {
         actorType = LoadBalancedDistributed
       )
       
-      logVehicleInfo(s"${getActorEntityId} reported trip completion to $personId: ${distanceTraveled}m in $travelTime ticks")
+      logVehicleInfo(s"${getActorEntityId} reported trip completion to ${personRef.id}: ${distanceTraveled}m in $travelTime ticks")
     }
   }
   
@@ -164,7 +168,7 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def deactivateVehicle(): Unit = {
     setVehicleStatus(Parked)
-    ownerPersonId = None
+    ownerPersonRef = None
     tripStartTick = None
     tripStartDistance = 0.0
     

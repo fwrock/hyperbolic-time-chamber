@@ -157,12 +157,25 @@ The person-centric model now follows the same pattern for vehicle references.
 4. **Type Safety**: Compiler enforces complete references
 5. **Debugging**: Clear distinction between actor identity and shard location
 
+## Actors Fixed
+
+### PersonState & Person Actor
+**Issue:** `ownedVehicles` stored as `Map[String, String]`, preventing proper message routing to vehicles.
+**Fix:** Changed to `Map[String, Identify]` with complete vehicle references.
+
+### PrivateVehicle Trait
+**Issue:** `ownerPersonId: Option[String]` stored only person's ID, used wrong shard when reporting trip completion.
+**Fix:** Changed to `ownerPersonRef: Option[Identify]`, extracts Person's shard from `StartTrip` event sender.
+
+**Affected Classes:** `Car`, `Bicycle`, `Motorcycle` (all use PrivateVehicle trait)
+
 ## Migration Checklist
 
 When adding new actor-to-actor communication:
 
 - [ ] Store dependencies as `Identify` objects, not strings
-- [ ] Use `vehicle.id` and `vehicle.classType` when sending messages
+- [ ] Use `actorRef.id` and `actorRef.classType` when sending messages
+- [ ] Extract sender's shard from `event.actorClassType` when receiving messages
 - [ ] Update JSON configuration to include both `id` and `classType`
 - [ ] Add dependencies section in actor JSON definitions
 - [ ] Test cross-shard message delivery
