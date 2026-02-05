@@ -3,6 +3,7 @@ package model.hybrid.entity.state
 
 import core.entity.state.BaseState
 import core.types.Tick
+import org.htc.protobuf.core.entity.actor.Identify
 
 /** Person state representing a person agent in the simulation.
   * 
@@ -12,7 +13,7 @@ import core.types.Tick
   * 
   * @param dailySchedule List of activities scheduled for the day
   * @param currentActivityIndex Current activity being performed
-  * @param ownedVehicles Map of vehicle IDs owned by this person (mode -> vehicleId)
+  * @param ownedVehicles Map of vehicle references owned by this person (mode -> Identify with id + classType)
   * @param currentTripVehicleId Vehicle currently being used (if any)
   * @param currentTripStartTick When current trip started
   * @param totalDistanceTraveled Total distance traveled today (meters)
@@ -21,7 +22,7 @@ import core.types.Tick
 case class PersonState(
   dailySchedule: List[Activity],
   currentActivityIndex: Int = 0,
-  ownedVehicles: Map[String, String] = Map.empty, // mode -> vehicleId
+  ownedVehicles: Map[String, Identify] = Map.empty, // mode -> Identify(id, classType)
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   totalDistanceTraveled: Double = 0.0,
@@ -101,12 +102,12 @@ case class Activity(
 /** Logistics for arriving at an activity location.
   * 
   * @param mode Transportation mode ("car", "bicycle", "motorcycle", "walk", "transit")
-  * @param vehicleId ID of the vehicle to use (for private modes)
+  * @param vehicle Complete vehicle reference with id and classType (for private modes)
   * @param driverAttributes Attributes affecting driving behavior
   */
 case class ArrivalLogistics(
   mode: String, // "car", "bicycle", "motorcycle", "walk", "transit"
-  vehicleId: Option[String] = None, // Required for private vehicles
+  vehicle: Option[Identify] = None, // Required for private vehicles (contains id + classType)
   driverAttributes: DriverAttributes = DriverAttributes()
 )
 
