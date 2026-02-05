@@ -158,12 +158,12 @@ class Person(
   /** Initiate private vehicle trip.
     */
   private def initiatePrivateVehicleTrip(origin: String, destination: String, logistics: ArrivalLogistics): Unit = {
-    logistics.vehicleId match {
-      case Some(vehicleId) =>
+    logistics.vehicle match {
+      case Some(vehicleRef) =>
         // Check if person owns this vehicle
         state.ownedVehicles.get(logistics.mode) match {
-          case Some(ownedVehicleId) if ownedVehicleId == vehicleId =>
-            // Send StartTrip to vehicle
+          case Some(ownedVehicleRef) if ownedVehicleRef.id == vehicleRef.id =>
+            // Send StartTrip to vehicle using complete reference (id + classType)
             val startTripData = StartTripData(
               personId = getEntityId,
               origin = origin,
@@ -173,8 +173,8 @@ class Person(
             )
             
             sendMessageTo(
-              entityId = vehicleId,
-              shardId = getShardId, // Assume vehicle on same shard (or lookup)
+              entityId = vehicleRef.id,
+              shardId = vehicleRef.classType, // Use vehicle's actual shard
               data = startTripData,
               eventType = "StartTrip",
               actorType = LoadBalancedDistributed
@@ -182,22 +182,22 @@ class Person(
             
             // Update state
             state.copy(
-              currentTripVehicleId = Some(vehicleId),
+              currentTripVehicleId = Some(vehicleRef.id),
               currentTripStartTick = Some(currentTick)
             )
             
-            logInfo(s"${getEntityId} started trip with $vehicleId: $origin -> $destination")
+            logInfo(s"${getEntityId} started trip with ${vehicleRef.id}: $origin -> $destination")
             
             // Wait for TripCompleted
             onFinishSpontaneous(Some(currentTick + 1))
           
           case _ =>
-            logError(s"${getEntityId} does not own vehicle $vehicleId for mode ${logistics.mode}")
+            logError(s"${getEntityId} does not own vehicle ${vehicleRef.id} for mode ${logistics.mode}")
             advanceToNextActivity() // Skip trip
         }
       
       case None =>
-        logError(s"${getEntityId} no vehicleId specified for mode ${logistics.mode}")
+        logError(s"${getEntityId} no vehicle specified for mode ${logistics.mode}")
         advanceToNextActivity() // Skip trip
     }
   }
