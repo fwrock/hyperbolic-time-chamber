@@ -7,7 +7,10 @@ import core.types.Tick
 import core.entity.actor.properties.Properties
 import model.hybrid.entity.state.{PersonState, Activity, ArrivalLogistics, DriverAttributes}
 import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData}
+import model.hybrid.util.{GPSUtil, CityMapUtil}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+
+import scala.collection.mutable
 
 /** Person actor - Agent-based person in the simulation.
   * 
@@ -135,9 +138,8 @@ class Person(
             initiatePrivateVehicleTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
           
           case "walk" =>
-            // Walking trip (simplified: instant for now)
-            logInfo(s"${getEntityId} walking to ${nextActivity.nodeId}")
-            advanceToNextActivity()
+            // Mesoscopic walking trip
+            initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId)
           
           case "transit" =>
             // Transit trip (future implementation)
@@ -153,6 +155,87 @@ class Person(
         logWarn(s"${getEntityId} has no current activity")
         advanceToNextActivity()
     }
+  }
+  
+  /** Initiate walking trip (mesoscopic).
+    * 
+    * Calculates route using road network, computes walking time based on
+    * distance and walking speed (1.4 m/s typical), and schedules arrival.
+    */
+  private def initiateWalkingTrip(origin: String, destination: String): Unit = {
+    // Calculate route using road network
+    GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
+      case Some((routeCost, routeQueue)) =>
+        // Calculate total distance by summing link lengths
+        val totalDistance = calculateRouteDistance(routeQueue)
+        
+        // Walking speed: 1.4 m/s (5.04 km/h) typical pedestrian speed
+        val walkingSpeed = 1.4 // m/s
+        
+        // Calculate walking time in seconds, then convert to ticks (1 tick = 1 second)
+        val walkingTimeSeconds = totalDistance / walkingSpeed
+        val walkingTimeTicks = math.ceil(walkingTimeSeconds).toLong
+        
+        // Calculate arrival tick
+        val arrivalTick = currentTick + walkingTimeTicks
+        
+        // Update state with walking trip info
+        state = state.copy(
+          currentTripVehicleId = Some("walking"),
+          currentTripStartTick = Some(currentTick)
+        )
+        
+        logInfo(s"${getEntityId} walking from $origin to $destination: " +
+          s"${totalDistance.toInt}m, ${walkingTimeTicks}s, arriving at tick $arrivalTick")
+        
+        // Report walking trip start
+        report(
+          data = Map(
+            "event_type" -> "walking_trip_start",
+            "person_id" -> getEntityId,
+            "origin" -> origin,
+            "destination" -> destination,
+            "distance" -> totalDistance,
+            "walking_time_ticks" -> walkingTimeTicks,
+            "arrival_tick" -> arrivalTick,
+            "walking_speed" -> walkingSpeed,
+            "tick" -> currentTick
+          ),
+          label = "person_walking_start"
+        )
+        
+        // Schedule arrival at destination
+        onFinishSpontaneous(Some(arrivalTick))
+      
+      case None =>
+        logError(s"${getEntityId} cannot find walking route from $origin to $destination")
+        // No route found, skip trip and advance to next activity
+        advanceToNextActivity()
+    }
+  }
+  
+  /** Calculate total route distance by summing link lengths.
+    */
+  private def calculateRouteDistance(routeQueue: mutable.Queue[(String, String)]): Double = {
+    var totalDistance = 0.0
+    
+    // Create a copy to iterate without modifying original
+    val routeCopy = routeQueue.clone()
+    
+    while (routeCopy.nonEmpty) {
+      val (linkEdgeGraphId, _) = routeCopy.dequeue()
+      
+      // Get EdgeGraph which contains the link length
+      CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
+        case Some(edgeLabel) =>
+          // EdgeGraph has a length property
+          totalDistance += edgeLabel.length
+        case None =>
+          logWarn(s"Edge label $linkEdgeGraphId not found")
+      }
+    }
+    
+    totalDistance
   }
   
   /** Initiate private vehicle trip.
@@ -234,6 +317,33 @@ class Person(
   /** Advance to next activity in schedule.
     */
   private def advanceToNextActivity(): Unit = {
+    // If completing a walking trip, report it
+    if (state.currentTripVehicleId.contains("walking")) {
+      val walkingDistance = 0.0 // Distance already tracked during trip start
+      state.currentTripStartTick match {
+        case Some(startTick) =>
+          val travelTime = currentTick - startTick
+          
+          report(
+            data = Map(
+              "event_type" -> "walking_trip_completed",
+              "person_id" -> getEntityId,
+              "travel_time" -> travelTime,
+              "arrival_tick" -> currentTick,
+              "tick" -> currentTick
+            ),
+            label = "person_walking_completed"
+          )
+          
+          logInfo(s"${getEntityId} completed walking trip in ${travelTime}s")
+        case None =>
+          // No start tick recorded
+      }
+      
+      // Complete the walking trip (distance is 0 since we already logged it at start)
+      state = state.completeTrip(0.0)
+    }
+    
     val newState = state.advanceActivity()
     
     newState.currentActivity match {
