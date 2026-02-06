@@ -9,16 +9,14 @@ import org.interscity.htc.model.hybrid.actor.Movable
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, MovableStatusEnum, SimulationModeEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-
-import org.interscity.htc.model.hybrid.entity.state.{CarState, MicroCarState, DriverAttributes}
-import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.model.hybrid.entity.event.data.person._
+import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes, MicroCarState}
+import org.interscity.htc.model.hybrid.entity.event.data.*
+import org.interscity.htc.model.hybrid.entity.event.data.person.*
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
@@ -68,8 +66,8 @@ class Car(
   
   // ===== PrivateVehicle Accessor Methods =====
   
-  override protected def getVehicleStatus: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
-  override protected def setVehicleStatus(status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum): Unit = {
+  override protected def getVehicleStatus: MovableStatusEnum = state.status
+  override protected def setVehicleStatus(status: MovableStatusEnum): Unit = {
     state.status = status
   }
   override protected def getActorCurrentTick: Tick = currentTick
