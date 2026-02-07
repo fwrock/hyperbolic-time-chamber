@@ -1,6 +1,7 @@
 package org.interscity.htc
 package model.hybrid.entity.event.data
 
+import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 
 /** Data for entering a link in microscopic mode.
@@ -26,7 +27,7 @@ case class MicroEnterLinkData(
   numberOfLanes: Int,
   microTimeStep: Double,
   ticksPerGlobalTick: Int
-)
+) extends BaseEventData
 
 /** Data for leaving a link from microscopic mode.
   * 
@@ -47,7 +48,7 @@ case class MicroLeaveLinkData(
   travelTime: Double,
   distanceTraveled: Double,
   averageSpeed: Double
-)
+) extends BaseEventData
 
 /** Data for microscopic update within a link.
   * 
@@ -74,7 +75,7 @@ case class MicroUpdateData(
   gapToLeader: Double,
   leaderVelocity: Double,
   safeVelocity: Double
-)
+) extends BaseEventData
 
 /** Data for microscopic step request from vehicle.
   * 
@@ -101,7 +102,7 @@ case class MicroStepData(
   maxDeceleration: Double,
   minGap: Double,
   vehicleLength: Double
-)
+) extends BaseEventData
 
 /** Data for lane change request or update.
   * 
@@ -121,7 +122,7 @@ case class LaneChangeData(
   progress: Double,
   reason: String,
   isComplete: Boolean
-)
+) extends BaseEventData
 
 /** Data for car-following update.
   * 
@@ -145,7 +146,7 @@ case class FollowingUpdateData(
   desiredAcceleration: Double,
   appliedAcceleration: Double,
   modelUsed: String
-)
+) extends BaseEventData
 
 /** Data for microscopic intersection coordination.
   * 
@@ -169,7 +170,7 @@ case class IntersectionMicroData(
   estimatedArrivalTime: Double,
   priority: Int,
   canEnter: Boolean
-)
+) extends BaseEventData
 
 /** Signal for completing all micro ticks in a global tick.
   * 
@@ -183,7 +184,7 @@ case class MicroTicksCompleted(
   linkId: String,
   globalTick: Long,
   totalSubTicks: Int
-)
+) extends BaseEventData
 
 /** Global tick trigger event from TimeManager to Link.
   * 
@@ -194,5 +195,5 @@ case class MicroTicksCompleted(
   */
 case class GlobalTickEvent(
   tick: Long
-)
+) extends BaseEventData
 
