@@ -41,11 +41,10 @@ abstract class BaseActor[T <: BaseState](
   protected var entityId: String =
     if (properties != null) properties.entityId 
     else {
-      // 🎲 Usar UUID determinístico se RandomSeedManager estiver disponível
       try {
         core.actor.manager.RandomSeedManager.deterministicUUID()
       } catch {
-        case _: Exception => UUID.randomUUID().toString // Fallback
+        case _: Exception => UUID.randomUUID().toString
       }
     }
   protected var shardId: String = getShardId
