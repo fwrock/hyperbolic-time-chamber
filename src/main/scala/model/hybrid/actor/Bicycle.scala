@@ -7,8 +7,12 @@ import core.types.Tick
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.actor.Movable
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
-import org.interscity.htc.model.hybrid.util.{GPSUtil, SpeedUtil}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{BicycleState, MicroBicycleState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
@@ -94,6 +98,9 @@ class Bicycle(
       case Ready =>
         enterLink()
       
+      case WaitingSignal =>
+        leavingLink()
+      
       case Moving =>
         if (state.isMicroMode) {
           // MICRO mode: check position
@@ -122,10 +129,62 @@ class Bicycle(
     }
     
     event.data match {
+      case d: SignalStateData => handleSignalState(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
       case _ => super.actInteractWith(event)
+    }
+  }
+  
+  /** Request signal state from node before leaving link.
+    */
+  private def requestSignalState(): Unit = {
+    if (state.destination == state.movableCurrentPath.map(_._2).orNull || state.bestRoute.isEmpty) {
+      val currentNodeId = getCurrentNode
+      if (currentNodeId != null) {
+        finishJourney("reached_destination", currentNodeId)
+      } else {
+        finishJourney("no_current_node", "unknown")
+      }
+      selfDestruct()
+    } else {
+      state.status = WaitingSignalState
+      getCurrentNode match {
+        case nodeId if nodeId != null =>
+          CityMapUtil.nodesById.get(nodeId) match {
+            case Some(node) =>
+              getNextLink match {
+                case linkId if linkId != null =>
+                  sendMessageTo(
+                    entityId = node.id,
+                    shardId = node.classType,
+                    RequestSignalStateData(targetLinkId = linkId),
+                    EventTypeEnum.RequestSignalState.toString
+                  )
+                case null =>
+                  logWarn("No next link available")
+                  leavingLink()
+              }
+            case None =>
+              logWarn(s"Node $nodeId not found")
+              leavingLink()
+          }
+        case null =>
+          logWarn("No current node")
+          leavingLink()
+      }
+    }
+  }
+  
+  /** Handle signal state response from node.
+    */
+  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
+    if (data.phase == Red) {
+      state.status = WaitingSignal
+      onFinishSpontaneous(Some(data.nextTick))
+    } else {
+      leavingLink()
     }
   }
   

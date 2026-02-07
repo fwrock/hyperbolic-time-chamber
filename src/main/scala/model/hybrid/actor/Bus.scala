@@ -13,7 +13,7 @@ import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.hybrid.util.{BusUtil, SpeedUtil}
+import org.interscity.htc.model.hybrid.util.{BusUtil, CityMapUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
@@ -84,7 +84,8 @@ class Bus(
             }
           }
         } else {
-          // MESO mode: standard behavior
+          // MESO mode: check signal before proceeding
+          requestSignalState()
 //           requestLoadPassenger()
 //           requestUnloadPeopleData()
         }
@@ -102,13 +103,51 @@ class Bus(
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     event.data match {
-      case d: BusLoadPassengerData => handleBusLoadPeople(event, d)
-      case d: BusUnloadPassengerData => handleUnloadPassenger(event, d)
       case d: SignalStateData => handleSignalState(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
+      case d: BusLoadPassengerData => handleBusLoadPeople(event, d)
+      case d: BusUnloadPassengerData => handleUnloadPassenger(event, d)
       case _ => super.actInteractWith(event)
+    }
+  }
+  
+  /** Request signal state from node before leaving link.
+    */
+  private def requestSignalState(): Unit = {
+    if (state.destination == state.movableCurrentPath.map(_._2).orNull || state.bestRoute.isEmpty) {
+      val currentNodeId = getCurrentNode
+      logInfo(s"Bus ${getEntityId} reached destination: $currentNodeId")
+      state.status = Finished
+      onFinishSpontaneous(None)
+      selfDestruct()
+    } else {
+      state.status = WaitingSignalState
+      getCurrentNode match {
+        case nodeId if nodeId != null =>
+          CityMapUtil.nodesById.get(nodeId) match {
+            case Some(node) =>
+              getNextLink match {
+                case linkId if linkId != null =>
+                  sendMessageTo(
+                    entityId = node.id,
+                    shardId = node.classType,
+                    RequestSignalStateData(targetLinkId = linkId),
+                    EventTypeEnum.RequestSignalState.toString
+                  )
+                case null =>
+                  logWarn("No next link available")
+                  leavingLink()
+              }
+            case None =>
+              logWarn(s"Node $nodeId not found")
+              leavingLink()
+          }
+        case null =>
+          logWarn("No current node")
+          leavingLink()
+      }
     }
   }
   
@@ -353,8 +392,9 @@ class Bus(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     if (data.phase == Red) {
       state.status = WaitingSignal
-      scheduleEvent(data.nextTick)
+      onFinishSpontaneous(Some(data.nextTick))
     } else {
+      leavingLink()
     }
   }
   
