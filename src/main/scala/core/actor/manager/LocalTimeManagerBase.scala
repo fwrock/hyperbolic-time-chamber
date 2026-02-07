@@ -32,7 +32,7 @@ abstract class LocalTimeManagerBase(
 ) extends TimeManagerBase(
       timeManager = null,
       actorId = actorId
-    ) {
+    ) with MicroAwareTimeManager {
 
   protected var countScheduled = 0
   private var selfProxy: ActorRef = null
@@ -110,6 +110,8 @@ abstract class LocalTimeManagerBase(
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
     if (isRunning && !isTerminated) {
+      // Trigger micro links before processing regular events
+      triggerMicroLinks(globalTick)
       processTick(localTickOffset)
     }
   }

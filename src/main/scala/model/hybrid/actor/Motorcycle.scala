@@ -11,7 +11,6 @@ import org.interscity.htc.model.hybrid.util.{GPSUtil, SpeedUtil}
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{MicroMotorcycleState, MotorcycleState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.model.hybrid.entity.event.data.person._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
