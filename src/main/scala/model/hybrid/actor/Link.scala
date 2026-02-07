@@ -8,6 +8,8 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.util.IdentifyUtil
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data.*
@@ -15,7 +17,7 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.event.data.*
-import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.hybrid.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
 
 /** Link actor supporting both MESO and MICRO simulation modes.
   * 
@@ -53,8 +55,15 @@ class Link(
     */
   private val carFollowingModel: CarFollowingModel = KraussModel()
   
+  /** Track if connections have been registered with nodes.
+    */
+  private var connectionsRegistered: Boolean = false
+  
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
+    
+    // Don't send connections immediately - do it lazily on first use
+    // This avoids race conditions where nodes haven't started yet
     
     // If MICRO mode, spawn LinkMicroTimeManager
     if (state.isMicroMode) {
@@ -62,6 +71,41 @@ class Link(
     }
     
     logInfo(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+  }
+  
+  /** Ensure link connections are registered with nodes.
+    * Called lazily on first vehicle interaction to avoid race conditions.
+    */
+  private def ensureConnectionsRegistered(): Unit = {
+    if (!connectionsRegistered) {
+      logDebug(s"Registering link connections with nodes")
+      sendConnectionsToNode(state.to)
+      sendConnectionsToNode(state.from)
+      connectionsRegistered = true
+    }
+  }
+  
+  /** Send link connection information to a node.
+    * This allows nodes to map link IDs to their endpoints,
+    * enabling proper traffic signal state lookups.
+    */
+  private def sendConnectionsToNode(nodeId: String): Unit = {
+    val toIdentify = IdentifyUtil.fromDependency(getDependency(state.to))
+    val fromIdentify = IdentifyUtil.fromDependency(getDependency(state.from))
+    val nodeIdentify = IdentifyUtil.fromDependency(getDependency(nodeId))
+    
+    sendMessageTo(
+      entityId = nodeIdentify.id,
+      shardId = nodeIdentify.classType,
+      data = LinkConnectionsData(
+        to = toIdentify,
+        from = fromIdentify
+      ),
+      eventType = EventTypeEnum.LinkConnection.toString,
+      actorType = LoadBalancedDistributed
+    )
+    
+    logDebug(s"Sent connection info to node $nodeId")
   }
   
   /** Initialize microscopic simulation mode.
@@ -101,6 +145,9 @@ class Link(
     * - MICRO: Initialize microscopic state, register with time manager
     */
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    // Ensure connections are registered (lazy initialization)
+    ensureConnectionsRegistered()
+    
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
     
     if (state.isMicroMode) {
