@@ -1,0 +1,27 @@
+{
+  "name": "JSON_Format_Test",
+  "description": "Generated hybrid scenario",
+  "generated": "2026-02-07T16:49:10.145733",
+  "version": "1.0.0",
+  "statistics": {
+    "nodes": 9,
+    "links": 24,
+    "vehicles": 30,
+    "microLinks": 24,
+    "mesoLinks": 0,
+    "vehiclesByType": {
+      "CAR": 21,
+      "BUS": 3,
+      "BICYCLE": 3,
+      "MOTORCYCLE": 3
+    },
+    "signalizedIntersections": 1
+  },
+  "configuration": {
+    "startTick": 0,
+    "endTick": 3600,
+    "tickDuration": 1.0,
+    "networkType": "grid",
+    "randomSeed": 42
+  }
+}
