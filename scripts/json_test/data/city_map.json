@@ -1,0 +1,186 @@
+{
+  "vertices": {
+    "node_0_0": {
+      "latitude": -23.5505,
+      "longitude": -46.6333
+    },
+    "node_0_1": {
+      "latitude": -23.5505,
+      "longitude": -46.628386218069515
+    },
+    "node_0_2": {
+      "latitude": -23.5505,
+      "longitude": -46.62347243613903
+    },
+    "node_1_0": {
+      "latitude": -23.545995495495497,
+      "longitude": -46.6333
+    },
+    "node_1_1": {
+      "latitude": -23.545995495495497,
+      "longitude": -46.628386218069515
+    },
+    "node_1_2": {
+      "latitude": -23.545995495495497,
+      "longitude": -46.62347243613903
+    },
+    "node_2_0": {
+      "latitude": -23.54149099099099,
+      "longitude": -46.6333
+    },
+    "node_2_1": {
+      "latitude": -23.54149099099099,
+      "longitude": -46.628386218069515
+    },
+    "node_2_2": {
+      "latitude": -23.54149099099099,
+      "longitude": -46.62347243613903
+    }
+  },
+  "edges": [
+    {
+      "sourceId": "node_0_0",
+      "targetId": "node_0_1",
+      "weight": 500.0000000000707,
+      "label": "link_0"
+    },
+    {
+      "sourceId": "node_0_1",
+      "targetId": "node_0_0",
+      "weight": 500.0000000000707,
+      "label": "link_1"
+    },
+    {
+      "sourceId": "node_0_0",
+      "targetId": "node_1_0",
+      "weight": 499.99999999982236,
+      "label": "link_2"
+    },
+    {
+      "sourceId": "node_1_0",
+      "targetId": "node_0_0",
+      "weight": 499.99999999982236,
+      "label": "link_3"
+    },
+    {
+      "sourceId": "node_0_1",
+      "targetId": "node_0_2",
+      "weight": 500.0000000000707,
+      "label": "link_4"
+    },
+    {
+      "sourceId": "node_0_2",
+      "targetId": "node_0_1",
+      "weight": 500.0000000000707,
+      "label": "link_5"
+    },
+    {
+      "sourceId": "node_0_1",
+      "targetId": "node_1_1",
+      "weight": 499.99999999982236,
+      "label": "link_6"
+    },
+    {
+      "sourceId": "node_1_1",
+      "targetId": "node_0_1",
+      "weight": 499.99999999982236,
+      "label": "link_7"
+    },
+    {
+      "sourceId": "node_0_2",
+      "targetId": "node_1_2",
+      "weight": 499.99999999982236,
+      "label": "link_8"
+    },
+    {
+      "sourceId": "node_1_2",
+      "targetId": "node_0_2",
+      "weight": 499.99999999982236,
+      "label": "link_9"
+    },
+    {
+      "sourceId": "node_1_0",
+      "targetId": "node_1_1",
+      "weight": 500.01713180200136,
+      "label": "link_10"
+    },
+    {
+      "sourceId": "node_1_1",
+      "targetId": "node_1_0",
+      "weight": 500.01713180200136,
+      "label": "link_11"
+    },
+    {
+      "sourceId": "node_1_0",
+      "targetId": "node_2_0",
+      "weight": 500.0000000002167,
+      "label": "link_12"
+    },
+    {
+      "sourceId": "node_2_0",
+      "targetId": "node_1_0",
+      "weight": 500.0000000002167,
+      "label": "link_13"
+    },
+    {
+      "sourceId": "node_1_1",
+      "targetId": "node_1_2",
+      "weight": 500.01713180200136,
+      "label": "link_14"
+    },
+    {
+      "sourceId": "node_1_2",
+      "targetId": "node_1_1",
+      "weight": 500.01713180200136,
+      "label": "link_15"
+    },
+    {
+      "sourceId": "node_1_1",
+      "targetId": "node_2_1",
+      "weight": 500.0000000002167,
+      "label": "link_16"
+    },
+    {
+      "sourceId": "node_2_1",
+      "targetId": "node_1_1",
+      "weight": 500.0000000002167,
+      "label": "link_17"
+    },
+    {
+      "sourceId": "node_1_2",
+      "targetId": "node_2_2",
+      "weight": 500.0000000002167,
+      "label": "link_18"
+    },
+    {
+      "sourceId": "node_2_2",
+      "targetId": "node_1_2",
+      "weight": 500.0000000002167,
+      "label": "link_19"
+    },
+    {
+      "sourceId": "node_2_0",
+      "targetId": "node_2_1",
+      "weight": 500.034260513397,
+      "label": "link_20"
+    },
+    {
+      "sourceId": "node_2_1",
+      "targetId": "node_2_0",
+      "weight": 500.034260513397,
+      "label": "link_21"
+    },
+    {
+      "sourceId": "node_2_1",
+      "targetId": "node_2_2",
+      "weight": 500.034260513397,
+      "label": "link_22"
+    },
+    {
+      "sourceId": "node_2_2",
+      "targetId": "node_2_1",
+      "weight": 500.034260513397,
+      "label": "link_23"
+    }
+  ]
+}

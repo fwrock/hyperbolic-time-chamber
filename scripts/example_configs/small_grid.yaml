@@ -1,0 +1,36 @@
+# Small Grid Scenario Configuration
+# 3x3 grid with mixed MICRO/MESO links
+
+name: "Small Grid Hybrid Test"
+description: "Small 3x3 grid scenario for testing hybrid simulation"
+output_dir: "../simulations/input/small_grid_scenario"
+
+# Simulation parameters
+start_tick: 0
+end_tick: 1800  # 30 minutes
+tick_duration: 1.0
+
+# Network configuration
+network_type: "grid"
+num_nodes: 9  # 3x3 grid
+grid_size: 300.0  # 300 meters between nodes
+base_latitude: -23.5505
+base_longitude: -46.6333
+
+# Link parameters
+default_lanes: 2
+default_speed_limit: 50.0  # km/h
+default_capacity: 1800.0  # vehicles/hour/lane
+micro_link_ratio: 0.4  # 40% of links are MICRO
+
+# Vehicle parameters
+num_vehicles: 50
+vehicle_distribution:
+  car: 0.7
+  bus: 0.1
+  bicycle: 0.1
+  motorcycle: 0.1
+
+# Random seed
+random_seed: 42
+verbose: true
