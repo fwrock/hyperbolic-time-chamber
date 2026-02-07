@@ -184,3 +184,15 @@ case class MicroTicksCompleted(
   globalTick: Long,
   totalSubTicks: Int
 )
+
+/** Global tick trigger event from TimeManager to Link.
+  * 
+  * Sent from LocalTimeManager to micro-enabled links to trigger
+  * sub-tick execution for the current global tick.
+  * 
+  * @param tick Global tick number to execute
+  */
+case class GlobalTickEvent(
+  tick: Long
+)
+

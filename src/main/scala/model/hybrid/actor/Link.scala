@@ -4,7 +4,6 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import core.types.Tick
 
-import org.apache.pekko.actor.typed.ActorRef
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -12,9 +11,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data.*
-import org.interscity.htc.model.hybrid.micro.manager.LinkMicroTimeManager
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
-import org.interscity.htc.model.hybrid.micro.lane.{LaneChangeModel, MobilLaneChange}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.event.data.*
@@ -52,9 +49,9 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
   
-  /** Optional micro time manager (only for MICRO mode).
+  /** Car-following model for microscopic simulation.
     */
-  private var microTimeManager: Option[ActorRef[LinkMicroTimeManager.Command]] = None
+  private val carFollowingModel: CarFollowingModel = KraussModel()
   
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
@@ -77,29 +74,12 @@ class Link(
       state.initializeMicroLanes()
     }
     
-    // Spawn LinkMicroTimeManager
-    // Note: This is simplified - actual implementation would use context.spawn
-    // For now, we document the intention
-    logInfo(s"LinkMicroTimeManager spawn placeholder - would spawn with:")
+    logInfo(s"✓ MICRO mode initialized")
     logInfo(s"  - linkId: ${properties.entityId}")
     logInfo(s"  - lanes: ${state.lanes}")
     logInfo(s"  - length: ${state.length}m")
     logInfo(s"  - timeStep: ${state.microTimeStep}s")
     logInfo(s"  - ticksPerGlobalTick: ${state.microTicksPerGlobalTick}")
-    
-    // TODO: Actual spawn implementation
-    // microTimeManager = Some(context.spawn(
-    //   LinkMicroTimeManager(
-    //     linkId = getActorIdentify.id,
-    //     numberOfLanes = state.lanes,
-    //     linkLength = state.length,
-    //     microTimeStep = state.microTimeStep,
-    //     ticksPerGlobalTick = state.microTicksPerGlobalTick,
-    //     carFollowingModel = KraussModel(),
-    //     laneChangeModel = MobilLaneChange()
-    //   ),
-    //   name = s"micro-tm-${getActorIdentify.id}"
-    // ))
   }
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
@@ -108,6 +88,7 @@ class Link(
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case d: MicroStepData => handleMicroStep(event, d)
       case d: LaneChangeData => handleLaneChange(event, d)
+      case d: GlobalTickEvent => handleGlobalTick(d.tick)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
@@ -198,18 +179,7 @@ class Link(
       actorType = LoadBalancedDistributed
     )
     
-    // Register with micro time manager
-    microTimeManager.foreach { tm =>
-      // tm ! LinkMicroTimeManager.RegisterVehicle(
-      //   vehicleId = data.actorId,
-      //   lane = assignedLane,
-      //   position = 0.0,
-      //   velocity = 0.0, // Initial velocity (vehicle will update)
-      //   vehicleLength = data.actorSize,
-      //   actor = ??? // Vehicle's micro update receiver
-      // )
-      log.debug(s"Would register vehicle ${data.actorId} with LinkMicroTimeManager")
-    }
+    logDebug(s"Vehicle ${data.actorId} registered in MICRO mode, lane $assignedLane")
     
     logInfo(s"Vehicle ${data.actorId} entered MICRO link, assigned to lane $assignedLane")
   }
@@ -223,11 +193,11 @@ class Link(
     state.registered.filterInPlace(_.actorId != data.actorId)
     
     if (state.isMicroMode) {
-      // Unregister from micro time manager
-      microTimeManager.foreach { tm =>
-        // tm ! LinkMicroTimeManager.UnregisterVehicle(data.actorId)
-        log.debug(s"Would unregister vehicle ${data.actorId} from LinkMicroTimeManager")
+      // Remove from micro state
+      state.vehiclesByLane.foreach { case (_, queue) =>
+        queue.dequeueAll(_.actorId == data.actorId)
       }
+      logDebug(s"Unregistered vehicle ${data.actorId} from MICRO mode")
       
       // Send micro leave data
       val microLeaveData = MicroLeaveLinkData(
@@ -274,17 +244,19 @@ class Link(
       return
     }
     
-    log.debug(s"Vehicle ${data.vehicleId} micro step at position ${data.currentPosition}")
+    logDebug(s"Vehicle ${data.vehicleId} micro step at position ${data.currentPosition}")
     
-    // Forward to micro time manager
-    microTimeManager.foreach { tm =>
-      // tm ! LinkMicroTimeManager.UpdateVehicleState(
-      //   vehicleId = data.vehicleId,
-      //   position = data.currentPosition,
-      //   velocity = data.currentVelocity,
-      //   lane = data.currentLane
-      // )
-      log.debug(s"Would forward micro step to LinkMicroTimeManager")
+    // Update vehicle state directly
+    state.vehiclesByLane.get(data.currentLane).foreach { queue =>
+      queue.find(_.actorId == data.vehicleId).foreach { vehicle =>
+        val updated = vehicle.copy(
+          position = data.currentPosition,
+          velocity = data.currentVelocity
+        )
+        queue.dequeueAll(_.actorId == data.vehicleId)
+        queue.enqueue(updated)
+        logDebug(s"Updated vehicle ${data.vehicleId} state directly")
+      }
     }
   }
   
@@ -298,14 +270,17 @@ class Link(
     
     logDebug(s"Vehicle ${data.vehicleId} lane change: ${data.fromLane} -> ${data.toLane}")
     
-    // Forward to micro time manager
-    microTimeManager.foreach { tm =>
-      // tm ! LinkMicroTimeManager.RequestLaneChange(
-      //   vehicleId = data.vehicleId,
-      //   fromLane = data.fromLane,
-      //   toLane = data.toLane
-      // )
-      log.debug(s"Would forward lane change to LinkMicroTimeManager")
+    // Process lane change directly
+    for {
+      fromQueue <- state.vehiclesByLane.get(data.fromLane)
+      toQueue <- state.vehiclesByLane.get(data.toLane)
+      vehicle <- fromQueue.find(_.actorId == data.vehicleId)
+    } {
+      fromQueue.dequeueAll(_.actorId == data.vehicleId)
+      val insertIdx = toQueue.indexWhere(_.position < vehicle.position)
+      if (insertIdx >= 0) toQueue.insert(insertIdx, vehicle)
+      else toQueue.enqueue(vehicle)
+      logInfo(s"Vehicle ${data.vehicleId} changed from lane ${data.fromLane} to ${data.toLane}")
     }
   }
   
@@ -320,12 +295,136 @@ class Link(
   }
   
   /** Handle global tick (for micro mode).
+    * Called by LocalTimeManager via GlobalTickEvent.
+    * Link executes sub-ticks and manages microscopic updates directly.
     */
-  def onGlobalTick(tick: Tick): Unit = {
+  private def handleGlobalTick(tick: Tick): Unit = {
     if (state.isMicroMode) {
-      microTimeManager.foreach { tm =>
-        // tm ! LinkMicroTimeManager.ExecuteGlobalTick(tick)
-        log.debug(s"Would execute global tick $tick on LinkMicroTimeManager")
+      logDebug(s"Executing MICRO tick $tick with ${state.microTicksPerGlobalTick} sub-ticks")
+      
+      // Execute all sub-ticks locally
+      for (subTick <- 0 until state.microTicksPerGlobalTick) {
+        executeSubTick(subTick)
+      }
+      
+      // Check for vehicles at link end
+      checkVehiclesAtLinkEnd(tick)
+      
+      logDebug(s"Completed MICRO tick $tick")
+    }
+  }
+  
+  /** Execute a single sub-tick for all lanes.
+    */
+  private def executeSubTick(subTick: Int): Unit = {
+    state.vehiclesByLane.foreach { case (laneId, vehicles) =>
+      if (vehicles.nonEmpty) {
+        processMicroLane(laneId, vehicles, subTick)
+      }
+    }
+  }
+  
+  /** Process all vehicles in a lane for one sub-tick.
+    * Applies car-following model and updates vehicle states.
+    */
+  private def processMicroLane(
+    laneId: Int,
+    vehicles: scala.collection.mutable.Queue[model.hybrid.entity.state.model.VehicleInLane],
+    subTick: Int
+  ): Unit = {
+    // Process vehicles from front to back
+    for (i <- vehicles.indices) {
+      val vehicle = vehicles(i)
+      
+      // Find leader vehicle (ahead in same lane)
+      val leader = if (i > 0) Some(vehicles(i - 1)) else None
+      
+      // Calculate gap and leader velocity
+      val (gap, leaderVel) = leader match {
+        case Some(l) => 
+          (l.position - vehicle.position - vehicle.vehicleLength, l.velocity)
+        case None => 
+          (state.length - vehicle.position, state.speedLimit / 3.6) // Free road
+      }
+      
+      // Apply car-following model (simple Krauss-like)
+      val targetVel = leader match {
+        case Some(l) if gap < 50.0 => 
+          // Follow leader with safe gap
+          math.min(l.velocity, math.sqrt(2.0 * 4.5 * gap)) // Safe velocity
+        case _ => 
+          state.speedLimit / 3.6 // Free-flow speed (km/h to m/s)
+      }
+      
+      val velChange = (targetVel - vehicle.velocity) * 0.5 * state.microTimeStep
+      val newVelocity = math.max(0.0, math.min(vehicle.velocity + velChange, state.speedLimit / 3.6))
+      val newPosition = vehicle.position + newVelocity * state.microTimeStep
+      val newAcceleration = velChange / state.microTimeStep
+      
+      // Update vehicle state in queue
+      vehicles(i) = vehicle.copy(
+        position = newPosition,
+        velocity = newVelocity,
+        acceleration = newAcceleration
+      )
+      
+      // Send update to vehicle actor via sharding
+      sendMessageTo(
+        entityId = vehicle.actorId,
+        shardId = vehicle.shardId,
+        data = MicroUpdateData(
+          subTick = subTick,
+          position = newPosition,
+          velocity = newVelocity,
+          acceleration = newAcceleration,
+          currentLane = laneId,
+          leaderVehicle = leader.map(_.actorId),
+          gapToLeader = gap,
+          leaderVelocity = leaderVel,
+          safeVelocity = newVelocity
+        ),
+        eventType = "MicroUpdate", // Custom event type
+        actorType = LoadBalancedDistributed
+      )
+    }
+  }
+  
+  /** Check if any vehicles have reached the end of the link.
+    * Send MicroLeaveLinkData to those vehicles.
+    */
+  private def checkVehiclesAtLinkEnd(tick: Tick): Unit = {
+    state.vehiclesByLane.foreach { case (laneId, vehicles) =>
+      val vehiclesAtEnd = vehicles.filter(_.position >= state.length)
+      
+      vehiclesAtEnd.foreach { vehicle =>
+        // Calculate travel time (LinkRegister doesn't have tick field in hybrid model)
+        val travelTime = 1L // Simplified - actual calculation would need entry tick tracking
+        
+        // Send leave link message
+        val leaveData = MicroLeaveLinkData(
+          linkId = properties.entityId,
+          finalPosition = vehicle.position,
+          finalVelocity = vehicle.velocity,
+          travelTime = travelTime.toDouble,
+          distanceTraveled = state.length,
+          averageSpeed = if (travelTime > 0) state.length / travelTime else vehicle.velocity
+        )
+        
+        sendMessageTo(
+          entityId = vehicle.actorId,
+          shardId = vehicle.shardId,
+          data = leaveData,
+          eventType = "MicroLeaveLink", // Custom event type
+          actorType = LoadBalancedDistributed
+        )
+        
+        // Remove from queue
+        vehicles.dequeueAll(_.actorId == vehicle.actorId)
+        
+        // Remove from registered (LinkRegister uses actorId, not actorRefId)
+        state.registered.filterInPlace(_.actorId != vehicle.actorId)
+        
+        logDebug(s"Vehicle ${vehicle.actorId} left MICRO link")
       }
     }
   }
