@@ -18,6 +18,8 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
+import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
+import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 
 /** Link actor supporting both MESO and MICRO simulation modes.
   * 
@@ -59,6 +61,31 @@ class Link(
     */
   private var connectionsRegistered: Boolean = false
   
+  /** Last tick when dynamic cost was published.
+    */
+  private var lastCostPublishTick: Tick = 0
+  
+  /** Interval for publishing dynamic costs (ticks).
+    * Read from configuration or use default.
+    */
+  private val costPublishInterval: Int = {
+    try {
+      com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval")
+    } catch {
+      case _: Exception => 10 // Default: 10 ticks
+    }
+  }
+  
+  /** Cache TTL for dynamic costs (seconds).
+    */
+  private val cacheTtl: Int = {
+    try {
+      com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl")
+    } catch {
+      case _: Exception => 60 // Default: 60 seconds
+    }
+  }
+  
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
     
@@ -69,6 +96,9 @@ class Link(
     if (state.isMicroMode) {
       initializeMicroMode()
     }
+    
+    // Publish initial dynamic cost
+    publishDynamicCost()
     
     logInfo(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
@@ -344,8 +374,15 @@ class Link(
   /** Handle global tick (for micro mode).
     * Called by LocalTimeManager via GlobalTickEvent.
     * Link executes sub-ticks and manages microscopic updates directly.
+    * Also checks if dynamic cost should be published.
     */
   private def handleGlobalTick(tick: Tick): Unit = {
+    // Check if we should publish dynamic cost
+    if (tick - lastCostPublishTick >= costPublishInterval) {
+      publishDynamicCost()
+      lastCostPublishTick = tick
+    }
+    
     if (state.isMicroMode) {
       logDebug(s"Executing MICRO tick $tick with ${state.microTicksPerGlobalTick} sub-ticks")
       
@@ -473,6 +510,31 @@ class Link(
         
         logDebug(s"Vehicle ${vehicle.actorId} left MICRO link")
       }
+    }
+  }
+  
+  /** Calculate and publish dynamic cost to cache.
+    * 
+    * This reflects current traffic conditions and enables dynamic routing.
+    * Published to Redis for cluster-wide access.
+    */
+  private def publishDynamicCost(): Unit = {
+    val dynamicCost = DynamicLinkCost.fromLinkState(
+      linkId = getEntityId,
+      length = state.length,
+      currentSpeed = state.currentSpeed,
+      freeFlowSpeed = state.freeSpeed,
+      vehicleCount = state.registered.size,
+      capacity = state.capacity,
+      congestionFactor = state.congestionFactor,
+      tick = currentTick
+    )
+    
+    DynamicWeightCache.publishCost(dynamicCost, cacheTtl) match {
+      case scala.util.Success(_) =>
+        logDebug(s"Published dynamic cost: weight=${dynamicCost.totalCost}, congestion=${dynamicCost.congestionFactor}, vehicles=${dynamicCost.vehicleCount}")
+      case scala.util.Failure(e) =>
+        logWarn(s"Failed to publish dynamic cost: ${e.getMessage}")
     }
   }
 }
