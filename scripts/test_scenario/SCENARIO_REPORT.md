@@ -1,6 +1,6 @@
 # Scenario Report: Quick Test
 
-**Generated:** 2026-02-07 16:48:23
+**Generated:** 2026-02-09 20:31:39
 
 ## Description
 Quick test scenario for development
@@ -62,9 +62,13 @@ test_scenario/
 │   ├── city_map.json          # Graph structure
 │   ├── nodes.json              # Node actors
 │   ├── links.json              # Link actors
-│   ├── vehicles.json           # Vehicle actors
+│   ├── cars.json               # Car actors
+│   ├── buses.json              # Bus actors (if any)
+│   ├── bicycles.json           # Bicycle actors (if any)
+│   ├── motorcycles.json        # Motorcycle actors (if any)
 │   └── traffic_signals.json    # Traffic signal actors
-├── application.conf            # Simulation configuration
+├── simulation.json             # Simulation configuration
+├── application.conf            # Application configuration
 ├── scenario_metadata.json      # Machine-readable metadata
 └── SCENARIO_REPORT.md          # This report
 ```
