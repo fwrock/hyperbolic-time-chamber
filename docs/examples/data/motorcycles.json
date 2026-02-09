@@ -1,0 +1,42 @@
+[
+  {
+    "id": "htcaid:motorcycle;motorcycle_0",
+    "typeActor": "hybrid.actor.Motorcycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.MotorcycleState",
+      "content": {
+        "startTick": 300,
+        "origin": "htcaid:node;node_4",
+        "destination": "htcaid:node;node_6",
+        "actorType": "MOTORCYCLE",
+        "size": 2.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "START",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_4",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "canFilterLanes": true,
+        "aggressiveness": 0.7,
+        "driverAttributes": {
+          "aggressiveness": 0.7,
+          "reactionTimeFactor": 0.8,
+          "speedFactor": 1.2,
+          "minGapFactor": 0.7
+        }
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_4",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_6",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

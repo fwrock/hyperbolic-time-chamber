@@ -54,6 +54,13 @@ class LoadDataManager(
   private def loadData(event: LoadDataEvent): Unit = {
     dataSourceAmount = event.actorsDataSources.size
     logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
+    
+    if (dataSourceAmount == 0) {
+      logWarning("No data sources to load. Skipping actor creation.")
+      simulationManager ! FinishCreationEvent()
+      return
+    }
+    
     creatorRef = createCreatorLoadData(dataSourceAmount)
     creatorPoolRef = createCreatorPoolLoadData(dataSourceAmount)
 
@@ -104,8 +111,8 @@ class LoadDataManager(
   }
 
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
-    val totalInstances = amountDataSources
-    val maxInstancesPerNode = Math.max(10, amountDataSources / 8)
+    val totalInstances = Math.max(1, amountDataSources)
+    val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
     context.actorOf(
       ClusterRouterPool(
         local = RoundRobinPool(0),
@@ -129,8 +136,8 @@ class LoadDataManager(
   }
 
   private def createCreatorPoolLoadData(amountDataSources: Int): ActorRef = {
-    val totalInstances = amountDataSources
-    val maxInstancesPerNode = Math.max(10, amountDataSources / 8)
+    val totalInstances = Math.max(1, amountDataSources)
+    val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
     context.actorOf(
       ClusterRouterPool(
         local = RoundRobinPool(0),

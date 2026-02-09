@@ -447,8 +447,8 @@ class HybridScenarioGenerator:
         # Write actors (links)
         self._write_links(data_dir / "links.json")
         
-        # Write actors (vehicles)
-        self._write_vehicles(data_dir / "vehicles.json")
+        # Write actors (vehicles) - separate files by type
+        self._write_vehicles_by_type(data_dir)
         
         # Write traffic signals
         self._write_traffic_signals(data_dir / "traffic_signals.json")
@@ -586,75 +586,106 @@ class HybridScenarioGenerator:
         
         self.log(f"  ✓ Links: {path.name} ({len(actors)} links)")
     
-    def _write_vehicles(self, path: Path):
-        """Write vehicle actors"""
-        actors = []
+    def _write_vehicles_by_type(self, data_dir: Path):
+        """Write vehicle actors split by type into separate files"""
+        # Group vehicles by type
+        vehicles_by_type = {
+            VehicleTypeEnum.CAR: [],
+            VehicleTypeEnum.BUS: [],
+            VehicleTypeEnum.BICYCLE: [],
+            VehicleTypeEnum.MOTORCYCLE: []
+        }
         
         for vehicle in self.vehicles:
-            # Determine actor type and state type
-            type_map = {
-                VehicleTypeEnum.CAR: ("hybrid.actor.Car", "model.hybrid.entity.state.CarState", 4.5),
-                VehicleTypeEnum.BUS: ("hybrid.actor.Bus", "model.hybrid.entity.state.BusState", 12.0),
-                VehicleTypeEnum.BICYCLE: ("hybrid.actor.Bicycle", "model.hybrid.entity.state.BicycleState", 2.0),
-                VehicleTypeEnum.MOTORCYCLE: ("hybrid.actor.Motorcycle", "model.hybrid.entity.state.MotorcycleState", 2.5),
-            }
+            vehicles_by_type[vehicle.type].append(vehicle)
+        
+        # Type mapping for actor and state types
+        type_map = {
+            VehicleTypeEnum.CAR: ("hybrid.actor.Car", "model.hybrid.entity.state.CarState", 4.5, "cars"),
+            VehicleTypeEnum.BUS: ("hybrid.actor.Bus", "model.hybrid.entity.state.BusState", 12.0, "buses"),
+            VehicleTypeEnum.BICYCLE: ("hybrid.actor.Bicycle", "model.hybrid.entity.state.BicycleState", 2.0, "bicycles"),
+            VehicleTypeEnum.MOTORCYCLE: ("hybrid.actor.Motorcycle", "model.hybrid.entity.state.MotorcycleState", 2.5, "motorcycles"),
+        }
+        
+        # Write separate file for each vehicle type
+        for vehicle_type, vehicles in vehicles_by_type.items():
+            if not vehicles:  # Skip empty types
+                continue
             
-            actor_type, state_type, size = type_map[vehicle.type]
+            actor_type, state_type, size, filename = type_map[vehicle_type]
+            actors = []
             
-            content = {
-                "startTick": vehicle.start_tick,
-                "origin": f"htcaid:node;{vehicle.origin}",
-                "destination": f"htcaid:node;{vehicle.destination}",
-                "actorType": vehicle.type.value,
-                "size": size,
-                "currentSimulationMode": "MESO",
-                "microState": None,
-                "status": "START",
-                "bestRoute": None,
-                "currentNode": f"htcaid:node;{vehicle.origin}",
-                "distance": 0.0,
-                "eventCount": 0,
-                "scheduleOnTimeManager": True
-            }
-            
-            # Add driver attributes if present
-            if vehicle.driver_attributes:
-                content["driverAttributes"] = asdict(vehicle.driver_attributes)
-            
-            # Add bus-specific fields
-            if vehicle.type == VehicleTypeEnum.BUS:
-                content.update({
-                    "label": f"Bus Line {vehicle.id}",
-                    "capacity": 80,
-                    "busStops": {},
-                    "people": {},
-                    "nextBusStop": None
-                })
-            
-            actor = {
-                "id": f"htcaid:{vehicle.type.value.lower()};{vehicle.id}",
-                "typeActor": actor_type,
-                "data": {
-                    "dataType": state_type,
-                    "content": content
-                },
-                "dependencies": {
-                    "from_node": {
-                        "id": f"htcaid:node;{vehicle.origin}",
-                        "classType": "hybrid.actor.Node"
+            for vehicle in vehicles:
+                content = {
+                    "startTick": vehicle.start_tick,
+                    "origin": f"htcaid:node;{vehicle.origin}",
+                    "destination": f"htcaid:node;{vehicle.destination}",
+                    "actorType": vehicle.type.value,
+                    "size": size,
+                    "currentSimulationMode": "MESO",
+                    "microState": None,
+                    "status": "START",
+                    "bestRoute": None,
+                    "currentNode": f"htcaid:node;{vehicle.origin}",
+                    "distance": 0.0,
+                    "eventCount": 0,
+                    "scheduleOnTimeManager": True
+                }
+                
+                # Add driver attributes if present
+                if vehicle.driver_attributes:
+                    content["driverAttributes"] = asdict(vehicle.driver_attributes)
+                
+                # Add bus-specific fields
+                if vehicle.type == VehicleTypeEnum.BUS:
+                    content.update({
+                        "label": f"Bus Line {vehicle.id}",
+                        "capacity": 80,
+                        "busStops": {},
+                        "people": {},
+                        "nextBusStop": None
+                    })
+                
+                # Add bicycle-specific fields
+                if vehicle.type == VehicleTypeEnum.BICYCLE:
+                    content.update({
+                        "prefersBikeLane": True,
+                        "canUseSidewalk": False
+                    })
+                
+                # Add motorcycle-specific fields
+                if vehicle.type == VehicleTypeEnum.MOTORCYCLE:
+                    content.update({
+                        "canFilterLanes": True,
+                        "aggressiveness": vehicle.driver_attributes.aggressiveness if vehicle.driver_attributes else 0.7
+                    })
+                
+                actor = {
+                    "id": f"htcaid:{vehicle.type.value.lower()};{vehicle.id}",
+                    "typeActor": actor_type,
+                    "data": {
+                        "dataType": state_type,
+                        "content": content
                     },
-                    "to_node": {
-                        "id": f"htcaid:node;{vehicle.destination}",
-                        "classType": "hybrid.actor.Node"
+                    "dependencies": {
+                        "from_node": {
+                            "id": f"htcaid:node;{vehicle.origin}",
+                            "classType": "hybrid.actor.Node"
+                        },
+                        "to_node": {
+                            "id": f"htcaid:node;{vehicle.destination}",
+                            "classType": "hybrid.actor.Node"
+                        }
                     }
                 }
-            }
-            actors.append(actor)
-        
-        with open(path, 'w') as f:
-            json.dump(actors, f, indent=2)
-        
-        self.log(f"  ✓ Vehicles: {path.name} ({len(actors)} vehicles)")
+                actors.append(actor)
+            
+            # Write file for this vehicle type
+            file_path = data_dir / f"{filename}.json"
+            with open(file_path, 'w') as f:
+                json.dump(actors, f, indent=2)
+            
+            self.log(f"  ✓ {filename.capitalize()}: {file_path.name} ({len(actors)} vehicles)")
     
     def _write_traffic_signals(self, path: Path):
         """Write traffic signal actors"""
@@ -761,13 +792,46 @@ class HybridScenarioGenerator:
                         }
                     },
                     {
-                        "id": "vehicles",
+                        "id": "cars",
                         "classType": "hybrid.actor.Car",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
                             "type": "json",
                             "info": {
-                                "path": "data/vehicles.json"
+                                "path": "data/cars.json"
+                            }
+                        }
+                    },
+                    {
+                        "id": "buses",
+                        "classType": "hybrid.actor.Bus",
+                        "creationType": "LoadBalancedDistributed",
+                        "dataSource": {
+                            "type": "json",
+                            "info": {
+                                "path": "data/buses.json"
+                            }
+                        }
+                    },
+                    {
+                        "id": "bicycles",
+                        "classType": "hybrid.actor.Bicycle",
+                        "creationType": "LoadBalancedDistributed",
+                        "dataSource": {
+                            "type": "json",
+                            "info": {
+                                "path": "data/bicycles.json"
+                            }
+                        }
+                    },
+                    {
+                        "id": "motorcycles",
+                        "classType": "hybrid.actor.Motorcycle",
+                        "creationType": "LoadBalancedDistributed",
+                        "dataSource": {
+                            "type": "json",
+                            "info": {
+                                "path": "data/motorcycles.json"
                             }
                         }
                     },
@@ -899,9 +963,13 @@ class HybridScenarioGenerator:
 │   ├── city_map.json          # Graph structure
 │   ├── nodes.json              # Node actors
 │   ├── links.json              # Link actors
-│   ├── vehicles.json           # Vehicle actors
+│   ├── cars.json               # Car actors
+│   ├── buses.json              # Bus actors (if any)
+│   ├── bicycles.json           # Bicycle actors (if any)
+│   ├── motorcycles.json        # Motorcycle actors (if any)
 │   └── traffic_signals.json    # Traffic signal actors
-├── application.conf            # Simulation configuration
+├── simulation.json             # Simulation configuration
+├── application.conf            # Application configuration
 ├── scenario_metadata.json      # Machine-readable metadata
 └── SCENARIO_REPORT.md          # This report
 ```

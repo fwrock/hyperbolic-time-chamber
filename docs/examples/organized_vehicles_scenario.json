@@ -1,9 +1,9 @@
 {
   "simulation": {
-    "name": "Quick Test",
-    "description": "Quick test scenario for development",
+    "name": "Organized Vehicles Example",
+    "description": "Example showing vehicles organized by type (cars, buses, bicycles, motorcycles) in separate files",
     "startTick": 0,
-    "endTick": 600,
+    "endTick": 3600,
     "tickDuration": 1.0,
     "randomSeed": 42,
     "actorsDataSources": [

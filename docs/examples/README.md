@@ -9,6 +9,7 @@ This directory contains practical examples and tutorials for using the Hyperboli
 ### **🟢 Basic Examples**
 Simple, focused examples that demonstrate core concepts:
 
+- **[Organized Vehicles Scenario](organized_vehicles_scenario.json)** - Example showing vehicles split by type
 - **[Simple Intersection](basic/simple_intersection.md)** - Single signalized intersection
 - **[Highway Segment](basic/highway_segment.md)** - Basic highway with vehicles  
 - **[Bus Route](basic/bus_route.md)** - Public transit simulation

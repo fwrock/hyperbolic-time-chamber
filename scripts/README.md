@@ -72,6 +72,37 @@ cd ..
 - Generates human-readable reports
 - Verbose output for debugging
 
+### `split_vehicles.py`
+
+**Vehicle organization script** - Splits combined vehicles.json files into separate type-specific files:
+
+**Usage:**
+```bash
+python scripts/split_vehicles.py <input_file> <output_dir>
+
+# Example
+python scripts/split_vehicles.py \
+    simulations/input/my_scenario/data/vehicles.json \
+    simulations/input/my_scenario/data/
+```
+
+**Features:**
+- Automatically identifies vehicle types (Car, Bus, Bicycle, Motorcycle, Subway)
+- Creates separate JSON files for each type
+- Optionally updates simulation.json configuration
+- Provides detailed statistics
+- Creates backup before modifying files
+
+**Output:**
+- `cars.json` - All car vehicles
+- `buses.json` - All bus vehicles
+- `bicycles.json` - All bicycle vehicles
+- `motorcycles.json` - All motorcycle vehicles
+- `subways.json` - All subway vehicles
+- `unknowns.json` - Vehicles that couldn't be classified (if any)
+
+See [VEHICLE_ORGANIZATION.md](../docs/VEHICLE_ORGANIZATION.md) for detailed guide.
+
 ---
 
 ## ⚙️ Configuration Files

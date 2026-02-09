@@ -1,0 +1,82 @@
+[
+  {
+    "id": "htcaid:motorcycle;motorcycle_18",
+    "typeActor": "hybrid.actor.Motorcycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.MotorcycleState",
+      "content": {
+        "startTick": 93,
+        "origin": "htcaid:node;node_0_2",
+        "destination": "htcaid:node;node_2_1",
+        "actorType": "MOTORCYCLE",
+        "size": 2.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "START",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_0_2",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.4671270868001643,
+          "reactionTimeFactor": 0.8999225791528402,
+          "speedFactor": 1.0846531198552027,
+          "minGapFactor": 0.9772522980213828
+        },
+        "canFilterLanes": true,
+        "aggressiveness": 0.4671270868001643
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_0_2",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_2_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:motorcycle;motorcycle_19",
+    "typeActor": "hybrid.actor.Motorcycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.MotorcycleState",
+      "content": {
+        "startTick": 25,
+        "origin": "htcaid:node;node_2_2",
+        "destination": "htcaid:node;node_0_1",
+        "actorType": "MOTORCYCLE",
+        "size": 2.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "START",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_2_2",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.6912869363991132,
+          "reactionTimeFactor": 1.016235175240122,
+          "speedFactor": 0.9029515712991302,
+          "minGapFactor": 0.8373051104735344
+        },
+        "canFilterLanes": true,
+        "aggressiveness": 0.6912869363991132
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_2_2",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_0_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]
