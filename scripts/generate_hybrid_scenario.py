@@ -463,27 +463,36 @@ class HybridScenarioGenerator:
     
     def _write_city_map(self, path: Path):
         """Write city map as graph structure"""
-        # Build vertices
-        vertices = {}
+        # Build nodes array
+        nodes = []
         for node in self.nodes:
-            vertices[node.id] = {
-                "latitude": node.latitude,
-                "longitude": node.longitude
-            }
+            nodes.append({
+                "id": f"htcaid:node;{node.id}",
+                "classType": "hybrid.actor.Node",
+                "resourceId": f"htcrid:node;{node.id}",
+                "latitude": str(node.latitude),
+                "longitude": str(node.longitude)
+            })
         
-        # Build edges
+        # Build edges array
         edges = []
         for link in self.links:
             edges.append({
-                "sourceId": link.from_node,
-                "targetId": link.to_node,
+                "source_id": f"htcaid:node;{link.from_node}",
+                "target_id": f"htcaid:node;{link.to_node}",
                 "weight": link.length,
-                "label": link.id
+                "label": {
+                    "id": f"htcaid:link;{link.id}",
+                    "resourceId": f"htcrid:link;{link.id}",
+                    "classType": "hybrid.actor.Link",
+                    "length": link.length
+                }
             })
         
         city_map = {
-            "vertices": vertices,
-            "edges": edges
+            "nodes": nodes,
+            "edges": edges,
+            "directed": True
         }
         
         with open(path, 'w') as f:

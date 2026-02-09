@@ -1,0 +1,64 @@
+[
+  {
+    "id": "htcaid:signal;signal_0",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 8,
+        "nodes": [
+          "htcaid:node;node_1_1"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;link_6",
+              "htcaid:link;link_15"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;link_10",
+              "htcaid:link;link_17"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;link_6": {
+            "state": "RED",
+            "timeInState": 0
+          },
+          "htcaid:link;link_10": {
+            "state": "RED",
+            "timeInState": 0
+          },
+          "htcaid:link;link_15": {
+            "state": "RED",
+            "timeInState": 0
+          },
+          "htcaid:link;link_17": {
+            "state": "RED",
+            "timeInState": 0
+          }
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;node_1_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

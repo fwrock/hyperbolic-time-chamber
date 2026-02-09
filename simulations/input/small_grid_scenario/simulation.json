@@ -1,0 +1,57 @@
+{
+  "simulation": {
+    "name": "Small Grid Hybrid Test",
+    "description": "Small 3x3 grid scenario for testing hybrid simulation",
+    "startTick": 0,
+    "endTick": 1800,
+    "tickDuration": 1.0,
+    "randomSeed": 42,
+    "actorsDataSources": [
+      {
+        "id": "nodes",
+        "classType": "hybrid.actor.Node",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "type": "json",
+          "info": {
+            "path": "data/nodes.json"
+          }
+        }
+      },
+      {
+        "id": "links",
+        "classType": "hybrid.actor.Link",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "type": "json",
+          "info": {
+            "path": "data/links.json"
+          }
+        }
+      },
+      {
+        "id": "vehicles",
+        "classType": "hybrid.actor.Car",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "type": "json",
+          "info": {
+            "path": "data/vehicles.json"
+          }
+        }
+      },
+      {
+        "id": "traffic_signals",
+        "classType": "hybrid.actor.TrafficSignal",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "type": "json",
+          "info": {
+            "path": "data/traffic_signals.json"
+          }
+        }
+      }
+    ],
+    "cityMapFile": "data/city_map.json"
+  }
+}
