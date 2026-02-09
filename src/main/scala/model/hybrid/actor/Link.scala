@@ -124,7 +124,7 @@ class Link(
     val fromIdentify = IdentifyUtil.fromDependency(getDependency(state.from))
     val nodeIdentify = IdentifyUtil.fromDependency(getDependency(nodeId))
     
-    sendMessageTo(
+     sendMessageTo(
       entityId = nodeIdentify.id,
       shardId = nodeIdentify.classType,
       data = LinkConnectionsData(
