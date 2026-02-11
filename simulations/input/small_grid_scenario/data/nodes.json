@@ -31,7 +31,7 @@
       "content": {
         "startTick": 0,
         "latitude": -23.5505,
-        "longitude": -46.63035173084171,
+        "longitude": -46.628386218069515,
         "links": [
           "htcaid:link;link_0",
           "htcaid:link;link_1",
@@ -57,7 +57,7 @@
       "content": {
         "startTick": 0,
         "latitude": -23.5505,
-        "longitude": -46.62740346168342,
+        "longitude": -46.62347243613903,
         "links": [
           "htcaid:link;link_4",
           "htcaid:link;link_5",
@@ -80,7 +80,7 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.547797297297297,
+        "latitude": -23.545995495495497,
         "longitude": -46.6333,
         "links": [
           "htcaid:link;link_2",
@@ -106,8 +106,8 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.547797297297297,
-        "longitude": -46.63035173084171,
+        "latitude": -23.545995495495497,
+        "longitude": -46.628386218069515,
         "links": [
           "htcaid:link;link_6",
           "htcaid:link;link_7",
@@ -134,8 +134,8 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.547797297297297,
-        "longitude": -46.62740346168342,
+        "latitude": -23.545995495495497,
+        "longitude": -46.62347243613903,
         "links": [
           "htcaid:link;link_8",
           "htcaid:link;link_9",
@@ -160,7 +160,7 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.545094594594595,
+        "latitude": -23.54149099099099,
         "longitude": -46.6333,
         "links": [
           "htcaid:link;link_12",
@@ -184,8 +184,8 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.545094594594595,
-        "longitude": -46.63035173084171,
+        "latitude": -23.54149099099099,
+        "longitude": -46.628386218069515,
         "links": [
           "htcaid:link;link_16",
           "htcaid:link;link_17",
@@ -210,8 +210,8 @@
       "dataType": "model.hybrid.entity.state.NodeState",
       "content": {
         "startTick": 0,
-        "latitude": -23.545094594594595,
-        "longitude": -46.62740346168342,
+        "latitude": -23.54149099099099,
+        "longitude": -46.62347243613903,
         "links": [
           "htcaid:link;link_18",
           "htcaid:link;link_19",

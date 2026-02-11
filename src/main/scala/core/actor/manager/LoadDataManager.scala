@@ -56,8 +56,7 @@ class LoadDataManager(
     logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
     
     if (dataSourceAmount == 0) {
-      logWarning("No data sources to load. Skipping actor creation.")
-      simulationManager ! FinishCreationEvent()
+      logWarn("No data sources to load. Simulation will start with no actors.")
       return
     }
     

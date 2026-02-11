@@ -29,13 +29,13 @@ pip install pyyaml
 
 ```bash
 # Option 1: Interactive mode (easiest)
-python generate_hybrid_scenario.py --interactive
+python3 generate_hybrid_scenario.py --interactive
 
 # Option 2: Quick test scenario
-python generate_hybrid_scenario.py --quick-test
+python3 generate_hybrid_scenario.py --quick-test
 
 # Option 3: From configuration file
-python generate_hybrid_scenario.py --config example_configs/small_grid.yaml
+python3 generate_hybrid_scenario.py --config example_configs/small_grid.yaml
 ```
 
 ### Run the Generated Scenario

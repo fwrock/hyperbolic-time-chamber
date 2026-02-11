@@ -1,25 +1,25 @@
 {
-  "name": "Small Grid Hybrid Test",
-  "description": "Small 3x3 grid scenario for testing hybrid simulation",
-  "generated": "2026-02-09T19:56:20.179261",
+  "name": "small_grid_scenario",
+  "description": "Generated hybrid scenario",
+  "generated": "2026-02-10T22:15:01.390627",
   "version": "1.0.0",
   "statistics": {
     "nodes": 9,
     "links": 24,
-    "vehicles": 50,
-    "microLinks": 12,
-    "mesoLinks": 12,
+    "vehicles": 100,
+    "microLinks": 8,
+    "mesoLinks": 16,
     "vehiclesByType": {
-      "CAR": 35,
-      "BUS": 5,
-      "BICYCLE": 5,
-      "MOTORCYCLE": 5
+      "Car": 70,
+      "Bus": 10,
+      "Bike": 10,
+      "Motorcycle": 10
     },
     "signalizedIntersections": 1
   },
   "configuration": {
     "startTick": 0,
-    "endTick": 1800,
+    "endTick": 3600,
     "tickDuration": 1.0,
     "networkType": "grid",
     "randomSeed": 42

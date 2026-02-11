@@ -1,9 +1,9 @@
-# Scenario Report: Small Grid Hybrid Test
+# Scenario Report: small_grid_scenario
 
-**Generated:** 2026-02-09 19:56:20
+**Generated:** 2026-02-10 22:15:01
 
 ## Description
-Small 3x3 grid scenario for testing hybrid simulation
+Generated hybrid scenario
 
 ## Network Statistics
 
@@ -14,33 +14,33 @@ Small 3x3 grid scenario for testing hybrid simulation
 - **Signalized Intersections:** 1
 
 ### Link Distribution
-- **MICRO Links:** 12 (50.0%)
-- **MESO Links:** 12 (50.0%)
+- **MICRO Links:** 8 (33.3%)
+- **MESO Links:** 16 (66.7%)
 
 ### Link Characteristics
-- **Average Length:** 300.0 meters
+- **Average Length:** 500.0 meters
 - **Average Lanes:** 2.4
 - **Speed Limits:** 30 - 80 km/h
 
 ## Vehicle Statistics
 
-### Total Vehicles: 50
+### Total Vehicles: 100
 
-- **CAR:** 35 (70.0%)
-- **BUS:** 5 (10.0%)
-- **BICYCLE:** 5 (10.0%)
-- **MOTORCYCLE:** 5 (10.0%)
+- **Car:** 70 (70.0%)
+- **Bus:** 10 (10.0%)
+- **Bike:** 10 (10.0%)
+- **Motorcycle:** 10 (10.0%)
 
 ### Temporal Distribution
-- **Start Tick Range:** 0 - 898
-- **Average Start Tick:** 435
+- **Start Tick Range:** 0 - 1796
+- **Average Start Tick:** 927
 
 ## Simulation Configuration
 
 - **Start Tick:** 0
-- **End Tick:** 1800
+- **End Tick:** 3600
 - **Tick Duration:** 1.0 seconds
-- **Total Duration:** 30.0 minutes
+- **Total Duration:** 60.0 minutes
 - **Random Seed:** 42
 
 ## Hybrid Configuration
@@ -62,9 +62,13 @@ small_grid_scenario/
 │   ├── city_map.json          # Graph structure
 │   ├── nodes.json              # Node actors
 │   ├── links.json              # Link actors
-│   ├── vehicles.json           # Vehicle actors
+│   ├── cars.json               # Car actors
+│   ├── buses.json              # Bus actors (if any)
+│   ├── bicycles.json           # Bicycle actors (if any)
+│   ├── motorcycles.json        # Motorcycle actors (if any)
 │   └── traffic_signals.json    # Traffic signal actors
-├── application.conf            # Simulation configuration
+├── simulation.json             # Simulation configuration
+├── application.conf            # Application configuration
 ├── scenario_metadata.json      # Machine-readable metadata
 └── SCENARIO_REPORT.md          # This report
 ```

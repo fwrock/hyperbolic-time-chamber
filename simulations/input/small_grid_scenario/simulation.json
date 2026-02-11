@@ -1,9 +1,14 @@
 {
   "simulation": {
-    "name": "Small Grid Hybrid Test",
-    "description": "Small 3x3 grid scenario for testing hybrid simulation",
+    "id": "small_grid_scenario",
+    "name": "small_grid_scenario",
+    "description": "Generated hybrid scenario",
     "startTick": 0,
-    "endTick": 1800,
+    "endTick": 3600,
+    "startRealTime": "2026-01-27T00:00:00.000",
+    "timeUnit": "seconds",
+    "timeStep": 1,
+    "duration": 3600,
     "tickDuration": 1.0,
     "randomSeed": 42,
     "actorsDataSources": [
@@ -12,9 +17,9 @@
         "classType": "hybrid.actor.Node",
         "creationType": "LoadBalancedDistributed",
         "dataSource": {
-          "type": "json",
+          "sourceType": "json",
           "info": {
-            "path": "data/nodes.json"
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/nodes.json"
           }
         }
       },
@@ -23,20 +28,53 @@
         "classType": "hybrid.actor.Link",
         "creationType": "LoadBalancedDistributed",
         "dataSource": {
-          "type": "json",
+          "sourceType": "json",
           "info": {
-            "path": "data/links.json"
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/links.json"
           }
         }
       },
       {
-        "id": "vehicles",
+        "id": "cars",
         "classType": "hybrid.actor.Car",
         "creationType": "LoadBalancedDistributed",
         "dataSource": {
-          "type": "json",
+          "sourceType": "json",
           "info": {
-            "path": "data/vehicles.json"
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/cars.json"
+          }
+        }
+      },
+      {
+        "id": "buses",
+        "classType": "hybrid.actor.Bus",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "sourceType": "json",
+          "info": {
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/buses.json"
+          }
+        }
+      },
+      {
+        "id": "bicycles",
+        "classType": "hybrid.actor.Bicycle",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "sourceType": "json",
+          "info": {
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/bicycles.json"
+          }
+        }
+      },
+      {
+        "id": "motorcycles",
+        "classType": "hybrid.actor.Motorcycle",
+        "creationType": "LoadBalancedDistributed",
+        "dataSource": {
+          "sourceType": "json",
+          "info": {
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/motorcycles.json"
           }
         }
       },
@@ -45,13 +83,13 @@
         "classType": "hybrid.actor.TrafficSignal",
         "creationType": "LoadBalancedDistributed",
         "dataSource": {
-          "type": "json",
+          "sourceType": "json",
           "info": {
-            "path": "data/traffic_signals.json"
+            "path": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/traffic_signals.json"
           }
         }
       }
     ],
-    "cityMapFile": "data/city_map.json"
+    "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/small_grid_scenario/data/city_map.json"
   }
 }

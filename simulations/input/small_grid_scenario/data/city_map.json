@@ -12,321 +12,321 @@
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_0_1",
       "latitude": "-23.5505",
-      "longitude": "-46.63035173084171"
+      "longitude": "-46.628386218069515"
     },
     {
       "id": "htcaid:node;node_0_2",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_0_2",
       "latitude": "-23.5505",
-      "longitude": "-46.62740346168342"
+      "longitude": "-46.62347243613903"
     },
     {
       "id": "htcaid:node;node_1_0",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_1_0",
-      "latitude": "-23.547797297297297",
+      "latitude": "-23.545995495495497",
       "longitude": "-46.6333"
     },
     {
       "id": "htcaid:node;node_1_1",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_1_1",
-      "latitude": "-23.547797297297297",
-      "longitude": "-46.63035173084171"
+      "latitude": "-23.545995495495497",
+      "longitude": "-46.628386218069515"
     },
     {
       "id": "htcaid:node;node_1_2",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_1_2",
-      "latitude": "-23.547797297297297",
-      "longitude": "-46.62740346168342"
+      "latitude": "-23.545995495495497",
+      "longitude": "-46.62347243613903"
     },
     {
       "id": "htcaid:node;node_2_0",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_2_0",
-      "latitude": "-23.545094594594595",
+      "latitude": "-23.54149099099099",
       "longitude": "-46.6333"
     },
     {
       "id": "htcaid:node;node_2_1",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_2_1",
-      "latitude": "-23.545094594594595",
-      "longitude": "-46.63035173084171"
+      "latitude": "-23.54149099099099",
+      "longitude": "-46.628386218069515"
     },
     {
       "id": "htcaid:node;node_2_2",
       "classType": "hybrid.actor.Node",
       "resourceId": "htcrid:node;node_2_2",
-      "latitude": "-23.545094594594595",
-      "longitude": "-46.62740346168342"
+      "latitude": "-23.54149099099099",
+      "longitude": "-46.62347243613903"
     }
   ],
   "edges": [
     {
       "source_id": "htcaid:node;node_0_0",
       "target_id": "htcaid:node;node_0_1",
-      "weight": 299.99999999989785,
+      "weight": 500.0000000000707,
       "label": {
         "id": "htcaid:link;link_0",
         "resourceId": "htcrid:link;link_0",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999989785
+        "length": 500.0000000000707
       }
     },
     {
       "source_id": "htcaid:node;node_0_1",
       "target_id": "htcaid:node;node_0_0",
-      "weight": 299.99999999989785,
+      "weight": 500.0000000000707,
       "label": {
         "id": "htcaid:link;link_1",
         "resourceId": "htcrid:link;link_1",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999989785
+        "length": 500.0000000000707
       }
     },
     {
       "source_id": "htcaid:node;node_0_0",
       "target_id": "htcaid:node;node_1_0",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_2",
         "resourceId": "htcrid:link;link_2",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_1_0",
       "target_id": "htcaid:node;node_0_0",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_3",
         "resourceId": "htcrid:link;link_3",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_0_1",
       "target_id": "htcaid:node;node_0_2",
-      "weight": 299.99999999989785,
+      "weight": 500.0000000000707,
       "label": {
         "id": "htcaid:link;link_4",
         "resourceId": "htcrid:link;link_4",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999989785
+        "length": 500.0000000000707
       }
     },
     {
       "source_id": "htcaid:node;node_0_2",
       "target_id": "htcaid:node;node_0_1",
-      "weight": 299.99999999989785,
+      "weight": 500.0000000000707,
       "label": {
         "id": "htcaid:link;link_5",
         "resourceId": "htcrid:link;link_5",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999989785
+        "length": 500.0000000000707
       }
     },
     {
       "source_id": "htcaid:node;node_0_1",
       "target_id": "htcaid:node;node_1_1",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_6",
         "resourceId": "htcrid:link;link_6",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_1_1",
       "target_id": "htcaid:node;node_0_1",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_7",
         "resourceId": "htcrid:link;link_7",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_0_2",
       "target_id": "htcaid:node;node_1_2",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_8",
         "resourceId": "htcrid:link;link_8",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_1_2",
       "target_id": "htcaid:node;node_0_2",
-      "weight": 299.99999999997226,
+      "weight": 499.99999999982236,
       "label": {
         "id": "htcaid:link;link_9",
         "resourceId": "htcrid:link;link_9",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 499.99999999982236
       }
     },
     {
       "source_id": "htcaid:node;node_1_0",
       "target_id": "htcaid:node;node_1_1",
-      "weight": 300.00616767110785,
+      "weight": 500.01713180200136,
       "label": {
         "id": "htcaid:link;link_10",
         "resourceId": "htcrid:link;link_10",
         "classType": "hybrid.actor.Link",
-        "length": 300.00616767110785
+        "length": 500.01713180200136
       }
     },
     {
       "source_id": "htcaid:node;node_1_1",
       "target_id": "htcaid:node;node_1_0",
-      "weight": 300.00616767110785,
+      "weight": 500.01713180200136,
       "label": {
         "id": "htcaid:link;link_11",
         "resourceId": "htcrid:link;link_11",
         "classType": "hybrid.actor.Link",
-        "length": 300.00616767110785
+        "length": 500.01713180200136
       }
     },
     {
       "source_id": "htcaid:node;node_1_0",
       "target_id": "htcaid:node;node_2_0",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_12",
         "resourceId": "htcrid:link;link_12",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_2_0",
       "target_id": "htcaid:node;node_1_0",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_13",
         "resourceId": "htcrid:link;link_13",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_1_1",
       "target_id": "htcaid:node;node_1_2",
-      "weight": 300.00616767110785,
+      "weight": 500.01713180200136,
       "label": {
         "id": "htcaid:link;link_14",
         "resourceId": "htcrid:link;link_14",
         "classType": "hybrid.actor.Link",
-        "length": 300.00616767110785
+        "length": 500.01713180200136
       }
     },
     {
       "source_id": "htcaid:node;node_1_2",
       "target_id": "htcaid:node;node_1_1",
-      "weight": 300.00616767110785,
+      "weight": 500.01713180200136,
       "label": {
         "id": "htcaid:link;link_15",
         "resourceId": "htcrid:link;link_15",
         "classType": "hybrid.actor.Link",
-        "length": 300.00616767110785
+        "length": 500.01713180200136
       }
     },
     {
       "source_id": "htcaid:node;node_1_1",
       "target_id": "htcaid:node;node_2_1",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_16",
         "resourceId": "htcrid:link;link_16",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_2_1",
       "target_id": "htcaid:node;node_1_1",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_17",
         "resourceId": "htcrid:link;link_17",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_1_2",
       "target_id": "htcaid:node;node_2_2",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_18",
         "resourceId": "htcrid:link;link_18",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_2_2",
       "target_id": "htcaid:node;node_1_2",
-      "weight": 299.99999999997226,
+      "weight": 500.0000000002167,
       "label": {
         "id": "htcaid:link;link_19",
         "resourceId": "htcrid:link;link_19",
         "classType": "hybrid.actor.Link",
-        "length": 299.99999999997226
+        "length": 500.0000000002167
       }
     },
     {
       "source_id": "htcaid:node;node_2_0",
       "target_id": "htcaid:node;node_2_1",
-      "weight": 300.0123346747714,
+      "weight": 500.034260513397,
       "label": {
         "id": "htcaid:link;link_20",
         "resourceId": "htcrid:link;link_20",
         "classType": "hybrid.actor.Link",
-        "length": 300.0123346747714
+        "length": 500.034260513397
       }
     },
     {
       "source_id": "htcaid:node;node_2_1",
       "target_id": "htcaid:node;node_2_0",
-      "weight": 300.0123346747714,
+      "weight": 500.034260513397,
       "label": {
         "id": "htcaid:link;link_21",
         "resourceId": "htcrid:link;link_21",
         "classType": "hybrid.actor.Link",
-        "length": 300.0123346747714
+        "length": 500.034260513397
       }
     },
     {
       "source_id": "htcaid:node;node_2_1",
       "target_id": "htcaid:node;node_2_2",
-      "weight": 300.0123346747714,
+      "weight": 500.034260513397,
       "label": {
         "id": "htcaid:link;link_22",
         "resourceId": "htcrid:link;link_22",
         "classType": "hybrid.actor.Link",
-        "length": 300.0123346747714
+        "length": 500.034260513397
       }
     },
     {
       "source_id": "htcaid:node;node_2_2",
       "target_id": "htcaid:node;node_2_1",
-      "weight": 300.0123346747714,
+      "weight": 500.034260513397,
       "label": {
         "id": "htcaid:link;link_23",
         "resourceId": "htcrid:link;link_23",
         "classType": "hybrid.actor.Link",
-        "length": 300.0123346747714
+        "length": 500.034260513397
       }
     }
   ],

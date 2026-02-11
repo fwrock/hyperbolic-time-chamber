@@ -29,9 +29,11 @@ abstract class Movable[T <: MovableState](
     if (state.movableStatus == Finished) {
       return
     }
+    logInfo(s"Requesting route from ${state.origin} to ${state.destination}")
     try {
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
+          logInfo(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
@@ -56,8 +58,10 @@ abstract class Movable[T <: MovableState](
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
+    logDebug(s"actSpontaneous called with status=${state.movableStatus}, origin=${state.origin}, destination=${state.destination}")
     state.movableStatus match
       case Start =>
+        logInfo(s"Starting route request from ${state.origin} to ${state.destination}")
         requestRoute()
       case Ready =>
         enterLink()

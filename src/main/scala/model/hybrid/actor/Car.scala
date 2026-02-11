@@ -138,12 +138,16 @@ class Car(
       return
     }
     
+    logInfo(s"Car requestRoute: getTripOrigin=${getTripOrigin}, state.origin=${state.origin}, getTripDestination=${getTripDestination}, state.destination=${state.destination}")
+    
     // Use trip origin/destination if set (from PrivateVehicle), otherwise use state
     val origin = getTripOrigin.getOrElse(state.origin)
     val destination = getTripDestination.getOrElse(state.destination)
     
+    logInfo(s"Car requestRoute: resolved origin=${origin}, destination=${destination}")
+    
     if (origin == null || destination == null) {
-      logWarn(s"Car ${getEntityId} has null origin or destination")
+      logWarn(s"Car ${getEntityId} has null origin or destination: origin=$origin, destination=$destination")
       return
     }
     

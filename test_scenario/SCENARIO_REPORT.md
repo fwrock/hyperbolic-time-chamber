@@ -1,6 +1,6 @@
 # Scenario Report: Quick Test
 
-**Generated:** 2026-02-09 20:31:39
+**Generated:** 2026-02-09 21:20:12
 
 ## Description
 Quick test scenario for development
@@ -26,10 +26,10 @@ Quick test scenario for development
 
 ### Total Vehicles: 20
 
-- **CAR:** 14 (70.0%)
-- **BUS:** 2 (10.0%)
-- **BICYCLE:** 2 (10.0%)
-- **MOTORCYCLE:** 2 (10.0%)
+- **Car:** 14 (70.0%)
+- **Bus:** 2 (10.0%)
+- **Bike:** 2 (10.0%)
+- **Motorcycle:** 2 (10.0%)
 
 ### Temporal Distribution
 - **Start Tick Range:** 0 - 299
@@ -79,7 +79,7 @@ test_scenario/
 
 ```bash
 # Set environment variable
-export HTC_SIMULATION_DATA_PATH=/home/dean/PhD/hyperbolic-time-chamber/scripts/test_scenario
+export HTC_SIMULATION_DATA_PATH=/home/dean/PhD/hyperbolic-time-chamber/test_scenario
 
 # Run simulation
 ./build-and-run.sh
@@ -88,7 +88,7 @@ export HTC_SIMULATION_DATA_PATH=/home/dean/PhD/hyperbolic-time-chamber/scripts/t
 ### Docker
 
 ```bash
-docker run -v /home/dean/PhD/hyperbolic-time-chamber/scripts/test_scenario:/app/scenario \
+docker run -v /home/dean/PhD/hyperbolic-time-chamber/test_scenario:/app/scenario \
   -e HTC_SIMULATION_DATA_PATH=/app/scenario \
   hyperbolic-time-chamber
 ```

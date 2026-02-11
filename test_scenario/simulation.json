@@ -4,6 +4,10 @@
     "description": "Quick test scenario for development",
     "startTick": 0,
     "endTick": 600,
+    "startRealTime": "2026-01-01T00:00:00.000",
+    "timeUnit": "seconds",
+    "timeStep": 1,
+    "duration": 600,
     "tickDuration": 1.0,
     "randomSeed": 42,
     "actorsDataSources": [

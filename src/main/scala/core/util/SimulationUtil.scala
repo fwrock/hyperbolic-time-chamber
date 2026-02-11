@@ -4,7 +4,7 @@ package core.util
 import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
 
-import org.interscity.htc.core.entity.configuration.Simulation
+import org.interscity.htc.core.entity.configuration.{ Simulation, SimulationWrapper }
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.interscity.htc.core.enumeration.CreationTypeEnum
@@ -18,12 +18,24 @@ object SimulationUtil {
   def loadSimulationConfig(configuration: String = null): Simulation =
     if (configuration != null) {
       val content = readJsonFile(configuration)
-      fromJson[Simulation](content)
+      // Try to parse as wrapped format first, then fall back to direct format
+      try {
+        fromJson[SimulationWrapper](content).simulation
+      } catch {
+        case _: Exception => fromJson[Simulation](content)
+      }
     } else {
       val envConfig = "HTC_SIMULATION_CONFIG_FILE"
       sys.env.get(envConfig) match {
-        case Some(file) => fromJson[Simulation](readJsonFile(file))
-        case None       => throw new SimulationEnvConfigFoundException(envConfig)
+        case Some(file) =>
+          val content = readJsonFile(file)
+          // Try to parse as wrapped format first, then fall back to direct format
+          try {
+            fromJson[SimulationWrapper](content).simulation
+          } catch {
+            case _: Exception => fromJson[Simulation](content)
+          }
+        case None => throw new SimulationEnvConfigFoundException(envConfig)
       }
     }
 
