@@ -1,7 +1,7 @@
 {
   "name": "Quick Test",
   "description": "Quick test scenario for development",
-  "generated": "2026-02-09T20:31:39.675848",
+  "generated": "2026-02-09T21:20:12.439531",
   "version": "1.0.0",
   "statistics": {
     "nodes": 9,
@@ -10,10 +10,10 @@
     "microLinks": 12,
     "mesoLinks": 12,
     "vehiclesByType": {
-      "CAR": 14,
-      "BUS": 2,
-      "BICYCLE": 2,
-      "MOTORCYCLE": 2
+      "Car": 14,
+      "Bus": 2,
+      "Bike": 2,
+      "Motorcycle": 2
     },
     "signalizedIntersections": 1
   },

@@ -1,0 +1,432 @@
+[
+  {
+    "id": "htcaid:bus;bus_70",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1331,
+        "origin": "htcaid:node;node_1_2",
+        "destination": "htcaid:node;node_1_0",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_2",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.34117102227166163,
+          "reactionTimeFactor": 1.1829142411105473,
+          "speedFactor": 0.9080516275081534,
+          "minGapFactor": 0.8124119995522849
+        },
+        "label": "Bus Line bus_70",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_2",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_1_0",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_71",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1718,
+        "origin": "htcaid:node;node_1_0",
+        "destination": "htcaid:node;node_1_1",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_0",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.3122280103921994,
+          "reactionTimeFactor": 0.8609529383139162,
+          "speedFactor": 0.9252441949748412,
+          "minGapFactor": 1.0677835378479643
+        },
+        "label": "Bus Line bus_71",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_0",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_1_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_72",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1432,
+        "origin": "htcaid:node;node_1_0",
+        "destination": "htcaid:node;node_2_2",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_0",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.45374621793731196,
+          "reactionTimeFactor": 0.9475580697291766,
+          "speedFactor": 1.0211785385120624,
+          "minGapFactor": 1.1854938976404834
+        },
+        "label": "Bus Line bus_72",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_0",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_2_2",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_73",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 637,
+        "origin": "htcaid:node;node_0_1",
+        "destination": "htcaid:node;node_1_0",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_0_1",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.36485924979456397,
+          "reactionTimeFactor": 0.8102713701989864,
+          "speedFactor": 0.9623914488789391,
+          "minGapFactor": 1.0709389147401636
+        },
+        "label": "Bus Line bus_73",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_0_1",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_1_0",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_74",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1464,
+        "origin": "htcaid:node;node_2_0",
+        "destination": "htcaid:node;node_2_1",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_2_0",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.41899786625502916,
+          "reactionTimeFactor": 1.036839144499941,
+          "speedFactor": 1.0661143267560638,
+          "minGapFactor": 0.8971397522148529
+        },
+        "label": "Bus Line bus_74",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_2_0",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_2_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_75",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1630,
+        "origin": "htcaid:node;node_1_1",
+        "destination": "htcaid:node;node_0_1",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_1",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.8903066109088029,
+          "reactionTimeFactor": 1.113054138544408,
+          "speedFactor": 0.9694407530616899,
+          "minGapFactor": 0.9713512052938977
+        },
+        "label": "Bus Line bus_75",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_1",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_0_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_76",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1036,
+        "origin": "htcaid:node;node_1_2",
+        "destination": "htcaid:node;node_0_1",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_2",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.6885259524340831,
+          "reactionTimeFactor": 0.8050608600663413,
+          "speedFactor": 0.9840117481683656,
+          "minGapFactor": 0.9960806819961633
+        },
+        "label": "Bus Line bus_76",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_2",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_0_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_77",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1301,
+        "origin": "htcaid:node;node_2_0",
+        "destination": "htcaid:node;node_1_2",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_2_0",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.8349450088830619,
+          "reactionTimeFactor": 0.9838957390406985,
+          "speedFactor": 0.930598229818772,
+          "minGapFactor": 0.8704547844344238
+        },
+        "label": "Bus Line bus_77",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_2_0",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_1_2",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_78",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1261,
+        "origin": "htcaid:node;node_2_2",
+        "destination": "htcaid:node;node_1_1",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_2_2",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.7849195312840536,
+          "reactionTimeFactor": 1.0152691625793022,
+          "speedFactor": 0.9966995007766393,
+          "minGapFactor": 0.9742297972015577
+        },
+        "label": "Bus Line bus_78",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_2_2",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_1_1",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:bus;bus_79",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 1744,
+        "origin": "htcaid:node;node_1_1",
+        "destination": "htcaid:node;node_2_0",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;node_1_1",
+        "distance": 0.0,
+        "eventCount": 0,
+        "scheduleOnTimeManager": true,
+        "driverAttributes": {
+          "aggressiveness": 0.4472971014562145,
+          "reactionTimeFactor": 1.1738487514456,
+          "speedFactor": 0.9557856498384941,
+          "minGapFactor": 0.9803208000775082
+        },
+        "label": "Bus Line bus_79",
+        "capacity": 80,
+        "busStops": {},
+        "people": {},
+        "nextBusStop": null
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;node_1_1",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;node_2_0",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

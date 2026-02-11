@@ -1,6 +1,6 @@
 [
   {
-    "id": "htcaid:bicycle;bicycle_16",
+    "id": "htcaid:bike;bike_16",
     "typeActor": "hybrid.actor.Bicycle",
     "data": {
       "dataType": "model.hybrid.entity.state.BicycleState",
@@ -8,7 +8,7 @@
         "startTick": 239,
         "origin": "htcaid:node;node_2_0",
         "destination": "htcaid:node;node_2_1",
-        "actorType": "BICYCLE",
+        "actorType": "Bike",
         "size": 2.0,
         "currentSimulationMode": "MESO",
         "microState": null,
@@ -40,7 +40,7 @@
     }
   },
   {
-    "id": "htcaid:bicycle;bicycle_17",
+    "id": "htcaid:bike;bike_17",
     "typeActor": "hybrid.actor.Bicycle",
     "data": {
       "dataType": "model.hybrid.entity.state.BicycleState",
@@ -48,7 +48,7 @@
         "startTick": 173,
         "origin": "htcaid:node;node_0_0",
         "destination": "htcaid:node;node_2_1",
-        "actorType": "BICYCLE",
+        "actorType": "Bike",
         "size": 2.0,
         "currentSimulationMode": "MESO",
         "microState": null,

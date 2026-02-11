@@ -36,7 +36,7 @@ case class BicycleState(
   override val origin: String,
   override val destination: String,
   var bestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var currentNode: String,
+  var currentNode: String = null,
   var distance: Double = 0,
   override val actorType: ActorTypeEnum,
   override val size: Double,

@@ -27,7 +27,8 @@ class JsonReportData(
   
   // Create readable directory name with timestamp
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
-  private val timeBasedId = startRealTime.format(dateFormatter)
+  private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
+  private val timeBasedId = effectiveStartTime.format(dateFormatter)
   
   // Generate simulation ID using same logic as CassandraReportData
   private lazy val simulationId: String = {

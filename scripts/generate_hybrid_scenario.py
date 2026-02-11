@@ -32,11 +32,11 @@ class SimulationModeEnum(Enum):
     MICRO = "MICRO"
 
 class VehicleTypeEnum(Enum):
-    """Vehicle types supported"""
-    CAR = "CAR"
-    BUS = "BUS"
-    BICYCLE = "BICYCLE"
-    MOTORCYCLE = "MOTORCYCLE"
+    """Vehicle types supported - must match Scala ActorTypeEnum"""
+    CAR = "Car"
+    BUS = "Bus"
+    BICYCLE = "Bike"
+    MOTORCYCLE = "Motorcycle"
 
 class LaneTypeEnum(Enum):
     """Lane types"""
@@ -624,7 +624,7 @@ class HybridScenarioGenerator:
                     "size": size,
                     "currentSimulationMode": "MESO",
                     "microState": None,
-                    "status": "START",
+                    "status": "Start",
                     "bestRoute": None,
                     "currentNode": f"htcaid:node;{vehicle.origin}",
                     "distance": 0.0,
@@ -739,8 +739,7 @@ class HybridScenarioGenerator:
                         "offset": node.signal_offset,
                         "nodes": [f"htcaid:node;{node.id}"],
                         "phases": phases,
-                        "signalStates": signal_states,
-                        "scheduleOnTimeManager": True
+                        "signalStates": signal_states
                     }
                 },
                 "dependencies": {
@@ -762,10 +761,15 @@ class HybridScenarioGenerator:
         """Write simulation.json configuration file"""
         simulation_config = {
             "simulation": {
+                "id": str(self.config.name).lower().replace(" ", "_"),
                 "name": self.config.name,
                 "description": self.config.description,
                 "startTick": self.config.start_tick,
                 "endTick": self.config.end_tick,
+                "startRealTime": "2026-01-27T00:00:00.000",
+                "timeUnit": "seconds",
+                "timeStep": int(self.config.tick_duration),
+                "duration": self.config.end_tick - self.config.start_tick,
                 "tickDuration": self.config.tick_duration,
                 "randomSeed": self.config.random_seed,
                 "actorsDataSources": [
@@ -774,9 +778,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Node",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/nodes.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/nodes.json"
                             }
                         }
                     },
@@ -785,9 +789,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Link",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/links.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/links.json"
                             }
                         }
                     },
@@ -796,9 +800,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Car",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/cars.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/cars.json"
                             }
                         }
                     },
@@ -807,9 +811,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Bus",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/buses.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/buses.json"
                             }
                         }
                     },
@@ -818,9 +822,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Bicycle",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/bicycles.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/bicycles.json"
                             }
                         }
                     },
@@ -829,9 +833,9 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.Motorcycle",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/motorcycles.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/motorcycles.json"
                             }
                         }
                     },
@@ -840,14 +844,14 @@ class HybridScenarioGenerator:
                         "classType": "hybrid.actor.TrafficSignal",
                         "creationType": "LoadBalancedDistributed",
                         "dataSource": {
-                            "type": "json",
+                            "sourceType": "json",
                             "info": {
-                                "path": "data/traffic_signals.json"
+                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/traffic_signals.json"
                             }
                         }
                     }
                 ],
-                "cityMapFile": "data/city_map.json"
+                "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/city_map.json"
             }
         }
         
@@ -1044,7 +1048,7 @@ def interactive_mode() -> ScenarioConfig:
     print("🎯 Interactive Scenario Generator")
     print("="*80 + "\n")
     
-    name = input("Scenario name [Hybrid Test]: ").strip() or "Hybrid Test"
+    name = input("Scenario name [hybrid-test]: ").strip() or "hybrid-test"
     description = input("Description [Test scenario]: ").strip() or "Test scenario"
     output_dir = input("Output directory [./output]: ").strip() or "./output"
     
@@ -1123,7 +1127,7 @@ Examples:
     else:
         # Build config from command-line args
         config = ScenarioConfig(
-            name=args.name or "Hybrid Scenario",
+            name=args.name or "hybrid-scenario",
             description="Generated hybrid scenario",
             output_dir=args.output or Path("./output"),
             num_nodes=args.nodes or 9,
