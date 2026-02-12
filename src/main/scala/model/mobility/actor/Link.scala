@@ -56,11 +56,13 @@ class Link(
     }
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    model.mobility.util.LinkMessageStats.incrementEnterLink()
+    
     val dataLink = if (state == null) {
       LinkInfoData(
         linkCapacity = Int.MaxValue,
         linkFreeSpeed = 50,
-        linkLanes = 1,
+        linkLanes = 1
       )
     } else {
       LinkInfoData(
@@ -92,6 +94,8 @@ class Link(
   }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    model.mobility.util.LinkMessageStats.incrementLeaveLink()
+    
     state.registered.filterInPlace(_.actorId != data.actorId)
     val dataLink = LinkInfoData(
       linkLength = state.length,

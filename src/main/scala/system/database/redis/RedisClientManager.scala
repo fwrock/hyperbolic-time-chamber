@@ -1,7 +1,7 @@
 package org.interscity.htc
 package system.database.redis
 
-import redis.clients.jedis.{JedisPool, JedisPoolConfig}
+import redis.clients.jedis.{ JedisPool, JedisPoolConfig }
 
 class RedisClientManager {
   private val redisHost = sys.env.getOrElse("REDIS_HOST", "localhost")
@@ -14,11 +14,10 @@ class RedisClientManager {
 
   def save(key: String, value: Array[Byte]): Unit = {
     val jedis = pool.getResource
-    try {
+    try
       jedis.set(key.getBytes, value)
-    } finally {
+    finally
       jedis.close() // devolve ao pool
-    }
   }
 
   def load(key: String): Option[Array[Byte]] = {
@@ -26,9 +25,7 @@ class RedisClientManager {
     try {
       val value = jedis.get(key.getBytes)
       Option(value)
-    } finally {
-      jedis.close()
-    }
+    } finally jedis.close()
   }
 
   def closePool(): Unit = pool.close()
