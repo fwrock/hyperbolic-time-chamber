@@ -10,10 +10,13 @@ case class Simulation(
   description: String,
   id: Option[String] = None,
   startTick: Tick,
+  endTick: Option[Tick] = None,
   startRealTime: LocalDateTime,
   timeUnit: String,
   timeStep: Long,
+  tickDuration: Option[Double] = None,
   duration: Tick,
-  randomSeed: Option[Long] = None, // 🆕
-  actorsDataSources: List[ActorDataSource]
+  randomSeed: Option[Long] = None,
+  cityMapFile: Option[String] = None,
+  actorsDataSources: List[ActorDataSource] = List.empty
 )

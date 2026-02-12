@@ -277,7 +277,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       case e: Exception =>
         e.printStackTrace()
         onFinishSpontaneous()
-    save(event)
+    // save(event) // Event persistence disabled
   }
 
   /** Called when the actor receives a spontaneous event from the time manager.
@@ -292,7 +292,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
     actInteractWith(event)
-    save(event)
+    // save(event) // Event persistence disabled
   }
 
   /** Called when the actor receives an interaction event from another actor.

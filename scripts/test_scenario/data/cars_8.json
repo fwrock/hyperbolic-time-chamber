@@ -1,0 +1,3002 @@
+[
+  {
+    "id": "htcaid:car;trip_990",
+    "name": "Node303195233",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 84790,
+        "origin": "htcaid:node;303195233",
+        "destination": "htcaid:node;507969949",
+        "linkOrigin": "htcaid:link;4192",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303195233",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;507969949",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_687",
+    "name": "Node4117787350",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 58230,
+        "origin": "htcaid:node;4117787350",
+        "destination": "htcaid:node;2454667285",
+        "linkOrigin": "htcaid:link;3194",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4117787350",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2454667285",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_47",
+    "name": "Node300063909",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 4247,
+        "origin": "htcaid:node;300063909",
+        "destination": "htcaid:node;60641104",
+        "linkOrigin": "htcaid:link;3207",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;300063909",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60641104",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_902",
+    "name": "Node457566752",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 77050,
+        "origin": "htcaid:node;457566752",
+        "destination": "htcaid:node;142835392",
+        "linkOrigin": "htcaid:link;5862",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;457566752",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142835392",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_857",
+    "name": "Node1277760485",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 73099,
+        "origin": "htcaid:node;1277760485",
+        "destination": "htcaid:node;2128070537",
+        "linkOrigin": "htcaid:link;83",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1277760485",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2128070537",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_800",
+    "name": "Node4228472152",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 67806,
+        "origin": "htcaid:node;4228472152",
+        "destination": "htcaid:node;175992423",
+        "linkOrigin": "htcaid:link;5806",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4228472152",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;175992423",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_239",
+    "name": "Node307003749",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 20724,
+        "origin": "htcaid:node;307003749",
+        "destination": "htcaid:node;4117796016",
+        "linkOrigin": "htcaid:link;7551",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;307003749",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4117796016",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_397",
+    "name": "Node140829084",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 33709,
+        "origin": "htcaid:node;140829084",
+        "destination": "htcaid:node;415513244",
+        "linkOrigin": "htcaid:link;4494",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;140829084",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;415513244",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_420",
+    "name": "Node444959643",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 35117,
+        "origin": "htcaid:node;444959643",
+        "destination": "htcaid:node;4252544310",
+        "linkOrigin": "htcaid:link;4432",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;444959643",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4252544310",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_639",
+    "name": "Node4258797320",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 54130,
+        "origin": "htcaid:node;4258797320",
+        "destination": "htcaid:node;5357032666",
+        "linkOrigin": "htcaid:link;6330",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4258797320",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5357032666",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_681",
+    "name": "Node467725341",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 57578,
+        "origin": "htcaid:node;467725341",
+        "destination": "htcaid:node;3481723198",
+        "linkOrigin": "htcaid:link;3987",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;467725341",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3481723198",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_929",
+    "name": "Node466909065",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 79255,
+        "origin": "htcaid:node;466909065",
+        "destination": "htcaid:node;617887906",
+        "linkOrigin": "htcaid:link;5068",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;466909065",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;617887906",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_92",
+    "name": "Node1933826299",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 7665,
+        "origin": "htcaid:node;1933826299",
+        "destination": "htcaid:node;60609955",
+        "linkOrigin": "htcaid:link;109",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1933826299",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609955",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_334",
+    "name": "Node142805148",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 28980,
+        "origin": "htcaid:node;142805148",
+        "destination": "htcaid:node;1277761585",
+        "linkOrigin": "htcaid:link;3387",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;142805148",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1277761585",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_153",
+    "name": "Node4823908417",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 12579,
+        "origin": "htcaid:node;4823908417",
+        "destination": "htcaid:node;2535442697",
+        "linkOrigin": "htcaid:link;280",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4823908417",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2535442697",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_863",
+    "name": "Node151272448",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 73584,
+        "origin": "htcaid:node;151272448",
+        "destination": "htcaid:node;1944745397",
+        "linkOrigin": "htcaid:link;870",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;151272448",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1944745397",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_684",
+    "name": "Node3359537187",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 58001,
+        "origin": "htcaid:node;3359537187",
+        "destination": "htcaid:node;434003346",
+        "linkOrigin": "htcaid:link;681",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3359537187",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;434003346",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_461",
+    "name": "Node296285246",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 38625,
+        "origin": "htcaid:node;296285246",
+        "destination": "htcaid:node;4760868533",
+        "linkOrigin": "htcaid:link;5241",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;296285246",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4760868533",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_472",
+    "name": "Node5539305452",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 39461,
+        "origin": "htcaid:node;5539305452",
+        "destination": "htcaid:node;5093052779",
+        "linkOrigin": "htcaid:link;1121",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5539305452",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5093052779",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_796",
+    "name": "Node305269242",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 67301,
+        "origin": "htcaid:node;305269242",
+        "destination": "htcaid:node;672861885",
+        "linkOrigin": "htcaid:link;7072",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;305269242",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;672861885",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_517",
+    "name": "Node60624694",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 43020,
+        "origin": "htcaid:node;60624694",
+        "destination": "htcaid:node;667673921",
+        "linkOrigin": "htcaid:link;4741",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60624694",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;667673921",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_142",
+    "name": "Node60685686",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 11793,
+        "origin": "htcaid:node;60685686",
+        "destination": "htcaid:node;1953466373",
+        "linkOrigin": "htcaid:link;2926",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60685686",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1953466373",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_136",
+    "name": "Node4969023115",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 11118,
+        "origin": "htcaid:node;4969023115",
+        "destination": "htcaid:node;2400540466",
+        "linkOrigin": "htcaid:link;1816",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4969023115",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2400540466",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_621",
+    "name": "Node151272834",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 52373,
+        "origin": "htcaid:node;151272834",
+        "destination": "htcaid:node;60609766",
+        "linkOrigin": "htcaid:link;1083",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;151272834",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609766",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_487",
+    "name": "Node4024247137",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 40836,
+        "origin": "htcaid:node;4024247137",
+        "destination": "htcaid:node;2454873966",
+        "linkOrigin": "htcaid:link;2921",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4024247137",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2454873966",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_834",
+    "name": "Node507969902",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 71039,
+        "origin": "htcaid:node;507969902",
+        "destination": "htcaid:node;466938063",
+        "linkOrigin": "htcaid:link;6147",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;507969902",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;466938063",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_346",
+    "name": "Node1965963005",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 29899,
+        "origin": "htcaid:node;1965963005",
+        "destination": "htcaid:node;567677615",
+        "linkOrigin": "htcaid:link;6125",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1965963005",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;567677615",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_464",
+    "name": "Node172004067",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 38923,
+        "origin": "htcaid:node;172004067",
+        "destination": "htcaid:node;3991690853",
+        "linkOrigin": "htcaid:link;5443",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;172004067",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3991690853",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_852",
+    "name": "Node5102142308",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 72644,
+        "origin": "htcaid:node;5102142308",
+        "destination": "htcaid:node;140855843",
+        "linkOrigin": "htcaid:link;4212",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5102142308",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;140855843",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_318",
+    "name": "Node1957220230",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 27531,
+        "origin": "htcaid:node;1957220230",
+        "destination": "htcaid:node;1049484837",
+        "linkOrigin": "htcaid:link;5855",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1957220230",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1049484837",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_838",
+    "name": "Node2522578850",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 71151,
+        "origin": "htcaid:node;2522578850",
+        "destination": "htcaid:node;4380714703",
+        "linkOrigin": "htcaid:link;1713",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2522578850",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4380714703",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_493",
+    "name": "Node140804525",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 41326,
+        "origin": "htcaid:node;140804525",
+        "destination": "htcaid:node;3283856006",
+        "linkOrigin": "htcaid:link;1864",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;140804525",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3283856006",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_428",
+    "name": "Node467744136",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 35794,
+        "origin": "htcaid:node;467744136",
+        "destination": "htcaid:node;60685805",
+        "linkOrigin": "htcaid:link;2254",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;467744136",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60685805",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_46",
+    "name": "Node5102187954",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 4223,
+        "origin": "htcaid:node;5102187954",
+        "destination": "htcaid:node;172021002",
+        "linkOrigin": "htcaid:link;7263",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5102187954",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;172021002",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_70",
+    "name": "Node303866181",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 5959,
+        "origin": "htcaid:node;303866181",
+        "destination": "htcaid:node;60641012",
+        "linkOrigin": "htcaid:link;7867",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303866181",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60641012",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_358",
+    "name": "Node2006973647",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 31091,
+        "origin": "htcaid:node;2006973647",
+        "destination": "htcaid:node;2367210854",
+        "linkOrigin": "htcaid:link;2311",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2006973647",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2367210854",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_561",
+    "name": "Node260686273",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 46291,
+        "origin": "htcaid:node;260686273",
+        "destination": "htcaid:node;4033623327",
+        "linkOrigin": "htcaid:link;7201",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;260686273",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4033623327",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_126",
+    "name": "Node2869020072",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 10445,
+        "origin": "htcaid:node;2869020072",
+        "destination": "htcaid:node;304960229",
+        "linkOrigin": "htcaid:link;2570",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2869020072",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;304960229",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_3",
+    "name": "Node820040932",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 337,
+        "origin": "htcaid:node;820040932",
+        "destination": "htcaid:node;2513875302",
+        "linkOrigin": "htcaid:link;942",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;820040932",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2513875302",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_501",
+    "name": "Node4211183666",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 41934,
+        "origin": "htcaid:node;4211183666",
+        "destination": "htcaid:node;3358309984",
+        "linkOrigin": "htcaid:link;5694",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4211183666",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3358309984",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_188",
+    "name": "Node60641444",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 15870,
+        "origin": "htcaid:node;60641444",
+        "destination": "htcaid:node;627949665",
+        "linkOrigin": "htcaid:link;3130",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60641444",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;627949665",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_221",
+    "name": "Node5497169359",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 19055,
+        "origin": "htcaid:node;5497169359",
+        "destination": "htcaid:node;307003771",
+        "linkOrigin": "htcaid:link;5435",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5497169359",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;307003771",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_905",
+    "name": "Node2006965208",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 77475,
+        "origin": "htcaid:node;2006965208",
+        "destination": "htcaid:node;303868154",
+        "linkOrigin": "htcaid:link;3370",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2006965208",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303868154",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_860",
+    "name": "Node27867723",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 73485,
+        "origin": "htcaid:node;27867723",
+        "destination": "htcaid:node;303859456",
+        "linkOrigin": "htcaid:link;1968",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;27867723",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303859456",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_50",
+    "name": "Node2513875329",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 4549,
+        "origin": "htcaid:node;2513875329",
+        "destination": "htcaid:node;2389060594",
+        "linkOrigin": "htcaid:link;6146",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2513875329",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2389060594",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_432",
+    "name": "Node1616134987",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 35967,
+        "origin": "htcaid:node;1616134987",
+        "destination": "htcaid:node;4962324520",
+        "linkOrigin": "htcaid:link;2372",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1616134987",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4962324520",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_604",
+    "name": "Node457566715",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 50513,
+        "origin": "htcaid:node;457566715",
+        "destination": "htcaid:node;145210463",
+        "linkOrigin": "htcaid:link;6954",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;457566715",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;145210463",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_146",
+    "name": "Node3238791617",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 11950,
+        "origin": "htcaid:node;3238791617",
+        "destination": "htcaid:node;28991544",
+        "linkOrigin": "htcaid:link;2992",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3238791617",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;28991544",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_147",
+    "name": "Node4252387985",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 11974,
+        "origin": "htcaid:node;4252387985",
+        "destination": "htcaid:node;302284793",
+        "linkOrigin": "htcaid:link;670",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4252387985",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;302284793",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_889",
+    "name": "Node3283856023",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 75936,
+        "origin": "htcaid:node;3283856023",
+        "destination": "htcaid:node;1957220001",
+        "linkOrigin": "htcaid:link;543",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3283856023",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1957220001",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_498",
+    "name": "Node1544694514",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 41615,
+        "origin": "htcaid:node;1544694514",
+        "destination": "htcaid:node;298289544",
+        "linkOrigin": "htcaid:link;4006",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1544694514",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;298289544",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_302",
+    "name": "Node931259404",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 26521,
+        "origin": "htcaid:node;931259404",
+        "destination": "htcaid:node;304693602",
+        "linkOrigin": "htcaid:link;3934",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;931259404",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;304693602",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_311",
+    "name": "Node459347802",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 27383,
+        "origin": "htcaid:node;459347802",
+        "destination": "htcaid:node;1707833663",
+        "linkOrigin": "htcaid:link;2123",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;459347802",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1707833663",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_384",
+    "name": "Node466808387",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 32796,
+        "origin": "htcaid:node;466808387",
+        "destination": "htcaid:node;302284698",
+        "linkOrigin": "htcaid:link;7513",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;466808387",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;302284698",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_313",
+    "name": "Node5648267738",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 27441,
+        "origin": "htcaid:node;5648267738",
+        "destination": "htcaid:node;2537138116",
+        "linkOrigin": "htcaid:link;710",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5648267738",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2537138116",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_381",
+    "name": "Node296285920",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 32664,
+        "origin": "htcaid:node;296285920",
+        "destination": "htcaid:node;2444436516",
+        "linkOrigin": "htcaid:link;4380",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;296285920",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2444436516",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_972",
+    "name": "Node415513200",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 83209,
+        "origin": "htcaid:node;415513200",
+        "destination": "htcaid:node;303561634",
+        "linkOrigin": "htcaid:link;462",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;415513200",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303561634",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_157",
+    "name": "Node2386985675",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 12889,
+        "origin": "htcaid:node;2386985675",
+        "destination": "htcaid:node;457593092",
+        "linkOrigin": "htcaid:link;628",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2386985675",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457593092",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_536",
+    "name": "Node1938339274",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 44577,
+        "origin": "htcaid:node;1938339274",
+        "destination": "htcaid:node;4505383403",
+        "linkOrigin": "htcaid:link;6980",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1938339274",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4505383403",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_42",
+    "name": "Node1464773789",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 4008,
+        "origin": "htcaid:node;1464773789",
+        "destination": "htcaid:node;25711587",
+        "linkOrigin": "htcaid:link;5603",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1464773789",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;25711587",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_297",
+    "name": "Node465888622",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 25900,
+        "origin": "htcaid:node;465888622",
+        "destination": "htcaid:node;29693310",
+        "linkOrigin": "htcaid:link;3694",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;465888622",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;29693310",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_586",
+    "name": "Node2447177224",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 48445,
+        "origin": "htcaid:node;2447177224",
+        "destination": "htcaid:node;3305962806",
+        "linkOrigin": "htcaid:link;4487",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2447177224",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3305962806",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_769",
+    "name": "Node1583416635",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 65520,
+        "origin": "htcaid:node;1583416635",
+        "destination": "htcaid:node;60641336",
+        "linkOrigin": "htcaid:link;2858",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1583416635",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60641336",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_124",
+    "name": "Node3260308318",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 10374,
+        "origin": "htcaid:node;3260308318",
+        "destination": "htcaid:node;296285246",
+        "linkOrigin": "htcaid:link;3730",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3260308318",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;296285246",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_113",
+    "name": "Node394921896",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 9270,
+        "origin": "htcaid:node;394921896",
+        "destination": "htcaid:node;1544694517",
+        "linkOrigin": "htcaid:link;1134",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;394921896",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1544694517",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_419",
+    "name": "Node1953778580",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 35072,
+        "origin": "htcaid:node;1953778580",
+        "destination": "htcaid:node;431359360",
+        "linkOrigin": "htcaid:link;1052",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1953778580",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;431359360",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_617",
+    "name": "Node2453626790",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 52227,
+        "origin": "htcaid:node;2453626790",
+        "destination": "htcaid:node;140829053",
+        "linkOrigin": "htcaid:link;5344",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2453626790",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;140829053",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_122",
+    "name": "Node462043016",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 10272,
+        "origin": "htcaid:node;462043016",
+        "destination": "htcaid:node;2050908615",
+        "linkOrigin": "htcaid:link;643",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;462043016",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2050908615",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_928",
+    "name": "Node85730457",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 79238,
+        "origin": "htcaid:node;85730457",
+        "destination": "htcaid:node;459335457",
+        "linkOrigin": "htcaid:link;1019",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;85730457",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;459335457",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_803",
+    "name": "Node4477211392",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 68292,
+        "origin": "htcaid:node;4477211392",
+        "destination": "htcaid:node;1423143122",
+        "linkOrigin": "htcaid:link;419",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4477211392",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1423143122",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_161",
+    "name": "Node302727633",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 13332,
+        "origin": "htcaid:node;302727633",
+        "destination": "htcaid:node;2520196897",
+        "linkOrigin": "htcaid:link;5015",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;302727633",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2520196897",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_765",
+    "name": "Node2562729461",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 65239,
+        "origin": "htcaid:node;2562729461",
+        "destination": "htcaid:node;303855431",
+        "linkOrigin": "htcaid:link;7441",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2562729461",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303855431",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_34",
+    "name": "Node431359354",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 3239,
+        "origin": "htcaid:node;431359354",
+        "destination": "htcaid:node;1952553629",
+        "linkOrigin": "htcaid:link;834",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;431359354",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1952553629",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_485",
+    "name": "Node2521966888",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 40670,
+        "origin": "htcaid:node;2521966888",
+        "destination": "htcaid:node;60641430",
+        "linkOrigin": "htcaid:link;4852",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2521966888",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60641430",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_467",
+    "name": "Node1273989896",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 39073,
+        "origin": "htcaid:node;1273989896",
+        "destination": "htcaid:node;299774329",
+        "linkOrigin": "htcaid:link;6733",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1273989896",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;299774329",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_218",
+    "name": "Node260997932",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 18857,
+        "origin": "htcaid:node;260997932",
+        "destination": "htcaid:node;26352084",
+        "linkOrigin": "htcaid:link;7211",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;260997932",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;26352084",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_712",
+    "name": "Node155430747",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 60428,
+        "origin": "htcaid:node;155430747",
+        "destination": "htcaid:node;747561832",
+        "linkOrigin": "htcaid:link;2202",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;155430747",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;747561832",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_121",
+    "name": "Node453636204",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 10014,
+        "origin": "htcaid:node;453636204",
+        "destination": "htcaid:node;4477205579",
+        "linkOrigin": "htcaid:link;5868",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;453636204",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4477205579",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_542",
+    "name": "Node142787021",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 44748,
+        "origin": "htcaid:node;142787021",
+        "destination": "htcaid:node;418517418",
+        "linkOrigin": "htcaid:link;3325",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;142787021",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;418517418",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_526",
+    "name": "Node142801237",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 43455,
+        "origin": "htcaid:node;142801237",
+        "destination": "htcaid:node;296285685",
+        "linkOrigin": "htcaid:link;889",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;142801237",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;296285685",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_722",
+    "name": "Node60641191",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 61752,
+        "origin": "htcaid:node;60641191",
+        "destination": "htcaid:node;1269974041",
+        "linkOrigin": "htcaid:link;5989",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60641191",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1269974041",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_133",
+    "name": "Node1097971350",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 11030,
+        "origin": "htcaid:node;1097971350",
+        "destination": "htcaid:node;1923540525",
+        "linkOrigin": "htcaid:link;2496",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1097971350",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1923540525",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_469",
+    "name": "Node3730265683",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 39398,
+        "origin": "htcaid:node;3730265683",
+        "destination": "htcaid:node;440437769",
+        "linkOrigin": "htcaid:link;7095",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3730265683",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;440437769",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_820",
+    "name": "Node307004004",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 69851,
+        "origin": "htcaid:node;307004004",
+        "destination": "htcaid:node;1464773794",
+        "linkOrigin": "htcaid:link;2107",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;307004004",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1464773794",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_497",
+    "name": "Node2120307434",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 41596,
+        "origin": "htcaid:node;2120307434",
+        "destination": "htcaid:node;461884672",
+        "linkOrigin": "htcaid:link;4475",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2120307434",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;461884672",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_131",
+    "name": "Node466938063",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 10836,
+        "origin": "htcaid:node;466938063",
+        "destination": "htcaid:node;418519017",
+        "linkOrigin": "htcaid:link;105",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;466938063",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;418519017",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_878",
+    "name": "Node1833396339",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 75067,
+        "origin": "htcaid:node;1833396339",
+        "destination": "htcaid:node;1952573112",
+        "linkOrigin": "htcaid:link;3336",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1833396339",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1952573112",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_148",
+    "name": "Node2557001435",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 12000,
+        "origin": "htcaid:node;2557001435",
+        "destination": "htcaid:node;142808173",
+        "linkOrigin": "htcaid:link;1433",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2557001435",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142808173",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_167",
+    "name": "Node4040697098",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 13778,
+        "origin": "htcaid:node;4040697098",
+        "destination": "htcaid:node;4158597367",
+        "linkOrigin": "htcaid:link;6515",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4040697098",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4158597367",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_427",
+    "name": "Node1107272586",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 35754,
+        "origin": "htcaid:node;1107272586",
+        "destination": "htcaid:node;142831549",
+        "linkOrigin": "htcaid:link;6878",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1107272586",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142831549",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_876",
+    "name": "Node1707742228",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 74976,
+        "origin": "htcaid:node;1707742228",
+        "destination": "htcaid:node;457593233",
+        "linkOrigin": "htcaid:link;3659",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1707742228",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457593233",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_502",
+    "name": "Node1902217654",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 41980,
+        "origin": "htcaid:node;1902217654",
+        "destination": "htcaid:node;459347431",
+        "linkOrigin": "htcaid:link;6940",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1902217654",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;459347431",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_706",
+    "name": "Node1832159358",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 59931,
+        "origin": "htcaid:node;1832159358",
+        "destination": "htcaid:node;387095733",
+        "linkOrigin": "htcaid:link;320",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1832159358",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;387095733",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_451",
+    "name": "Node4236744037",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 37470,
+        "origin": "htcaid:node;4236744037",
+        "destination": "htcaid:node;60609803",
+        "linkOrigin": "htcaid:link;7309",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4236744037",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609803",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_434",
+    "name": "Node1664142142",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 36117,
+        "origin": "htcaid:node;1664142142",
+        "destination": "htcaid:node;3359537180",
+        "linkOrigin": "htcaid:link;6671",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1664142142",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3359537180",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_652",
+    "name": "Node151250496",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 54454,
+        "origin": "htcaid:node;151250496",
+        "destination": "htcaid:node;60609976",
+        "linkOrigin": "htcaid:link;7193",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;151250496",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609976",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_511",
+    "name": "Node1389167135",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 42407,
+        "origin": "htcaid:node;1389167135",
+        "destination": "htcaid:node;387095802",
+        "linkOrigin": "htcaid:link;6407",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1389167135",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;387095802",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_599",
+    "name": "Node60624690",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 50218,
+        "origin": "htcaid:node;60624690",
+        "destination": "htcaid:node;303857124",
+        "linkOrigin": "htcaid:link;4767",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60624690",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303857124",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_271",
+    "name": "Node598670833",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 23448,
+        "origin": "htcaid:node;598670833",
+        "destination": "htcaid:node;4505383403",
+        "linkOrigin": "htcaid:link;1580",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;598670833",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4505383403",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_405",
+    "name": "Node1117834903",
+    "typeActor": "mobility.actor.Car",
+    "data": {
+      "dataType": "model.mobility.entity.state.CarState",
+      "content": {
+        "startTick": 34105,
+        "origin": "htcaid:node;1117834903",
+        "destination": "htcaid:node;4293874133",
+        "linkOrigin": "htcaid:link;204",
+        "gpsId": "htcaid:gps;1",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1117834903",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4293874133",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  }
+]

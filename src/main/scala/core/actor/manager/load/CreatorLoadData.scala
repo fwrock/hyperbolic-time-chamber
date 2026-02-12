@@ -125,7 +125,7 @@ class CreatorLoadData(
           resourceId = actorCreation.resourceId,
           classType = actorCreation.actor.typeActor,
           data = actorCreation.actor.data.content,
-          timeManager = timeManagers,
+          timeManagers = timeManagers,
           creatorManager = self,
           reporters = reporters,
           dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
@@ -139,7 +139,7 @@ class CreatorLoadData(
           resourceId = actorCreation.resourceId,
           actorClassName = actorCreation.actor.typeActor,
           entityId = actorCreation.actor.id,
-          timeManager = timeManagers,
+          timeManagers = timeManagers,
           creatorManager = self
         )
 
@@ -191,7 +191,7 @@ class CreatorLoadData(
               data = InitializeData(
                 data = data.data,
                 resourceId = data.resourceId,
-                timeManager = data.timeManagers,
+                timeManagers = data.timeManagers,
                 creatorManager = data.creatorManager,
                 reporters = data.reporters,
                 dependencies = data.dependencies.map { case (_, dep) => IdUtil.format(dep.id) -> dep }

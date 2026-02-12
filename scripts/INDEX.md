@@ -37,10 +37,12 @@ cd .. && ./build-and-run.sh
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| **generate_hybrid_scenario.py** | Main generator | Create complete scenarios |
+| **generate_hybrid_scenario.py** | Main generator | Create complete scenarios from scratch |
+| **migrate_to_hybrid.py** | 🔄 **NEW** Migration tool | Convert mobility → hybrid model |
 | **validate_scenario.py** | Validator | Check scenario correctness |
 | **scenario_stats.py** | Statistics | Analyze scenario properties |
 | **run_examples.sh** | Helper | Quick examples runner |
+| **test_migration.sh** | Migration tester | Test migration script |
 
 ### Configuration Files
 
@@ -52,12 +54,16 @@ cd .. && ./build-and-run.sh
 | └─ random_network.yaml | Irregular topology |
 | └─ micro_intensive.yaml | 90% MICRO links |
 | └─ meso_baseline.yaml | Pure MESO baseline |
+| └─ migration_config.yaml | 🔄 Migration configuration |
+| └─ migration_simple.yaml | 🔄 Simple migration |
+| └─ migration_micro_intensive.yaml | 🔄 MICRO-intensive migration |
 
 ### Documentation
 
 | File | Description |
 |------|-------------|
-| **README.md** | Complete guide with all features |
+| **README.md** | Complete guide for scenario generation |
+| **MIGRATION_GUIDE.md** | 🔄 **NEW** Complete migration guide |
 | **QUICKSTART.md** | 5-minute getting started guide |
 | **INDEX.md** | This file |
 
@@ -65,7 +71,7 @@ cd .. && ./build-and-run.sh
 
 ## 🎮 Common Commands
 
-### Generate Scenarios
+### Generate Scenarios (New)
 
 ```bash
 # Quick test
@@ -84,6 +90,31 @@ python3 generate_hybrid_scenario.py \
   --vehicles 500 \
   --micro-ratio 0.3 \
   --output ../simulations/input/my_scenario
+```
+
+### 🔄 Migrate Existing Scenarios (Mobility → Hybrid)
+
+```bash
+# Quick migration test
+./test_migration.sh
+
+# Basic migration
+python3 migrate_to_hybrid.py \
+  --input input/cenario_1000_viagens \
+  --output output/hybrid_scenario
+
+# With vehicle type conversion
+python3 migrate_to_hybrid.py \
+  --input input/cenario_1000_viagens \
+  --output output/hybrid_mixed \
+  --convert-vehicles \
+  --micro-ratio 0.3
+
+# From config file
+python3 migrate_to_hybrid.py --config example_configs/migration_config.yaml
+
+# See full guide
+cat MIGRATION_GUIDE.md
 ```
 
 ### Validate & Analyze
@@ -337,6 +368,9 @@ cd .. && ./build-and-run.sh
 
 | Document | Topic |
 |----------|-------|
+| [MIGRATION_UPDATE_SUMMARY.md](MIGRATION_UPDATE_SUMMARY.md) | 🆕 **Migration v2.0 update** |
+| [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Migration tool complete guide |
+| [MIGRATION_SUMMARY_PT.md](MIGRATION_SUMMARY_PT.md) | Resumo em português |
 | [HYBRID_INPUT_MODEL.md](../docs/HYBRID_INPUT_MODEL.md) | Data format specification |
 | [SCENARIO_CREATION.md](../docs/SCENARIO_CREATION.md) | Manual creation guide |
 | [CONFIGURATION.md](../docs/CONFIGURATION.md) | Configuration reference |

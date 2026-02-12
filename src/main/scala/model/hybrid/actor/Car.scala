@@ -156,7 +156,11 @@ class Car(
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
           state.bestRoute = Some(pathQueue)
+          // CRITICAL: Also update parent MovableState field!
+          state.movableBestRoute = Some(pathQueue)
+          state.movableBestCost = cost
           state.status = Ready
+          state.movableStatus = Ready
           state.updateCurrentPath(None)
           
           // Report journey started

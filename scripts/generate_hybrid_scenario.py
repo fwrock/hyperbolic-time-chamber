@@ -135,7 +135,7 @@ class ScenarioConfig:
     micro_link_ratio: float = 0.3  # ratio of links that are MICRO
     
     # Vehicle parameters
-    num_vehicles: int = 100
+    num_vehicles: int = 20
     vehicle_distribution: Dict[VehicleTypeEnum, float] = field(default_factory=lambda: {
         VehicleTypeEnum.CAR: 0.7,
         VehicleTypeEnum.BUS: 0.1,
@@ -470,8 +470,8 @@ class HybridScenarioGenerator:
                 "id": f"htcaid:node;{node.id}",
                 "classType": "hybrid.actor.Node",
                 "resourceId": f"htcrid:node;{node.id}",
-                "latitude": str(node.latitude),
-                "longitude": str(node.longitude)
+                "latitude": node.latitude,
+                "longitude": node.longitude
             })
         
         # Build edges array
@@ -495,10 +495,63 @@ class HybridScenarioGenerator:
             "directed": True
         }
         
+        # Validate graph connectivity
+        self._validate_graph(nodes, edges)
+        
         with open(path, 'w') as f:
             json.dump(city_map, f, indent=2)
         
         self.log(f"  ✓ City map: {path.name}")
+    
+    def _validate_graph(self, nodes, edges):
+        """Validate graph connectivity"""
+        node_ids = {n["id"] for n in nodes}
+        
+        # Check all edges reference valid nodes
+        invalid_edges = 0
+        for edge in edges:
+            if edge["source_id"] not in node_ids:
+                self.log(f"  ⚠️  WARNING: Edge source {edge['source_id']} not in nodes!")
+                invalid_edges += 1
+            if edge["target_id"] not in node_ids:
+                self.log(f"  ⚠️  WARNING: Edge target {edge['target_id']} not in nodes!")
+                invalid_edges += 1
+        
+        if invalid_edges > 0:
+            self.log(f"  ⚠️  WARNING: {invalid_edges} invalid edge references found!")
+        
+        # Check graph connectivity (simplified check)
+        if len(edges) < len(nodes) - 1:
+            self.log(f"  ⚠️  WARNING: Graph may not be connected! Nodes: {len(nodes)}, Edges: {len(edges)}")
+        else:
+            self.log(f"  ✓ Graph connectivity check: {len(edges)} edges for {len(nodes)} nodes")
+        
+        # Report connectivity
+        out_degree = {}
+        in_degree = {}
+        for edge in edges:
+            src = edge["source_id"]
+            tgt = edge["target_id"]
+            out_degree[src] = out_degree.get(src, 0) + 1
+            in_degree[tgt] = in_degree.get(tgt, 0) + 1
+        
+        # Find isolated nodes
+        isolated = []
+        for node_id in node_ids:
+            if node_id not in out_degree and node_id not in in_degree:
+                isolated.append(node_id)
+        
+        if isolated:
+            self.log(f"  ⚠️  WARNING: {len(isolated)} isolated nodes found!")
+            for node_id in isolated[:5]:  # Show first 5
+                self.log(f"      • {node_id}")
+        else:
+            self.log(f"  ✓ No isolated nodes found")
+        
+        # Find nodes with no outgoing edges (dead ends)
+        dead_ends = [nid for nid in node_ids if nid not in out_degree]
+        if dead_ends:
+            self.log(f"  ℹ️  Info: {len(dead_ends)} nodes have no outgoing edges (dead ends)")
     
     def _write_nodes(self, path: Path):
         """Write node actors"""
@@ -724,7 +777,7 @@ class HybridScenarioGenerator:
             signal_states = {}
             for link in incoming_links:
                 signal_states[f"htcaid:link;{link.id}"] = {
-                    "state": "RED",
+                    "state": "Red",
                     "timeInState": 0
                 }
             
@@ -760,99 +813,97 @@ class HybridScenarioGenerator:
     def _write_simulation_json(self, path: Path):
         """Write simulation.json configuration file"""
         simulation_config = {
-            "simulation": {
-                "id": str(self.config.name).lower().replace(" ", "_"),
-                "name": self.config.name,
-                "description": self.config.description,
-                "startTick": self.config.start_tick,
-                "endTick": self.config.end_tick,
-                "startRealTime": "2026-01-27T00:00:00.000",
-                "timeUnit": "seconds",
-                "timeStep": int(self.config.tick_duration),
-                "duration": self.config.end_tick - self.config.start_tick,
-                "tickDuration": self.config.tick_duration,
-                "randomSeed": self.config.random_seed,
-                "actorsDataSources": [
-                    {
-                        "id": "nodes",
-                        "classType": "hybrid.actor.Node",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/nodes.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "links",
-                        "classType": "hybrid.actor.Link",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/links.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "cars",
-                        "classType": "hybrid.actor.Car",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/cars.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "buses",
-                        "classType": "hybrid.actor.Bus",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/buses.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "bicycles",
-                        "classType": "hybrid.actor.Bicycle",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/bicycles.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "motorcycles",
-                        "classType": "hybrid.actor.Motorcycle",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/motorcycles.json"
-                            }
-                        }
-                    },
-                    {
-                        "id": "traffic_signals",
-                        "classType": "hybrid.actor.TrafficSignal",
-                        "creationType": "LoadBalancedDistributed",
-                        "dataSource": {
-                            "sourceType": "json",
-                            "info": {
-                                "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/traffic_signals.json"
-                            }
+            "id": str(self.config.name).lower().replace(" ", "_"),
+            "name": self.config.name,
+            "description": self.config.description,
+            "startTick": self.config.start_tick,
+            "endTick": self.config.end_tick,
+            "startRealTime": "2026-01-27T00:00:00.000",
+            "timeUnit": "seconds",
+            "timeStep": int(self.config.tick_duration),
+            "duration": self.config.end_tick - self.config.start_tick,
+            "tickDuration": self.config.tick_duration,
+            "randomSeed": self.config.random_seed,
+            "actorsDataSources": [
+                {
+                    "id": "nodes",
+                    "classType": "hybrid.actor.Node",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/nodes.json"
                         }
                     }
-                ],
-                "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/city_map.json"
-            }
+                },
+                {
+                    "id": "links",
+                    "classType": "hybrid.actor.Link",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/links.json"
+                        }
+                    }
+                },
+                {
+                    "id": "cars",
+                    "classType": "hybrid.actor.Car",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/cars.json"
+                        }
+                    }
+                },
+                {
+                    "id": "buses",
+                    "classType": "hybrid.actor.Bus",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/buses.json"
+                        }
+                    }
+                },
+                {
+                    "id": "bicycles",
+                    "classType": "hybrid.actor.Bicycle",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/bicycles.json"
+                        }
+                    }
+                },
+                {
+                    "id": "motorcycles",
+                    "classType": "hybrid.actor.Motorcycle",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/motorcycles.json"
+                        }
+                    }
+                },
+                {
+                    "id": "traffic_signals",
+                    "classType": "hybrid.actor.TrafficSignal",
+                    "creationType": "LoadBalancedDistributed",
+                    "dataSource": {
+                        "sourceType": "json",
+                        "info": {
+                            "path": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/traffic_signals.json"
+                        }
+                    }
+                }
+            ],
+            "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/"+self.config.name.lower().replace(" ", "-")+"/data/city_map.json"
         }
         
         with open(path, 'w') as f:

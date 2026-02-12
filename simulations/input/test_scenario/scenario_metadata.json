@@ -1,0 +1,27 @@
+{
+  "name": "Quick Test",
+  "description": "Quick test scenario for development",
+  "generated": "2026-02-11T22:42:37.465518",
+  "version": "1.0.0",
+  "statistics": {
+    "nodes": 9,
+    "links": 24,
+    "vehicles": 20,
+    "microLinks": 12,
+    "mesoLinks": 12,
+    "vehiclesByType": {
+      "Car": 14,
+      "Bus": 2,
+      "Bike": 2,
+      "Motorcycle": 2
+    },
+    "signalizedIntersections": 1
+  },
+  "configuration": {
+    "startTick": 0,
+    "endTick": 600,
+    "tickDuration": 1.0,
+    "networkType": "grid",
+    "randomSeed": 42
+  }
+}

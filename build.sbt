@@ -6,6 +6,7 @@ ThisBuild / version := "1.23.3"
 ThisBuild / scalaVersion := "3.3.5"
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
+resolvers += "Confluent".at("https://packages.confluent.io/maven/")
 
 // Apache Pekko
 val pekkoVersion = "1.1.5"
@@ -24,6 +25,8 @@ val jacksonDataTypeVersion = "2.18.3"
 val kryoVersion = "1.3.0"
 val protobufVersion = "4.32.0"
 val pekkoProtobuf = "1.0.3"
+val avroVersion = "1.12.0"
+val confluentAvroVersion = "7.7.2"
 
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
@@ -82,6 +85,11 @@ lazy val root = (project in file("."))
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
+
+      // Apache Avro
+      "org.apache.avro" % "avro" % avroVersion,
+      "io.confluent" % "kafka-avro-serializer" % confluentAvroVersion,
+      "io.confluent" % "kafka-streams-avro-serde" % confluentAvroVersion,
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
