@@ -1,58 +1,67 @@
 package org.interscity.htc.model.mobility.collections
 
-import com.fasterxml.jackson.databind.{DeserializationFeature, JavaType, ObjectMapper}
+import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.interscity.htc.model.mobility.collections.graph.{Edge, EdgeInfo}
+import org.interscity.htc.model.mobility.collections.graph.{ Edge, EdgeInfo }
 
-
-import java.io.{BufferedInputStream, File, FileInputStream, InputStream}
+import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
 import scala.reflect.ClassTag
-import scala.collection.immutable.{Map, Queue, Set}
+import scala.collection.immutable.{ Map, Queue, Set }
 import scala.collection.mutable
-import scala.util.{Try, Using}
+import scala.util.{ Try, Using }
 import scala.annotation.tailrec
 import scala.math.Numeric
 
 /** Estrutura para uma aresta no JSON, usando IDs de referência. */
 private case class JsonEdgeRefFormat[ID, W, L](
-                                                source_id: ID, // Referência ao ID do nó fonte
-                                                target_id: ID, // Referência ao ID do nó destino
-                                                weight: Option[W],
-                                                label: L // O objeto label completo (EdgeGraph no seu caso)
-                                              )
+  source_id: ID, // Referência ao ID do nó fonte
+  target_id: ID, // Referência ao ID do nó destino
+  weight: Option[W],
+  label: L // O objeto label completo (EdgeGraph no seu caso)
+)
 
 /** Estrutura que representa o formato JSON completo com referências. */
 private case class JsonGraphRefFormat[V, ID, W, L](
-                                                    nodes: List[V], // Lista de nós completos
-                                                    edges: List[JsonEdgeRefFormat[ID, W, L]], // Lista de arestas com labels completos
-                                                    directed: Boolean
-                                                  )
+  nodes: List[V], // Lista de nós completos
+  edges: List[JsonEdgeRefFormat[ID, W, L]], // Lista de arestas com labels completos
+  directed: Boolean
+)
 
-/**
- * Estrutura para encapsular o grafo carregado e mapas de consulta rápida.
- * @param graph O objeto Graph.
- * @param nodesById Mapa de ID do nó para o objeto nó (V).
- * @param edgeLabelsById Mapa de ID do label da aresta para o objeto label (L).
- * @tparam V Tipo do vértice (NodeGraph).
- * @tparam ID Tipo do identificador usado como chave nos mapas (String).
- * @tparam W Tipo do peso da aresta (Double).
- * @tparam L Tipo do label da aresta (EdgeGraph).
- */
+/** Estrutura para encapsular o grafo carregado e mapas de consulta rápida.
+  * @param graph
+  *   O objeto Graph.
+  * @param nodesById
+  *   Mapa de ID do nó para o objeto nó (V).
+  * @param edgeLabelsById
+  *   Mapa de ID do label da aresta para o objeto label (L).
+  * @tparam V
+  *   Tipo do vértice (NodeGraph).
+  * @tparam ID
+  *   Tipo do identificador usado como chave nos mapas (String).
+  * @tparam W
+  *   Tipo do peso da aresta (Double).
+  * @tparam L
+  *   Tipo do label da aresta (EdgeGraph).
+  */
 case class LoadedGraphData[V, ID, W, L](
-                                         graph: Graph[V, W, L],
-                                         nodesById: Map[ID, V],
-                                         edgeLabelsById: Map[ID, L]
-                                       )
+  graph: Graph[V, W, L],
+  nodesById: Map[ID, V],
+  edgeLabelsById: Map[ID, L]
+)
 
 /** Classe principal do Grafo.
- * @param adjacencyList Mapa: Vértice -> (Vizinho -> EdgeInfo(Peso, Label))
- * @tparam V Tipo do identificador do vértice (NodeGraph).
- * @tparam W Tipo do peso da aresta (Double).
- * @tparam L Tipo do objeto "label" da aresta (EdgeGraph).
- */
+  * @param adjacencyList
+  *   Mapa: Vértice -> (Vizinho -> EdgeInfo(Peso, Label))
+  * @tparam V
+  *   Tipo do identificador do vértice (NodeGraph).
+  * @tparam W
+  *   Tipo do peso da aresta (Double).
+  * @tparam L
+  *   Tipo do objeto "label" da aresta (EdgeGraph).
+  */
 case class Graph[V, W, L] private (
-                                    private val adjacencyList: Map[V, Map[V, EdgeInfo[W, L]]]
-                                  ) {
+  private val adjacencyList: Map[V, Map[V, EdgeInfo[W, L]]]
+) {
 
   // --- Operações Básicas ---
   val vertices: Set[V] = adjacencyList.keySet
@@ -82,10 +91,12 @@ case class Graph[V, W, L] private (
   def label(source: V, target: V): Option[L] = edgeInfo(source, target).map(_.label)
 
   def edges: Set[Edge[V, W, L]] =
-    adjacencyList.flatMap { case (source, neighborsMap) =>
-      neighborsMap.map { case (target, info) =>
-        Edge(source, target, info.weight, info.label)
-      }
+    adjacencyList.flatMap {
+      case (source, neighborsMap) =>
+        neighborsMap.map {
+          case (target, info) =>
+            Edge(source, target, info.weight, info.label)
+        }
     }.toSet
 
   def contains(vertex: V): Boolean = adjacencyList.contains(vertex)
@@ -130,16 +141,19 @@ case class Graph[V, W, L] private (
 
   // --- A* e Dijkstra (lógica interna permanece a mesma, mas os métodos de reconstrução são importantes) ---
 
-  /** A* que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta no Caminho). */
+  /** A* que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta no
+    * Caminho).
+    */
   def aStarEdgeTargets(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
-                                                                               num: Numeric[W]
+    num: Numeric[W]
   ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
     val weightToDouble: W => Double = num.toDouble(_)
     val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]() // Nó -> Predecessor
-    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val openSet =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
 
     gScore(startNode) = 0.0
     fScore(startNode) = heuristic(startNode, goalNode)
@@ -152,31 +166,37 @@ case class Graph[V, W, L] private (
       if (current == goalNode) {
         foundGoalScore = Some(gScore(goalNode))
       } else if (gScore(current) < Double.PositiveInfinity) {
-        neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          val tentativeGScore = gScore(current) + weightToDouble(edgeInfoObj.weight)
-          if (tentativeGScore < gScore(neighbor)) {
-            cameFrom(neighbor) = current
-            gScore(neighbor) = tentativeGScore
-            fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
-            openSet.enqueue((fScore(neighbor), neighbor))
-          }
+        neighbors(current).foreach {
+          case (neighbor, edgeInfoObj) =>
+            val tentativeGScore = gScore(current) + weightToDouble(edgeInfoObj.weight)
+            if (tentativeGScore < gScore(neighbor)) {
+              cameFrom(neighbor) = current
+              gScore(neighbor) = tentativeGScore
+              fScore(neighbor) = tentativeGScore + heuristic(neighbor, goalNode)
+              openSet.enqueue((fScore(neighbor), neighbor))
+            }
         }
       }
     }
-    foundGoalScore.flatMap { cost =>
-      reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (cost, path))
+    foundGoalScore.flatMap {
+      cost =>
+        reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
+          path => (cost, path)
+        )
     }
   }
 
-  def aStarEdgeTargetsOptimized(startNode: V, goalNode: V, heuristic: (V, V) => Double)
-                               (implicit num: Numeric[W]): Option[(Double, List[(Edge[V, W, L], V)])] = {
+  def aStarEdgeTargetsOptimized(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
+    num: Numeric[W]
+  ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
     val weightToDouble: W => Double = num.toDouble(_)
 
     val gScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val fScore = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]()
-    val openSet = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val openSet =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
     val closedSet = mutable.Set[V]() // Conjunto fechado
 
     gScore(startNode) = 0.0
@@ -196,7 +216,9 @@ case class Graph[V, W, L] private (
         // Para este while, podemos apenas deixar o if não ter um else e o loop continua.
       } else if (current == goalNode) {
         // Objetivo alcançado!
-        return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (gScore(goalNode), path))
+        return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
+          path => (gScore(goalNode), path)
+        )
       } else {
         // Processa o nó 'current' apenas se ele não foi processado de forma ótima antes.
         // Adicionar ao closedSet aqui é uma abordagem. Alguns o fazem após expandir vizinhos.
@@ -207,19 +229,20 @@ case class Graph[V, W, L] private (
         if (!closedSet.contains(current)) { // Apenas processa se não estiver fechado
           closedSet.add(current) // Marca como processado/fechado
 
-          neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-            // Não precisa verificar closedSet para o vizinho aqui,
-            // pois se um caminho melhor for encontrado para ele,
-            // ele será (re)adicionado à openSet. A verificação de closedSet no início
-            // do loop cuidará de pular vizinhos já processados quando eles se tornarem 'current'.
-            val tentativeGScore = gScore(current) + weightToDouble(edgeInfoObj.weight)
-            if (tentativeGScore < gScore(neighbor)) {
-              cameFrom(neighbor) = current
-              gScore(neighbor) = tentativeGScore
-              val newFScoreForNeighbor = tentativeGScore + heuristic(neighbor, goalNode)
-              fScore(neighbor) = newFScoreForNeighbor // Atualiza o fScore conhecido
-              openSet.enqueue((newFScoreForNeighbor, neighbor))
-            }
+          neighbors(current).foreach {
+            case (neighbor, edgeInfoObj) =>
+              // Não precisa verificar closedSet para o vizinho aqui,
+              // pois se um caminho melhor for encontrado para ele,
+              // ele será (re)adicionado à openSet. A verificação de closedSet no início
+              // do loop cuidará de pular vizinhos já processados quando eles se tornarem 'current'.
+              val tentativeGScore = gScore(current) + weightToDouble(edgeInfoObj.weight)
+              if (tentativeGScore < gScore(neighbor)) {
+                cameFrom(neighbor) = current
+                gScore(neighbor) = tentativeGScore
+                val newFScoreForNeighbor = tentativeGScore + heuristic(neighbor, goalNode)
+                fScore(neighbor) = newFScoreForNeighbor // Atualiza o fScore conhecido
+                openSet.enqueue((newFScoreForNeighbor, neighbor))
+              }
           }
         }
       }
@@ -227,16 +250,19 @@ case class Graph[V, W, L] private (
     None // Caminho não encontrado
   }
 
-  /** Dijkstra que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta no Caminho). */
+  /** Dijkstra que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta
+    * no Caminho).
+    */
   def dijkstraEdgeTargets(startNode: V, goalNode: V)(implicit
-                                                     num: Numeric[W]
+    num: Numeric[W]
   ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
     val weightToDouble: W => Double = num.toDouble(_)
-    
+
     val distances = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]()
-    val priorityQueue = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val priorityQueue =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
     val visited = mutable.Set[V]()
 
     distances(startNode) = 0.0
@@ -244,40 +270,44 @@ case class Graph[V, W, L] private (
 
     while (priorityQueue.nonEmpty) {
       val (currentDistance, current) = priorityQueue.dequeue()
-      
+
       if (!visited.contains(current)) {
         visited.add(current)
-        
+
         if (current == goalNode) {
-          return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (distances(goalNode), path))
+          return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
+            path => (distances(goalNode), path)
+          )
         }
-        
-        neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          if (!visited.contains(neighbor)) {
-            val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
-            if (newDistance < distances(neighbor)) {
-              distances(neighbor) = newDistance
-              cameFrom(neighbor) = current
-              priorityQueue.enqueue((newDistance, neighbor))
+
+        neighbors(current).foreach {
+          case (neighbor, edgeInfoObj) =>
+            if (!visited.contains(neighbor)) {
+              val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
+              if (newDistance < distances(neighbor)) {
+                distances(neighbor) = newDistance
+                cameFrom(neighbor) = current
+                priorityQueue.enqueue((newDistance, neighbor))
+              }
             }
-          }
         }
       }
     }
-    
+
     None // Caminho não encontrado
   }
 
-    /** Dijkstra otimizado para encontrar o caminho mais curto entre dois nós. */
+  /** Dijkstra otimizado para encontrar o caminho mais curto entre dois nós. */
   def dijkstraEdgeTargetsOptimized(startNode: V, goalNode: V)(implicit
-                                                              num: Numeric[W]
+    num: Numeric[W]
   ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
     val weightToDouble: W => Double = num.toDouble(_)
-    
+
     val distances = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val cameFrom = mutable.Map[V, V]()
-    val priorityQueue = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val priorityQueue =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
     val visited = mutable.Set[V]()
 
     distances(startNode) = 0.0
@@ -285,73 +315,79 @@ case class Graph[V, W, L] private (
 
     while (priorityQueue.nonEmpty) {
       val (currentDistance, current) = priorityQueue.dequeue()
-      
+
       // Pula entradas obsoletas na fila
       if (currentDistance > distances(current)) {
         // Continue para próxima iteração
       } else if (current == goalNode) {
         // Objetivo alcançado!
-        return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(path => (distances(goalNode), path))
+        return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
+          path => (distances(goalNode), path)
+        )
       } else if (!visited.contains(current)) {
         visited.add(current)
-        
-        neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          if (!visited.contains(neighbor)) {/* Lines 300-306 omitted */}
+
+        neighbors(current).foreach {
+          case (neighbor, edgeInfoObj) =>
+            if (!visited.contains(neighbor)) { /* Lines 300-306 omitted */ }
         }
       }
     }
-    
+
     None // Caminho não encontrado
   }
 
-  /** 
-   * Encontra o caminho com menor número de arestas/links entre dois nós usando BFS.
-   * Similar à função digraph:get_short_path/3 do Erlang.
-   * Retorna o número de hops e o caminho como lista de tuplas (Aresta, Nó destino).
-   */
+  /** Encontra o caminho com menor número de arestas/links entre dois nós usando BFS. Similar à
+    * função digraph:get_short_path/3 do Erlang. Retorna o número de hops e o caminho como lista de
+    * tuplas (Aresta, Nó destino).
+    */
   def shortestPathByHops(startNode: V, goalNode: V): Option[(Int, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
     if (startNode == goalNode) return Some((0, List.empty))
-    
+
     val queue = mutable.Queue[(V, Int)]() // (nó atual, distância em hops)
     val visited = mutable.Set[V]()
     val cameFrom = mutable.Map[V, V]()
-    
+
     queue.enqueue((startNode, 0))
     visited.add(startNode)
-    
+
     while (queue.nonEmpty) {
       val (current, hops) = queue.dequeue()
-      
+
       // Verifica todos os vizinhos do nó atual
-      neighbors(current).foreach { case (neighbor, _) =>
-        if (!visited.contains(neighbor)) {
-          visited.add(neighbor)
-          cameFrom(neighbor) = current
-          
-          if (neighbor == goalNode) {
-            // Objetivo encontrado! Reconstrói o caminho
-            return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode)
-              .map(path => (hops + 1, path))
+      neighbors(current).foreach {
+        case (neighbor, _) =>
+          if (!visited.contains(neighbor)) {
+            visited.add(neighbor)
+            cameFrom(neighbor) = current
+
+            if (neighbor == goalNode) {
+              // Objetivo encontrado! Reconstrói o caminho
+              return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode)
+                .map(
+                  path => (hops + 1, path)
+                )
+            }
+
+            queue.enqueue((neighbor, hops + 1))
           }
-          
-          queue.enqueue((neighbor, hops + 1))
-        }
       }
     }
-    
+
     None // Caminho não encontrado
   }
 
   /** Dijkstra para encontrar as distâncias mais curtas de um nó para todos os outros. */
   def dijkstraAllDistances(startNode: V)(implicit
-                                         num: Numeric[W]
+    num: Numeric[W]
   ): Map[V, Double] = {
     if (!contains(startNode)) return Map.empty
     val weightToDouble: W => Double = num.toDouble(_)
-    
+
     val distances = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
-    val priorityQueue = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+    val priorityQueue =
+      mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
     val visited = mutable.Set[V]()
 
     distances(startNode) = 0.0
@@ -359,34 +395,35 @@ case class Graph[V, W, L] private (
 
     while (priorityQueue.nonEmpty) {
       val (currentDistance, current) = priorityQueue.dequeue()
-      
+
       if (!visited.contains(current) && currentDistance <= distances(current)) {
         visited.add(current)
-        
-        neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          if (!visited.contains(neighbor)) {
-            val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
-            if (newDistance < distances(neighbor)) {
-              distances(neighbor) = newDistance
-              priorityQueue.enqueue((newDistance, neighbor))
+
+        neighbors(current).foreach {
+          case (neighbor, edgeInfoObj) =>
+            if (!visited.contains(neighbor)) {
+              val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
+              if (newDistance < distances(neighbor)) {
+                distances(neighbor) = newDistance
+                priorityQueue.enqueue((newDistance, neighbor))
+              }
             }
-          }
         }
       }
     }
-    
+
     distances.toMap
   }
 
   // --- Métodos de Reconstrução de Caminho ---
   private def reconstructEdgeTargetTuplePath(
-                                              cameFrom: mutable.Map[V, V],
-                                              startNode: V,
-                                              endNode: V
-                                            ): Option[List[(Edge[V, W, L], V)]] = {
+    cameFrom: mutable.Map[V, V],
+    startNode: V,
+    endNode: V
+  ): Option[List[(Edge[V, W, L], V)]] = {
     if (startNode == endNode) return Some(List.empty)
     @tailrec
-    def loop(curr: V, acc: List[(Edge[V, W, L], V)]): Option[List[(Edge[V, W, L], V)]] = {
+    def loop(curr: V, acc: List[(Edge[V, W, L], V)]): Option[List[(Edge[V, W, L], V)]] =
       cameFrom.get(curr) match {
         case Some(prev) =>
           edgeInfo(prev, curr) match {
@@ -399,7 +436,6 @@ case class Graph[V, W, L] private (
           }
         case None => if (curr == startNode) Some(acc) else None // Chegou ao início ou erro
       }
-    }
     loop(endNode, Nil)
   }
 
@@ -416,54 +452,68 @@ object Graph {
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     def buildGraphRefFormatType[V, ID, W, L]()(implicit
-                                               ctV: ClassTag[V], ctID: ClassTag[ID], ctW: ClassTag[W], ctL: ClassTag[L]
+      ctV: ClassTag[V],
+      ctID: ClassTag[ID],
+      ctW: ClassTag[W],
+      ctL: ClassTag[L]
     ): JavaType = {
       val typeFactory = mapper.getTypeFactory
       typeFactory.constructParametricType(
         classOf[JsonGraphRefFormat[_, _, _, _]],
-        ctV.runtimeClass, ctID.runtimeClass, ctW.runtimeClass, ctL.runtimeClass
+        ctV.runtimeClass,
+        ctID.runtimeClass,
+        ctW.runtimeClass,
+        ctL.runtimeClass
       )
     }
   }
 
-  /**
-   * Carrega um grafo de um arquivo JSON.
-   * @param filePath Caminho para o arquivo JSON.
-   * @param nodeIdExtractor Função para extrair o ID de um objeto nó V.
-   * @param edgeLabelIdExtractor Função para extrair o ID de um objeto label de aresta L.
-   * @param defaultWeightForUnweighted Peso padrão se não especificado na aresta.
-   * @return Try[LoadedGraphData] contendo o grafo e mapas de consulta.
-   */
+  /** Carrega um grafo de um arquivo JSON.
+    * @param filePath
+    *   Caminho para o arquivo JSON.
+    * @param nodeIdExtractor
+    *   Função para extrair o ID de um objeto nó V.
+    * @param edgeLabelIdExtractor
+    *   Função para extrair o ID de um objeto label de aresta L.
+    * @param defaultWeightForUnweighted
+    *   Peso padrão se não especificado na aresta.
+    * @return
+    *   Try[LoadedGraphData] contendo o grafo e mapas de consulta.
+    */
   def loadFromJsonFile[V, ID, W, L](
-                                     filePath: String,
-                                     nodeIdExtractor: V => ID,
-                                     edgeLabelIdExtractor: L => ID, // Extrator para ID do label da aresta
-                                     defaultWeightForUnweighted: W
-                                   )(implicit
-                                     vCtFile: ClassTag[V], idCtFile: ClassTag[ID],
-                                     wCtFile: ClassTag[W], lCtFile: ClassTag[L]
-                                   ): Try[LoadedGraphData[V, ID, W, L]] =
-    Using(new BufferedInputStream(new FileInputStream(new File(filePath)))) { inputStream =>
-      loadFromJson[V, ID, W, L](
-        inputStream,
-        nodeIdExtractor,
-        edgeLabelIdExtractor, // Passa o extrator
-        defaultWeightForUnweighted
-      )(vCtFile, idCtFile, wCtFile, lCtFile)
+    filePath: String,
+    nodeIdExtractor: V => ID,
+    edgeLabelIdExtractor: L => ID, // Extrator para ID do label da aresta
+    defaultWeightForUnweighted: W
+  )(implicit
+    vCtFile: ClassTag[V],
+    idCtFile: ClassTag[ID],
+    wCtFile: ClassTag[W],
+    lCtFile: ClassTag[L]
+  ): Try[LoadedGraphData[V, ID, W, L]] =
+    Using(new BufferedInputStream(new FileInputStream(new File(filePath)))) {
+      inputStream =>
+        loadFromJson[V, ID, W, L](
+          inputStream,
+          nodeIdExtractor,
+          edgeLabelIdExtractor, // Passa o extrator
+          defaultWeightForUnweighted
+        )(vCtFile, idCtFile, wCtFile, lCtFile)
     }.flatten
 
-  /**
-   * Carrega um grafo de um InputStream JSON.
-   */
+  /** Carrega um grafo de um InputStream JSON.
+    */
   def loadFromJson[V, ID, W, L](
-                                 jsonStream: InputStream,
-                                 nodeIdExtractor: V => ID,
-                                 edgeLabelIdExtractor: L => ID, // Extrator para ID do label da aresta
-                                 defaultWeightForUnweighted: W
-                               )(implicit
-                                 vCt: ClassTag[V], idCt: ClassTag[ID],
-                                 wCt: ClassTag[W], lCt: ClassTag[L]
-                               ): Try[LoadedGraphData[V, ID, W, L]] =
+    jsonStream: InputStream,
+    nodeIdExtractor: V => ID,
+    edgeLabelIdExtractor: L => ID, // Extrator para ID do label da aresta
+    defaultWeightForUnweighted: W
+  )(implicit
+    vCt: ClassTag[V],
+    idCt: ClassTag[ID],
+    wCt: ClassTag[W],
+    lCt: ClassTag[L]
+  ): Try[LoadedGraphData[V, ID, W, L]] =
     Try {
       val graphFormatType: JavaType =
         JacksonConfig.buildGraphRefFormatType[V, ID, W, L]()(vCt, idCt, wCt, lCt)
@@ -475,13 +525,14 @@ object Graph {
       // Constrói mapa de nós por ID
       val nodeMapBuilder = Map.newBuilder[ID, V]
       val seenNodeIds = mutable.Set[ID]()
-      jsonGraph.nodes.foreach { node =>
-        val nodeId = nodeIdExtractor(node)
-        if (seenNodeIds.contains(nodeId)) {
-          throw new IllegalArgumentException(s"ID de nó duplicado no JSON: $nodeId")
-        }
-        seenNodeIds.add(nodeId)
-        nodeMapBuilder += (nodeId -> node)
+      jsonGraph.nodes.foreach {
+        node =>
+          val nodeId = nodeIdExtractor(node)
+          if (seenNodeIds.contains(nodeId)) {
+            throw new IllegalArgumentException(s"ID de nó duplicado no JSON: $nodeId")
+          }
+          seenNodeIds.add(nodeId)
+          nodeMapBuilder += (nodeId -> node)
       }
       val nodesByIdMap: Map[ID, V] = nodeMapBuilder.result()
 
@@ -489,40 +540,47 @@ object Graph {
       val edgeLabelMapBuilder = Map.newBuilder[ID, L] // Mapa para labels de arestas
       val seenEdgeLabelIds = mutable.Set[ID]()
 
-      jsonGraph.edges.foreach { jsonEdge =>
-        val sourceNodeOpt = nodesByIdMap.get(jsonEdge.source_id)
-        val targetNodeOpt = nodesByIdMap.get(jsonEdge.target_id)
+      jsonGraph.edges.foreach {
+        jsonEdge =>
+          val sourceNodeOpt = nodesByIdMap.get(jsonEdge.source_id)
+          val targetNodeOpt = nodesByIdMap.get(jsonEdge.target_id)
 
-        (sourceNodeOpt, targetNodeOpt) match {
-          case (Some(sourceNode), Some(targetNode)) =>
-            val weight = jsonEdge.weight.getOrElse(defaultWeightForUnweighted)
-            val edgeLabelObject: L = jsonEdge.label // Este é o EdgeGraph completo
+          (sourceNodeOpt, targetNodeOpt) match {
+            case (Some(sourceNode), Some(targetNode)) =>
+              val weight = jsonEdge.weight.getOrElse(defaultWeightForUnweighted)
+              val edgeLabelObject: L = jsonEdge.label // Este é o EdgeGraph completo
 
-            // Adiciona o label da aresta ao mapa de consulta de labels
-            val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
-            if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
-              edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
-              seenEdgeLabelIds.add(currentEdgeLabelId)
-            } else {
-              // Opcional: verificar se o objeto label é o mesmo se o ID for repetido.
-              // Se os IDs de EdgeGraph são únicos, não precisa se preocupar.
-              val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
-              if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
-                // Poderia ser um aviso ou erro dependendo da sua lógica de dados
-                System.err.println(s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado.")
+              // Adiciona o label da aresta ao mapa de consulta de labels
+              val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
+              if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
+                edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
+                seenEdgeLabelIds.add(currentEdgeLabelId)
+              } else {
+                // Opcional: verificar se o objeto label é o mesmo se o ID for repetido.
+                // Se os IDs de EdgeGraph são únicos, não precisa se preocupar.
+                val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
+                if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
+                  // Poderia ser um aviso ou erro dependendo da sua lógica de dados
+                  System.err.println(
+                    s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado."
+                  )
+                }
               }
-            }
 
-            if (jsonGraph.directed) {
-              graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
-            } else {
-              graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
-            }
-          case (None, _) =>
-            throw new NoSuchElementException(s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado.")
-          case (_, None) =>
-            throw new NoSuchElementException(s"Nó de destino com ID '${jsonEdge.target_id}' não encontrado.")
-        }
+              if (jsonGraph.directed) {
+                graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
+              } else {
+                graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
+              }
+            case (None, _) =>
+              throw new NoSuchElementException(
+                s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado."
+              )
+            case (_, None) =>
+              throw new NoSuchElementException(
+                s"Nó de destino com ID '${jsonEdge.target_id}' não encontrado."
+              )
+          }
       }
       LoadedGraphData(graph, nodesByIdMap, edgeLabelMapBuilder.result())
     }.recover {

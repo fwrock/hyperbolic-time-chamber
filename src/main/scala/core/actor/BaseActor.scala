@@ -23,7 +23,7 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
 /** Generic base actor class that provides the basic structure for all actors in the system.
   * This class contains only generic actor functionality. For simulation-specific actors,
   * use SimulationBaseActor instead.
-  * 
+  *
   * @param properties The properties containing actor configuration
   * @tparam T The state type of the actor
   */
@@ -36,10 +36,10 @@ abstract class BaseActor[T <: BaseState](
 
   protected val config = ConfigFactory.load()
   private var isInitialized: Boolean = false
-  private val snapShotInterval = 1000
+  private val snapShotInterval = 10000000
 
   protected var entityId: String =
-    if (properties != null) properties.entityId 
+    if (properties != null) properties.entityId
     else {
       try {
         core.actor.manager.RandomSeedManager.deterministicUUID()
@@ -124,26 +124,20 @@ abstract class BaseActor[T <: BaseState](
     case event                                => handleEvent(event)
   }
 
-  protected def save(event: Any): Unit =
-    persist(event) {
-      e =>
-        context.system.eventStream.publish(e)
-        if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-          saveSnapshot(state)
-    }
+  private def save(event: Any): Unit = ()
+//    persist(event) {
+//      e =>
+//        context.system.eventStream.publish(e)
+//        if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
+//          saveSnapshot(state)
+//    }
 
   def receiveCommand: Receive = receive
 
   def receiveRecover: Receive = {
     case snapshot: SnapshotOffer =>
       state = snapshot.snapshot.asInstanceOf[T]
-      logInfo(s"Recovered state: $state")
-    case _: org.apache.pekko.persistence.RecoveryCompleted =>
-      // Recovery completed - this is normal Pekko Persistence lifecycle
-      ()
-    case event => 
-      // During recovery, just log - don't process events meant for normal operation
-      logDebug(s"Ignoring event during recovery: ${event.getClass.getSimpleName}")
+    case _ => receive
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
@@ -169,9 +163,8 @@ abstract class BaseActor[T <: BaseState](
   /** Called when the actor is finished. This method is called when the actor finishes processing
     * messages.
     */
-  protected def selfDestruct(): Unit = {
+  protected def selfDestruct(): Unit =
     context.stop(self)
-  }
 
   /** Called when the actor is being destroyed.
     * Override this method to perform cleanup actions.

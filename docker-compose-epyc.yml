@@ -1,0 +1,266 @@
+---
+# Docker Compose - Optimized for Dual AMD EPYC 7453 (112 threads, 1TB RAM)
+# Single-node configuration with NUMA awareness
+#
+# Hardware:
+# - CPU: 2x AMD EPYC 7453 (56 cores / 112 threads)
+# - RAM: 1 TB (1024 GB)
+# - GPU: 2x NVIDIA RTX A5500 (24 GB each)
+# - OS: Ubuntu 24.04.3 LTS
+
+services:
+
+  redis:
+    image: redis:latest
+    container_name: htc-redis-epyc
+    network_mode: host
+    command: >
+      redis-server
+      --maxmemory 64gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-backlog 131072
+      --maxclients 200000
+      --tcp-keepalive 60
+      --timeout 0
+      --io-threads 8
+      --io-threads-do-reads yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+          cpus: '8.0'
+        reservations:
+          memory: 64G
+          cpus: '8.0'
+
+  # Seed Node on NUMA Node 0
+  htc-seed:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_seed_epyc
+    depends_on:
+      - redis
+    cpuset: "0-27,56-83"  # NUMA node 0: cores 0-27 + HT 56-83
+    hostname: seed-node
+    network_mode: host
+    environment:
+      # Cluster Configuration
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: seed-node
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8558
+      
+      # Redis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      
+      # Simulation paths (ADJUST TO YOUR PATHS)
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/data/city_map.json
+      
+      # Time Manager - Full power
+      HTC_TIME_MANAGER_INSTANCES: 512
+      HTC_TIME_MANAGER_PER_NODE: 512
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      
+      # Report Manager
+      HTC_REPORT_JSON_INSTANCES: 256
+      HTC_REPORT_JSON_PER_NODE: 256
+      
+      # JVM Performance Tuning for 1TB RAM + NUMA Node 0
+      JAVA_OPTS: >-
+        -Xmx450G
+        -Xms450G
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=64M
+        -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled
+        -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch
+        -XX:InitiatingHeapOccupancyPercent=40
+        -XX:G1ReservePercent=10
+        -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60
+        -XX:ConcGCThreads=14
+        -XX:ParallelGCThreads=56
+        -XX:+UseNUMA
+        -XX:+DisableExplicitGC
+        -XX:+UseTransparentHugePages
+        -XX:+UseLargePages
+        -XX:LargePageSizeInBytes=2m
+        -XX:+PrintCommandLineFlags
+        -Dpekko.actor.default-dispatcher.throughput=1000
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=224
+        -Dpekko.remote.artery.advanced.maximum-frame-size=4MiB
+        -Dpekko.cluster.sharding.buffer-size=500000
+        
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+      - /dev/hugepages:/dev/hugepages
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    deploy:
+      resources:
+        limits:
+          memory: 470G
+          cpus: '56.0'
+        reservations:
+          memory: 450G
+          cpus: '50.0'
+
+  # Worker Node on NUMA Node 1
+  htc-worker:
+    image: uxhabam/hyperbolic-time-chamber:1.12.0
+    container_name: htc_worker_epyc
+    depends_on:
+      - htc-seed
+    cpuset: "28-55,84-111"  # NUMA node 1: cores 28-55 + HT 84-111
+    hostname: worker-node
+    network_mode: host
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: worker-node
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      MANAGEMENT_HTTP_PORT: 8559
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/data/city_map.json
+      
+      HTC_TIME_MANAGER_INSTANCES: 8192
+      HTC_TIME_MANAGER_PER_NODE: 8192
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 2147483647
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 180000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      
+      HTC_REPORT_JSON_INSTANCES: 256
+      HTC_REPORT_JSON_PER_NODE: 256
+      
+      # JVM Performance Tuning for NUMA Node 1
+      JAVA_OPTS: >-
+        -Xmx450G
+        -Xms450G
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+        -XX:G1HeapRegionSize=64M
+        -XX:+UseStringDeduplication
+        -XX:+ParallelRefProcEnabled
+        -XX:+UseCompressedOops
+        -XX:+AlwaysPreTouch
+        -XX:InitiatingHeapOccupancyPercent=40
+        -XX:G1ReservePercent=10
+        -XX:G1NewSizePercent=30
+        -XX:G1MaxNewSizePercent=60
+        -XX:ConcGCThreads=14
+        -XX:ParallelGCThreads=56
+        -XX:+UseNUMA
+        -XX:+DisableExplicitGC
+        -XX:+UseTransparentHugePages
+        -XX:+UseLargePages
+        -XX:LargePageSizeInBytes=2m
+        -XX:+PrintCommandLineFlags
+        -Dpekko.actor.default-dispatcher.throughput=1000
+        -Dpekko.actor.default-dispatcher.fork-join-executor.parallelism-max=224
+        
+    volumes:
+      - ./simulations:/app/hyperbolic-time-chamber/simulations
+      - ./output:/app/hyperbolic-time-chamber/output
+      - /dev/hugepages:/dev/hugepages
+    ulimits:
+      memlock: -1
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    deploy:
+      resources:
+        limits:
+          memory: 470G
+          cpus: '56.0'
+        reservations:
+          memory: 450G
+          cpus: '50.0'
+
+volumes:
+  redis_data:
+
+# ═══════════════════════════════════════════════════════════════════════
+# Performance Tips for AMD EPYC 7453 (Dual Socket)
+# ═══════════════════════════════════════════════════════════════════════
+
+# 1. Enable Huge Pages (run before docker-compose up):
+#    echo 250000 | sudo tee /proc/sys/vm/nr_hugepages
+#    echo always | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+#    echo always | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
+
+# 2. Check NUMA topology:
+#    numactl --hardware
+#    lscpu | grep NUMA
+
+# 3. Verify CPU pinning:
+#    docker exec htc_seed_epyc taskset -cp 1
+#    docker exec htc_worker_epyc taskset -cp 1
+
+# 4. Monitor NUMA stats:
+#    numastat -c htc_seed_epyc htc_worker_epyc
+
+# 5. Check cluster status:
+#    curl http://localhost:8558/cluster/members | jq
+#    curl http://localhost:8559/cluster/members | jq
+
+# 6. Monitor GC (add to JAVA_OPTS):
+#    -Xlog:gc*:file=/app/hyperbolic-time-chamber/output/gc.log:time,uptime,level,tags
+
+# 7. Monitor container stats:
+#    docker stats
+
+# 8. Check memory bandwidth (requires Intel MLC or similar):
+#    # Monitor DRAM bandwidth per NUMA node
+
+# 9. Profile with async-profiler:
+#    docker exec htc_worker_epyc jcmd 1 Profiler.start
+
+# 10. Estimate workload capacity:
+#     With 900GB heap + 112 threads:
+#     - ~50-100M actors in memory
+#     - ~500K-1M events/sec throughput
+#     - Simulation with 10-30M vehicles viable
+
+# ═══════════════════════════════════════════════════════════════════════
+# NUMA Configuration Notes
+# ═══════════════════════════════════════════════════════════════════════
+#
+# AMD EPYC 7453 has 2 NUMA nodes (one per socket):
+# - NUMA Node 0: cores 0-27  (+ HT 56-83)
+# - NUMA Node 1: cores 28-55 (+ HT 84-111)
+#
+# Each container is pinned to one NUMA node to avoid cross-socket traffic.
+# This gives ~2x memory bandwidth compared to interleaved allocation.
+#
+# Verify with: numactl --hardware
+#
+# Expected output:
+# available: 2 nodes (0-1)
+# node 0 cpus: 0-27 56-83
+# node 0 size: 515 GB
+# node 1 cpus: 28-55 84-111
+# node 1 size: 512 GB
+#
+# ═══════════════════════════════════════════════════════════════════════
