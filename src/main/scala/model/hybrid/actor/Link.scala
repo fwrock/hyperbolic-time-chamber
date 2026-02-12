@@ -17,7 +17,7 @@ import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussMod
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.event.data.*
-import org.interscity.htc.model.hybrid.entity.event.data.link.{LinkConnectionsData, LinkInfoData}
+import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 
@@ -56,10 +56,6 @@ class Link(
   /** Car-following model for microscopic simulation.
     */
   private val carFollowingModel: CarFollowingModel = KraussModel()
-  
-  /** Track if connections have been registered with nodes.
-    */
-  private var connectionsRegistered: Boolean = false
   
   /** Last tick when dynamic cost was published.
     */
@@ -102,41 +98,8 @@ class Link(
     
     logInfo(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
-  
-  /** Ensure link connections are registered with nodes.
-    * Called lazily on first vehicle interaction to avoid race conditions.
-    */
-  private def ensureConnectionsRegistered(): Unit = {
-    if (!connectionsRegistered) {
-      logDebug(s"Registering link connections with nodes")
-      sendConnectionsToNode(state.to)
-      sendConnectionsToNode(state.from)
-      connectionsRegistered = true
-    }
-  }
-  
-  /** Send link connection information to a node.
-    * This allows nodes to map link IDs to their endpoints,
-    * enabling proper traffic signal state lookups.
-    */
-  private def sendConnectionsToNode(nodeId: String): Unit = {
-    val toIdentify = IdentifyUtil.fromDependency(getDependency(state.to))
-    val fromIdentify = IdentifyUtil.fromDependency(getDependency(state.from))
-    val nodeIdentify = IdentifyUtil.fromDependency(getDependency(nodeId))
-    
-     sendMessageTo(
-      entityId = nodeIdentify.id,
-      shardId = nodeIdentify.classType,
-      data = LinkConnectionsData(
-        to = toIdentify,
-        from = fromIdentify
-      ),
-      eventType = EventTypeEnum.LinkConnection.toString,
-      actorType = LoadBalancedDistributed
-    )
-    
-    logDebug(s"Sent connection info to node $nodeId")
-  }
+
+
   
   /** Initialize microscopic simulation mode.
     */
@@ -175,9 +138,6 @@ class Link(
     * - MICRO: Initialize microscopic state, register with time manager
     */
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
-    // Ensure connections are registered (lazy initialization)
-    ensureConnectionsRegistered()
-    
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
     
     if (state.isMicroMode) {

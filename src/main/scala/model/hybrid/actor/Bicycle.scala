@@ -196,7 +196,11 @@ class Bicycle(
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
+          // CRITICAL: Also update parent MovableState field!
+          state.movableBestRoute = Some(pathQueue)
+          state.movableBestCost = cost
           state.status = Ready
+          state.movableStatus = Ready
           state.updateCurrentPath(None)
           
           // Report journey started

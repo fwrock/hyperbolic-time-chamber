@@ -1,0 +1,557 @@
+[
+  {
+    "id": "htcaid:bus;route_0_bus_0",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 0,
+        "label": "Bus Line 1",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_90": "htcaid:node;1434789116",
+          "htcaid:busstop;busstop_157": "htcaid:node;2006973631",
+          "htcaid:busstop;busstop_137": "htcaid:node;142830639",
+          "htcaid:busstop;busstop_189": "htcaid:node;466909349",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246",
+          "htcaid:busstop;busstop_214": "htcaid:node;4264803135"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1434789116",
+        "destination": "htcaid:node;1434789116",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_0_bus_1",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 200,
+        "label": "Bus Line 1",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_90": "htcaid:node;1434789116",
+          "htcaid:busstop;busstop_157": "htcaid:node;2006973631",
+          "htcaid:busstop;busstop_137": "htcaid:node;142830639",
+          "htcaid:busstop;busstop_189": "htcaid:node;466909349",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246",
+          "htcaid:busstop;busstop_214": "htcaid:node;4264803135"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1434789116",
+        "destination": "htcaid:node;1434789116",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_0_bus_2",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 400,
+        "label": "Bus Line 1",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_90": "htcaid:node;1434789116",
+          "htcaid:busstop;busstop_157": "htcaid:node;2006973631",
+          "htcaid:busstop;busstop_137": "htcaid:node;142830639",
+          "htcaid:busstop;busstop_189": "htcaid:node;466909349",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246",
+          "htcaid:busstop;busstop_214": "htcaid:node;4264803135"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1434789116",
+        "destination": "htcaid:node;1434789116",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_1_bus_0",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 100,
+        "label": "Bus Line 2",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_212": "htcaid:node;1594725717",
+          "htcaid:busstop;busstop_78": "htcaid:node;26352024",
+          "htcaid:busstop;busstop_25": "htcaid:node;1584985765",
+          "htcaid:busstop;busstop_184": "htcaid:node;394905648",
+          "htcaid:busstop;busstop_23": "htcaid:node;467744065",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1594725717",
+        "destination": "htcaid:node;1594725717",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_1_bus_1",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 300,
+        "label": "Bus Line 2",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_212": "htcaid:node;1594725717",
+          "htcaid:busstop;busstop_78": "htcaid:node;26352024",
+          "htcaid:busstop;busstop_25": "htcaid:node;1584985765",
+          "htcaid:busstop;busstop_184": "htcaid:node;394905648",
+          "htcaid:busstop;busstop_23": "htcaid:node;467744065",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1594725717",
+        "destination": "htcaid:node;1594725717",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_1_bus_2",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 500,
+        "label": "Bus Line 2",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_212": "htcaid:node;1594725717",
+          "htcaid:busstop;busstop_78": "htcaid:node;26352024",
+          "htcaid:busstop;busstop_25": "htcaid:node;1584985765",
+          "htcaid:busstop;busstop_184": "htcaid:node;394905648",
+          "htcaid:busstop;busstop_23": "htcaid:node;467744065",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1594725717",
+        "destination": "htcaid:node;1594725717",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_2_bus_0",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 200,
+        "label": "Bus Line 3",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_159": "htcaid:node;172015345",
+          "htcaid:busstop;busstop_127": "htcaid:node;155430132",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585",
+          "htcaid:busstop;busstop_47": "htcaid:node;2006965201",
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_97": "htcaid:node;1833396373"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;172015345",
+        "destination": "htcaid:node;172015345",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_2_bus_1",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 400,
+        "label": "Bus Line 3",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_159": "htcaid:node;172015345",
+          "htcaid:busstop;busstop_127": "htcaid:node;155430132",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585",
+          "htcaid:busstop;busstop_47": "htcaid:node;2006965201",
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_97": "htcaid:node;1833396373"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;172015345",
+        "destination": "htcaid:node;172015345",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_2_bus_2",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 600,
+        "label": "Bus Line 3",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_159": "htcaid:node;172015345",
+          "htcaid:busstop;busstop_127": "htcaid:node;155430132",
+          "htcaid:busstop;busstop_163": "htcaid:node;2529920585",
+          "htcaid:busstop;busstop_47": "htcaid:node;2006965201",
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_97": "htcaid:node;1833396373"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;172015345",
+        "destination": "htcaid:node;172015345",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_3_bus_0",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 300,
+        "label": "Bus Line 4",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_219": "htcaid:node;296285949",
+          "htcaid:busstop;busstop_181": "htcaid:node;2140090153",
+          "htcaid:busstop;busstop_124": "htcaid:node;165485179",
+          "htcaid:busstop;busstop_89": "htcaid:node;4191831479",
+          "htcaid:busstop;busstop_86": "htcaid:node;1379439927",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;296285949",
+        "destination": "htcaid:node;296285949",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_3_bus_1",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 500,
+        "label": "Bus Line 4",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_219": "htcaid:node;296285949",
+          "htcaid:busstop;busstop_181": "htcaid:node;2140090153",
+          "htcaid:busstop;busstop_124": "htcaid:node;165485179",
+          "htcaid:busstop;busstop_89": "htcaid:node;4191831479",
+          "htcaid:busstop;busstop_86": "htcaid:node;1379439927",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;296285949",
+        "destination": "htcaid:node;296285949",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_3_bus_2",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 700,
+        "label": "Bus Line 4",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_219": "htcaid:node;296285949",
+          "htcaid:busstop;busstop_181": "htcaid:node;2140090153",
+          "htcaid:busstop;busstop_124": "htcaid:node;165485179",
+          "htcaid:busstop;busstop_89": "htcaid:node;4191831479",
+          "htcaid:busstop;busstop_86": "htcaid:node;1379439927",
+          "htcaid:busstop;busstop_206": "htcaid:node;1836133246"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;296285949",
+        "destination": "htcaid:node;296285949",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_4_bus_0",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 400,
+        "label": "Bus Line 5",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_40": "htcaid:node;1106899589",
+          "htcaid:busstop;busstop_43": "htcaid:node;1111783688",
+          "htcaid:busstop;busstop_82": "htcaid:node;1952697074",
+          "htcaid:busstop;busstop_4": "htcaid:node;60609944",
+          "htcaid:busstop;busstop_28": "htcaid:node;466938151"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1038690657",
+        "destination": "htcaid:node;1038690657",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_4_bus_1",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 600,
+        "label": "Bus Line 5",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_40": "htcaid:node;1106899589",
+          "htcaid:busstop;busstop_43": "htcaid:node;1111783688",
+          "htcaid:busstop;busstop_82": "htcaid:node;1952697074",
+          "htcaid:busstop;busstop_4": "htcaid:node;60609944",
+          "htcaid:busstop;busstop_28": "htcaid:node;466938151"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1038690657",
+        "destination": "htcaid:node;1038690657",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:bus;route_4_bus_2",
+    "typeActor": "hybrid.actor.Bus",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusState",
+      "content": {
+        "startTick": 800,
+        "label": "Bus Line 5",
+        "capacity": 80,
+        "distance": 0.0,
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "busStops": {
+          "htcaid:busstop;busstop_193": "htcaid:node;1038690657",
+          "htcaid:busstop;busstop_40": "htcaid:node;1106899589",
+          "htcaid:busstop;busstop_43": "htcaid:node;1111783688",
+          "htcaid:busstop;busstop_82": "htcaid:node;1952697074",
+          "htcaid:busstop;busstop_4": "htcaid:node;60609944",
+          "htcaid:busstop;busstop_28": "htcaid:node;466938151"
+        },
+        "numberOfPorts": 2,
+        "people": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "bestCost": 0.0,
+        "origin": "htcaid:node;1038690657",
+        "destination": "htcaid:node;1038690657",
+        "actorType": "Bus",
+        "size": 12.0,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  }
+]

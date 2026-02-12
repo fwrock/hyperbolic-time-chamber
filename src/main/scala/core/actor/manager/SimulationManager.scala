@@ -74,15 +74,21 @@ class SimulationManager(
   private def startLoadData(): Unit =
     if (poolTimeManager != null && reporters != null) {
       loadManager = createSingletonLoadManager()
+      logInfo(s"Sending LoadDataEvent with ${configuration.actorsDataSources.size} data sources")
       createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
         actorRef = selfProxy,
         actorsDataSources = configuration.actorsDataSources
       )
+    } else {
+      logWarn(s"Not ready to load data: poolTimeManager=${poolTimeManager != null}, reporters=${reporters != null}")
     }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
-    logInfo(s"Run simulation")
+    logInfo(s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources")
+    configuration.actorsDataSources.foreach { source =>
+      logInfo(s"  - Data source: ${source.id} (${source.classType}): ${source.dataSource}")
+    }
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
   }

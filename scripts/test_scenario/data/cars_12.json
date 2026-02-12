@@ -1,0 +1,4202 @@
+[
+  {
+    "id": "htcaid:car;trip_250",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 21785,
+        "origin": "htcaid:node;445249640",
+        "destination": "htcaid:node;1607733723",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;445249640",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4058407785355362,
+          "reactionTimeFactor": 0.8745600155116534,
+          "speedFactor": 0.9268664124578544,
+          "minGapFactor": 0.9945885037838945
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;445249640",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1607733723",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_295",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 25646,
+        "origin": "htcaid:node;140819574",
+        "destination": "htcaid:node;2537138118",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;140819574",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6015682516179233,
+          "reactionTimeFactor": 0.8440952999909543,
+          "speedFactor": 1.0134184268331088,
+          "minGapFactor": 0.8850293492842854
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;140819574",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2537138118",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_642",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 54229,
+        "origin": "htcaid:node;1240448049",
+        "destination": "htcaid:node;5043856561",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1240448049",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4205645087017807,
+          "reactionTimeFactor": 1.0999662941179555,
+          "speedFactor": 1.0618357252466153,
+          "minGapFactor": 0.876753933010554
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1240448049",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5043856561",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_980",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 83954,
+        "origin": "htcaid:node;444960266",
+        "destination": "htcaid:node;145207920",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;444960266",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8897682751816807,
+          "reactionTimeFactor": 1.1486462188029063,
+          "speedFactor": 0.9881460899514517,
+          "minGapFactor": 1.1651885617507143
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;444960266",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;145207920",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_484",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 40538,
+        "origin": "htcaid:node;1370704461",
+        "destination": "htcaid:node;4219529583",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1370704461",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.36551726848644905,
+          "reactionTimeFactor": 1.0545734559480135,
+          "speedFactor": 0.9159619603948677,
+          "minGapFactor": 0.8342828255228059
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1370704461",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4219529583",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_74",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 6375,
+        "origin": "htcaid:node;444960260",
+        "destination": "htcaid:node;619194403",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;444960260",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.37480894748909266,
+          "reactionTimeFactor": 0.8257049749557731,
+          "speedFactor": 0.9059333303356862,
+          "minGapFactor": 0.8939120515522275
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;444960260",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;619194403",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_492",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 41282,
+        "origin": "htcaid:node;444960022",
+        "destination": "htcaid:node;2578181713",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;444960022",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5911166116869655,
+          "reactionTimeFactor": 1.1042134377384458,
+          "speedFactor": 0.9019013152436264,
+          "minGapFactor": 0.906432300066348
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;444960022",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2578181713",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_416",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 34715,
+        "origin": "htcaid:node;60641204",
+        "destination": "htcaid:node;1595187359",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60641204",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8731282398427724,
+          "reactionTimeFactor": 1.0661289113236827,
+          "speedFactor": 1.0578414335662407,
+          "minGapFactor": 0.816743737747794
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60641204",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1595187359",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_40",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 3721,
+        "origin": "htcaid:node;1393378359",
+        "destination": "htcaid:node;165462950",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1393378359",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4266410150632316,
+          "reactionTimeFactor": 1.1167146146513878,
+          "speedFactor": 0.975133160655178,
+          "minGapFactor": 1.008029648622563
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1393378359",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;165462950",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_272",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 23451,
+        "origin": "htcaid:node;461884649",
+        "destination": "htcaid:node;26352036",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;461884649",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8772347275675714,
+          "reactionTimeFactor": 0.9063343195084583,
+          "speedFactor": 0.9971852309602973,
+          "minGapFactor": 1.1027646551639734
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;461884649",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;26352036",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_195",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 16170,
+        "origin": "htcaid:node;1589046205",
+        "destination": "htcaid:node;462043016",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1589046205",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6626229305391921,
+          "reactionTimeFactor": 0.934620080503181,
+          "speedFactor": 1.0363719998153331,
+          "minGapFactor": 0.937230980394617
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1589046205",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;462043016",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_546",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 44976,
+        "origin": "htcaid:node;1642248104",
+        "destination": "htcaid:node;459347508",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1642248104",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4891342825450623,
+          "reactionTimeFactor": 0.8958388118177386,
+          "speedFactor": 0.9722421253697251,
+          "minGapFactor": 0.959388540322887
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1642248104",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;459347508",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_111",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 9212,
+        "origin": "htcaid:node;303788551",
+        "destination": "htcaid:node;307004573",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;303788551",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6664854350264737,
+          "reactionTimeFactor": 1.1901220242858803,
+          "speedFactor": 1.0746154864583244,
+          "minGapFactor": 1.1225080820923368
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303788551",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;307004573",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_559",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 46174,
+        "origin": "htcaid:node;142844584",
+        "destination": "htcaid:node;301116451",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;142844584",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3018507977884378,
+          "reactionTimeFactor": 1.148216604287351,
+          "speedFactor": 0.9803616713363233,
+          "minGapFactor": 1.134168463611515
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;142844584",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;301116451",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_191",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 15922,
+        "origin": "htcaid:node;25714469",
+        "destination": "htcaid:node;299610845",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;25714469",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8550222701081471,
+          "reactionTimeFactor": 0.8102721709069883,
+          "speedFactor": 0.9245789078906257,
+          "minGapFactor": 1.0122517355664598
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;25714469",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;299610845",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_409",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 34318,
+        "origin": "htcaid:node;303867318",
+        "destination": "htcaid:node;601114979",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;303867318",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8706371636655836,
+          "reactionTimeFactor": 1.1005758965463988,
+          "speedFactor": 0.9497075280076711,
+          "minGapFactor": 0.9807672310422411
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303867318",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;601114979",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_548",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 45152,
+        "origin": "htcaid:node;4191894366",
+        "destination": "htcaid:node;142840598",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4191894366",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7117109372863595,
+          "reactionTimeFactor": 1.1479412271833402,
+          "speedFactor": 1.0029828003244499,
+          "minGapFactor": 1.0640913641093221
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4191894366",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142840598",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_255",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 22037,
+        "origin": "htcaid:node;4343779562",
+        "destination": "htcaid:node;1661634174",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4343779562",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.30187746578238034,
+          "reactionTimeFactor": 1.0552293031142566,
+          "speedFactor": 1.0883875411936925,
+          "minGapFactor": 0.9288734287519166
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4343779562",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1661634174",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_286",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 24502,
+        "origin": "htcaid:node;2739259218",
+        "destination": "htcaid:node;298291635",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2739259218",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6802663804301871,
+          "reactionTimeFactor": 1.1493737967185802,
+          "speedFactor": 1.0939195153229802,
+          "minGapFactor": 1.0943252126143133
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2739259218",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;298291635",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_152",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 12325,
+        "origin": "htcaid:node;30470277",
+        "destination": "htcaid:node;5045471071",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;30470277",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7067576517655231,
+          "reactionTimeFactor": 0.893423460742125,
+          "speedFactor": 0.9969072288277228,
+          "minGapFactor": 1.0956818539279471
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;30470277",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5045471071",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_588",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 49105,
+        "origin": "htcaid:node;459347765",
+        "destination": "htcaid:node;2816494717",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;459347765",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.776376226908129,
+          "reactionTimeFactor": 0.9393335831997284,
+          "speedFactor": 1.087816950576728,
+          "minGapFactor": 1.1765910444582834
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;459347765",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2816494717",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_938",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 79833,
+        "origin": "htcaid:node;1952553606",
+        "destination": "htcaid:node;2099094545",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1952553606",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5856731503614998,
+          "reactionTimeFactor": 1.0633356030496954,
+          "speedFactor": 1.0398999466079515,
+          "minGapFactor": 0.840182288689249
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1952553606",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2099094545",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_608",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 51018,
+        "origin": "htcaid:node;5049079259",
+        "destination": "htcaid:node;4247742004",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;5049079259",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5309151260280445,
+          "reactionTimeFactor": 1.0428695237489847,
+          "speedFactor": 1.0423883946883103,
+          "minGapFactor": 1.1479434893132878
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5049079259",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4247742004",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_163",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 13590,
+        "origin": "htcaid:node;303562316",
+        "destination": "htcaid:node;25929486",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;303562316",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8257404040033787,
+          "reactionTimeFactor": 1.1139447774195748,
+          "speedFactor": 1.043333125866408,
+          "minGapFactor": 0.8126982990737598
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303562316",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;25929486",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_625",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 52699,
+        "origin": "htcaid:node;151249794",
+        "destination": "htcaid:node;1715400838",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;151249794",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5987550338960622,
+          "reactionTimeFactor": 0.8348359563986907,
+          "speedFactor": 1.066470822204742,
+          "minGapFactor": 1.19852189585193
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;151249794",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1715400838",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_300",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 26236,
+        "origin": "htcaid:node;778047235",
+        "destination": "htcaid:node;4293874133",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;778047235",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.892331765032347,
+          "reactionTimeFactor": 0.9867212181331302,
+          "speedFactor": 1.0792817152236205,
+          "minGapFactor": 1.182020488726135
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;778047235",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4293874133",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_869",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 74150,
+        "origin": "htcaid:node;389461941",
+        "destination": "htcaid:node;248042130",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;389461941",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5893011271773672,
+          "reactionTimeFactor": 1.0162671632793594,
+          "speedFactor": 0.9486711996967209,
+          "minGapFactor": 0.8681732051171438
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;389461941",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;248042130",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_274",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 23499,
+        "origin": "htcaid:node;184038861",
+        "destination": "htcaid:node;2050908619",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;184038861",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8665259271550705,
+          "reactionTimeFactor": 1.0799636009020561,
+          "speedFactor": 0.9210939354224404,
+          "minGapFactor": 1.1973445883863125
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;184038861",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2050908619",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_249",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 21700,
+        "origin": "htcaid:node;1046117156",
+        "destination": "htcaid:node;206291865",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1046117156",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3175330690752056,
+          "reactionTimeFactor": 1.1716013906269294,
+          "speedFactor": 0.9653001590112575,
+          "minGapFactor": 0.9533959262559081
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1046117156",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;206291865",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_237",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 20608,
+        "origin": "htcaid:node;305196684",
+        "destination": "htcaid:node;302284608",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;305196684",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4682147080617072,
+          "reactionTimeFactor": 1.0876699932146923,
+          "speedFactor": 1.0331865362469888,
+          "minGapFactor": 1.1806015518233504
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;305196684",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;302284608",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_623",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 52446,
+        "origin": "htcaid:node;28636604",
+        "destination": "htcaid:node;2308808813",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;28636604",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7023607632060265,
+          "reactionTimeFactor": 1.066190547155608,
+          "speedFactor": 1.084547237358307,
+          "minGapFactor": 1.0534192762536239
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;28636604",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2308808813",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_83",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 6974,
+        "origin": "htcaid:node;4217832163",
+        "destination": "htcaid:node;3312393277",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4217832163",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5951752696504076,
+          "reactionTimeFactor": 1.1182161858433024,
+          "speedFactor": 0.9665602235077927,
+          "minGapFactor": 0.8895224867218136
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4217832163",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;3312393277",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_193",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 16050,
+        "origin": "htcaid:node;151272834",
+        "destination": "htcaid:node;1583679741",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;151272834",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6455832515642228,
+          "reactionTimeFactor": 1.169539000393985,
+          "speedFactor": 0.9129334057032862,
+          "minGapFactor": 0.9372903119832585
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;151272834",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1583679741",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_119",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 9744,
+        "origin": "htcaid:node;302805833",
+        "destination": "htcaid:node;443455551",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;302805833",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8461002754454736,
+          "reactionTimeFactor": 1.097187127876289,
+          "speedFactor": 1.045005617114381,
+          "minGapFactor": 1.0615678597751326
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;302805833",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;443455551",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_449",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 37319,
+        "origin": "htcaid:node;1490115239",
+        "destination": "htcaid:node;1584972751",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1490115239",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7710491294945774,
+          "reactionTimeFactor": 1.1864991988424687,
+          "speedFactor": 0.987392450583648,
+          "minGapFactor": 0.8933469779001201
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1490115239",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1584972751",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_563",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 46558,
+        "origin": "htcaid:node;459335450",
+        "destination": "htcaid:node;2006965201",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;459335450",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.45545636914233845,
+          "reactionTimeFactor": 0.916390601061822,
+          "speedFactor": 0.9222765044706157,
+          "minGapFactor": 0.9360951415913737
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;459335450",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2006965201",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_245",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 21386,
+        "origin": "htcaid:node;2537138116",
+        "destination": "htcaid:node;1373371575",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2537138116",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6553202924305677,
+          "reactionTimeFactor": 0.8752625487584405,
+          "speedFactor": 1.0884015353264007,
+          "minGapFactor": 1.029135603808573
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2537138116",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1373371575",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_140",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 11622,
+        "origin": "htcaid:node;4051061811",
+        "destination": "htcaid:node;2396880345",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4051061811",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3764504798650606,
+          "reactionTimeFactor": 0.9253489165129323,
+          "speedFactor": 0.9760390215768171,
+          "minGapFactor": 1.0947671562483265
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4051061811",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2396880345",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_628",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 53006,
+        "origin": "htcaid:node;158844146",
+        "destination": "htcaid:node;305196312",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;158844146",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4864793482209068,
+          "reactionTimeFactor": 1.0360239134299845,
+          "speedFactor": 0.9379715350972393,
+          "minGapFactor": 0.9552582114334389
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;158844146",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;305196312",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_749",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 63601,
+        "origin": "htcaid:node;304116710",
+        "destination": "htcaid:node;2400595423",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;304116710",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.554219096837832,
+          "reactionTimeFactor": 1.108512360945415,
+          "speedFactor": 1.0595036278356644,
+          "minGapFactor": 1.1735700660841624
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;304116710",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2400595423",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_688",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 58237,
+        "origin": "htcaid:node;4511317149",
+        "destination": "htcaid:node;459347508",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4511317149",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3757844188202234,
+          "reactionTimeFactor": 1.065497111086898,
+          "speedFactor": 1.0181551966401063,
+          "minGapFactor": 0.8426343691209328
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4511317149",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;459347508",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_552",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 45362,
+        "origin": "htcaid:node;2537137924",
+        "destination": "htcaid:node;172021638",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2537137924",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.305513113163231,
+          "reactionTimeFactor": 1.1409448100942456,
+          "speedFactor": 0.9631852450142813,
+          "minGapFactor": 1.1264591841187772
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2537137924",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;172021638",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_757",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 64057,
+        "origin": "htcaid:node;303855012",
+        "destination": "htcaid:node;304465010",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;303855012",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4780941315168886,
+          "reactionTimeFactor": 0.8875616952771922,
+          "speedFactor": 1.0359961844321854,
+          "minGapFactor": 0.8589701432033343
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303855012",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;304465010",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_21",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 2152,
+        "origin": "htcaid:node;1436846915",
+        "destination": "htcaid:node;4251883794",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1436846915",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4700356951916398,
+          "reactionTimeFactor": 1.0988239725391586,
+          "speedFactor": 1.0698254939932998,
+          "minGapFactor": 1.1311005166261399
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1436846915",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4251883794",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_183",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 15494,
+        "origin": "htcaid:node;165461352",
+        "destination": "htcaid:node;303795954",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;165461352",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3206063193032755,
+          "reactionTimeFactor": 0.9280557433035714,
+          "speedFactor": 1.0004755988573062,
+          "minGapFactor": 1.075439998875451
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;165461352",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303795954",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_577",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 47606,
+        "origin": "htcaid:node;1379358578",
+        "destination": "htcaid:node;303862345",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1379358578",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.46407152561924725,
+          "reactionTimeFactor": 1.1390677055910894,
+          "speedFactor": 1.0147943906162422,
+          "minGapFactor": 1.0524308288952329
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1379358578",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303862345",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_786",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 66313,
+        "origin": "htcaid:node;60685821",
+        "destination": "htcaid:node;60624743",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60685821",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.42942303789418423,
+          "reactionTimeFactor": 0.916598041963996,
+          "speedFactor": 1.0932991405974457,
+          "minGapFactor": 0.8235250353251183
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60685821",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60624743",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_620",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 52347,
+        "origin": "htcaid:node;165485179",
+        "destination": "htcaid:node;1108068262",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;165485179",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7861261069766189,
+          "reactionTimeFactor": 0.8610808933612248,
+          "speedFactor": 1.0433532613674001,
+          "minGapFactor": 1.139227979578549
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;165485179",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1108068262",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_645",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 54346,
+        "origin": "htcaid:node;4293906839",
+        "destination": "htcaid:node;2538318352",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4293906839",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8606597444880844,
+          "reactionTimeFactor": 0.8900286933791858,
+          "speedFactor": 1.047145114917407,
+          "minGapFactor": 1.1692631419462916
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4293906839",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2538318352",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_910",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 77916,
+        "origin": "htcaid:node;60685407",
+        "destination": "htcaid:node;2396867132",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60685407",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.765623242463262,
+          "reactionTimeFactor": 1.1427115186676522,
+          "speedFactor": 1.0454790925857542,
+          "minGapFactor": 0.919640710903375
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60685407",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2396867132",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_356",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 30924,
+        "origin": "htcaid:node;2832750212",
+        "destination": "htcaid:node;434003356",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2832750212",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7890072971250877,
+          "reactionTimeFactor": 1.1649505491510577,
+          "speedFactor": 0.9318386450276721,
+          "minGapFactor": 0.8086263285515991
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2832750212",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;434003356",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_256",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 22065,
+        "origin": "htcaid:node;172017880",
+        "destination": "htcaid:node;457039825",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;172017880",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5353713438097096,
+          "reactionTimeFactor": 0.9689749886926969,
+          "speedFactor": 0.9946843236540471,
+          "minGapFactor": 0.9393228642872399
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;172017880",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457039825",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_391",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 33139,
+        "origin": "htcaid:node;292425135",
+        "destination": "htcaid:node;1952573112",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;292425135",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5348176288205226,
+          "reactionTimeFactor": 0.8287292883629931,
+          "speedFactor": 1.0453509200856685,
+          "minGapFactor": 0.9129456332217941
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;292425135",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1952573112",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_284",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 24350,
+        "origin": "htcaid:node;299610845",
+        "destination": "htcaid:node;2308808983",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;299610845",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8538382717747637,
+          "reactionTimeFactor": 1.0804434682615167,
+          "speedFactor": 1.0096020063665099,
+          "minGapFactor": 0.8389278266754767
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;299610845",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2308808983",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_138",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 11464,
+        "origin": "htcaid:node;305664255",
+        "destination": "htcaid:node;396151775",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;305664255",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.49405115136027244,
+          "reactionTimeFactor": 1.1165109860312452,
+          "speedFactor": 1.073171086318898,
+          "minGapFactor": 0.8216493214661172
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;305664255",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;396151775",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_491",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 41178,
+        "origin": "htcaid:node;1274825585",
+        "destination": "htcaid:node;301867995",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1274825585",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8607452573310772,
+          "reactionTimeFactor": 0.9216296030805483,
+          "speedFactor": 1.0309267970378615,
+          "minGapFactor": 1.030862963609579
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1274825585",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;301867995",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_829",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 70788,
+        "origin": "htcaid:node;4377403582",
+        "destination": "htcaid:node;1277760263",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4377403582",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5651302443263926,
+          "reactionTimeFactor": 0.9929766872259425,
+          "speedFactor": 1.0794436173808917,
+          "minGapFactor": 0.8839065379444851
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4377403582",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1277760263",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_638",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 54021,
+        "origin": "htcaid:node;1956669700",
+        "destination": "htcaid:node;1819653067",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1956669700",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7826150659399443,
+          "reactionTimeFactor": 0.8782620273092953,
+          "speedFactor": 1.0302475989000985,
+          "minGapFactor": 0.9448903105436489
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1956669700",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1819653067",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_251",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 21816,
+        "origin": "htcaid:node;2323782354",
+        "destination": "htcaid:node;2397408968",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2323782354",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.813684777508745,
+          "reactionTimeFactor": 0.8407791366527015,
+          "speedFactor": 1.0570998504586282,
+          "minGapFactor": 1.1433723036873502
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2323782354",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2397408968",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_235",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 20471,
+        "origin": "htcaid:node;60609956",
+        "destination": "htcaid:node;155430129",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60609956",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5259334755706704,
+          "reactionTimeFactor": 1.1930802179190847,
+          "speedFactor": 1.0358890531087819,
+          "minGapFactor": 0.8672891674220126
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60609956",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;155430129",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_110",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 9138,
+        "origin": "htcaid:node;1584985768",
+        "destination": "htcaid:node;177376095",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1584985768",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.33379890514633537,
+          "reactionTimeFactor": 0.9422335415308438,
+          "speedFactor": 0.9947751509839786,
+          "minGapFactor": 1.1780252786054377
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1584985768",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;177376095",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_259",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 22348,
+        "origin": "htcaid:node;3359512149",
+        "destination": "htcaid:node;457564838",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;3359512149",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.37040810725216605,
+          "reactionTimeFactor": 1.006174071580463,
+          "speedFactor": 0.9676971638104207,
+          "minGapFactor": 0.9735285758069961
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3359512149",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457564838",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_82",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 6898,
+        "origin": "htcaid:node;386255591",
+        "destination": "htcaid:node;303857124",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;386255591",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.38914099317925815,
+          "reactionTimeFactor": 1.0890201670050441,
+          "speedFactor": 0.9490002006798877,
+          "minGapFactor": 0.8475210167195064
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;386255591",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303857124",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_993",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 85095,
+        "origin": "htcaid:node;301867995",
+        "destination": "htcaid:node;2140090155",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;301867995",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5379868782548274,
+          "reactionTimeFactor": 0.9210758438348297,
+          "speedFactor": 1.0192310958423545,
+          "minGapFactor": 0.8689948012018114
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;301867995",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2140090155",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_404",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 34091,
+        "origin": "htcaid:node;4252392664",
+        "destination": "htcaid:node;1046116392",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4252392664",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7471201406808421,
+          "reactionTimeFactor": 1.1103399237745846,
+          "speedFactor": 1.0982327920128783,
+          "minGapFactor": 1.068294357235786
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4252392664",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1046116392",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_833",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 70947,
+        "origin": "htcaid:node;2323782354",
+        "destination": "htcaid:node;303788550",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2323782354",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3537666892009861,
+          "reactionTimeFactor": 0.9854695107486718,
+          "speedFactor": 1.0636390308295354,
+          "minGapFactor": 0.9528403677797795
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2323782354",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303788550",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_214",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 18433,
+        "origin": "htcaid:node;2397409020",
+        "destination": "htcaid:node;457051366",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2397409020",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6794001086944139,
+          "reactionTimeFactor": 0.9780473124007077,
+          "speedFactor": 0.9023204835057265,
+          "minGapFactor": 0.8466510536749273
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2397409020",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457051366",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_562",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 46435,
+        "origin": "htcaid:node;931240960",
+        "destination": "htcaid:node;1363061399",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;931240960",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3732309378201593,
+          "reactionTimeFactor": 1.0565637310409313,
+          "speedFactor": 1.081695690020544,
+          "minGapFactor": 0.8899740160197817
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;931240960",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1363061399",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_341",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 29547,
+        "origin": "htcaid:node;60624525",
+        "destination": "htcaid:node;4242082090",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60624525",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6521102945788886,
+          "reactionTimeFactor": 1.1949397342581467,
+          "speedFactor": 0.9958996732141447,
+          "minGapFactor": 1.077490340904472
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60624525",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4242082090",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_799",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 67625,
+        "origin": "htcaid:node;440437772",
+        "destination": "htcaid:node;467763865",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;440437772",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.356731942866789,
+          "reactionTimeFactor": 1.037151602450301,
+          "speedFactor": 0.9767919756236546,
+          "minGapFactor": 1.1999816764730116
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;440437772",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;467763865",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_516",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 42853,
+        "origin": "htcaid:node;1955005658",
+        "destination": "htcaid:node;316544903",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1955005658",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7216421906664512,
+          "reactionTimeFactor": 0.9193453388554547,
+          "speedFactor": 0.9250472874931116,
+          "minGapFactor": 0.9300915898784944
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1955005658",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;316544903",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_950",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 80856,
+        "origin": "htcaid:node;313137587",
+        "destination": "htcaid:node;142774898",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;313137587",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7282608877519392,
+          "reactionTimeFactor": 1.1448841953135276,
+          "speedFactor": 1.007502213395968,
+          "minGapFactor": 0.9621322060014842
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;313137587",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142774898",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_112",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 9243,
+        "origin": "htcaid:node;246651696",
+        "destination": "htcaid:node;445043624",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;246651696",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7204451457548725,
+          "reactionTimeFactor": 0.9575186179758911,
+          "speedFactor": 1.0634925686365617,
+          "minGapFactor": 1.113389822280992
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;246651696",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;445043624",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_777",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 65924,
+        "origin": "htcaid:node;4760868533",
+        "destination": "htcaid:node;1644767780",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4760868533",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6180525965477375,
+          "reactionTimeFactor": 0.8255726650920544,
+          "speedFactor": 1.0674287879239344,
+          "minGapFactor": 1.0155927142910632
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4760868533",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1644767780",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_135",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 11070,
+        "origin": "htcaid:node;1117699233",
+        "destination": "htcaid:node;2082358176",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1117699233",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7912965631040977,
+          "reactionTimeFactor": 1.0606802646043578,
+          "speedFactor": 1.050701643158478,
+          "minGapFactor": 0.8829855083396466
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1117699233",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2082358176",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_437",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 36208,
+        "origin": "htcaid:node;459347708",
+        "destination": "htcaid:node;1620105400",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;459347708",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6951494286847217,
+          "reactionTimeFactor": 0.8469304268975979,
+          "speedFactor": 1.0724006885276776,
+          "minGapFactor": 1.0780863558648155
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;459347708",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1620105400",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_957",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 81572,
+        "origin": "htcaid:node;155431666",
+        "destination": "htcaid:node;1393378957",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;155431666",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3031944016578276,
+          "reactionTimeFactor": 0.9788931512847929,
+          "speedFactor": 0.9628592165157874,
+          "minGapFactor": 0.8156572643781185
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;155431666",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1393378957",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_357",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 30994,
+        "origin": "htcaid:node;5045017739",
+        "destination": "htcaid:node;4187978095",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;5045017739",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6450486177484538,
+          "reactionTimeFactor": 1.061056200150282,
+          "speedFactor": 0.9175641858018878,
+          "minGapFactor": 0.9027041937454048
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;5045017739",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4187978095",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_888",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 75928,
+        "origin": "htcaid:node;3354630816",
+        "destination": "htcaid:node;5357752145",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;3354630816",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7518412382975457,
+          "reactionTimeFactor": 0.8338441311714901,
+          "speedFactor": 0.924943424025399,
+          "minGapFactor": 0.9194311689244498
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3354630816",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5357752145",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_324",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 28034,
+        "origin": "htcaid:node;2006965210",
+        "destination": "htcaid:node;302284555",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2006965210",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.8797656992573759,
+          "reactionTimeFactor": 0.8686412794084887,
+          "speedFactor": 1.0954206197637744,
+          "minGapFactor": 1.0632637470963167
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2006965210",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;302284555",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_918",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 78508,
+        "origin": "htcaid:node;760171172",
+        "destination": "htcaid:node;5005959052",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;760171172",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4490022508826851,
+          "reactionTimeFactor": 0.8184665052479941,
+          "speedFactor": 1.0891589187375355,
+          "minGapFactor": 1.1618478053295667
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;760171172",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;5005959052",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_79",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 6753,
+        "origin": "htcaid:node;29039402",
+        "destination": "htcaid:node;1943676002",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;29039402",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4760380968115817,
+          "reactionTimeFactor": 1.0136409593967208,
+          "speedFactor": 0.9279710092798941,
+          "minGapFactor": 0.996177130028908
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;29039402",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;1943676002",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_618",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 52305,
+        "origin": "htcaid:node;2543921338",
+        "destination": "htcaid:node;60624576",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2543921338",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4877616294741612,
+          "reactionTimeFactor": 1.1643132626593693,
+          "speedFactor": 1.0993594323875266,
+          "minGapFactor": 1.0424688534087225
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2543921338",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60624576",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_199",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 16337,
+        "origin": "htcaid:node;60624580",
+        "destination": "htcaid:node;2400518763",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;60624580",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6063542077385164,
+          "reactionTimeFactor": 1.0751721236080203,
+          "speedFactor": 1.0325233993228724,
+          "minGapFactor": 0.817894221058787
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60624580",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2400518763",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_339",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 29453,
+        "origin": "htcaid:node;2537137854",
+        "destination": "htcaid:node;457046626",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2537137854",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.32204036945733566,
+          "reactionTimeFactor": 0.8566669324031747,
+          "speedFactor": 1.0712170345077334,
+          "minGapFactor": 0.8860851763410059
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2537137854",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;457046626",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_168",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 13792,
+        "origin": "htcaid:node;2468335046",
+        "destination": "htcaid:node;308237773",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2468335046",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3805248034096258,
+          "reactionTimeFactor": 1.020828250694394,
+          "speedFactor": 1.0183566277609246,
+          "minGapFactor": 0.9109582875028017
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2468335046",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;308237773",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_98",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 8025,
+        "origin": "htcaid:node;303859797",
+        "destination": "htcaid:node;466909106",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;303859797",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7374626425906096,
+          "reactionTimeFactor": 0.96880600474584,
+          "speedFactor": 1.0099697221144548,
+          "minGapFactor": 0.9042697768860528
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303859797",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;466909106",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_277",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 23790,
+        "origin": "htcaid:node;2400595419",
+        "destination": "htcaid:node;60624580",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2400595419",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6898613642319735,
+          "reactionTimeFactor": 0.8653277498485428,
+          "speedFactor": 0.9912135497976156,
+          "minGapFactor": 1.1778961934273822
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2400595419",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;60624580",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_319",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 27596,
+        "origin": "htcaid:node;1870149339",
+        "destination": "htcaid:node;4170137966",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1870149339",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7059154022872896,
+          "reactionTimeFactor": 1.1760797312692266,
+          "speedFactor": 0.9286487900255685,
+          "minGapFactor": 0.8815051587538661
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1870149339",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;4170137966",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_352",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 30423,
+        "origin": "htcaid:node;440437758",
+        "destination": "htcaid:node;301485054",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;440437758",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6777409213751923,
+          "reactionTimeFactor": 0.9077598750452973,
+          "speedFactor": 1.0266239683282419,
+          "minGapFactor": 1.0582284903306585
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;440437758",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;301485054",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_696",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 59117,
+        "origin": "htcaid:node;2441819577",
+        "destination": "htcaid:node;303561660",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;2441819577",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7286669807380837,
+          "reactionTimeFactor": 1.025456862620467,
+          "speedFactor": 1.0295542222567025,
+          "minGapFactor": 1.004570977702572
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2441819577",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;303561660",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_202",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 16995,
+        "origin": "htcaid:node;3529128128",
+        "destination": "htcaid:node;142808169",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;3529128128",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.39842584320762664,
+          "reactionTimeFactor": 1.128627121905957,
+          "speedFactor": 0.9632720678932205,
+          "minGapFactor": 1.1151136262226913
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;3529128128",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142808169",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_331",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 28575,
+        "origin": "htcaid:node;4511170989",
+        "destination": "htcaid:node;466860647",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4511170989",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.5273651407327199,
+          "reactionTimeFactor": 1.1856070804703451,
+          "speedFactor": 0.9494995371662447,
+          "minGapFactor": 0.9080500934261716
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4511170989",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;466860647",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_512",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 42518,
+        "origin": "htcaid:node;1277760506",
+        "destination": "htcaid:node;2395197773",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1277760506",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.6188820992856776,
+          "reactionTimeFactor": 1.0735916988503003,
+          "speedFactor": 0.9813562528281798,
+          "minGapFactor": 0.9317430038457438
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1277760506",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2395197773",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_632",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 53180,
+        "origin": "htcaid:node;389063105",
+        "destination": "htcaid:node;467960309",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;389063105",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.3533844949133075,
+          "reactionTimeFactor": 1.1636981556818407,
+          "speedFactor": 1.055614190210779,
+          "minGapFactor": 0.8585318531657915
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;389063105",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;467960309",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_734",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 62457,
+        "origin": "htcaid:node;1277760880",
+        "destination": "htcaid:node;462042983",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1277760880",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.7788584197719342,
+          "reactionTimeFactor": 0.9094587147529821,
+          "speedFactor": 0.9195893710511267,
+          "minGapFactor": 1.1917940854095623
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1277760880",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;462042983",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_766",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 65329,
+        "origin": "htcaid:node;246651697",
+        "destination": "htcaid:node;567547315",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;246651697",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4333353432057754,
+          "reactionTimeFactor": 1.1807131442576728,
+          "speedFactor": 1.0565467237318098,
+          "minGapFactor": 0.8494013970367056
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;246651697",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;567547315",
+        "resourceId": "htcrid:node;5",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_781",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 65971,
+        "origin": "htcaid:node;4257988434",
+        "destination": "htcaid:node;296286010",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;4257988434",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.615885404027972,
+          "reactionTimeFactor": 1.1502047696904825,
+          "speedFactor": 1.0177654099782456,
+          "minGapFactor": 1.1227192654896336
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4257988434",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;296286010",
+        "resourceId": "htcrid:node;3",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_666",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 55944,
+        "origin": "htcaid:node;1602639494",
+        "destination": "htcaid:node;2615441847",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;1602639494",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.357324334363461,
+          "reactionTimeFactor": 0.9395600846423373,
+          "speedFactor": 1.0144316149732446,
+          "minGapFactor": 0.9127986894593901
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;1602639494",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;2615441847",
+        "resourceId": "htcrid:node;2",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  },
+  {
+    "id": "htcaid:car;trip_204",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 17283,
+        "origin": "htcaid:node;432482518",
+        "destination": "htcaid:node;142826761",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Start",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;432482518",
+        "distance": 0.0,
+        "eventCount": 0,
+        "driverAttributes": {
+          "aggressiveness": 0.4626323801612866,
+          "reactionTimeFactor": 0.8396264609592267,
+          "speedFactor": 0.9095926570456436,
+          "minGapFactor": 0.9271985559061476
+        },
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;432482518",
+        "resourceId": "htcrid:node;4",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      },
+      "to_node": {
+        "id": "htcaid:node;142826761",
+        "resourceId": "htcrid:node;1",
+        "classType": "mobility.actor.Node",
+        "actorType": "LoadBalancedDistributed"
+      }
+    }
+  }
+]

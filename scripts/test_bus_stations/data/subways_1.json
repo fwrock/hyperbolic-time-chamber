@@ -1,0 +1,150 @@
+[
+  {
+    "id": "htcaid:subway;line_0_train_0",
+    "typeActor": "hybrid.actor.Subway",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayState",
+      "content": {
+        "startTick": 0,
+        "capacity": 300,
+        "numberOfPorts": 4,
+        "velocity": 22.22,
+        "distance": 0.0,
+        "boardingTimeByPassenger": 1.5,
+        "stopTime": 30,
+        "subwayStations": {
+          "htcaid:subwaystation;station_160": "htcaid:node;5257881638",
+          "htcaid:subwaystation;station_2": "htcaid:node;457593067",
+          "htcaid:subwaystation;station_168": "htcaid:node;457593172",
+          "htcaid:subwaystation;station_106": "htcaid:node;457593200",
+          "htcaid:subwaystation;station_12": "htcaid:node;1833396362"
+        },
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "origin": "htcaid:node;5257881638",
+        "destination": "htcaid:node;1833396362",
+        "passengers": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "currentPathPosition": 0,
+        "bestCost": 0.0,
+        "line": "line_1",
+        "actorType": "Subway",
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:subway;line_0_train_1",
+    "typeActor": "hybrid.actor.Subway",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayState",
+      "content": {
+        "startTick": 150,
+        "capacity": 300,
+        "numberOfPorts": 4,
+        "velocity": 22.22,
+        "distance": 0.0,
+        "boardingTimeByPassenger": 1.5,
+        "stopTime": 30,
+        "subwayStations": {
+          "htcaid:subwaystation;station_160": "htcaid:node;5257881638",
+          "htcaid:subwaystation;station_2": "htcaid:node;457593067",
+          "htcaid:subwaystation;station_168": "htcaid:node;457593172",
+          "htcaid:subwaystation;station_106": "htcaid:node;457593200",
+          "htcaid:subwaystation;station_12": "htcaid:node;1833396362"
+        },
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "origin": "htcaid:node;5257881638",
+        "destination": "htcaid:node;1833396362",
+        "passengers": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "currentPathPosition": 0,
+        "bestCost": 0.0,
+        "line": "line_1",
+        "actorType": "Subway",
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:subway;line_1_train_0",
+    "typeActor": "hybrid.actor.Subway",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayState",
+      "content": {
+        "startTick": 50,
+        "capacity": 300,
+        "numberOfPorts": 4,
+        "velocity": 22.22,
+        "distance": 0.0,
+        "boardingTimeByPassenger": 1.5,
+        "stopTime": 30,
+        "subwayStations": {
+          "htcaid:subwaystation;station_28": "htcaid:node;176010867",
+          "htcaid:subwaystation;station_102": "htcaid:node;176011400",
+          "htcaid:subwaystation;station_201": "htcaid:node;60641028",
+          "htcaid:subwaystation;station_171": "htcaid:node;60641305",
+          "htcaid:subwaystation;station_150": "htcaid:node;2451555632"
+        },
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "origin": "htcaid:node;176010867",
+        "destination": "htcaid:node;2451555632",
+        "passengers": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "currentPathPosition": 0,
+        "bestCost": 0.0,
+        "line": "line_2",
+        "actorType": "Subway",
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:subway;line_1_train_1",
+    "typeActor": "hybrid.actor.Subway",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayState",
+      "content": {
+        "startTick": 200,
+        "capacity": 300,
+        "numberOfPorts": 4,
+        "velocity": 22.22,
+        "distance": 0.0,
+        "boardingTimeByPassenger": 1.5,
+        "stopTime": 30,
+        "subwayStations": {
+          "htcaid:subwaystation;station_28": "htcaid:node;176010867",
+          "htcaid:subwaystation;station_102": "htcaid:node;176011400",
+          "htcaid:subwaystation;station_201": "htcaid:node;60641028",
+          "htcaid:subwaystation;station_171": "htcaid:node;60641305",
+          "htcaid:subwaystation;station_150": "htcaid:node;2451555632"
+        },
+        "countUnloadPassenger": 0,
+        "countUnloadReceived": 0,
+        "origin": "htcaid:node;176010867",
+        "destination": "htcaid:node;2451555632",
+        "passengers": {},
+        "bestRoute": null,
+        "currentPath": null,
+        "currentPathPosition": 0,
+        "bestCost": 0.0,
+        "line": "line_2",
+        "actorType": "Subway",
+        "status": "Start",
+        "scheduleOnTimeManager": true
+      }
+    },
+    "dependencies": {}
+  }
+]

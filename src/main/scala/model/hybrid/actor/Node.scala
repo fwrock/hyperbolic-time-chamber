@@ -18,7 +18,6 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.hybrid.entity.event.data.link.LinkConnectionsData
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
@@ -41,7 +40,6 @@ class Node(
       case d: RequestSignalStateData    => handleRequestSignalState(event, d)
       case d: TrafficSignalChangeStatusData =>
         handleReceiveSignalChangeStatus(event, d)
-      case d: LinkConnectionsData => handleLinkConnections(event, d)
       case _ =>
         logWarn("Event not handled")
     }
@@ -56,13 +54,6 @@ class Node(
     data.lines.foreach {
       line =>
         state.subwayStations.put(line, event.toIdentity)
-    }
-
-  private def handleLinkConnections(event: ActorInteractionEvent, data: LinkConnectionsData): Unit =
-    if (data.to.id == getEntityId) {
-      state.connections.put(event.actorRefId, data.from)
-    } else {
-      state.connections.put(event.actorRefId, data.to)
     }
 
   private def handleRequestSignalState(

@@ -150,14 +150,20 @@ class SubwayStation(
     line: String
   ): mutable.Queue[(String, String)] = {
     val route = mutable.Queue[(String, String)]()
-    val lineRoute = state.linesRoute(line)
-    for (i <- 0 until lineRoute.size - 1)
-      route.enqueue(
-        (
-          lineRoute(i)._2,
-          lineRoute(i)._1.nodeId
-        )
-      )
+    val lineRoute = state.linesRoute.get(line)
+    
+    lineRoute match {
+      case Some(routeQueue) =>
+        // linesRoute format: Queue[(SubwayStationNode, rail_link_id)]
+        // Output format: Queue[(rail_link_id, node_id)]
+        routeQueue.foreach { case (stationNode, railLinkId) =>
+          route.enqueue((railLinkId, stationNode.nodeId))
+        }
+        logInfo(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
+      case None =>
+        logWarn(s"No route found for line $line")
+    }
+    
     route
   }
 }

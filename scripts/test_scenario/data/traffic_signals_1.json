@@ -1,0 +1,5197 @@
+[
+  {
+    "id": "htcaid:signal;signal_0",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 19,
+        "nodes": [
+          "htcaid:node;142806215"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3434"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;972"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3434": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;972": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142806215",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_1",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 15,
+        "nodes": [
+          "htcaid:node;2158445324"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4610"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7396"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4610": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7396": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2158445324",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_2",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 22,
+        "nodes": [
+          "htcaid:node;466909274"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3717"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5081"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3717": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5081": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;466909274",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_3",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 18,
+        "nodes": [
+          "htcaid:node;567714514"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3648"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5667"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3648": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5667": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;567714514",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_4",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 10,
+        "nodes": [
+          "htcaid:node;1393378375"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7446"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7664"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;7446": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7664": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1393378375",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_5",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 15,
+        "nodes": [
+          "htcaid:node;40257931"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1346"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1367"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1346": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1367": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;40257931",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_6",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 9,
+        "nodes": [
+          "htcaid:node;5029814537"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2033"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4698"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2033": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4698": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;5029814537",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_7",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 1,
+        "nodes": [
+          "htcaid:node;60641414"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2516"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4272"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2516": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4272": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60641414",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_8",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 1,
+        "nodes": [
+          "htcaid:node;2454873958"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;292",
+              "htcaid:link;447"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;298"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;292": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;298": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;447": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2454873958",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_9",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;142808164"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5164"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5167"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5164": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5167": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142808164",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_10",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;1393378874"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2847"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7237"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2847": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7237": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1393378874",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_11",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 25,
+        "nodes": [
+          "htcaid:node;748729280"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;184"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;191"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;184": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;191": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;748729280",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_12",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 27,
+        "nodes": [
+          "htcaid:node;466909279"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5065",
+              "htcaid:link;5073"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5068"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5065": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5068": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5073": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;466909279",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_13",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;467725349"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1011"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1831"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1011": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1831": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;467725349",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_14",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;409500733"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2873"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7231"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2873": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7231": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;409500733",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_15",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 17,
+        "nodes": [
+          "htcaid:node;165463204"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4251"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4892"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4251": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4892": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;165463204",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_16",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 13,
+        "nodes": [
+          "htcaid:node;60641200"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6484"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6532"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6484": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6532": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60641200",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_17",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 24,
+        "nodes": [
+          "htcaid:node;1686024131"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4984"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;6355"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4984": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6355": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1686024131",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_18",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 21,
+        "nodes": [
+          "htcaid:node;1046116392"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1940"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2305"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1940": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2305": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1046116392",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_19",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 19,
+        "nodes": [
+          "htcaid:node;577320313"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2245"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;694"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2245": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;694": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;577320313",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_20",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 20,
+        "nodes": [
+          "htcaid:node;432481045"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1611",
+              "htcaid:link;4370"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1705"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1611": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1705": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4370": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;432481045",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_21",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 13,
+        "nodes": [
+          "htcaid:node;2454667285"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4826"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7019"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4826": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7019": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2454667285",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_22",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 20,
+        "nodes": [
+          "htcaid:node;4261834548"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4046"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7705"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4046": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7705": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4261834548",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_23",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 19,
+        "nodes": [
+          "htcaid:node;1583334160"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3023"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4940"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3023": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4940": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1583334160",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_24",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 18,
+        "nodes": [
+          "htcaid:node;440437734"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2021"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6495"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2021": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6495": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;440437734",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_25",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 27,
+        "nodes": [
+          "htcaid:node;1273989837"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1915"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1928"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1915": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1928": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1273989837",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_26",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 29,
+        "nodes": [
+          "htcaid:node;5046882943"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3932",
+              "htcaid:link;4262"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4259"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3932": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4259": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4262": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;5046882943",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_27",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 5,
+        "nodes": [
+          "htcaid:node;142842350"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3892"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5973"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3892": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5973": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142842350",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_28",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;413363225"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6199"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6260"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6199": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6260": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;413363225",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_29",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 18,
+        "nodes": [
+          "htcaid:node;1373435363"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2754"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;930"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2754": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;930": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1373435363",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_30",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;856727250"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1336"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1353"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1336": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1353": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;856727250",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_31",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 4,
+        "nodes": [
+          "htcaid:node;1586483352"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5486"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5607"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5486": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5607": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1586483352",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_32",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 7,
+        "nodes": [
+          "htcaid:node;459347702"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2246",
+              "htcaid:link;6213"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6210"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2246": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6210": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6213": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;459347702",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_33",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 8,
+        "nodes": [
+          "htcaid:node;302564035"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;6770"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;6771"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6770": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6771": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;302564035",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_34",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 26,
+        "nodes": [
+          "htcaid:node;1050228187"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6290"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6752"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6290": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6752": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1050228187",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_35",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 4,
+        "nodes": [
+          "htcaid:node;856727276"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4392"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5760"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4392": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5760": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;856727276",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_36",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 29,
+        "nodes": [
+          "htcaid:node;60685775"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6329"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7154"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6329": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7154": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60685775",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_37",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 22,
+        "nodes": [
+          "htcaid:node;459347687"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2080"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2359"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2080": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2359": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;459347687",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_38",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 1,
+        "nodes": [
+          "htcaid:node;917144410"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;151",
+              "htcaid:link;1575"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;154"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;151": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;154": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1575": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;917144410",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_39",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 10,
+        "nodes": [
+          "htcaid:node;1428116775"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2334"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2340"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2334": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2340": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1428116775",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_40",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 9,
+        "nodes": [
+          "htcaid:node;299278885"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6863"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6883"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6863": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6883": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;299278885",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_41",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 5,
+        "nodes": [
+          "htcaid:node;3297755168"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1804"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2205"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1804": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2205": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3297755168",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_42",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 16,
+        "nodes": [
+          "htcaid:node;4167937343"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3499"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3576"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3499": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;3576": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4167937343",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_43",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 7,
+        "nodes": [
+          "htcaid:node;1945309890"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5299"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;7494"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5299": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7494": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1945309890",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_44",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 21,
+        "nodes": [
+          "htcaid:node;151272834"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1082"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2200"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1082": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2200": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;151272834",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_45",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;165473564"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1214"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7890"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1214": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7890": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;165473564",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_46",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;440421660"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3007",
+              "htcaid:link;7619"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7389"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3007": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7389": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7619": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;440421660",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_47",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 6,
+        "nodes": [
+          "htcaid:node;30472356"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2328"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2971"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2328": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2971": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;30472356",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_48",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 8,
+        "nodes": [
+          "htcaid:node;2549366568"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3199"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;511"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3199": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;511": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2549366568",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_49",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 17,
+        "nodes": [
+          "htcaid:node;457566715"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5974"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6953"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5974": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6953": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;457566715",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_50",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 2,
+        "nodes": [
+          "htcaid:node;2395197773"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5044"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5390"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5044": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5390": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2395197773",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_51",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 16,
+        "nodes": [
+          "htcaid:node;457039564"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1669",
+              "htcaid:link;5764"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1672"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1669": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1672": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5764": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;457039564",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_52",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 0,
+        "nodes": [
+          "htcaid:node;184038866"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2398"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5182"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2398": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5182": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;184038866",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_53",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 3,
+        "nodes": [
+          "htcaid:node;1373435350"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2611"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3419"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2611": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;3419": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1373435350",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_54",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 20,
+        "nodes": [
+          "htcaid:node;303863290"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1358",
+              "htcaid:link;7859"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1361"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1358": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1361": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7859": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303863290",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_55",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 15,
+        "nodes": [
+          "htcaid:node;1590315626"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5520"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7784"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5520": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7784": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1590315626",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_56",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 19,
+        "nodes": [
+          "htcaid:node;3312393285"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4448"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6089"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4448": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6089": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3312393285",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_57",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 24,
+        "nodes": [
+          "htcaid:node;165461352"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4432",
+              "htcaid:link;6608"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4861"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4432": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4861": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6608": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;165461352",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_58",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 21,
+        "nodes": [
+          "htcaid:node;1819619973"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4138"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;6757"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4138": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6757": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1819619973",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_59",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 27,
+        "nodes": [
+          "htcaid:node;4823908406"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;301",
+              "htcaid:link;4312"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;304"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;301": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;304": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4312": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4823908406",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_60",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 6,
+        "nodes": [
+          "htcaid:node;303561515"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1704"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;4037"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1704": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4037": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303561515",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_61",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 17,
+        "nodes": [
+          "htcaid:node;303788451"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3745",
+              "htcaid:link;5087"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;377"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3745": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;377": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5087": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303788451",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_62",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;248231059"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2427"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5038"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2427": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5038": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;248231059",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_63",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 5,
+        "nodes": [
+          "htcaid:node;172021638"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;7258",
+              "htcaid:link;7876"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;7866"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;7258": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7866": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7876": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;172021638",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_64",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 15,
+        "nodes": [
+          "htcaid:node;2140728079"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3718"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5273"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3718": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5273": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2140728079",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_65",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 0,
+        "nodes": [
+          "htcaid:node;457593233"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1933"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1946"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1933": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;1946": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;457593233",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_66",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 24,
+        "nodes": [
+          "htcaid:node;260685848"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3033"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;701"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3033": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;701": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;260685848",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_67",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 19,
+        "nodes": [
+          "htcaid:node;396151766"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3059",
+              "htcaid:link;5887"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5884"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3059": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5884": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5887": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;396151766",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_68",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 7,
+        "nodes": [
+          "htcaid:node;4823908400"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;269"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5315"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;269": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5315": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4823908400",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_69",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 14,
+        "nodes": [
+          "htcaid:node;453568009"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;685"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;7148"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;685": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7148": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;453568009",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_70",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 28,
+        "nodes": [
+          "htcaid:node;140806268"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1936"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;675"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1936": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;675": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;140806268",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_71",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 26,
+        "nodes": [
+          "htcaid:node;1273989870"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3355"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;6718"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3355": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6718": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1273989870",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_72",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 4,
+        "nodes": [
+          "htcaid:node;303562378"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3399"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7612"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3399": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7612": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303562378",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_73",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 22,
+        "nodes": [
+          "htcaid:node;1273989831"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3354"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6733"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3354": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6733": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1273989831",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_74",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 4,
+        "nodes": [
+          "htcaid:node;4229160598"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2442"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;472"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2442": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;472": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4229160598",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_75",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 7,
+        "nodes": [
+          "htcaid:node;1953466357"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4410",
+              "htcaid:link;5896"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;4412"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4410": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4412": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5896": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1953466357",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_76",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 22,
+        "nodes": [
+          "htcaid:node;176021082"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;331"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;7722"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;331": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7722": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;176021082",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_77",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 3,
+        "nodes": [
+          "htcaid:node;5043856561"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1735"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2207"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1735": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2207": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;5043856561",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_78",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 6,
+        "nodes": [
+          "htcaid:node;60609796"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2463"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4396"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2463": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4396": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60609796",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_79",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;444959847"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5334"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7500"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5334": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7500": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;444959847",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_80",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 15,
+        "nodes": [
+          "htcaid:node;3283856023"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;542",
+              "htcaid:link;7509"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;5592"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;542": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5592": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7509": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3283856023",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_81",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 28,
+        "nodes": [
+          "htcaid:node;387903283"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3073"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;3096"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3073": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;3096": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;387903283",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_82",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 10,
+        "nodes": [
+          "htcaid:node;2006965186"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3370"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;3426"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3370": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;3426": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2006965186",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_83",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 5,
+        "nodes": [
+          "htcaid:node;302284660"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6774"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6776"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6774": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6776": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;302284660",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_84",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 0,
+        "nodes": [
+          "htcaid:node;437564382"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2239"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;7001"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2239": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7001": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;437564382",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_85",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 6,
+        "nodes": [
+          "htcaid:node;459347581"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6305"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6308"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6305": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6308": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;459347581",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_86",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 11,
+        "nodes": [
+          "htcaid:node;1481825368"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;459"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;5398"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;459": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5398": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1481825368",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_87",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 0,
+        "nodes": [
+          "htcaid:node;466860654"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;3164"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;7609"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;3164": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7609": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;466860654",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_88",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 22,
+        "nodes": [
+          "htcaid:node;1944745418"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1457"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5831"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1457": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5831": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1944745418",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_89",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 27,
+        "nodes": [
+          "htcaid:node;467944359"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;5197"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6555"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;5197": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6555": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;467944359",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_90",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 10,
+        "nodes": [
+          "htcaid:node;303561624"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4179",
+              "htcaid:link;7566"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6412"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;4179": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6412": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7566": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303561624",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_91",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 23,
+        "nodes": [
+          "htcaid:node;142808170"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2415",
+              "htcaid:link;5927"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;2418"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2415": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2418": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;5927": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142808170",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_92",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 1,
+        "nodes": [
+          "htcaid:node;452096536"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;1795"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4705"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1795": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4705": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;452096536",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_93",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 25,
+        "nodes": [
+          "htcaid:node;301599533"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;1224"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;543"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1224": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;543": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;301599533",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_94",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 5,
+        "nodes": [
+          "htcaid:node;1685127374"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6348"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6354"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6348": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6354": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1685127374",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_95",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 28,
+        "nodes": [
+          "htcaid:node;60624605"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;2466"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;4623"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;2466": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;4623": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60624605",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_96",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 1,
+        "nodes": [
+          "htcaid:node;4561913704"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6631"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6751"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6631": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6751": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4561913704",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_97",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 90,
+        "offset": 27,
+        "nodes": [
+          "htcaid:node;4265779806"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6685",
+              "htcaid:link;7188"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 45,
+            "greenLinks": [
+              "htcaid:link;6693"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6685": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6693": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;7188": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4265779806",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_98",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 120,
+        "offset": 17,
+        "nodes": [
+          "htcaid:node;64095102"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6138"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 60,
+            "greenLinks": [
+              "htcaid:link;6560"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;6138": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;6560": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;64095102",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:signal;signal_99",
+    "typeActor": "hybrid.actor.TrafficSignal",
+    "data": {
+      "dataType": "model.hybrid.entity.state.TrafficSignalState",
+      "content": {
+        "startTick": 0,
+        "cycleDuration": 60,
+        "offset": 16,
+        "nodes": [
+          "htcaid:node;60641387"
+        ],
+        "phases": [
+          {
+            "phaseId": 0,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;1405"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          },
+          {
+            "phaseId": 1,
+            "duration": 30,
+            "greenLinks": [
+              "htcaid:link;2886"
+            ],
+            "yellowDuration": 3,
+            "allRedDuration": 2
+          }
+        ],
+        "signalStates": {
+          "htcaid:link;1405": {
+            "state": "Red",
+            "timeInState": 0
+          },
+          "htcaid:link;2886": {
+            "state": "Red",
+            "timeInState": 0
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60641387",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

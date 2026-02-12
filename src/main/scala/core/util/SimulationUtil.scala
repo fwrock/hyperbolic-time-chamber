@@ -20,7 +20,6 @@ object SimulationUtil {
   def loadSimulationConfig(configuration: String = null): Simulation = {
     if (configuration != null) {
       val content = readJsonFile(configuration)
-      // Try to parse as wrapped format first, then fall back to direct format
       try {
         fromJson[SimulationWrapper](content).simulation
       } catch {

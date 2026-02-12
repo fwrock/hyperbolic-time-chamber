@@ -1,0 +1,3782 @@
+[
+  {
+    "id": "htcaid:node;1379439611",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347495.1841890225",
+        "longitude": "-2855574.70179711",
+        "links": [
+          "htcaid:link;1755",
+          "htcaid:link;1966",
+          "htcaid:link;6925"
+        ],
+        "connections": {
+          "htcaid:link;1755": {
+            "id": "htcaid:node;2050908619",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1966": {
+            "id": "htcaid:node;29691530",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6925": {
+            "id": "htcaid:node;29691532",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439777",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347646.48924288",
+        "longitude": "-2855933.9588758573",
+        "links": [
+          "htcaid:link;1866",
+          "htcaid:link;7100"
+        ],
+        "connections": {
+          "htcaid:link;1866": {
+            "id": "htcaid:node;5373816277",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7100": {
+            "id": "htcaid:node;2050908620",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439827",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347638.779948791",
+        "longitude": "-2855981.6023515756",
+        "links": [
+          "htcaid:link;3372",
+          "htcaid:link;86"
+        ],
+        "connections": {
+          "htcaid:link;3372": {
+            "id": "htcaid:node;5497274160",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;86": {
+            "id": "htcaid:node;4170137976",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439895",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346345.744037425",
+        "longitude": "-2856098.039348632",
+        "links": [
+          "htcaid:link;1840",
+          "htcaid:link;1843"
+        ],
+        "connections": {
+          "htcaid:link;1840": {
+            "id": "htcaid:node;3354417162",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1843": {
+            "id": "htcaid:node;3354417161",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439902",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346363.989967368",
+        "longitude": "-2856123.7819028907",
+        "links": [
+          "htcaid:link;1853",
+          "htcaid:link;5608"
+        ],
+        "connections": {
+          "htcaid:link;1853": {
+            "id": "htcaid:node;1379439910",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5608": {
+            "id": "htcaid:node;302284797",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439909",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346297.826074953",
+        "longitude": "-2856163.2422829294",
+        "links": [
+          "htcaid:link;1854",
+          "htcaid:link;1856"
+        ],
+        "connections": {
+          "htcaid:link;1854": {
+            "id": "htcaid:node;1379439911",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1856": {
+            "id": "htcaid:node;3354417144",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439910",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346346.879979454",
+        "longitude": "-2856167.662795242",
+        "links": [
+          "htcaid:link;1853",
+          "htcaid:link;4095",
+          "htcaid:link;6875"
+        ],
+        "connections": {
+          "htcaid:link;1853": {
+            "id": "htcaid:node;1379439902",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4095": {
+            "id": "htcaid:node;3354630822",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6875": {
+            "id": "htcaid:node;302284698",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439911",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346338.709260678",
+        "longitude": "-2856177.6840380025",
+        "links": [
+          "htcaid:link;1828",
+          "htcaid:link;1854",
+          "htcaid:link;5866"
+        ],
+        "connections": {
+          "htcaid:link;1828": {
+            "id": "htcaid:node;3354417142",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1854": {
+            "id": "htcaid:node;1379439909",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5866": {
+            "id": "htcaid:node;3312393279",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439927",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343785.45692373",
+        "longitude": "-2856211.228130816",
+        "links": [
+          "htcaid:link;1862",
+          "htcaid:link;1941",
+          "htcaid:link;1942",
+          "htcaid:link;1956"
+        ],
+        "connections": {
+          "htcaid:link;1862": {
+            "id": "htcaid:node;1379439936",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1941": {
+            "id": "htcaid:node;299774453",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1942": {
+            "id": "htcaid:node;299774453",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1956": {
+            "id": "htcaid:node;4235715089",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439936",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343782.565867618",
+        "longitude": "-2856234.0638177907",
+        "links": [
+          "htcaid:link;1862",
+          "htcaid:link;5384"
+        ],
+        "connections": {
+          "htcaid:link;1862": {
+            "id": "htcaid:node;1379439927",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5384": {
+            "id": "htcaid:node;305196684",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379439951",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346157.920479465",
+        "longitude": "-2856402.1006459086",
+        "links": [
+          "htcaid:link;3962",
+          "htcaid:link;5982"
+        ],
+        "connections": {
+          "htcaid:link;3962": {
+            "id": "htcaid:node;305663797",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5982": {
+            "id": "htcaid:node;1117834928",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1379509396",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344906.840223756",
+        "longitude": "-2858292.7852069996",
+        "links": [
+          "htcaid:link;524",
+          "htcaid:link;7043"
+        ],
+        "connections": {
+          "htcaid:link;524": {
+            "id": "htcaid:node;26352018",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7043": {
+            "id": "htcaid:node;1106862393",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167133",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345017.276360858",
+        "longitude": "-2850646.8927274444",
+        "links": [
+          "htcaid:link;3210",
+          "htcaid:link;6403"
+        ],
+        "connections": {
+          "htcaid:link;3210": {
+            "id": "htcaid:node;140838899",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6403": {
+            "id": "htcaid:node;140838902",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167135",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344840.005874993",
+        "longitude": "-2850645.015135681",
+        "links": [
+          "htcaid:link;226",
+          "htcaid:link;5538",
+          "htcaid:link;6281",
+          "htcaid:link;6407"
+        ],
+        "connections": {
+          "htcaid:link;226": {
+            "id": "htcaid:node;140829053",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5538": {
+            "id": "htcaid:node;140838899",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6281": {
+            "id": "htcaid:node;300063909",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6407": {
+            "id": "htcaid:node;1389167145",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167145",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344839.572732443",
+        "longitude": "-2850659.5468785195",
+        "links": [
+          "htcaid:link;122",
+          "htcaid:link;6407",
+          "htcaid:link;6408"
+        ],
+        "connections": {
+          "htcaid:link;122": {
+            "id": "htcaid:node;140829053",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6407": {
+            "id": "htcaid:node;1389167135",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6408": {
+            "id": "htcaid:node;301665985",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167158",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344809.069709796",
+        "longitude": "-2850849.983757041",
+        "links": [
+          "htcaid:link;4679",
+          "htcaid:link;5047"
+        ],
+        "connections": {
+          "htcaid:link;4679": {
+            "id": "htcaid:node;301665985",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5047": {
+            "id": "htcaid:node;301665986",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167170",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345536.595198238",
+        "longitude": "-2850990.3398186076",
+        "links": [
+          "htcaid:link;221",
+          "htcaid:link;227"
+        ],
+        "connections": {
+          "htcaid:link;221": {
+            "id": "htcaid:node;303561561",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;227": {
+            "id": "htcaid:node;140838902",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167176",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346026.231883342",
+        "longitude": "-2851002.6331970263",
+        "links": [
+          "htcaid:link;163",
+          "htcaid:link;3975",
+          "htcaid:link;3976"
+        ],
+        "connections": {
+          "htcaid:link;163": {
+            "id": "htcaid:node;1389167178",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3975": {
+            "id": "htcaid:node;2128070537",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3976": {
+            "id": "htcaid:node;2128070537",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167178",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346064.3587744115",
+        "longitude": "-2851034.5082481615",
+        "links": [
+          "htcaid:link;1022",
+          "htcaid:link;163",
+          "htcaid:link;5877"
+        ],
+        "connections": {
+          "htcaid:link;1022": {
+            "id": "htcaid:node;140819573",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;163": {
+            "id": "htcaid:node;1389167176",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5877": {
+            "id": "htcaid:node;140838918",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167191",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344747.600479436",
+        "longitude": "-2851049.438400956",
+        "links": [
+          "htcaid:link;3202",
+          "htcaid:link;4278"
+        ],
+        "connections": {
+          "htcaid:link;3202": {
+            "id": "htcaid:node;303788407",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4278": {
+            "id": "htcaid:node;1363061397",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167198",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344758.650159252",
+        "longitude": "-2851080.166871546",
+        "links": [
+          "htcaid:link;1106",
+          "htcaid:link;4328"
+        ],
+        "connections": {
+          "htcaid:link;1106": {
+            "id": "htcaid:node;300059070",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4328": {
+            "id": "htcaid:node;1363061406",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167251",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344692.260540852",
+        "longitude": "-2851340.73568258",
+        "links": [
+          "htcaid:link;1096",
+          "htcaid:link;4039"
+        ],
+        "connections": {
+          "htcaid:link;1096": {
+            "id": "htcaid:node;1389167277",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4039": {
+            "id": "htcaid:node;300063880",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167277",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344674.5718238605",
+        "longitude": "-2851398.207617227",
+        "links": [
+          "htcaid:link;1096",
+          "htcaid:link;131",
+          "htcaid:link;27",
+          "htcaid:link;30"
+        ],
+        "connections": {
+          "htcaid:link;1096": {
+            "id": "htcaid:node;1389167251",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;131": {
+            "id": "htcaid:node;142811324",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;27": {
+            "id": "htcaid:node;40258826",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;30": {
+            "id": "htcaid:node;1389167280",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167280",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344664.533882744",
+        "longitude": "-2851407.9212138923",
+        "links": [
+          "htcaid:link;2678",
+          "htcaid:link;30",
+          "htcaid:link;5540"
+        ],
+        "connections": {
+          "htcaid:link;2678": {
+            "id": "htcaid:node;142811324",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;30": {
+            "id": "htcaid:node;1389167277",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5540": {
+            "id": "htcaid:node;1389167293",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167293",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344692.752374708",
+        "longitude": "-2851432.496614326",
+        "links": [
+          "htcaid:link;3790",
+          "htcaid:link;5540"
+        ],
+        "connections": {
+          "htcaid:link;3790": {
+            "id": "htcaid:node;265577204",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5540": {
+            "id": "htcaid:node;1389167280",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167323",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344775.4010970425",
+        "longitude": "-2851545.77710333",
+        "links": [
+          "htcaid:link;3785",
+          "htcaid:link;6957"
+        ],
+        "connections": {
+          "htcaid:link;3785": {
+            "id": "htcaid:node;40258826",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6957": {
+            "id": "htcaid:node;40258221",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167427",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345316.252241083",
+        "longitude": "-2852004.821830781",
+        "links": [
+          "htcaid:link;3561",
+          "htcaid:link;3564"
+        ],
+        "connections": {
+          "htcaid:link;3561": {
+            "id": "htcaid:node;302806066",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3564": {
+            "id": "htcaid:node;300058901",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167453",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346586.550090534",
+        "longitude": "-2852213.4437893145",
+        "links": [
+          "htcaid:link;212",
+          "htcaid:link;3278"
+        ],
+        "connections": {
+          "htcaid:link;212": {
+            "id": "htcaid:node;1615014196",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3278": {
+            "id": "htcaid:node;1452874398",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167554",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345626.649944967",
+        "longitude": "-2852810.239223255",
+        "links": [
+          "htcaid:link;1074",
+          "htcaid:link;6663"
+        ],
+        "connections": {
+          "htcaid:link;1074": {
+            "id": "htcaid:node;1117834820",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6663": {
+            "id": "htcaid:node;302806067",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167638",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345082.834982407",
+        "longitude": "-2853534.867715609",
+        "links": [
+          "htcaid:link;1754",
+          "htcaid:link;2890",
+          "htcaid:link;575"
+        ],
+        "connections": {
+          "htcaid:link;1754": {
+            "id": "htcaid:node;302805834",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2890": {
+            "id": "htcaid:node;304693497",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;575": {
+            "id": "htcaid:node;304693504",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1389167659",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345218.631658218",
+        "longitude": "-2853968.014759716",
+        "links": [
+          "htcaid:link;5787",
+          "htcaid:link;640"
+        ],
+        "connections": {
+          "htcaid:link;5787": {
+            "id": "htcaid:node;28636593",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;640": {
+            "id": "htcaid:node;28636604",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378086",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343037.29978426",
+        "longitude": "-2850042.254119619",
+        "links": [
+          "htcaid:link;5174",
+          "htcaid:link;5175",
+          "htcaid:link;5176",
+          "htcaid:link;5177",
+          "htcaid:link;7832"
+        ],
+        "connections": {
+          "htcaid:link;5174": {
+            "id": "htcaid:node;1393378087",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5175": {
+            "id": "htcaid:node;1393378087",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5176": {
+            "id": "htcaid:node;303857124",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5177": {
+            "id": "htcaid:node;303857124",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7832": {
+            "id": "htcaid:node;303855431",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;5174": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 23,
+            "signalId": "htcaid:signal;signal_229"
+          },
+          "htcaid:link;5177": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 23,
+            "signalId": "htcaid:signal;signal_229"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378087",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343044.356315957",
+        "longitude": "-2850049.5986408666",
+        "links": [
+          "htcaid:link;1375",
+          "htcaid:link;5172",
+          "htcaid:link;5173",
+          "htcaid:link;5174",
+          "htcaid:link;5175"
+        ],
+        "connections": {
+          "htcaid:link;1375": {
+            "id": "htcaid:node;2578181804",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5172": {
+            "id": "htcaid:node;303855013",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5173": {
+            "id": "htcaid:node;303855013",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5174": {
+            "id": "htcaid:node;1393378086",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5175": {
+            "id": "htcaid:node;1393378086",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378098",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342952.56401537",
+        "longitude": "-2850342.5829031696",
+        "links": [
+          "htcaid:link;5069",
+          "htcaid:link;5070"
+        ],
+        "connections": {
+          "htcaid:link;5069": {
+            "id": "htcaid:node;466909065",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5070": {
+            "id": "htcaid:node;466909065",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378128",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343523.899031446",
+        "longitude": "-2850419.715406921",
+        "links": [
+          "htcaid:link;7283",
+          "htcaid:link;7284"
+        ],
+        "connections": {
+          "htcaid:link;7283": {
+            "id": "htcaid:node;303859169",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7284": {
+            "id": "htcaid:node;303859169",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378276",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343591.545598249",
+        "longitude": "-2850795.5448863665",
+        "links": [
+          "htcaid:link;3503",
+          "htcaid:link;7449",
+          "htcaid:link;7659"
+        ],
+        "connections": {
+          "htcaid:link;3503": {
+            "id": "htcaid:node;466909349",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7449": {
+            "id": "htcaid:node;1393378359",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7659": {
+            "id": "htcaid:node;40257903",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378359",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343426.694096785",
+        "longitude": "-2850872.6307408772",
+        "links": [
+          "htcaid:link;7446",
+          "htcaid:link;7448",
+          "htcaid:link;7449"
+        ],
+        "connections": {
+          "htcaid:link;7446": {
+            "id": "htcaid:node;1393378375",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7448": {
+            "id": "htcaid:node;4167937332",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7449": {
+            "id": "htcaid:node;1393378276",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378375",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343433.4810484685",
+        "longitude": "-2850884.104969978",
+        "links": [
+          "htcaid:link;7446",
+          "htcaid:link;7664",
+          "htcaid:link;7665"
+        ],
+        "connections": {
+          "htcaid:link;7446": {
+            "id": "htcaid:node;1393378359",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7664": {
+            "id": "htcaid:node;466909349",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7665": {
+            "id": "htcaid:node;4167937330",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;7446": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 10,
+            "signalId": "htcaid:signal;signal_4"
+          },
+          "htcaid:link;7664": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 10,
+            "signalId": "htcaid:signal;signal_4"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378436",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343348.024758364",
+        "longitude": "-2851004.3439979386",
+        "links": [
+          "htcaid:link;3285",
+          "htcaid:link;6461",
+          "htcaid:link;6616",
+          "htcaid:link;6617"
+        ],
+        "connections": {
+          "htcaid:link;3285": {
+            "id": "htcaid:node;1393378491",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6461": {
+            "id": "htcaid:node;2427423500",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6616": {
+            "id": "htcaid:node;4167937330",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6617": {
+            "id": "htcaid:node;4167937330",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378491",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343461.079764277",
+        "longitude": "-2851105.8085646946",
+        "links": [
+          "htcaid:link;3285",
+          "htcaid:link;6489",
+          "htcaid:link;777"
+        ],
+        "connections": {
+          "htcaid:link;3285": {
+            "id": "htcaid:node;1393378436",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6489": {
+            "id": "htcaid:node;1393378560",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;777": {
+            "id": "htcaid:node;28800788",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378560",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343198.078203699",
+        "longitude": "-2851247.9859046955",
+        "links": [
+          "htcaid:link;3078",
+          "htcaid:link;6489",
+          "htcaid:link;7292"
+        ],
+        "connections": {
+          "htcaid:link;3078": {
+            "id": "htcaid:node;142777323",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6489": {
+            "id": "htcaid:node;1393378491",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7292": {
+            "id": "htcaid:node;2427423500",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378596",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342444.086517539",
+        "longitude": "-2851338.9128825474",
+        "links": [
+          "htcaid:link;1321",
+          "htcaid:link;1322"
+        ],
+        "connections": {
+          "htcaid:link;1321": {
+            "id": "htcaid:node;389063049",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1322": {
+            "id": "htcaid:node;389063049",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378874",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342886.083471146",
+        "longitude": "-2851542.396399037",
+        "links": [
+          "htcaid:link;2847",
+          "htcaid:link;7237",
+          "htcaid:link;7454"
+        ],
+        "connections": {
+          "htcaid:link;2847": {
+            "id": "htcaid:node;1393378957",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7237": {
+            "id": "htcaid:node;1393379132",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7454": {
+            "id": "htcaid:node;387095764",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;2847": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 2,
+            "signalId": "htcaid:signal;signal_10"
+          },
+          "htcaid:link;7237": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 2,
+            "signalId": "htcaid:signal;signal_10"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393378957",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342911.840448859",
+        "longitude": "-2851605.650898302",
+        "links": [
+          "htcaid:link;2837",
+          "htcaid:link;2847",
+          "htcaid:link;6491"
+        ],
+        "connections": {
+          "htcaid:link;2837": {
+            "id": "htcaid:node;1393379132",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2847": {
+            "id": "htcaid:node;1393378874",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6491": {
+            "id": "htcaid:node;388512094",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393379132",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342866.12144929",
+        "longitude": "-2851735.9243741417",
+        "links": [
+          "htcaid:link;2837",
+          "htcaid:link;4137",
+          "htcaid:link;7237"
+        ],
+        "connections": {
+          "htcaid:link;2837": {
+            "id": "htcaid:node;1393378957",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4137": {
+            "id": "htcaid:node;2899174924",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7237": {
+            "id": "htcaid:node;1393378874",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393379346",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342718.762608854",
+        "longitude": "-2852048.390527287",
+        "links": [
+          "htcaid:link;2679",
+          "htcaid:link;2725",
+          "htcaid:link;3079"
+        ],
+        "connections": {
+          "htcaid:link;2679": {
+            "id": "htcaid:node;387095742",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2725": {
+            "id": "htcaid:node;315793947",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3079": {
+            "id": "htcaid:node;315793801",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393379349",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342597.872912293",
+        "longitude": "-2852051.8313322053",
+        "links": [
+          "htcaid:link;3080",
+          "htcaid:link;406"
+        ],
+        "connections": {
+          "htcaid:link;3080": {
+            "id": "htcaid:node;142827943",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;406": {
+            "id": "htcaid:node;387095733",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393379724",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343058.68342232",
+        "longitude": "-2852614.706332469",
+        "links": [
+          "htcaid:link;6134",
+          "htcaid:link;6842"
+        ],
+        "connections": {
+          "htcaid:link;6134": {
+            "id": "htcaid:node;2513875329",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6842": {
+            "id": "htcaid:node;2466359875",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1393381272",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342824.437013798",
+        "longitude": "-2854014.4267818704",
+        "links": [
+          "htcaid:link;1560",
+          "htcaid:link;6113"
+        ],
+        "connections": {
+          "htcaid:link;1560": {
+            "id": "htcaid:node;298289544",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6113": {
+            "id": "htcaid:node;3359512166",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397984369",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7341998.658462774",
+        "longitude": "-2853255.6658984614",
+        "links": [
+          "htcaid:link;4888",
+          "htcaid:link;4900",
+          "htcaid:link;4901"
+        ],
+        "connections": {
+          "htcaid:link;4888": {
+            "id": "htcaid:node;370799549",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4900": {
+            "id": "htcaid:node;386247467",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4901": {
+            "id": "htcaid:node;386247467",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397984576",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7341216.163794386",
+        "longitude": "-2853547.4285391513",
+        "links": [
+          "htcaid:link;3723",
+          "htcaid:link;5560"
+        ],
+        "connections": {
+          "htcaid:link;3723": {
+            "id": "htcaid:node;389461941",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5560": {
+            "id": "htcaid:node;2466086489",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397985624",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343753.167096467",
+        "longitude": "-2855164.247172019",
+        "links": [
+          "htcaid:link;4499",
+          "htcaid:link;4512"
+        ],
+        "connections": {
+          "htcaid:link;4499": {
+            "id": "htcaid:node;1937130703",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4512": {
+            "id": "htcaid:node;4591380577",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397985986",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7341530.334905338",
+        "longitude": "-2855755.8820789615",
+        "links": [
+          "htcaid:link;3813",
+          "htcaid:link;7177"
+        ],
+        "connections": {
+          "htcaid:link;3813": {
+            "id": "htcaid:node;389747805",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7177": {
+            "id": "htcaid:node;2360197082",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397986137",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7341796.1113022445",
+        "longitude": "-2856157.2735091443",
+        "links": [
+          "htcaid:link;1737",
+          "htcaid:link;831"
+        ],
+        "connections": {
+          "htcaid:link;1737": {
+            "id": "htcaid:node;29778771",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;831": {
+            "id": "htcaid:node;1397986151",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397986151",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7341893.990623654",
+        "longitude": "-2856221.0103847696",
+        "links": [
+          "htcaid:link;7325",
+          "htcaid:link;831"
+        ],
+        "connections": {
+          "htcaid:link;7325": {
+            "id": "htcaid:node;4369337343",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;831": {
+            "id": "htcaid:node;1397986137",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1397986187",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342035.363765535",
+        "longitude": "-2856314.458026184",
+        "links": [
+          "htcaid:link;5684",
+          "htcaid:link;7324"
+        ],
+        "connections": {
+          "htcaid:link;5684": {
+            "id": "htcaid:node;660766938",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7324": {
+            "id": "htcaid:node;4369337343",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140804525",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342289.499923559",
+        "longitude": "-2848184.887125683",
+        "links": [
+          "htcaid:link;1553",
+          "htcaid:link;1864",
+          "htcaid:link;4289",
+          "htcaid:link;4296"
+        ],
+        "connections": {
+          "htcaid:link;1553": {
+            "id": "htcaid:node;2391065513",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1864": {
+            "id": "htcaid:node;140806270",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4289": {
+            "id": "htcaid:node;4252452256",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4296": {
+            "id": "htcaid:node;457566698",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140804527",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342256.3636016",
+        "longitude": "-2848438.1846705913",
+        "links": [
+          "htcaid:link;1554",
+          "htcaid:link;1555",
+          "htcaid:link;1859",
+          "htcaid:link;1860"
+        ],
+        "connections": {
+          "htcaid:link;1554": {
+            "id": "htcaid:node;2391065513",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1555": {
+            "id": "htcaid:node;2400540468",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1859": {
+            "id": "htcaid:node;140806268",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1860": {
+            "id": "htcaid:node;4252387985",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;1554": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 4,
+            "signalId": "htcaid:signal;signal_118"
+          },
+          "htcaid:link;1859": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 4,
+            "signalId": "htcaid:signal;signal_118"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140804535",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342301.360907035",
+        "longitude": "-2848788.800773335",
+        "links": [
+          "htcaid:link;1197",
+          "htcaid:link;5001"
+        ],
+        "connections": {
+          "htcaid:link;1197": {
+            "id": "htcaid:node;861890886",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5001": {
+            "id": "htcaid:node;5376907528",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140804544",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342216.259420774",
+        "longitude": "-2849197.9633472646",
+        "links": [
+          "htcaid:link;6794",
+          "htcaid:link;6921"
+        ],
+        "connections": {
+          "htcaid:link;6794": {
+            "id": "htcaid:node;5376907530",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6921": {
+            "id": "htcaid:node;863976010",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140806264",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342280.051447316",
+        "longitude": "-2848771.0105307973",
+        "links": [
+          "htcaid:link;1008",
+          "htcaid:link;5009",
+          "htcaid:link;6796"
+        ],
+        "connections": {
+          "htcaid:link;1008": {
+            "id": "htcaid:node;457593200",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5009": {
+            "id": "htcaid:node;2073443954",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6796": {
+            "id": "htcaid:node;5376907529",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140806267",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342209.129489079",
+        "longitude": "-2848666.203960195",
+        "links": [
+          "htcaid:link;1338",
+          "htcaid:link;5974",
+          "htcaid:link;6914"
+        ],
+        "connections": {
+          "htcaid:link;1338": {
+            "id": "htcaid:node;2400540473",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5974": {
+            "id": "htcaid:node;457566715",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6914": {
+            "id": "htcaid:node;457593190",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140806268",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342241.460402454",
+        "longitude": "-2848436.284242025",
+        "links": [
+          "htcaid:link;1857",
+          "htcaid:link;1859",
+          "htcaid:link;1936",
+          "htcaid:link;675"
+        ],
+        "connections": {
+          "htcaid:link;1857": {
+            "id": "htcaid:node;2391065514",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1859": {
+            "id": "htcaid:node;140804527",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1936": {
+            "id": "htcaid:node;457593231",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;675": {
+            "id": "htcaid:node;4252387987",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;1936": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 28,
+            "signalId": "htcaid:signal;signal_70"
+          },
+          "htcaid:link;675": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 28,
+            "signalId": "htcaid:signal;signal_70"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140806270",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342274.653470056",
+        "longitude": "-2848183.142925242",
+        "links": [
+          "htcaid:link;1858",
+          "htcaid:link;1864",
+          "htcaid:link;4285",
+          "htcaid:link;4297"
+        ],
+        "connections": {
+          "htcaid:link;1858": {
+            "id": "htcaid:node;2391065514",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1864": {
+            "id": "htcaid:node;140804525",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4285": {
+            "id": "htcaid:node;140806271",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4297": {
+            "id": "htcaid:node;457566699",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;1858": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 6,
+            "signalId": "htcaid:signal;signal_184"
+          },
+          "htcaid:link;1864": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 6,
+            "signalId": "htcaid:signal;signal_184"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140806271",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342293.568941086",
+        "longitude": "-2848031.6472918424",
+        "links": [
+          "htcaid:link;4285",
+          "htcaid:link;4286",
+          "htcaid:link;5291"
+        ],
+        "connections": {
+          "htcaid:link;4285": {
+            "id": "htcaid:node;140806270",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4286": {
+            "id": "htcaid:node;457593159",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5291": {
+            "id": "htcaid:node;140807081",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140807081",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342191.746872748",
+        "longitude": "-2848092.359722518",
+        "links": [
+          "htcaid:link;5291",
+          "htcaid:link;5292",
+          "htcaid:link;6956"
+        ],
+        "connections": {
+          "htcaid:link;5291": {
+            "id": "htcaid:node;140806271",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5292": {
+            "id": "htcaid:node;140807082",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6956": {
+            "id": "htcaid:node;457566699",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140807082",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342166.858288835",
+        "longitude": "-2848106.1809389098",
+        "links": [
+          "htcaid:link;1498",
+          "htcaid:link;4242",
+          "htcaid:link;5292"
+        ],
+        "connections": {
+          "htcaid:link;1498": {
+            "id": "htcaid:node;132347421",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4242": {
+            "id": "htcaid:node;176014739",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5292": {
+            "id": "htcaid:node;140807081",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140819571",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346084.651206951",
+        "longitude": "-2851079.2248778148",
+        "links": [
+          "htcaid:link;3999",
+          "htcaid:link;4000",
+          "htcaid:link;4498"
+        ],
+        "connections": {
+          "htcaid:link;3999": {
+            "id": "htcaid:node;299169950",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4000": {
+            "id": "htcaid:node;299169950",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4498": {
+            "id": "htcaid:node;2584006410",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140819573",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346051.404754863",
+        "longitude": "-2851039.64165436",
+        "links": [
+          "htcaid:link;1022",
+          "htcaid:link;1635"
+        ],
+        "connections": {
+          "htcaid:link;1022": {
+            "id": "htcaid:node;1389167178",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1635": {
+            "id": "htcaid:node;303561561",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140819574",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345863.237248976",
+        "longitude": "-2850825.9692449123",
+        "links": [
+          "htcaid:link;5265",
+          "htcaid:link;5266",
+          "htcaid:link;5752",
+          "htcaid:link;5753"
+        ],
+        "connections": {
+          "htcaid:link;5265": {
+            "id": "htcaid:node;140820186",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5266": {
+            "id": "htcaid:node;140820186",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5752": {
+            "id": "htcaid:node;2128070537",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5753": {
+            "id": "htcaid:node;2128070537",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140820186",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345209.0336161535",
+        "longitude": "-2850107.8057786846",
+        "links": [
+          "htcaid:link;3504",
+          "htcaid:link;3505",
+          "htcaid:link;5265",
+          "htcaid:link;5266",
+          "htcaid:link;7849"
+        ],
+        "connections": {
+          "htcaid:link;3504": {
+            "id": "htcaid:node;303561660",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3505": {
+            "id": "htcaid:node;303561660",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5265": {
+            "id": "htcaid:node;140819574",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5266": {
+            "id": "htcaid:node;140819574",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7849": {
+            "id": "htcaid:node;303610908",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140820187",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344938.532709346",
+        "longitude": "-2849811.4540708647",
+        "links": [
+          "htcaid:link;3442",
+          "htcaid:link;4507",
+          "htcaid:link;4508",
+          "htcaid:link;4517",
+          "htcaid:link;4518"
+        ],
+        "connections": {
+          "htcaid:link;3442": {
+            "id": "htcaid:node;303562345",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4507": {
+            "id": "htcaid:node;1363061402",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4508": {
+            "id": "htcaid:node;1363061402",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4517": {
+            "id": "htcaid:node;303561660",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4518": {
+            "id": "htcaid:node;303561660",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140821762",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346093.64637444",
+        "longitude": "-2851314.363186048",
+        "links": [
+          "htcaid:link;1102",
+          "htcaid:link;1116"
+        ],
+        "connections": {
+          "htcaid:link;1102": {
+            "id": "htcaid:node;140821764",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1116": {
+            "id": "htcaid:node;302806137",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140821764",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346104.0665370645",
+        "longitude": "-2851247.101506787",
+        "links": [
+          "htcaid:link;1102",
+          "htcaid:link;136",
+          "htcaid:link;2690",
+          "htcaid:link;7549"
+        ],
+        "connections": {
+          "htcaid:link;1102": {
+            "id": "htcaid:node;140821762",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;136": {
+            "id": "htcaid:node;3354044403",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2690": {
+            "id": "htcaid:node;302806116",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7549": {
+            "id": "htcaid:node;300058919",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140822925",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346018.759017205",
+        "longitude": "-2851575.121561062",
+        "links": [
+          "htcaid:link;1113",
+          "htcaid:link;1702"
+        ],
+        "connections": {
+          "htcaid:link;1113": {
+            "id": "htcaid:node;3316840692",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1702": {
+            "id": "htcaid:node;3354044403",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140824198",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345862.574625993",
+        "longitude": "-2851623.223931398",
+        "links": [
+          "htcaid:link;2692",
+          "htcaid:link;3467",
+          "htcaid:link;7060"
+        ],
+        "connections": {
+          "htcaid:link;2692": {
+            "id": "htcaid:node;299610786",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;3467": {
+            "id": "htcaid:node;304693373",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7060": {
+            "id": "htcaid:node;3316883634",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140829053",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344863.512080649",
+        "longitude": "-2850652.9717395105",
+        "links": [
+          "htcaid:link;122",
+          "htcaid:link;225",
+          "htcaid:link;226"
+        ],
+        "connections": {
+          "htcaid:link;122": {
+            "id": "htcaid:node;1389167145",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;225": {
+            "id": "htcaid:node;301665987",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;226": {
+            "id": "htcaid:node;1389167135",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140829084",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343412.240882343",
+        "longitude": "-2849225.0420329967",
+        "links": [
+          "htcaid:link;4494",
+          "htcaid:link;6274"
+        ],
+        "connections": {
+          "htcaid:link;4494": {
+            "id": "htcaid:node;863899098",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6274": {
+            "id": "htcaid:node;2397445826",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140829091",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343070.7219650885",
+        "longitude": "-2848527.4264759175",
+        "links": [
+          "htcaid:link;4635",
+          "htcaid:link;5831"
+        ],
+        "connections": {
+          "htcaid:link;4635": {
+            "id": "htcaid:node;457564810",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5831": {
+            "id": "htcaid:node;1944745418",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140829103",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342453.486757457",
+        "longitude": "-2847826.9013453517",
+        "links": [
+          "htcaid:link;2440",
+          "htcaid:link;4640"
+        ],
+        "connections": {
+          "htcaid:link;2440": {
+            "id": "htcaid:node;457564840",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4640": {
+            "id": "htcaid:node;140829110",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140829110",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342198.9748302335",
+        "longitude": "-2847676.1904304083",
+        "links": [
+          "htcaid:link;4640",
+          "htcaid:link;5127"
+        ],
+        "connections": {
+          "htcaid:link;4640": {
+            "id": "htcaid:node;140829103",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5127": {
+            "id": "htcaid:node;4350117947",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838859",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342205.978432406",
+        "longitude": "-2847665.101492478",
+        "links": [
+          "htcaid:link;5082",
+          "htcaid:link;5124"
+        ],
+        "connections": {
+          "htcaid:link;5082": {
+            "id": "htcaid:node;140838867",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5124": {
+            "id": "htcaid:node;4350117946",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838867",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342473.50920003",
+        "longitude": "-2847830.072782109",
+        "links": [
+          "htcaid:link;4629",
+          "htcaid:link;5082"
+        ],
+        "connections": {
+          "htcaid:link;4629": {
+            "id": "htcaid:node;457563224",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5082": {
+            "id": "htcaid:node;140838859",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838881",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343250.969522783",
+        "longitude": "-2848773.9617363513",
+        "links": [
+          "htcaid:link;3740",
+          "htcaid:link;4986"
+        ],
+        "connections": {
+          "htcaid:link;3740": {
+            "id": "htcaid:node;4684418136",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4986": {
+            "id": "htcaid:node;140838883",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838883",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343430.151925581",
+        "longitude": "-2849220.44537786",
+        "links": [
+          "htcaid:link;4493",
+          "htcaid:link;4986"
+        ],
+        "connections": {
+          "htcaid:link;4493": {
+            "id": "htcaid:node;4350118091",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;4986": {
+            "id": "htcaid:node;140838881",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838890",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343961.902733983",
+        "longitude": "-2849907.1157524684",
+        "links": [
+          "htcaid:link;2010",
+          "htcaid:link;6428",
+          "htcaid:link;6429"
+        ],
+        "connections": {
+          "htcaid:link;2010": {
+            "id": "htcaid:node;3052434211",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6428": {
+            "id": "htcaid:node;3052434206",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6429": {
+            "id": "htcaid:node;303886764",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838893",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344193.489234551",
+        "longitude": "-2850099.6202363474",
+        "links": [
+          "htcaid:link;6430",
+          "htcaid:link;6431",
+          "htcaid:link;7607"
+        ],
+        "connections": {
+          "htcaid:link;6430": {
+            "id": "htcaid:node;303886764",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6431": {
+            "id": "htcaid:node;142805147",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;7607": {
+            "id": "htcaid:node;2400595423",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838899",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7344828.751854795",
+        "longitude": "-2850620.6471563815",
+        "links": [
+          "htcaid:link;3210",
+          "htcaid:link;5538",
+          "htcaid:link;6284"
+        ],
+        "connections": {
+          "htcaid:link;3210": {
+            "id": "htcaid:node;1389167133",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5538": {
+            "id": "htcaid:node;1389167135",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6284": {
+            "id": "htcaid:node;167401305",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838902",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7345044.487963902",
+        "longitude": "-2850651.7069019172",
+        "links": [
+          "htcaid:link;227",
+          "htcaid:link;6403"
+        ],
+        "connections": {
+          "htcaid:link;227": {
+            "id": "htcaid:node;1389167170",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6403": {
+            "id": "htcaid:node;1389167133",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140838918",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7346072.526850864",
+        "longitude": "-2851038.3550536707",
+        "links": [
+          "htcaid:link;3989",
+          "htcaid:link;5877"
+        ],
+        "connections": {
+          "htcaid:link;3989": {
+            "id": "htcaid:node;3358309987",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5877": {
+            "id": "htcaid:node;1389167178",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140848383",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343569.118054002",
+        "longitude": "-2848317.95814276",
+        "links": [
+          "htcaid:link;2391",
+          "htcaid:link;2392",
+          "htcaid:link;5892",
+          "htcaid:link;5893",
+          "htcaid:link;5894",
+          "htcaid:link;5895"
+        ],
+        "connections": {
+          "htcaid:link;2391": {
+            "id": "htcaid:node;165459109",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2392": {
+            "id": "htcaid:node;2006973631",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5892": {
+            "id": "htcaid:node;444959814",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5893": {
+            "id": "htcaid:node;444959814",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5894": {
+            "id": "htcaid:node;165467520",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5895": {
+            "id": "htcaid:node;165467520",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140848384",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343424.051225109",
+        "longitude": "-2848158.8892872147",
+        "links": [
+          "htcaid:link;3022",
+          "htcaid:link;5888",
+          "htcaid:link;5889",
+          "htcaid:link;5890",
+          "htcaid:link;5891"
+        ],
+        "connections": {
+          "htcaid:link;3022": {
+            "id": "htcaid:node;2418337389",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5888": {
+            "id": "htcaid:node;5623136100",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5889": {
+            "id": "htcaid:node;5623136100",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5890": {
+            "id": "htcaid:node;444959814",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5891": {
+            "id": "htcaid:node;444959814",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140848388",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7343004.463527095",
+        "longitude": "-2847832.736557323",
+        "links": [
+          "htcaid:link;5264",
+          "htcaid:link;5882",
+          "htcaid:link;5883",
+          "htcaid:link;5884",
+          "htcaid:link;5885"
+        ],
+        "connections": {
+          "htcaid:link;5264": {
+            "id": "htcaid:node;457560075",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5882": {
+            "id": "htcaid:node;4512172415",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5883": {
+            "id": "htcaid:node;4512172415",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5884": {
+            "id": "htcaid:node;396151766",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5885": {
+            "id": "htcaid:node;396151766",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;5264": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 7,
+            "signalId": "htcaid:signal;signal_360"
+          },
+          "htcaid:link;5882": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 7,
+            "signalId": "htcaid:signal;signal_360"
+          },
+          "htcaid:link;5885": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 7,
+            "signalId": "htcaid:signal;signal_360"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;140855843",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7342553.077780655",
+        "longitude": "-2847318.2521806443",
+        "links": [
+          "htcaid:link;2322",
+          "htcaid:link;689"
+        ],
+        "connections": {
+          "htcaid:link;2322": {
+            "id": "htcaid:node;60685775",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;689": {
+            "id": "htcaid:node;2390822407",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1411861874",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347355.566446428",
+        "longitude": "-2842128.1067928746",
+        "links": [
+          "htcaid:link;1627",
+          "htcaid:link;1886",
+          "htcaid:link;6082"
+        ],
+        "connections": {
+          "htcaid:link;1627": {
+            "id": "htcaid:node;1412581979",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1886": {
+            "id": "htcaid:node;2522578848",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;6082": {
+            "id": "htcaid:node;940877863",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1411865287",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347447.026064414",
+        "longitude": "-2842556.5363936187",
+        "links": [
+          "htcaid:link;1120",
+          "htcaid:link;2061"
+        ],
+        "connections": {
+          "htcaid:link;1120": {
+            "id": "htcaid:node;1411865304",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;2061": {
+            "id": "htcaid:node;2522578848",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1411865304",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347493.476604131",
+        "longitude": "-2842447.1098290742",
+        "links": [
+          "htcaid:link;1120",
+          "htcaid:link;5668"
+        ],
+        "connections": {
+          "htcaid:link;1120": {
+            "id": "htcaid:node;1411865287",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5668": {
+            "id": "htcaid:node;1411865305",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1411865305",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347520.324458012",
+        "longitude": "-2842406.755813404",
+        "links": [
+          "htcaid:link;1129",
+          "htcaid:link;1130",
+          "htcaid:link;1252",
+          "htcaid:link;5668"
+        ],
+        "connections": {
+          "htcaid:link;1129": {
+            "id": "htcaid:node;709637725",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1130": {
+            "id": "htcaid:node;709637725",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;1252": {
+            "id": "htcaid:node;1423542891",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5668": {
+            "id": "htcaid:node;1411865304",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {
+          "htcaid:link;1129": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 13,
+            "signalId": "htcaid:signal;signal_122"
+          },
+          "htcaid:link;1252": {
+            "state": "Red",
+            "remainingTime": 0,
+            "nextTick": 13,
+            "signalId": "htcaid:signal;signal_122"
+          }
+        },
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1412581979",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347335.189692583",
+        "longitude": "-2842130.1458937866",
+        "links": [
+          "htcaid:link;1627",
+          "htcaid:link;5618"
+        ],
+        "connections": {
+          "htcaid:link;1627": {
+            "id": "htcaid:node;1411861874",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;5618": {
+            "id": "htcaid:node;5406061619",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": false,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;1414239480",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "latitude": "-7347454.414460357",
+        "longitude": "-2842410.894172547",
+        "links": [
+          "htcaid:link;6104",
+          "htcaid:link;741"
+        ],
+        "connections": {
+          "htcaid:link;6104": {
+            "id": "htcaid:node;1423542891",
+            "classType": "hybrid.actor.Node"
+          },
+          "htcaid:link;741": {
+            "id": "htcaid:node;940877863",
+            "classType": "hybrid.actor.Node"
+          }
+        },
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {},
+        "hasHybridConnections": true,
+        "conflictZones": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {}
+  }
+]

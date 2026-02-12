@@ -1,0 +1,1656 @@
+[
+  {
+    "id": "htcaid:busstop;busstop_0",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;5046882943",
+        "label": "BusStop 0",
+        "people": {
+          "Bus Line 2": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;5046882943",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_1",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;142857542",
+        "label": "BusStop 1",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142857542",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_2",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60685465",
+        "label": "BusStop 2",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60685465",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_3",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;151273011",
+        "label": "BusStop 3",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;151273011",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_4",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60609944",
+        "label": "BusStop 4",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60609944",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_5",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;415513248",
+        "label": "BusStop 5",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;415513248",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_6",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1277760214",
+        "label": "BusStop 6",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1277760214",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_7",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;455606563",
+        "label": "BusStop 7",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;455606563",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_8",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;140806268",
+        "label": "BusStop 8",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;140806268",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_9",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;568197822",
+        "label": "BusStop 9",
+        "people": {
+          "Bus Line 2": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;568197822",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_10",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3358309984",
+        "label": "BusStop 10",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3358309984",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_11",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;661212028",
+        "label": "BusStop 11",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;661212028",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_12",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;51255414",
+        "label": "BusStop 12",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;51255414",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_13",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;303855665",
+        "label": "BusStop 13",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303855665",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_14",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3475327962",
+        "label": "BusStop 14",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3475327962",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_15",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;157195767",
+        "label": "BusStop 15",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;157195767",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_16",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;158834930",
+        "label": "BusStop 16",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;158834930",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_17",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1623700479",
+        "label": "BusStop 17",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1623700479",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_18",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;173365267",
+        "label": "BusStop 18",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;173365267",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_19",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60685813",
+        "label": "BusStop 19",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60685813",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_20",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2140090154",
+        "label": "BusStop 20",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2140090154",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_21",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60609976",
+        "label": "BusStop 21",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60609976",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_22",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1605884845",
+        "label": "BusStop 22",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1605884845",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_23",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;467744065",
+        "label": "BusStop 23",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;467744065",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_24",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2456848750",
+        "label": "BusStop 24",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2456848750",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_25",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1584985765",
+        "label": "BusStop 25",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1584985765",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_26",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;445249639",
+        "label": "BusStop 26",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;445249639",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_27",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;303788549",
+        "label": "BusStop 27",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303788549",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_28",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;466938151",
+        "label": "BusStop 28",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;466938151",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_29",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;459335449",
+        "label": "BusStop 29",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;459335449",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_30",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2006973653",
+        "label": "BusStop 30",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2006973653",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_31",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3375721637",
+        "label": "BusStop 31",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3375721637",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_32",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2434359230",
+        "label": "BusStop 32",
+        "people": {
+          "Bus Line 2": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2434359230",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_33",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;386255604",
+        "label": "BusStop 33",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;386255604",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_34",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;459347541",
+        "label": "BusStop 34",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;459347541",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_35",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60685391",
+        "label": "BusStop 35",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60685391",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_36",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4511170886",
+        "label": "BusStop 36",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4511170886",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_37",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1368141538",
+        "label": "BusStop 37",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1368141538",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_38",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4259655871",
+        "label": "BusStop 38",
+        "people": {
+          "Bus Line 2": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4259655871",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_39",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;304693382",
+        "label": "BusStop 39",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;304693382",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_40",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1106899589",
+        "label": "BusStop 40",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1106899589",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_41",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4236820668",
+        "label": "BusStop 41",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4236820668",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_42",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1360431826",
+        "label": "BusStop 42",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1360431826",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_43",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1111783688",
+        "label": "BusStop 43",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1111783688",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_44",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;25947734",
+        "label": "BusStop 44",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;25947734",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_45",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3316840703",
+        "label": "BusStop 45",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3316840703",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_46",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;444959828",
+        "label": "BusStop 46",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;444959828",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_47",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2006965201",
+        "label": "BusStop 47",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2006965201",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_48",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3011460172",
+        "label": "BusStop 48",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3011460172",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_49",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2591054602",
+        "label": "BusStop 49",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2591054602",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_50",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3354630813",
+        "label": "BusStop 50",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3354630813",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_51",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60685862",
+        "label": "BusStop 51",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60685862",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_52",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4597226406",
+        "label": "BusStop 52",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4597226406",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_53",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2520196897",
+        "label": "BusStop 53",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2520196897",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_54",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3992014669",
+        "label": "BusStop 54",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3992014669",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_55",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2008482166",
+        "label": "BusStop 55",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2008482166",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_56",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2454873850",
+        "label": "BusStop 56",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2454873850",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_57",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1990911134",
+        "label": "BusStop 57",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1990911134",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_58",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2537137831",
+        "label": "BusStop 58",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2537137831",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_59",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;309706808",
+        "label": "BusStop 59",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;309706808",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_60",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2429561624",
+        "label": "BusStop 60",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2429561624",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_61",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1664142162",
+        "label": "BusStop 61",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1664142162",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_62",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1389167145",
+        "label": "BusStop 62",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1389167145",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_63",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;60686006",
+        "label": "BusStop 63",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;60686006",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_64",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;142788280",
+        "label": "BusStop 64",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;142788280",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_65",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1845965084",
+        "label": "BusStop 65",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1845965084",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_66",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;679183853",
+        "label": "BusStop 66",
+        "people": {
+          "Bus Line 1": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;679183853",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_67",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;392666618",
+        "label": "BusStop 67",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;392666618",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_68",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1583679690",
+        "label": "BusStop 68",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1583679690",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_69",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3358829341",
+        "label": "BusStop 69",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3358829341",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_70",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;3278570111",
+        "label": "BusStop 70",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;3278570111",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_71",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;261904193",
+        "label": "BusStop 71",
+        "people": {
+          "Bus Line 2": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;261904193",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_72",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2537959700",
+        "label": "BusStop 72",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2537959700",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_73",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2520923727",
+        "label": "BusStop 73",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2520923727",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_74",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;307003600",
+        "label": "BusStop 74",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;307003600",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_75",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2323782336",
+        "label": "BusStop 75",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2323782336",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_76",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4411605848",
+        "label": "BusStop 76",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4411605848",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_77",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;303561614",
+        "label": "BusStop 77",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;303561614",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_78",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;26352024",
+        "label": "BusStop 78",
+        "people": {
+          "Bus Line 3": []
+        }
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;26352024",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_79",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;25697082",
+        "label": "BusStop 79",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;25697082",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_80",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4009424169",
+        "label": "BusStop 80",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4009424169",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_81",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1389167280",
+        "label": "BusStop 81",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1389167280",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_82",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1952697074",
+        "label": "BusStop 82",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1952697074",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_83",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;457039920",
+        "label": "BusStop 83",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;457039920",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_84",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1832159383",
+        "label": "BusStop 84",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1832159383",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_85",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4158610041",
+        "label": "BusStop 85",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4158610041",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_86",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;1379439927",
+        "label": "BusStop 86",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;1379439927",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_87",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;457564838",
+        "label": "BusStop 87",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;457564838",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_88",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;2537138125",
+        "label": "BusStop 88",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;2537138125",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;busstop_89",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;4191831479",
+        "label": "BusStop 89",
+        "people": {}
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;4191831479",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

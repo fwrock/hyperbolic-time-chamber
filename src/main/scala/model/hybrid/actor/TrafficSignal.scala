@@ -8,6 +8,7 @@ import org.interscity.htc.model.hybrid.entity.state.TrafficSignalState
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
@@ -23,16 +24,31 @@ class TrafficSignal(
       properties = properties
     ) {
 
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+    // Agendar primeiro tick considerando o offset
+    val firstTick = state.startTick + state.offset
+    logInfo(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
+    onFinishSpontaneous(Some(firstTick))
+  }
+
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =
     handlePhaseTransition(event.tick)
 
-  private def handlePhaseTransition(currentTick: Tick): Unit =
+  private def handlePhaseTransition(currentTick: Tick): Unit = {
+    // Calcular posição no ciclo atual
+    val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
+    
+    // Próximo tick é no início do próximo ciclo
+    val ticksSinceStart = currentTick - state.startTick + state.offset
+    val nextCycleStart = ((ticksSinceStart / state.cycleDuration) + 1) * state.cycleDuration
+    val nextTickTime = state.startTick + nextCycleStart - state.offset
+    
+    logDebug(s"TrafficSignal tick=$currentTick, currentCycleTick=$currentCycleTick, nextTick=$nextTickTime")
+    
     state.phases.foreach {
       phase =>
-        val currentCycleTick = (currentTick + state.offset) % state.cycleDuration
         val newState = calcNewState(currentCycleTick, phase)
-        val nextTickTime =
-          currentCycleTick + state.cycleDuration - (currentCycleTick % state.cycleDuration)
 
         val changedOrigins = mutable.Set[String]()
 
@@ -54,19 +70,11 @@ class TrafficSignal(
             }
             signalState.state = newState
         }
-        /*
-        if (changedOrigins.nonEmpty) {
-          state.nodes.foreach {
-            node =>
-              notifyNodes(SignalState(
-                state = newState,
-                remainingTime = signalState.remainingTime,
-                nextTick = nextTickTime,
-              ), state.nodes.filterNot(changedOrigins.contains), phase.origin, nextTickTime)
-          }
-        }*/
-        onFinishSpontaneous(Some(nextTickTime))
     }
+    
+    // Agendar próximo tick (uma vez para todas as fases)
+    onFinishSpontaneous(Some(nextTickTime))
+  }
 
   private def notifyNodes(
     signalState: SignalState,

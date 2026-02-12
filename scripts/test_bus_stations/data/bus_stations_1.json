@@ -1,0 +1,181 @@
+[
+  {
+    "id": "htcaid:busstation;station_0",
+    "typeActor": "hybrid.actor.BusStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStationState",
+      "content": {
+        "startTick": 0,
+        "name": "Station for Bus Line 1",
+        "origin": "htcaid:node;2591054602",
+        "destination": "htcaid:node;4236820668",
+        "busStops": {
+          "htcaid:busstop;busstop_49": "htcaid:node;2591054602",
+          "htcaid:busstop;busstop_66": "htcaid:node;679183853",
+          "htcaid:busstop;busstop_53": "htcaid:node;2520196897",
+          "htcaid:busstop;busstop_60": "htcaid:node;2429561624",
+          "htcaid:busstop;busstop_59": "htcaid:node;309706808",
+          "htcaid:busstop;busstop_41": "htcaid:node;4236820668"
+        },
+        "interval": 600,
+        "buses": [
+          {
+            "actorId": "htcaid:bus;route_0_bus_0",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 1"
+          },
+          {
+            "actorId": "htcaid:bus;route_0_bus_1",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 1"
+          },
+          {
+            "actorId": "htcaid:bus;route_0_bus_2",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 1"
+          }
+        ],
+        "goingRoute": null,
+        "goingBestCost": Infinity,
+        "returningRoute": null,
+        "returningBestCost": Infinity,
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "origin": {
+        "id": "htcaid:node;2591054602",
+        "classType": "hybrid.actor.Node"
+      },
+      "destination": {
+        "id": "htcaid:node;4236820668",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstation;station_1",
+    "typeActor": "hybrid.actor.BusStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStationState",
+      "content": {
+        "startTick": 100,
+        "name": "Station for Bus Line 2",
+        "origin": "htcaid:node;4259655871",
+        "destination": "htcaid:node;261904193",
+        "busStops": {
+          "htcaid:busstop;busstop_38": "htcaid:node;4259655871",
+          "htcaid:busstop;busstop_0": "htcaid:node;5046882943",
+          "htcaid:busstop;busstop_9": "htcaid:node;568197822",
+          "htcaid:busstop;busstop_32": "htcaid:node;2434359230",
+          "htcaid:busstop;busstop_71": "htcaid:node;261904193"
+        },
+        "interval": 600,
+        "buses": [
+          {
+            "actorId": "htcaid:bus;route_1_bus_0",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 2"
+          },
+          {
+            "actorId": "htcaid:bus;route_1_bus_1",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 2"
+          },
+          {
+            "actorId": "htcaid:bus;route_1_bus_2",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 2"
+          }
+        ],
+        "goingRoute": null,
+        "goingBestCost": Infinity,
+        "returningRoute": null,
+        "returningBestCost": Infinity,
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "origin": {
+        "id": "htcaid:node;4259655871",
+        "classType": "hybrid.actor.Node"
+      },
+      "destination": {
+        "id": "htcaid:node;261904193",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstation;station_2",
+    "typeActor": "hybrid.actor.BusStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStationState",
+      "content": {
+        "startTick": 200,
+        "name": "Station for Bus Line 3",
+        "origin": "htcaid:node;445249639",
+        "destination": "htcaid:node;4597226406",
+        "busStops": {
+          "htcaid:busstop;busstop_26": "htcaid:node;445249639",
+          "htcaid:busstop;busstop_78": "htcaid:node;26352024",
+          "htcaid:busstop;busstop_76": "htcaid:node;4411605848",
+          "htcaid:busstop;busstop_8": "htcaid:node;140806268",
+          "htcaid:busstop;busstop_7": "htcaid:node;455606563",
+          "htcaid:busstop;busstop_52": "htcaid:node;4597226406"
+        },
+        "interval": 600,
+        "buses": [
+          {
+            "actorId": "htcaid:bus;route_2_bus_0",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 3"
+          },
+          {
+            "actorId": "htcaid:bus;route_2_bus_1",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 3"
+          },
+          {
+            "actorId": "htcaid:bus;route_2_bus_2",
+            "capacity": 80,
+            "size": 12.0,
+            "numberOfPorts": 2,
+            "label": "Bus Line 3"
+          }
+        ],
+        "goingRoute": null,
+        "goingBestCost": Infinity,
+        "returningRoute": null,
+        "returningBestCost": Infinity,
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "origin": {
+        "id": "htcaid:node;445249639",
+        "classType": "hybrid.actor.Node"
+      },
+      "destination": {
+        "id": "htcaid:node;4597226406",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]
