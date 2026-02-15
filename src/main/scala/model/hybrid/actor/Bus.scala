@@ -74,14 +74,22 @@ class Bus(
       case Moving =>
         if (state.isMicroMode) {
           // MICRO mode: check position and handle bus stops
+          var shouldLeave = false
           state.microState.foreach { micro =>
             // Check if at bus stop
             checkBusStopAtPosition(micro.positionInLink)
             
             // Check if reached end of link
             if (micro.positionInLink >= getCurrentLinkLength) {
-              leavingLink()
+              shouldLeave = true
             }
+          }
+          
+          if (shouldLeave) {
+            leavingLink()
+          } else {
+            // Continue in MICRO mode, schedule next check
+            onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
           // MESO mode: check signal before proceeding
@@ -98,6 +106,7 @@ class Bus(
       
       case _ =>
         logInfo(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous(Some(currentTick + 1))
     }
   }
   
@@ -136,6 +145,8 @@ class Bus(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
+                  // Schedule to wait for signal response
+                  onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
                   logWarn("No next link available")
                   leavingLink()

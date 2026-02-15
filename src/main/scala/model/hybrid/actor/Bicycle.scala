@@ -104,10 +104,18 @@ class Bicycle(
       case Moving =>
         if (state.isMicroMode) {
           // MICRO mode: check position
+          var shouldLeave = false
           state.microState.foreach { micro =>
             if (micro.positionInLink >= getCurrentLinkLength) {
-              leavingLink()
+              shouldLeave = true
             }
+          }
+          
+          if (shouldLeave) {
+            leavingLink()
+          } else {
+            // Continue in MICRO mode, schedule next check
+            onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
           // MESO mode: simple progression
@@ -162,6 +170,8 @@ class Bicycle(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
+                  // Schedule to wait for signal response
+                  onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
                   logWarn("No next link available")
                   leavingLink()

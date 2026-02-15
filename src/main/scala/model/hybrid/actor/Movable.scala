@@ -124,6 +124,8 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
+            // Schedule to wait for link response
+            onFinishSpontaneous(Some(currentTick + 1))
           case None =>
             state.movableStatus = Finished
             logWarn("No edge label found for link, finishing.")
@@ -169,11 +171,15 @@ abstract class Movable[T <: MovableState](
               onFinish(nextNodeId)
             }
             state.movableCurrentPath = None
+            // Schedule to wait for next action (node signal or route request)
+            onFinishSpontaneous(Some(currentTick + 1))
           case _ =>
             logWarn("Path item not handled")
+            onFinishSpontaneous(Some(currentTick + 1))
         }
       case None =>
         logWarn("No link to leave")
+        onFinishSpontaneous(Some(currentTick + 1))
     }
 
   protected def getNextPath: Option[(String, String)] =

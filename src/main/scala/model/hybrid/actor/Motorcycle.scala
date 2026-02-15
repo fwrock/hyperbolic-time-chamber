@@ -106,6 +106,7 @@ class Motorcycle(
       case Moving =>
         if (state.isMicroMode) {
           // MICRO mode: check position and possibly filter lanes
+          var shouldLeave = false
           state.microState.foreach { micro =>
             // Check if can filter between lanes (if traffic is slow)
             if (shouldAttemptLaneFiltering(micro)) {
@@ -113,8 +114,15 @@ class Motorcycle(
             }
             
             if (micro.positionInLink >= getCurrentLinkLength) {
-              leavingLink()
+              shouldLeave = true
             }
+          }
+          
+          if (shouldLeave) {
+            leavingLink()
+          } else {
+            // Continue in MICRO mode, schedule next check
+            onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
           // MESO mode: request signal state
@@ -169,6 +177,8 @@ class Motorcycle(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
+                  // Schedule to wait for signal response
+                  onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
                   logWarn("No next link available")
                   leavingLink()

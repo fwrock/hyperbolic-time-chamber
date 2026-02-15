@@ -97,10 +97,18 @@ class Car(
         if (state.isMicroMode) {
           // In MICRO mode, wait for updates from LinkMicroTimeManager
           // Check if reached end of link
+          var shouldLeave = false
           state.microState.foreach { micro =>
             if (micro.positionInLink >= getCurrentLinkLength) {
-              leavingLink()
+              shouldLeave = true
             }
+          }
+          
+          if (shouldLeave) {
+            leavingLink()
+          } else {
+            // Continue in MICRO mode, schedule next check
+            onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
           // MESO mode: standard behavior
@@ -229,11 +237,19 @@ class Car(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
+                  // Schedule to wait for signal response
+                  onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
+                  // No next link, finish
+                  onFinishSpontaneous(None)
               }
             case None =>
+              // Node not found, retry next tick
+              onFinishSpontaneous(Some(currentTick + 1))
           }
         case null =>
+          // No current node, retry next tick
+          onFinishSpontaneous(Some(currentTick + 1))
       }
     }
   }

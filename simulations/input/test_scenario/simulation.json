@@ -1,0 +1,93 @@
+{
+  "id": "quick_test",
+  "name": "Quick Test",
+  "description": "Quick test scenario for development",
+  "startTick": 0,
+  "endTick": 600,
+  "startRealTime": "2026-01-27T00:00:00.000",
+  "timeUnit": "seconds",
+  "timeStep": 1,
+  "duration": 600,
+  "tickDuration": 1.0,
+  "randomSeed": 42,
+  "actorsDataSources": [
+    {
+      "id": "nodes",
+      "classType": "hybrid.actor.Node",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/nodes.json"
+        }
+      }
+    },
+    {
+      "id": "links",
+      "classType": "hybrid.actor.Link",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/links.json"
+        }
+      }
+    },
+    {
+      "id": "cars",
+      "classType": "hybrid.actor.Car",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/cars.json"
+        }
+      }
+    },
+    {
+      "id": "buses",
+      "classType": "hybrid.actor.Bus",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/buses.json"
+        }
+      }
+    },
+    {
+      "id": "bicycles",
+      "classType": "hybrid.actor.Bicycle",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/bicycles.json"
+        }
+      }
+    },
+    {
+      "id": "motorcycles",
+      "classType": "hybrid.actor.Motorcycle",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/motorcycles.json"
+        }
+      }
+    },
+    {
+      "id": "traffic_signals",
+      "classType": "hybrid.actor.TrafficSignal",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/traffic_signals.json"
+        }
+      }
+    }
+  ],
+  "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/test_scenario/data/city_map.json"
+}
