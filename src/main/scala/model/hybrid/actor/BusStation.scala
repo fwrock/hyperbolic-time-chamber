@@ -51,6 +51,7 @@ class BusStation(
         state.status = RouteWaiting
         // Calculate routes directly from in-memory map
         calculateRoutesFromMap()
+        // NOTE: onFinishSpontaneous is called inside calculateRoutesFromMap()
       case Working =>
         if (state.buses.nonEmpty) {
           val bus = state.buses.dequeue()
@@ -68,16 +69,20 @@ class BusStation(
               // Put the bus back in the queue for later retry
               state.buses.enqueue(bus)
               state.status = RouteWaiting // Go back to waiting for route
+              onFinishSpontaneous(Some(currentTick + state.interval))
             case e: Exception =>
               logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
               state.buses.enqueue(bus)
               state.status = RouteWaiting
+              onFinishSpontaneous(Some(currentTick + state.interval))
           }
         } else {
           state.status = WorkingWithOutBus
+          onFinishSpontaneous(Some(currentTick + state.interval))
         }
       case _ =>
         logInfo(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous(None)
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
