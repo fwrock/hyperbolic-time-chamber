@@ -21,6 +21,6 @@ echo "🐳 Step 3: Building docker image..."
 docker build -t ${PROJECT_NAME}:latest .
 
 echo "📦 Step 4: Deploying with docker compose..."
-docker compose up --build
+docker compose up node1 --build
 
 echo "✅ Application is running with docker compose!"

@@ -38,6 +38,7 @@ lazy val root = (project in file("."))
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
     assembly / assemblyJarName := "hyperbolic-time-chamber-1.23.3.jar",
+    assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
       case PathList("META-INF", _*) => MergeStrategy.discard
@@ -86,29 +87,37 @@ lazy val root = (project in file("."))
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
 
-      // Apache Avro
-      "org.apache.avro" % "avro" % avroVersion,
-      "io.confluent" % "kafka-avro-serializer" % confluentAvroVersion,
-      "io.confluent" % "kafka-streams-avro-serde" % confluentAvroVersion,
+      // TODO: Re-enable Avro dependencies when snakeyaml conflicts are resolved
+      // "org.apache.avro" % "avro" % avroVersion,
+
+      // Force specific SnakeYAML version - stable release
+      // "org.yaml" % "snakeyaml" % "1.33",
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
       "ch.qos.logback" % "logback-core" % logbackVersion,
       "org.slf4j" % "slf4j-api" % "2.0.17",
 
-      // Faker
-      "com.github.javafaker" % "javafaker" % "1.0.2",
       "com.typesafe" % "config" % "1.4.5",
 
       // Test
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
     ),
+    
+    // No dependency overrides needed currently
+    dependencyOverrides ++= Seq(),
+    
     Compile / PB.protoSources := Seq(
       baseDirectory.value / "src" / "main" / "protobuf"
     ),
     Compile / PB.targets := Seq(
       scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
     ),
-    PB.protocVersion := "-v4.30.2"
+    PB.protocVersion := "4.30.2"
+    
+    // TODO: Re-enable when Avro plugin issue is resolved
+    // Avro configuration
+    // Compile / avroSource := baseDirectory.value / "src" / "main" / "avro",
+    // Compile / avroGenerate / target := (Compile / sourceManaged).value / "avro"
   )

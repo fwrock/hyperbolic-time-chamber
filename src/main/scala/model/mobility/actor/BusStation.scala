@@ -35,13 +35,25 @@ class BusStation(
       case Working =>
         if (state.buses.nonEmpty) {
           val bus = state.buses.dequeue()
-          val actorRef = createBus(bus)
-          val className = classOf[Bus].getName
-          dependencies(bus.actorId) = Dependency(
-            id = entityId,
-            classType = className
-          )
-          onFinishSpontaneous(Some(currentTick + state.interval))
+          try {
+            val actorRef = createBus(bus)
+            val className = classOf[Bus].getName
+            dependencies(bus.actorId) = Dependency(
+              id = entityId,
+              classType = className
+            )
+            onFinishSpontaneous(Some(currentTick + state.interval))
+          } catch {
+            case e: IllegalStateException =>
+              logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
+              // Put the bus back in the queue for later retry
+              state.buses.enqueue(bus)
+              state.status = RouteWaiting // Go back to waiting for route
+            case e: Exception =>
+              logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
+              state.buses.enqueue(bus)
+              state.status = RouteWaiting
+          }
         } else {
           state.status = WorkingWithOutBus
         }
@@ -58,30 +70,64 @@ class BusStation(
 
   private def handleRequestRoute(value: ActorInteractionEvent): Unit = {
     val route = value.data.asInstanceOf[ReceiveRouteData]
-    if (route.label == "going-route") {
-      state.goingRoute match
-        case Some(goingRoute) =>
-          goingRoute.put(SubRoutePair(route.origin, route.destination), route.path)
-    } else {
-      state.returningRoute match
-        case Some(returningRoute) =>
-          returningRoute.put(SubRoutePair(route.origin, route.destination), route.path)
-    }
-    if (isCalculateRoutingComplete) {
-      state.status = Ready
-      val bus = state.buses.dequeue()
-      val actorRef = createBus(bus)
-      val className = classOf[Bus].getName
-      dependencies(bus.actorId) = Dependency(
-        id = entityId,
-        classType = className
-      )
-      state.status = Working
-      onFinishSpontaneous(Some(currentTick + state.interval))
+    
+    // We need to find the bus stop pair corresponding to the received origin/destination nodes
+    val originBusStop = state.busStops.find(_._2 == route.origin).map(_._1)
+    val destinationBusStop = state.busStops.find(_._2 == route.destination).map(_._1)
+    
+    (originBusStop, destinationBusStop) match {
+      case (Some(originStop), Some(destStop)) =>
+        val subRoutePair = SubRoutePair(originStop, destStop)
+        
+        if (route.label == "going-route") {
+          state.goingRoute match
+            case Some(goingRoute) =>
+              goingRoute.put(subRoutePair, route.path)
+        } else {
+          state.returningRoute match
+            case Some(returningRoute) =>
+              returningRoute.put(subRoutePair, route.path)
+        }
+        
+        if (isCalculateRoutingComplete) {
+          state.status = Ready
+          if (state.buses.nonEmpty) {
+            val bus = state.buses.dequeue()
+            try {
+              val actorRef = createBus(bus)
+              val className = classOf[Bus].getName
+              dependencies(bus.actorId) = Dependency(
+                id = entityId,
+                classType = className
+              )
+              state.status = Working
+              onFinishSpontaneous(Some(currentTick + state.interval))
+            } catch {
+              case e: IllegalStateException =>
+                logError(s"Failed to create bus ${bus.actorId} after route completion: ${e.getMessage}")
+                state.buses.enqueue(bus) // Put back in queue
+                state.status = RouteWaiting // Wait for valid route data
+              case e: Exception =>
+                logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
+                state.buses.enqueue(bus)
+                state.status = RouteWaiting
+            }
+          } else {
+            logWarn("Route calculation completed but no buses available")
+          }
+        }
+      case _ =>
+        logWarn(s"BusStation ${getEntityId} received route for unknown node pair: ${route.origin} -> ${route.destination}")
     }
   }
 
-  private def createBus(bus: BusInformation): ActorRef =
+  private def createBus(bus: BusInformation): ActorRef = {
+    val route = calcBusBestRoute()
+    if (route.isEmpty) {
+      logWarn(s"Cannot create bus ${bus.actorId} - no valid route available")
+      throw new IllegalStateException(s"No route available for bus ${bus.actorId}")
+    }
+    
     createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Bus],
@@ -95,18 +141,37 @@ class BusStation(
           size = bus.size,
           origin = state.origin,
           destination = state.destination,
-          bestRoute = Some(calcBusBestRoute()),
+          bestRoute = Some(route),
           numberOfPorts = bus.numberOfPorts,
           label = bus.label
         )
       ),
       dependencies
     )
+  }
 
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
     val bestRoute = mutable.Queue[(String, String)]()
-//    bestRoute ++= getTotalRoute(state.goingRoute.get)
-//    bestRoute ++= getTotalRoute(state.returningRoute.get)
+    
+    // Check if we have valid route data before building the route
+    if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
+      val goingRouteData = getTotalRoute(state.goingRoute.get)
+      bestRoute ++= goingRouteData.map(pair => (pair._1.id, pair._2.id))
+    } else {
+      logWarn("No going route defined for bus station")
+    }
+    
+    if (state.returningRoute.isDefined && state.returningRoute.get.nonEmpty) {
+      val returningRouteData = getTotalRoute(state.returningRoute.get)
+      bestRoute ++= returningRouteData.map(pair => (pair._1.id, pair._2.id))
+    } else {
+      logWarn("No returning route defined for bus station")
+    }
+    
+    if (bestRoute.isEmpty) {
+      logWarn("Bus route calculation resulted in empty route - this may cause buses to terminate immediately")
+    }
+    
     bestRoute
   }
 
@@ -132,31 +197,44 @@ class BusStation(
       case Some(r) => r.keys.size == state.busStops.sliding(2, 2).size
       case None    => false
 
-  private def requestGoingRoute(): Unit =
-    for (pair <- state.busStops.keys.sliding(2))
-      requestRoute(pair.head, pair.last, "going-route")
+  private def requestGoingRoute(): Unit = {
+    val busStopsList = state.busStops.keys.toList
+    for (pair <- busStopsList.sliding(2)) {
+      val originBusStopId = pair.head
+      val destinationBusStopId = pair.last
+      val originNodeId = state.busStops(originBusStopId)
+      val destinationNodeId = state.busStops(destinationBusStopId)
+      requestRoute(originBusStopId, destinationBusStopId, originNodeId, destinationNodeId, "going-route")
+    }
+  }
 
   private def requestReturningRoute(): Unit = {
     val reversedBusStops = state.busStops.keys.toList.reverse
-    for (pair <- reversedBusStops.sliding(2))
-      requestRoute(pair.head, pair.last, "returning-route")
+    for (pair <- reversedBusStops.sliding(2)) {
+      val originBusStopId = pair.head
+      val destinationBusStopId = pair.last
+      val originNodeId = state.busStops(originBusStopId)
+      val destinationNodeId = state.busStops(destinationBusStopId)
+      requestRoute(originBusStopId, destinationBusStopId, originNodeId, destinationNodeId, "returning-route")
+    }
   }
 
-  private def requestRoute(origin: String, destination: String, label: String): Unit = {
+  private def requestRoute(originBusStopId: String, destinationBusStopId: String, originNodeId: String, destinationNodeId: String, label: String): Unit = {
     val data = RequestRouteData(
       requester = getSelfShard,
       requesterClassType = getShardId,
       requesterId = entityId,
       currentCost = 0,
-      targetNodeId = destination,
-      originNodeId = origin,
+      targetNodeId = destinationNodeId,
+      originNodeId = originNodeId,
       path = mutable.Queue(),
       label = label
     )
-    val dependency = getDependency(origin)
+    // Create a temporary dependency for the origin node to request route
+    val nodeActorRef = context.system.actorSelection(s"/user/sharded-actors/hybrid.actor.Node/$originNodeId")
     sendMessageTo(
-      dependency.id,
-      dependency.classType,
+      originNodeId,
+      "hybrid.actor.Node",
       data,
       RequestRoute.toString
     )

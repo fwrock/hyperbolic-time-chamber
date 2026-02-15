@@ -29,7 +29,7 @@ class TrafficSignal(
     // Agendar primeiro tick considerando o offset
     val firstTick = state.startTick + state.offset
     logInfo(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
-    onFinishSpontaneous(Some(firstTick))
+    scheduleEvent(firstTick)
   }
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =

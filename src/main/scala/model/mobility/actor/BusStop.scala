@@ -21,14 +21,19 @@ class BusStop(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    val dependency = getDependency(state.nodeId)
-    sendMessageTo(
-      dependency.id,
-      dependency.classType,
-      RegisterBusStopData(
-        label = state.label
-      )
-    )
+    getDependencyOption(state.nodeId) match {
+      case Some(dependency) =>
+        sendMessageTo(
+          dependency.id,
+          dependency.classType,
+          RegisterBusStopData(
+            label = state.label
+          )
+        )
+        logInfo(s"BusStop ${getEntityId} registered with node ${dependency.id}")
+      case None =>
+        logWarn(s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+    }
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =

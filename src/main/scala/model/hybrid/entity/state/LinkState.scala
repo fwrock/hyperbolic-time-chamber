@@ -51,7 +51,7 @@ case class LinkState(
   // ========== Meso fields (inherited from LinkState) ==========
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
-  scheduleOnTimeManager: Boolean = true,
+  scheduleOnTimeManager: Boolean = false,
   from: String,
   to: String,
   length: Double,

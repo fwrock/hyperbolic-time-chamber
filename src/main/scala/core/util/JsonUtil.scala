@@ -8,6 +8,9 @@ import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, Object
 import com.fasterxml.jackson.databind.`type`.TypeFactory
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.fasterxml.jackson.databind.module.SimpleModule
+import com.fasterxml.jackson.databind.{KeyDeserializer, DeserializationContext, JsonDeserializer}
+import com.fasterxml.jackson.core.{JsonParser, JsonToken}
 import com.google.protobuf.ByteString
 
 import java.io.InputStream
@@ -16,10 +19,76 @@ import scala.jdk.CollectionConverters._
 
 object JsonUtil {
 
+  // Custom key deserializer for SubRoutePair
+  class SubRoutePairKeyDeserializer extends KeyDeserializer {
+    override def deserializeKey(key: String, ctxt: DeserializationContext): Object = {
+      val parts = key.split(":")
+      if (parts.length == 2) {
+        // Try both hybrid and mobility versions
+        try {
+          org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0), parts(1))
+        } catch {
+          case _: Exception =>
+            org.interscity.htc.model.mobility.entity.state.model.SubRoutePair(parts(0), parts(1))
+        }
+      } else {
+        throw new IllegalArgumentException(s"Invalid SubRoutePair key format: $key")
+      }
+    }
+  }
+
+  // Custom deserializer for Tuple2 with SubwayStationNode
+  class SubwayStationNodeTupleDeserializer extends JsonDeserializer[(org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)] {
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): (org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String) = {
+      if (p.getCurrentToken == JsonToken.START_OBJECT) {
+        val node = p.readValuesAs(classOf[java.util.Map[String, Object]])
+        if (node.hasNext) {
+          val obj = node.next()
+          val stationId = obj.get("stationId").asInstanceOf[String]
+          val nodeId = obj.get("nodeId").asInstanceOf[String]
+          val railLinkId = obj.getOrDefault("railLinkId", obj.get("linkId")).asInstanceOf[String]
+          
+          val subwayStationNode = org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode(stationId, nodeId)
+          (subwayStationNode, railLinkId)
+        } else {
+          throw new RuntimeException("Invalid SubwayStationNode tuple format")
+        }
+      } else {
+        // Try array format [{"stationId": "...", "nodeId": "..."}, "link_id"]
+        val codec = p.getCodec
+        val array = codec.readValue(p, classOf[Array[Object]])
+        if (array.length == 2) {
+          val nodeMap = array(0).asInstanceOf[java.util.Map[String, String]]
+          val stationId = nodeMap.get("stationId")
+          val nodeId = nodeMap.get("nodeId")
+          val railLinkId = array(1).asInstanceOf[String]
+          
+          val subwayStationNode = org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode(stationId, nodeId)
+          (subwayStationNode, railLinkId)
+        } else {
+          throw new RuntimeException(s"Invalid SubwayStationNode tuple array format: expected 2 elements, got ${array.length}")
+        }
+      }
+    }
+  }
+
   private val mapper = new ObjectMapper()
   mapper.registerModule(DefaultScalaModule)
   mapper.registerModule(new JavaTimeModule())
   mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
+  // Register custom key deserializers for SubRoutePair
+  private val subRoutePairModule = new SimpleModule()
+  subRoutePairModule.addKeyDeserializer(classOf[org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair], new SubRoutePairKeyDeserializer)
+  subRoutePairModule.addKeyDeserializer(classOf[org.interscity.htc.model.mobility.entity.state.model.SubRoutePair], new SubRoutePairKeyDeserializer)
+  
+  // Register custom deserializer for SubwayStationNode tuples
+  subRoutePairModule.addDeserializer(
+    classOf[(org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)], 
+    new SubwayStationNodeTupleDeserializer
+  )
+  
+  mapper.registerModule(subRoutePairModule)
 
   def readJsonFile(filePath: String): String = {
     val source = Source.fromFile(filePath)

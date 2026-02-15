@@ -3,21 +3,28 @@ package org.interscity.htc.model.hybrid.util
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
-import org.interscity.htc.model.hybrid.util.cache.{InMemoryCacheStrategy, RedisCacheStrategy, WeightCacheStrategy}
+import org.interscity.htc.model.hybrid.util.cache.{InMemoryCacheStrategy, KafkaCacheStrategy, RedisCacheStrategy, WeightCacheStrategy}
 
 import scala.util.Try
+import scala.concurrent.ExecutionContext
 
 /** Cache for dynamic link costs with configurable strategy.
   * 
   * Supports multiple backends:
   * 
-  * 1. **Redis** (centralized):
+  * 1. **Kafka** (recommended):
+  *    - LinkActors publish → Kafka topic → all nodes consume
+  *    - ~10ns local reads (ultra-fast A* calculation)
+  *    - Eventually consistent (~100ms realistic lag)
+  *    - Best for multi-node clusters with high-frequency routing
+  * 
+  * 2. **Redis** (centralized):
   *    - Single Redis instance shared by cluster
   *    - ~1ms network latency
   *    - Immediate consistency
-  *    - Best for multi-node clusters
+  *    - Legacy option for simpler deployments
   * 
-  * 2. **InMemory** (distributed):
+  * 3. **InMemory** (distributed):
   *    - Local ConcurrentHashMap + Pekko Distributed Data
   *    - ~10ns local reads (ultra-fast!)
   *    - Eventually consistent (~10-50ms sync)
@@ -25,7 +32,7 @@ import scala.util.Try
   * 
   * Configuration:
   * ```
-  * htc.routing.cache-strategy = "redis"  # or "inmemory"
+  * htc.routing.cache-strategy = "kafka"  # or "redis" or "inmemory"
   * ```
   */
 object DynamicWeightCache {
@@ -36,29 +43,43 @@ object DynamicWeightCache {
     val strategyType = try {
       config.getString("htc.routing.cache-strategy")
     } catch {
-      case _: Exception => "redis" // Default to Redis
+      case _: Exception => "kafka" // Default to Kafka
     }
     
+    implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
+    
     strategyType.toLowerCase match {
+      case "kafka" =>
+        println("Using Kafka cache strategy (distributed pub/sub + local memory)")
+        new KafkaCacheStrategy()
+        
       case "inmemory" =>
         println("Using InMemory cache strategy (fast local + Pekko Distributed Data)")
         // Note: ActorSystem must be passed from context where it's available
-        // For now, we'll use Redis as default until ActorSystem is properly injected
-        println("WARNING: InMemory strategy requires ActorSystem, falling back to Redis")
-        new RedisCacheStrategy()
+        // For now, we'll use Kafka as default until ActorSystem is properly injected
+        println("WARNING: InMemory strategy requires ActorSystem, falling back to Kafka")
+        new KafkaCacheStrategy()
         
-      case "redis" | _ =>
+      case "redis" =>
         println("Using Redis cache strategy (centralized, cluster-wide)")
         new RedisCacheStrategy()
+        
+      case _ =>
+        println(s"Unknown cache strategy: $strategyType, falling back to Kafka")
+        new KafkaCacheStrategy()
     }
   }
   
   /** Factory method to create strategy with ActorSystem (for InMemory).
     */
   def createStrategy(strategyType: String)(implicit system: ActorSystem): WeightCacheStrategy = {
+    implicit val ec: ExecutionContext = system.dispatcher
+    
     strategyType.toLowerCase match {
+      case "kafka" => new KafkaCacheStrategy()
       case "inmemory" => new InMemoryCacheStrategy()
-      case "redis" | _ => new RedisCacheStrategy()
+      case "redis" => new RedisCacheStrategy()
+      case _ => new KafkaCacheStrategy() // Default to Kafka
     }
   }
   

@@ -23,6 +23,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwaySt
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.hybrid.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
@@ -31,7 +32,9 @@ class Node(
       properties = properties
     ) {
 
-  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {}
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    onFinishSpontaneous(None)
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -44,26 +47,37 @@ class Node(
         logWarn("Event not handled")
     }
 
-  private def handleRegisterBusStop(event: ActorInteractionEvent, data: RegisterBusStopData): Unit =
-    state.busStops.put(data.label, event.toIdentity)
+  private def handleRegisterBusStop(event: ActorInteractionEvent, data: RegisterBusStopData): Unit = {
+    if (state != null) {
+      state.busStops.put(data.label, event.toIdentity)
+    } else {
+      logWarn(s"Node ${getEntityId} state not initialized, deferring bus stop registration for ${data.label}")
+    }
+  }
 
   private def handleRegisterSubwayStation(
     event: ActorInteractionEvent,
     data: RegisterSubwayStationData
-  ): Unit =
-    data.lines.foreach {
-      line =>
-        state.subwayStations.put(line, event.toIdentity)
+  ): Unit = {
+    if (state != null) {
+      data.lines.foreach {
+        line =>
+          state.subwayStations.put(line, event.toIdentity)
+      }
+    } else {
+      logWarn(s"Node ${getEntityId} state not initialized, deferring subway station registration for lines: ${data.lines.mkString(", ")}")
     }
+  }
 
   private def handleRequestSignalState(
     event: ActorInteractionEvent,
     data: RequestSignalStateData
   ): Unit = {
-    state.connections.get(data.targetLinkId) match {
-      case Some(identify) =>
-        state.signals.get(identify.id) match {
-          case Some(sig) =>
+    if (state != null) {
+      state.connections.get(data.targetLinkId) match {
+        case Some(identify) =>
+          state.signals.get(identify.id) match {
+            case Some(sig) =>
 //            report(
 //              data = SignalStateData(
 //                phase = sig.state,
@@ -71,17 +85,17 @@ class Node(
 //              ),
 //              "send signal state"
 //            )
-            sendMessageTo(
-              entityId = event.actorRefId,
-              shardId = event.shardRefId,
-              data = SignalStateData(
-                phase = sig.state,
-                nextTick = sig.nextTick
-              ),
-              eventType = EventTypeEnum.ReceiveSignalState.toString,
-              actorType = LoadBalancedDistributed
-            )
-          case None =>
+              sendMessageTo(
+                entityId = event.actorRefId,
+                shardId = event.shardRefId,
+                data = SignalStateData(
+                  phase = sig.state,
+                  nextTick = sig.nextTick
+                ),
+                eventType = EventTypeEnum.ReceiveSignalState.toString,
+                actorType = LoadBalancedDistributed
+              )
+            case None =>
 //            report(
 //              data = SignalStateData(
 //                phase = Green,
@@ -89,18 +103,18 @@ class Node(
 //              ),
 //              "send signal state"
 //            )
-            sendMessageTo(
-              entityId = event.actorRefId,
-              shardId = event.shardRefId,
-              data = SignalStateData(
-                phase = Green,
-                nextTick = currentTick
-              ),
-              eventType = EventTypeEnum.ReceiveSignalState.toString,
-              actorType = LoadBalancedDistributed
-            )
-        }
-      case None =>
+              sendMessageTo(
+                entityId = event.actorRefId,
+                shardId = event.shardRefId,
+                data = SignalStateData(
+                  phase = Green,
+                  nextTick = currentTick
+                ),
+                eventType = EventTypeEnum.ReceiveSignalState.toString,
+                actorType = LoadBalancedDistributed
+              )
+          }
+        case None =>
 //        report(
 //          data = SignalStateData(
 //            phase = Green,
@@ -108,22 +122,41 @@ class Node(
 //          ),
 //          "send signal state"
 //        )
-        sendMessageTo(
-          entityId = event.actorRefId,
-          shardId = event.shardRefId,
-          data = SignalStateData(
-            phase = Green,
-            nextTick = currentTick
-          ),
-          eventType = EventTypeEnum.ReceiveSignalState.toString,
-          actorType = LoadBalancedDistributed
-        )
+          sendMessageTo(
+            entityId = event.actorRefId,
+            shardId = event.shardRefId,
+            data = SignalStateData(
+              phase = Green,
+              nextTick = currentTick
+            ),
+            eventType = EventTypeEnum.ReceiveSignalState.toString,
+            actorType = LoadBalancedDistributed
+          )
+      }
+    } else {
+      logWarn(s"Node ${getEntityId} state not initialized, deferring signal state request for link: ${data.targetLinkId}")
+      // Send default Green signal as fallback
+      sendMessageTo(
+        entityId = event.actorRefId,
+        shardId = event.shardRefId,
+        data = SignalStateData(
+          phase = Green,
+          nextTick = currentTick
+        ),
+        eventType = EventTypeEnum.ReceiveSignalState.toString,
+        actorType = LoadBalancedDistributed
+      )
     }
   }
 
   private def handleReceiveSignalChangeStatus(
     event: ActorInteractionEvent,
     data: TrafficSignalChangeStatusData
-  ): Unit =
-    state.signals.put(data.phaseOrigin, data.signalState)
+  ): Unit = {
+    if (state != null) {
+      state.signals.put(data.phaseOrigin, data.signalState)
+    } else {
+      logWarn(s"Node ${getEntityId} state not initialized, deferring signal change status for phase: ${data.phaseOrigin}")
+    }
+  }
 }

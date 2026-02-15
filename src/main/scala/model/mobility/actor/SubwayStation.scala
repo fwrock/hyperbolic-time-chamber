@@ -27,14 +27,19 @@ class SubwayStation(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    val node = getDependency(state.nodeId)
-    sendMessageTo(
-      node.id,
-      node.classType,
-      RegisterSubwayStationData(
-        lines = state.lines.keys.toSeq
-      )
-    )
+    getDependencyOption(state.nodeId) match {
+      case Some(node) =>
+        sendMessageTo(
+          node.id,
+          node.classType,
+          RegisterSubwayStationData(
+            lines = state.lines.keys.toSeq
+          )
+        )
+        logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+      case None =>
+        logWarn(s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+    }
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =

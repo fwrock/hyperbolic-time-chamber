@@ -1,7 +1,9 @@
 package org.interscity.htc
 package model.hybrid.entity.state.model
 
+import com.fasterxml.jackson.annotation.{JsonCreator, JsonProperty}
+
 case class SubwayStationNode(
-  stationId: String,
-  nodeId: String
+  @JsonProperty("stationId") stationId: String,
+  @JsonProperty("nodeId") nodeId: String
 )

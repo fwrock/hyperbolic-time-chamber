@@ -2,22 +2,22 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{ IdUtil, JsonUtil, StringUtil }
+import core.util.{IdUtil, JsonUtil, StringUtil}
 
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
-import org.htc.protobuf.core.entity.event.control.load.StartEntityAckEvent
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
-import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
+import org.interscity.htc.core.enumeration.{ReportTypeEnum, TimeManagerTypeEnum}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -180,7 +180,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     // Send ack to the creator that initialization finished
     try {
       // InitializeEvent.actorRef is the creator/loader that requested initialization
-      event.actorRef ! org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent(entityId = entityId)
+      event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
       logInfo(s"Sent InitializeEntityAckEvent for $entityId to creator")
     } catch {
       case e: Exception => logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
@@ -272,6 +272,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
     currentTimeManager = event.actorRef
+    logInfo(s"Received SpontaneousEvent at tick $currentTick from time manager ${currentTimeManager.path.name}")
     try actSpontaneous(event)
     catch
       case e: Exception =>
@@ -315,6 +316,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
+    logInfo("Finishing spontaneous event at tick " + currentTick)
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
@@ -421,8 +423,38 @@ abstract class SimulationBaseActor[T <: BaseState](
     * @param entityId The entity id
     * @return The dependency
     */
-  protected def getDependency(entityId: String): Dependency =
-    dependencies(IdUtil.format(entityId))
+  protected def getDependency(entityId: String): Dependency = {
+    val formattedId = IdUtil.format(entityId)
+    dependencies.get(formattedId) match {
+      case Some(dependency) => dependency
+      case None =>
+        logWarn(s"Dependency not found for entityId: $entityId (formatted: $formattedId). Available dependencies: ${dependencies.keys.mkString(", ")}")
+        throw new NoSuchElementException(s"Dependency not found: $entityId")
+    }
+  }
+
+  /** Safely gets a dependency by entity id, returning None if not found.
+    * @param entityId The entity id
+    * @return The dependency wrapped in Option
+    */
+  protected def getDependencyOption(entityId: String): Option[Dependency] = {
+    val formattedId = IdUtil.format(entityId)
+    dependencies.get(formattedId)
+  }
+
+  /** Safely gets a dependency by entity id, throwing exception if not found.
+    * @param entityId The entity id
+    * @return The dependency
+    * @throws NoSuchElementException if dependency not found
+    */
+  protected def getDependencySafe(entityId: String): Dependency = {
+    getDependencyOption(entityId) match {
+      case Some(dependency) => dependency
+      case None => 
+        logError(s"Dependency not found: $entityId")
+        throw new NoSuchElementException(s"Dependency not found: $entityId")
+    }
+  }
 
   /** Gets the time manager actor reference (default: discrete-event).
     * @return The time manager actor reference

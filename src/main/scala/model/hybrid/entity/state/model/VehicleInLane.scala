@@ -1,6 +1,8 @@
 package org.interscity.htc
 package model.hybrid.entity.state.model
 
+import core.types.Tick
+
 /** Represents a vehicle currently in a lane during microscopic simulation.
  *
  * @param actorId ID of the vehicle actor
@@ -18,6 +20,7 @@ case class VehicleInLane(
                           velocity: Double,
                           acceleration: Double,
                           vehicleLength: Double,
+                          entryTick: Tick = 0,
                           microStateRef: Option[Any] = None  // Can hold MicroCarState, MicroBusState, etc.
                         ) {
   /** Calculate the rear position of the vehicle */
