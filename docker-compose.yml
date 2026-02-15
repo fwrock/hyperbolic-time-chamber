@@ -3,7 +3,7 @@ services:
 
   # Zookeeper for Kafka coordination
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.4.0
     container_name: htc-zookeeper
     hostname: zookeeper
     network_mode: host
@@ -17,7 +17,7 @@ services:
 
   # Kafka broker
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.0
     container_name: htc-kafka
     hostname: kafka
     network_mode: host
@@ -28,13 +28,10 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: localhost:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: localhost:9092
-      KAFKA_CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      KAFKA_CONFLUENT_METRICS_ENABLE: 'true'
-      KAFKA_CONFLUENT_SUPPORT_CUSTOMER_ID: anonymous
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
       # Performance optimizations for HTC
@@ -50,7 +47,7 @@ services:
 
   # Schema Registry for Avro schemas
   schema-registry:
-    image: confluentinc/cp-schema-registry:latest
+    image: confluentinc/cp-schema-registry:7.4.0
     container_name: htc-schema-registry
     hostname: schema-registry
     network_mode: host
@@ -108,11 +105,11 @@ services:
       REDIS_PORT: 6379
       
       # Management
-      MANAGEMENT_HTTP_PORT: 8558
+      MANAGEMENT_HTTP_PORT: 8558 
       
       # Simulation Configuration
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/quick-test/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/quick-test/data/city_map.json
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/hybrid_scenario/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/hybrid_scenario/data/city_map.json
       
       # Time Manager Configuration
       HTC_TIME_MANAGER_INSTANCES: 16

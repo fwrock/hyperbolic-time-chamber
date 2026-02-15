@@ -50,7 +50,7 @@ object GPSUtil {
             CityMapUtil.cityMap.label(source, target).map { edgeLabel =>
               val staticWeight = CityMapUtil.cityMap.weight(source, target).getOrElse(0.0)
               // Query dynamic weight cache, fallback to static if not found
-              DynamicWeightCache.getWeight(edgeLabel.id, staticWeight)
+              DynamicWeightCache.getWeight(edgeLabel.id, staticWeight)  
             }
         } else {
           // Use static weights from graph

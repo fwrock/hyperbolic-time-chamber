@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
 import core.types.Tick
+import core.entity.event.SpontaneousEvent
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -60,6 +61,9 @@ class Link(
   /** Last tick when dynamic cost was published.
     */
   private var lastCostPublishTick: Tick = 0
+
+  /** Whether this link is currently scheduled for micro ticks. */
+  private var microTickScheduled: Boolean = false
   
   /** Interval for publishing dynamic costs (ticks).
     * Read from configuration or use default.
@@ -108,7 +112,7 @@ class Link(
     
     // Initialize lanes if not already done
     if (state.vehiclesByLane.isEmpty) {
-      state.initializeMicroLanes()
+      state = state.initializeMicroLanes()
     }
     
     logInfo(s"✓ MICRO mode initialized")
@@ -129,6 +133,24 @@ class Link(
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
+  }
+
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    if (!state.isMicroMode) {
+      microTickScheduled = false
+      onFinishSpontaneous(None)
+      return
+    }
+
+    val hasVehicles = state.totalVehiclesInMicro > 0
+    if (!hasVehicles) {
+      microTickScheduled = false
+      onFinishSpontaneous(None)
+      return
+    }
+
+    handleGlobalTick(currentTick)
+    onFinishSpontaneous(Some(currentTick + 1))
   }
   
   /** Handle vehicle entering link.
@@ -193,6 +215,11 @@ class Link(
       )
     )
     
+    // Ensure micro lanes are initialized
+    if (state.vehiclesByLane.isEmpty) {
+      state = state.initializeMicroLanes()
+    }
+
     // Assign lane (simple strategy: least occupied lane)
     val assignedLane = findLeastOccupiedLane()
     
@@ -215,6 +242,30 @@ class Link(
       eventType = "MicroEnterLink", // Custom event type
       actorType = LoadBalancedDistributed
     )
+
+    // Track vehicle in micro lane state (entry tick from event)
+    val entryTick = event.tick
+    val vehicle = model.hybrid.entity.state.model.VehicleInLane(
+      actorId = data.actorId,
+      shardId = data.shardId,
+      position = 0.0,
+      velocity = 0.0,
+      acceleration = 0.0,
+      vehicleLength = data.actorSize,
+      entryTick = entryTick
+    )
+
+    state.vehiclesByLane.get(assignedLane).foreach { queue =>
+      val insertIdx = queue.indexWhere(_.position < vehicle.position)
+      if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
+    }
+
+    // Schedule micro ticks on demand
+    if (!microTickScheduled) {
+      microTickScheduled = true
+      scheduleEvent(entryTick + 1)
+      logInfo(s"Activated micro scheduling at tick ${entryTick + 1}")
+    }
     
     logDebug(s"Vehicle ${data.actorId} registered in MICRO mode, lane $assignedLane")
     
@@ -253,6 +304,10 @@ class Link(
         eventType = "MicroLeaveLink",
         actorType = LoadBalancedDistributed
       )
+
+      if (state.totalVehiclesInMicro == 0) {
+        logInfo("MICRO link is now empty; will stop scheduling on next tick")
+      }
     } else {
       // Standard meso response
       val linkInfo = LinkInfoData(
@@ -344,6 +399,10 @@ class Link(
     }
     
     if (state.isMicroMode) {
+      if (state.totalVehiclesInMicro == 0) {
+        logDebug(s"Skipping MICRO tick $tick (no vehicles)")
+        return
+      }
       logDebug(s"Executing MICRO tick $tick with ${state.microTicksPerGlobalTick} sub-ticks")
       
       // Execute all sub-ticks locally
@@ -441,8 +500,8 @@ class Link(
       val vehiclesAtEnd = vehicles.filter(_.position >= state.length)
       
       vehiclesAtEnd.foreach { vehicle =>
-        // Calculate travel time (LinkRegister doesn't have tick field in hybrid model)
-        val travelTime = 1L // Simplified - actual calculation would need entry tick tracking
+        // Calculate travel time based on entry tick
+        val travelTime = math.max(1L, tick - vehicle.entryTick + 1)
         
         // Send leave link message
         val leaveData = MicroLeaveLinkData(
@@ -492,9 +551,9 @@ class Link(
     
     DynamicWeightCache.publishCost(dynamicCost, cacheTtl) match {
       case scala.util.Success(_) =>
-        logDebug(s"Published dynamic cost: weight=${dynamicCost.totalCost}, congestion=${dynamicCost.congestionFactor}, vehicles=${dynamicCost.vehicleCount}")
+        logDebug(s"Published dynamic cost to Kafka: weight=${dynamicCost.totalCost}, congestion=${dynamicCost.congestionFactor}, vehicles=${dynamicCost.vehicleCount}")
       case scala.util.Failure(e) =>
-        logWarn(s"Failed to publish dynamic cost: ${e.getMessage}")
+        logWarn(s"Failed to publish dynamic cost to Kafka: ${e.getMessage}")
     }
   }
 }

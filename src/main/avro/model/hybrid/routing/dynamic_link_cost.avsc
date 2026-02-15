@@ -1,0 +1,81 @@
+{
+  "type": "record",
+  "name": "DynamicLinkCostEvent",
+  "namespace": "org.interscity.htc.avro.model.hybrid.routing",
+  "doc": "Dynamic link cost event for real-time traffic routing in HTC simulation",
+  "fields": [
+    {
+      "name": "linkId",
+      "type": "string",
+      "doc": "Unique identifier for the link (e.g., htcaid:link;downtown_main_st)"
+    },
+    {
+      "name": "staticCost", 
+      "type": "double",
+      "doc": "Base static cost of the link (distance-based)"
+    },
+    {
+      "name": "congestionFactor",
+      "type": "double", 
+      "default": 1.0,
+      "doc": "Current congestion multiplier (1.0 = free flow, 5.0 = heavy traffic)"
+    },
+    {
+      "name": "incidentPenalty",
+      "type": "double",
+      "default": 0.0, 
+      "doc": "Additional cost penalty for incidents/accidents on this link"
+    },
+    {
+      "name": "currentSpeed",
+      "type": "double",
+      "doc": "Current average speed on the link (km/h)"
+    },
+    {
+      "name": "freeFlowSpeed", 
+      "type": "double",
+      "doc": "Free flow speed limit for the link (km/h)"
+    },
+    {
+      "name": "vehicleCount",
+      "type": "int",
+      "doc": "Number of vehicles currently on the link"
+    },
+    {
+      "name": "capacity",
+      "type": "double",
+      "doc": "Maximum capacity of the link (vehicles)"
+    },
+    {
+      "name": "totalCost",
+      "type": "double", 
+      "doc": "Final calculated cost including all factors"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "System timestamp when this cost was calculated (milliseconds since epoch)"
+    },
+    {
+      "name": "tick",
+      "type": "long",
+      "doc": "Simulation tick when this cost was calculated"
+    },
+    {
+      "name": "nodeId",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Optional: ID of the cluster node that published this event"
+    },
+    {
+      "name": "simulationMode",
+      "type": {
+        "type": "enum",
+        "name": "SimulationMode",
+        "symbols": ["MESO", "MICRO"]
+      },
+      "default": "MESO",
+      "doc": "Simulation mode of the link that generated this cost"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import scala.collection.mutable
 case class NodeState(
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
-  scheduleOnTimeManager: Boolean = true,
+  scheduleOnTimeManager: Boolean = false,
   latitude: Double,
   longitude: Double,
   links: List[String],

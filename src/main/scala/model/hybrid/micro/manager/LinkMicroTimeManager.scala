@@ -102,7 +102,7 @@ class LinkMicroTimeManager(
   )(implicit context: ActorContext[Command]): Unit = {
     context.log.debug(s"[$linkId] Registering vehicle $vehicleId in lane $lane at position $position")
     
-    val vehicle = VehicleInLane(vehicleId, shardId = "", position, velocity, acceleration = 0.0, vehicleLength)
+    val vehicle = VehicleInLane(vehicleId, shardId = "", position, velocity, acceleration = 0.0, vehicleLength, entryTick = currentGlobalTick)
     
     vehiclesByLane.get(lane) match {
       case Some(queue) =>

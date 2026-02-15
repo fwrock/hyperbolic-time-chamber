@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import org.interscity.htc.model.hybrid.actor.Subway
 import org.interscity.htc.model.hybrid.entity.state.*
 import org.interscity.htc.model.hybrid.entity.state.{ SubwayState, SubwayStationState }
 
@@ -14,9 +15,10 @@ import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralAr
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, IdentifyUtil, JsonUtil }
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
-import org.interscity.htc.model.hybrid.entity.state.enumeration.SubwayStationStateEnum
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, SubwayStationStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
 import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 import scala.collection.mutable
 
@@ -28,14 +30,21 @@ class SubwayStation(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    val node = getDependency(state.nodeId)
-    sendMessageTo(
-      node.id,
-      node.classType,
-      RegisterSubwayStationData(
-        lines = state.lines.keys.toSeq
-      )
-    )
+    getDependencyOption(state.nodeId) match {
+      case Some(node) =>
+        sendMessageTo(
+          node.id,
+          node.classType,
+          RegisterSubwayStationData(
+            lines = state.lines.keys.toList
+          ),
+          "RegisterSubwayStation",
+          LoadBalancedDistributed
+        )
+        logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+      case None =>
+        logWarn(s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+    }
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -43,10 +52,13 @@ class SubwayStation(
       case Start =>
         state.status = Working
         createSubwayFrom(state.lines)
+        scheduleNextTick()
       case Working =>
         createSubwayFrom(filterLinesByNextTick())
+        scheduleNextTick()
       case _ =>
         logInfo(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous(None)
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -106,22 +118,59 @@ class SubwayStation(
           case Some(subwayQueue) =>
             if (subwayQueue.nonEmpty && state.garage) {
               val subway = subwayQueue.dequeue()
-              val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
-              lines(line).nextTick = currentTick + lines(line).interval
-              onFinishSpontaneous(Some(lines(line).nextTick), destruct = false)
+              try {
+                val actorRef = createSubway(subway)
+                dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
+                lines(line).nextTick = currentTick + lines(line).interval
+              } catch {
+                case e: IllegalStateException =>
+                  logError(s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}")
+                  // Put the subway back in the queue for later retry
+                  subwayQueue.enqueue(subway)
+                case e: Exception =>
+                  logError(s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}")
+                  // Put the subway back in the queue for later retry
+                  subwayQueue.enqueue(subway)
+              }
             }
           case None =>
             logInfo(s"Subway not found for line $line")
     }
 
-  private def createSubway(subway: SubwayInformation): ActorRef =
-    createShardedActorSeveralArgs(
-      system = context.system,
-      actorClass = classOf[Subway],
+  private def scheduleNextTick(): Unit = {
+    val nextTickOpt = state.lines.values
+      .map { line =>
+        if (line.nextTick <= currentTick) {
+          line.nextTick = currentTick + line.interval
+        }
+        line.nextTick
+      }
+      .toList
+      .sorted
+      .headOption
+    onFinishSpontaneous(nextTickOpt, destruct = false)
+  }
+
+  private def createSubway(subway: SubwayInformation): ActorRef = {
+    val route = convertLineRouteToPath(subway.line)
+    if (route.isEmpty) {
+      logWarn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available")
+      throw new IllegalStateException(s"No route available for subway line ${subway.line}")
+    }
+    
+    val subwayStations = convertLineToSubwayStations(subway.line)
+    if (subwayStations.isEmpty) {
+      logWarn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available")
+      throw new IllegalStateException(s"No subway stations available for line ${subway.line}")
+    }
+    
+    val subwayProperties = Properties(
       entityId = subway.actorId,
-      getTimeManager,
-      toJson(
+      resourceId = properties.resourceId,
+      timeManagers = properties.timeManagers,
+      creatorManager = properties.creatorManager,
+      reporters = properties.reporters,
+      data = toJson(
         SubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
@@ -129,14 +178,24 @@ class SubwayStation(
           velocity = subway.velocity,
           stopTime = subway.stopTime,
           line = subway.line,
-          bestRoute = Some(convertLineRouteToPath(subway.line)),
-          subwayStations = convertLineToSubwayStations(subway.line),
+          bestRoute = Some(route),
+          subwayStations = subwayStations,
           origin = state.nodeId,
-          destination = convertLineToSubwayStations(subway.line).values.last
+          destination = subwayStations.values.last
         )
       ),
-      dependencies
+      dependencies = mutable.Map[String, Dependency](),
+      actorType = properties.actorType,
+      defaultTimeManagerType = properties.defaultTimeManagerType
     )
+
+    createShardedActorSeveralArgs(
+      system = context.system,
+      actorClass = classOf[Subway],
+      entityId = subway.actorId,
+      subwayProperties
+    )
+  }
 
   private def convertLineToSubwayStations(line: String): mutable.Map[String, String] = {
     val lineRoute = state.linesRoute(line)
@@ -154,10 +213,10 @@ class SubwayStation(
     
     lineRoute match {
       case Some(routeQueue) =>
-        // linesRoute format: Queue[(SubwayStationNode, rail_link_id)]
+        // linesRoute format: Queue[SubwayRouteEntry]
         // Output format: Queue[(rail_link_id, node_id)]
-        routeQueue.foreach { case (stationNode, railLinkId) =>
-          route.enqueue((railLinkId, stationNode.nodeId))
+        routeQueue.foreach { routeEntry =>
+          route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))
         }
         logInfo(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
       case None =>

@@ -642,7 +642,7 @@ class HybridMigrator:
         self.log(f"  ✓ Generated {len(self.bus_stops)} bus stops")
         self.log(f"  ✓ Generated {len(self.subway_stations)} subway stations")
 
-        self.log(f"  ✓ Generated {num_lines} subway lines with {len(self.subways)} trains")
+        self.log(f"  ✓ Generated {num_lines} subway lines with {self.stats.get('subways', 0)} trains")
     
     def _generate_bus_stops(self):
         """Generate bus stops at selected nodes"""
@@ -779,6 +779,16 @@ class HybridMigrator:
                     "label": route_label
                 }
                 bus_information_queue.append(bus_info)
+
+            # Dependencies: Scala will format dep.id using IdUtil.format() as the map key
+            # So we just need id and classType; the key in JSON doesn't matter
+            bus_station_dependencies = {}
+            unique_node_ids = set(bus_stops_map.values())
+            for node_id in unique_node_ids:
+                bus_station_dependencies[node_id] = {
+                    "id": node_id,
+                    "classType": "hybrid.actor.Node"
+                }
             
             bus_station = {
                 "id": station_id,
@@ -794,22 +804,13 @@ class HybridMigrator:
                         "interval": 600,  # 10 minutes between bus creation
                         "buses": bus_information_queue,  # Queue of BusInformation
                         "goingRoute": None,  # Will be calculated at runtime
-                        "goingBestCost": float('inf'),
+                        "goingBestCost": 1.0e12,
                         "returningRoute": None,  # Will be calculated at runtime  
-                        "returningBestCost": float('inf'),
+                        "returningBestCost": 1.0e12,
                         "status": "Start"
                     }
                 },
-                "dependencies": {
-                    "origin": {
-                        "id": origin_node,
-                        "classType": "hybrid.actor.Node"
-                    },
-                    "destination": {
-                        "id": destination_node,
-                        "classType": "hybrid.actor.Node"
-                    }
-                }
+                "dependencies": bus_station_dependencies
             }
             
             # Store station instead of individual buses
@@ -921,6 +922,7 @@ class HybridMigrator:
             line_id = f"line_{route_idx + 1}"
             line_label = f"Metro Line {route_idx + 1}"
             frequency = random.choice([3, 5, 7, 10])  # minutes
+            interval_seconds = frequency * 60
             
             # Update stations to include this line
             for station in route_stations:
@@ -931,82 +933,49 @@ class HybridMigrator:
                     station_content['lines'] = {}
                 
                 station_content['lines'][line_id] = {
-                    "label": line_label,
-                    "frequency": frequency,
-                    "terminal": station == route_stations[0] or station == route_stations[-1]
+                    "interval": interval_seconds,
+                    "nextTick": 0
                 }
-                
-                # Add route path to linesRoute
-                if 'linesRoute' not in station_content:
-                    station_content['linesRoute'] = {}
-                
-                # Build route from this station
-                route_path = []
-                station_idx = route_stations.index(station)
-                for i in range(station_idx + 1, len(route_stations)):
-                    next_station = route_stations[i]
-                    next_node = next_station['data']['content']['nodeId']  # FIXED: was 'node'
-                    route_path.append({
-                        "station": {"id": next_station['id'], "classType": "hybrid.actor.SubwayStation"},
-                        "node": next_node
-                    })
-                
-                station_content['linesRoute'][line_id] = route_path
-            
-            # Generate trains for this line
+
+                # Ensure subways map exists for this line (queue of SubwayInformation)
+                if 'subways' not in station_content:
+                    station_content['subways'] = {}
+                if line_id not in station_content['subways']:
+                    station_content['subways'][line_id] = []
+
+                # Mark terminal and garage stations
+                if station == route_stations[0] or station == route_stations[-1]:
+                    station_content['terminal'] = True
+                if station == route_stations[0]:
+                    station_content['garage'] = True
+
+            # Populate subway queues only at the first station (garage)
+            garage_station = route_stations[0]
+            garage_content = garage_station['data']['content']
+            garage_queue = garage_content['subways'].setdefault(line_id, [])
             for train_idx in range(self.config.subways_per_route):
-                train_id = f"htcaid:subway;line_{route_idx}_train_{train_idx}"
-                
-                # Stagger start times
-                start_tick = route_idx * 50 + train_idx * 150
-                
-                # Start at first station
-                origin_station = route_stations[0]
-                origin_node = origin_station['data']['content']['nodeId']  # FIXED: was 'node'
-                dest_station = route_stations[-1]
-                dest_node = dest_station['data']['content']['nodeId']  # FIXED: was 'node'
-                
-                # Build subwayStations map (station_id -> node_id)
-                subway_stations_map = {}
-                for station in route_stations:
-                    station_id = station['id']
-                    node_id = station['data']['content']['nodeId']  # FIXED: was 'node'
-                    subway_stations_map[station_id] = node_id
-                
-                subway = {
-                    "id": train_id,
-                    "typeActor": "hybrid.actor.Subway",
-                    "data": {
-                        "dataType": "model.hybrid.entity.state.SubwayState",
-                        "content": {
-                            "startTick": start_tick,
-                            "capacity": 300,
-                            "numberOfPorts": 4,
-                            "velocity": 22.22,  # 80 km/h
-                            "distance": 0.0,
-                            "boardingTimeByPassenger": 1.5,
-                            "stopTime": 30,  # 30 seconds at each station
-                            "subwayStations": subway_stations_map,
-                            "countUnloadPassenger": 0,
-                            "countUnloadReceived": 0,
-                            "origin": origin_node,
-                            "destination": dest_node,
-                            "passengers": {},
-                            "bestRoute": None,
-                            "currentPath": None,
-                            "currentPathPosition": 0,
-                            "bestCost": 0.0,
-                            "line": line_id,
-                            "actorType": "Subway",
-                            "status": "Start",
-                            "scheduleOnTimeManager": True
-                        }
-                    },
-                    "dependencies": {}
+                train_info = {
+                    "line": line_id,
+                    "actorId": f"htcaid:subway;{line_id}_train_{train_idx}",
+                    "capacity": 300,
+                    "numberOfPorts": 4,
+                    "velocity": 22.22,  # 80 km/h
+                    "stopTime": 30
                 }
-                
-                self.subways.append(subway)
+                garage_queue.append(train_info)
                 self.stats['subways'] += 1
+
+            # Store route info for rail link generation (internal use only)
+            route = {
+                "id": line_id,
+                "data": {
+                    "content": {
+                        "label": line_label,
+                        "stations": [station['id'] for station in route_stations]
+                    }
+                }
+            }
+            self.subway_routes.append(route)
             
             route_idx += 1
     
@@ -1082,11 +1051,11 @@ class HybridMigrator:
             # Build node_id -> station mapping
             node_to_station = {}
             for station in self.subway_stations:
-                node_id = station['data']['content']['node']
+                node_id = station['data']['content']['nodeId']
                 node_to_station[node_id] = station
             
             for route_data in routes_data['routes']:
-                route_id = f"htcaid:subwayroute;{route_data['id']}"
+                line_id = route_data['id']
                 station_node_ids = route_data['stations']
                 
                 # Validate stations exist
@@ -1101,79 +1070,49 @@ class HybridMigrator:
                     self.log(f"  ⚠️  Route {route_data['id']} has less than 2 valid stations, skipping")
                     continue
                 
-                # Create route
+                # Create route info for rail link generation (internal use only)
                 route = {
-                    "id": route_id,
-                    "typeActor": "hybrid.actor.SubwayRoute",
+                    "id": line_id,
                     "data": {
-                        "dataType": "model.hybrid.entity.state.SubwayRouteState",
                         "content": {
-                            "startTick": 0,
                             "label": route_data['label'],
-                            "stations": [station['id'] for station in route_stations],
-                            "frequency": route_data.get('frequency', 5),
-                            "operatingHours": route_data.get('operatingHours', {"start": 300, "end": 1380}),
-                            "digitalRail": True,
-                            "scheduleOnTimeManager": False
-                        }
-                    },
-                    "dependencies": {}
-                }
-                
-                self.subway_routes.append(route)
-                
-                # Update stations to reference this line
-                for station in route_stations:
-                    station['data']['content']['lines'].append(route_id)
-                
-                # Generate trains for this line
-                trains_per_route = route_data.get('trainsPerRoute', self.config.subways_per_route)
-                for train_idx in range(trains_per_route):
-                    train_id = f"htcaid:subway;{route_data['id']}_train_{train_idx}"
-                    
-                    # Stagger start times
-                    start_tick = len(self.subway_routes) * 50 + train_idx * 150
-                    
-                    # Start at first station
-                    origin_station = route_stations[0]
-                    origin_node = origin_station['data']['content']['node']
-                    
-                    subway = {
-                        "id": train_id,
-                        "typeActor": "hybrid.actor.Subway",
-                        "data": {
-                            "dataType": "model.hybrid.entity.state.SubwayState",
-                            "content": {
-                                "startTick": start_tick,
-                                "label": f"{route_data['label']} Train {train_idx + 1}",
-                                "capacity": 300,
-                                "origin": origin_node,
-                                "destination": origin_node,
-                                "route": route_id,
-                                "stations": {station['id']: station['id'] for station in route_stations},
-                                "people": {},
-                                "actorType": "Subway",
-                                "size": 60.0,
-                                "currentSimulationMode": "MESO",
-                                "microState": None,
-                                "status": "Start",
-                                "digitalRailPath": [station['id'] for station in route_stations],
-                                "currentStation": origin_station['id'],
-                                "nextStation": route_stations[1]['id'] if len(route_stations) > 1 else None,
-                                "distance": 0.0,
-                                "eventCount": 0,
-                                "scheduleOnTimeManager": True
-                            }
-                        },
-                        "dependencies": {
-                            "route": {
-                                "id": route_id,
-                                "classType": "hybrid.actor.SubwayRoute"
-                            }
+                            "stations": [station['id'] for station in route_stations]
                         }
                     }
-                    
-                    self.subways.append(subway)
+                }
+
+                self.subway_routes.append(route)
+
+                interval_seconds = route_data.get('frequency', 5) * 60
+
+                # Update stations with line info and subway queues
+                for station in route_stations:
+                    station_content = station['data']['content']
+                    station_content.setdefault('lines', {})
+                    station_content.setdefault('subways', {})
+                    station_content['lines'][line_id] = {
+                        "interval": interval_seconds,
+                        "nextTick": 0
+                    }
+                    station_content['subways'].setdefault(line_id, [])
+
+                # Mark terminal/garage stations and enqueue trains at the first station
+                route_stations[0]['data']['content']['garage'] = True
+                route_stations[0]['data']['content']['terminal'] = True
+                route_stations[-1]['data']['content']['terminal'] = True
+
+                trains_per_route = route_data.get('trainsPerRoute', self.config.subways_per_route)
+                garage_queue = route_stations[0]['data']['content']['subways'][line_id]
+                for train_idx in range(trains_per_route):
+                    train_info = {
+                        "line": line_id,
+                        "actorId": f"htcaid:subway;{line_id}_train_{train_idx}",
+                        "capacity": 300,
+                        "numberOfPorts": 4,
+                        "velocity": 22.22,
+                        "stopTime": 30
+                    }
+                    garage_queue.append(train_info)
                     self.stats['subways'] += 1
             
             self.log(f"  ✓ Loaded {len(self.subway_routes)} subway routes from file")
@@ -1208,6 +1147,7 @@ class HybridMigrator:
             route_content = route['data']['content']
             station_ids = route_content['stations']
             line_label = route_content['label']
+            line_id_safe = route['id'].split(';')[-1]
             
             if len(station_ids) < 2:
                 continue
@@ -1224,8 +1164,8 @@ class HybridMigrator:
                 if not from_station or not to_station:
                     continue
                 
-                from_node = from_station['data']['content']['node']
-                to_node = to_station['data']['content']['node']
+                from_node = from_station['data']['content']['nodeId']
+                to_node = to_station['data']['content']['nodeId']
                 
                 # Calculate distance between stations (use existing road network distance as approximation)
                 # In production, would use actual rail alignment
@@ -1233,7 +1173,7 @@ class HybridMigrator:
                 
                 # Rail link parameters (optimized for subway)
                 rail_link = {
-                    "id": f"htcaid:rail_link;line_{route['id'].split(';')[1]}_segment_{i}",
+                    "id": f"htcaid:rail_link;line_{line_id_safe}_segment_{i}",
                     "typeActor": "hybrid.actor.RailLink",
                     "data": {
                         "dataType": "model.hybrid.entity.state.RailLinkState",
@@ -1282,10 +1222,7 @@ class HybridMigrator:
                             "id": to_station_id,
                             "classType": "hybrid.actor.SubwayStation"
                         },
-                        "subway_line": {
-                            "id": route['id'],
-                            "classType": "hybrid.actor.SubwayRoute"
-                        }
+                        
                     }
                 }
                 
@@ -1304,13 +1241,13 @@ class HybridMigrator:
                 if not from_station or not to_station:
                     continue
                 
-                from_node = from_station['data']['content']['node']
-                to_node = to_station['data']['content']['node']
+                from_node = from_station['data']['content']['nodeId']
+                to_node = to_station['data']['content']['nodeId']
                 
                 distance = self._calculate_distance_between_nodes(from_node, to_node)
                 
                 rail_link = {
-                    "id": f"htcaid:rail_link;line_{route['id'].split(';')[1]}_return_{i}",
+                    "id": f"htcaid:rail_link;line_{line_id_safe}_return_{i}",
                     "typeActor": "hybrid.actor.RailLink",
                     "data": {
                         "dataType": "model.hybrid.entity.state.RailLinkState",
@@ -1342,7 +1279,7 @@ class HybridMigrator:
                         "to_node": {"id": to_node, "classType": "hybrid.actor.Node"},
                         "from_station": {"id": from_station_id, "classType": "hybrid.actor.SubwayStation"},
                         "to_station": {"id": to_station_id, "classType": "hybrid.actor.SubwayStation"},
-                        "subway_line": {"id": route['id'], "classType": "hybrid.actor.SubwayRoute"}
+                        
                     }
                 }
                 
@@ -1366,7 +1303,7 @@ class HybridMigrator:
         """
         for station in self.subway_stations:
             station_content = station['data']['content']
-            station_node = station_content['node']
+            station_node = station_content['nodeId']
             
             # Initialize linesRoute structure
             lines_route = {}
@@ -1401,9 +1338,11 @@ class HybridMigrator:
                         to_station = next((s for s in self.subway_stations if s['id'] == to_station_id), None)
                         if to_station:
                             route_path.append({
-                                "stationId": to_station_id,
-                                "nodeId": to_station['data']['content']['node'],
-                                "linkId": rail_link['id']
+                                "stationNode": {
+                                    "stationId": to_station_id,
+                                    "nodeId": to_station['data']['content']['nodeId']
+                                },
+                                "railLinkId": rail_link['id']
                             })
                 
                 # Return path (back to start - for circular lines)
@@ -1416,9 +1355,11 @@ class HybridMigrator:
                         to_station = next((s for s in self.subway_stations if s['id'] == to_station_id), None)
                         if to_station:
                             route_path.append({
-                                "stationId": to_station_id,
-                                "nodeId": to_station['data']['content']['node'],
-                                "linkId": rail_link['id']
+                                "stationNode": {
+                                    "stationId": to_station_id,
+                                    "nodeId": to_station['data']['content']['nodeId']
+                                },
+                                "railLinkId": rail_link['id']
                             })
                 
                 if route_path:

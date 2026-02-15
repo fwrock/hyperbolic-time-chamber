@@ -15,7 +15,7 @@ case class BusStationState(
   name: String,
   origin: String,
   destination: String = null,
-  busStops: Map[String, String],
+  busStops: mutable.LinkedHashMap[String, String],  // Preserves insertion order
   interval: Tick,
   buses: mutable.Queue[BusInformation],
   goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] = Some(
