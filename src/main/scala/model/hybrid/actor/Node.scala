@@ -78,13 +78,21 @@ class Node(
         case Some(identify) =>
           state.signals.get(identify.id) match {
             case Some(sig) =>
-//            report(
-//              data = SignalStateData(
-//                phase = sig.state,
-//                nextTick = sig.nextTick
-//              ),
-//              "send signal state"
-//            )
+              // Report signal request
+              report(
+                data = Map(
+                  "event_type" -> "signal_state_requested",
+                  "node_id" -> getEntityId,
+                  "link_id" -> data.targetLinkId,
+                  "signal_id" -> identify.id,
+                  "phase_state" -> sig.state.toString,
+                  "remaining_time" -> sig.remainingTime,
+                  "vehicle_id" -> event.actorRefId,
+                  "tick" -> currentTick
+                ),
+                label = "node_signal_requested"
+              )
+              
               sendMessageTo(
                 entityId = event.actorRefId,
                 shardId = event.shardRefId,

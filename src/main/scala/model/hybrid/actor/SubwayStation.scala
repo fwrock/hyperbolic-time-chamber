@@ -189,6 +189,23 @@ class SubwayStation(
       defaultTimeManagerType = properties.defaultTimeManagerType
     )
 
+    // Report subway creation
+    report(
+      data = Map(
+        "event_type" -> "subway_created",
+        "station_id" -> getEntityId,
+        "subway_id" -> subway.actorId,
+        "line" -> subway.line,
+        "capacity" -> subway.capacity,
+        "velocity" -> subway.velocity,
+        "stop_time" -> subway.stopTime,
+        "route_length" -> route.size,
+        "number_of_stations" -> subwayStations.size,
+        "tick" -> currentTick
+      ),
+      label = "subway_created"
+    )
+
     createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Subway],

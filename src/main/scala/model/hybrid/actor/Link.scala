@@ -162,6 +162,22 @@ class Link(
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
     
+    // Report vehicle entering link
+    report(
+      data = Map(
+        "event_type" -> "vehicle_entered_link",
+        "link_id" -> properties.entityId,
+        "vehicle_id" -> data.actorId,
+        "vehicle_type" -> data.actorType,
+        "link_length" -> state.length,
+        "simulation_mode" -> state.simulationMode.toString,
+        "current_congestion" -> state.congestionFactor,
+        "vehicles_in_link" -> state.registered.size,
+        "tick" -> currentTick
+      ),
+      label = "link_vehicle_entered"
+    )
+    
     if (state.isMicroMode) {
       handleEnterLinkMicro(event, data)
     } else {
@@ -276,6 +292,20 @@ class Link(
     */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     logDebug(s"Vehicle ${data.actorId} leaving link")
+    
+    // Report vehicle leaving link
+    report(
+      data = Map(
+        "event_type" -> "vehicle_left_link",
+        "link_id" -> properties.entityId,
+        "vehicle_id" -> data.actorId,
+        "vehicle_type" -> data.actorType.toString,
+        "link_length" -> state.length,
+        "vehicles_remaining" -> (state.registered.size - 1),
+        "tick" -> currentTick
+      ),
+      label = "link_vehicle_left"
+    )
     
     // Unregister vehicle
     state.registered.filterInPlace(_.actorId != data.actorId)

@@ -30,15 +30,10 @@ object GPSUtil {
     destinationId: String,
     useDynamicWeights: Boolean = true
   ): Option[(Double, mutable.Queue[(String, String)])] = {
-    System.err.println(s"[GPSUtil] calcRoute called: origin=$originId, destination=$destinationId")
-    System.err.println(s"[GPSUtil] Total nodes in map: ${CityMapUtil.nodesById.size}")
-    System.err.println(s"[GPSUtil] Total edges in map: ${CityMapUtil.cityMap.edges.size}")
     
     val originNodeOpt = CityMapUtil.nodesById.get(originId)
     val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
-    
-    System.err.println(s"[GPSUtil] originNode found: ${originNodeOpt.isDefined}")
-    System.err.println(s"[GPSUtil] destinationNode found: ${destinationNodeOpt.isDefined}")
+
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
@@ -59,13 +54,10 @@ object GPSUtil {
         
         // Use shortest path by hops for now, but with dynamic weight consideration
         // TODO: Implement A* with custom weight function
-        System.err.println(s"[GPSUtil] About to call cityMap.shortestPathByHops")
         val pathResult = CityMapUtil.cityMap.shortestPathByHops(originNode, destinationNode)
-        System.err.println(s"[GPSUtil] shortestPathByHops returned: ${pathResult.isDefined}")
         
         pathResult match {
           case Some((hopCount, path)) =>
-            System.err.println(s"[GPSUtil] Path found! Hops: $hopCount, Path length: ${path.length}")
             // Recalculate cost using dynamic weights
             val dynamicCost = if (useDynamicWeights) {
               path.foldLeft(0.0) { case (acc, (edgeObject, targetNode)) =>
@@ -81,10 +73,7 @@ object GPSUtil {
             path.foreach { case (edgeObject, targetNodeOfEdgeInPath) =>
               // Keep original IDs (with : and ;) for CityMapUtil lookups
               routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
-              System.err.println(s"[GPSUtil] Route segment: edge=${edgeObject.label.id}, target=${targetNodeOfEdgeInPath.id}")
             }
-            System.err.println(s"[GPSUtil] Final route queue size: ${routeQueue.size}")
-            System.err.println(s"[GPSUtil] Returning: Some((cost=$dynamicCost, queue with ${routeQueue.size} elements))")
             Some((dynamicCost, routeQueue))
           case None =>
             System.err.println(s"GPSUtil: Nenhuma rota encontrada de $originId para $destinationId.")

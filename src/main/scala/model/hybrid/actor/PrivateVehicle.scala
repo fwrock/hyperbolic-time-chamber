@@ -83,33 +83,41 @@ trait PrivateVehicle[T <: MovableState] {
     * and begins the trip.
     */
   protected def handleStartTrip(event: ActorInteractionEvent, data: StartTripData): Unit = {
-    if (getVehicleStatus != Parked) {
-      logVehicleWarn(s"${getActorEntityId} received StartTrip but is not Parked (status: ${getVehicleStatus})")
-      return
+    // Guard: wrap all state access in try-catch, defer if not ready
+    try {
+      val status = getVehicleStatus
+      if (status != Parked) {
+        logVehicleWarn(s"${getActorEntityId} received StartTrip but is not Parked (status: $status)")
+        return
+      }
+      
+      logVehicleInfo(s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}")
+      
+      // Store owner reference (complete Identify with id + classType)
+      ownerPersonRef = Some(Identify(
+        id = data.personId,
+        classType = event.actorClassType // Person's shard/classType from event sender
+      ))
+      tripOrigin = Some(data.origin)
+      tripDestination = Some(data.destination)
+      driverAttributes = data.driverAttributes.validate()
+      tripStartTick = Some(data.startTick)
+      tripStartDistance = getCurrentDistance
+      
+      // Configure vehicle with driver attributes
+      applyDriverAttributes(driverAttributes)
+      
+      // Activate vehicle (transition from Parked to Start)
+      setVehicleStatus(Start)
+      
+      // Register with TimeManager (this will trigger route request)
+      // The existing actSpontaneous logic will handle Start status
+      scheduleNextTick(Some(getActorCurrentTick + 1))
+    } catch {
+      case _: NullPointerException =>
+        logVehicleDebug(s"${getActorEntityId} state not ready for StartTrip, deferring message")
+        context.self ! event
     }
-    
-    logVehicleInfo(s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}")
-    
-    // Store owner reference (complete Identify with id + classType)
-    ownerPersonRef = Some(Identify(
-      id = data.personId,
-      classType = event.actorClassType // Person's shard/classType from event sender
-    ))
-    tripOrigin = Some(data.origin)
-    tripDestination = Some(data.destination)
-    driverAttributes = data.driverAttributes.validate()
-    tripStartTick = Some(data.startTick)
-    tripStartDistance = getCurrentDistance
-    
-    // Configure vehicle with driver attributes
-    applyDriverAttributes(driverAttributes)
-    
-    // Activate vehicle (transition from Parked to Start)
-    setVehicleStatus(Start)
-    
-    // Register with TimeManager (this will trigger route request)
-    // The existing actSpontaneous logic will handle Start status
-    scheduleNextTick(Some(getActorCurrentTick + 1))
   }
   
   /** Get current trip origin (for route calculation).

@@ -81,7 +81,22 @@ class TrafficSignal(
     nodes: List[String],
     phaseOrigin: String,
     nextTick: Tick
-  ): Unit =
+  ): Unit = {
+    // Report phase change
+    report(
+      data = Map(
+        "event_type" -> "signal_phase_change",
+        "signal_id" -> getEntityId,
+        "phase_origin" -> phaseOrigin,
+        "phase_state" -> signalState.state.toString,
+        "remaining_time" -> signalState.remainingTime,
+        "next_tick" -> nextTick,
+        "affected_nodes" -> nodes.size,
+        "tick" -> currentTick
+      ),
+      label = "signal_phase_change"
+    )
+    
     nodes.foreach {
       node =>
         val data = TrafficSignalChangeStatusData(
@@ -92,6 +107,7 @@ class TrafficSignal(
         val dependency = getDependency(node)
         sendMessageTo(dependency.id, dependency.classType, data, TrafficSignalChangeStatus.toString)
     }
+  }
 
   private def calcNewState(currentCycleTick: Tick, phase: Phase): TrafficSignalPhaseStateEnum =
     if (

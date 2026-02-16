@@ -66,9 +66,11 @@ class Car(
   
   // ===== PrivateVehicle Accessor Methods =====
   
-  override protected def getVehicleStatus: MovableStatusEnum = state.status
+  override protected def getVehicleStatus: MovableStatusEnum = {
+    if (state == null) Parked else state.status
+  }
   override protected def setVehicleStatus(status: MovableStatusEnum): Unit = {
-    state.status = status
+    if (state != null) state.status = status
   }
   override protected def getActorCurrentTick: Tick = currentTick
   override protected def getActorShardId: String = getShardId
@@ -257,6 +259,20 @@ class Car(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     if (data.phase == Red) {
       state.status = WaitingSignal
+      
+      // Report signal wait event
+      report(
+        data = Map(
+          "event_type" -> "signal_wait",
+          "vehicle_type" -> "car",
+          "vehicle_id" -> getEntityId,
+          "phase" -> data.phase.toString,
+          "wait_until_tick" -> data.nextTick,
+          "tick" -> currentTick
+        ),
+        label = "signal_wait"
+      )
+      
       onFinishSpontaneous(Some(data.nextTick))
     } else {
       leavingLink()
