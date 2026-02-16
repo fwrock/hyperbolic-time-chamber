@@ -241,6 +241,22 @@ class BusStation(
 
     logInfo(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
 
+    // Report bus creation
+    report(
+      data = Map(
+        "event_type" -> "bus_created",
+        "station_id" -> getEntityId,
+        "bus_id" -> bus.actorId,
+        "capacity" -> bus.capacity,
+        "route_length" -> route.size,
+        "number_of_ports" -> bus.numberOfPorts,
+        "label" -> bus.label,
+        "start_tick" -> busStartTick,
+        "tick" -> currentTick
+      ),
+      label = "bus_created"
+    )
+
     createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Bus],

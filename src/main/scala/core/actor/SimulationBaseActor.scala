@@ -181,7 +181,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     try {
       // InitializeEvent.actorRef is the creator/loader that requested initialization
       event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
-      logInfo(s"Sent InitializeEntityAckEvent for $entityId to creator")
     } catch {
       case e: Exception => logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
     }
@@ -272,7 +271,6 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
     currentTimeManager = event.actorRef
-    logInfo(s"Received SpontaneousEvent at tick $currentTick from time manager ${currentTimeManager.path.name}")
     try actSpontaneous(event)
     catch
       case e: Exception =>
@@ -316,7 +314,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
-    logInfo("Finishing spontaneous event at tick " + currentTick)
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,

@@ -170,7 +170,10 @@ class HybridMigrator:
             self.log("\n👥 Step 7/8: Generating persons...")
             self._generate_persons()
             
-            self.log("\n🗺️  Step 8/8: Migrating city map...")
+            self.log("\n� Step 7.5/8: Linking persons to vehicles...")
+            self._link_persons_to_vehicles()
+            
+            self.log("\n�🗺️  Step 8/8: Migrating city map...")
             self._migrate_city_map()
             
             self.log("\n💾 Step 8/8: Writing output files...")
@@ -1453,88 +1456,83 @@ class HybridMigrator:
         return nearest_stop
     
     def _generate_persons(self):
-        """Generate Person actors based on vehicle trips"""
+        """Generate Person actors based on vehicle trips
+        
+        Person-centric model: Persons control vehicles, not the other way around.
+        - Persons are scheduled on TimeManager (scheduleOnTimeManager: true)
+        - Cars owned by persons do NOT have scheduleOnTimeManager
+        - Cars are passive resources activated by persons when needed
+        """
         if not self.config.generate_persons:
             self.log("  ⏭️  Person generation skipped")
             return
         
         # Calculate number of persons to generate
-        total_vehicles = sum(len(vehicles) for vehicles in self.vehicles.values())
-        num_persons = int(total_vehicles * self.config.persons_per_vehicle)
+        total_cars = len(self.vehicles.get(VehicleTypeEnum.CAR, []))
+        num_persons = int(total_cars * self.config.persons_per_vehicle)
         
-        # Get all vehicle trips for origin/destination
-        all_vehicle_trips = []
-        for vtype, vehicles in self.vehicles.items():
-            for vehicle in vehicles:
-                content = vehicle['data']['content']
-                all_vehicle_trips.append({
-                    'origin': content['origin'],
-                    'destination': content['destination'],
-                    'startTick': content.get('startTick', 0)
-                })
+        # Get all car trips for templates
+        all_car_trips = []
+        for vehicle in self.vehicles.get(VehicleTypeEnum.CAR, []):
+            content = vehicle['data']['content']
+            all_car_trips.append({
+                'vehicle_id': vehicle['id'],
+                'origin': content['origin'],
+                'destination': content['destination'],
+                'startTick': content.get('startTick', 0)
+            })
         
-        # Generate persons
-        for person_idx in range(num_persons):
-            # Use vehicle trip as template (with variation)
-            if all_vehicle_trips:
-                template = random.choice(all_vehicle_trips)
-                origin = template['origin']
-                destination = template['destination']
-                base_start_tick = template['startTick']
-            else:
-                # Fallback to random nodes
-                origin = random.choice(self.nodes)['id']
-                destination = random.choice([n['id'] for n in self.nodes if n['id'] != origin])
-                base_start_tick = 0
+        # Decide which cars will be owned by persons
+        # Strategy: 60% of cars are owned by persons, 40% remain autonomous (taxis, etc.)
+        car_ownership_ratio = 0.6
+        num_cars_to_assign = int(len(all_car_trips) * car_ownership_ratio)
+        
+        # Shuffle and assign
+        random.shuffle(all_car_trips)
+        cars_for_persons = all_car_trips[:num_cars_to_assign]
+        
+        self.log(f"  📊 Assigning {num_cars_to_assign}/{len(all_car_trips)} cars to persons")
+        
+        # Generate persons (one per assigned car for simplicity)
+        for person_idx, car_trip in enumerate(cars_for_persons):
+            vehicle_id = car_trip['vehicle_id']
+            origin = car_trip['origin']
+            destination = car_trip['destination']
+            base_start_tick = car_trip['startTick']
             
-            # Add variation to start tick
-            start_tick = max(0, base_start_tick + random.randint(-300, 300))
-            
-            # Randomly decide if person uses public transport or walking
-            uses_public_transport = random.random() < 0.4  # 40% use public transport
-            
-            # Select mode preference
-            if uses_public_transport:
-                if self.bus_stops and self.subway_stations:
-                    mode_preference = random.choice(["bus", "subway", "mixed"])
-                elif self.bus_stops:
-                    mode_preference = "bus"
-                elif self.subway_stations:
-                    mode_preference = "subway"
-                else:
-                    mode_preference = "walk"
-            else:
-                mode_preference = "walk"
+            # Add variation to start tick (person decides when to leave home)
+            work_start_tick = max(0, base_start_tick + random.randint(-300, 300))
+            work_end_tick = work_start_tick + random.randint(14400, 28800)  # 4-8 hours at work
             
             person_id = f"htcaid:person;person_{person_idx}"
             
-            # Create daily schedule (Home -> Work -> Home) following Activity structure
-            # Activity(sequence, activityType, nodeId, endTime, arrivalLogistics)
-            work_start_tick = start_tick
-            work_end_tick = work_start_tick + random.randint(14400, 28800)  # 4-8 hours
-            
-            # Generate driver attributes
+            # Generate driver attributes (person's driving style)
             aggressiveness = random.uniform(0.3, 0.8)
             max_speed_factor = random.uniform(0.9, 1.2)
             reaction_time = random.uniform(0.8, 1.5)
             min_gap_factor = random.uniform(0.8, 1.3)
             
+            # Daily schedule: Home -> Work -> Home
+            # Person uses their own car for trips
             daily_schedule = [
                 {
                     "sequence": 0,
                     "activityType": "Home",
                     "nodeId": origin,
-                    "endTime": str(work_start_tick),  # String format
-                    "arrivalLogistics": None  # First activity has no arrival logistics
+                    "endTime": str(work_start_tick),  # When person leaves home
+                    "arrivalLogistics": None  # First activity has no arrival
                 },
                 {
                     "sequence": 1,
                     "activityType": "Work",
                     "nodeId": destination,
-                    "endTime": str(work_end_tick),
+                    "endTime": str(work_end_tick),  # When person leaves work
                     "arrivalLogistics": {
-                        "mode": mode_preference,  # "walk", "bus", "subway", "mixed"
-                        "vehicle": None,  # Will be assigned if person uses private vehicle
+                        "mode": "car",  # Person uses their own car
+                        "vehicle": {
+                            "id": vehicle_id,
+                            "classType": "hybrid.actor.Car"  # Actor type for sharding
+                        },
                         "driverAttributes": {
                             "aggressiveness": aggressiveness,
                             "maxSpeedFactor": max_speed_factor,
@@ -1549,8 +1547,11 @@ class HybridMigrator:
                     "nodeId": origin,
                     "endTime": "86400",  # End of day
                     "arrivalLogistics": {
-                        "mode": mode_preference,
-                        "vehicle": None,
+                        "mode": "car",
+                        "vehicle": {
+                            "id": vehicle_id,
+                            "classType": "hybrid.actor.Car"  # Actor type for sharding
+                        },
                         "driverAttributes": {
                             "aggressiveness": aggressiveness,
                             "maxSpeedFactor": max_speed_factor,
@@ -1569,22 +1570,182 @@ class HybridMigrator:
                     "content": {
                         "dailySchedule": daily_schedule,
                         "currentActivityIndex": 0,
-                        "ownedVehicles": {},  # Empty initially, will be populated if person has vehicles
+                        "ownedVehicles": {
+                            "car": {
+                                "id": vehicle_id,
+                                "classType": "hybrid.actor.Car"  # Actor type for sharding
+                            }
+                        },
                         "currentTripVehicleId": None,
                         "currentTripStartTick": None,
                         "totalDistanceTraveled": 0.0,
-                        "completedTrips": 0
+                        "completedTrips": 0,
+                        "scheduleOnTimeManager": True,  # Person scheduled on TimeManager
+                        "startTick": work_start_tick  # When person first acts (leaves home for work)
                     }
                 },
-                "dependencies": {}
+                "dependencies": {
+                    "car": {
+                        "id": vehicle_id,
+                        "classType": "hybrid.actor.Car"  # Actor type for sharding
+                    }
+                }
             }
             
             self.persons.append(person)
             self.stats['persons'] += 1
+            
+            # Mark vehicle as owned (will be processed in next step)
+            # Store person ownership in a map for vehicle processing
+            if not hasattr(self, '_vehicle_ownership'):
+                self._vehicle_ownership = {}
+            self._vehicle_ownership[vehicle_id] = person_id
         
-        self.log(f"  ✓ Generated {len(self.persons)} persons")
+        # Generate additional persons without cars (use public transport/walking)
+        # These represent non-car-owning persons
+        num_transit_persons = max(0, num_persons - len(cars_for_persons))
+        
+        if num_transit_persons > 0:
+            self.log(f"  🚶 Generating {num_transit_persons} persons without cars")
+            
+            for i in range(num_transit_persons):
+                person_idx_full = len(cars_for_persons) + i
+                
+                # Random origin/destination
+                origin = random.choice(self.nodes)['id']
+                destination = random.choice([n['id'] for n in self.nodes if n['id'] != origin])
+                
+                # Random schedule
+                work_start_tick = random.randint(21600, 32400)  # 6am-9am
+                work_end_tick = work_start_tick + random.randint(14400, 28800)
+                
+                # Decide mode: bus, subway, or walk
+                if self.bus_stops and self.subway_stations:
+                    mode_preference = random.choice(["bus", "subway", "walk", "mixed"])
+                elif self.bus_stops:
+                    mode_preference = random.choice(["bus", "walk"])
+                elif self.subway_stations:
+                    mode_preference = random.choice(["subway", "walk"])
+                else:
+                    mode_preference = "walk"
+                
+                person_id = f"htcaid:person;person_{person_idx_full}"
+                
+                daily_schedule = [
+                    {
+                        "sequence": 0,
+                        "activityType": "Home",
+                        "nodeId": origin,
+                        "endTime": str(work_start_tick),
+                        "arrivalLogistics": None
+                    },
+                    {
+                        "sequence": 1,
+                        "activityType": "Work",
+                        "nodeId": destination,
+                        "endTime": str(work_end_tick),
+                        "arrivalLogistics": {
+                            "mode": mode_preference,
+                            "vehicle": None,
+                            "driverAttributes": None
+                        }
+                    },
+                    {
+                        "sequence": 2,
+                        "activityType": "Home",
+                        "nodeId": origin,
+                        "endTime": "86400",
+                        "arrivalLogistics": {
+                            "mode": mode_preference,
+                            "vehicle": None,
+                            "driverAttributes": None
+                        }
+                    }
+                ]
+                
+                person = {
+                    "id": person_id,
+                    "typeActor": "hybrid.actor.Person",
+                    "data": {
+                        "dataType": "model.hybrid.entity.state.PersonState",
+                        "content": {
+                            "dailySchedule": daily_schedule,
+                            "currentActivityIndex": 0,
+                            "ownedVehicles": {},  # No vehicles
+                            "currentTripVehicleId": None,
+                            "currentTripStartTick": None,
+                            "totalDistanceTraveled": 0.0,
+                            "completedTrips": 0,
+                            "scheduleOnTimeManager": True,  # Person scheduled on TimeManager
+                            "startTick": work_start_tick  # When person first acts
+                        }
+                    },
+                    "dependencies": {}
+                }
+                
+                self.persons.append(person)
+                self.stats['persons'] += 1
+        
+        self.log(f"  ✓ Generated {len(self.persons)} persons ({len(cars_for_persons)} with cars, {num_transit_persons} without)")
+
+    def _link_persons_to_vehicles(self):
+        """Link persons to their owned vehicles
+        
+        Person-centric model requirements:
+        - Cars owned by persons: 
+          * Set scheduleOnTimeManager to false (passive, not scheduled by TimeManager)
+          * Remove startTick (not needed for passive vehicles)
+          * Set status to "Parked" (passive, waiting for person activation)
+        - Autonomous vehicles (taxis, etc.): keep scheduleOnTimeManager=true
+        """
+        if not hasattr(self, '_vehicle_ownership'):
+            self.log("  ℹ️  No vehicle ownership mapping found")
+            return
+        
+        owned_vehicle_ids = set(self._vehicle_ownership.keys())
+        self.log(f"  📊 Found {len(owned_vehicle_ids)} owned vehicles to process...")
+        
+        # Validate we have cars to process
+        all_cars = self.vehicles.get(VehicleTypeEnum.CAR, [])
+        if not all_cars:
+            self.log("  ⚠️  No cars found in vehicles")
+            return
+        
+        # Process cars - NOTE: modifying car dicts in place
+        cars_updated = 0
+        cars_autonomous = 0
+        
+        for car in all_cars:
+            car_id = car['id']
+            content = car['data']['content']
+            
+            if car_id in owned_vehicle_ids:
+                # Car is owned by a person: make it passive
+                # CRITICAL: Must set scheduleOnTimeManager to false (not just delete)
+                # because the field has a default=true in the Scala case class
+                content['scheduleOnTimeManager'] = False
+                
+                # Remove startTick (owned cars don't have scheduled start times)
+                if 'startTick' in content:
+                    del content['startTick']
+                
+                # IMPORTANT: Status must be Parked (checked by Car.actSpontaneous)
+                content['status'] = "Parked"
+                
+                # Add owner reference (for debugging and verification)
+                content['ownedBy'] = self._vehicle_ownership[car_id]
+                cars_updated += 1
+            else:
+                # Autonomous vehicle: ensure it has scheduling enabled
+                content['scheduleOnTimeManager'] = True
+                if 'startTick' not in content:
+                    content['startTick'] = 0
+                cars_autonomous += 1
+        
+        self.log(f"  ✓ Linked vehicles: {cars_updated} owned by persons (Parked/scheduleOnTimeManager=false), {cars_autonomous} autonomous (Scheduled)")
     
     def _migrate_city_map(self):
+
         """Migrate city map to hybrid model"""
         if not self.city_map:
             self.log("  ⚠️  No city map to migrate")

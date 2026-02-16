@@ -48,15 +48,32 @@ class BusStop(
   private def handleBusRequestPassenger(
     event: ActorInteractionEvent,
     data: BusRequestPassengerData
-  ): Unit =
+  ): Unit = {
     state.people.get(data.label) match {
       case Some(people) =>
         val peopleToLoad = people.take(data.availableSpace)
         state.people.put(data.label, people.drop(data.availableSpace))
+        
+        // Report passenger loading
+        report(
+          data = Map(
+            "event_type" -> "passengers_loaded",
+            "bus_stop_id" -> getEntityId,
+            "bus_id" -> event.actorRefId,
+            "route_label" -> data.label,
+            "passengers_loaded" -> peopleToLoad.size,
+            "available_space" -> data.availableSpace,
+            "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
+            "tick" -> currentTick
+          ),
+          label = "bus_stop_passengers_loaded"
+        )
+        
         sendLoadPeopleToBus(peopleToLoad, event)
       case None =>
         sendLoadPeopleToBus(mutable.Seq(), event)
     }
+  }
 
   private def sendLoadPeopleToBus(
     peopleToLoad: mutable.Seq[Identify],
@@ -78,6 +95,19 @@ class BusStop(
     state.people.get(data.label) match {
       case Some(people) =>
         state.people.put(data.label, people :+ person)
+        
+        // Report passenger arrival at bus stop
+        report(
+          data = Map(
+            "event_type" -> "passenger_arrived_at_stop",
+            "bus_stop_id" -> getEntityId,
+            "person_id" -> person.id,
+            "route_label" -> data.label,
+            "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
+            "tick" -> currentTick
+          ),
+          label = "bus_stop_passenger_arrived"
+        )
       case None =>
         state.people.put(data.label, mutable.Seq(person))
     }

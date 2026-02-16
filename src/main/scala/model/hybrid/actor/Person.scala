@@ -46,6 +46,13 @@ class Person(
       return
     }
     
+    // Check if currently in a trip (waiting for TripCompleted)
+    if (state.currentTripVehicleId.isDefined) {
+      // Trip in progress, wait for TripCompleted message
+      onFinishSpontaneous(Some(currentTick + 1))
+      return
+    }
+    
     state.currentActivity match {
       case Some(activity) =>
         // Check if it's time to leave this activity
@@ -53,8 +60,10 @@ class Person(
           logDebug(s"${getEntityId} completing activity ${activity.activityType} at ${activity.nodeId}")
           startNextTrip()
         } else {
-          // Still at activity, wait
-          onFinishSpontaneous(Some(currentTick + 1))
+          // Still at activity, wait for next check
+          // Reschedule to check later
+          val waitTicks = Math.min(100L, getTickUntilActivityEnd(activity))
+          onFinishSpontaneous(Some(currentTick + waitTicks))
         }
       
       case None =>
@@ -84,6 +93,18 @@ class Person(
         // Could implement time string parsing here ("08:00" -> tick)
         logWarn(s"Cannot parse endTime: ${activity.endTime}, assuming time reached")
         true
+    }
+  }
+  
+  /** Calculate ticks until activity end time.
+    */
+  private def getTickUntilActivityEnd(activity: Activity): Long = {
+    try {
+      val endTick = activity.endTime.toLong
+      Math.max(1L, endTick - currentTick)
+    } catch {
+      case _: NumberFormatException =>
+        100L  // Default check interval
     }
   }
   
@@ -141,9 +162,10 @@ class Person(
             // Mesoscopic walking trip
             initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId)
           
-          case "transit" =>
-            // Transit trip (future implementation)
-            logInfo(s"${getEntityId} taking transit to ${nextActivity.nodeId}")
+          case "transit" | "bus" | "subway" | "mixed" =>
+            // Transit modes (simplified for now: instant arrival)
+            // Full implementation would route on transit network
+            logInfo(s"${getEntityId} taking ${logistics.mode} to ${nextActivity.nodeId}")
             advanceToNextActivity()
           
           case _ =>
@@ -264,7 +286,7 @@ class Person(
             )
             
             // Update state
-            state.copy(
+            state = state.copy(
               currentTripVehicleId = Some(vehicleRef.id),
               currentTripStartTick = Some(currentTick)
             )
@@ -344,9 +366,9 @@ class Person(
       state = state.completeTrip(0.0)
     }
     
-    val newState = state.advanceActivity()
+    state = state.advanceActivity()
     
-    newState.currentActivity match {
+    state.currentActivity match {
       case Some(activity) =>
         logInfo(s"${getEntityId} arrived at ${activity.activityType} (${activity.nodeId})")
         
@@ -364,7 +386,8 @@ class Person(
           label = "person_activity_start"
         )
         
-        // Schedule next spontaneous event
+        // Activity just started, remain registered with TimeManager
+        // actSpontaneous will be called again to check when to leave
         onFinishSpontaneous(Some(currentTick + 1))
       
       case None =>

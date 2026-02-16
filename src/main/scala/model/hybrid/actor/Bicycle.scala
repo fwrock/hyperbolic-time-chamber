@@ -192,6 +192,18 @@ class Bicycle(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     if (data.phase == Red) {
       state.status = WaitingSignal
+      // Report signal waiting event
+      report(
+        data = Map(
+          "event_type" -> "signal_wait",
+          "vehicle_type" -> "bicycle",
+          "vehicle_id" -> getEntityId,
+          "phase" -> data.phase.toString,
+          "wait_until_tick" -> data.nextTick,
+          "tick" -> currentTick
+        ),
+        label = "signal_wait"
+      )
       onFinishSpontaneous(Some(data.nextTick))
     } else {
       leavingLink()
