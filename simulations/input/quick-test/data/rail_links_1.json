@@ -1,0 +1,472 @@
+[
+  {
+    "id": "htcaid:rail_link;line_line_1_segment_0",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;4259655866",
+        "to": "htcaid:node;2308420507",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_100",
+        "toStation": "htcaid:subwaystation;station_73",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;4259655866",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;2308420507",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_100",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_73",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_segment_1",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;2308420507",
+        "to": "htcaid:node;184038861",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_73",
+        "toStation": "htcaid:subwaystation;station_137",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2308420507",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;184038861",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_73",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_137",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_segment_2",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;184038861",
+        "to": "htcaid:node;60609797",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_137",
+        "toStation": "htcaid:subwaystation;station_154",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;184038861",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609797",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_137",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_154",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_segment_3",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;60609797",
+        "to": "htcaid:node;303852689",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_154",
+        "toStation": "htcaid:subwaystation;station_54",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60609797",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;303852689",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_154",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_54",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_segment_4",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;303852689",
+        "to": "htcaid:node;60624550",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_54",
+        "toStation": "htcaid:subwaystation;station_68",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303852689",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;60624550",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_54",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_68",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_return_5",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;60624550",
+        "to": "htcaid:node;303852689",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_68",
+        "toStation": "htcaid:subwaystation;station_54",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60624550",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;303852689",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_68",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_54",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_return_4",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;303852689",
+        "to": "htcaid:node;60609797",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_54",
+        "toStation": "htcaid:subwaystation;station_154",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;303852689",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;60609797",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_54",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_154",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_return_3",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;60609797",
+        "to": "htcaid:node;184038861",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_154",
+        "toStation": "htcaid:subwaystation;station_137",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;60609797",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;184038861",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_154",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_137",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_return_2",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;184038861",
+        "to": "htcaid:node;2308420507",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_137",
+        "toStation": "htcaid:subwaystation;station_73",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;184038861",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;2308420507",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_137",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_73",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  },
+  {
+    "id": "htcaid:rail_link;line_line_1_return_1",
+    "typeActor": "hybrid.actor.RailLink",
+    "data": {
+      "dataType": "model.hybrid.entity.state.RailLinkState",
+      "content": {
+        "from": "htcaid:node;2308420507",
+        "to": "htcaid:node;4259655866",
+        "length": 1000.0,
+        "lanes": 2,
+        "speedLimit": 80.0,
+        "capacity": 10.0,
+        "freeSpeed": 80.0,
+        "railType": "SUBWAY",
+        "subwayLine": "line_1",
+        "fromStation": "htcaid:subwaystation;station_73",
+        "toStation": "htcaid:subwaystation;station_100",
+        "gradient": 0.0,
+        "curvature": 0.0,
+        "simulationMode": "MESO",
+        "laneConfigurations": [],
+        "vehiclesByLane": {},
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "registered": [],
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;2308420507",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;4259655866",
+        "classType": "hybrid.actor.Node"
+      },
+      "from_station": {
+        "id": "htcaid:subwaystation;station_73",
+        "classType": "hybrid.actor.SubwayStation"
+      },
+      "to_station": {
+        "id": "htcaid:subwaystation;station_100",
+        "classType": "hybrid.actor.SubwayStation"
+      }
+    }
+  }
+]

@@ -1,0 +1,124 @@
+{
+  "id": "bfs_cenario_1000_viagens_2",
+  "name": "HTC-Simulator: cenario_1000_viagens",
+  "description": "Simulates a smart mobility scenario with a map and car trips generated from MATSim data",
+  "randomSeed": 42,
+  "startRealTime": "2025-01-27T00:00:00.000",
+  "timeUnit": "seconds",
+  "timeStep": 1,
+  "duration": 86400,
+  "startTick": 0,
+  "actorsDataSources": [
+    {
+      "id": "htcrid:node;1",
+      "classType": "hybrid.actor.Node",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/nodes_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:link;1",
+      "classType": "hybrid.actor.Link",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/links_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:link;2",
+      "classType": "hybrid.actor.Link",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/links_2.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:rail_link;1",
+      "classType": "hybrid.actor.RailLink",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/rail_links_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:car;1",
+      "classType": "hybrid.actor.Car",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/cars_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:busstop;1",
+      "classType": "hybrid.actor.BusStop",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/bus_stops_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:busstation;1",
+      "classType": "hybrid.actor.BusStation",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/bus_stations_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:subwaystation;1",
+      "classType": "hybrid.actor.SubwayStation",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/subway_stations_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:person;1",
+      "classType": "hybrid.actor.Person",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/persons_1.json"
+        }
+      }
+    },
+    {
+      "id": "htcrid:signal;1",
+      "classType": "hybrid.actor.TrafficSignal",
+      "creationType": "LoadBalancedDistributed",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/traffic_signals_1.json"
+        }
+      }
+    }
+  ],
+  "cityMapFile": "/app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_9/data/city_map.json"
+}
