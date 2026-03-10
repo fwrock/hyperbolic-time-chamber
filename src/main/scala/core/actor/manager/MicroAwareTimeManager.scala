@@ -53,7 +53,7 @@ trait MicroAwareTimeManager extends TimeManagerBase {
     */
   protected def triggerMicroLinks(tick: Tick): Unit = {
     if (microLinks.nonEmpty) {
-      logDebug(s"Triggering ${microLinks.size} micro links for tick $tick")
+      logInfo(s"[MicroTM] Triggering ${microLinks.size} micro links for global tick $tick")
       
       microLinks.foreach { linkRef =>
         // Send global tick event to link

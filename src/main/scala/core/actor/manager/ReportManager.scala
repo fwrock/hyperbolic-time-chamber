@@ -4,7 +4,7 @@ package core.actor.manager
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.state.DefaultState
 import org.interscity.htc.core.enumeration.ReportTypeEnum
@@ -79,6 +79,17 @@ class ReportManager(
       case (_, actorRef) =>
         actorRef ! event
     }
+  }
+
+  override def handleEvent: Receive = {
+    case _: StopSimulationEvent =>
+      logInfo("Received StopSimulationEvent. Flushing/stopping reporters")
+      val destructEvent = DestructEvent(actorRef = getPath)
+      reporters.foreach {
+        case (_, actorRef) =>
+          actorRef ! destructEvent
+      }
+      selfDestruct()
   }
 
 }

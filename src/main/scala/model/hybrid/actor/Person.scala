@@ -9,6 +9,7 @@ import model.hybrid.entity.state.{PersonState, Activity, ArrivalLogistics, Drive
 import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData}
 import model.hybrid.util.{GPSUtil, CityMapUtil}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.util.SimulationUtil
 
 import scala.collection.mutable
 
@@ -38,6 +39,9 @@ class Person(
 ) extends SimulationBaseActor[PersonState](
       properties = properties
     ) {
+
+  private lazy val simulationDurationTicks: Tick = SimulationUtil.loadSimulationConfig().duration
+  private lazy val maxTripWaitTicks: Tick = math.max(1L, simulationDurationTicks)
   
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state.isScheduleComplete) {
@@ -48,8 +52,29 @@ class Person(
     
     // Check if currently in a trip (waiting for TripCompleted)
     if (state.currentTripVehicleId.isDefined) {
-      // Trip in progress, wait for TripCompleted message
-      onFinishSpontaneous(Some(currentTick + 1))
+      val waitTicks = state.currentTripStartTick.map(start => currentTick - start).getOrElse(0L)
+      if (waitTicks >= maxTripWaitTicks) {
+        val vehicleId = state.currentTripVehicleId.getOrElse("unknown")
+        logWarn(
+          s"${getEntityId} timed out waiting TripCompleted from $vehicleId after $waitTicks ticks. Releasing stuck trip."
+        )
+        report(
+          data = Map(
+            "event_type" -> "trip_timeout",
+            "person_id" -> getEntityId,
+            "vehicle_id" -> vehicleId,
+            "wait_ticks" -> waitTicks,
+            "timeout_ticks" -> maxTripWaitTicks,
+            "tick" -> currentTick
+          ),
+          label = "person_trip_timeout"
+        )
+        state = state.completeTrip(0.0)
+        advanceToNextActivity()
+      } else {
+        // Trip in progress, wait for TripCompleted message
+        onFinishSpontaneous(Some(currentTick + 1))
+      }
       return
     }
     

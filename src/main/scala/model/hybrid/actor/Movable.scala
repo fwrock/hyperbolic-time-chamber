@@ -10,6 +10,7 @@ import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousE
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import model.hybrid.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
 import model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start}
+import model.hybrid.entity.state.enumeration.MovableStatusEnum.Waiting
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import model.hybrid.entity.event.data.link.LinkInfoData
 import model.hybrid.entity.event.data.{EnterLinkData, LeaveLinkData}
@@ -65,6 +66,8 @@ abstract class Movable[T <: MovableState](
         requestRoute()
       case Ready =>
         enterLink()
+      case Waiting =>
+        onFinishSpontaneous(Some(currentTick + 1))
       case Finished =>
         onFinishSpontaneous()
       case _ =>
@@ -111,6 +114,7 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
+            state.movableStatus = Waiting
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
@@ -132,10 +136,10 @@ abstract class Movable[T <: MovableState](
             onFinishSpontaneous()
             selfDestruct()
         }
-      case None if state.movableBestRoute.isEmpty =>
+      case None if state.movableBestRoute.forall(_.isEmpty) =>
         state.movableStatus = Finished
         logWarn("No current path and no best route available, finishing.")
-        onFinishSpontaneous()
+        onFinish(state.destination)
       case None =>
         getNextPath match {
           case Some(nextPath) =>
@@ -143,7 +147,7 @@ abstract class Movable[T <: MovableState](
             enterLink()
           case None =>
             state.movableStatus = Finished
-            onFinishSpontaneous()
+            onFinish(state.destination)
         }
     }
   }
@@ -166,7 +170,7 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.LeaveLink.toString,
               actorType = LoadBalancedDistributed
             )
-            if (state.movableBestRoute.isEmpty) {
+            if (state.movableBestRoute.forall(_.isEmpty)) {
               logWarn("No best route available to continue")
               onFinish(nextNodeId)
             }
@@ -183,38 +187,56 @@ abstract class Movable[T <: MovableState](
     }
 
   protected def getNextPath: Option[(String, String)] =
-    state.movableBestRoute match
-      case Some(path) if path.nonEmpty =>
-        Some(path.dequeue())
-      case Some(_) =>
-        logDebug("Path queue is empty, trajectory completed")
-        None
-      case None =>
-        logWarn("No path to follow")
-        None
+    if (state == null) {
+      logDebug("State is null; no next path available")
+      None
+    } else {
+      state.movableBestRoute match
+        case Some(path) if path.nonEmpty =>
+          Some(path.dequeue())
+        case Some(_) =>
+          logDebug("Path queue is empty, trajectory completed")
+          None
+        case None =>
+          logWarn("No path to follow")
+          None
+    }
 
   protected def viewNextPath: Option[(String, String)] =
-    state.movableBestRoute match
-      case Some(path) if path.nonEmpty =>
-        Some(path.head)
-      case Some(_) =>
-        logDebug("Path queue is empty, no next path available")
-        None
-      case None =>
-        logWarn("No path to follow")
-        None
+    if (state == null) {
+      logDebug("State is null; cannot view next path")
+      None
+    } else {
+      state.movableBestRoute match
+        case Some(path) if path.nonEmpty =>
+          Some(path.head)
+        case Some(_) =>
+          logDebug("Path queue is empty, no next path available")
+          None
+        case None =>
+          logWarn("No path to follow")
+          None
+    }
 
   protected def getCurrentNode: String =
-    state.movableCurrentPath match
-      case Some(item) =>
-        item._2
-      case None =>
-        null
+    if (state == null) {
+      null
+    } else {
+      state.movableCurrentPath match
+        case Some(item) =>
+          item._2
+        case None =>
+          null
+    }
 
   protected def getNextLink: String =
-    viewNextPath match
-      case Some(item) =>
-        item._1
-      case None =>
-        null
+    if (state == null) {
+      null
+    } else {
+      viewNextPath match
+        case Some(item) =>
+          item._1
+        case None =>
+          null
+    }
 }

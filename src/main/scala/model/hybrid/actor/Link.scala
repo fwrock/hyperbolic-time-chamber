@@ -22,6 +22,8 @@ import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 
+import scala.collection.mutable
+
 /** Link actor supporting both MESO and MICRO simulation modes.
   * 
   * The simulation mode is determined by the link configuration (HybridLinkState.simulationMode).
@@ -62,6 +64,20 @@ class Link(
     */
   private var lastCostPublishTick: Tick = 0
 
+  private var summaryTick: Tick = Long.MinValue
+  private var tickLoaded: Int = 0
+  private var tickInserted: Int = 0
+  private var tickArrived: Int = 0
+  private var tickTravelTimeSum: Double = 0.0
+  private var tickProcessingDurationMs: Long = 0L
+  private var cumulativeLoadedVehicles: Long = 0L
+  private var cumulativeLoaded: Long = 0L
+  private var cumulativeArrived: Long = 0L
+  private var cumulativeDiscarded: Long = 0L
+
+  private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+  private val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+
   /** Whether this link is currently scheduled for micro ticks. */
   private var microTickScheduled: Boolean = false
   
@@ -100,7 +116,7 @@ class Link(
     // Publish initial dynamic cost
     publishDynamicCost()
     
-    logInfo(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
 
@@ -108,19 +124,19 @@ class Link(
   /** Initialize microscopic simulation mode.
     */
   private def initializeMicroMode(): Unit = {
-    logInfo(s"Initializing MICRO mode for link ${state.from} -> ${state.to}")
+    logDebug(s"Initializing MICRO mode for link ${state.from} -> ${state.to}")
     
     // Initialize lanes if not already done
     if (state.vehiclesByLane.isEmpty) {
       state = state.initializeMicroLanes()
     }
-    
-    logInfo(s"✓ MICRO mode initialized")
-    logInfo(s"  - linkId: ${properties.entityId}")
-    logInfo(s"  - lanes: ${state.lanes}")
-    logInfo(s"  - length: ${state.length}m")
-    logInfo(s"  - timeStep: ${state.microTimeStep}s")
-    logInfo(s"  - ticksPerGlobalTick: ${state.microTicksPerGlobalTick}")
+
+    logDebug(s"✓ MICRO mode initialized")
+    logDebug(s"  - linkId: ${getEntityId}")
+    logDebug(s"  - lanes: ${state.lanes}")
+    logDebug(s"  - length: ${state.length}m")
+    logDebug(s"  - timeStep: ${state.microTimeStep}s")
+    logDebug(s"  - ticksPerGlobalTick: ${state.microTicksPerGlobalTick}")
   }
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
@@ -137,20 +153,34 @@ class Link(
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (!state.isMicroMode) {
+      logInfo(s"Link ${getEntityId} in MESO mode (registered=${state.registered.size}) received spontaneous event - unregistering")
       microTickScheduled = false
       onFinishSpontaneous(None)
       return
     }
 
     val hasVehicles = state.totalVehiclesInMicro > 0
+    val vehicleCount = state.totalVehiclesInMicro
+    val registeredCount = state.registered.size
+    
     if (!hasVehicles) {
+      logInfo(s"Link ${getEntityId} has no vehicles (micro=$vehicleCount, registered=$registeredCount) at tick $currentTick - unregistering from TimeManager")
       microTickScheduled = false
       onFinishSpontaneous(None)
       return
     }
 
+    logInfo(s"Link ${getEntityId} processing spontaneous tick $currentTick with $vehicleCount vehicles (registered=$registeredCount)")
     handleGlobalTick(currentTick)
-    onFinishSpontaneous(Some(currentTick + 1))
+
+    val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0
+    if (hasVehiclesAfterTick) {
+      onFinishSpontaneous(Some(currentTick + 1))
+    } else {
+      microTickScheduled = false
+      logInfo(s"Link ${getEntityId} became empty during tick $currentTick - stopping scheduling now")
+      onFinishSpontaneous(None)
+    }
   }
   
   /** Handle vehicle entering link.
@@ -160,13 +190,14 @@ class Link(
     * - MICRO: Initialize microscopic state, register with time manager
     */
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
     
     // Report vehicle entering link
     report(
       data = Map(
         "event_type" -> "vehicle_entered_link",
-        "link_id" -> properties.entityId,
+        "link_id" -> getEntityId,
         "vehicle_id" -> data.actorId,
         "vehicle_type" -> data.actorType,
         "link_length" -> state.length,
@@ -188,6 +219,31 @@ class Link(
   /** Handle vehicle entering in MESO mode (standard behavior).
     */
   private def handleEnterLinkMeso(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    if (state.registered.exists(_.actorId == data.actorId)) {
+      val duplicateInfo = LinkInfoData(
+        linkLength = state.length,
+        linkCapacity = state.capacity,
+        linkNumberOfCars = state.registered.size,
+        linkFreeSpeed = state.freeSpeed,
+        linkLanes = state.lanes
+      )
+
+      sendMessageTo(
+        entityId = event.actorRefId,
+        shardId = event.shardRefId,
+        data = duplicateInfo,
+        eventType = EventTypeEnum.ReceiveEnterLinkInfo.toString,
+        actorType = LoadBalancedDistributed
+      )
+      logDebug(s"Duplicate MESO enter ignored for vehicle ${data.actorId}")
+      return
+    }
+
+    tickLoaded += 1
+    cumulativeLoadedVehicles += 1
+    vehicleEntryTick.put(data.actorId, currentTick)
+    vehicleWaitingSeconds.getOrElseUpdate(data.actorId, 0.0)
+
     // Register vehicle
     state.registered.add(
       LinkRegister(
@@ -198,6 +254,7 @@ class Link(
         actorCreationType = data.actorCreationType
       )
     )
+    onVehicleInserted()
     
     // Send link info (standard meso response)
     val linkInfo = LinkInfoData(
@@ -220,16 +277,36 @@ class Link(
   /** Handle vehicle entering in MICRO mode.
     */
   private def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    findVehicleLane(data.actorId) match {
+      case Some(existingLane) =>
+        sendMicroEnterAck(event, existingLane)
+        if (!microTickScheduled) {
+          microTickScheduled = true
+          scheduleEvent(currentTick + 1)
+          logInfo(s"Re-activated micro scheduling at tick ${currentTick + 1}")
+        }
+        logDebug(s"Duplicate MICRO enter ignored for vehicle ${data.actorId} on lane $existingLane")
+        return
+      case None =>
+    }
+
+    tickLoaded += 1
+    cumulativeLoadedVehicles += 1
+    vehicleEntryTick.put(data.actorId, event.tick)
+    vehicleWaitingSeconds.getOrElseUpdate(data.actorId, 0.0)
+
     // Register vehicle (meso compatibility)
-    state.registered.add(
-      LinkRegister(
-        actorId = data.actorId,
-        shardId = data.shardId,
-        actorType = data.actorType,
-        actorSize = data.actorSize,
-        actorCreationType = data.actorCreationType
+    if (!state.registered.exists(_.actorId == data.actorId)) {
+      state.registered.add(
+        LinkRegister(
+          actorId = data.actorId,
+          shardId = data.shardId,
+          actorType = data.actorType,
+          actorSize = data.actorSize,
+          actorCreationType = data.actorCreationType
+        )
       )
-    )
+    }
     
     // Ensure micro lanes are initialized
     if (state.vehiclesByLane.isEmpty) {
@@ -239,25 +316,7 @@ class Link(
     // Assign lane (simple strategy: least occupied lane)
     val assignedLane = findLeastOccupiedLane()
     
-    // Send micro enter link data
-    val microEnterData = MicroEnterLinkData(
-      linkId = properties.entityId,
-      mode = SimulationModeEnum.MICRO,
-      assignedLane = assignedLane,
-      linkLength = state.length,
-      speedLimit = state.speedLimit,
-      numberOfLanes = state.lanes,
-      microTimeStep = state.microTimeStep,
-      ticksPerGlobalTick = state.microTicksPerGlobalTick
-    )
-    
-    sendMessageTo(
-      entityId = event.actorRefId,
-      shardId = event.shardRefId,
-      data = microEnterData,
-      eventType = "MicroEnterLink", // Custom event type
-      actorType = LoadBalancedDistributed
-    )
+    sendMicroEnterAck(event, assignedLane)
 
     // Track vehicle in micro lane state (entry tick from event)
     val entryTick = event.tick
@@ -275,6 +334,7 @@ class Link(
       val insertIdx = queue.indexWhere(_.position < vehicle.position)
       if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
     }
+    onVehicleInserted()
 
     // Schedule micro ticks on demand
     if (!microTickScheduled) {
@@ -287,21 +347,52 @@ class Link(
     
     logInfo(s"Vehicle ${data.actorId} entered MICRO link, assigned to lane $assignedLane")
   }
+
+  private def sendMicroEnterAck(event: ActorInteractionEvent, lane: Int): Unit = {
+    val microEnterData = MicroEnterLinkData(
+      linkId = getEntityId,
+      mode = SimulationModeEnum.MICRO,
+      assignedLane = lane,
+      linkLength = state.length,
+      speedLimit = state.speedLimit,
+      numberOfLanes = state.lanes,
+      microTimeStep = state.microTimeStep,
+      ticksPerGlobalTick = state.microTicksPerGlobalTick
+    )
+
+    sendMessageTo(
+      entityId = event.actorRefId,
+      shardId = event.shardRefId,
+      data = microEnterData,
+      eventType = "MicroEnterLink",
+      actorType = LoadBalancedDistributed
+    )
+  }
+
+  private def findVehicleLane(actorId: String): Option[Int] = {
+    state.vehiclesByLane.collectFirst {
+      case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
+    }
+  }
   
   /** Handle vehicle leaving link.
     */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${data.actorId} leaving link")
+
+    val wasRegistered = state.registered.exists(_.actorId == data.actorId)
+    val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
     
     // Report vehicle leaving link
     report(
       data = Map(
         "event_type" -> "vehicle_left_link",
-        "link_id" -> properties.entityId,
+        "link_id" -> getEntityId,
         "vehicle_id" -> data.actorId,
         "vehicle_type" -> data.actorType.toString,
         "link_length" -> state.length,
-        "vehicles_remaining" -> (state.registered.size - 1),
+        "vehicles_remaining" -> vehiclesRemaining,
         "tick" -> currentTick
       ),
       label = "link_vehicle_left"
@@ -309,6 +400,11 @@ class Link(
     
     // Unregister vehicle
     state.registered.filterInPlace(_.actorId != data.actorId)
+    vehicleEntryTick.remove(data.actorId)
+    vehicleWaitingSeconds.remove(data.actorId)
+    if (wasRegistered) {
+      onVehicleArrived(travelTime = 0.0)
+    }
     
     if (state.isMicroMode) {
       // Remove from micro state
@@ -319,7 +415,7 @@ class Link(
       
       // Send micro leave data
       val microLeaveData = MicroLeaveLinkData(
-        linkId = properties.entityId,
+        linkId = getEntityId,
         finalPosition = state.length,
         finalVelocity = state.currentSpeed,
         travelTime = 0.0, // Would calculate actual time
@@ -335,8 +431,9 @@ class Link(
         actorType = LoadBalancedDistributed
       )
 
-      if (state.totalVehiclesInMicro == 0) {
-        logInfo("MICRO link is now empty; will stop scheduling on next tick")
+      if (state.totalVehiclesInMicro == 0 && microTickScheduled) {
+        microTickScheduled = false
+        logInfo("MICRO link is now empty; stopping scheduling")
       }
     } else {
       // Standard meso response
@@ -422,6 +519,9 @@ class Link(
     * Also checks if dynamic cost should be published.
     */
   private def handleGlobalTick(tick: Tick): Unit = {
+    val processingStartedAt = System.nanoTime()
+    ensureSummaryTick(tick)
+
     // Check if we should publish dynamic cost
     if (tick - lastCostPublishTick >= costPublishInterval) {
       publishDynamicCost()
@@ -445,6 +545,9 @@ class Link(
       
       logDebug(s"Completed MICRO tick $tick")
     }
+
+    tickProcessingDurationMs = (System.nanoTime() - processingStartedAt) / 1000000L
+    emitSumoSummaryStep(tick)
   }
   
   /** Execute a single sub-tick for all lanes.
@@ -493,6 +596,13 @@ class Link(
       val newVelocity = math.max(0.0, math.min(vehicle.velocity + velChange, state.speedLimit / 3.6))
       val newPosition = vehicle.position + newVelocity * state.microTimeStep
       val newAcceleration = velChange / state.microTimeStep
+
+      if (newVelocity < 0.1) {
+        vehicleWaitingSeconds.update(
+          vehicle.actorId,
+          vehicleWaitingSeconds.getOrElse(vehicle.actorId, 0.0) + state.microTimeStep
+        )
+      }
       
       // Update vehicle state in queue
       vehicles(i) = vehicle.copy(
@@ -535,7 +645,7 @@ class Link(
         
         // Send leave link message
         val leaveData = MicroLeaveLinkData(
-          linkId = properties.entityId,
+          linkId = getEntityId,
           finalPosition = vehicle.position,
           finalVelocity = vehicle.velocity,
           travelTime = travelTime.toDouble,
@@ -556,10 +666,91 @@ class Link(
         
         // Remove from registered (LinkRegister uses actorId, not actorRefId)
         state.registered.filterInPlace(_.actorId != vehicle.actorId)
+        vehicleEntryTick.remove(vehicle.actorId)
+        vehicleWaitingSeconds.remove(vehicle.actorId)
+        onVehicleArrived(travelTime = travelTime.toDouble)
         
         logDebug(s"Vehicle ${vehicle.actorId} left MICRO link")
       }
     }
+  }
+
+  private def ensureSummaryTick(tick: Tick): Unit = {
+    if (summaryTick != tick) {
+      summaryTick = tick
+      tickLoaded = 0
+      tickInserted = 0
+      tickArrived = 0
+      tickTravelTimeSum = 0.0
+      tickProcessingDurationMs = 0L
+    }
+  }
+
+  private def onVehicleInserted(): Unit = {
+    tickInserted += 1
+    cumulativeLoaded += 1
+  }
+
+  private def onVehicleArrived(travelTime: Double): Unit = {
+    tickArrived += 1
+    cumulativeArrived += 1
+    if (travelTime > 0) {
+      tickTravelTimeSum += travelTime
+    }
+  }
+
+  private def emitSumoSummaryStep(tick: Tick): Unit = {
+    val running = state.totalVehicles
+    val halting = if (state.isMicroMode) {
+      state.vehiclesByLane.valuesIterator.map(_.count(_.velocity <= 0.1)).sum
+    } else {
+      0
+    }
+    val meanSpeed = if (state.isMicroMode) {
+      val allVehicles = state.vehiclesByLane.valuesIterator.flatMap(_.iterator).toVector
+      if (allVehicles.nonEmpty) allVehicles.map(_.velocity).sum / allVehicles.size else 0.0
+    } else {
+      state.currentSpeed
+    }
+    val meanSpeedRelative = if (state.freeSpeed > 0) meanSpeed / state.freeSpeed else 0.0
+    val runningVehicleIds = state.registered.iterator.map(_.actorId).toVector
+    val meanTravelTime =
+      if (runningVehicleIds.nonEmpty)
+        runningVehicleIds.map(id => math.max(0L, tick - vehicleEntryTick.getOrElse(id, tick)).toDouble).sum / runningVehicleIds.size
+      else 0.0
+    val meanWaitingTime =
+      if (runningVehicleIds.nonEmpty)
+        runningVehicleIds.map(id => vehicleWaitingSeconds.getOrElse(id, 0.0)).sum / runningVehicleIds.size
+      else 0.0
+    val waiting = math.max(0L, cumulativeLoadedVehicles - cumulativeLoaded).toInt
+
+    report(
+      data = Map(
+        "event_type" -> "sumo_summary_step",
+        "scope" -> "link",
+        "link_id" -> getEntityId,
+        "mode" -> state.simulationMode.toString,
+        "time" -> tick,
+        "loaded" -> cumulativeLoadedVehicles,
+        "inserted" -> tickInserted,
+        "running" -> running,
+        "waiting" -> waiting,
+        "ended" -> cumulativeArrived,
+        "arrived" -> tickArrived,
+        "collisions" -> 0,
+        "teleports" -> 0,
+        "halting" -> halting,
+        "stopped" -> 0,
+        "meanWaitingTime" -> meanWaitingTime,
+        "meanTravelTime" -> meanTravelTime,
+        "meanSpeed" -> meanSpeed,
+        "meanSpeedRelative" -> meanSpeedRelative,
+        "discarded" -> cumulativeDiscarded,
+        "duration" -> tickProcessingDurationMs,
+        "tick" -> tick
+      ),
+      label = "sumo_summary_step"
+    )
   }
   
   /** Calculate and publish dynamic cost to cache.

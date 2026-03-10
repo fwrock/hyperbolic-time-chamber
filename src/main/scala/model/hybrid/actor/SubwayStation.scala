@@ -11,9 +11,11 @@ import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, IdentifyUtil, JsonUtil }
+import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, SubwayStationStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
@@ -27,6 +29,8 @@ class SubwayStation(
 ) extends SimulationBaseActor[SubwayStationState](
       properties = properties
     ) {
+
+  private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
@@ -48,7 +52,10 @@ class SubwayStation(
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    state.status match
+    if (currentTick >= simulationEnd) {
+      logInfo(s"SubwayStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling")
+      onFinishSpontaneous(None)
+    } else state.status match
       case Start =>
         state.status = Working
         createSubwayFrom(state.lines)
@@ -145,6 +152,7 @@ class SubwayStation(
         }
         line.nextTick
       }
+      .filter(_ < simulationEnd)
       .toList
       .sorted
       .headOption

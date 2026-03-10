@@ -9,6 +9,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.{ActorTypeEnum, 
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.MicroCarState
+import org.interscity.htc.model.hybrid.entity.state.model.PrecomputedRouteItem
 
 import scala.collection.mutable
 
@@ -51,6 +52,7 @@ case class CarState(
   name: String = "",
   override val origin: String,
   override val destination: String = null,
+  var precomputedRoute: Option[List[PrecomputedRouteItem]] = None,
   var bestRoute: Option[mutable.Queue[(String, String)]] = None,
   var bestCost: Double = Double.MaxValue,
   var currentNode: String = null,

@@ -10,6 +10,7 @@ import core.util.ActorCreatorUtil.createActor
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, LoadNextEvent }
@@ -49,6 +50,7 @@ class LoadDataManager(
     case event: LoadDataEvent       => loadData(event)
     case event: FinishLoadDataEvent => handleFinishLoadData(event)
     case _: LoadNextEvent           => handleLoadNext()
+    case _: StopSimulationEvent     => handleStopSimulation()
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
@@ -196,6 +198,14 @@ class LoadDataManager(
     } else {
       selfProxy
     }
+
+  private def handleStopSimulation(): Unit = {
+    logInfo("Received StopSimulationEvent. Stopping load manager gracefully")
+    loaders.keys.foreach { loaderRef =>
+      loaderRef ! DestructEvent(actorRef = getPath)
+    }
+    selfDestruct()
+  }
 }
 
 object LoadDataManager {

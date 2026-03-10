@@ -10,6 +10,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.SpontaneousEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.types.Tick
+import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
@@ -24,12 +25,18 @@ class TrafficSignal(
       properties = properties
     ) {
 
+  private val simulationEnd: Tick = TrafficSignal.simulationEndTick
+
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
     // Agendar primeiro tick considerando o offset
     val firstTick = state.startTick + state.offset
     logInfo(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
-    scheduleEvent(firstTick)
+    if (firstTick < simulationEnd) {
+      scheduleEvent(firstTick)
+    } else {
+      onFinishSpontaneous()
+    }
   }
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -73,7 +80,11 @@ class TrafficSignal(
     }
     
     // Agendar próximo tick (uma vez para todas as fases)
-    onFinishSpontaneous(Some(nextTickTime))
+    if (nextTickTime < simulationEnd) {
+      onFinishSpontaneous(Some(nextTickTime))
+    } else {
+      onFinishSpontaneous()
+    }
   }
 
   private def notifyNodes(
@@ -117,4 +128,12 @@ class TrafficSignal(
     } else {
       Red
     }
+}
+
+object TrafficSignal {
+  lazy val simulationEndTick: Tick = {
+    val simulationConfig = SimulationUtil.loadSimulationConfig()
+    if (simulationConfig.extendSimulationIfPendingEventsAfterEnd) Long.MaxValue
+    else simulationConfig.duration
+  }
 }
