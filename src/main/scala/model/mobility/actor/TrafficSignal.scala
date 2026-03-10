@@ -14,6 +14,7 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.core.util.SimulationUtil
 
 import scala.collection.mutable
 import scala.collection.mutable.PriorityQueue
@@ -38,8 +39,7 @@ class TrafficSignal(
   
   /** Event-driven: Schedule all phase transitions upfront (O(1) per transition) */
   private def scheduleAllPhaseTransitions(): Unit = {
-    // Get simulation duration from config
-    val simulationEnd = config.getLong("htc.simulation.duration")
+    val simulationEnd = TrafficSignal.simulationEndTick
     var cycleTick = 0L
     
     logInfo(s"Pre-scheduling phase transitions for signal ${getEntityId} until tick $simulationEnd")
@@ -248,4 +248,8 @@ class TrafficSignal(
     } else {
       Red
     }
+}
+
+object TrafficSignal {
+  lazy val simulationEndTick: Tick = SimulationUtil.loadSimulationConfig().duration
 }

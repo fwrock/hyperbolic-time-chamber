@@ -9,10 +9,10 @@ resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 resolvers += "Confluent".at("https://packages.confluent.io/maven/")
 
 // Apache Pekko
-val pekkoVersion = "1.1.5"
-val pekkoManagementVersion = "1.1.1"
+val pekkoVersion = "1.4.0"
+val pekkoManagementVersion = "1.2.0"
 val jacksonVersion = "2.19.2"
-val pekkoHttpVersion = "1.2.0"
+val pekkoHttpVersion = "1.3.0"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs

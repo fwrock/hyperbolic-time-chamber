@@ -54,7 +54,7 @@ object GPSUtil {
         
         // Use shortest path by hops for now, but with dynamic weight consideration
         // TODO: Implement A* with custom weight function
-        val pathResult = CityMapUtil.cityMap.shortestPathByHops(originNode, destinationNode)
+        val pathResult = CityMapUtil.cityMap.dijkstraEdgeTargetsOptimized(originNode, destinationNode)
         
         pathResult match {
           case Some((hopCount, path)) =>

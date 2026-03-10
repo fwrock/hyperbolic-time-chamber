@@ -127,6 +127,14 @@ trait PrivateVehicle[T <: MovableState] {
   /** Get current trip destination (for route calculation).
     */
   protected def getTripDestination: Option[String] = tripDestination
+
+  /** Get current trip start tick (for trip metrics).
+    */
+  protected def getTripStartTick: Option[Tick] = tripStartTick
+
+  /** Get current driver attributes (for speed factor metrics).
+    */
+  protected def getDriverAttributes: DriverAttributes = driverAttributes
   
   /** Handle ParkVehicle message (optional explicit parking).
     */

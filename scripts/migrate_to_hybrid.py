@@ -22,6 +22,7 @@ from enum import Enum
 import yaml
 from datetime import datetime
 from collections import defaultdict
+from collections import deque
 
 # ============================================================================
 # CONFIGURATION
@@ -256,8 +257,8 @@ class HybridMigrator:
                     "dataType": "model.hybrid.entity.state.NodeState",
                     "content": {
                         "startTick": old_content.get('startTick', 0),
-                        "latitude": old_content['latitude'],
-                        "longitude": old_content['longitude'],
+                        "latitude": float(old_content['latitude']),
+                        "longitude": float(old_content['longitude']),
                         "links": [],  # Will be populated after link migration
                         "connections": {},
                         "signals": {},
@@ -484,7 +485,7 @@ class HybridMigrator:
     
     def _migrate_vehicles(self):
         """Migrate vehicles from mobility to hybrid model"""
-        source_cars = self.vehicles[VehicleTypeEnum.CAR]
+        source_cars = self._sanitize_vehicle_routes(self.vehicles[VehicleTypeEnum.CAR])
         
         if not self.config.convert_vehicles:
             # Just migrate all cars to hybrid cars
@@ -535,6 +536,75 @@ class HybridMigrator:
             for vtype, count in conversion_counts.items():
                 if count > 0:
                     self.log(f"    • {vtype.value}: {count} ({count/total*100:.1f}%)")
+
+    def _build_link_graph(self) -> Dict[str, set[str]]:
+        graph: Dict[str, set[str]] = defaultdict(set)
+        for link in self.links:
+            content = link["data"]["content"]
+            from_node = content.get("from")
+            to_node = content.get("to")
+            if from_node and to_node:
+                graph[from_node].add(to_node)
+        return graph
+
+    def _reachable_nodes(self, origin: str, graph: Dict[str, set[str]], cache: Dict[str, set[str]]) -> set[str]:
+        if origin in cache:
+            return cache[origin]
+        visited: set[str] = set()
+        queue: deque[str] = deque([origin])
+        while queue:
+            node = queue.popleft()
+            if node in visited:
+                continue
+            visited.add(node)
+            for nxt in graph.get(node, set()):
+                if nxt not in visited:
+                    queue.append(nxt)
+        cache[origin] = visited
+        return visited
+
+    def _sanitize_vehicle_routes(self, source_cars: List[Dict]) -> List[Dict]:
+        graph = self._build_link_graph()
+        graph_nodes = list(graph.keys())
+        if not graph_nodes:
+            self.log("  ⚠️  No link graph found; keeping original vehicles", error=True)
+            return source_cars
+
+        cache: Dict[str, set[str]] = {}
+        sanitized: List[Dict] = []
+        repaired = 0
+        dropped = 0
+
+        for car in source_cars:
+            car_copy = json.loads(json.dumps(car))
+            content = car_copy.get("data", {}).get("content", {})
+            origin = content.get("origin")
+            destination = content.get("destination")
+
+            if origin not in graph:
+                origin = random.choice(graph_nodes)
+                content["origin"] = origin
+                content["currentNode"] = origin
+                repaired += 1
+
+            reachable = self._reachable_nodes(origin, graph, cache)
+            valid_destinations = [node for node in reachable if node != origin]
+
+            if not valid_destinations:
+                dropped += 1
+                continue
+
+            if destination not in reachable or destination == origin:
+                content["destination"] = random.choice(valid_destinations)
+                repaired += 1
+
+            sanitized.append(car_copy)
+
+        if repaired > 0:
+            self.log(f"  🔧 Repaired {repaired} vehicle routes (origin/destination normalization)")
+        if dropped > 0:
+            self.log(f"  ⚠️  Dropped {dropped} vehicles with no reachable destination")
+        return sanitized
     
     def _migrate_car_to_hybrid(self, car: Dict, target_type: VehicleTypeEnum) -> Dict:
         """Migrate a single car to hybrid model (private vehicles only)"""
@@ -610,6 +680,18 @@ class HybridMigrator:
             },
             "dependencies": car.get('dependencies', {})
         }
+
+        dependencies = migrated.get("dependencies", {})
+        if "from_node" in dependencies:
+            dependencies["from_node"] = {
+                "id": content["origin"],
+                "classType": "hybrid.actor.Node"
+            }
+        if "to_node" in dependencies:
+            dependencies["to_node"] = {
+                "id": content["destination"],
+                "classType": "hybrid.actor.Node"
+            }
         
         # Remove GPS dependency (not needed in hybrid model)
         if 'gps' in migrated['dependencies']:
@@ -1751,9 +1833,14 @@ class HybridMigrator:
             self.log("  ⚠️  No city map to migrate")
             return
         
-        # Update node class types
+        # Update node class types and convert lat/lon strings → float
+        # (NodeGraph in Scala expects Double; string values break Dijkstra)
         for node in self.city_map['nodes']:
             node['classType'] = 'hybrid.actor.Node'
+            if 'latitude' in node and isinstance(node['latitude'], str):
+                node['latitude'] = float(node['latitude'])
+            if 'longitude' in node and isinstance(node['longitude'], str):
+                node['longitude'] = float(node['longitude'])
         
         # Update edge class types
         for edge in self.city_map['edges']:

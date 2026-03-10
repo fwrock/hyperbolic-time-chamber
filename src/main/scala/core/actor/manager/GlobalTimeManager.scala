@@ -26,6 +26,7 @@ import scala.collection.mutable
   */
 class GlobalTimeManager(
   val simulationDuration: Tick,
+  val extendSimulationIfPendingEventsAfterEnd: Boolean,
   val simulationManager: ActorRef
 ) extends TimeManagerBase(
       timeManager = null,
@@ -157,18 +158,30 @@ class GlobalTimeManager(
   }
 
   private def calculateAndBroadcastNextGlobalTick(): Unit = {
+    val totalManagers = localTimeManagers.size
     val scheduled = localTimeManagers.values.filter(_.hasSchedule)
-    val nextTick = if (scheduled.nonEmpty) {
-      scheduled.map(_.tick).min
-    } else {
-      localTimeManagers.values.filter(_.isProcessed).map(_.tick).min
+    val scheduledCount = scheduled.size
+
+   /* logInfo(
+      s"Global tick coordination: currentTick=$localTickOffset, totalManagers=$totalManagers, scheduledManagers=$scheduledCount, extendAfterEnd=$extendSimulationIfPendingEventsAfterEnd"
+    )*/
+
+    if (scheduled.isEmpty) {
+      logInfo("No more scheduled events across local time managers. Terminating simulation")
+      terminateSimulation()
+      return
     }
+
+    val nextTick = scheduled.map(_.tick).min
+//    logInfo(s"Global tick coordination: selected nextTick=$nextTick from $scheduledCount scheduled manager(s)")
     
     localTickOffset = nextTick
     tickOffset = nextTick - initialTick
     
-    // Check if simulation should terminate
-    if (localTickOffset - initialTick >= simulationDuration) {
+    // Check if simulation should terminate by configured duration.
+    // If extension is enabled, allow simulation to continue beyond duration
+    // while there are still scheduled events.
+    if (!extendSimulationIfPendingEventsAfterEnd && localTickOffset - initialTick >= simulationDuration) {
       terminateSimulation()
       return
     }
@@ -226,7 +239,8 @@ class GlobalTimeManager(
 object GlobalTimeManager {
   def props(
     simulationDuration: Tick,
+    extendSimulationIfPendingEventsAfterEnd: Boolean,
     simulationManager: ActorRef
   ): Props =
-    Props(classOf[GlobalTimeManager], simulationDuration, simulationManager)
+    Props(classOf[GlobalTimeManager], simulationDuration, extendSimulationIfPendingEventsAfterEnd, simulationManager)
 }

@@ -38,6 +38,13 @@ class LocalDiscreteEventTimeManager(
   protected def processTick(tick: Tick): Unit = {
     // Process all events scheduled for this tick
     scheduledActors.get(tick).foreach { actorsSet =>
+      val actorTypes = actorsSet.groupBy(_.classType).view.mapValues(_.size).toMap
+      val actorSummary = actorTypes.map { case (classType, count) => 
+        s"${classType.split('.').lastOption.getOrElse(classType)}=$count" 
+      }.mkString(", ")
+      if (tick % 10000 == 0) {
+        logInfo(s"[LocalDiscreteEvent] Processing tick $tick with ${actorsSet.size} scheduled actors ($actorSummary)")
+      }
       sendSpontaneousEvent(tick, actorsSet)
     }
     scheduledActors.remove(tick)

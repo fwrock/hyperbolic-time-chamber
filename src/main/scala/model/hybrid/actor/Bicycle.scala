@@ -20,6 +20,7 @@ import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.model.hybrid.entity.event.data.person._
 import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bicycle actor - NEW vehicle type for hybrid simulator.
   * 
@@ -63,6 +64,33 @@ class Bicycle(
   /** Link entry tick.
     */
   private var linkEntryTick: Option[Tick] = None
+
+  private var sumoDepartTick: Option[Tick] = None
+  private var sumoDepartSpeed: Double = 0.0
+  private var sumoArrivalSpeed: Double = 0.0
+  private var sumoDepartLane: Option[String] = None
+  private var sumoDepartPos: Double = 0.0
+  private var sumoArrivalLane: Option[String] = None
+  private var sumoArrivalPos: Double = 0.0
+  private var sumoWaitingTimeSeconds: Double = 0.0
+  private var sumoWaitingCount: Int = 0
+  private var sumoStopTimeSeconds: Double = 0.0
+  private var sumoIdealTravelTimeSeconds: Double = 0.0
+  private var sumoCurrentMicroTimeStepSeconds: Double = 1.0
+  private var sumoIsHalting: Boolean = false
+  private var sumoRerouteNo: Int = 0
+  private var sumoTripInfoReported: Boolean = false
+
+  private def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
+    val isHaltingNow = speed < 0.1
+    if (isHaltingNow) {
+      if (!sumoIsHalting) {
+        sumoWaitingCount += 1
+      }
+      sumoWaitingTimeSeconds += math.max(0.0, deltaSeconds)
+    }
+    sumoIsHalting = isHaltingNow
+  }
   
   // ===== PrivateVehicle Accessor Methods =====
   
@@ -148,13 +176,18 @@ class Bicycle(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
-    if (state.destination == state.movableCurrentPath.map(_._2).orNull || state.bestRoute.isEmpty) {
+    val currentPathNode = state.movableCurrentPath.map(_._2).orNull
+    val routeDepleted = state.movableBestRoute.forall(_.isEmpty)
+    if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
         finishJourney("reached_destination", currentNodeId)
+        onFinishPrivateVehicle(currentNodeId)
       } else {
         finishJourney("no_current_node", "unknown")
+        onFinishPrivateVehicle("unknown")
       }
+      onFinishSpontaneous(None)
       selfDestruct()
     } else {
       state.status = WaitingSignalState
@@ -192,6 +225,10 @@ class Bicycle(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     if (data.phase == Red) {
       state.status = WaitingSignal
+      val waitTicks = math.max(0L, data.nextTick - currentTick)
+      if (waitTicks > 0) {
+        updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
+      }
       // Report signal waiting event
       report(
         data = Map(
@@ -214,8 +251,13 @@ class Bicycle(
     if (state.status == Finished) {
       return
     }
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    if (sumoDepartTick.nonEmpty) {
+      sumoRerouteNo += 1
+    }
     try {
-      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           // CRITICAL: Also update parent MovableState field!
@@ -229,9 +271,10 @@ class Bicycle(
           report(
             data = Map(
               "event_type" -> "journey_started",
+              "vehicle_id" -> getEntityId,
               "bicycle_id" -> getEntityId,
-              "origin" -> state.origin,
-              "destination" -> state.destination,
+              "origin" -> origin,
+              "destination" -> destination,
               "route_length" -> pathQueue.size,
               "tick" -> currentTick
             ),
@@ -241,17 +284,17 @@ class Bicycle(
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            finishJourney("already_at_destination", state.origin)
+            finishJourney("already_at_destination", origin)
           }
         
         case None =>
           logError(s"Failed to calculate route for bicycle ${getEntityId}")
-          finishJourney("route_calculation_failed", state.origin)
+          finishJourney("route_calculation_failed", origin)
       }
     } catch {
       case e: Exception =>
         logError(s"Exception during bicycle route request: ${e.getMessage}", e)
-        finishJourney("exception", state.origin)
+        finishJourney("exception", origin)
     }
   }
   
@@ -287,6 +330,15 @@ class Bicycle(
     // Activate MICRO mode
     state.activateMicroMode(initialMicroState)
     state.status = Moving
+    sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
+    sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.speedLimit)
+    updateHaltingState(initialMicroState.velocity, 0.0)
+    if (sumoDepartTick.isEmpty) {
+      sumoDepartTick = Some(currentTick)
+      sumoDepartSpeed = initialMicroState.velocity
+      sumoDepartLane = Some(s"${data.linkId}_${initialMicroState.currentLane}")
+      sumoDepartPos = 0.0
+    }
     
     // Report micro enter
     report(
@@ -323,6 +375,8 @@ class Bicycle(
       )
       
       state.updateMicroState(updatedMicro)
+      sumoArrivalSpeed = data.velocity
+      updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
       
       log.debug(s"Bicycle micro update: pos=${data.position}, vel=${data.velocity}")
     }
@@ -336,6 +390,10 @@ class Bicycle(
     val travelTime = linkEntryTick.map(entryTick => currentTick - entryTick).getOrElse(0L)
     
     state.distance += data.distanceTraveled
+    sumoArrivalSpeed = data.finalVelocity
+    sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
+    sumoArrivalPos = data.finalPosition
+    updateHaltingState(data.finalVelocity, 0.0)
     
     // Report micro leave
     report(
@@ -374,6 +432,14 @@ class Bicycle(
     val time = data.linkLength / bicycleSpeed
     
     state.status = Moving
+    sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
+    updateHaltingState(bicycleSpeed, 0.0)
+    if (sumoDepartTick.isEmpty) {
+      sumoDepartTick = Some(currentTick)
+      sumoDepartSpeed = bicycleSpeed
+      sumoDepartLane = Some(s"${event.actorRefId}_0")
+      sumoDepartPos = 0.0
+    }
     
     // Report meso enter
     report(
@@ -400,6 +466,10 @@ class Bicycle(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
+    sumoArrivalSpeed = 0.0
+    sumoArrivalLane = Some(s"${event.actorRefId}_0")
+    sumoArrivalPos = data.linkLength
+    updateHaltingState(0.0, 0.0)
     
     // Report meso leave
     report(
@@ -413,29 +483,93 @@ class Bicycle(
       ),
       label = "leave_link"
     )
-    
-    onFinishSpontaneous(Some(currentTick + 1))
+
+    val routeDepleted = state.movableCurrentPath.isEmpty && state.movableBestRoute.forall(_.isEmpty)
+    if (routeDepleted && state.status != Finished) {
+      finishJourney("reached_destination", state.destination)
+      onFinishPrivateVehicle(state.destination)
+      selfDestruct()
+      onFinishSpontaneous(None)
+    } else {
+      onFinishSpontaneous(Some(currentTick + 1))
+    }
   }
   
   /** Finish bicycle journey.
     */
   private def finishJourney(reason: String, finalNode: String): Unit = {
+    val destination = getTripDestination.getOrElse(state.destination)
+    val origin = getTripOrigin.getOrElse(state.origin)
     report(
       data = Map(
         "event_type" -> "journey_completed",
+        "vehicle_id" -> getEntityId,
         "bicycle_id" -> getEntityId,
-        "origin" -> state.origin,
-        "destination" -> state.destination,
+        "origin" -> origin,
+        "destination" -> destination,
         "final_node" -> finalNode,
-        "reached_destination" -> (state.destination == finalNode),
+        "reached_destination" -> (destination == finalNode),
         "completion_reason" -> reason,
         "total_distance" -> state.distance,
         "tick" -> currentTick
       ),
       label = "journey_completed"
     )
+
+    reportSumoTripInfo(reason = reason, finalNode = finalNode)
     
     state.status = Finished
+  }
+
+  private def reportSumoTripInfo(reason: String, finalNode: String): Unit = {
+    if (sumoTripInfoReported) return
+
+    val destination = getTripDestination.getOrElse(state.destination)
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val plannedDepart = getTripStartTick.getOrElse(state.startTick)
+    val depart = sumoDepartTick.getOrElse(plannedDepart)
+    val arrival = currentTick
+    val duration = math.max(0L, arrival - depart)
+    val routeLength = state.distance
+    val expectedTravelTime = math.max(0.0, sumoIdealTravelTimeSeconds)
+    val timeLoss = math.max(0.0, duration.toDouble - expectedTravelTime)
+    val vaporized = reason == "actor_destructed_before_completion"
+    val departDelay = math.max(0L, depart - plannedDepart)
+
+    report(
+      data = Map(
+        "event_type" -> "sumo_tripinfo",
+        "vehicle_id" -> getEntityId,
+        "vehicle_type" -> "bicycle",
+        "vType" -> "bicycle",
+        "origin" -> origin,
+        "destination" -> destination,
+        "final_node" -> finalNode,
+        "completion_reason" -> reason,
+        "depart" -> depart,
+        "arrival" -> arrival,
+        "departLane" -> sumoDepartLane.getOrElse(""),
+        "departPos" -> sumoDepartPos,
+        "arrivalLane" -> sumoArrivalLane.getOrElse(""),
+        "arrivalPos" -> sumoArrivalPos,
+        "duration" -> duration,
+        "routeLength" -> routeLength,
+        "waitingTime" -> sumoWaitingTimeSeconds,
+        "waitingCount" -> sumoWaitingCount,
+        "stopTime" -> sumoStopTimeSeconds,
+        "timeLoss" -> timeLoss,
+        "departDelay" -> departDelay,
+        "rerouteNo" -> sumoRerouteNo,
+        "arrivalSpeed" -> sumoArrivalSpeed,
+        "departSpeed" -> sumoDepartSpeed,
+        "speedFactor" -> getDriverAttributes.maxSpeedFactor,
+        "vaporized" -> vaporized,
+        "tick" -> currentTick
+      ),
+      label = "sumo_tripinfo"
+    )
+
+    sumoTripInfoReported = true
   }
   
   /** Find bike lane in link configuration (if any).
@@ -478,6 +612,16 @@ class Bicycle(
   override protected def onFinish(nodeId: String): Unit = {
     onFinishPrivateVehicle(nodeId)
     finishJourney("onFinish_called", nodeId)
+  }
+
+  override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null && !sumoTripInfoReported && state.status != Finished) {
+      val fallbackNode = Option(getCurrentNode)
+        .orElse(state.movableCurrentPath.map(_._2))
+        .getOrElse("unknown")
+      finishJourney("actor_destructed_before_completion", fallbackNode)
+      onFinishPrivateVehicle(fallbackNode)
+    }
   }
 }
 

@@ -296,7 +296,14 @@ case class Graph[V, W, L] private (
         visited.add(current)
         
         neighbors(current).foreach { case (neighbor, edgeInfoObj) =>
-          if (!visited.contains(neighbor)) {/* Lines 300-306 omitted */}
+          if (!visited.contains(neighbor)) {
+            val newDistance = currentDistance + weightToDouble(edgeInfoObj.weight)
+            if (newDistance < distances(neighbor)) {
+              distances(neighbor) = newDistance
+              cameFrom(neighbor) = current
+              priorityQueue.enqueue((newDistance, neighbor))
+            }
+          }
         }
       }
     }

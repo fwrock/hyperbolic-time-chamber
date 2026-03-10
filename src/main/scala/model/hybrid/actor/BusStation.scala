@@ -10,9 +10,11 @@ import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
+import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.event.data.{ ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
@@ -27,6 +29,8 @@ class BusStation(
 ) extends SimulationBaseActor[BusStationState](
       properties = properties
     ) {
+
+  private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
 
   /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic).
     * Ensures deterministic route building and lookup.
@@ -46,7 +50,10 @@ class BusStation(
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    state.status match {
+    if (currentTick >= simulationEnd) {
+      logInfo(s"BusStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling")
+      onFinishSpontaneous(None)
+    } else state.status match {
       case Start =>
         state.status = RouteWaiting
         // Calculate routes directly from in-memory map

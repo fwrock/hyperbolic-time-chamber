@@ -42,6 +42,9 @@ class LocalTimeSteppedTimeManager(
     * @param tick The tick to process
     */
   protected def processTick(tick: Tick): Unit = {
+    if (tick % 10000 == 0) {
+      logInfo(s"[LocalTimeStepped] Processing tick $tick with ${registeredActors.size} registered actors")
+    }
     // Trigger all registered actors at this time step
     triggerAllActors(tick)
     
@@ -61,6 +64,9 @@ class LocalTimeSteppedTimeManager(
     // In time-stepped mode, we could optionally trigger ALL registered actors
     // For now, we only trigger those scheduled, but this can be extended
     if (scheduledAtThisTick.nonEmpty) {
+      if (tick % 1000 == 0) {
+        logInfo(s"[LocalTimeStepped] Triggering ${scheduledAtThisTick.size} scheduled actors at tick $tick")
+      }
       sendSpontaneousEvent(tick, scheduledAtThisTick)
       scheduledActors.remove(tick)
     }

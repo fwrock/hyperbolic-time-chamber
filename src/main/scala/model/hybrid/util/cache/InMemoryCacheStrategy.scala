@@ -1,19 +1,16 @@
 package org.interscity.htc.model.hybrid.util.cache
 
-import org.apache.pekko.actor.ActorSystem
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success, Try}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 /** In-memory cache strategy with simple local cache.
   * 
   * Architecture:
   * - Local in-memory cache (ConcurrentHashMap)
-  * - For distributed clusters, use Redis strategy instead
+  * - No external dependencies (no Kafka, no Redis, no ActorSystem required)
   * - No cluster synchronization in this simple version
   * 
   * Performance:
@@ -32,22 +29,24 @@ import scala.jdk.CollectionConverters._
   * - ✅ Simple implementation
   * - ❌ No cluster synchronization (each node has own cache)
   * - ❌ Higher memory usage per node
-  * 
-  * Note: For multi-node clusters with sync, use Redis strategy or implement
-  *       Pekko Distributed Data integration separately.
   */
-class InMemoryCacheStrategy(implicit system: ActorSystem) extends WeightCacheStrategy {
-  
-  private implicit val ec: ExecutionContext = system.dispatcher
-  
+class InMemoryCacheStrategy extends WeightCacheStrategy {
+
   // Local cache for ultra-fast reads
   private val localCache = new ConcurrentHashMap[String, (DynamicLinkCost, Long)]()
-  
+
+  // Daemon scheduler for TTL expiration - no ActorSystem needed
+  private val scheduler = Executors.newSingleThreadScheduledExecutor { r =>
+    val t = new Thread(r, "inmemory-cache-expiry")
+    t.setDaemon(true)
+    t
+  }
+
   // Background cleanup of expired entries
   private def scheduleExpiration(linkId: String, ttlSeconds: Int): Unit = {
-    system.scheduler.scheduleOnce(ttlSeconds.seconds) {
-      localCache.remove(linkId)
-    }
+    scheduler.schedule(new Runnable {
+      def run(): Unit = localCache.remove(linkId)
+    }, ttlSeconds.toLong, TimeUnit.SECONDS)
   }
   
   override def publishCost(cost: DynamicLinkCost, ttlSeconds: Int): Try[Unit] = {

@@ -36,6 +36,7 @@ class SimulationManager(
     case event: FinishLoadDataEvent      => startSimulation()
     case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
     case event: RegisterReportersEvent   => registerReporters(event)
+    case _: StopSimulationEvent          => handleStopSimulation()
   }
 
   override def onStart(): Unit =
@@ -97,6 +98,7 @@ class SimulationManager(
     createSingletonManager(
       manager = GlobalTimeManager.props(
         simulationDuration = configuration.duration,
+        extendSimulationIfPendingEventsAfterEnd = configuration.extendSimulationIfPendingEventsAfterEnd,
         simulationManager = getSelfProxy
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
@@ -125,4 +127,23 @@ class SimulationManager(
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
     )
+
+  private def handleStopSimulation(): Unit = {
+    logInfo("Received StopSimulationEvent. Stopping simulation managers gracefully")
+    try {
+      if (loadManager != null) {
+        createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
+      }
+      if (reportManager != null) {
+        createSingletonProxy(REPORT_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
+      }
+      if (timeSingletonManager != null) {
+        createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
+      }
+    } catch {
+      case e: Exception =>
+        logError(s"Error while forwarding StopSimulationEvent: ${e.getMessage}", e)
+    }
+    selfDestruct()
+  }
 }

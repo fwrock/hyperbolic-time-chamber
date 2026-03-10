@@ -16,6 +16,7 @@ case class Simulation(
   timeStep: Long,
   tickDuration: Option[Double] = None,
   duration: Tick,
+  extendSimulationIfPendingEventsAfterEnd: Boolean = false,
   randomSeed: Option[Long] = None,
   cityMapFile: Option[String] = None,
   actorsDataSources: List[ActorDataSource] = List.empty

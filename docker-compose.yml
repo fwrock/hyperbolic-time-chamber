@@ -108,8 +108,9 @@ services:
       MANAGEMENT_HTTP_PORT: 8558 
       
       # Simulation Configuration
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_10/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/hybrid_scenario_10/data/city_map.json
+      HTC_SCENARIO_NAME: ${HTC_SCENARIO_NAME:-htc_scenario}
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO_NAME:-htc_scenario}/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO_NAME:-htc_scenario}/data/city_map.json
       
       # Time Manager Configuration
       HTC_TIME_MANAGER_INSTANCES: 16
