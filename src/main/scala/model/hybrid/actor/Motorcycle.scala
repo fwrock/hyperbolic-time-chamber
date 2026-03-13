@@ -293,6 +293,11 @@ class Motorcycle(
   /** Handle signal state response from node.
     */
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
+    // Guard against stale/duplicate SignalStateData responses caused by the retry mechanism.
+    if (state.status != WaitingSignalState) {
+      logDebug(s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard.")
+      return
+    }
     signalStateRetryCounter = 0  // Reset stuck counter on signal response
     if (data.phase == Red) {
       state.status = WaitingSignal
