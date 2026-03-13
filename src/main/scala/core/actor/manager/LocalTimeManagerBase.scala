@@ -83,7 +83,22 @@ abstract class LocalTimeManagerBase(
 
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
-    val actorsSet = scheduledActors.getOrElseUpdate(event.tick, mutable.Set[Identify]())
+    // CRITICAL: If the requested tick is in the past (< localTickOffset), it has already
+    // been processed and removed from scheduledActors by processTick. Any entry added at
+    // that past tick is orphaned — nextTick filters out ticks < localTickOffset, so they
+    // are never dispatched again. This happens when ScheduleEvent is routed via the pool
+    // router to a TM that has already advanced past the requested tick (e.g. from MICRO
+    // link handleEnterLinkMicro calling scheduleEvent while a "fast" TM receives it).
+    // Use <= localTickOffset (not just <) to also guard against same-tick races where
+    // processTick(T) already cleared scheduledActors[T] but localTickOffset is still T.
+    // Fix: bump past-tick/same-tick requests to localTickOffset + 1, guaranteeing future processing.
+    val effectiveTick = if (event.tick <= localTickOffset) {
+      logDebug(s"[TM] ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}")
+      localTickOffset + 1
+    } else {
+      event.tick
+    }
+    val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
   }
 

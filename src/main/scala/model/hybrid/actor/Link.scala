@@ -260,7 +260,13 @@ class Link(
 
     if (!microTickScheduled) {
       microTickScheduled = true
-      scheduleEvent(entryTick + 1)
+      // CRITICAL: Use currentTick (the link's own tick, always >= event.tick) rather than
+      // entryTick (event.tick, the car's tick when it sent the message).
+      // In MICRO mode cars stop scheduling their own spontaneous events, so their currentTick
+      // lags behind. When they send EnterLinkData, event.tick may already be < link's currentTick.
+      // scheduleEvent with a past tick is silently ignored by the TimeManager (nextTick filters
+      // ticks < localTickOffset), causing the link to never run its micro simulation.
+      scheduleEvent(currentTick + 1)
     }
   }
 
