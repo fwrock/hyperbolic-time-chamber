@@ -281,13 +281,18 @@ class Car(
         case null =>
     }
 
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
+  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
+    // Guard against stale/duplicate SignalStateData due to retry race condition
+    if (state.movableStatus != WaitingSignalState) {
+      return
+    }
     if (data.phase == Red) {
       state.movableStatus = WaitingSignal
       onFinishSpontaneous(Some(data.nextTick))
     } else {
       leavingLink()
     }
+  }
 
   override def leavingLink(): Unit = {
     state.movableStatus = Ready

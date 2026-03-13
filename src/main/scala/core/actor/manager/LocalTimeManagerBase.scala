@@ -90,6 +90,11 @@ abstract class LocalTimeManagerBase(
   protected def finishEvent(finish: FinishEvent): Unit = {
     if (finish.timeManager == self) {
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
+      // Track whether this actor was actually processing a spontaneous event.
+      // Only spontaneous-event completions should trigger tick advancement.
+      // Calling onFinishSpontaneous from actInteractWith (e.g. handleMicroEnterLink) must
+      // NOT falsely report hasScheduled=false to the global TM and terminate the simulation.
+      val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
       
       // If no scheduleTick provided (None), remove actor from ALL future scheduled ticks
@@ -110,8 +115,13 @@ abstract class LocalTimeManagerBase(
       }
       
       finishDestruct(finish)
-      // Report to global and wait for next tick (don't advance locally)
-      advanceToNextTick()
+      // Only advance to the next tick if this actor was actually running a spontaneous event.
+      // When onFinishSpontaneous is called from actInteractWith (not actSpontaneous), the actor
+      // is NOT in runningEvents; advancing here would trigger a spurious hasScheduled=false
+      // report to the global TM, causing premature simulation termination.
+      if (wasProcessingSpontaneousEvent) {
+        advanceToNextTick()
+      }
     } else {
       finish.timeManager ! finish
     }

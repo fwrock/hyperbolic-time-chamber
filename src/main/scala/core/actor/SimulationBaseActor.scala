@@ -292,6 +292,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
+    // Keep currentTick monotonically advancing: interaction events carry the sender's
+    // currentTick, which may be newer than ours. Without this update, actors that
+    // unregister from the TimeManager (e.g., MICRO-mode vehicles driven by Link events)
+    // retain a stale currentTick. When they later call onFinishSpontaneous(Some(currentTick + 1)),
+    // they schedule for an already-processed tick, and the TimeManager never dispatches them again.
+    if (event.tick > currentTick) {
+      currentTick = event.tick
+    }
     actInteractWith(event)
     // save(event) // Event persistence disabled
   }
