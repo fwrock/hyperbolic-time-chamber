@@ -119,12 +119,17 @@ case class LinkState(
   /** Initialize lane structure for MICRO mode */
   def initializeMicroLanes(): LinkState = {
     if (isMicroMode && vehiclesByLane.isEmpty) {
-      val lanes = (0 until this.lanes).map { laneId =>
+      // Ensure at least 1 lane even if lanes=0 in the input data.
+      // A link with lanes=0 would otherwise produce an empty vehiclesByLane map,
+      // causing totalVehiclesInMicro=0 and silently trapping all vehicles: they enter
+      // state.registered but are never added to a lane, so the micro loop skips them.
+      val effectiveLanes = math.max(1, this.lanes)
+      val lanes = (0 until effectiveLanes).map { laneId =>
         laneId -> mutable.Queue.empty[VehicleInLane]
       }.toMap
       
       val configs = if (laneConfigurations.isEmpty) {
-        (0 until this.lanes).map { laneId =>
+        (0 until effectiveLanes).map { laneId =>
           LaneConfig(laneId = laneId)
         }.toList
       } else laneConfigurations

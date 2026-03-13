@@ -446,6 +446,22 @@ class Car(
   }
 
   private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit = {
+    // MICRO-mode cars don't receive spontaneous events, so they can't rely on actSpontaneous
+    // to detect simulation end.  This guard mirrors the same check in actSpontaneous so that
+    // a car that is still traversing a MICRO link when the simulation clock expires will
+    // cleanly finish its journey instead of silently vanishing.
+    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+        && currentTick >= simulationEndTick && state.movableStatus != Finished) {
+      logInfo(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing.")
+      val finalNode = Option(getCurrentNode).getOrElse(state.destination)
+      leavingLink()
+      finishJourney("simulation_time_exceeded", finalNode)
+      onFinishPrivateVehicle(finalNode)
+      onFinishSpontaneous(None)
+      selfDestruct()
+      return
+    }
+
     state.microState.foreach { micro =>
       val updatedMicro = micro.copy(
         positionInLink = data.position,
