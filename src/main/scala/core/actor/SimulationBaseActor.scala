@@ -274,8 +274,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     try actSpontaneous(event)
     catch
       case e: Exception =>
+        logError(s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}")
         e.printStackTrace()
-        onFinishSpontaneous()
+        // Reschedule for retry instead of permanently unscheduling the actor
+        onFinishSpontaneous(Some(currentTick + 1))
     // save(event) // Event persistence disabled
   }
 
@@ -331,7 +333,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     )
     scheduleTick.foreach(
       tick =>
-        getTimeManager(currentTimeManagerType) ! ScheduleEvent(
+        // CRITICAL: Send ScheduleEvent to the SAME TimeManager that received the FinishEvent.
+        // Using getTimeManager(currentTimeManagerType) could route to a different TM instance
+        // (pool router), causing cross-TM scheduling inconsistencies and simulation hangs.
+        currentTimeManager ! ScheduleEvent(
           tick = tick,
           actorRef = getPath,
           identify = Some(

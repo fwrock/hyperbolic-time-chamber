@@ -47,7 +47,7 @@ case class MicroLeaveLinkData(
   finalVelocity: Double,
   travelTime: Double,
   distanceTraveled: Double,
-  averageSpeed: Double
+  averageSpeed: Double,
 ) extends BaseEventData
 
 /** Data for microscopic update within a link.

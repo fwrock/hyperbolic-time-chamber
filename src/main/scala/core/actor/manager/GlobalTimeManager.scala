@@ -161,11 +161,7 @@ class GlobalTimeManager(
     val totalManagers = localTimeManagers.size
     val scheduled = localTimeManagers.values.filter(_.hasSchedule)
     val scheduledCount = scheduled.size
-
-   /* logInfo(
-      s"Global tick coordination: currentTick=$localTickOffset, totalManagers=$totalManagers, scheduledManagers=$scheduledCount, extendAfterEnd=$extendSimulationIfPendingEventsAfterEnd"
-    )*/
-
+    
     if (scheduled.isEmpty) {
       logInfo("No more scheduled events across local time managers. Terminating simulation")
       terminateSimulation()
@@ -180,8 +176,9 @@ class GlobalTimeManager(
     
     // Check if simulation should terminate by configured duration.
     // If extension is enabled, allow simulation to continue beyond duration
-    // while there are still scheduled events.
+    // while there are still scheduled events (vehicles finishing their trips).
     if (!extendSimulationIfPendingEventsAfterEnd && localTickOffset - initialTick >= simulationDuration) {
+      logInfo(s"Simulation reached configured duration ($simulationDuration ticks). Terminating.")
       terminateSimulation()
       return
     }

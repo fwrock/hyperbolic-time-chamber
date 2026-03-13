@@ -63,6 +63,11 @@ class Bus(
     */
   private var linkEntryTick: Option[Tick] = None
 
+  /** MESO exit tick — the tick at which link traversal completes.
+    * Used to prevent stale Waiting-poll ticks from triggering premature requestSignalState.
+    */
+  private var mesoExitTick: Option[Tick] = None
+
   private var sumoDepartTick: Option[Tick] = None
   private var sumoDepartSpeed: Double = 0.0
   private var sumoArrivalSpeed: Double = 0.0
@@ -79,6 +84,14 @@ class Bus(
   private var sumoRerouteNo: Int = 0
   private var sumoTripInfoReported: Boolean = false
 
+  /** Expected tick when red signal phase ends.
+    * Prevents stale WaitingSignalState poll ticks from triggering premature leavingLink.
+    */
+  private var signalWaitUntilTick: Option[Tick] = None
+
+  /** Maximum simulation end tick - vehicles must finish by this tick. */
+  private lazy val simulationEndTick: Tick = model.hybrid.util.VehicleSimulationConfig.simulationEndTick
+
   private def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {
@@ -91,6 +104,23 @@ class Bus(
   }
   
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    if (state == null) {
+      logWarn("Bus state is null, cannot process spontaneous event — sending FinishEvent to unblock TimeManager")
+      onFinishSpontaneous(None)
+      return
+    }
+
+    // Safety net: Force-finish vehicles that exceed simulation end time (only when extension is disabled)
+    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+        && currentTick >= simulationEndTick && state.status != Finished) {
+      logInfo(s"Bus ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
+      val finalNode = Option(getCurrentNode).getOrElse(state.destination)
+      finishJourney("simulation_time_exceeded", finalNode)
+      onFinishSpontaneous(None)
+      selfDestruct()
+      return
+    }
+    
     state.status match {
       case Start =>
         report(
@@ -132,15 +162,32 @@ class Bus(
             onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
-          // MESO mode: check signal before proceeding
-          requestSignalState()
+          // MESO mode: only request signal state after travel time has elapsed
+          mesoExitTick match {
+            case Some(exitTick) if currentTick < exitTick =>
+              // Travel time hasn't elapsed yet, wait
+              onFinishSpontaneous(Some(exitTick))
+            case _ =>
+              mesoExitTick = None
+              requestSignalState()
+          }
 //           requestLoadPassenger()
 //           requestUnloadPeopleData()
         }
       
-      case WaitingSignal | WaitingLoadPassenger | WaitingUnloadPassenger =>
+      case WaitingSignal =>
+        // Gate on signalWaitUntilTick to prevent stale poll ticks from
+        // triggering premature leavingLink before the red signal phase ends.
+        signalWaitUntilTick match {
+          case Some(waitTick) if currentTick < waitTick =>
+            onFinishSpontaneous(Some(waitTick))
+          case _ =>
+            signalWaitUntilTick = None
+            leavingLink()
+        }
+      
+      case WaitingLoadPassenger | WaitingUnloadPassenger =>
 //         if (isEndNodeState && nodeStateMaxTime == event.tick) {
-          state.status = Moving
           leavingLink()
 //         }
       
@@ -382,7 +429,9 @@ class Bus(
       label = "enter_link"
     )
     
-    onFinishSpontaneous(Some(currentTick + time.toLong))
+    val exitTick = currentTick + time.toLong
+    mesoExitTick = Some(exitTick)
+    onFinishSpontaneous(Some(exitTick))
   }
   
   /** Handle leaving MESO link.
@@ -396,6 +445,7 @@ class Bus(
     sumoArrivalLane = Some(s"${event.actorRefId}_0")
     sumoArrivalPos = data.linkLength
     updateHaltingState(0.0, 0.0)
+    mesoExitTick = None
     
     // Report meso leave
     report(
@@ -414,8 +464,8 @@ class Bus(
     val routeDepleted = state.movableCurrentPath.isEmpty && state.movableBestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
-      selfDestruct()
       onFinishSpontaneous(None)
+      selfDestruct()
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }
@@ -485,6 +535,7 @@ class Bus(
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     if (data.phase == Red) {
       state.status = WaitingSignal
+      signalWaitUntilTick = Some(data.nextTick)
       val waitTicks = math.max(0L, data.nextTick - currentTick)
       if (waitTicks > 0) {
         updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
@@ -507,6 +558,13 @@ class Bus(
     } else {
       leavingLink()
     }
+  }
+
+  override def leavingLink(): Unit = {
+    mesoExitTick = None
+    signalWaitUntilTick = None
+    state.status = Ready
+    super.leavingLink()
   }
   
   override def getNextPath: Option[(String, String)] = {

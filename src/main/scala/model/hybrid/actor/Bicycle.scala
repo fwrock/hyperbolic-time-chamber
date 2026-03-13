@@ -65,6 +65,11 @@ class Bicycle(
     */
   private var linkEntryTick: Option[Tick] = None
 
+  /** MESO exit tick — the tick at which link traversal completes.
+    * Used to prevent stale Waiting-poll ticks from triggering premature requestSignalState.
+    */
+  private var mesoExitTick: Option[Tick] = None
+
   private var sumoDepartTick: Option[Tick] = None
   private var sumoDepartSpeed: Double = 0.0
   private var sumoArrivalSpeed: Double = 0.0
@@ -80,6 +85,20 @@ class Bicycle(
   private var sumoIsHalting: Boolean = false
   private var sumoRerouteNo: Int = 0
   private var sumoTripInfoReported: Boolean = false
+
+  /** Maximum simulation end tick - vehicles must finish by this tick. */
+  private lazy val simulationEndTick: Tick = model.hybrid.util.VehicleSimulationConfig.simulationEndTick
+
+  /** Expected tick when red signal phase ends.
+    * Prevents stale WaitingSignalState poll ticks from triggering premature leavingLink.
+    */
+  private var signalWaitUntilTick: Option[Tick] = None
+
+  /** Counter for consecutive ticks in WaitingSignalState without Node response. */
+  private var signalStateRetryCounter: Int = 0
+  
+  /** Maximum ticks to wait for signal state response before recovering. */
+  private val MaxSignalStateRetries: Int = 100
 
   private def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
@@ -113,9 +132,27 @@ class Bicycle(
   // ===== End Accessor Methods =====
   
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    if (state == null) {
+      logWarn("Bicycle state is null, cannot process spontaneous event — sending FinishEvent to unblock TimeManager")
+      onFinishSpontaneous(None)
+      return
+    }
+
     // Check if vehicle is parked (passive state)
     if (state.status == Parked) {
       onFinishSpontaneous(None)
+      return
+    }
+    
+    // Safety net: Force-finish vehicles that exceed simulation end time (only when extension is disabled)
+    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+        && currentTick >= simulationEndTick && state.status != Finished) {
+      logInfo(s"Bicycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
+      val finalNode = Option(getCurrentNode).getOrElse(state.destination)
+      finishJourney("simulation_time_exceeded", finalNode)
+      onFinishPrivateVehicle(finalNode)
+      onFinishSpontaneous(None)
+      selfDestruct()
       return
     }
     
@@ -127,7 +164,15 @@ class Bicycle(
         enterLink()
       
       case WaitingSignal =>
-        leavingLink()
+        // Gate on signalWaitUntilTick to prevent stale poll ticks from
+        // triggering premature leavingLink before the red signal phase ends.
+        signalWaitUntilTick match {
+          case Some(waitTick) if currentTick < waitTick =>
+            onFinishSpontaneous(Some(waitTick))
+          case _ =>
+            signalWaitUntilTick = None
+            leavingLink()
+        }
       
       case Moving =>
         if (state.isMicroMode) {
@@ -146,7 +191,25 @@ class Bicycle(
             onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
-          // MESO mode: simple progression
+          // MESO mode: only request signal state after travel time has elapsed
+          mesoExitTick match {
+            case Some(exitTick) if currentTick < exitTick =>
+              // Travel time hasn't elapsed yet, wait
+              onFinishSpontaneous(Some(exitTick))
+            case _ =>
+              mesoExitTick = None
+              requestSignalState()
+          }
+        }
+      
+      case WaitingSignalState =>
+        signalStateRetryCounter += 1
+        if (signalStateRetryCounter > MaxSignalStateRetries) {
+          logWarn(s"Bicycle ${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link.")
+          signalStateRetryCounter = 0
+          leavingLink()
+        } else {
+          // Still waiting for Node response, reschedule
           onFinishSpontaneous(Some(currentTick + 1))
         }
       
@@ -223,8 +286,10 @@ class Bicycle(
   /** Handle signal state response from node.
     */
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
+    signalStateRetryCounter = 0  // Reset stuck counter on signal response
     if (data.phase == Red) {
       state.status = WaitingSignal
+      signalWaitUntilTick = Some(data.nextTick)
       val waitTicks = math.max(0L, data.nextTick - currentTick)
       if (waitTicks > 0) {
         updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
@@ -245,6 +310,13 @@ class Bicycle(
     } else {
       leavingLink()
     }
+  }
+
+  override def leavingLink(): Unit = {
+    mesoExitTick = None
+    signalWaitUntilTick = None
+    state.status = Ready
+    super.leavingLink()
   }
   
   override def requestRoute(): Unit = {
@@ -456,7 +528,9 @@ class Bicycle(
       label = "enter_link"
     )
     
-    onFinishSpontaneous(Some(currentTick + Math.ceil(time).toLong))
+    val exitTick = currentTick + Math.ceil(time).toLong
+    mesoExitTick = Some(exitTick)
+    onFinishSpontaneous(Some(exitTick))
   }
   
   /** Handle leaving MESO link.
@@ -470,6 +544,7 @@ class Bicycle(
     sumoArrivalLane = Some(s"${event.actorRefId}_0")
     sumoArrivalPos = data.linkLength
     updateHaltingState(0.0, 0.0)
+    mesoExitTick = None
     
     // Report meso leave
     report(
@@ -488,8 +563,8 @@ class Bicycle(
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
       onFinishPrivateVehicle(state.destination)
-      selfDestruct()
       onFinishSpontaneous(None)
+      selfDestruct()
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }
