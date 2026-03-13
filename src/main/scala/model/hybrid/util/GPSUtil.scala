@@ -37,7 +37,7 @@ object GPSUtil {
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        System.err.println(s"[GPSUtil] Calling shortestPathByHops from ${originNode.id} to ${destinationNode.id}")
+        System.err.println(s"[GPSUtil] Calling route from ${originNode.id} to ${destinationNode.id}")
         // If using dynamic weights, create a weight function that queries the cache
         val weightFunc: (NodeGraph, NodeGraph) => Option[Double] = if (useDynamicWeights) {
           (source, target) =>

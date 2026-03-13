@@ -26,10 +26,17 @@ abstract class Movable[T <: MovableState](
       properties = properties
     ) {
 
+  /** Counter for consecutive ticks in Waiting state without receiving a Link response. */
+  private var waitingTicksCounter: Int = 0
+
+  /** Maximum ticks to wait for a Link response before recovering.
+    * If a Link doesn't respond within this threshold, the vehicle is stuck
+    * (e.g., Link actor not found, message lost, data inconsistency).
+    * Recovery: skip current link and advance to next route segment.
+    */
+  private val MaxWaitingTicks: Int = 100
+
   protected def requestRoute(): Unit = {
-    if (state.movableStatus == Finished) {
-      return
-    }
     logInfo(s"Requesting route from ${state.origin} to ${state.destination}")
     try {
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
@@ -43,18 +50,18 @@ abstract class Movable[T <: MovableState](
           } else {
             state.movableStatus = Finished
             logInfo("No path available between origin and destination, finishing.")
-            onFinishSpontaneous()
+            onFinishSpontaneous(destruct = true)
           }
         case None =>
           logError(s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}.")
           state.movableStatus = Finished
-          onFinishSpontaneous()
+          onFinishSpontaneous(destruct = true)
       }
     } catch {
       case e: Exception =>
         logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
         state.movableStatus = Finished
-        onFinishSpontaneous()
+        onFinishSpontaneous(destruct = true)
     }
   }
 
@@ -67,9 +74,19 @@ abstract class Movable[T <: MovableState](
       case Ready =>
         enterLink()
       case Waiting =>
-        onFinishSpontaneous(Some(currentTick + 1))
+        waitingTicksCounter += 1
+        if (waitingTicksCounter > MaxWaitingTicks) {
+          logWarn(s"${getEntityId} stuck in Waiting for $waitingTicksCounter ticks at tick $currentTick (Link not responding). Recovering by skipping to next route segment.")
+          waitingTicksCounter = 0
+          state.movableCurrentPath = None
+          state.movableStatus = Ready
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          onFinishSpontaneous(Some(currentTick + 1))
+        }
       case Finished =>
         onFinishSpontaneous()
+        selfDestruct()
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
@@ -82,6 +99,7 @@ abstract class Movable[T <: MovableState](
     }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit =
+    waitingTicksCounter = 0  // Reset stuck counter on any link response
     EventTypeEnum.valueOf(event.eventType) match {
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
@@ -107,6 +125,7 @@ abstract class Movable[T <: MovableState](
       state.movableStatus = Finished
     }
     onFinishSpontaneous()
+    selfDestruct()
   }
 
   protected def enterLink(): Unit = {
@@ -115,6 +134,7 @@ abstract class Movable[T <: MovableState](
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
           case Some(edgeLabel) =>
             state.movableStatus = Waiting
+            waitingTicksCounter = 0  // Reset for fresh wait
             sendMessageTo(
               entityId = edgeLabel.id,
               shardId = edgeLabel.classType,
@@ -128,13 +148,12 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
-            // Schedule to wait for link response
-            onFinishSpontaneous(Some(currentTick + 1))
+            // Schedule to wait for link response --- wrong, because generates race condition
+//            onFinishSpontaneous(Some(currentTick + 1))
           case None =>
             state.movableStatus = Finished
             logWarn("No edge label found for link, finishing.")
-            onFinishSpontaneous()
-            selfDestruct()
+            onFinishSpontaneous(destruct = true)
         }
       case None if state.movableBestRoute.forall(_.isEmpty) =>
         state.movableStatus = Finished
@@ -172,7 +191,9 @@ abstract class Movable[T <: MovableState](
             )
             if (state.movableBestRoute.forall(_.isEmpty)) {
               logWarn("No best route available to continue")
+              state.movableCurrentPath = None
               onFinish(nextNodeId)
+              return // onFinish already calls onFinishSpontaneous + selfDestruct
             }
             state.movableCurrentPath = None
             // Schedule to wait for next action (node signal or route request)
@@ -182,8 +203,26 @@ abstract class Movable[T <: MovableState](
             onFinishSpontaneous(Some(currentTick + 1))
         }
       case None =>
-        logWarn("No link to leave")
-        onFinishSpontaneous(Some(currentTick + 1))
+        // No current link to leave - try to progress or finish
+        if (state.movableBestRoute.forall(_.isEmpty)) {
+          // Route depleted, finish journey
+          logInfo(s"No link to leave and route depleted for ${getEntityId}, finishing.")
+          state.movableStatus = Finished
+          onFinish(state.destination)
+        } else {
+          // Route has more segments - get next path and enter link
+          getNextPath match {
+            case Some(nextPath) =>
+              logDebug(s"No link to leave, advancing to next path segment for ${getEntityId}")
+              state.movableCurrentPath = Some(nextPath)
+              state.movableStatus = Ready
+              enterLink()
+            case None =>
+              logInfo(s"No link to leave and no next path available for ${getEntityId}, finishing.")
+              state.movableStatus = Finished
+              onFinish(state.destination)
+          }
+        }
     }
 
   protected def getNextPath: Option[(String, String)] =

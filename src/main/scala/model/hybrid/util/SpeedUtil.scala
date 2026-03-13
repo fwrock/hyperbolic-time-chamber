@@ -11,7 +11,7 @@ object SpeedUtil {
     lanes: Int = 1
   ): Double = {
     val alpha = 1.0
-    val beta = 0.05
+    val beta = 1.0
     if numberOfCars >= capacity then 1.0
     else freeSpeed * math.pow(1 - math.pow(numberOfCars / capacity, beta), alpha)
   }
