@@ -484,13 +484,16 @@ class Car(
   }
 
   private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit = {
-    // Guard against a race condition where MicroLeaveLinkData from a previous link arrives
-    // after the car has already entered the next link and activated a new MicroState.
-    // Accepting a stale MicroLeaveLink would incorrectly deactivate the new link's micro state,
-    // causing the car to behave as if in MESO mode while the new MICRO link still tracks it.
-    if (currentLinkId.isDefined && !currentLinkId.contains(data.linkId)) {
+    // Only process if this car is actively on this exact link. This covers two cases:
+    //  1. Race condition: MicroLeaveLinkData from a previous link arrives after the car has
+    //     already moved to the next link (currentLinkId is Some(otherLink)).
+    //  2. Stale delivery to a shard-recreated car: when forceDestructActiveActors destructs
+    //     a MICRO-mode car, an in-flight MicroLeaveLinkData queued in the shard is delivered
+    //     to the new instance which has currentLinkId == None. Using !contains instead of
+    //     isDefined && !contains ensures we also discard the None case.
+    if (!currentLinkId.contains(data.linkId)) {
       logWarn(s"${getEntityId}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
-        s"(car is already on link ${currentLinkId.getOrElse("none")}). Race condition avoided.")
+        s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded.")
       return
     }
 
