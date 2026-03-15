@@ -343,13 +343,18 @@ class Link(
       queue.dequeueAll(_.actorId == data.actorId)
     }
 
+    // BUGFIX: Send accumulated waiting time from Link to Car
+    val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(data.actorId, 0.0)
+    vehicleWaitingSeconds.remove(data.actorId)
+
     val microLeaveData = MicroLeaveLinkData(
       linkId = getEntityId,
       finalPosition = state.length,
       finalVelocity = state.currentSpeed,
       travelTime = math.max(1L, currentTick - entryTick + 1),
       distanceTraveled = state.length,
-      averageSpeed = state.currentSpeed
+      averageSpeed = state.currentSpeed,
+      waitingTimeSeconds = accumulatedWaitingTime
     )
 
     sendMessageTo(

@@ -37,9 +37,10 @@ case class MicroEnterLinkData(
   * @param linkId Link being exited
   * @param finalPosition Position at exit (should be ≈ linkLength)
   * @param finalVelocity Velocity at exit
-  * @param travelTime Total time spent in link
+  * @param travelTime Total time spent in link (seconds)
   * @param distanceTraveled Total distance (for verification)
   * @param averageSpeed Average speed during traversal
+  * @param waitingTimeSeconds Total time spent halting (velocity < 0.1 m/s) in seconds
   */
 case class MicroLeaveLinkData(
   linkId: String,
@@ -48,6 +49,7 @@ case class MicroLeaveLinkData(
   travelTime: Double,
   distanceTraveled: Double,
   averageSpeed: Double,
+  waitingTimeSeconds: Double = 0.0
 ) extends BaseEventData
 
 /** Data for microscopic update within a link.
