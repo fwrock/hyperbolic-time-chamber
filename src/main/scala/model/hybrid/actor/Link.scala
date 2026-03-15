@@ -11,6 +11,9 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.util.IdentifyUtil
 import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.entity.event.EntityEnvelopeEvent
+import core.util.{IdUtil, StringUtil}
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data.*
@@ -585,6 +588,21 @@ class Link(
       case scala.util.Success(_) => // Silencioso no sucesso para evitar log spam
       case scala.util.Failure(e) =>
         logWarn(s"Failed to publish dynamic cost to Kafka: ${e.getMessage}")
+    }
+  }
+
+  // When the simulation terminates, forceDestructActiveActors only covers actors still in
+  // scheduledActors/runningEvents. MICRO-mode vehicles called onFinishSpontaneous(None) on
+  // entry, removing themselves from TM tracking. By forwarding the DestructEvent to all
+  // registered vehicles here, we ensure Car.onDestruct fires for each one, which calls
+  // finishJourney and logs the journey_completed event.
+  override def onDestruct(event: DestructEvent): Unit = {
+    state.registered.foreach { reg =>
+      val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
+      shardRef ! EntityEnvelopeEvent(
+        IdUtil.format(reg.actorId),
+        DestructEvent(actorRef = self.path.toString)
+      )
     }
   }
 }
