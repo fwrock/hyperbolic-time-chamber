@@ -358,7 +358,10 @@ class Car(
       signalWaitUntilTick = Some(data.nextTick)
       val waitTicks = math.max(0L, data.nextTick - currentTick)
       if (waitTicks > 0) {
-        updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
+        // BUGFIX: Assuming 1 tick = 1 second (default HTC time unit)
+        // Convert ticks to seconds for proper waiting time accumulation
+        val waitSeconds = waitTicks.toDouble
+        updateHaltingState(speed = 0.0, deltaSeconds = waitSeconds)
       }
 
       report(
@@ -416,7 +419,8 @@ class Car(
     sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     // Ideal travel time: length(m) / speed(m/s)
     sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
-    updateHaltingState(initialMicroState.velocity, 0.0)
+    // NOTE: Don't track halting state here - Link tracks it during sub-ticks and sends
+    // accumulated waitingTimeSeconds in MicroLeaveLinkData
 
     if (sumoDepartTick.isEmpty) {
       sumoDepartTick = Some(currentTick)
@@ -475,7 +479,8 @@ class Car(
 
       state.updateMicroState(updatedMicro)
       sumoArrivalSpeed = data.velocity
-      updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
+      // NOTE: Don't track halting state per update - Link accumulates waiting time
+      // across all sub-ticks and sends the total in MicroLeaveLinkData
 
       if (data.position >= getCurrentLinkLength && state.movableStatus == Moving) {
         requestSignalState()
@@ -503,7 +508,13 @@ class Car(
     sumoArrivalSpeed = data.finalVelocity
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition
-    updateHaltingState(data.finalVelocity, 0.0)
+    
+    // BUGFIX: Use Link's accumulated waiting time directly instead of recalculating
+    // The Link has already tracked all sub-ticks where velocity < 0.1 m/s
+    sumoWaitingTimeSeconds += data.waitingTimeSeconds
+    if (data.waitingTimeSeconds > 0.0) {
+      sumoWaitingCount += 1
+    }
 
     report(
       data = Map(
@@ -517,6 +528,7 @@ class Car(
         "travel_time_seconds" -> data.travelTime,
         "distance_traveled" -> data.distanceTraveled,
         "average_speed" -> data.averageSpeed,
+        "waiting_time_seconds" -> data.waitingTimeSeconds,
         "total_distance" -> state.distance,
         "tick" -> currentTick
       ),
@@ -547,7 +559,9 @@ class Car(
     val time = data.linkLength / speed
     state.movableStatus = Moving
     sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
-    updateHaltingState(speed, 0.0)
+    
+    // BUGFIX: Don't call updateHaltingState here - wait until we leave the link
+    // to properly calculate the actual travel time and halting duration
 
     if (sumoDepartTick.isEmpty) {
       sumoDepartTick = Some(currentTick)
@@ -584,7 +598,24 @@ class Car(
     sumoArrivalSpeed = 0.0
     sumoArrivalLane = Some(s"${event.actorRefId}_0")
     sumoArrivalPos = data.linkLength
-    updateHaltingState(0.0, 0.0)
+    
+    // BUGFIX: Calculate actual travel time through the MESO link
+    // and accumulate waiting time if vehicle was moving slowly
+    linkEntryTick.foreach { entryTick =>
+      val travelTimeTicks = currentTick - entryTick
+      val travelTimeSeconds = travelTimeTicks.toDouble  // 1 tick = 1 second
+      
+      // Recalculate actual speed during link traversal
+      val actualSpeed = if (travelTimeSeconds > 0) {
+        data.linkLength / travelTimeSeconds  // m/s
+      } else {
+        0.0
+      }
+      
+      // If vehicle was halting (speed < 0.1 m/s), count entire travel time as waiting
+      // If vehicle was moving slowly, proportionally count the extra time spent
+      updateHaltingState(actualSpeed, travelTimeSeconds)
+    }
 
     currentLinkId = None
     currentLinkLength = 0.0
@@ -663,10 +694,13 @@ class Car(
     val plannedDepart = getTripStartTick.getOrElse(state.startTick)
     val depart = sumoDepartTick.getOrElse(plannedDepart)
     val arrival = currentTick
-    val duration = math.max(0L, arrival - depart)
+    // BUGFIX: Convert ticks to seconds explicitly (assuming 1 tick = 1 second)
+    val durationTicks = math.max(0L, arrival - depart)
+    val durationSeconds = durationTicks.toDouble
     val routeLength = state.distance
     val expectedTravelTime = math.max(0.0, sumoIdealTravelTimeSeconds)
-    val timeLoss = math.max(0.0, duration.toDouble - expectedTravelTime)
+    // Now both are in seconds: durationSeconds and expectedTravelTime
+    val timeLoss = math.max(0.0, durationSeconds - expectedTravelTime)
     val vaporized = reason == "actor_destructed_before_completion"
     val departDelay = math.max(0L, depart - plannedDepart)
 
@@ -686,7 +720,7 @@ class Car(
         "departPos" -> sumoDepartPos,
         "arrivalLane" -> sumoArrivalLane.getOrElse(""),
         "arrivalPos" -> sumoArrivalPos,
-        "duration" -> duration,
+        "duration" -> durationSeconds,
         "routeLength" -> routeLength,
         "waitingTime" -> sumoWaitingTimeSeconds,
         "waitingCount" -> sumoWaitingCount,
