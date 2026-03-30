@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
-import core.entity.event.{ EntityEnvelopeEvent }
+import core.entity.event.EntityEnvelopeEvent
 import core.entity.state.BaseState
 import core.util.{ IdUtil, JsonUtil }
 
@@ -20,12 +20,14 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ Await, ExecutionContext, Future }
 
-/** Generic base actor class that provides the basic structure for all actors in the system.
-  * This class contains only generic actor functionality. For simulation-specific actors,
-  * use SimulationBaseActor instead.
+/** Generic base actor class that provides the basic structure for all actors in the system. This
+  * class contains only generic actor functionality. For simulation-specific actors, use
+  * SimulationBaseActor instead.
   *
-  * @param properties The properties containing actor configuration
-  * @tparam T The state type of the actor
+  * @param properties
+  *   The properties containing actor configuration
+  * @tparam T
+  *   The state type of the actor
   */
 abstract class BaseActor[T <: BaseState](
   private val properties: Properties
@@ -41,9 +43,9 @@ abstract class BaseActor[T <: BaseState](
   protected var entityId: String =
     if (properties != null) properties.entityId
     else {
-      try {
+      try
         core.actor.manager.RandomSeedManager.deterministicUUID()
-      } catch {
+      catch {
         case _: Exception => UUID.randomUUID().toString
       }
     }
@@ -69,18 +71,19 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def onStart(): Unit = ()
 
-  /** Handles events that are not handled by default receive.
-    * Override this method to handle custom events.
+  /** Handles events that are not handled by default receive. Override this method to handle custom
+    * events.
     */
   protected def handleEvent: Receive = {
     case event => logInfo(s"Event not handled $event")
   }
 
-  /** Handles initialization of the actor.
-    * Override this method to perform custom initialization logic.
-    * @param event The initialization event
+  /** Handles initialization of the actor. Override this method to perform custom initialization
+    * logic.
+    * @param event
+    *   The initialization event
     */
-  protected def onInitialize(event: InitializeEvent): Unit = {
+  protected def onInitialize(event: InitializeEvent): Unit =
     if (!isInitialized) {
       entityId = event.id
       state = JsonUtil.convertValue[T](event.data.data)
@@ -91,9 +94,6 @@ abstract class BaseActor[T <: BaseState](
         context.stop(self)
       }
     }
-  }
-
-
 
   /** Logs an event. This method is called when the actor wants to log an event.
     * @param eventInfo
@@ -153,7 +153,8 @@ abstract class BaseActor[T <: BaseState](
 
   /** Handles the destruction event. This method is called when the actor receives a destruction
     * event. It calls the onDestruct method.
-    * @param event The destruction event
+    * @param event
+    *   The destruction event
     */
   private def destruct(event: DestructEvent): Unit = {
     onDestruct(event)
@@ -166,22 +167,26 @@ abstract class BaseActor[T <: BaseState](
   protected def selfDestruct(): Unit =
     context.stop(self)
 
-  /** Called when the actor is being destroyed.
-    * Override this method to perform cleanup actions.
-    * @param event The destruction event
+  /** Called when the actor is being destroyed. Override this method to perform cleanup actions.
+    * @param event
+    *   The destruction event
     */
   protected def onDestruct(event: DestructEvent): Unit = {}
 
   /** Gets an actor selection by pool entity id.
-    * @param entityId The entity id
-    * @return The actor selection
+    * @param entityId
+    *   The entity id
+    * @return
+    *   The actor selection
     */
   protected def getActorPoolRef(entityId: String): ActorSelection =
     context.system.actorSelection(s"/user/${IdUtil.format(entityId)}")
 
   /** Gets an actor reference from a path.
-    * @param path The actor path
-    * @return The actor reference
+    * @param path
+    *   The actor path
+    * @return
+    *   The actor reference
     */
   protected def getActorRef(path: String): ActorRef =
     Await.result(getActorRefFromPath(path), Duration.Inf)
@@ -200,29 +205,35 @@ abstract class BaseActor[T <: BaseState](
   }
 
   /** Gets the actor id.
-    * @return The actor id
+    * @return
+    *   The actor id
     */
   protected def getEntityId: String = entityId
 
   /** Gets the actor path as a string.
-    * @return The actor path
+    * @return
+    *   The actor path
     */
   protected def getPath: String = self.path.toString
 
   /** Gets the actor reference of the shard region for the current actor.
-    * @return The actor reference of the shard region
+    * @return
+    *   The actor reference of the shard region
     */
   protected def getSelfShard: ActorRef =
     ClusterSharding(context.system).shardRegion(getShardId)
 
   /** Gets the shard name for the current actor.
-    * @return The shard name
+    * @return
+    *   The shard name
     */
   protected def getShardId: String = getClass.getName
 
   /** Gets the actor reference of the shard region for a given class name.
-    * @param className The class name of the shard region
-    * @return The actor reference of the shard region
+    * @param className
+    *   The class name of the shard region
+    * @return
+    *   The actor reference of the shard region
     */
   protected def getShardRef(className: String): ActorRef =
     ClusterSharding(context.system).shardRegion(className)

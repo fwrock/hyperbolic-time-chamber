@@ -13,13 +13,13 @@ import org.interscity.htc.core.util.IdentifyUtil
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.EntityEnvelopeEvent
-import core.util.{IdUtil, StringUtil}
+import core.util.{ IdUtil, StringUtil }
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data.*
-import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
+import org.interscity.htc.model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.{DynamicLinkCost, LinkRegister, VehicleInLane}
+import org.interscity.htc.model.hybrid.entity.state.model.{ DynamicLinkCost, LinkRegister, VehicleInLane }
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
@@ -27,10 +27,10 @@ import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import scala.collection.mutable
 
 class Link(
-            private val properties: Properties
-          ) extends SimulationBaseActor[LinkState](
-  properties = properties
-) {
+  private val properties: Properties
+) extends SimulationBaseActor[LinkState](
+      properties = properties
+    ) {
 
   private def cost: Double = {
     val speedFactor =
@@ -57,15 +57,13 @@ class Link(
 
   private var microTickScheduled: Boolean = false
 
-  private val costPublishInterval: Int = {
-    try { com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval") }
+  private val costPublishInterval: Int =
+    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval")
     catch { case _: Exception => 10 }
-  }
 
-  private val cacheTtl: Int = {
-    try { com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl") }
+  private val cacheTtl: Int =
+    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl")
     catch { case _: Exception => 60 }
-  }
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
@@ -75,7 +73,9 @@ class Link(
     }
 
     publishDynamicCost()
-    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+    logDebug(
+      s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m"
+    )
   }
 
   private def initializeMicroMode(): Unit = {
@@ -93,14 +93,13 @@ class Link(
     logDebug(s"  - ticksPerGlobalTick: ${state.microTicksPerGlobalTick}")
   }
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: EnterLinkData => handleEnterLink(event, d)
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
-  }
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (!state.isMicroMode) {
@@ -253,9 +252,10 @@ class Link(
       entryTick = entryTick
     )
 
-    state.vehiclesByLane.get(assignedLane).foreach { queue =>
-      val insertIdx = queue.indexWhere(_.position < vehicle.position)
-      if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
+    state.vehiclesByLane.get(assignedLane).foreach {
+      queue =>
+        val insertIdx = queue.indexWhere(_.position < vehicle.position)
+        if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
     }
     onVehicleInserted()
 
@@ -294,11 +294,10 @@ class Link(
     )
   }
 
-  private def findVehicleLane(actorId: String): Option[Int] = {
+  private def findVehicleLane(actorId: String): Option[Int] =
     state.vehiclesByLane.collectFirst {
       case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
     }
-  }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     ensureSummaryTick(currentTick)
@@ -323,7 +322,7 @@ class Link(
     state.registered.filterInPlace(_.actorId != data.actorId)
     val entryTick = vehicleEntryTick.get(data.actorId) match {
       case Some(tick) => tick
-      case None => -1
+      case None       => -1
     }
     vehicleEntryTick.remove(data.actorId)
     vehicleWaitingSeconds.remove(data.actorId)
@@ -338,9 +337,14 @@ class Link(
     }
   }
 
-  private def sendLeaveLinkMicro(event: ActorInteractionEvent, data: LeaveLinkData, entryTick: Long): Unit = {
-    state.vehiclesByLane.foreach { case (_, queue) =>
-      queue.dequeueAll(_.actorId == data.actorId)
+  private def sendLeaveLinkMicro(
+    event: ActorInteractionEvent,
+    data: LeaveLinkData,
+    entryTick: Long
+  ): Unit = {
+    state.vehiclesByLane.foreach {
+      case (_, queue) =>
+        queue.dequeueAll(_.actorId == data.actorId)
     }
 
     // BUGFIX: Send accumulated waiting time from Link to Car
@@ -388,10 +392,9 @@ class Link(
     )
   }
 
-  private def findLeastOccupiedLane(): Int = {
+  private def findLeastOccupiedLane(): Int =
     if (state.vehiclesByLane.isEmpty) 0
     else state.vehiclesByLane.minBy(_._2.size)._1
-  }
 
   private def handleGlobalTick(tick: Tick): Unit = {
     val processingStartedAt = System.nanoTime()
@@ -405,29 +408,28 @@ class Link(
     if (state.isMicroMode) {
       if (state.totalVehiclesInMicro == 0) return
 
-      for (subTick <- 0 until state.microTicksPerGlobalTick) {
+      for (subTick <- 0 until state.microTicksPerGlobalTick)
         executeSubTick(subTick, tick)
-      }
     }
 
     tickProcessingDurationMs = (System.nanoTime() - processingStartedAt) / 1000000L
     emitSumoSummaryStep(tick)
   }
 
-  private def executeSubTick(subTick: Int, tick: Tick): Unit = {
-    state.vehiclesByLane.foreach { case (laneId, vehicles) =>
-      if (vehicles.nonEmpty) {
-        processMicroLane(laneId, vehicles, subTick, tick)
-      }
+  private def executeSubTick(subTick: Int, tick: Tick): Unit =
+    state.vehiclesByLane.foreach {
+      case (laneId, vehicles) =>
+        if (vehicles.nonEmpty) {
+          processMicroLane(laneId, vehicles, subTick, tick)
+        }
     }
-  }
 
   private def processMicroLane(
-                                laneId: Int,
-                                vehicles: mutable.Queue[VehicleInLane],
-                                subTick: Int,
-                                tick: Tick,
-                              ): Unit = {
+    laneId: Int,
+    vehicles: mutable.Queue[VehicleInLane],
+    subTick: Int,
+    tick: Tick
+  ): Unit = {
     for (i <- vehicles.indices) {
       val vehicle = vehicles(i)
       val leader = if (i > 0) Some(vehicles(i - 1)) else None
@@ -442,13 +444,19 @@ class Link(
 
       val targetVel = leader match {
         case Some(l) if gap < 50.0 => math.min(l.velocity, math.sqrt(2.0 * 4.5 * gap))
-        case _ => state.speedLimit / 3.6
+        case _                     => state.speedLimit / 3.6
       }
 
       val safeTargetVel = if (targetVel.isNaN || targetVel.isInfinite) 0.0 else targetVel
       val velChange = (safeTargetVel - vehicle.velocity) * 0.5 * state.microTimeStep
       val rawNewVelocity = vehicle.velocity + velChange
-      val cappedVelocity = math.max(0.0, math.min(if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity, state.speedLimit / 3.6))
+      val cappedVelocity = math.max(
+        0.0,
+        math.min(
+          if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity,
+          state.speedLimit / 3.6
+        )
+      )
 
       // Limita a posição ao fim do link
       val rawNewPosition = vehicle.position + cappedVelocity * state.microTimeStep
@@ -494,12 +502,14 @@ class Link(
       }
     }
 
-    val ordered = vehicles.sortBy(v => -v.position)
+    val ordered = vehicles.sortBy(
+      v => -v.position
+    )
     vehicles.clear()
     vehicles ++= ordered
   }
 
-  private def ensureSummaryTick(tick: Tick): Unit = {
+  private def ensureSummaryTick(tick: Tick): Unit =
     if (summaryTick != tick) {
       summaryTick = tick
       tickLoaded = 0
@@ -508,7 +518,6 @@ class Link(
       tickTravelTimeSum = 0.0
       tickProcessingDurationMs = 0L
     }
-  }
 
   private def onVehicleInserted(): Unit = {
     tickInserted += 1
@@ -540,11 +549,19 @@ class Link(
     val runningVehicleIds = state.registered.iterator.map(_.actorId).toVector
     val meanTravelTime =
       if (runningVehicleIds.nonEmpty)
-        runningVehicleIds.map(id => math.max(0L, tick - vehicleEntryTick.getOrElse(id, tick)).toDouble).sum / runningVehicleIds.size
+        runningVehicleIds
+          .map(
+            id => math.max(0L, tick - vehicleEntryTick.getOrElse(id, tick)).toDouble
+          )
+          .sum / runningVehicleIds.size
       else 0.0
     val meanWaitingTime =
       if (runningVehicleIds.nonEmpty)
-        runningVehicleIds.map(id => vehicleWaitingSeconds.getOrElse(id, 0.0)).sum / runningVehicleIds.size
+        runningVehicleIds
+          .map(
+            id => vehicleWaitingSeconds.getOrElse(id, 0.0)
+          )
+          .sum / runningVehicleIds.size
       else 0.0
     val waiting = math.max(0L, cumulativeLoadedVehicles - cumulativeLoaded).toInt
 
@@ -601,19 +618,18 @@ class Link(
   // entry, removing themselves from TM tracking. By forwarding the DestructEvent to all
   // registered vehicles here, we ensure Car.onDestruct fires for each one, which calls
   // finishJourney and logs the journey_completed event.
-  override def onDestruct(event: DestructEvent): Unit = {
-    state.registered.foreach { reg =>
-      val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
-      shardRef ! EntityEnvelopeEvent(
-        IdUtil.format(reg.actorId),
-        DestructEvent(actorRef = self.path.toString)
-      )
+  override def onDestruct(event: DestructEvent): Unit =
+    state.registered.foreach {
+      reg =>
+        val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
+        shardRef ! EntityEnvelopeEvent(
+          IdUtil.format(reg.actorId),
+          DestructEvent(actorRef = self.path.toString)
+        )
     }
-  }
 }
 
 object Link {
-  def apply(properties: Properties): Link = {
+  def apply(properties: Properties): Link =
     new Link(properties)
-  }
 }

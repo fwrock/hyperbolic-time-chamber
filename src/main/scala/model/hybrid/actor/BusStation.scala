@@ -32,8 +32,8 @@ class BusStation(
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
 
-  /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic).
-    * Ensures deterministic route building and lookup.
+  /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic). Ensures
+    * deterministic route building and lookup.
     */
   private def orderedBusStopIds: List[String] = {
     def suffixNumber(id: String): Option[Int] = {
@@ -41,56 +41,60 @@ class BusStation(
       if (digits.nonEmpty) Some(digits.toInt) else None
     }
 
-    state.busStops.keys.toList.sortBy { id =>
-      suffixNumber(id) match {
-        case Some(num) => (0, num, id)
-        case None      => (1, Int.MaxValue, id)
-      }
+    state.busStops.keys.toList.sortBy {
+      id =>
+        suffixNumber(id) match {
+          case Some(num) => (0, num, id)
+          case None      => (1, Int.MaxValue, id)
+        }
     }
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {
-      logInfo(s"BusStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling")
+      logInfo(
+        s"BusStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
+      )
       onFinishSpontaneous(None)
-    } else state.status match {
-      case Start =>
-        state.status = RouteWaiting
-        // Calculate routes directly from in-memory map
-        calculateRoutesFromMap()
+    } else
+      state.status match {
+        case Start =>
+          state.status = RouteWaiting
+          // Calculate routes directly from in-memory map
+          calculateRoutesFromMap()
         // NOTE: onFinishSpontaneous is called inside calculateRoutesFromMap()
-      case Working =>
-        if (state.buses.nonEmpty) {
-          val bus = state.buses.dequeue()
-          try {
-            val actorRef = createBus(bus)
-            val className = classOf[Bus].getName
-            dependencies(bus.actorId) = Dependency(
-              id = entityId,
-              classType = className
-            )
+        case Working =>
+          if (state.buses.nonEmpty) {
+            val bus = state.buses.dequeue()
+            try {
+              val actorRef = createBus(bus)
+              val className = classOf[Bus].getName
+              dependencies(bus.actorId) = Dependency(
+                id = entityId,
+                classType = className
+              )
+              onFinishSpontaneous(Some(currentTick + state.interval))
+            } catch {
+              case e: IllegalStateException =>
+                logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
+                // Put the bus back in the queue for later retry
+                state.buses.enqueue(bus)
+                state.status = RouteWaiting // Go back to waiting for route
+                onFinishSpontaneous(Some(currentTick + state.interval))
+              case e: Exception =>
+                logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
+                state.buses.enqueue(bus)
+                state.status = RouteWaiting
+                onFinishSpontaneous(Some(currentTick + state.interval))
+            }
+          } else {
+            state.status = WorkingWithOutBus
             onFinishSpontaneous(Some(currentTick + state.interval))
-          } catch {
-            case e: IllegalStateException =>
-              logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-              // Put the bus back in the queue for later retry
-              state.buses.enqueue(bus)
-              state.status = RouteWaiting // Go back to waiting for route
-              onFinishSpontaneous(Some(currentTick + state.interval))
-            case e: Exception =>
-              logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-              state.buses.enqueue(bus)
-              state.status = RouteWaiting
-              onFinishSpontaneous(Some(currentTick + state.interval))
           }
-        } else {
-          state.status = WorkingWithOutBus
-          onFinishSpontaneous(Some(currentTick + state.interval))
-        }
-      case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
-        onFinishSpontaneous(None)
-    }
+        case _ =>
+          logInfo(s"Event current status not handled ${state.status}")
+          onFinishSpontaneous(None)
+      }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -98,18 +102,18 @@ class BusStation(
         logInfo("Event not handled")
     }
 
-  /** Calculate all bus routes directly from the in-memory static map.
-    * This is synchronous and doesn't require actor messages.
+  /** Calculate all bus routes directly from the in-memory static map. This is synchronous and
+    * doesn't require actor messages.
     */
   private def calculateRoutesFromMap(): Unit = {
     logInfo(s"BusStation ${getEntityId} calculating routes from in-memory map")
-    
+
     // Calculate going route (use existing mutable map)
     val goingStops = orderedBusStopIds
     for (pair <- goingStops.sliding(2)) {
       val originBusStopId = pair.head
       val destinationBusStopId = pair.last
-      
+
       state.busStops.get(originBusStopId) match {
         case Some(originNodeId) =>
           state.busStops.get(destinationBusStopId) match {
@@ -117,18 +121,24 @@ class BusStation(
               GPSUtil.calcRoute(originId = originNodeId, destinationId = destinationNodeId) match {
                 case Some((cost, pathQueue)) =>
                   // Convert Queue[(String, String)] to Queue[(Identify, Identify)]
-                  val identifyPath = pathQueue.map { case (from, to) =>
-                    (Identify(id = from), Identify(id = to))
+                  val identifyPath = pathQueue.map {
+                    case (from, to) =>
+                      (Identify(id = from), Identify(id = to))
                   }
-                  state.goingRoute.foreach { routeMap =>
-                    routeMap.put(
-                      SubRoutePair(originBusStopId, destinationBusStopId),
-                      identifyPath
-                    )
+                  state.goingRoute.foreach {
+                    routeMap =>
+                      routeMap.put(
+                        SubRoutePair(originBusStopId, destinationBusStopId),
+                        identifyPath
+                      )
                   }
-                  logDebug(s"Going route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)")
+                  logDebug(
+                    s"Going route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)"
+                  )
                 case None =>
-                  logWarn(s"Could not calculate going route: $originBusStopId -> $destinationBusStopId")
+                  logWarn(
+                    s"Could not calculate going route: $originBusStopId -> $destinationBusStopId"
+                  )
               }
             case None =>
               logWarn(s"Destination bus stop $destinationBusStopId has no node mapping")
@@ -137,31 +147,37 @@ class BusStation(
           logWarn(s"Origin bus stop $originBusStopId has no node mapping")
       }
     }
-    
+
     // Calculate returning route (reverse order, use existing mutable map)
     val returningStops = orderedBusStopIds.reverse
     for (pair <- returningStops.sliding(2)) {
       val originBusStopId = pair.head
       val destinationBusStopId = pair.last
-      
+
       state.busStops.get(originBusStopId) match {
         case Some(originNodeId) =>
           state.busStops.get(destinationBusStopId) match {
             case Some(destinationNodeId) =>
               GPSUtil.calcRoute(originId = originNodeId, destinationId = destinationNodeId) match {
                 case Some((cost, pathQueue)) =>
-                  val identifyPath = pathQueue.map { case (from, to) =>
-                    (Identify(id = from), Identify(id = to))
+                  val identifyPath = pathQueue.map {
+                    case (from, to) =>
+                      (Identify(id = from), Identify(id = to))
                   }
-                  state.returningRoute.foreach { routeMap =>
-                    routeMap.put(
-                      SubRoutePair(originBusStopId, destinationBusStopId),
-                      identifyPath
-                    )
+                  state.returningRoute.foreach {
+                    routeMap =>
+                      routeMap.put(
+                        SubRoutePair(originBusStopId, destinationBusStopId),
+                        identifyPath
+                      )
                   }
-                  logDebug(s"Returning route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)")
+                  logDebug(
+                    s"Returning route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)"
+                  )
                 case None =>
-                  logWarn(s"Could not calculate returning route: $originBusStopId -> $destinationBusStopId")
+                  logWarn(
+                    s"Could not calculate returning route: $originBusStopId -> $destinationBusStopId"
+                  )
               }
             case None =>
               logWarn(s"Destination bus stop $destinationBusStopId has no node mapping")
@@ -170,15 +186,17 @@ class BusStation(
           logWarn(s"Origin bus stop $originBusStopId has no node mapping")
       }
     }
-    
+
     // Debug: log all calculated route keys
-    state.goingRoute.foreach { routeMap =>
-      logDebug(s"Going route keys: ${routeMap.keys.mkString(", ")}")
+    state.goingRoute.foreach {
+      routeMap =>
+        logDebug(s"Going route keys: ${routeMap.keys.mkString(", ")}")
     }
-    state.returningRoute.foreach { routeMap =>
-      logDebug(s"Returning route keys: ${routeMap.keys.mkString(", ")}")
+    state.returningRoute.foreach {
+      routeMap =>
+        logDebug(s"Returning route keys: ${routeMap.keys.mkString(", ")}")
     }
-    
+
     // Check if route calculation is complete
     if (isCalculateRoutingComplete) {
       logInfo(s"BusStation ${getEntityId} route calculation complete")
@@ -231,7 +249,7 @@ class BusStation(
       data = toJson(
         BusState(
           startTick = busStartTick,
-          busStops = state.busStops.toMap,  // Convert LinkedHashMap to Map
+          busStops = state.busStops.toMap, // Convert LinkedHashMap to Map
           capacity = bus.capacity,
           size = bus.size,
           origin = state.origin,
@@ -274,26 +292,32 @@ class BusStation(
 
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
     val bestRoute = mutable.Queue[(String, String)]()
-    
+
     // Check if we have valid route data before building the route
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get, orderedBusStopIds)
-      bestRoute ++= goingRouteData.map(pair => (pair._1.id, pair._2.id))
+      bestRoute ++= goingRouteData.map(
+        pair => (pair._1.id, pair._2.id)
+      )
     } else {
       logWarn("No going route defined for bus station")
     }
-    
+
     if (state.returningRoute.isDefined && state.returningRoute.get.nonEmpty) {
       val returningRouteData = getTotalRoute(state.returningRoute.get, orderedBusStopIds.reverse)
-      bestRoute ++= returningRouteData.map(pair => (pair._1.id, pair._2.id))
+      bestRoute ++= returningRouteData.map(
+        pair => (pair._1.id, pair._2.id)
+      )
     } else {
       logWarn("No returning route defined for bus station")
     }
-    
+
     if (bestRoute.isEmpty) {
-      logWarn("Bus route calculation resulted in empty route - this may cause buses to terminate immediately")
+      logWarn(
+        "Bus route calculation resulted in empty route - this may cause buses to terminate immediately"
+      )
     }
-    
+
     bestRoute
   }
 

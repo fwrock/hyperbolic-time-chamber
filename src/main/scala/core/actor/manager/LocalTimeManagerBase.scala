@@ -17,13 +17,15 @@ import org.interscity.htc.core.util.{ IdUtil, StringUtil }
 
 import scala.collection.mutable
 
-/** Base abstract class for local time managers.
-  * Local time managers handle the actual execution of simulation events
-  * and report progress back to the global time manager.
-  * 
-  * @param simulationDuration The total duration of the simulation in ticks
-  * @param simulationManager Reference to the simulation manager
-  * @param parentManager Reference to the global time manager
+/** Base abstract class for local time managers. Local time managers handle the actual execution of
+  * simulation events and report progress back to the global time manager.
+  *
+  * @param simulationDuration
+  *   The total duration of the simulation in ticks
+  * @param simulationManager
+  *   Reference to the simulation manager
+  * @param parentManager
+  *   Reference to the global time manager
   */
 abstract class LocalTimeManagerBase(
   val simulationDuration: Tick,
@@ -33,19 +35,19 @@ abstract class LocalTimeManagerBase(
 ) extends TimeManagerBase(
       timeManager = null,
       actorId = actorId
-    ) with MicroAwareTimeManager {
+    )
+    with MicroAwareTimeManager {
 
   protected var countScheduled = 0
   private var selfProxy: ActorRef = null
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     if (parentManager.nonEmpty) {
       // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
-  }
 
   override def handleEvent: Receive = {
     case start: StartSimulationTimeEvent => startSimulation(start)
@@ -58,12 +60,14 @@ abstract class LocalTimeManagerBase(
       stopSimulation()
       forceDestructActiveActors()
       terminateSimulation()
-    case event                           => super.handleEvent(event)
+    case event => super.handleEvent(event)
   }
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
     logInfo(s"Local TimeManager started at tick ${event.startTick}")
-    event.data.foreach(data => startTime = data.startTime)
+    event.data.foreach(
+      data => startTime = data.startTime
+    )
     initialTick = event.startTick
     localTickOffset = initialTick
     isPaused = false
@@ -73,8 +77,9 @@ abstract class LocalTimeManagerBase(
 
   protected def registerActor(event: RegisterActorEvent): Unit = {
     registeredActors.add(event.actorId)
-    event.identify.foreach { identity =>
-      registeredIdentities.put(event.actorId, identity)
+    event.identify.foreach {
+      identity =>
+        registeredIdentities.put(event.actorId, identity)
     }
     scheduleEvent(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
@@ -93,7 +98,9 @@ abstract class LocalTimeManagerBase(
     // processTick(T) already cleared scheduledActors[T] but localTickOffset is still T.
     // Fix: bump past-tick/same-tick requests to localTickOffset + 1, guaranteeing future processing.
     val effectiveTick = if (event.tick <= localTickOffset) {
-      logDebug(s"[TM] ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}")
+      logDebug(
+        s"[TM] ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}"
+      )
       localTickOffset + 1
     } else {
       event.tick
@@ -102,7 +109,7 @@ abstract class LocalTimeManagerBase(
     event.identify.foreach(actorsSet.add)
   }
 
-  protected def finishEvent(finish: FinishEvent): Unit = {
+  protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
       // Track whether this actor was actually processing a spontaneous event.
@@ -111,24 +118,27 @@ abstract class LocalTimeManagerBase(
       // NOT falsely report hasScheduled=false to the global TM and terminate the simulation.
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
-      
+
       // If no scheduleTick provided (None), remove actor from ALL future scheduled ticks
       if (finish.scheduleTick.isEmpty) {
         val actorId = finish.identify.id
         val actorClass = finish.identify.classType
         var removedFromTicks = 0
-        scheduledActors.foreach { case (tick, actors) =>
-          val sizeBefore = actors.size
-          actors.filterInPlace(_.id != actorId)
-          if (actors.size < sizeBefore) removedFromTicks += 1
+        scheduledActors.foreach {
+          case (tick, actors) =>
+            val sizeBefore = actors.size
+            actors.filterInPlace(_.id != actorId)
+            if (actors.size < sizeBefore) removedFromTicks += 1
         }
         // Clean up empty tick entries
-        scheduledActors.filterInPlace { case (_, actors) => actors.nonEmpty }
+        scheduledActors.filterInPlace {
+          case (_, actors) => actors.nonEmpty
+        }
         if (removedFromTicks > 0) {
           logInfo(s"Unregistered ${actorClass} (${actorId}) from $removedFromTicks future ticks")
         }
       }
-      
+
       finishDestruct(finish)
       // Only advance to the next tick if this actor was actually running a spontaneous event.
       // When onFinishSpontaneous is called from actInteractWith (not actSpontaneous), the actor
@@ -140,25 +150,24 @@ abstract class LocalTimeManagerBase(
     } else {
       finish.timeManager ! finish
     }
-  }
 
-  private def finishDestruct(finish: FinishEvent): Unit = {
+  private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
       registeredActors.remove(finish.identify.id)
       registeredIdentities.remove(finish.identify.id)
       sendDestructEvent(finish)
     }
-  }
 
-  override protected def onSpontaneousEvent(spontaneous: SpontaneousEvent): Unit = {
+  override protected def onSpontaneousEvent(spontaneous: SpontaneousEvent): Unit =
     if (isRunning && !isTerminated) {
       processTick(spontaneous.tick)
     }
-  }
 
   private def syncWithGlobalTime(globalTick: Tick): Unit = {
     if (globalTick % 10000 == 0) {
-      logInfo(s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)")
+      logInfo(
+        s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
+      )
     }
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
@@ -170,23 +179,23 @@ abstract class LocalTimeManagerBase(
   }
 
   /** Processes a simulation tick. Subclasses implement specific time management strategies.
-    * @param tick The tick to process
+    * @param tick
+    *   The tick to process
     */
   protected def processTick(tick: Tick): Unit
 
   /** Advances to the next simulation tick. */
-  protected def advanceToNextTick(): Unit = {
+  protected def advanceToNextTick(): Unit =
     if (runningEvents.isEmpty) {
       nextTick match {
-        case Some(tick) => 
+        case Some(tick) =>
           // Report to global and wait for sync instead of advancing locally
           reportGlobalTimeManager(hasScheduled = true)
-        case None => 
+        case None =>
           // No more events scheduled locally, report and wait
           reportGlobalTimeManager(hasScheduled = false)
       }
     }
-  }
 
   protected def nextTick: Option[Tick] = {
     val scheduled = scheduledActors.keys.filter(_ >= localTickOffset)
@@ -200,33 +209,36 @@ abstract class LocalTimeManagerBase(
     }
   }
 
-  /** Process next scheduled event at given tick.
-    * NOTE: This is a utility method not directly used by current implementations.
-    * See LocalDiscreteEventTimeManager and LocalTimeSteppedTimeManager for actual processTick logic.
+  /** Process next scheduled event at given tick. NOTE: This is a utility method not directly used
+    * by current implementations. See LocalDiscreteEventTimeManager and LocalTimeSteppedTimeManager
+    * for actual processTick logic.
     */
   protected def processNextEventTick(tick: Tick): Unit = {
     localTickOffset = tick
-    scheduledActors.get(tick).foreach { actorsSet =>
-      logInfo(s"[Legacy] processNextEventTick: tick $tick with ${actorsSet.size} scheduled actors")
-      sendSpontaneousEvent(tick, actorsSet)
+    scheduledActors.get(tick).foreach {
+      actorsSet =>
+        logInfo(
+          s"[Legacy] processNextEventTick: tick $tick with ${actorsSet.size} scheduled actors"
+        )
+        sendSpontaneousEvent(tick, actorsSet)
     }
     scheduledActors.remove(tick)
     scheduledTicksOnFinish.remove(tick)
   }
 
-  protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    actorsRef.foreach { identity =>
-      runningEvents.add(identity)
-      sendSpontaneousEvent(tick, identity)
+  protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
+    actorsRef.foreach {
+      identity =>
+        runningEvents.add(identity)
+        sendSpontaneousEvent(tick, identity)
     }
-  }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
     if (identity.actorType.isEmpty) {
       logWarn(s"Actor identity has empty actorType: $identity")
       return
     }
-    
+
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>
         sendSpontaneousEventShard(tick, identity)
@@ -262,24 +274,29 @@ abstract class LocalTimeManagerBase(
   private def forceDestructActiveActors(): Unit = {
     val identitiesToDestruct = mutable.Map[String, Identify]()
 
-    scheduledActors.values.foreach { identities =>
-      identities.foreach { identity =>
-        identitiesToDestruct.put(identity.id, identity)
-      }
+    scheduledActors.values.foreach {
+      identities =>
+        identities.foreach {
+          identity =>
+            identitiesToDestruct.put(identity.id, identity)
+        }
     }
 
-    runningEvents.foreach { identity =>
-      identitiesToDestruct.put(identity.id, identity)
+    runningEvents.foreach {
+      identity =>
+        identitiesToDestruct.put(identity.id, identity)
     }
 
     if (identitiesToDestruct.nonEmpty) {
-      logInfo(s"Force-destructing ${identitiesToDestruct.size} active/scheduled actors on simulation stop")
+      logInfo(
+        s"Force-destructing ${identitiesToDestruct.size} active/scheduled actors on simulation stop"
+      )
     }
 
     identitiesToDestruct.values.foreach(sendDestructEvent)
   }
 
-  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit = {
+  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
     if (parentManager.nonEmpty) {
       // Report the NEXT tick we want to process (not current tick)
       val reportTick = if (hasScheduled) nextTick.getOrElse(localTickOffset) else localTickOffset
@@ -289,7 +306,6 @@ abstract class LocalTimeManagerBase(
         actorRef = self.path.toString
       )
     }
-  }
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit = {
     val actorRef = getActorRef(finishEvent.identify.actorRef)
@@ -317,16 +333,17 @@ abstract class LocalTimeManagerBase(
           actorRef ! DestructEvent(actorRef = self.path.toString)
         }
       case _ =>
-        logWarn(s"Unknown creation type on force-destruct: ${identity.actorType} for actor ${identity.id}")
+        logWarn(
+          s"Unknown creation type on force-destruct: ${identity.actorType} for actor ${identity.id}"
+        )
     }
   }
 
-  protected def getSelfProxy: ActorRef = {
+  protected def getSelfProxy: ActorRef =
     if (selfProxy == null) {
       selfProxy = self
       selfProxy
     } else {
       selfProxy
     }
-  }
 }

@@ -17,12 +17,14 @@ import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_A
 
 import scala.collection.mutable
 
-/** Global Time Manager that coordinates all local time managers.
-  * This manager acts as a central coordinator, synchronizing time across
-  * distributed local time managers and ensuring consistent simulation progress.
-  * 
-  * @param simulationDuration The total duration of the simulation in ticks
-  * @param simulationManager Reference to the simulation manager
+/** Global Time Manager that coordinates all local time managers. This manager acts as a central
+  * coordinator, synchronizing time across distributed local time managers and ensuring consistent
+  * simulation progress.
+  *
+  * @param simulationDuration
+  *   The total duration of the simulation in ticks
+  * @param simulationManager
+  *   Reference to the simulation manager
   */
 class GlobalTimeManager(
   val simulationDuration: Tick,
@@ -38,12 +40,11 @@ class GlobalTimeManager(
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
   @volatile private var isTerminated = false
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     createTimeManagersPool()
-  }
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 8  // Reduced from 64 to reduce log spam
+    val totalInstances = 8 // Reduced from 64 to reduce log spam
     val maxInstancesPerNode = Math.max(4, totalInstances / 2)
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
@@ -78,7 +79,9 @@ class GlobalTimeManager(
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
     logInfo(s"Global TimeManager started at tick ${event.startTick}")
-    event.data.foreach(data => startTime = data.startTime)
+    event.data.foreach(
+      data => startTime = data.startTime
+    )
     initialTick = event.startTick
     localTickOffset = initialTick
     isPaused = false
@@ -91,10 +94,9 @@ class GlobalTimeManager(
     // Actors are registered with local time managers
   }
 
-  protected def scheduleEvent(event: ScheduleEvent): Unit = {
+  protected def scheduleEvent(event: ScheduleEvent): Unit =
     // Forward schedule requests to the appropriate local time manager
     timeManagersPool ! event
-  }
 
   protected def finishEvent(event: FinishEvent): Unit = {
     // Finish events are handled by local time managers
@@ -105,13 +107,14 @@ class GlobalTimeManager(
     notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.PauseSimulationEvent())
   }
 
-  override protected def resumeSimulation(): Unit = {
+  override protected def resumeSimulation(): Unit =
     if (isPaused) {
       isPaused = false
       self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
-      notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.ResumeSimulationEvent())
+      notifyLocalManagers(
+        org.htc.protobuf.core.entity.event.control.execution.ResumeSimulationEvent()
+      )
     }
-  }
 
   override protected def stopSimulation(): Unit = {
     super.stopSimulation()
@@ -125,7 +128,9 @@ class GlobalTimeManager(
       LocalTimeManagerTickInfo(tick = localTickOffset)
     )
     if (isNew) {
-      logInfo(s"Registered LocalTimeManager: ${event.actorRef.path.name} - Total registered: ${localTimeManagers.size}")
+      logInfo(
+        s"Registered LocalTimeManager: ${event.actorRef.path.name} - Total registered: ${localTimeManagers.size}"
+      )
     }
   }
 
@@ -161,7 +166,7 @@ class GlobalTimeManager(
     val totalManagers = localTimeManagers.size
     val scheduled = localTimeManagers.values.filter(_.hasSchedule)
     val scheduledCount = scheduled.size
-    
+
     if (scheduled.isEmpty) {
       logInfo("No more scheduled events across local time managers. Terminating simulation")
       terminateSimulation()
@@ -170,33 +175,35 @@ class GlobalTimeManager(
 
     val nextTick = scheduled.map(_.tick).min
 //    logInfo(s"Global tick coordination: selected nextTick=$nextTick from $scheduledCount scheduled manager(s)")
-    
+
     localTickOffset = nextTick
     tickOffset = nextTick - initialTick
-    
+
     // Check if simulation should terminate by configured duration.
     // If extension is enabled, allow simulation to continue beyond duration
     // while there are still scheduled events (vehicles finishing their trips).
-    if (!extendSimulationIfPendingEventsAfterEnd && localTickOffset - initialTick >= simulationDuration) {
+    if (
+      !extendSimulationIfPendingEventsAfterEnd && localTickOffset - initialTick >= simulationDuration
+    ) {
       logInfo(s"Simulation reached configured duration ($simulationDuration ticks). Terminating.")
       terminateSimulation()
       return
     }
-    
-    localTimeManagers.keys.foreach { timeManager =>
-      localTimeManagers.update(
-        timeManager,
-        LocalTimeManagerTickInfo(tick = nextTick)
-      )
+
+    localTimeManagers.keys.foreach {
+      timeManager =>
+        localTimeManagers.update(
+          timeManager,
+          LocalTimeManagerTickInfo(tick = nextTick)
+        )
     }
-    
+
     notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
   }
 
-  private def notifyLocalManagers(event: Any): Unit = {
+  private def notifyLocalManagers(event: Any): Unit =
     // Broadcast to all routees in the pool
     timeManagersPool ! org.apache.pekko.routing.Broadcast(event)
-  }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
     // Handled by local time managers
@@ -206,31 +213,31 @@ class GlobalTimeManager(
     // Coordination happens through local time manager reports
   }
 
-  protected def nextTick: Option[Tick] = {
+  protected def nextTick: Option[Tick] =
     if (localTickOffset - initialTick >= simulationDuration) {
       None
     } else {
       Some(localTickOffset + 1)
     }
-  }
 
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
       isTerminated = true
       printSimulationDuration()
       logInfo("Global simulation terminated")
-      notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent())
+      notifyLocalManagers(
+        org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+      )
     }
   }
 
-  private def getSelfProxy: ActorRef = {
+  private def getSelfProxy: ActorRef =
     if (selfProxy == null) {
       selfProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
       selfProxy
     } else {
       selfProxy
     }
-  }
 }
 
 object GlobalTimeManager {
@@ -239,5 +246,10 @@ object GlobalTimeManager {
     extendSimulationIfPendingEventsAfterEnd: Boolean,
     simulationManager: ActorRef
   ): Props =
-    Props(classOf[GlobalTimeManager], simulationDuration, extendSimulationIfPendingEventsAfterEnd, simulationManager)
+    Props(
+      classOf[GlobalTimeManager],
+      simulationDuration,
+      extendSimulationIfPendingEventsAfterEnd,
+      simulationManager
+    )
 }

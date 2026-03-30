@@ -18,7 +18,7 @@ abstract class MovableState(
   var movableBestRoute: Option[mutable.Queue[(String, String)]] = None,
   var movableCurrentPath: Option[(String, String)] = None,
   var movableCurrentNode: String = null,
-  var movableCurrentLink: String = null,  // Event-driven: current link
+  var movableCurrentLink: String = null, // Event-driven: current link
   val origin: String,
   val destination: String,
   val gpsId: String = null,
@@ -27,7 +27,7 @@ abstract class MovableState(
   var movableReachedDestination: Boolean = false,
   val actorType: ActorTypeEnum,
   val size: Double,
-  var movableNextScheduledTick: Option[Tick] = None  // Event-driven: safe horizon
+  var movableNextScheduledTick: Option[Tick] = None // Event-driven: safe horizon
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

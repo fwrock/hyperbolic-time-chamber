@@ -6,29 +6,29 @@ import model.hybrid.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import model.hybrid.entity.state.enumeration.EventTypeEnum.{ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo}
-import model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Ready, Start, Waiting}
+import model.hybrid.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
+import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start, Waiting }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import model.hybrid.entity.event.data.link.LinkInfoData
-import model.hybrid.entity.event.data.{EnterLinkData, LeaveLinkData}
+import model.hybrid.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import model.hybrid.entity.state.enumeration.EventTypeEnum
-import model.hybrid.util.{CityMapUtil, GPSUtil}
+import model.hybrid.util.{ CityMapUtil, GPSUtil }
 
 abstract class Movable[T <: MovableState](
-                                           private val properties: Properties
-                                         )(implicit m: Manifest[T])
-  extends SimulationBaseActor[T](
-    properties = properties
-  ) {
+  private val properties: Properties
+)(implicit m: Manifest[T])
+    extends SimulationBaseActor[T](
+      properties = properties
+    ) {
 
   private var waitingTicksCounter: Int = 0
   private val MaxWaitingTicks: Int = 100
 
   protected def requestRoute(): Unit = {
     logInfo(s"Requesting route from ${state.origin} to ${state.destination}")
-    try {
+    try
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
           logInfo(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
@@ -43,11 +43,13 @@ abstract class Movable[T <: MovableState](
             onFinish(state.origin)
           }
         case None =>
-          logError(s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}.")
+          logError(
+            s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}."
+          )
           state.movableStatus = Finished
           onFinish(state.origin)
       }
-    } catch {
+    catch {
       case e: Exception =>
         logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
         state.movableStatus = Finished
@@ -55,7 +57,7 @@ abstract class Movable[T <: MovableState](
     }
   }
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+  override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Start =>
         logInfo(s"Starting route request from ${state.origin} to ${state.destination}")
@@ -67,7 +69,9 @@ abstract class Movable[T <: MovableState](
       case Waiting =>
         waitingTicksCounter += 1
         if (waitingTicksCounter > MaxWaitingTicks) {
-          logWarn(s"${getEntityId} stuck in Waiting for $waitingTicksCounter ticks at tick $currentTick (Link not responding). Recovering by skipping to next route segment.")
+          logWarn(
+            s"${getEntityId} stuck in Waiting for $waitingTicksCounter ticks at tick $currentTick (Link not responding). Recovering by skipping to next route segment."
+          )
           waitingTicksCounter = 0
           state.movableCurrentPath = None
           state.movableStatus = Ready
@@ -84,12 +88,11 @@ abstract class Movable[T <: MovableState](
         logWarn(s"Movable status not explicitly handled in base class: ${state.movableStatus}")
         onFinishSpontaneous(Some(currentTick + 1))
     }
-  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: LinkInfoData => handleLinkInfo(event, d)
-      case _ => logWarn(s"Movable Event not handled: $event")
+      case _               => logWarn(s"Movable Event not handled: $event")
     }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
@@ -97,12 +100,18 @@ abstract class Movable[T <: MovableState](
     EventTypeEnum.valueOf(event.eventType) match {
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
-      case _ => logWarn(s"Event not handled: $event with data: $data")
+      case _                    => logWarn(s"Event not handled: $event with data: $data")
     }
   }
 
-  protected def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {}
-  protected def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {}
+  protected def actHandleReceiveEnterLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {}
+  protected def actHandleReceiveLeaveLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {}
 
   protected def onFinish(nodeId: String): Unit = {
     if (state.destination == nodeId) {
@@ -115,7 +124,7 @@ abstract class Movable[T <: MovableState](
     selfDestruct()
   }
 
-  protected def enterLink(): Unit = {
+  protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
         CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
@@ -157,7 +166,6 @@ abstract class Movable[T <: MovableState](
             onFinish(state.destination)
         }
     }
-  }
 
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
@@ -210,8 +218,8 @@ abstract class Movable[T <: MovableState](
     else {
       state.movableBestRoute match {
         case Some(path) if path.nonEmpty => Some(path.dequeue())
-        case Some(_) => None
-        case None => None
+        case Some(_)                     => None
+        case None                        => None
       }
     }
 
@@ -220,8 +228,8 @@ abstract class Movable[T <: MovableState](
     else {
       state.movableBestRoute match {
         case Some(path) if path.nonEmpty => Some(path.head)
-        case Some(_) => None
-        case None => None
+        case Some(_)                     => None
+        case None                        => None
       }
     }
 

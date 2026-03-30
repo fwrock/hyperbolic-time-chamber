@@ -38,7 +38,9 @@ class SubwayStation(
         )
         logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None =>
-        logWarn(s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+        logWarn(
+          s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
     }
   }
 

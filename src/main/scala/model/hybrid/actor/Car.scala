@@ -1,19 +1,19 @@
 package org.interscity.htc
 package model.hybrid.actor
 
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, MovableStatusEnum, SimulationModeEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, MovableStatusEnum, SimulationModeEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil}
+import org.interscity.htc.model.hybrid.util.{ CityMapUtil, GPSUtil }
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes, MicroCarState}
+import org.interscity.htc.model.hybrid.entity.state.{ CarState, DriverAttributes, MicroCarState }
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
@@ -21,10 +21,11 @@ import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import scala.collection.mutable
 
 class Car(
-           private val properties: Properties
-         ) extends Movable[CarState](
-  properties = properties
-) with PrivateVehicle[CarState] {
+  private val properties: Properties
+) extends Movable[CarState](
+      properties = properties
+    )
+    with PrivateVehicle[CarState] {
 
   // A trava absoluta para garantir log único de finalização
   private var journeyFinishedReported: Boolean = false
@@ -51,7 +52,8 @@ class Car(
   private var sumoRerouteNo: Int = 0
   private var sumoTripInfoReported: Boolean = false
 
-  private lazy val simulationEndTick: Tick = model.hybrid.util.VehicleSimulationConfig.simulationEndTick
+  private lazy val simulationEndTick: Tick =
+    model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
   private var signalStateRetryCounter: Int = 0
@@ -69,16 +71,31 @@ class Car(
   }
 
   // ===== PrivateVehicle Accessor Methods =====
-  override protected def getVehicleStatus: MovableStatusEnum = if (state == null) Parked else state.status
-  override protected def setVehicleStatus(status: MovableStatusEnum): Unit = if (state != null) state.movableStatus = status
+  override protected def getVehicleStatus: MovableStatusEnum =
+    if (state == null) Parked else state.status
+  override protected def setVehicleStatus(status: MovableStatusEnum): Unit =
+    if (state != null) state.movableStatus = status
   override protected def getActorCurrentTick: Tick = currentTick
   override protected def getActorShardId: String = getShardId
   override protected def getActorEntityId: String = getEntityId
-  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(nextTick)
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
+    nextTick
+  )
   override protected def getCurrentDistance: Double = if (state == null) 0.0 else state.distance
-  override protected def sendVehicleMessage(entityId: String, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum): Unit = {
-    sendMessageTo(entityId = entityId, shardId = shardId, data = data, eventType = eventType, actorType = actorType)
-  }
+  override protected def sendVehicleMessage(
+    entityId: String,
+    shardId: String,
+    data: AnyRef,
+    eventType: String,
+    actorType: CreationTypeEnum
+  ): Unit =
+    sendMessageTo(
+      entityId = entityId,
+      shardId = shardId,
+      data = data,
+      eventType = eventType,
+      actorType = actorType
+    )
   override protected def logVehicleInfo(message: String): Unit = logInfo(message)
   override protected def logVehicleWarn(message: String): Unit = logWarn(message)
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
@@ -89,9 +106,13 @@ class Car(
       return
     }
 
-    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
-      && currentTick >= simulationEndTick && state.movableStatus != Finished) {
-      logInfo(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
+    if (
+      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      && currentTick >= simulationEndTick && state.movableStatus != Finished
+    ) {
+      logInfo(
+        s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
+      )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       // Notify the Link so it removes this car from vehiclesByLane
       leavingLink()
@@ -133,7 +154,9 @@ class Car(
       case WaitingSignalState =>
         signalStateRetryCounter += 1
         if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(s"${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link.")
+          logWarn(
+            s"${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
+          )
           signalStateRetryCounter = 0
           leavingLink()
         } else {
@@ -154,24 +177,29 @@ class Car(
     }
 
     event.data match {
-      case d: SignalStateData => handleSignalState(event, d)
+      case d: SignalStateData    => handleSignalState(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
-      case d: MicroUpdateData => handleMicroUpdate(event, d)
+      case d: MicroUpdateData    => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
-      case _ => super.actInteractWith(event)
+      case _                     => super.actInteractWith(event)
     }
   }
 
-  private def precomputedRoute = state.precomputedRoute
-    .map { items =>
-      items.flatMap { item =>
-        if (item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty) {
-          Some((item.linkId, item.nodeId))
-        } else None
+  private def precomputedRoute = state.precomputedRoute.map {
+    items =>
+      items.flatMap {
+        item =>
+          if (
+            item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty
+          ) {
+            Some((item.linkId, item.nodeId))
+          } else None
       }
-    }
+  }
     .filter(_.nonEmpty)
-    .map(items => mutable.Queue.from(items))
+    .map(
+      items => mutable.Queue.from(items)
+    )
 
   override def requestRoute(): Unit = {
     if (state.movableStatus == Finished) return
@@ -231,7 +259,7 @@ class Car(
       return
     }
 
-    try {
+    try
       GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestCost = cost
@@ -257,7 +285,7 @@ class Car(
           onFinishSpontaneous(None)
           selfDestruct()
       }
-    } catch {
+    catch {
       case e: Exception =>
         logError(s"Exception during route request: ${e.getMessage}", e)
         finishJourney("exception_during_route_request", state.origin)
@@ -266,7 +294,11 @@ class Car(
     }
   }
 
-  private def reportRouteEvents(route: mutable.Queue[(String, String)], source: String, cost: Double = 0.0): Unit = {
+  private def reportRouteEvents(
+    route: mutable.Queue[(String, String)],
+    source: String,
+    cost: Double = 0.0
+  ): Unit = {
     report(
       data = Map(
         "event_type" -> "journey_started",
@@ -274,7 +306,7 @@ class Car(
         "car_id" -> getEntityId,
         "origin" -> state.origin,
         "destination" -> state.destination,
-        "route_cost" -> (if(cost > 0) cost else state.bestCost),
+        "route_cost" -> (if (cost > 0) cost else state.bestCost),
         "route_length" -> route.size,
         "tick" -> currentTick,
         "route_source" -> source
@@ -300,7 +332,9 @@ class Car(
     val routeDepleted = state.movableBestRoute.forall(_.isEmpty)
 
     if (currentPathNode == null && !routeDepleted) {
-      logWarn(s"${getEntityId} requestSignalState with null currentPathNode but non-empty route at tick=$currentTick; recovering to Ready")
+      logWarn(
+        s"${getEntityId} requestSignalState with null currentPathNode but non-empty route at tick=$currentTick; recovering to Ready"
+      )
       state.movableStatus = Ready
       onFinishSpontaneous(Some(currentTick + 1))
       return
@@ -308,7 +342,8 @@ class Car(
 
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
-      val finalNode = Option(currentPathNode).orElse(Option(currentNodeId)).getOrElse(state.destination)
+      val finalNode =
+        Option(currentPathNode).orElse(Option(currentNodeId)).getOrElse(state.destination)
       // Notify the Link so it removes this car from vehiclesByLane;
       // without this, Link keeps sending MicroUpdateData to a dead actor,
       // causing shard to re-create an uninitialized Car → NPE.
@@ -349,7 +384,9 @@ class Car(
     // generating a second request. Both responses eventually arrive. Without this guard, the second
     // response would call leavingLink() on an already-left link, corrupting the route queue.
     if (state.movableStatus != WaitingSignalState) {
-      logDebug(s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.movableStatus}, expected WaitingSignalState). Race condition guard.")
+      logDebug(
+        s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.movableStatus}, expected WaitingSignalState). Race condition guard."
+      )
       return
     }
     signalStateRetryCounter = 0
@@ -454,9 +491,13 @@ class Car(
     // to detect simulation end.  This guard mirrors the same check in actSpontaneous so that
     // a car that is still traversing a MICRO link when the simulation clock expires will
     // cleanly finish its journey instead of silently vanishing.
-    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
-        && currentTick >= simulationEndTick && state.movableStatus != Finished) {
-      logInfo(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing.")
+    if (
+      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      && currentTick >= simulationEndTick && state.movableStatus != Finished
+    ) {
+      logInfo(
+        s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing."
+      )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       leavingLink()
       finishJourney("simulation_time_exceeded", finalNode)
@@ -466,25 +507,26 @@ class Car(
       return
     }
 
-    state.microState.foreach { micro =>
-      val updatedMicro = micro.copy(
-        positionInLink = data.position,
-        velocity = data.velocity,
-        acceleration = data.acceleration,
-        currentLane = data.currentLane,
-        leaderVehicle = data.leaderVehicle,
-        gapToLeader = data.gapToLeader,
-        leaderVelocity = data.leaderVelocity
-      )
+    state.microState.foreach {
+      micro =>
+        val updatedMicro = micro.copy(
+          positionInLink = data.position,
+          velocity = data.velocity,
+          acceleration = data.acceleration,
+          currentLane = data.currentLane,
+          leaderVehicle = data.leaderVehicle,
+          gapToLeader = data.gapToLeader,
+          leaderVelocity = data.leaderVelocity
+        )
 
-      state.updateMicroState(updatedMicro)
-      sumoArrivalSpeed = data.velocity
-      // NOTE: Don't track halting state per update - Link accumulates waiting time
-      // across all sub-ticks and sends the total in MicroLeaveLinkData
+        state.updateMicroState(updatedMicro)
+        sumoArrivalSpeed = data.velocity
+        // NOTE: Don't track halting state per update - Link accumulates waiting time
+        // across all sub-ticks and sends the total in MicroLeaveLinkData
 
-      if (data.position >= getCurrentLinkLength && state.movableStatus == Moving) {
-        requestSignalState()
-      }
+        if (data.position >= getCurrentLinkLength && state.movableStatus == Moving) {
+          requestSignalState()
+        }
     }
   }
 
@@ -497,18 +539,24 @@ class Car(
     //     to the new instance which has currentLinkId == None. Using !contains instead of
     //     isDefined && !contains ensures we also discard the None case.
     if (!currentLinkId.contains(data.linkId)) {
-      logWarn(s"${getEntityId}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
-        s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded.")
+      logWarn(
+        s"${getEntityId}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
+          s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded."
+      )
       return
     }
 
-    val travelTime = linkEntryTick.map(entryTick => currentTick - entryTick).getOrElse(0L)
+    val travelTime = linkEntryTick
+      .map(
+        entryTick => currentTick - entryTick
+      )
+      .getOrElse(0L)
 
     state.distance += data.distanceTraveled
     sumoArrivalSpeed = data.finalVelocity
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition
-    
+
     // BUGFIX: Use Link's accumulated waiting time directly instead of recalculating
     // The Link has already tracked all sub-ticks where velocity < 0.1 m/s
     sumoWaitingTimeSeconds += data.waitingTimeSeconds
@@ -543,7 +591,10 @@ class Car(
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
-  override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+  override def actHandleReceiveEnterLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {
     currentLinkId = Some(event.actorRefId)
     currentLinkLength = data.linkLength
     linkEntryTick = Some(currentTick)
@@ -559,7 +610,7 @@ class Car(
     val time = data.linkLength / speed
     state.movableStatus = Moving
     sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
-    
+
     // BUGFIX: Don't call updateHaltingState here - wait until we leave the link
     // to properly calculate the actual travel time and halting duration
 
@@ -593,28 +644,32 @@ class Car(
     onFinishSpontaneous(Some(exitTick))
   }
 
-  override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+  override def actHandleReceiveLeaveLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {
     state.distance += data.linkLength
     sumoArrivalSpeed = 0.0
     sumoArrivalLane = Some(s"${event.actorRefId}_0")
     sumoArrivalPos = data.linkLength
-    
+
     // BUGFIX: Calculate actual travel time through the MESO link
     // and accumulate waiting time if vehicle was moving slowly
-    linkEntryTick.foreach { entryTick =>
-      val travelTimeTicks = currentTick - entryTick
-      val travelTimeSeconds = travelTimeTicks.toDouble  // 1 tick = 1 second
-      
-      // Recalculate actual speed during link traversal
-      val actualSpeed = if (travelTimeSeconds > 0) {
-        data.linkLength / travelTimeSeconds  // m/s
-      } else {
-        0.0
-      }
-      
-      // If vehicle was halting (speed < 0.1 m/s), count entire travel time as waiting
-      // If vehicle was moving slowly, proportionally count the extra time spent
-      updateHaltingState(actualSpeed, travelTimeSeconds)
+    linkEntryTick.foreach {
+      entryTick =>
+        val travelTimeTicks = currentTick - entryTick
+        val travelTimeSeconds = travelTimeTicks.toDouble // 1 tick = 1 second
+
+        // Recalculate actual speed during link traversal
+        val actualSpeed = if (travelTimeSeconds > 0) {
+          data.linkLength / travelTimeSeconds // m/s
+        } else {
+          0.0
+        }
+
+        // If vehicle was halting (speed < 0.1 m/s), count entire travel time as waiting
+        // If vehicle was moving slowly, proportionally count the extra time spent
+        updateHaltingState(actualSpeed, travelTimeSeconds)
     }
 
     currentLinkId = None
@@ -740,21 +795,21 @@ class Car(
     sumoTripInfoReported = true
   }
 
-  private def getCurrentLinkLength: Double = {
+  private def getCurrentLinkLength: Double =
     if (currentLinkLength > 0.0) currentLinkLength else 1000.0
-  }
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
     super.applyDriverAttributes(attrs)
 
-    state.microState.foreach { micro =>
-      val updatedMicro = micro.copy(
-        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
-        reactionTime = attrs.reactionTime,
-        minGap = micro.minGap * attrs.minGapFactor,
-        maxAcceleration = micro.maxAcceleration * (0.8 + 0.4 * attrs.aggressiveness)
-      )
-      state.updateMicroState(updatedMicro)
+    state.microState.foreach {
+      micro =>
+        val updatedMicro = micro.copy(
+          desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+          reactionTime = attrs.reactionTime,
+          minGap = micro.minGap * attrs.minGapFactor,
+          maxAcceleration = micro.maxAcceleration * (0.8 + 0.4 * attrs.aggressiveness)
+        )
+        state.updateMicroState(updatedMicro)
     }
   }
 

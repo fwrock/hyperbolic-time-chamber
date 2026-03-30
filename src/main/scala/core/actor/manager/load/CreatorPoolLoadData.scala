@@ -33,7 +33,7 @@ class CreatorPoolLoadData(
   // Fields needed for actor creation (not for simulation)
   private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
   private val creatorManager: ActorRef = creatorProperties.creatorManager
-  private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] = 
+  private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] =
     creatorProperties.reporters
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()

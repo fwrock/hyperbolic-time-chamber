@@ -57,7 +57,6 @@ abstract class Movable[T <: MovableState](
     }
   }
 
-
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match
       case Start =>

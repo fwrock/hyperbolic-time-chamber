@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.hybrid.actor
 
-import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -12,61 +12,64 @@ import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil, SpeedUtil}
+import org.interscity.htc.model.hybrid.util.{ CityMapUtil, GPSUtil, SpeedUtil }
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.hybrid.entity.state.{BicycleState, MicroBicycleState, DriverAttributes}
+import org.interscity.htc.model.hybrid.entity.state.{ BicycleState, DriverAttributes, MicroBicycleState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.model.hybrid.entity.event.data.person._
-import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
+import org.interscity.htc.model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bicycle actor - NEW vehicle type for hybrid simulator.
-  * 
+  *
   * NOW A PRIVATE VEHICLE ASSET (Person-Centric Model):
-  * - Passive (Parked) by default
-  * - Activated by Person via StartTrip message
-  * - Configured with person's DriverAttributes
-  * - Reports back with TripCompleted
-  * - Low speeds (typically 15-25 km/h)
-  * - Prefer bike lanes when available
-  * - Can share lanes with cars if necessary
-  * - Lower acceleration and deceleration
-  * - Smaller vehicle size (2m)
-  * 
+  *   - Passive (Parked) by default
+  *   - Activated by Person via StartTrip message
+  *   - Configured with person's DriverAttributes
+  *   - Reports back with TripCompleted
+  *   - Low speeds (typically 15-25 km/h)
+  *   - Prefer bike lanes when available
+  *   - Can share lanes with cars if necessary
+  *   - Lower acceleration and deceleration
+  *   - Smaller vehicle size (2m)
+  *
   * MESO mode:
-  * - Aggregate bicycle flow
-  * - Simplified speed calculations
-  * 
+  *   - Aggregate bicycle flow
+  *   - Simplified speed calculations
+  *
   * MICRO mode:
-  * - Detailed positioning with bicycle-specific parameters
-  * - Bike lane preference
-  * - Safety gap considerations (vulnerable user)
-  * - Interactions with cars and other vehicles
-  * 
-  * @param properties Actor properties
+  *   - Detailed positioning with bicycle-specific parameters
+  *   - Bike lane preference
+  *   - Safety gap considerations (vulnerable user)
+  *   - Interactions with cars and other vehicles
+  *
+  * @param properties
+  *   Actor properties
   */
 class Bicycle(
   private val properties: Properties
 ) extends Movable[BicycleState](
       properties = properties
-    ) with PrivateVehicle[BicycleState] {
-  
+    )
+    with PrivateVehicle[BicycleState] {
+
   /** Car-following model with bicycle parameters.
     */
-  private val carFollowingModel: CarFollowingModel = KraussModel.withRandomness(0.3) // Higher randomness
-  
+  private val carFollowingModel: CarFollowingModel =
+    KraussModel.withRandomness(0.3) // Higher randomness
+
   /** Current link being traversed.
     */
   private var currentLinkId: Option[String] = None
-  
+
   /** Link entry tick.
     */
   private var linkEntryTick: Option[Tick] = None
 
-  /** MESO exit tick — the tick at which link traversal completes.
-    * Used to prevent stale Waiting-poll ticks from triggering premature requestSignalState.
+  /** MESO exit tick — the tick at which link traversal completes. Used to prevent stale
+    * Waiting-poll ticks from triggering premature requestSignalState.
     */
   private var mesoExitTick: Option[Tick] = None
 
@@ -87,16 +90,17 @@ class Bicycle(
   private var sumoTripInfoReported: Boolean = false
 
   /** Maximum simulation end tick - vehicles must finish by this tick. */
-  private lazy val simulationEndTick: Tick = model.hybrid.util.VehicleSimulationConfig.simulationEndTick
+  private lazy val simulationEndTick: Tick =
+    model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
-  /** Expected tick when red signal phase ends.
-    * Prevents stale WaitingSignalState poll ticks from triggering premature leavingLink.
+  /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
+    * triggering premature leavingLink.
     */
   private var signalWaitUntilTick: Option[Tick] = None
 
   /** Counter for consecutive ticks in WaitingSignalState without Node response. */
   private var signalStateRetryCounter: Int = 0
-  
+
   /** Maximum ticks to wait for signal state response before recovering. */
   private val MaxSignalStateRetries: Int = 100
 
@@ -110,30 +114,47 @@ class Bicycle(
     }
     sumoIsHalting = isHaltingNow
   }
-  
+
   // ===== PrivateVehicle Accessor Methods =====
-  
-  override protected def getVehicleStatus: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
-  override protected def setVehicleStatus(status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum): Unit = {
+
+  override protected def getVehicleStatus
+    : org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
+  override protected def setVehicleStatus(
+    status: org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
+  ): Unit =
     state.status = status
-  }
   override protected def getActorCurrentTick: Tick = currentTick
   override protected def getActorShardId: String = getShardId
   override protected def getActorEntityId: String = getEntityId
-  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(nextTick)
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
+    nextTick
+  )
   override protected def getCurrentDistance: Double = state.distance
-  override protected def sendVehicleMessage(entityId: String, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum): Unit = {
-    sendMessageTo(entityId = entityId, shardId = shardId, data = data, eventType = eventType, actorType = actorType)
-  }
+  override protected def sendVehicleMessage(
+    entityId: String,
+    shardId: String,
+    data: AnyRef,
+    eventType: String,
+    actorType: CreationTypeEnum
+  ): Unit =
+    sendMessageTo(
+      entityId = entityId,
+      shardId = shardId,
+      data = data,
+      eventType = eventType,
+      actorType = actorType
+    )
   override protected def logVehicleInfo(message: String): Unit = logInfo(message)
   override protected def logVehicleWarn(message: String): Unit = logWarn(message)
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
-  
+
   // ===== End Accessor Methods =====
-  
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
-      logWarn("Bicycle state is null, cannot process spontaneous event — sending FinishEvent to unblock TimeManager")
+      logWarn(
+        "Bicycle state is null, cannot process spontaneous event — sending FinishEvent to unblock TimeManager"
+      )
       onFinishSpontaneous(None)
       return
     }
@@ -143,11 +164,15 @@ class Bicycle(
       onFinishSpontaneous(None)
       return
     }
-    
+
     // Safety net: Force-finish vehicles that exceed simulation end time (only when extension is disabled)
-    if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
-        && currentTick >= simulationEndTick && state.status != Finished) {
-      logInfo(s"Bicycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
+    if (
+      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      && currentTick >= simulationEndTick && state.status != Finished
+    ) {
+      logInfo(
+        s"Bicycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
+      )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       finishJourney("simulation_time_exceeded", finalNode)
       onFinishPrivateVehicle(finalNode)
@@ -155,14 +180,14 @@ class Bicycle(
       selfDestruct()
       return
     }
-    
+
     state.status match {
       case Start =>
         requestRoute()
-      
+
       case Ready =>
         enterLink()
-      
+
       case WaitingSignal =>
         // Gate on signalWaitUntilTick to prevent stale poll ticks from
         // triggering premature leavingLink before the red signal phase ends.
@@ -173,17 +198,18 @@ class Bicycle(
             signalWaitUntilTick = None
             leavingLink()
         }
-      
+
       case Moving =>
         if (state.isMicroMode) {
           // MICRO mode: check position
           var shouldLeave = false
-          state.microState.foreach { micro =>
-            if (micro.positionInLink >= getCurrentLinkLength) {
-              shouldLeave = true
-            }
+          state.microState.foreach {
+            micro =>
+              if (micro.positionInLink >= getCurrentLinkLength) {
+                shouldLeave = true
+              }
           }
-          
+
           if (shouldLeave) {
             leavingLink()
           } else {
@@ -201,41 +227,43 @@ class Bicycle(
               requestSignalState()
           }
         }
-      
+
       case WaitingSignalState =>
         signalStateRetryCounter += 1
         if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(s"Bicycle ${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link.")
+          logWarn(
+            s"Bicycle ${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
+          )
           signalStateRetryCounter = 0
           leavingLink()
         } else {
           // Still waiting for Node response, reschedule
           onFinishSpontaneous(Some(currentTick + 1))
         }
-      
+
       case Finished =>
         onFinishSpontaneous()
-      
+
       case _ =>
         logWarn(s"Bicycle status not handled: ${state.status}")
         onFinishSpontaneous(Some(currentTick + 1))
     }
   }
-  
+
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     if (handlePrivateVehicleEvent(event)) {
       return
     }
-    
+
     event.data match {
-      case d: SignalStateData => handleSignalState(event, d)
+      case d: SignalStateData    => handleSignalState(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
-      case d: MicroUpdateData => handleMicroUpdate(event, d)
+      case d: MicroUpdateData    => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
-      case _ => super.actInteractWith(event)
+      case _                     => super.actInteractWith(event)
     }
   }
-  
+
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
@@ -282,16 +310,18 @@ class Bicycle(
       }
     }
   }
-  
+
   /** Handle signal state response from node.
     */
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
     // Guard against stale/duplicate SignalStateData responses caused by the retry mechanism.
     if (state.status != WaitingSignalState) {
-      logDebug(s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard.")
+      logDebug(
+        s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
+      )
       return
     }
-    signalStateRetryCounter = 0  // Reset stuck counter on signal response
+    signalStateRetryCounter = 0 // Reset stuck counter on signal response
     if (data.phase == Red) {
       state.status = WaitingSignal
       signalWaitUntilTick = Some(data.nextTick)
@@ -323,7 +353,7 @@ class Bicycle(
     state.status = Ready
     super.leavingLink()
   }
-  
+
   override def requestRoute(): Unit = {
     if (state.status == Finished) {
       return
@@ -333,7 +363,7 @@ class Bicycle(
     if (sumoDepartTick.nonEmpty) {
       sumoRerouteNo += 1
     }
-    try {
+    try
       GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
@@ -343,7 +373,7 @@ class Bicycle(
           state.status = Ready
           state.movableStatus = Ready
           state.updateCurrentPath(None)
-          
+
           // Report journey started
           report(
             data = Map(
@@ -357,32 +387,32 @@ class Bicycle(
             ),
             label = "journey_started"
           )
-          
+
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
             finishJourney("already_at_destination", origin)
           }
-        
+
         case None =>
           logError(s"Failed to calculate route for bicycle ${getEntityId}")
           finishJourney("route_calculation_failed", origin)
       }
-    } catch {
+    catch {
       case e: Exception =>
         logError(s"Exception during bicycle route request: ${e.getMessage}", e)
         finishJourney("exception", origin)
     }
   }
-  
+
   /** Handle entering MICRO link.
     */
   private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
     logDebug(s"Bicycle entering MICRO link ${data.linkId}, lane ${data.assignedLane}")
-    
+
     currentLinkId = Some(data.linkId)
     linkEntryTick = Some(currentTick)
-    
+
     // Initialize microscopic state with bicycle parameters
     val initialMicroState = MicroBicycleState(
       positionInLink = 0.0,
@@ -403,7 +433,7 @@ class Bicycle(
       desiredLane = findBikeLane(data),
       laneChangeProgress = 0.0
     )
-    
+
     // Activate MICRO mode
     state.activateMicroMode(initialMicroState)
     state.status = Moving
@@ -416,7 +446,7 @@ class Bicycle(
       sumoDepartLane = Some(s"${data.linkId}_${initialMicroState.currentLane}")
       sumoDepartPos = 0.0
     }
-    
+
     // Report micro enter
     report(
       data = Map(
@@ -432,46 +462,50 @@ class Bicycle(
       ),
       label = "enter_micro_link"
     )
-    
+
     onFinishSpontaneous(Some(currentTick + 1))
   }
-  
+
   /** Handle microscopic update.
     */
-  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit = {
-    state.microState.foreach { micro =>
-      // Update microscopic state
-      val updatedMicro = micro.copy(
-        positionInLink = data.position,
-        velocity = data.velocity,
-        acceleration = data.acceleration,
-        currentLane = data.currentLane,
-        leaderVehicle = data.leaderVehicle,
-        gapToLeader = data.gapToLeader,
-        leaderVelocity = data.leaderVelocity
-      )
-      
-      state.updateMicroState(updatedMicro)
-      sumoArrivalSpeed = data.velocity
-      updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
-      
-      log.debug(s"Bicycle micro update: pos=${data.position}, vel=${data.velocity}")
+  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
+    state.microState.foreach {
+      micro =>
+        // Update microscopic state
+        val updatedMicro = micro.copy(
+          positionInLink = data.position,
+          velocity = data.velocity,
+          acceleration = data.acceleration,
+          currentLane = data.currentLane,
+          leaderVehicle = data.leaderVehicle,
+          gapToLeader = data.gapToLeader,
+          leaderVelocity = data.leaderVelocity
+        )
+
+        state.updateMicroState(updatedMicro)
+        sumoArrivalSpeed = data.velocity
+        updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
+
+        log.debug(s"Bicycle micro update: pos=${data.position}, vel=${data.velocity}")
     }
-  }
-  
+
   /** Handle leaving MICRO link.
     */
   private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit = {
     logDebug(s"Bicycle leaving MICRO link ${data.linkId}")
-    
-    val travelTime = linkEntryTick.map(entryTick => currentTick - entryTick).getOrElse(0L)
-    
+
+    val travelTime = linkEntryTick
+      .map(
+        entryTick => currentTick - entryTick
+      )
+      .getOrElse(0L)
+
     state.distance += data.distanceTraveled
     sumoArrivalSpeed = data.finalVelocity
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition
     updateHaltingState(data.finalVelocity, 0.0)
-    
+
     // Report micro leave
     report(
       data = Map(
@@ -487,15 +521,15 @@ class Bicycle(
       ),
       label = "leave_micro_link"
     )
-    
+
     // Deactivate MICRO mode
     state.deactivateMicroMode()
     currentLinkId = None
     linkEntryTick = None
-    
+
     onFinishSpontaneous(Some(currentTick + 1))
   }
-  
+
   /** Handle entering MESO link.
     */
   override def actHandleReceiveEnterLinkInfo(
@@ -503,11 +537,11 @@ class Bicycle(
     data: LinkInfoData
   ): Unit = {
     logDebug(s"Bicycle entering MESO link ${event.actorRefId}")
-    
+
     // Simplified bicycle speed calculation (lower speed than cars)
     val bicycleSpeed = 5.56 // 20 km/h constant for MESO mode
     val time = data.linkLength / bicycleSpeed
-    
+
     state.status = Moving
     sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
     updateHaltingState(bicycleSpeed, 0.0)
@@ -517,7 +551,7 @@ class Bicycle(
       sumoDepartLane = Some(s"${event.actorRefId}_0")
       sumoDepartPos = 0.0
     }
-    
+
     // Report meso enter
     report(
       data = Map(
@@ -532,12 +566,12 @@ class Bicycle(
       ),
       label = "enter_link"
     )
-    
+
     val exitTick = currentTick + Math.ceil(time).toLong
     mesoExitTick = Some(exitTick)
     onFinishSpontaneous(Some(exitTick))
   }
-  
+
   /** Handle leaving MESO link.
     */
   override def actHandleReceiveLeaveLinkInfo(
@@ -550,7 +584,7 @@ class Bicycle(
     sumoArrivalPos = data.linkLength
     updateHaltingState(0.0, 0.0)
     mesoExitTick = None
-    
+
     // Report meso leave
     report(
       data = Map(
@@ -574,7 +608,7 @@ class Bicycle(
       onFinishSpontaneous(Some(currentTick + 1))
     }
   }
-  
+
   /** Finish bicycle journey.
     */
   private def finishJourney(reason: String, finalNode: String): Unit = {
@@ -597,7 +631,7 @@ class Bicycle(
     )
 
     reportSumoTripInfo(reason = reason, finalNode = finalNode)
-    
+
     state.status = Finished
   }
 
@@ -651,42 +685,42 @@ class Bicycle(
 
     sumoTripInfoReported = true
   }
-  
+
   /** Find bike lane in link configuration (if any).
     */
-  private def findBikeLane(data: MicroEnterLinkData): Option[Int] = {
+  private def findBikeLane(data: MicroEnterLinkData): Option[Int] =
     // Would query link configuration for bike lane
     // Simplified: assume lane 0 is bike lane if link has 3+ lanes
     if (data.numberOfLanes >= 3) Some(0) else None
-  }
-  
+
   /** Get current link length.
     */
-  private def getCurrentLinkLength: Double = {
-    currentLinkId.flatMap { linkId =>
-      org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
+  private def getCurrentLinkLength: Double =
+    currentLinkId.flatMap {
+      linkId =>
+        org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(500.0)
-  }
-  
+
   // ========== PrivateVehicle abstract method implementations ==========
-  
+
   /** Apply driver attributes to bicycle physics.
     */
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
     super.applyDriverAttributes(attrs)
-    
-    state.microState.foreach { micro =>
-      val updatedMicro = micro.copy(
-        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
-        reactionTime = attrs.reactionTime,
-        minGap = micro.minGap * attrs.minGapFactor
-      )
-      state.updateMicroState(updatedMicro)
+
+    state.microState.foreach {
+      micro =>
+        val updatedMicro = micro.copy(
+          desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+          reactionTime = attrs.reactionTime,
+          minGap = micro.minGap * attrs.minGapFactor
+        )
+        state.updateMicroState(updatedMicro)
     }
-    
+
     logInfo(s"Bicycle ${getEntityId} configured with driver attributes")
   }
-  
+
   /** Override onFinish to use PrivateVehicle completion.
     */
   override protected def onFinish(nodeId: String): Unit = {
@@ -694,7 +728,7 @@ class Bicycle(
     finishJourney("onFinish_called", nodeId)
   }
 
-  override def onDestruct(event: DestructEvent): Unit = {
+  override def onDestruct(event: DestructEvent): Unit =
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))
@@ -702,13 +736,11 @@ class Bicycle(
       finishJourney("actor_destructed_before_completion", fallbackNode)
       onFinishPrivateVehicle(fallbackNode)
     }
-  }
 }
 
 /** Bicycle companion object.
   */
 object Bicycle {
-  def apply(properties: Properties): Bicycle = {
+  def apply(properties: Properties): Bicycle =
     new Bicycle(properties)
-  }
 }

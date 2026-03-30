@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.entity.state.model
 
-import com.fasterxml.jackson.annotation.{JsonCreator, JsonProperty}
+import com.fasterxml.jackson.annotation.{ JsonCreator, JsonProperty }
 
 case class SubRoutePair(
   @JsonProperty("origin") origin: String,

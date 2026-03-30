@@ -42,7 +42,7 @@ class Car(
     if (state.movableStatus == Finished) {
       return
     }
-    
+
     // Report journey started
 //    report(
 //      data = Map(
@@ -55,7 +55,7 @@ class Car(
 //      label = "journey_started"
 //    )
     state.eventCount += 1
-    
+
     try {
       state.movableStatus = RouteWaiting
       GPSUtilWithCache.calcRoute(originId = state.origin, destinationId = state.destination) match {
@@ -74,8 +74,8 @@ class Car(
 //              "destination" -> state.destination,
 //              "route_cost" -> cost,
 //              "route_length" -> pathQueue.size,
-//              "route_links" -> pathQueue.map(_._1).mkString(","), 
-//              "route_nodes" -> pathQueue.map(_._2).mkString(","), 
+//              "route_links" -> pathQueue.map(_._1).mkString(","),
+//              "route_nodes" -> pathQueue.map(_._2).mkString(","),
 //              "tick" -> currentTick
 //            ),
 //            label = "route_planned"

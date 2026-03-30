@@ -3,18 +3,18 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import core.util.{ActorCreatorUtil, IdUtil, StringUtil}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import core.util.{ ActorCreatorUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartCreationEvent}
-import org.interscity.htc.core.entity.actor.properties.{CreatorProperties, Properties}
-import org.interscity.htc.core.entity.actor.{ActorSimulationCreation, Initialization}
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
+import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk, RetryPendingAcks}
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk, RetryPendingAcks }
 import org.interscity.htc.core.entity.event.data.InitializeData
 
 import scala.collection.mutable
@@ -67,26 +67,28 @@ class CreatorLoadData(
   }
 
   override def handleEvent: Receive = {
-    case event: CreateActorsEvent  =>
+    case event: CreateActorsEvent =>
       logInfo(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
       handleCreateActors(event)
-    case event: StartCreationEvent => handleStartCreation(event)
-    case event: ProcessNextCreateChunk => handleProcessNextCreateChunk(event.batchId)
+    case event: StartCreationEvent         => handleStartCreation(event)
+    case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
     case event: ShardRegion.StartEntityAck => handleInitialize(event)
     case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
-    case RetryPendingAcks => handleRetryPendingAcks()
+    case RetryPendingAcks                  => handleRetryPendingAcks()
 
     case _ =>
   }
 
   private def handleRetryPendingAcks(): Unit = {
     var pendingCount = 0
-    initializeData.foreach { case (_, entitiesMap) =>
-      entitiesMap.foreach { case (entityId, initialization) =>
-        val shardRegion = getShardRef(StringUtil.getModelClassName(initialization.classType))
-        shardRegion ! ShardRegion.StartEntity(entityId)
-        pendingCount += 1
-      }
+    initializeData.foreach {
+      case (_, entitiesMap) =>
+        entitiesMap.foreach {
+          case (entityId, initialization) =>
+            val shardRegion = getShardRef(StringUtil.getModelClassName(initialization.classType))
+            shardRegion ! ShardRegion.StartEntity(entityId)
+            pendingCount += 1
+        }
     }
     // if (pendingCount > 0) logWarn(s"Watchdog: Reenviando StartEntity para $pendingCount atores.")
   }
@@ -119,31 +121,32 @@ class CreatorLoadData(
     val chunk = currentActors.take(CREATE_CHUNK_SIZE)
 
     if (chunk.nonEmpty) {
-      chunk.foreach { actorCreation =>
-        val initialization = Initialization(
-          id = actorCreation.actor.id,
-          resourceId = actorCreation.resourceId,
-          classType = actorCreation.actor.typeActor,
-          data = actorCreation.actor.data.content,
-          timeManagers = timeManagers,
-          creatorManager = self,
-          reporters = reporters,
-          dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
-        )
+      chunk.foreach {
+        actorCreation =>
+          val initialization = Initialization(
+            id = actorCreation.actor.id,
+            resourceId = actorCreation.resourceId,
+            classType = actorCreation.actor.typeActor,
+            data = actorCreation.actor.data.content,
+            timeManagers = timeManagers,
+            creatorManager = self,
+            reporters = reporters,
+            dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
+          )
 
-        addInitializeData(actorCreation.actor.id, batchId, initialization)
-        addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+          addInitializeData(actorCreation.actor.id, batchId, initialization)
+          addToInitializedAcknowledges(batchId, actorCreation.actor.id)
 
-        val shardRegion = createShardRegion(
-          system = context.system,
-          resourceId = actorCreation.resourceId,
-          actorClassName = actorCreation.actor.typeActor,
-          entityId = actorCreation.actor.id,
-          timeManagers = timeManagers,
-          creatorManager = self
-        )
+          val shardRegion = createShardRegion(
+            system = context.system,
+            resourceId = actorCreation.resourceId,
+            actorClassName = actorCreation.actor.typeActor,
+            entityId = actorCreation.actor.id,
+            timeManagers = timeManagers,
+            creatorManager = self
+          )
 
-        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+          shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
       }
 
       actorsToCreate(batchId) = actorsToCreate(batchId).drop(chunk.size)
@@ -160,27 +163,32 @@ class CreatorLoadData(
     }
   }
 
-  private def addInitializeData(entityId: String, batchId: String, initialization: Initialization): Unit =
+  private def addInitializeData(
+    entityId: String,
+    batchId: String,
+    initialization: Initialization
+  ): Unit =
     initializeData.get(batchId) match {
       case Some(data) => data.put(entityId, initialization)
-      case None => initializeData.put(batchId, mutable.Map(entityId -> initialization))
+      case None       => initializeData.put(batchId, mutable.Map(entityId -> initialization))
     }
 
   private def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
     initializedAcknowledges.get(batchId) match {
       case Some(acknowledge) => initializedAcknowledges.put(batchId, acknowledge :+ entityId)
-      case None => initializedAcknowledges.put(batchId, mutable.Seq(entityId))
+      case None              => initializedAcknowledges.put(batchId, mutable.Seq(entityId))
     }
     actorsBatches.put(entityId, batchId)
   }
 
   private def removeOfInitializedAcknowledges(batchId: String, entityId: String): Unit =
     initializedAcknowledges.get(batchId) match {
-      case Some(acknowledge) => initializedAcknowledges.put(batchId, acknowledge.filter(_ != entityId))
+      case Some(acknowledge) =>
+        initializedAcknowledges.put(batchId, acknowledge.filter(_ != entityId))
       case None =>
     }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
     actorsBatches.get(event.entityId) match {
       case Some(batchId) =>
         initializeData.get(batchId).flatMap(_.get(event.entityId)) match {
@@ -194,7 +202,9 @@ class CreatorLoadData(
                 timeManagers = data.timeManagers,
                 creatorManager = data.creatorManager,
                 reporters = data.reporters,
-                dependencies = data.dependencies.map { case (_, dep) => IdUtil.format(dep.id) -> dep }
+                dependencies = data.dependencies.map {
+                  case (_, dep) => IdUtil.format(dep.id) -> dep
+                }
               )
             )
 
@@ -210,7 +220,6 @@ class CreatorLoadData(
         }
       case None =>
     }
-  }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
     val batchId = actorsBatches.getOrElse(event.entityId, "")
@@ -227,19 +236,22 @@ class CreatorLoadData(
 
     if (!hasPendingCreation && !hasPendingAcks && !hasPendingInitData) {
 
-      batchesLoad.get(batchId).foreach { ref =>
-        ref ! FinishCreationEvent(
-          actorRef = self,
-          batchId = batchId,
-          amount = amountActors
-        )
+      batchesLoad.get(batchId).foreach {
+        ref =>
+          ref ! FinishCreationEvent(
+            actorRef = self,
+            batchId = batchId,
+            amount = amountActors
+          )
       }
 
       batchesLoad.remove(batchId)
       batchesToCreate.remove(batchId)
       actorsToCreate.remove(batchId)
 
-      actorsBatches.filterInPlace((_, bId) => bId != batchId)
+      actorsBatches.filterInPlace(
+        (_, bId) => bId != batchId
+      )
     }
   }
 }
