@@ -30,11 +30,10 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
 
-  override def onInitialize(event: InitializeEvent): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
 //    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
 //    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
-  }
 
   private def sendConnections(actorId: String, identify: Identify): Unit =
     sendMessageTo(
@@ -57,7 +56,7 @@ class Link(
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     model.mobility.util.LinkMessageStats.incrementEnterLink()
-    
+
     val dataLink = if (state == null) {
       LinkInfoData(
         linkCapacity = Int.MaxValue,
@@ -95,7 +94,7 @@ class Link(
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     model.mobility.util.LinkMessageStats.incrementLeaveLink()
-    
+
     state.registered.filterInPlace(_.actorId != data.actorId)
     val dataLink = LinkInfoData(
       linkLength = state.length,

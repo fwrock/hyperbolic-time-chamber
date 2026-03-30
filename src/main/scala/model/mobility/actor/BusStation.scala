@@ -70,15 +70,15 @@ class BusStation(
 
   private def handleRequestRoute(value: ActorInteractionEvent): Unit = {
     val route = value.data.asInstanceOf[ReceiveRouteData]
-    
+
     // We need to find the bus stop pair corresponding to the received origin/destination nodes
     val originBusStop = state.busStops.find(_._2 == route.origin).map(_._1)
     val destinationBusStop = state.busStops.find(_._2 == route.destination).map(_._1)
-    
+
     (originBusStop, destinationBusStop) match {
       case (Some(originStop), Some(destStop)) =>
         val subRoutePair = SubRoutePair(originStop, destStop)
-        
+
         if (route.label == "going-route") {
           state.goingRoute match
             case Some(goingRoute) =>
@@ -88,7 +88,7 @@ class BusStation(
             case Some(returningRoute) =>
               returningRoute.put(subRoutePair, route.path)
         }
-        
+
         if (isCalculateRoutingComplete) {
           state.status = Ready
           if (state.buses.nonEmpty) {
@@ -104,7 +104,9 @@ class BusStation(
               onFinishSpontaneous(Some(currentTick + state.interval))
             } catch {
               case e: IllegalStateException =>
-                logError(s"Failed to create bus ${bus.actorId} after route completion: ${e.getMessage}")
+                logError(
+                  s"Failed to create bus ${bus.actorId} after route completion: ${e.getMessage}"
+                )
                 state.buses.enqueue(bus) // Put back in queue
                 state.status = RouteWaiting // Wait for valid route data
               case e: Exception =>
@@ -117,7 +119,9 @@ class BusStation(
           }
         }
       case _ =>
-        logWarn(s"BusStation ${getEntityId} received route for unknown node pair: ${route.origin} -> ${route.destination}")
+        logWarn(
+          s"BusStation ${getEntityId} received route for unknown node pair: ${route.origin} -> ${route.destination}"
+        )
     }
   }
 
@@ -127,7 +131,7 @@ class BusStation(
       logWarn(s"Cannot create bus ${bus.actorId} - no valid route available")
       throw new IllegalStateException(s"No route available for bus ${bus.actorId}")
     }
-    
+
     createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Bus],
@@ -152,26 +156,32 @@ class BusStation(
 
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
     val bestRoute = mutable.Queue[(String, String)]()
-    
+
     // Check if we have valid route data before building the route
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get)
-      bestRoute ++= goingRouteData.map(pair => (pair._1.id, pair._2.id))
+      bestRoute ++= goingRouteData.map(
+        pair => (pair._1.id, pair._2.id)
+      )
     } else {
       logWarn("No going route defined for bus station")
     }
-    
+
     if (state.returningRoute.isDefined && state.returningRoute.get.nonEmpty) {
       val returningRouteData = getTotalRoute(state.returningRoute.get)
-      bestRoute ++= returningRouteData.map(pair => (pair._1.id, pair._2.id))
+      bestRoute ++= returningRouteData.map(
+        pair => (pair._1.id, pair._2.id)
+      )
     } else {
       logWarn("No returning route defined for bus station")
     }
-    
+
     if (bestRoute.isEmpty) {
-      logWarn("Bus route calculation resulted in empty route - this may cause buses to terminate immediately")
+      logWarn(
+        "Bus route calculation resulted in empty route - this may cause buses to terminate immediately"
+      )
     }
-    
+
     bestRoute
   }
 
@@ -204,7 +214,13 @@ class BusStation(
       val destinationBusStopId = pair.last
       val originNodeId = state.busStops(originBusStopId)
       val destinationNodeId = state.busStops(destinationBusStopId)
-      requestRoute(originBusStopId, destinationBusStopId, originNodeId, destinationNodeId, "going-route")
+      requestRoute(
+        originBusStopId,
+        destinationBusStopId,
+        originNodeId,
+        destinationNodeId,
+        "going-route"
+      )
     }
   }
 
@@ -215,11 +231,23 @@ class BusStation(
       val destinationBusStopId = pair.last
       val originNodeId = state.busStops(originBusStopId)
       val destinationNodeId = state.busStops(destinationBusStopId)
-      requestRoute(originBusStopId, destinationBusStopId, originNodeId, destinationNodeId, "returning-route")
+      requestRoute(
+        originBusStopId,
+        destinationBusStopId,
+        originNodeId,
+        destinationNodeId,
+        "returning-route"
+      )
     }
   }
 
-  private def requestRoute(originBusStopId: String, destinationBusStopId: String, originNodeId: String, destinationNodeId: String, label: String): Unit = {
+  private def requestRoute(
+    originBusStopId: String,
+    destinationBusStopId: String,
+    originNodeId: String,
+    destinationNodeId: String,
+    label: String
+  ): Unit = {
     val data = RequestRouteData(
       requester = getSelfShard,
       requesterClassType = getShardId,
@@ -231,7 +259,8 @@ class BusStation(
       label = label
     )
     // Create a temporary dependency for the origin node to request route
-    val nodeActorRef = context.system.actorSelection(s"/user/sharded-actors/hybrid.actor.Node/$originNodeId")
+    val nodeActorRef =
+      context.system.actorSelection(s"/user/sharded-actors/hybrid.actor.Node/$originNodeId")
     sendMessageTo(
       originNodeId,
       "hybrid.actor.Node",

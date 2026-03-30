@@ -4,10 +4,9 @@ package system.broker.kafka.abstraction
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import java.time.Instant
 
-/**
- * Base trait for all Kafka messages in the HTC system
- * Provides common metadata and serialization support
- */
+/** Base trait for all Kafka messages in the HTC system Provides common metadata and serialization
+  * support
+  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
 trait KafkaMessage {
   def messageId: String
@@ -16,9 +15,8 @@ trait KafkaMessage {
   def messageType: String
 }
 
-/**
- * Envelope for wrapping any data in a Kafka message
- */
+/** Envelope for wrapping any data in a Kafka message
+  */
 case class KafkaMessageEnvelope[T](
   messageId: String,
   timestamp: Instant,
@@ -30,16 +28,14 @@ case class KafkaMessageEnvelope[T](
   replyTo: Option[String] = None
 ) extends KafkaMessage
 
-/**
- * Result of a Kafka operation
- */
+/** Result of a Kafka operation
+  */
 sealed trait KafkaResult[+T]
 case class KafkaSuccess[T](value: T) extends KafkaResult[T]
 case class KafkaFailure(error: Throwable) extends KafkaResult[Nothing]
 
-/**
- * Configuration for Kafka operations
- */
+/** Configuration for Kafka operations
+  */
 case class KafkaConfig(
   topic: String,
   key: Option[String] = None,
@@ -48,9 +44,8 @@ case class KafkaConfig(
   timeout: Option[Long] = None
 )
 
-/**
- * Metadata about a processed message
- */
+/** Metadata about a processed message
+  */
 case class MessageMetadata(
   topic: String,
   partition: Int,

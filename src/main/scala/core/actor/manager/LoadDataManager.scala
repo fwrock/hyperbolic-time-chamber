@@ -56,12 +56,12 @@ class LoadDataManager(
   private def loadData(event: LoadDataEvent): Unit = {
     dataSourceAmount = event.actorsDataSources.size
     logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
-    
+
     if (dataSourceAmount == 0) {
       logWarn("No data sources to load. Simulation will start with no actors.")
       return
     }
-    
+
     creatorRef = createCreatorLoadData(dataSourceAmount)
     creatorPoolRef = createCreatorPoolLoadData(dataSourceAmount)
 
@@ -79,10 +79,13 @@ class LoadDataManager(
   private def handleLoadNext(): Unit = {
     logInfo(s"handleLoadNext called. sourcesToCreate keys: ${sourcesToCreate.keys.mkString(", ")}")
     logInfo(s"sourcesInCreation: ${sourcesInCreation.mkString(", ")}")
-    
+
     sourcesToCreate.foreach {
       (key, queue) =>
-        logInfo(s"Checking key=$key, queue.nonEmpty=${queue.nonEmpty}, !sourcesInCreation.contains(key)=${!sourcesInCreation.contains(key)}")
+        logInfo(
+          s"Checking key=$key, queue.nonEmpty=${queue.nonEmpty}, !sourcesInCreation.contains(key)=${!sourcesInCreation
+              .contains(key)}"
+        )
         if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
           val source = queue.dequeue()
           sourcesInCreation.add(key)
@@ -167,7 +170,9 @@ class LoadDataManager(
     loaders(actorRef) = true
     logInfo(s"Total loaded data: ${loaders.values.count(_.self == true)}/${loaders.size}")
     sourcesInCreation.remove(event.actorClassType)
-    logInfo(s"Removed ${event.actorClassType} from sourcesInCreation. Remaining: ${sourcesInCreation.mkString(", ")}")
+    logInfo(
+      s"Removed ${event.actorClassType} from sourcesInCreation. Remaining: ${sourcesInCreation.mkString(", ")}"
+    )
 
     actorRef ! DestructEvent(actorRef = getPath)
 
@@ -201,8 +206,9 @@ class LoadDataManager(
 
   private def handleStopSimulation(): Unit = {
     logInfo("Received StopSimulationEvent. Stopping load manager gracefully")
-    loaders.keys.foreach { loaderRef =>
-      loaderRef ! DestructEvent(actorRef = getPath)
+    loaders.keys.foreach {
+      loaderRef =>
+        loaderRef ! DestructEvent(actorRef = getPath)
     }
     selfDestruct()
   }

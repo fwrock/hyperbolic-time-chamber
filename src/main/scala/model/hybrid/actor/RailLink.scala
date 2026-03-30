@@ -17,61 +17,63 @@ import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 
 /** Rail link actor for dedicated subway/metro infrastructure.
-  * 
-  * Rail links form a SEPARATE network from road links. Only subway/metro
-  * vehicles can use rail links. This prevents:
-  * - Cars/buses trying to drive on train tracks
-  * - Subways competing with road traffic
-  * - Unrealistic mixed-mode scenarios
-  * 
+  *
+  * Rail links form a SEPARATE network from road links. Only subway/metro vehicles can use rail
+  * links. This prevents:
+  *   - Cars/buses trying to drive on train tracks
+  *   - Subways competing with road traffic
+  *   - Unrealistic mixed-mode scenarios
+  *
   * Rail links have different physics than road links:
-  * - Higher speeds (60-100 km/h typical)
-  * - No lane changes
-  * - Gradient and curvature affect speed
-  * - No congestion (dedicated tracks)
-  * 
-  * @param properties Actor properties
+  *   - Higher speeds (60-100 km/h typical)
+  *   - No lane changes
+  *   - Gradient and curvature affect speed
+  *   - No congestion (dedicated tracks)
+  *
+  * @param properties
+  *   Actor properties
   */
 class RailLink(
   private val properties: Properties
 ) extends SimulationBaseActor[RailLinkState](
       properties = properties
     ) {
-  
+
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    
+
     // Don't send connections immediately - do it lazily on first use
     // This avoids race conditions where nodes haven't started yet
-    
+
     logInfo(s"RailLink initialized: ${state.from} -> ${state.to} (${state.subwayLine})")
     logInfo(s"  Length: ${state.length}m, SpeedLimit: ${state.speedLimit} km/h")
     logInfo(s"  Gradient: ${state.gradient}%, Curvature: ${state.curvature}")
   }
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: EnterLinkData => handleEnterLink(event, d)
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
-  }
-  
+
   /** Handle vehicle entering rail link.
-    * 
-    * VALIDATION: Only subway vehicles can enter rail links.
-    * If a non-subway vehicle tries to enter, reject it and log an error.
+    *
+    * VALIDATION: Only subway vehicles can enter rail links. If a non-subway vehicle tries to enter,
+    * reject it and log an error.
     */
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     // VALIDATION: Check vehicle type
     val vehicleType = data.actorType.toString
     if (!state.canAcceptVehicle(vehicleType)) {
-      logError(s"RAIL SAFETY VIOLATION: Vehicle type '${vehicleType}' attempted to enter rail link!")
+      logError(
+        s"RAIL SAFETY VIOLATION: Vehicle type '${vehicleType}' attempted to enter rail link!"
+      )
       logError(s"  Rail type: ${state.railType}")
       logError(s"  Rail link: ${state.from} -> ${state.to}")
       logError(s"  Subway line: ${state.subwayLine}")
       logError(s"Rejecting vehicle ${data.actorId}")
-      
+
       // Send rejection signal
       val errorInfo = LinkInfoData(
         linkLength = 0,
@@ -80,7 +82,7 @@ class RailLink(
         linkFreeSpeed = 0,
         linkLanes = 0
       )
-      
+
       sendMessageTo(
         entityId = event.actorRefId,
         shardId = event.shardRefId,
@@ -88,10 +90,10 @@ class RailLink(
         eventType = EventTypeEnum.ReceiveEnterLinkInfo.toString,
         actorType = LoadBalancedDistributed
       )
-      
+
       return // DO NOT REGISTER
     }
-    
+
     // Register vehicle (valid subway)
     state.registered.add(
       LinkRegister(
@@ -102,13 +104,13 @@ class RailLink(
         actorCreationType = data.actorCreationType
       )
     )
-    
+
     // Calculate effective speed (considering gradient and curvature)
     val effectiveSpeed = state.effectiveSpeed
-    
+
     logDebug(s"Subway ${data.actorId} entering rail link")
     logDebug(s"  Effective speed: $effectiveSpeed km/h")
-    
+
     // Send link info to subway
     val linkInfo = LinkInfoData(
       linkLength = state.length,
@@ -117,7 +119,7 @@ class RailLink(
       linkFreeSpeed = effectiveSpeed,
       linkLanes = state.lanes
     )
-    
+
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,
@@ -126,16 +128,17 @@ class RailLink(
       actorType = LoadBalancedDistributed
     )
   }
-  
+
   /** Handle vehicle leaving rail link.
     */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     // Unregister vehicle
-    state.registered.find(_.actorId == event.actorRefId).foreach { reg =>
-      state.registered.remove(reg)
-      logDebug(s"Subway ${event.actorRefId} left rail link")
+    state.registered.find(_.actorId == event.actorRefId).foreach {
+      reg =>
+        state.registered.remove(reg)
+        logDebug(s"Subway ${event.actorRefId} left rail link")
     }
-    
+
     // Send confirmation
     val linkInfo = LinkInfoData(
       linkLength = state.length,
@@ -144,7 +147,7 @@ class RailLink(
       linkFreeSpeed = state.effectiveSpeed,
       linkLanes = state.lanes
     )
-    
+
     sendMessageTo(
       entityId = event.actorRefId,
       shardId = event.shardRefId,

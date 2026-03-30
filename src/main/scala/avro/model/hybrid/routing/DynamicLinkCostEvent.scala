@@ -1,11 +1,10 @@
 package org.interscity.htc.avro.model.hybrid.routing
 
-/**
- * Manual implementation of DynamicLinkCostEvent to avoid sbt-avro plugin issues.
- * 
- * This replaces the generated Avro class until plugin dependencies are resolved.
- * Provides the same functionality for Kafka serialization.
- */
+/** Manual implementation of DynamicLinkCostEvent to avoid sbt-avro plugin issues.
+  *
+  * This replaces the generated Avro class until plugin dependencies are resolved. Provides the same
+  * functionality for Kafka serialization.
+  */
 case class DynamicLinkCostEvent(
   linkId: String,
   staticCost: Double,
@@ -22,9 +21,8 @@ case class DynamicLinkCostEvent(
   simulationMode: SimulationMode = SimulationMode.MESO
 )
 
-/**
- * Simulation mode enum
- */
+/** Simulation mode enum
+  */
 sealed trait SimulationMode {
   def name: String
 }
@@ -32,19 +30,18 @@ sealed trait SimulationMode {
 object SimulationMode {
   case object MESO extends SimulationMode { val name = "MESO" }
   case object MICRO extends SimulationMode { val name = "MICRO" }
-  
+
   def fromString(mode: String): SimulationMode = mode.toUpperCase match {
-    case "MESO" => MESO
+    case "MESO"  => MESO
     case "MICRO" => MICRO
-    case _ => MESO // Default
+    case _       => MESO // Default
   }
 }
 
 object DynamicLinkCostEvent {
-  
-  /**
-   * Builder pattern for compatibility with generated Avro classes
-   */
+
+  /** Builder pattern for compatibility with generated Avro classes
+    */
   class Builder {
     private var linkId: String = ""
     private var staticCost: Double = 0.0
@@ -59,7 +56,7 @@ object DynamicLinkCostEvent {
     private var tick: Long = 0L
     private var nodeId: Option[String] = None
     private var simulationMode: SimulationMode = SimulationMode.MESO
-    
+
     def setLinkId(value: String): Builder = { linkId = value; this }
     def setStaticCost(value: Double): Builder = { staticCost = value; this }
     def setCongestionFactor(value: Double): Builder = { congestionFactor = value; this }
@@ -73,7 +70,7 @@ object DynamicLinkCostEvent {
     def setTick(value: Long): Builder = { tick = value; this }
     def setNodeId(value: String): Builder = { nodeId = Option(value); this }
     def setSimulationMode(value: SimulationMode): Builder = { simulationMode = value; this }
-    
+
     def build(): DynamicLinkCostEvent = DynamicLinkCostEvent(
       linkId = linkId,
       staticCost = staticCost,
@@ -90,13 +87,12 @@ object DynamicLinkCostEvent {
       simulationMode = simulationMode
     )
   }
-  
+
   def newBuilder(): Builder = new Builder()
-  
-  /**
-   * Mock schema for compatibility
-   */
-  def getClassSchema: String = {
+
+  /** Mock schema for compatibility
+    */
+  def getClassSchema: String =
     """
     {
       "type": "record",
@@ -119,5 +115,4 @@ object DynamicLinkCostEvent {
       ]
     }
     """
-  }
 }

@@ -16,6 +16,6 @@ case class TrafficSignalState(
   phases: List[Phase],
   signalStates: mutable.Map[String, SignalState]
 ) extends BaseState(
-    startTick = startTick,
-    scheduleOnTimeManager = true  // Registrar no TimeManager para receber ticks
-  )
+      startTick = startTick,
+      scheduleOnTimeManager = true // Registrar no TimeManager para receber ticks
+    )

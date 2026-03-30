@@ -33,7 +33,9 @@ class BusStop(
         )
         logInfo(s"BusStop ${getEntityId} registered with node ${dependency.id}")
       case None =>
-        logWarn(s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+        logWarn(
+          s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
     }
   }
 
@@ -48,12 +50,12 @@ class BusStop(
   private def handleBusRequestPassenger(
     event: ActorInteractionEvent,
     data: BusRequestPassengerData
-  ): Unit = {
+  ): Unit =
     state.people.get(data.label) match {
       case Some(people) =>
         val peopleToLoad = people.take(data.availableSpace)
         state.people.put(data.label, people.drop(data.availableSpace))
-        
+
         // Report passenger loading
         report(
           data = Map(
@@ -68,12 +70,11 @@ class BusStop(
           ),
           label = "bus_stop_passengers_loaded"
         )
-        
+
         sendLoadPeopleToBus(peopleToLoad, event)
       case None =>
         sendLoadPeopleToBus(mutable.Seq(), event)
     }
-  }
 
   private def sendLoadPeopleToBus(
     peopleToLoad: mutable.Seq[Identify],
@@ -95,7 +96,7 @@ class BusStop(
     state.people.get(data.label) match {
       case Some(people) =>
         state.people.put(data.label, people :+ person)
-        
+
         // Report passenger arrival at bus stop
         report(
           data = Map(

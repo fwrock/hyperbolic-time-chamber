@@ -17,27 +17,25 @@ import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
 import scala.collection.mutable
 
 /** Subway actor - Metro train following predefined rail routes.
-  * 
-  * IMPORTANT: Subways use PREDEFINED routes (bestRoute) created by SubwayStation.
-  * Unlike cars/buses that use dynamic routing (GraphRouter), subway trains follow
-  * fixed rail lines that never change.
-  * 
+  *
+  * IMPORTANT: Subways use PREDEFINED routes (bestRoute) created by SubwayStation. Unlike cars/buses
+  * that use dynamic routing (GraphRouter), subway trains follow fixed rail lines that never change.
+  *
   * Key characteristics:
-  * - Uses RAIL_LINKS (not road links) - exclusive subway infrastructure
-  * - Route is predefined at creation by SubwayStation (bestRoute field)
-  * - Follows digital rail path (stations in order)
-  * - No dynamic rerouting - trains stay on their assigned line
-  * - RailLink validates vehicle type (only Subway can enter)
-  * 
+  *   - Uses RAIL_LINKS (not road links) - exclusive subway infrastructure
+  *   - Route is predefined at creation by SubwayStation (bestRoute field)
+  *   - Follows digital rail path (stations in order)
+  *   - No dynamic rerouting - trains stay on their assigned line
+  *   - RailLink validates vehicle type (only Subway can enter)
+  *
   * Flow:
-  * 1. SubwayStation creates Subway with bestRoute = rail_link IDs
-  * 2. Subway calls enterLink() with next rail_link from bestRoute
-  * 3. RailLink validates vehicle type (Subway ✓) and sends LinkInfoData
-  * 4. Subway travels through rail_link (no congestion)
-  * 5. Subway calls leavingLink() when reaching next station
-  * 6. Repeat for next rail_link in bestRoute
-  * 
-  * @param properties Actor properties
+  *   1. SubwayStation creates Subway with bestRoute = rail_link IDs 2. Subway calls enterLink()
+  *      with next rail_link from bestRoute 3. RailLink validates vehicle type (Subway ✓) and sends
+  *      LinkInfoData 4. Subway travels through rail_link (no congestion) 5. Subway calls
+  *      leavingLink() when reaching next station 6. Repeat for next rail_link in bestRoute
+  *
+  * @param properties
+  *   Actor properties
   */
 class Subway(
   private val properties: Properties

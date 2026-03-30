@@ -6,14 +6,16 @@ import core.types.Tick
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.interscity.htc.core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
-/** Local Time Manager for Discrete Event Simulation.
-  * This manager processes events in chronological order, advancing time
-  * only when all events at the current time have been processed.
-  * This is the traditional approach used by the original TimeManager.
-  * 
-  * @param simulationDuration The total duration of the simulation in ticks
-  * @param simulationManager Reference to the simulation manager
-  * @param parentManager Reference to the global time manager
+/** Local Time Manager for Discrete Event Simulation. This manager processes events in chronological
+  * order, advancing time only when all events at the current time have been processed. This is the
+  * traditional approach used by the original TimeManager.
+  *
+  * @param simulationDuration
+  *   The total duration of the simulation in ticks
+  * @param simulationManager
+  *   Reference to the simulation manager
+  * @param parentManager
+  *   Reference to the global time manager
   */
 class LocalDiscreteEventTimeManager(
   simulationDuration: Tick,
@@ -23,33 +25,38 @@ class LocalDiscreteEventTimeManager(
       simulationDuration = simulationDuration,
       simulationManager = simulationManager,
       parentManager = parentManager,
-      actorId = if (parentManager.isEmpty) 
-        s"$LOCAL_TIME_MANAGER_ACTOR_NAME-${System.nanoTime()}"
-      else 
-        LOCAL_TIME_MANAGER_ACTOR_NAME
+      actorId =
+        if (parentManager.isEmpty)
+          s"$LOCAL_TIME_MANAGER_ACTOR_NAME-${System.nanoTime()}"
+        else
+          LOCAL_TIME_MANAGER_ACTOR_NAME
     ) {
 
-  /** Processes a tick in discrete event manner.
-    * Events are processed one at a time in chronological order.
-    * Time only advances when all events at current tick are completed.
-    * 
-    * @param tick The tick to process
+  /** Processes a tick in discrete event manner. Events are processed one at a time in chronological
+    * order. Time only advances when all events at current tick are completed.
+    *
+    * @param tick
+    *   The tick to process
     */
   protected def processTick(tick: Tick): Unit = {
     // Process all events scheduled for this tick
-    scheduledActors.get(tick).foreach { actorsSet =>
-      val actorTypes = actorsSet.groupBy(_.classType).view.mapValues(_.size).toMap
-      val actorSummary = actorTypes.map { case (classType, count) => 
-        s"${classType.split('.').lastOption.getOrElse(classType)}=$count" 
-      }.mkString(", ")
-      if (tick % 10000 == 0) {
-        logInfo(s"[LocalDiscreteEvent] Processing tick $tick with ${actorsSet.size} scheduled actors ($actorSummary)")
-      }
-      sendSpontaneousEvent(tick, actorsSet)
+    scheduledActors.get(tick).foreach {
+      actorsSet =>
+        val actorTypes = actorsSet.groupBy(_.classType).view.mapValues(_.size).toMap
+        val actorSummary = actorTypes.map {
+          case (classType, count) =>
+            s"${classType.split('.').lastOption.getOrElse(classType)}=$count"
+        }.mkString(", ")
+        if (tick % 10000 == 0) {
+          logInfo(
+            s"[LocalDiscreteEvent] Processing tick $tick with ${actorsSet.size} scheduled actors ($actorSummary)"
+          )
+        }
+        sendSpontaneousEvent(tick, actorsSet)
     }
     scheduledActors.remove(tick)
     scheduledTicksOnFinish.remove(tick)
-    
+
     // After processing, check if we need to advance
     if (runningEvents.isEmpty) {
       // All events at current tick completed, report to global and wait

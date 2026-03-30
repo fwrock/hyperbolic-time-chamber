@@ -32,7 +32,9 @@ class BusStop(
         )
         logInfo(s"BusStop ${getEntityId} registered with node ${dependency.id}")
       case None =>
-        logWarn(s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+        logWarn(
+          s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
     }
   }
 

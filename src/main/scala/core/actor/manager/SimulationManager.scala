@@ -81,14 +81,19 @@ class SimulationManager(
         actorsDataSources = configuration.actorsDataSources
       )
     } else {
-      logWarn(s"Not ready to load data: poolTimeManager=${poolTimeManager != null}, reporters=${reporters != null}")
+      logWarn(
+        s"Not ready to load data: poolTimeManager=${poolTimeManager != null}, reporters=${reporters != null}"
+      )
     }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
-    logInfo(s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources")
-    configuration.actorsDataSources.foreach { source =>
-      logInfo(s"  - Data source: ${source.id} (${source.classType}): ${source.dataSource}")
+    logInfo(
+      s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources"
+    )
+    configuration.actorsDataSources.foreach {
+      source =>
+        logInfo(s"  - Data source: ${source.id} (${source.classType}): ${source.dataSource}")
     }
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
@@ -98,7 +103,8 @@ class SimulationManager(
     createSingletonManager(
       manager = GlobalTimeManager.props(
         simulationDuration = configuration.duration,
-        extendSimulationIfPendingEventsAfterEnd = configuration.extendSimulationIfPendingEventsAfterEnd,
+        extendSimulationIfPendingEventsAfterEnd =
+          configuration.extendSimulationIfPendingEventsAfterEnd,
         simulationManager = getSelfProxy
       ),
       name = GLOBAL_TIME_MANAGER_ACTOR_NAME,

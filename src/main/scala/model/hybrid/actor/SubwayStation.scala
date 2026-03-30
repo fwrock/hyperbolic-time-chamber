@@ -47,25 +47,30 @@ class SubwayStation(
         )
         logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None =>
-        logWarn(s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped.")
+        logWarn(
+          s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
     }
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {
-      logInfo(s"SubwayStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling")
+      logInfo(
+        s"SubwayStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
+      )
       onFinishSpontaneous(None)
-    } else state.status match
-      case Start =>
-        state.status = Working
-        createSubwayFrom(state.lines)
-        scheduleNextTick()
-      case Working =>
-        createSubwayFrom(filterLinesByNextTick())
-        scheduleNextTick()
-      case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
-        onFinishSpontaneous(None)
+    } else
+      state.status match
+        case Start =>
+          state.status = Working
+          createSubwayFrom(state.lines)
+          scheduleNextTick()
+        case Working =>
+          createSubwayFrom(filterLinesByNextTick())
+          scheduleNextTick()
+        case _ =>
+          logInfo(s"Event current status not handled ${state.status}")
+          onFinishSpontaneous(None)
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -131,11 +136,15 @@ class SubwayStation(
                 lines(line).nextTick = currentTick + lines(line).interval
               } catch {
                 case e: IllegalStateException =>
-                  logError(s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}")
+                  logError(
+                    s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}"
+                  )
                   // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
                 case e: Exception =>
-                  logError(s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}")
+                  logError(
+                    s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}"
+                  )
                   // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
               }
@@ -145,13 +154,13 @@ class SubwayStation(
     }
 
   private def scheduleNextTick(): Unit = {
-    val nextTickOpt = state.lines.values
-      .map { line =>
+    val nextTickOpt = state.lines.values.map {
+      line =>
         if (line.nextTick <= currentTick) {
           line.nextTick = currentTick + line.interval
         }
         line.nextTick
-      }
+    }
       .filter(_ < simulationEnd)
       .toList
       .sorted
@@ -162,16 +171,20 @@ class SubwayStation(
   private def createSubway(subway: SubwayInformation): ActorRef = {
     val route = convertLineRouteToPath(subway.line)
     if (route.isEmpty) {
-      logWarn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available")
+      logWarn(
+        s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available"
+      )
       throw new IllegalStateException(s"No route available for subway line ${subway.line}")
     }
-    
+
     val subwayStations = convertLineToSubwayStations(subway.line)
     if (subwayStations.isEmpty) {
-      logWarn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available")
+      logWarn(
+        s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available"
+      )
       throw new IllegalStateException(s"No subway stations available for line ${subway.line}")
     }
-    
+
     val subwayProperties = Properties(
       entityId = subway.actorId,
       resourceId = properties.resourceId,
@@ -235,19 +248,20 @@ class SubwayStation(
   ): mutable.Queue[(String, String)] = {
     val route = mutable.Queue[(String, String)]()
     val lineRoute = state.linesRoute.get(line)
-    
+
     lineRoute match {
       case Some(routeQueue) =>
         // linesRoute format: Queue[SubwayRouteEntry]
         // Output format: Queue[(rail_link_id, node_id)]
-        routeQueue.foreach { routeEntry =>
-          route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))
+        routeQueue.foreach {
+          routeEntry =>
+            route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))
         }
         logInfo(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
       case None =>
         logWarn(s"No route found for line $line")
     }
-    
+
     route
   }
 }

@@ -1,9 +1,9 @@
 package org.interscity.htc.model.hybrid.util
 
-import org.interscity.htc.model.hybrid.collections.{Graph, LoadedGraphData}
+import org.interscity.htc.model.hybrid.collections.{ Graph, LoadedGraphData }
 // Importa NodeGraph e EdgeGraph do novo pacote em Model.scala
-import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
-import scala.util.{Failure, Success}
+import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
+import scala.util.{ Failure, Success }
 
 object CityMapUtil {
 

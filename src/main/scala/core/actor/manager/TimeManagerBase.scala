@@ -12,12 +12,13 @@ import org.htc.protobuf.core.entity.event.control.execution.{ PauseSimulationEve
 
 import scala.collection.mutable
 
-/** Base abstract class for all time managers in the system.
-  * Provides common functionality for managing simulation time, actor registration,
-  * and event scheduling.
-  * 
-  * @param timeManager The parent time manager (if any)
-  * @param actorId The unique identifier for this time manager
+/** Base abstract class for all time managers in the system. Provides common functionality for
+  * managing simulation time, actor registration, and event scheduling.
+  *
+  * @param timeManager
+  *   The parent time manager (if any)
+  * @param actorId
+  *   The unique identifier for this time manager
   */
 abstract class TimeManagerBase(
   timeManager: ActorRef = null,
@@ -50,33 +51,38 @@ abstract class TimeManagerBase(
     case _: PauseSimulationEvent         => if (isRunning) pauseSimulation()
     case _: ResumeSimulationEvent        => resumeSimulation()
     case _: StopSimulationEvent          => stopSimulation()
-    case msg                             => 
+    case msg                             =>
       // Ignore Pekko persistence internal messages and other unhandled messages
       logDebug(s"Ignoring unhandled message: ${msg.getClass.getSimpleName}")
   }
 
   /** Handles spontaneous events. Subclasses override to implement specific behavior.
-    * @param event The spontaneous event
+    * @param event
+    *   The spontaneous event
     */
   protected def onSpontaneousEvent(event: SpontaneousEvent): Unit = ()
 
   /** Starts the simulation.
-    * @param event The start simulation event
+    * @param event
+    *   The start simulation event
     */
   protected def startSimulation(event: StartSimulationTimeEvent): Unit
 
   /** Registers an actor with the time manager.
-    * @param event The register actor event
+    * @param event
+    *   The register actor event
     */
   protected def registerActor(event: RegisterActorEvent): Unit
 
   /** Schedules an event for an actor at a specific tick.
-    * @param event The schedule event
+    * @param event
+    *   The schedule event
     */
   protected def scheduleEvent(event: ScheduleEvent): Unit
 
   /** Handles the completion of an actor's spontaneous event.
-    * @param event The finish event
+    * @param event
+    *   The finish event
     */
   protected def finishEvent(event: FinishEvent): Unit
 
@@ -99,18 +105,22 @@ abstract class TimeManagerBase(
   }
 
   /** Checks if the simulation is currently running.
-    * @return true if the simulation is running, false otherwise
+    * @return
+    *   true if the simulation is running, false otherwise
     */
   protected def isRunning: Boolean = !isPaused && !isStopped
 
   /** Gets the current simulation tick.
-    * @return The current tick
+    * @return
+    *   The current tick
     */
   def getCurrentTick: Tick = localTickOffset
 
   /** Sends a spontaneous event to an actor.
-    * @param tick The tick at which the event occurs
-    * @param identity The identity of the target actor
+    * @param tick
+    *   The tick at which the event occurs
+    * @param identity
+    *   The identity of the target actor
     */
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit
 
@@ -118,7 +128,8 @@ abstract class TimeManagerBase(
   protected def advanceToNextTick(): Unit
 
   /** Gets the next tick to process.
-    * @return The next tick, or None if simulation is complete
+    * @return
+    *   The next tick, or None if simulation is complete
     */
   protected def nextTick: Option[Tick]
 

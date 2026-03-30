@@ -2,33 +2,35 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
-import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
+import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{IdUtil, JsonUtil, StringUtil}
+import core.util.{ IdUtil, JsonUtil, StringUtil }
 
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
-import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
+import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
-import org.interscity.htc.core.enumeration.{ReportTypeEnum, TimeManagerTypeEnum}
+import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
-/** Base actor for simulation entities that require time management, spontaneous events,
-  * Lamport clocks, and reporting capabilities. Extends the generic BaseActor with
-  * simulation-specific functionality.
-  * 
-  * @param properties The properties containing simulation-specific configuration
-  * @tparam T The state type of the actor
+/** Base actor for simulation entities that require time management, spontaneous events, Lamport
+  * clocks, and reporting capabilities. Extends the generic BaseActor with simulation-specific
+  * functionality.
+  *
+  * @param properties
+  *   The properties containing simulation-specific configuration
+  * @tparam T
+  *   The state type of the actor
   */
 abstract class SimulationBaseActor[T <: BaseState](
   private val properties: Properties
@@ -39,68 +41,75 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
-  
+
   protected val dependencies: mutable.Map[String, Dependency] =
     if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
 
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
-  
+
   // Suporte para múltiplos time managers
-  protected var timeManagers: mutable.Map[String, ActorRef] = 
-    if (properties != null && properties.timeManagers != null) properties.timeManagers 
+  protected var timeManagers: mutable.Map[String, ActorRef] =
+    if (properties != null && properties.timeManagers != null) properties.timeManagers
     else mutable.Map[String, ActorRef]()
-  
+
   // Tipo de time manager atualmente em uso (padrão: discrete-event)
-  protected var currentTimeManagerType: String = 
-    if (properties != null) properties.defaultTimeManagerType else TimeManagerTypeEnum.DISCRETE_EVENT
-    
+  protected var currentTimeManagerType: String =
+    if (properties != null) properties.defaultTimeManagerType
+    else TimeManagerTypeEnum.DISCRETE_EVENT
+
   protected var creatorManager: ActorRef =
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
-  
-  /** Gets a specific time manager by type.
-    * @param managerType The type of time manager (e.g., "discrete-event", "time-stepped")
-    * @return The time manager ActorRef, or the default if not found
-    */
-  protected def getTimeManager(managerType: String): ActorRef = {
-    timeManagers.getOrElse(managerType, getDefaultTimeManager)
-  }
-  
-  /** Gets the default time manager (discrete-event).
-    * @return The discrete-event time manager ActorRef
-    */
-  protected def getDefaultTimeManager: ActorRef = {
-    timeManagers.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT, null)
-  }
 
-  /** Switches to a different time manager type during simulation.
-    * This allows actors to change their time management strategy dynamically.
-    * 
-    * @param newManagerType The type of time manager to switch to
-    * @return true if switch was successful, false if manager type not available
+  /** Gets a specific time manager by type.
+    * @param managerType
+    *   The type of time manager (e.g., "discrete-event", "time-stepped")
+    * @return
+    *   The time manager ActorRef, or the default if not found
     */
-  protected def switchTimeManager(newManagerType: String): Boolean = {
+  protected def getTimeManager(managerType: String): ActorRef =
+    timeManagers.getOrElse(managerType, getDefaultTimeManager)
+
+  /** Gets the default time manager (discrete-event).
+    * @return
+    *   The discrete-event time manager ActorRef
+    */
+  protected def getDefaultTimeManager: ActorRef =
+    timeManagers.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT, null)
+
+  /** Switches to a different time manager type during simulation. This allows actors to change
+    * their time management strategy dynamically.
+    *
+    * @param newManagerType
+    *   The type of time manager to switch to
+    * @return
+    *   true if switch was successful, false if manager type not available
+    */
+  protected def switchTimeManager(newManagerType: String): Boolean =
     if (timeManagers != null && timeManagers.contains(newManagerType)) {
       // Unregister from current time manager if needed
       // (implementation depends on requirements)
-      
+
       // Switch to new time manager
       currentTimeManagerType = newManagerType
-      
+
       // Register with new time manager
       registerOnTimeManager()
-      
+
       logInfo(s"Switched time manager to: $newManagerType")
       true
     } else {
-      logWarn(s"Time manager type '$newManagerType' not available. Available types: ${properties.getAvailableTimeManagerTypes.mkString(", ")}")
+      logWarn(
+        s"Time manager type '$newManagerType' not available. Available types: ${properties.getAvailableTimeManagerTypes
+            .mkString(", ")}"
+      )
       false
     }
-  }
 
   /** Gets the current time manager type being used.
-    * @return The current time manager type name
+    * @return
+    *   The current time manager type name
     */
   protected def getCurrentTimeManagerType: String = currentTimeManagerType
 
@@ -178,20 +187,26 @@ abstract class SimulationBaseActor[T <: BaseState](
       }
     }
     // Send ack to the creator that initialization finished
-    try {
+    try
       // InitializeEvent.actorRef is the creator/loader that requested initialization
       event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
-    } catch {
-      case e: Exception => logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
+    catch {
+      case e: Exception =>
+        logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
     }
   }
 
   /** Sends a message to another simulation actor.
-    * @param entityId The id of the entity in the shard region and simulation
-    * @param shardId The shard id (optional)
-    * @param data The data to send
-    * @param eventType The type of the event
-    * @param actorType The creation type of the target actor
+    * @param entityId
+    *   The id of the entity in the shard region and simulation
+    * @param shardId
+    *   The shard id (optional)
+    * @param data
+    *   The data to send
+    * @param eventType
+    *   The type of the event
+    * @param actorType
+    *   The creation type of the target actor
     */
   protected def sendMessageTo(
     entityId: String,
@@ -254,19 +269,22 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Updates the Lamport clock based on another actor's clock value.
-    * @param otherClock The Lamport clock of the other actor
+    * @param otherClock
+    *   The Lamport clock of the other actor
     */
   private def updateLamportClock(otherClock: Long): Unit =
     lamportClock.update(otherClock)
 
   /** Gets the current Lamport clock value.
-    * @return The current Lamport clock
+    * @return
+    *   The current Lamport clock
     */
   private def getLamportClock: Long =
     lamportClock.getClock
 
   /** Handles spontaneous events triggered by the time manager.
-    * @param event The spontaneous event
+    * @param event
+    *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
@@ -274,21 +292,25 @@ abstract class SimulationBaseActor[T <: BaseState](
     try actSpontaneous(event)
     catch
       case e: Exception =>
-        logError(s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}")
+        logError(
+          s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
+        )
         e.printStackTrace()
         // Reschedule for retry instead of permanently unscheduling the actor
         onFinishSpontaneous(Some(currentTick + 1))
     // save(event) // Event persistence disabled
   }
 
-  /** Called when the actor receives a spontaneous event from the time manager.
-    * Override this method to handle spontaneous events.
-    * @param event The spontaneous event
+  /** Called when the actor receives a spontaneous event from the time manager. Override this method
+    * to handle spontaneous events.
+    * @param event
+    *   The spontaneous event
     */
   protected def actSpontaneous(event: SpontaneousEvent): Unit = ()
 
   /** Handles interaction events from other actors.
-    * @param event The interaction event
+    * @param event
+    *   The interaction event
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     updateLamportClock(event.lamportTick)
@@ -304,9 +326,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     // save(event) // Event persistence disabled
   }
 
-  /** Called when the actor receives an interaction event from another actor.
-    * Override this method to handle interactions.
-    * @param event The interaction event
+  /** Called when the actor receives an interaction event from another actor. Override this method
+    * to handle interactions.
+    * @param event
+    *   The interaction event
     */
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
@@ -317,8 +340,10 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Finishes processing a spontaneous event and optionally schedules the next tick.
-    * @param scheduleTick Optional tick to schedule next event
-    * @param destruct Whether to destroy the actor after finishing
+    * @param scheduleTick
+    *   Optional tick to schedule next event
+    * @param destruct
+    *   Whether to destroy the actor after finishing
     */
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
@@ -365,7 +390,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   /** Schedules an event at a specific tick.
-    * @param tick The tick at which the event should be scheduled
+    * @param tick
+    *   The tick at which the event should be scheduled
     */
   protected def scheduleEvent(tick: Tick): Unit =
     getTimeManager(currentTimeManagerType) ! ScheduleEvent(
@@ -383,8 +409,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     )
 
   /** Reports data to the reporting system.
-    * @param data The data to report
-    * @param label Optional label for the report
+    * @param data
+    *   The data to report
+    * @param label
+    *   Optional label for the report
     */
   protected def report(data: Any, label: String = null): Unit =
     report(
@@ -398,7 +426,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     )
 
   /** Reports an event to the reporting system.
-    * @param event The report event
+    * @param event
+    *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
     val defaultReportType = ReportTypeEnum.valueOf(
@@ -417,7 +446,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Reports data without a label.
-    * @param data The data to report
+    * @param data
+    *   The data to report
     */
   protected def report(data: Any): Unit = {
     val event = ReportEvent(
@@ -430,22 +460,29 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Gets a dependency by entity id.
-    * @param entityId The entity id
-    * @return The dependency
+    * @param entityId
+    *   The entity id
+    * @return
+    *   The dependency
     */
   protected def getDependency(entityId: String): Dependency = {
     val formattedId = IdUtil.format(entityId)
     dependencies.get(formattedId) match {
       case Some(dependency) => dependency
       case None =>
-        logWarn(s"Dependency not found for entityId: $entityId (formatted: $formattedId). Available dependencies: ${dependencies.keys.mkString(", ")}")
+        logWarn(
+          s"Dependency not found for entityId: $entityId (formatted: $formattedId). Available dependencies: ${dependencies.keys
+              .mkString(", ")}"
+        )
         throw new NoSuchElementException(s"Dependency not found: $entityId")
     }
   }
 
   /** Safely gets a dependency by entity id, returning None if not found.
-    * @param entityId The entity id
-    * @return The dependency wrapped in Option
+    * @param entityId
+    *   The entity id
+    * @return
+    *   The dependency wrapped in Option
     */
   protected def getDependencyOption(entityId: String): Option[Dependency] = {
     val formattedId = IdUtil.format(entityId)
@@ -453,21 +490,24 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Safely gets a dependency by entity id, throwing exception if not found.
-    * @param entityId The entity id
-    * @return The dependency
-    * @throws NoSuchElementException if dependency not found
+    * @param entityId
+    *   The entity id
+    * @return
+    *   The dependency
+    * @throws NoSuchElementException
+    *   if dependency not found
     */
-  protected def getDependencySafe(entityId: String): Dependency = {
+  protected def getDependencySafe(entityId: String): Dependency =
     getDependencyOption(entityId) match {
       case Some(dependency) => dependency
-      case None => 
+      case None =>
         logError(s"Dependency not found: $entityId")
         throw new NoSuchElementException(s"Dependency not found: $entityId")
     }
-  }
 
   /** Gets the time manager actor reference (default: discrete-event).
-    * @return The time manager actor reference
+    * @return
+    *   The time manager actor reference
     */
   protected def getTimeManager: ActorRef = getDefaultTimeManager
 }

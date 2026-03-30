@@ -8,7 +8,7 @@ class RedisClientManager {
   private val redisPort = sys.env.getOrElse("REDIS_PORT", "6379").toInt
 
   private val pool = new JedisPool(new JedisPoolConfig(), redisHost, redisPort)
-  
+
   /** Expose pool for direct Jedis access */
   def getPool: JedisPool = pool
 
