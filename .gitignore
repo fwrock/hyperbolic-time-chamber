@@ -52,6 +52,10 @@ scripts/*
 ### Logs ###
 *.log
 
+.idea/*
+
+.idea/sbt.xml
+
 ### Python ###
 # Virtual environments
 venv/
