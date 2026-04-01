@@ -8,30 +8,38 @@ ThisBuild / scalaVersion := "3.3.5"
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 resolvers += "Confluent".at("https://packages.confluent.io/maven/")
 
+// Scala
+val scalaTestVersion = "3.2.20"
+val scalapbVersion = "0.11.11"
+
 // Apache Pekko
 val pekkoVersion = "1.4.0"
-val pekkoManagementVersion = "1.2.0"
-val jacksonVersion = "2.19.2"
+val pekkoManagementVersion = "1.2.1"
+val jacksonVersion = "2.21.2"
 val pekkoHttpVersion = "1.3.0"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
-val logbackVersion = "1.5.18"
+val logbackVersion = "1.5.32"
 
 // Serialization
 val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
-val kryoVersion = "1.3.0"
-val protobufVersion = "4.32.0"
+val kryoVersion = "1.5.0"
+val protobufVersion = "4.34.1"
 val pekkoProtobuf = "1.0.3"
 val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "7.1.0"
+val jedisVersion = "7.4.0"
 val levelDBVersion = "1.8"
+
+// Others
+val jolVersion = "0.17"
+
 
 lazy val root = (project in file("."))
   .settings(
@@ -98,10 +106,13 @@ lazy val root = (project in file("."))
       "ch.qos.logback" % "logback-core" % logbackVersion,
       "org.slf4j" % "slf4j-api" % "2.0.17",
 
-      "com.typesafe" % "config" % "1.4.5",
+      "com.typesafe" % "config" % "1.4.6",
+
+      // Observability
+      "org.openjdk.jol" % "jol-core" % "0.17",
 
       // Test
-      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+      "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
     ),
     

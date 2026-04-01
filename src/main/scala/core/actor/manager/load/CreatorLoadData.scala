@@ -68,7 +68,7 @@ class CreatorLoadData(
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent =>
-      logInfo(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
+      logDebug(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
       handleCreateActors(event)
     case event: StartCreationEvent         => handleStartCreation(event)
     case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
