@@ -1,0 +1,237 @@
+# ─────────────────────────────────────────────────────────────────
+# Grafana — dashboards pré-configurados para experimentos HTC
+#   • Memória distribuída (JVM heap + RSS por pod e por nó)
+#   • CPU (por pod, por nó GKE)
+#   • Rede (bytes/s por nó, throughput Kafka)
+#   • Tempo de execução (ticks/s, latência de eventos, GC pauses)
+# ─────────────────────────────────────────────────────────────────
+
+# ── Datasource automático apontando para o Prometheus interno ─────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus.monitoring.svc.cluster.local:9090
+        access: proxy
+        isDefault: true
+        editable: false
+---
+# ── Dashboard: HTC Performance Experiments ────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-config
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: HTC
+        orgId: 1
+        folder: "HTC Simulation"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-htc
+  namespace: monitoring
+data:
+  htc-performance.json: |
+    {
+      "title": "HTC — Experimentos de Desempenho",
+      "uid": "htc-perf",
+      "refresh": "10s",
+      "time": {"from": "now-30m", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "title": "Memória JVM Heap (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }, {
+            "expr": "jvm_memory_max_bytes{area=\"heap\", job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} max"
+          }],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "id": 2, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "title": "CPU Usage (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(process_cpu_seconds_total{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percentunit"}}
+        },
+        {
+          "id": 3, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "title": "Memória RSS por Nó GKE",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\"}",
+            "legendFormat": "{{node}} used"
+          }, {
+            "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\"}",
+            "legendFormat": "{{node}} total"
+          }],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "id": 4, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "title": "Rede — Bytes/s por Nó",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(node_network_receive_bytes_total{job=\"node-exporter\", device!~\"lo|veth.*\"}[1m])",
+            "legendFormat": "{{node}} {{device}} rx"
+          }, {
+            "expr": "rate(node_network_transmit_bytes_total{job=\"node-exporter\", device!~\"lo|veth.*\"}[1m])",
+            "legendFormat": "{{node}} {{device}} tx"
+          }],
+          "fieldConfig": {"defaults": {"unit": "Bps"}}
+        },
+        {
+          "id": 5, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "title": "JVM GC Pause Time (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(jvm_gc_pause_seconds_sum{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} {{action}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+        {
+          "id": 6, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "title": "Pekko — Dead Letters (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "pekko_actor_dead_letters_total{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }]
+        },
+        {
+          "id": 7, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+          "title": "Kafka Producer — Taxa de Mensagens",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(kafka_producer_record_send_total{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} {{topic}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 8, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+          "title": "CPU por Nó GKE",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "1 - avg by (node) (rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"}[1m]))",
+            "legendFormat": "{{node}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percentunit"}}
+        },
+        {
+          "id": 9, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+          "title": "Threads JVM Ativas (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "jvm_threads_live_threads{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} live"
+          }, {
+            "expr": "jvm_threads_daemon_threads{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} daemon"
+          }]
+        }
+      ],
+      "schemaVersion": 39,
+      "version": 1
+    }
+---
+# ── Deployment Grafana ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.2
+          ports:
+            - containerPort: 3000
+              name: web
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "htc-admin"              # mude em produção
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/htc-performance.json
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-config
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards-data
+              mountPath: /var/lib/grafana/dashboards
+            - name: storage
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-config
+          configMap:
+            name: grafana-dashboards-config
+        - name: dashboards-data
+          configMap:
+            name: grafana-dashboard-htc
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  type: LoadBalancer             # expõe externamente para acesso ao dashboard
+  ports:
+    - name: web
+      port: 80
+      targetPort: 3000

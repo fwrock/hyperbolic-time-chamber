@@ -85,6 +85,8 @@ object JsonUtil {
   mapper.registerModule(DefaultScalaModule)
   mapper.registerModule(new JavaTimeModule())
   mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+  // Allow int→long conversion for randomSeed and similar fields
+  mapper.configure(DeserializationFeature.USE_LONG_FOR_INTS, true)
 
   // Register custom key deserializers for SubRoutePair
   private val subRoutePairModule = new SimpleModule()

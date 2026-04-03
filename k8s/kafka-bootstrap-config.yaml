@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────
+# kafka-bootstrap-config.yaml
+#
+# ATENÇÃO: Este arquivo deve ser gerado/aplicado DEPOIS do terraform apply.
+# O endereço bootstrap é um output do Terraform.
+#
+# Passos:
+#   1. terraform -chdir=terraform/gcp apply
+#   2. KAFKA_ADDR=$(terraform -chdir=terraform/gcp output -raw kafka_bootstrap_address)
+#   3. kubectl create configmap kafka-bootstrap \
+#        --from-literal=bootstrap-servers="$KAFKA_ADDR" \
+#        -n default --dry-run=client -o yaml | kubectl apply -f -
+#
+# Ou use o script: scripts/apply-kafka-config.sh
+# ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-bootstrap
+  namespace: default
+data:
+  # Substitua pelo output: terraform output -raw kafka_bootstrap_address
+  # Formato: bootstrap.htc-kafka-XXXXX.us-central1.managedkafka.simedape-362519.cloud.goog:9092
+  bootstrap-servers: "PLACEHOLDER_RUN_SCRIPTS_APPLY_KAFKA_CONFIG"

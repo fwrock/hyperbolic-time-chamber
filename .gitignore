@@ -52,6 +52,10 @@ scripts/*
 ### Logs ###
 *.log
 
+*/terraform.tfstate
+*/terraform.tfstate.backup
+*/terraform/
+
 ### Python ###
 # Virtual environments
 venv/
@@ -113,5 +117,49 @@ analytics_output/
 *.temp
 .cache/
 logs/
+
+### Kubernetes ###
+# Secrets e configurações sensíveis
+k8s/*secret*.yaml
+k8s/**/*secret*.yaml
+*.secret.yaml
+*-secret.yaml
+
+# Configurações locais/personalizadas
+k8s/*.local.yaml
+k8s/**/*.local.yaml
+*.local.yaml
+*-local.yaml
+*.override.yaml
+*-override.yaml
+
+# Arquivos temporários do kubectl
+*.swp
+*.swo
+*~
+.kubectl_last_applied_configuration
+
+# Kustomize
+k8s/**/kustomization.yaml.bak
+k8s/overlays/local/
+
+# Helm
+k8s/charts/*.tgz
+k8s/charts/*/charts/
+k8s/charts/*/Chart.lock
+
+# Kubeconfig (caso esteja na pasta)
+k8s/kubeconfig
+k8s/config
+k8s/*.kubeconfig
+
+# Backups e arquivos temporários
+k8s/**/*.bak
+k8s/**/*.backup
+k8s/**/*.old
+
+# Arquivos gerados/compilados
+k8s/rendered/
+k8s/generated/
 
 .github/copilot-instructions.md

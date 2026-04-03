@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  serviceName: htc-simulator
+  replicas: 50
+  selector:
+    matchLabels:
+      app: htc-node
+  template:
+    metadata:
+      labels:
+        app: htc-node
+      annotations:
+        gke-gcsfuse/volumes: "true"
+        # Prometheus scrape configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9001"
+        prometheus.io/path:   "/metrics"
+    spec:
+      serviceAccountName: htc-service-account
+      # 1. Garante que a simulação só comece com os dados prontos
+      initContainers:
+        - name: wait-for-data
+          image: busybox
+          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+
+      containers:
+        - name: simulator
+          image: uxhabam/hyperbolic-time-chamber:2.0.1-k8s
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          ports:
+            - name: pekko-remote
+              containerPort: 25520
+            - name: management
+              containerPort: 8558
+            - name: metrics
+              containerPort: 9001 # Porta para o Prometheus
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Dconfig.resource=kubernetes.conf"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLUSTER_PORT
+              value: "25520"
+            - name: CLUSTER_IP
+              value: "$(POD_NAME).htc-simulator.default.svc.cluster.local"
+            - name: SEED_PORT_1600_TCP_ADDR
+              value: "htc-simulator-0.htc-simulator.default.svc.cluster.local"
+            - name: SEED_PORT_1600_TCP_PORT
+              value: "25520"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HTC_SIMULATION_CONFIG_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json"
+            - name: HTC_MOBILITY_CITY_MAP_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json"
+            # ── Managed Apache Kafka (Google Cloud) ─────────────────
+            # Bootstrap address vem do ConfigMap gerado pelo Terraform.
+            # Ver: k8s/kafka-bootstrap-config.yaml e scripts/apply-kafka-config.sh
+            - name: HTC_KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+            - name: HTC_KAFKA_REPORTING_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_EVENT_STREAMING_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_STATE_SYNC_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_PRODUCER_BATCH_SIZE
+              value: "65536"   # 64 KB — reduz round-trips para relatórios de alta frequência
+            - name: HTC_KAFKA_PRODUCER_LINGER_MS
+              value: "10"      # agrupa mensagens por 10ms antes de enviar
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+            # Output dos relatórios persiste no GCS automaticamente
+            - name: gcs-output-vol
+              mountPath: /app/hyperbolic-time-chamber/output
+
+      volumes:
+        - name: gcs-fuse-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-data-unique"
+              mountOptions: "implicit-dirs"
+        - name: gcs-output-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-output-unique"
+              mountOptions: "implicit-dirs"
