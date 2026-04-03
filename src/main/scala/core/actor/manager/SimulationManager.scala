@@ -106,11 +106,10 @@ class SimulationManager(
     reportManager = createSingletonReportManager()
     // LoadBalanceManager handles shard REBALANCING (migration between nodes).
     // LoadDataManager handles shard CREATION (initial actor placement).
-    // TODO: Wire LoadDataManager to query LoadBalanceManager for shard ID assignment
-    // during creation, so initial placement is spatially-aware. Currently, shards use
-    // Pekko's default hash-based allocation. The integration point is:
-    //   CreatorLoadData → RegisterSpatialEntityEvent → LoadBalanceManager → ShardAssignmentResponse
-    // which returns a logical shard ID that CreatorLoadData should use in createShardRegion().
+    // Spatial-aware initial placement: When LoadBalanceManager is enabled, CreatorLoadData
+    // sends RegisterSpatialEntitiesBatchEvent → LoadBalanceManager → BatchShardAssignmentResponse,
+    // which stores shard assignments in SpatialShardIdRegistry. The extractShardId function
+    // in ActorCreatorUtil checks this registry first, falling back to hash-based routing.
     createLoadBalanceManagerIfEnabled()
   }
 

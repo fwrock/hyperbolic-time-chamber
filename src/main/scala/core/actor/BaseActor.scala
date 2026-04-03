@@ -4,6 +4,7 @@ package core.actor
 import org.apache.pekko.actor.{ ActorLogging, ActorNotFound, ActorRef, ActorSelection, Stash }
 import core.entity.event.EntityEnvelopeEvent
 import core.entity.state.BaseState
+import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
 import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
@@ -13,6 +14,7 @@ import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.entity.event.control.loadbalance.PrepareForMigrationEvent
 
 import java.util.UUID
 import scala.compiletime.uninitialized
@@ -118,6 +120,7 @@ abstract class BaseActor[T <: BaseState](
     case event: DestructEvent                 => destruct(event)
     case event: EntityEnvelopeEvent           => handleEnvelopeEvent(event)
     case event: InitializeEvent               => onInitialize(event)
+    case event: PrepareForMigrationEvent      => handlePrepareForMigration(event)
     case event: ShardRegion.StartEntity       => handleStartEntity(event)
     case SaveSnapshotSuccess(metadata)        =>
     case SaveSnapshotFailure(metadata, cause) =>
@@ -142,10 +145,11 @@ abstract class BaseActor[T <: BaseState](
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
-      case event: InitializeEvent         => onInitialize(event)
-      case event: DestructEvent           => destruct(event)
-      case event: ShardRegion.StartEntity => handleStartEntity(event)
-      case event                          => handleEvent(event)
+      case event: InitializeEvent              => onInitialize(event)
+      case event: DestructEvent                => destruct(event)
+      case event: PrepareForMigrationEvent     => handlePrepareForMigration(event)
+      case event: ShardRegion.StartEntity      => handleStartEntity(event)
+      case event                               => handleEvent(event)
     }
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
@@ -172,6 +176,102 @@ abstract class BaseActor[T <: BaseState](
     *   The destruction event
     */
   protected def onDestruct(event: DestructEvent): Unit = {}
+
+  /** Handles the PrepareForMigrationEvent by serializing the current state to the migration store.
+    *
+    * This is called BEFORE the hand-off begins, while the actor is still alive and has its state.
+    * The serialized state will be read back when the actor is re-created on the target node.
+    *
+    * @param event
+    *   The prepare-for-migration event
+    */
+  private def handlePrepareForMigration(event: PrepareForMigrationEvent): Unit = {
+    saveMigrationState()
+    logDebug(s"Migration state saved for entity $entityId (shard: ${event.shardId})")
+  }
+
+  /** Serializes the current actor state to the [[MigrationStateStoreRegistry]] store.
+    *
+    * Only saves if:
+    *   1. A migration state store is registered (LBM is active)
+    *   2. The actor has been initialized (state is not null)
+    *
+    * Subclasses (e.g., [[SimulationBaseActor]]) can override [[buildMigrationSnapshot]]
+    * to include additional fields beyond the base state.
+    */
+  protected def saveMigrationState(): Unit = {
+    MigrationStateStoreRegistry.get.foreach { store =>
+      if (state != null) {
+        try {
+          val snapshot = buildMigrationSnapshot()
+          val snapshotJson = JsonUtil.toJson(snapshot)
+          val snapshotBytes = snapshotJson.getBytes("UTF-8")
+          store.saveState(entityId, snapshotBytes, snapshot.stateClassName)
+        } catch {
+          case e: Exception =>
+            logError(s"Failed to save migration state for $entityId: ${e.getMessage}", e)
+        }
+      }
+    }
+  }
+
+  /** Builds a [[MigrationSnapshot]] containing all data to preserve across migration.
+    *
+    * By default, includes only the actor's typed state. Subclasses override to include
+    * additional transient fields (e.g., SimulationBaseActor adds currentTick, lamportClock,
+    * dependencies).
+    *
+    * @return
+    *   A [[MigrationSnapshot]] with the serialized state and metadata
+    */
+  protected def buildMigrationSnapshot(): MigrationSnapshot =
+    MigrationSnapshot(
+      stateJson = JsonUtil.toJson(state),
+      stateClassName = state.getClass.getName
+    )
+
+  /** Attempts to restore actor state from the migration state store.
+    *
+    * Called during actor initialization. If migration state is found, it means this actor
+    * was migrated from another node and should restore its previous state instead of
+    * initializing from scratch.
+    *
+    * @return
+    *   true if migration state was successfully restored, false if not found or failed
+    */
+  protected def restoreMigrationState(): Boolean = {
+    MigrationStateStoreRegistry.get match {
+      case Some(store) =>
+        store.loadAndRemoveState(entityId) match {
+          case Some((snapshotBytes, _)) =>
+            try {
+              val snapshotJson = new String(snapshotBytes, "UTF-8")
+              val snapshot = JsonUtil.fromJson[MigrationSnapshot](snapshotJson)
+              applyMigrationSnapshot(snapshot)
+              logInfo(s"Migration state restored for entity $entityId")
+              true
+            } catch {
+              case e: Exception =>
+                logError(s"Failed to restore migration state for $entityId: ${e.getMessage}", e)
+                false
+            }
+          case None => false
+        }
+      case None => false
+    }
+  }
+
+  /** Applies a restored [[MigrationSnapshot]] to the actor.
+    *
+    * Subclasses override this to restore additional fields beyond the base state
+    * (e.g., SimulationBaseActor restores currentTick, lamportClock, dependencies).
+    *
+    * @param snapshot
+    *   The deserialized migration snapshot
+    */
+  protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    state = JsonUtil.fromJsonClassName[T](snapshot.stateJson, snapshot.stateClassName)
+  }
 
   /** Gets an actor selection by pool entity id.
     * @param entityId

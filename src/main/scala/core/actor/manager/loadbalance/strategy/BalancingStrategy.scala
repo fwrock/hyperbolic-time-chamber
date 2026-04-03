@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.loadbalance.strategy
 
 import core.entity.control.loadbalance.{ MigrationPlan, ShardMetrics, SpatialBounds, SpatialEntity }
+import core.enumeration.ShardTypeEnum
 
 import org.apache.pekko.actor.Address
 
@@ -80,6 +81,14 @@ trait BalancingStrategy {
 
   /** Gets all known shard IDs. */
   def getAllShardIds: Set[String]
+
+  /** Gets the shard type classification for a given shard.
+    * The LoadBalanceManager uses this to determine migration eligibility.
+    */
+  def getShardType(shardId: String): ShardTypeEnum = ShardTypeEnum.Dynamic
+
+  /** Checks whether a shard is eligible for migration (non-static). */
+  def isMigratable(shardId: String): Boolean = getShardType(shardId) != ShardTypeEnum.Static
 
   /** Gets strategy-specific statistics for monitoring. */
   def getStats: Map[String, Any]

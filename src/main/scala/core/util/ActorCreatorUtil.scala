@@ -11,6 +11,7 @@ import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSing
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import org.interscity.htc.core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.enumeration.{ CreationTypeEnum, ReportTypeEnum }
@@ -23,9 +24,20 @@ object ActorCreatorUtil {
     case EntityEnvelopeEvent(id, payload) => (id, payload)
   }
 
+  /** Shard ID extractor that uses spatial assignments when available.
+    *
+    * If the entity has been registered with LoadBalanceManager and its spatial shard ID
+    * is stored in [[SpatialShardIdRegistry]], that ID is used for routing. Otherwise,
+    * falls back to hash-based assignment (id.hashCode % 1000).
+    *
+    * This enables spatially-aware initial placement when load balancing is enabled,
+    * while remaining fully backward-compatible when it is not.
+    */
   private val extractShardId: ShardRegion.ExtractShardId = {
-    case EntityEnvelopeEvent(id, _)  => (id.hashCode % 1000).toString
-    case ShardRegion.StartEntity(id) => (id.hashCode % 1000).toString
+    case EntityEnvelopeEvent(id, _) =>
+      SpatialShardIdRegistry.getShardId(id).getOrElse((id.hashCode % 1000).toString)
+    case ShardRegion.StartEntity(id) =>
+      SpatialShardIdRegistry.getShardId(id).getOrElse((id.hashCode % 1000).toString)
   }
 
   def createActor[T](system: ActorSystem, actorClass: Class[T], args: AnyRef*): ActorRef = {
@@ -136,23 +148,39 @@ object ActorCreatorUtil {
         s"Creating shard region for $actorClassName with id $shardName entityId $entityId"
       )
 
-      sharding.start(
-        typeName = shardName,
-        entityProps = Props(
-          clazz,
-          Properties(
-            entityId = entityId,
-            resourceId = resourceId,
-            timeManagers = timeManagers,
-            creatorManager = creatorManager,
-            reporters = reporters,
-            actorType = CreationTypeEnum.LoadBalancedDistributed
-          )
-        ),
-        settings = ClusterShardingSettings(system),
-        extractEntityId = extractEntityId,
-        extractShardId = extractShardId
+      val entityProps = Props(
+        clazz,
+        Properties(
+          entityId = entityId,
+          resourceId = resourceId,
+          timeManagers = timeManagers,
+          creatorManager = creatorManager,
+          reporters = reporters,
+          actorType = CreationTypeEnum.LoadBalancedDistributed
+        )
       )
+
+      // Use custom allocator from LoadBalanceManager if registered, otherwise Pekko default
+      ShardAllocatorRegistry.get match {
+        case Some(allocator) =>
+          sharding.start(
+            typeName = shardName,
+            entityProps = entityProps,
+            settings = ClusterShardingSettings(system),
+            extractEntityId = extractEntityId,
+            extractShardId = extractShardId,
+            allocationStrategy = allocator,
+            handOffStopMessage = org.htc.protobuf.core.entity.event.control.execution.DestructEvent(actorRef = "")
+          )
+        case None =>
+          sharding.start(
+            typeName = shardName,
+            entityProps = entityProps,
+            settings = ClusterShardingSettings(system),
+            extractEntityId = extractEntityId,
+            extractShardId = extractShardId
+          )
+      }
     } else {
       sharding.shardRegion(shardName)
     }
