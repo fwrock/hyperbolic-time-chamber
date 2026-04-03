@@ -1,0 +1,160 @@
+# 1. Service Account do Kubernetes (O "crachá" do Pod)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: htc-service-account
+  annotations:
+    iam.gke.io/gcp-service-account: htc-simulator-sa@simedape-362519.iam.gserviceaccount.com
+---
+# 2. RBAC: Permite que os nós se descubram para formar o Cluster Pekko
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+subjects:
+  - kind: ServiceAccount
+    name: htc-service-account
+    namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# 3. Service headless para descoberta dos pods no cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: htc-node
+  ports:
+    - name: pekko-remote
+      port: 25520
+      targetPort: 25520
+    - name: management
+      port: 8558
+      targetPort: 8558
+    - name: metrics
+      port: 9001
+      targetPort: 9001
+---
+# 4. StatefulSet dos Simuladores
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  serviceName: htc-simulator
+  replicas: 8
+  selector:
+    matchLabels:
+      app: htc-node
+  template:
+    metadata:
+      labels:
+        app: htc-node
+      annotations:
+        gke-gcsfuse/volumes: "true" # Ativa o sidecar gerenciado do GCS Fuse
+        # Prometheus scrape configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9001"
+        prometheus.io/path:   "/metrics"
+    spec:
+      serviceAccountName: htc-service-account
+      initContainers:
+        - name: wait-for-data
+          image: busybox
+          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+      containers:
+        - name: simulator
+          image: uxhabam/hyperbolic-time-chamber:2.0.1-k8s
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+          ports:
+            - name: pekko-remote
+              containerPort: 25520
+            - name: management
+              containerPort: 8558
+            - name: metrics
+              containerPort: 9001
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Dconfig.resource=kubernetes.conf"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLUSTER_PORT
+              value: "25520"
+            - name: CLUSTER_IP
+              value: "$(POD_NAME).htc-simulator.default.svc.cluster.local"
+            - name: SEED_PORT_1600_TCP_ADDR
+              value: "htc-simulator-0.htc-simulator.default.svc.cluster.local"
+            - name: SEED_PORT_1600_TCP_PORT
+              value: "25520"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HTC_SIMULATION_CONFIG_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json"
+            - name: HTC_MOBILITY_CITY_MAP_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json"
+            # ── Managed Apache Kafka (Google Cloud) ─────────────────
+            - name: HTC_KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+            - name: HTC_KAFKA_REPORTING_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_EVENT_STREAMING_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_STATE_SYNC_ENABLED
+              value: "true"
+            - name: HTC_KAFKA_PRODUCER_BATCH_SIZE
+              value: "65536"
+            - name: HTC_KAFKA_PRODUCER_LINGER_MS
+              value: "10"
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+            - name: gcs-output-vol
+              mountPath: /app/hyperbolic-time-chamber/output
+      volumes:
+        - name: gcs-fuse-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-data-unique"
+              mountOptions: "implicit-dirs"
+        - name: gcs-output-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-output-unique"
+              mountOptions: "implicit-dirs"
