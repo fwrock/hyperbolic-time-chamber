@@ -4,18 +4,22 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import core.util.{ ActorCreatorUtil, IdUtil, StringUtil }
+import core.util.{ ActorCreatorUtil, DistributedUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
+import org.interscity.htc.core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.interscity.htc.core.entity.control.loadbalance.SpatialEntityData
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk, RetryPendingAcks }
+import org.interscity.htc.core.entity.event.control.loadbalance.{ BatchShardAssignmentResponse, RegisterSpatialEntitiesBatchEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
+import org.interscity.htc.core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -51,6 +55,17 @@ class CreatorLoadData(
 
   private var retryTask: org.apache.pekko.actor.Cancellable = _
 
+  /** Lazy singleton proxy to LoadBalanceManager (null if load balancing disabled). */
+  private var loadBalanceProxy: ActorRef = _
+
+  /** Pending chunks awaiting BatchShardAssignmentResponse from LoadBalanceManager.
+    * Key: batchId, Value: the chunk of actors waiting for spatial assignment.
+    */
+  private val pendingChunks: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
+
+  /** Whether we've checked for the LoadBalanceManager proxy (avoid repeated lookups). */
+  private var lbProxyChecked: Boolean = false
+
   override def onStart(): Unit = {
     super.onStart()
     retryTask = context.system.scheduler.scheduleWithFixedDelay(
@@ -70,11 +85,12 @@ class CreatorLoadData(
     case event: CreateActorsEvent =>
       logInfo(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
       handleCreateActors(event)
-    case event: StartCreationEvent         => handleStartCreation(event)
-    case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
-    case event: ShardRegion.StartEntityAck => handleInitialize(event)
-    case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
-    case RetryPendingAcks                  => handleRetryPendingAcks()
+    case event: StartCreationEvent              => handleStartCreation(event)
+    case event: ProcessNextCreateChunk          => handleProcessNextCreateChunk(event.batchId)
+    case event: BatchShardAssignmentResponse    => handleBatchAssignmentResponse(event)
+    case event: ShardRegion.StartEntityAck      => handleInitialize(event)
+    case event: InitializeEntityAckEvent        => handleFinishInitialization(event)
+    case RetryPendingAcks                       => handleRetryPendingAcks()
 
     case _ =>
   }
@@ -115,51 +131,219 @@ class CreatorLoadData(
     }
   }
 
+  /** Process the next chunk of entities for a batch.
+    *
+    * Two-phase creation when load balancing is enabled:
+    *   Phase 1: Extract spatial positions → send batch to LoadBalanceManager → wait
+    *   Phase 2: On BatchShardAssignmentResponse → store mappings → create entities
+    *
+    * When load balancing is disabled, entities are created immediately with hash-based routing.
+    */
   private def handleProcessNextCreateChunk(batchId: String): Unit = {
 
     val currentActors = actorsToCreate.getOrElse(batchId, List.empty)
     val chunk = currentActors.take(CREATE_CHUNK_SIZE)
 
     if (chunk.nonEmpty) {
-      chunk.foreach {
-        actorCreation =>
-          val initialization = Initialization(
-            id = actorCreation.actor.id,
-            resourceId = actorCreation.resourceId,
-            classType = actorCreation.actor.typeActor,
-            data = actorCreation.actor.data.content,
-            timeManagers = timeManagers,
-            creatorManager = self,
-            reporters = reporters,
-            dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
+      val lbProxy = getLoadBalanceProxy
+      if (lbProxy.isDefined) {
+        // Phase 1: Extract spatial data and send batch registration to LoadBalanceManager
+        val spatialEntities = chunk.flatMap { actorCreation =>
+          extractSpatialPosition(actorCreation).map { position =>
+            SpatialEntityData(
+              spatialEntityId = actorCreation.actor.id,
+              position = position
+            )
+          }
+        }
+
+        if (spatialEntities.nonEmpty) {
+          // Store chunk as pending — will be processed in handleBatchAssignmentResponse
+          pendingChunks.put(batchId, chunk)
+          lbProxy.get ! RegisterSpatialEntitiesBatchEvent(
+            entities = spatialEntities,
+            batchId = batchId
           )
-
-          addInitializeData(actorCreation.actor.id, batchId, initialization)
-          addToInitializedAcknowledges(batchId, actorCreation.actor.id)
-
-          val shardRegion = createShardRegion(
-            system = context.system,
-            resourceId = actorCreation.resourceId,
-            actorClassName = actorCreation.actor.typeActor,
-            entityId = actorCreation.actor.id,
-            timeManagers = timeManagers,
-            creatorManager = self
-          )
-
-          shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+          // Don't advance yet — wait for BatchShardAssignmentResponse
+          return
+        }
       }
 
-      actorsToCreate(batchId) = actorsToCreate(batchId).drop(chunk.size)
-
-      if (actorsToCreate(batchId).nonEmpty) {
-        context.system.scheduler.scheduleOnce(
-          DELAY_BETWEEN_CHUNKS,
-          self,
-          ProcessNextCreateChunk(batchId = batchId)
-        )
-      }
+      // No load balancing or no spatial data — create immediately with hash-based routing
+      createEntitiesFromChunk(chunk, batchId)
+      advanceToNextChunk(batchId, chunk.size)
     } else {
       checkAndSendFinish(batchId)
+    }
+  }
+
+  /** Handles the batch shard assignment response from LoadBalanceManager.
+    *
+    * Phase 2 of two-phase creation: stores the spatial shard assignments in
+    * [[SpatialShardIdRegistry]], then creates the entities using the assigned shard IDs.
+    */
+  private def handleBatchAssignmentResponse(response: BatchShardAssignmentResponse): Unit = {
+    // Store all spatial shard assignments so extractShardId can use them
+    SpatialShardIdRegistry.putAllShardIds(response.assignments)
+
+    // Store entity positions for lookup by subsequent entities (links → node positions)
+    SpatialShardIdRegistry.putAllPositions(response.positions)
+
+    logDebug(
+      s"Received spatial assignments for batch '${response.batchId}': " +
+        s"${response.assignments.size} entities assigned"
+    )
+
+    // Retrieve and process the pending chunk
+    pendingChunks.remove(response.batchId) match {
+      case Some(chunk) =>
+        createEntitiesFromChunk(chunk, response.batchId)
+        advanceToNextChunk(response.batchId, chunk.size)
+
+      case None =>
+        logWarn(
+          s"Received BatchShardAssignmentResponse for batch '${response.batchId}' " +
+            s"but no pending chunk found. Ignoring."
+        )
+    }
+  }
+
+  /** Creates entities from a chunk — the actual creation loop extracted from handleProcessNextCreateChunk.
+    * This is shared by both the immediate path (no LB) and the deferred path (after spatial assignment).
+    */
+  private def createEntitiesFromChunk(
+    chunk: List[ActorSimulationCreation],
+    batchId: String
+  ): Unit = {
+    chunk.foreach { actorCreation =>
+      val initialization = Initialization(
+        id = actorCreation.actor.id,
+        resourceId = actorCreation.resourceId,
+        classType = actorCreation.actor.typeActor,
+        data = actorCreation.actor.data.content,
+        timeManagers = timeManagers,
+        creatorManager = self,
+        reporters = reporters,
+        dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
+      )
+
+      addInitializeData(actorCreation.actor.id, batchId, initialization)
+      addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+
+      // Track entity class name in spatial registry for migration routing
+      val fullClassName = StringUtil.getModelClassName(actorCreation.actor.typeActor)
+      SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id, fullClassName)
+
+      val shardRegion = createShardRegion(
+        system = context.system,
+        resourceId = actorCreation.resourceId,
+        actorClassName = actorCreation.actor.typeActor,
+        entityId = actorCreation.actor.id,
+        timeManagers = timeManagers,
+        creatorManager = self
+      )
+
+      shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+    }
+  }
+
+  /** Advances to the next chunk or finishes if no more actors remain. */
+  private def advanceToNextChunk(batchId: String, chunkSize: Int): Unit = {
+    actorsToCreate(batchId) = actorsToCreate(batchId).drop(chunkSize)
+
+    if (actorsToCreate(batchId).nonEmpty) {
+      context.system.scheduler.scheduleOnce(
+        DELAY_BETWEEN_CHUNKS,
+        self,
+        ProcessNextCreateChunk(batchId = batchId)
+      )
+    }
+  }
+
+  /** Extracts spatial position from an entity's raw data content.
+    *
+    * Extraction strategy by entity type:
+    *   - Nodes: Direct lat/long from content map (`latitude`, `longitude` keys)
+    *   - Links: Look up `from` node position via [[SpatialShardIdRegistry]]
+    *   - Cars/Buses/Vehicles: Look up `origin` or `currentNode` position via registry
+    *   - Unknown: None (falls back to hash-based routing)
+    *
+    * @return Some((longitude, latitude)) if spatial data is available, None otherwise
+    */
+  private def extractSpatialPosition(actorCreation: ActorSimulationCreation): Option[(Double, Double)] = {
+    try {
+      actorCreation.actor.data.content match {
+        case contentMap: java.util.Map[?, ?] =>
+          val map = contentMap.asInstanceOf[java.util.Map[String, Any]]
+
+          // Direct coordinates (nodes and other entities with lat/long)
+          if (map.containsKey("latitude") && map.containsKey("longitude")) {
+            val lat = map.get("latitude") match {
+              case n: Number => n.doubleValue()
+              case _         => return None
+            }
+            val lon = map.get("longitude") match {
+              case n: Number => n.doubleValue()
+              case _         => return None
+            }
+            return Some((lon, lat))
+          }
+
+          // Links: look up source node position
+          if (map.containsKey("from")) {
+            val fromNodeId = map.get("from").asInstanceOf[String]
+            val pos = SpatialShardIdRegistry.getPosition(fromNodeId)
+            if (pos.isDefined) return pos
+          }
+
+          // Vehicles: look up origin node position
+          if (map.containsKey("origin")) {
+            val originNodeId = map.get("origin").asInstanceOf[String]
+            val pos = SpatialShardIdRegistry.getPosition(originNodeId)
+            if (pos.isDefined) return pos
+          }
+
+          // Fallback: currentNode
+          if (map.containsKey("currentNode")) {
+            val nodeId = map.get("currentNode").asInstanceOf[String]
+            val pos = SpatialShardIdRegistry.getPosition(nodeId)
+            if (pos.isDefined) return pos
+          }
+
+          None
+
+        case _ => None
+      }
+    } catch {
+      case _: Exception => None
+    }
+  }
+
+  /** Lazily obtains a singleton proxy to LoadBalanceManager, if load balancing is enabled.
+    *
+    * Uses [[ShardAllocatorRegistry.isRegistered]] as the gate — if the allocator
+    * hasn't been registered by LoadBalanceManager, spatial registration is skipped.
+    */
+  private def getLoadBalanceProxy: Option[ActorRef] = {
+    if (lbProxyChecked) return Option(loadBalanceProxy)
+
+    if (ShardAllocatorRegistry.isRegistered) {
+      try {
+        loadBalanceProxy = DistributedUtil.createSingletonProxy(
+          context.system,
+          LOAD_BALANCE_MANAGER_ACTOR_NAME
+        )
+        lbProxyChecked = true
+        Some(loadBalanceProxy)
+      } catch {
+        case e: Exception =>
+          logWarn(s"Failed to create LoadBalanceManager proxy: ${e.getMessage}. Using hash-based shard routing.")
+          lbProxyChecked = true
+          loadBalanceProxy = null
+          None
+      }
+    } else {
+      None // Load balancing not enabled
     }
   }
 

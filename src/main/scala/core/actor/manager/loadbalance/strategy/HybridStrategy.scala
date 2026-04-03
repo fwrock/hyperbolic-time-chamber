@@ -4,6 +4,7 @@ package core.actor.manager.loadbalance.strategy
 import core.actor.manager.loadbalance.prediction.PredictiveBalancer
 import core.actor.manager.loadbalance.spatial.{ KdTreeLoadBalancer, QuadtreePartitioner }
 import core.entity.control.loadbalance._
+import core.enumeration.ShardTypeEnum
 
 import org.apache.pekko.actor.Address
 
@@ -26,6 +27,10 @@ class HybridStrategy extends BalancingStrategy {
   private var predictor: PredictiveBalancer = _
   private var strategyConfig: StrategyConfig = _
   private var maxShardWeight: Double = 10000.0
+
+  /** Shard type classification: static infrastructure vs dynamic vehicles */
+  private val shardTypeMap: scala.collection.mutable.Map[String, ShardTypeEnum] =
+    scala.collection.mutable.Map.empty
 
   override def initialize(worldBounds: SpatialBounds, config: StrategyConfig): Unit = {
     strategyConfig = config
@@ -56,8 +61,19 @@ class HybridStrategy extends BalancingStrategy {
     maxShardWeight = config.maxEntitiesPerShard.toDouble
   }
 
-  override def assignShard(entity: SpatialEntity): String =
-    quadtree.registerEntity(entity)
+  override def assignShard(entity: SpatialEntity): String = {
+    val shardId = quadtree.registerEntity(entity)
+    // Classify the entity and merge shard type
+    val entityType = classifyEntity(entity)
+    shardTypeMap.get(shardId) match {
+      case Some(existing) if existing != entityType =>
+        shardTypeMap.put(shardId, ShardTypeEnum.Mixed)
+      case None =>
+        shardTypeMap.put(shardId, entityType)
+      case _ => // Same type already registered
+    }
+    shardId
+  }
 
   override def getShardForPosition(x: Double, y: Double): String =
     quadtree.getShardId(x, y)
@@ -134,7 +150,8 @@ class HybridStrategy extends BalancingStrategy {
       quadtree.applyTwoToOneBalance()
     }
 
-    migrations.toList.sortBy(-_.priority)
+    // Filter out static (non-migratable) shards before returning
+    migrations.filter(plan => isMigratable(plan.shardId)).toList.sortBy(-_.priority)
   }
 
   override def getAssignments: Map[String, Address] =
@@ -142,6 +159,12 @@ class HybridStrategy extends BalancingStrategy {
 
   override def getAllShardIds: Set[String] =
     quadtree.getAllShardIds
+
+  override def getShardType(shardId: String): ShardTypeEnum =
+    shardTypeMap.getOrElse(shardId, ShardTypeEnum.Dynamic)
+
+  override def isMigratable(shardId: String): Boolean =
+    getShardType(shardId) != ShardTypeEnum.Static
 
   override def getStats: Map[String, Any] = Map(
     "strategy" -> name,
@@ -154,5 +177,18 @@ class HybridStrategy extends BalancingStrategy {
 
   override def shutdown(): Unit = {
     predictor.clearAll()
+  }
+
+  /** Classifies a spatial entity as Static or Dynamic based on its ID convention.
+    * Entity IDs follow `htcaid:type;id` where type indicates the actor class.
+    */
+  private def classifyEntity(entity: SpatialEntity): ShardTypeEnum = {
+    val id = entity.spatialEntityId.toLowerCase
+    if (id.contains(":node;") || id.contains(":link;") ||
+        id.contains(":traffic_signal;") || id.contains(":signal;")) {
+      ShardTypeEnum.Static
+    } else {
+      ShardTypeEnum.Dynamic
+    }
   }
 }
