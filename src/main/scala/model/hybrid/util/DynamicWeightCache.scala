@@ -3,7 +3,7 @@ package org.interscity.htc.model.hybrid.util
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
-import org.interscity.htc.model.hybrid.util.cache.{ InMemoryCacheStrategy, KafkaCacheStrategy, RedisCacheStrategy, WeightCacheStrategy }
+import org.interscity.htc.model.hybrid.util.cache.{ DisabledCacheStrategy, KafkaCacheStrategy, WeightCacheStrategy }
 
 import scala.util.Try
 import scala.concurrent.ExecutionContext
@@ -51,36 +51,24 @@ object DynamicWeightCache {
 
     strategyType.toLowerCase match {
       case "kafka" =>
-        println("Using Kafka cache strategy (distributed pub/sub + local memory)")
+        println("[DynamicWeightCache] Using Kafka cache strategy (distributed pub/sub + local memory)")
         new KafkaCacheStrategy()
 
-      case "inmemory" =>
-        println("Using InMemory cache strategy (fast local + Pekko Distributed Data)")
-        // Note: ActorSystem must be passed from context where it's available
-        // For now, we'll use Kafka as default until ActorSystem is properly injected
-        println("WARNING: InMemory strategy requires ActorSystem, falling back to Kafka")
-        new KafkaCacheStrategy()
-
-      case "redis" =>
-        println("Using Redis cache strategy (centralized, cluster-wide)")
-        new RedisCacheStrategy()
-
-      case _ =>
-        println(s"Unknown cache strategy: $strategyType, falling back to Kafka")
-        new KafkaCacheStrategy()
+      case other =>
+        println(s"[DynamicWeightCache] Dynamic weights DISABLED (requires Kafka, got: '$other'). Using static weights only.")
+        new DisabledCacheStrategy()
     }
   }
 
-  /** Factory method to create strategy with ActorSystem (for InMemory).
+  /** Factory method to create strategy with ActorSystem.
+    * Dynamic weights only work with Kafka; otherwise returns disabled (no-op).
     */
   def createStrategy(strategyType: String)(implicit system: ActorSystem): WeightCacheStrategy = {
     implicit val ec: ExecutionContext = system.dispatcher
 
     strategyType.toLowerCase match {
-      case "kafka"    => new KafkaCacheStrategy()
-      case "inmemory" => new InMemoryCacheStrategy()
-      case "redis"    => new RedisCacheStrategy()
-      case _          => new KafkaCacheStrategy() // Default to Kafka
+      case "kafka" => new KafkaCacheStrategy()
+      case _       => new DisabledCacheStrategy()
     }
   }
 

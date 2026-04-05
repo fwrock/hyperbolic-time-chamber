@@ -37,6 +37,9 @@ val kafkaConnectorsVersion = "1.1.0"
 val jedisVersion = "7.4.0"
 val levelDBVersion = "1.8"
 
+// Prometheus Metrics
+val prometheusVersion = "0.16.0"
+
 // Others
 val jolVersion = "0.17"
 
@@ -111,6 +114,12 @@ lazy val root = (project in file("."))
 
       // Observability
       "org.openjdk.jol" % "jol-core" % "0.17",
+
+      // Prometheus Metrics (JVM + HTTP server)
+      "io.prometheus" % "simpleclient" % prometheusVersion,
+      "io.prometheus" % "simpleclient_hotspot" % prometheusVersion,
+      "io.prometheus" % "simpleclient_httpserver" % prometheusVersion,
+      "io.prometheus" % "simpleclient_common" % prometheusVersion,
 
       // Test
       "org.scalatest" %% "scalatest" % scalaTestVersion % Test,

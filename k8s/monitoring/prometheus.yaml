@@ -96,8 +96,8 @@ data:
         rules:
           - alert: HighMemoryUsage
             expr: |
-              (jvm_memory_used_bytes{area="heap"} /
-               jvm_memory_max_bytes{area="heap"}) > 0.85
+              (jvm_memory_bytes_used{area="heap"} /
+               jvm_memory_bytes_max{area="heap"}) > 0.85
             for: 2m
             labels:
               severity: warning

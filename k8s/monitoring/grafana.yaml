@@ -60,10 +60,10 @@ data:
           "title": "Memória JVM Heap (por pod)",
           "type": "timeseries",
           "targets": [{
-            "expr": "jvm_memory_used_bytes{area=\"heap\", job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "jvm_memory_bytes_used{area=\"heap\", job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} used"
           }, {
-            "expr": "jvm_memory_max_bytes{area=\"heap\", job=\"htc-simulation\"}",
+            "expr": "jvm_memory_bytes_max{area=\"heap\", job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} max"
           }],
           "fieldConfig": {"defaults": {"unit": "bytes"}}
@@ -93,14 +93,14 @@ data:
         },
         {
           "id": 4, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-          "title": "Rede — Bytes/s por Nó",
+          "title": "Rede — Bytes/s por Pod",
           "type": "timeseries",
           "targets": [{
-            "expr": "rate(node_network_receive_bytes_total{job=\"node-exporter\", device!~\"lo|veth.*\"}[1m])",
-            "legendFormat": "{{node}} {{device}} rx"
+            "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} rx"
           }, {
-            "expr": "rate(node_network_transmit_bytes_total{job=\"node-exporter\", device!~\"lo|veth.*\"}[1m])",
-            "legendFormat": "{{node}} {{device}} tx"
+            "expr": "sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} tx"
           }],
           "fieldConfig": {"defaults": {"unit": "Bps"}}
         },
@@ -109,8 +109,8 @@ data:
           "title": "JVM GC Pause Time (por pod)",
           "type": "timeseries",
           "targets": [{
-            "expr": "rate(jvm_gc_pause_seconds_sum{job=\"htc-simulation\"}[1m])",
-            "legendFormat": "{{pod}} {{action}}"
+            "expr": "rate(jvm_gc_collection_seconds_sum{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} {{gc}}"
           }],
           "fieldConfig": {"defaults": {"unit": "s"}}
         },
@@ -119,7 +119,7 @@ data:
           "title": "Pekko — Dead Letters (por pod)",
           "type": "timeseries",
           "targets": [{
-            "expr": "pekko_actor_dead_letters_total{job=\"htc-simulation\"}",
+            "expr": "htc_dead_letters_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }]
         },
@@ -128,7 +128,7 @@ data:
           "title": "Kafka Producer — Taxa de Mensagens",
           "type": "timeseries",
           "targets": [{
-            "expr": "rate(kafka_producer_record_send_total{job=\"htc-simulation\"}[1m])",
+            "expr": "rate(htc_kafka_messages_sent_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} {{topic}}"
           }],
           "fieldConfig": {"defaults": {"unit": "reqps"}}
@@ -144,16 +144,48 @@ data:
           "fieldConfig": {"defaults": {"unit": "percentunit"}}
         },
         {
-          "id": 9, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+          "id": 9, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
           "title": "Threads JVM Ativas (por pod)",
           "type": "timeseries",
           "targets": [{
-            "expr": "jvm_threads_live_threads{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} live"
+            "expr": "jvm_threads_current{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} total"
           }, {
-            "expr": "jvm_threads_daemon_threads{job=\"htc-simulation\"}",
+            "expr": "jvm_threads_daemon{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} daemon"
           }]
+        },
+        {
+          "id": 10, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+          "title": "Simulation Ticks (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(htc_simulation_ticks_total{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} ticks/s"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 11, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+          "title": "Atores Ativos (por tipo)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "htc_actors_active{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} {{actor_type}}"
+          }]
+        },
+        {
+          "id": 12, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+          "title": "Tick Duration (por pod)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(htc_tick_duration_seconds_sum{job=\"htc-simulation\"}[1m]) / rate(htc_tick_duration_seconds_count{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} avg"
+          }, {
+            "expr": "histogram_quantile(0.99, rate(htc_tick_duration_seconds_bucket{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "{{pod}} p99"
+          }],
+          "fieldConfig": {"defaults": {"unit": "s"}}
         }
       ],
       "schemaVersion": 39,
