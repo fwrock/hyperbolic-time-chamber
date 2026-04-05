@@ -86,7 +86,7 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.0.1-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.0.8-k8s
           resources:
             requests:
               cpu: "4"
@@ -103,7 +103,15 @@ spec:
               containerPort: 9001
           env:
             - name: JAVA_TOOL_OPTIONS
-              value: "-Dconfig.resource=kubernetes.conf"
+              value: >-
+                -Dconfig.resource=kubernetes.conf
+                -Xms8g -Xmx12g
+                -XX:+UseZGC -XX:+ZGenerational
+                -XX:ConcGCThreads=2
+                -XX:+AlwaysPreTouch
+                --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+                --add-opens=java.base/java.lang=ALL-UNNAMED
+                -XX:+AlwaysPreTouch
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -124,18 +132,30 @@ spec:
               value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json"
             - name: HTC_MOBILITY_CITY_MAP_FILE
               value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json"
+            # ── Cache Strategy ──────────────────────────────────────
+            # Use "inmemory" when Kafka is not available, "kafka" when Managed Kafka is provisioned
+            - name: HTC_CACHE_STRATEGY
+              value: "inmemory"
             # ── Managed Apache Kafka (Google Cloud) ─────────────────
             - name: HTC_KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
                   name: kafka-bootstrap
                   key: bootstrap-servers
+                  optional: true
+            # Dynamic routing Kafka (htc.kafka.bootstrap.servers)
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+                  optional: true
             - name: HTC_KAFKA_REPORTING_ENABLED
-              value: "true"
+              value: "false"
             - name: HTC_KAFKA_EVENT_STREAMING_ENABLED
-              value: "true"
+              value: "false"
             - name: HTC_KAFKA_STATE_SYNC_ENABLED
-              value: "true"
+              value: "false"
             - name: HTC_KAFKA_PRODUCER_BATCH_SIZE
               value: "65536"
             - name: HTC_KAFKA_PRODUCER_LINGER_MS

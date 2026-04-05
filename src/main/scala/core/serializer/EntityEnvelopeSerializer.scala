@@ -27,7 +27,7 @@ class EntityEnvelopeSerializer(
 
         val payloadManifest: String = payloadSerializer match {
           case s: SerializerWithStringManifest => s.manifest(payload)
-          case _                               => ""
+          case _ => payload.getClass.getName // Store class name for non-manifest serializers (e.g., protobuf)
         }
         val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(payload))
 

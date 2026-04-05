@@ -15,6 +15,9 @@ import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 object HyperbolicTimeChamber {
 
   def start(): Unit = {
+    // Start Prometheus metrics server before actor system
+    core.metrics.MetricsServer.start(9001)
+
     val system = ActorSystem("hyperbolic-time-chamber")
 
     // 🎲 Inicializar RandomSeedManager com configuração da simulação

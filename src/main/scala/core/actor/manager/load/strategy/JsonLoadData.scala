@@ -21,7 +21,8 @@ import scala.jdk.CollectionConverters.*
 class JsonLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
 
-  private implicit def ec: ExecutionContext = context.dispatcher
+  // Use io-dispatcher for I/O-bound file operations with virtual threads
+  private implicit def ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
 
   private var managerRef: ActorRef = _
   private var creatorRef: ActorRef = _

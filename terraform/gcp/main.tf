@@ -138,6 +138,12 @@ resource "google_managed_kafka_cluster" "htc_kafka" {
     env     = "simulation"
     purpose = "htc-reports"
   }
+
+  timeouts {
+    create = "2h"
+    update = "2h"
+    delete = "30m"
+  }
 }
 
 # ─── Tópicos HTC ─────────────────────────────

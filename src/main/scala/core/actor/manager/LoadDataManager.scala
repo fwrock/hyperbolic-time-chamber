@@ -92,17 +92,18 @@ class LoadDataManager(
           logInfo(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
-          val loader = createActor(
-            context.system,
+          // Create loader with io-dispatcher for I/O-bound file operations
+          val props = Props(
             source.dataSource.sourceType.clazz,
-            properties = Properties(
+            Properties(
               entityId = s"loader-${source.dataSource.hashCode()}",
               resourceId = "",
               timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
               creatorManager = null,
               reporters = mutable.Map.empty
             )
-          )
+          ).withDispatcher("pekko.actor.io-dispatcher")
+          val loader = context.system.actorOf(props)
           loaders.put(loader, false)
           loader ! LoadDataSourceEvent(
             managerRef = getSelfProxy,
