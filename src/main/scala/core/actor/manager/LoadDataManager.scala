@@ -15,7 +15,7 @@ import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Prop
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.{ FinishCreationEvent, FinishLoadDataEvent, LoadDataEvent, LoadDataSourceEvent, LoadNextEvent }
 import org.interscity.htc.core.util.ManagerConstantsUtil.POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
-import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.enumeration.{ LoadingStrategyEnum, ReportTypeEnum }
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME }
 
 import scala.collection.mutable
@@ -42,6 +42,7 @@ class LoadDataManager(
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
+  private var progressiveSources: List[ActorDataSource] = List.empty
 
   override def onStart(): Unit =
     reporters = poolReporters
@@ -54,18 +55,42 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    dataSourceAmount = event.actorsDataSources.size
-    logInfo(s"Starting Load data, dataSourceAmount = $dataSourceAmount")
+    // Split data sources into EAGER (loaded before simulation) and PROGRESSIVE (loaded during simulation)
+    val (eagerSources, progressive) = event.actorsDataSources.partition(
+      _.loadingStrategy == LoadingStrategyEnum.EAGER
+    )
+    progressiveSources = progressive
 
-    if (dataSourceAmount == 0) {
+    dataSourceAmount = eagerSources.size
+    logInfo(
+      s"Starting Load data: ${eagerSources.size} EAGER sources, " +
+        s"${progressive.size} PROGRESSIVE sources (deferred to simulation)"
+    )
+
+    if (dataSourceAmount == 0 && progressive.isEmpty) {
       logWarn("No data sources to load. Simulation will start with no actors.")
       return
     }
 
-    creatorRef = createCreatorLoadData(dataSourceAmount)
-    creatorPoolRef = createCreatorPoolLoadData(dataSourceAmount)
+    val totalSources = event.actorsDataSources.size
+    creatorRef = createCreatorLoadData(totalSources)
+    creatorPoolRef = createCreatorPoolLoadData(totalSources)
 
-    sourcesToCreate = event.actorsDataSources
+    if (eagerSources.isEmpty) {
+      logInfo("No EAGER sources. Proceeding directly to simulation start.")
+      simulationManager ! FinishLoadDataEvent(
+        actorRef = getSelfProxy,
+        amount = 0L,
+        actorClassType = null,
+        creators = mutable.Set(),
+        progressiveSources = progressiveSources,
+        creatorRef = creatorRef,
+        creatorPoolRef = creatorPoolRef
+      )
+      return
+    }
+
+    sourcesToCreate = eagerSources
       .groupBy(
         s => s.classType
       )
@@ -181,12 +206,18 @@ class LoadDataManager(
     getSelfProxy ! LoadNextEvent()
 
     if (isAllDataLoaded) {
-      logInfo(s"All data loaded! Sending FinishLoadDataEvent to SimulationManager")
+      logInfo(
+        s"All EAGER data loaded! Sending FinishLoadDataEvent to SimulationManager. " +
+          s"${progressiveSources.size} PROGRESSIVE sources pending."
+      )
       simulationManager ! FinishLoadDataEvent(
         actorRef = selfProxy,
         amount = loadDataTotalAmount,
         actorClassType = null,
-        creators = mutable.Set()
+        creators = mutable.Set(),
+        progressiveSources = progressiveSources,
+        creatorRef = creatorRef,
+        creatorPoolRef = creatorPoolRef
       )
     } else {
       logInfo(s"Not all data loaded yet. isAllDataLoaded=${isAllDataLoaded}")

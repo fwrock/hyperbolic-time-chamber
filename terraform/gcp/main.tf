@@ -93,10 +93,12 @@ resource "google_service_account_iam_member" "workload_identity_user" {
 # ─────────────────────────────────────────────
 # APIs necessárias (habilitação automática)
 # ─────────────────────────────────────────────
-resource "google_project_service" "managed_kafka_api" {
-  service            = "managedkafka.googleapis.com"
-  disable_on_destroy = false
-}
+# DESATIVADO: Kafka não está sendo usado na simulação atual.
+# Para reativar, descomente este bloco e os recursos abaixo.
+# resource "google_project_service" "managed_kafka_api" {
+#   service            = "managedkafka.googleapis.com"
+#   disable_on_destroy = false
+# }
 
 resource "google_project_service" "container_api" {
   service            = "container.googleapis.com"
@@ -104,136 +106,121 @@ resource "google_project_service" "container_api" {
 }
 
 # ─────────────────────────────────────────────
-# Google Managed Apache Kafka
-# 100% compatível com a API Kafka — sem mudanças no código da simulação.
-# Os custos são cobrados por vCPU/h e GB de storage.
-# Mínimo viável: 3 vCPU / 3 GiB RAM (menor configuração permitida).
+# DESATIVADO: Google Managed Apache Kafka
+# Não estamos usando Kafka na simulação atual. Reativar quando necessário.
+# Os custos são cobrados por vCPU/h e GB de storage (~$0.85/h mínimo).
 # ─────────────────────────────────────────────
-resource "google_managed_kafka_cluster" "htc_kafka" {
-  cluster_id = "htc-kafka"
-  location   = "us-central1"
+# resource "google_managed_kafka_cluster" "htc_kafka" {
+#   cluster_id = "htc-kafka"
+#   location   = "us-central1"
+#
+#   depends_on = [google_project_service.managed_kafka_api]
+#
+#   capacity_config {
+#     vcpu_count   = 3
+#     memory_bytes = 3221225472 # 3 GiB — mínimo suportado
+#   }
+#
+#   gcp_config {
+#     access_config {
+#       network_configs {
+#         # Mesma VPC do GKE — acesso interno sem custo de saída
+#         subnet = "projects/simedape-362519/regions/us-central1/subnetworks/default"
+#       }
+#     }
+#   }
+#
+#   rebalance_config {
+#     mode = "AUTO_REBALANCE_ON_SCALE_UP"
+#   }
+#
+#   labels = {
+#     env     = "simulation"
+#     purpose = "htc-reports"
+#   }
+#
+#   timeouts {
+#     create = "2h"
+#     update = "2h"
+#     delete = "30m"
+#   }
+# }
 
-  depends_on = [google_project_service.managed_kafka_api]
+# ─── Tópicos HTC (DESATIVADOS) ───────────────
+# resource "google_managed_kafka_topic" "htc_reports" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "htc.reports"
+#   partition_count    = 6
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms"    = "86400000"
+#     "compression.type" = "snappy"
+#   }
+# }
 
-  capacity_config {
-    vcpu_count   = 3
-    memory_bytes = 3221225472 # 3 GiB — mínimo suportado
-  }
+# resource "google_managed_kafka_topic" "htc_events" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "htc.events"
+#   partition_count    = 6
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms"    = "3600000"
+#     "compression.type" = "snappy"
+#   }
+# }
 
-  gcp_config {
-    access_config {
-      network_configs {
-        # Mesma VPC do GKE — acesso interno sem custo de saída
-        subnet = "projects/simedape-362519/regions/us-central1/subnetworks/default"
-      }
-    }
-  }
+# resource "google_managed_kafka_topic" "htc_commands" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "htc.commands"
+#   partition_count    = 3
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms" = "3600000"
+#   }
+# }
 
-  # Replicação e retenção para dados de relatórios
-  rebalance_config {
-    mode = "AUTO_REBALANCE_ON_SCALE_UP"
-  }
+# resource "google_managed_kafka_topic" "htc_state_sync" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "htc.state-sync"
+#   partition_count    = 6
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms"    = "1800000"
+#     "compression.type" = "snappy"
+#   }
+# }
 
-  labels = {
-    env     = "simulation"
-    purpose = "htc-reports"
-  }
+# resource "google_managed_kafka_topic" "htc_dynamic_costs" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "dynamic-link-costs"
+#   partition_count    = 6
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms"    = "600000"
+#     "compression.type" = "snappy"
+#   }
+# }
 
-  timeouts {
-    create = "2h"
-    update = "2h"
-    delete = "30m"
-  }
-}
+# resource "google_managed_kafka_topic" "htc_custom_reports" {
+#   cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
+#   location   = "us-central1"
+#   topic_id   = "htc.custom-reports"
+#   partition_count    = 3
+#   replication_factor = 3
+#   configs = {
+#     "retention.ms"    = "172800000"
+#     "compression.type" = "snappy"
+#   }
+# }
 
-# ─── Tópicos HTC ─────────────────────────────
-# Relatórios da simulação (principal foco de custo/performance)
-resource "google_managed_kafka_topic" "htc_reports" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "htc.reports"
-
-  partition_count    = 6   # maior paralelismo para ingestão de relatórios
-  replication_factor = 3
-
-  configs = {
-    "retention.ms"    = "86400000"  # 24h de retenção
-    "compression.type" = "snappy"
-  }
-}
-
-resource "google_managed_kafka_topic" "htc_events" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "htc.events"
-
-  partition_count    = 6
-  replication_factor = 3
-
-  configs = {
-    "retention.ms"    = "3600000"   # 1h — eventos são ephemeral
-    "compression.type" = "snappy"
-  }
-}
-
-resource "google_managed_kafka_topic" "htc_commands" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "htc.commands"
-
-  partition_count    = 3
-  replication_factor = 3
-
-  configs = {
-    "retention.ms" = "3600000"
-  }
-}
-
-resource "google_managed_kafka_topic" "htc_state_sync" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "htc.state-sync"
-
-  partition_count    = 6
-  replication_factor = 3
-
-  configs = {
-    "retention.ms"    = "1800000"   # 30 min
-    "compression.type" = "snappy"
-  }
-}
-
-resource "google_managed_kafka_topic" "htc_dynamic_costs" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "dynamic-link-costs"
-
-  partition_count    = 6
-  replication_factor = 3
-
-  configs = {
-    "retention.ms"    = "600000"    # 10 min — cache de roteamento
-    "compression.type" = "snappy"
-  }
-}
-
-resource "google_managed_kafka_topic" "htc_custom_reports" {
-  cluster    = google_managed_kafka_cluster.htc_kafka.cluster_id
-  location   = "us-central1"
-  topic_id   = "htc.custom-reports"
-
-  partition_count    = 3
-  replication_factor = 3
-
-  configs = {
-    "retention.ms"    = "172800000" # 48h — relatórios customizados ficam mais tempo
-    "compression.type" = "snappy"
-  }
-}
-
-# ─── IAM: SA do simulador pode produzir e consumir ───
-resource "google_project_iam_member" "kafka_client" {
-  project = "simedape-362519"
-  role    = "roles/managedkafka.client"
-  member  = "serviceAccount:${google_service_account.htc_sa.email}"
-}
+# ─── IAM: SA do simulador pode produzir e consumir (DESATIVADO) ───
+# resource "google_project_iam_member" "kafka_client" {
+#   project = "simedape-362519"
+#   role    = "roles/managedkafka.client"
+#   member  = "serviceAccount:${google_service_account.htc_sa.email}"
+# }
