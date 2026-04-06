@@ -66,6 +66,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-cluster-sharding-typed" % pekkoVersion,
       "org.apache.pekko" %% "pekko-management" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-management-cluster-http" % pekkoManagementVersion,
+      "org.apache.pekko" %% "pekko-management-cluster-bootstrap" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-discovery-kubernetes-api" % pekkoManagementVersion,
       "org.apache.pekko" %% "pekko-slf4j" % pekkoVersion,
       "org.apache.pekko" %% "pekko-http" % pekkoHttpVersion,

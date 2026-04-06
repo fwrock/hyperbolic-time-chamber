@@ -62,6 +62,11 @@ metadata:
 spec:
   serviceName: htc-simulator
   replicas: 8
+  # Parallel: all pods start simultaneously instead of waiting for each to be Ready.
+  # Required because readinessProbe depends on cluster formation (min-nr-of-members),
+  # and OrderedReady (default) creates a deadlock: pod-0 waits for 8 members,
+  # but pod-1 won't start until pod-0 is Ready.
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app: htc-node
@@ -86,7 +91,7 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.1.6-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.1.9-k8s
           resources:
             requests:
               cpu: "4"
@@ -101,6 +106,27 @@ spec:
               containerPort: 8558
             - name: metrics
               containerPort: 9001
+          # Health checks: prevent Kubernetes from killing busy pods.
+          # Uses Pekko Management health endpoints (port 8558).
+          # GENEROUS timeouts because simulation pods run at high CPU.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            # Allow 10 consecutive failures (= 5 min) before killing the pod.
+            # Prevents killing pods during CPU saturation or progressive loading.
+            failureThreshold: 10
           env:
             - name: JAVA_TOOL_OPTIONS
               value: >-
@@ -112,6 +138,11 @@ spec:
                 --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
                 --add-opens=java.base/java.lang=ALL-UNNAMED
                 -XX:+AlwaysPreTouch
+            # Cluster quorum: wait for this many members before starting simulation.
+            # Ensures shards are distributed across ALL pods from the start.
+            # Set to the number of pods you expect to participate.
+            - name: HTC_MIN_CLUSTER_MEMBERS
+              value: "8"
             - name: POD_NAME
               valueFrom:
                 fieldRef:

@@ -6,7 +6,7 @@ import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.entity.state.DefaultState
 import core.types.Tick
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ ActorRef, Props, Terminated }
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
@@ -67,8 +67,16 @@ class GlobalTimeManager(
     createTimeManagersPool()
 
   private def createTimeManagersPool(): Unit = {
-    val totalInstances = 8 // Reduced from 64 to reduce log spam
-    val maxInstancesPerNode = Math.max(4, totalInstances / 2)
+    // Read from config, with sensible defaults for cluster distribution.
+    // maxInstancesPerNode=1 ensures LocalTMs are spread across pods,
+    // preventing CPU hotspot on the singleton's node.
+    val config = context.system.settings.config
+    val totalInstances = config.getInt("htc.time-manager.total-instances")
+    val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")
+    logInfo(
+      s"Creating LocalTM pool: totalInstances=$totalInstances, " +
+        s"maxInstancesPerNode=$maxInstancesPerNode"
+    )
     timeManagersPool = context.actorOf(
       ClusterRouterPool(
         RoundRobinPool(0),
@@ -101,6 +109,8 @@ class GlobalTimeManager(
       handleRegisterProgressiveLoadManager(event)
     case event: TickWindowReady =>
       handleTickWindowReady(event)
+    case Terminated(ref) =>
+      handleTimeManagerTerminated(ref)
     case event => super.handleEvent(event)
   }
 
@@ -179,9 +189,31 @@ class GlobalTimeManager(
       LocalTimeManagerTickInfo(tick = localTickOffset)
     )
     if (isNew) {
+      // Watch for termination so we can remove stale TMs from crashed nodes
+      context.watch(event.actorRef)
       logInfo(
-        s"Registered LocalTimeManager: ${event.actorRef.path.name} - Total registered: ${localTimeManagers.size}"
+        s"Registered LocalTimeManager: ${event.actorRef.path.name} " +
+          s"on ${event.actorRef.path.address} - Total registered: ${localTimeManagers.size}"
       )
+    }
+  }
+
+  /**
+   * Handle termination of a LocalTimeManager (e.g. node crash, shard rebalancing).
+   * Removes the dead TM from the map so the synchronization barrier doesn't wait forever.
+   */
+  private def handleTimeManagerTerminated(ref: ActorRef): Unit = {
+    if (localTimeManagers.contains(ref)) {
+      localTimeManagers.remove(ref)
+      logWarn(
+        s"LocalTimeManager terminated: ${ref.path.name} on ${ref.path.address}. " +
+          s"Remaining: ${localTimeManagers.size}"
+      )
+      // Check if all remaining TMs have reported (the dead one was the only straggler)
+      if (localTimeManagers.nonEmpty && localTimeManagers.values.forall(_.isProcessed)) {
+        logInfo("All remaining managers reported after TM termination, advancing tick")
+        calculateAndBroadcastNextGlobalTick()
+      }
     }
   }
 

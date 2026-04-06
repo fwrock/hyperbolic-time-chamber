@@ -4,6 +4,7 @@ package core.actor.manager
 import core.entity.state.DefaultState
 
 import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.cluster.Cluster
 import core.util.SimulationUtil.loadSimulationConfig
 
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
@@ -129,6 +130,20 @@ class SimulationManager(
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     configuration = loadSimulationConfig(event.configuration)
+
+    // Log cluster state for diagnostics — helps identify shard distribution issues
+    val cluster = Cluster(context.system)
+    val members = cluster.state.members.filter(_.status == org.apache.pekko.cluster.MemberStatus.Up)
+    val minMembers = context.system.settings.config.getInt("pekko.cluster.min-nr-of-members")
+    logInfo(
+      s"Cluster state at simulation startup: ${members.size} Up members " +
+        s"(min-nr-of-members=$minMembers), selfAddress=${cluster.selfAddress}, " +
+        s"leader=${cluster.state.leader.getOrElse("none")}"
+    )
+    members.foreach { m =>
+      logInfo(s"  Member: ${m.address} roles=${m.roles} status=${m.status}")
+    }
+
     logInfo(
       s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources"
     )
