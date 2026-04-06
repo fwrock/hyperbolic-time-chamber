@@ -1,12 +1,14 @@
 package org.interscity.htc
 package core.actor.manager
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ ActorRef, Deploy, Props }
 import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData }
 import core.entity.state.DefaultState
 import core.util.ManagerConstantsUtil
 
+import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.remote.RemoteScope
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
@@ -132,10 +134,26 @@ class ProgressiveLoadDataManager(
         s"indexBuildBatchSize=$INDEX_BUILD_BATCH_SIZE"
     )
 
-    // Create all loader actors but DON'T trigger indexing yet.
-    // Index building parses entire JSON files into memory, so building all
-    // sources concurrently causes OOM. We batch index builds instead.
-    event.progressiveSources.foreach { source =>
+    // Distribute loaders across ALL cluster nodes (round-robin).
+    // Previously all loaders ran on the singleton's pod, concentrating
+    // JSON parsing + file I/O on one node (CPU hotspot). Since all pods
+    // have GCS FUSE mounted at the same path, any pod can read the files.
+    val cluster = Cluster(context.system)
+    val upMembers = cluster.state.members
+      .filter(_.status == MemberStatus.Up)
+      .toSeq
+      .sortBy(_.address)
+
+    logInfo(
+      s"Distributing ${event.progressiveSources.size} progressive loaders across " +
+        s"${upMembers.size} cluster members"
+    )
+
+    // Create loader actors distributed round-robin across cluster nodes.
+    // Each loader is individually addressable (stored in `loaders` map by sourceId)
+    // so we can send LoadActorsForTickRange to specific loaders.
+    event.progressiveSources.zipWithIndex.foreach { case (source, idx) =>
+      val targetAddress = upMembers(idx % upMembers.size).address
       val loaderProps = Props(
         classOf[ProgressiveJsonLoadData],
         Properties(
@@ -145,11 +163,17 @@ class ProgressiveLoadDataManager(
           creatorManager = null,
           reporters = mutable.Map.empty
         )
+      ).withDeploy(
+        Deploy(scope = RemoteScope(targetAddress))
       ).withDispatcher("pekko.actor.io-dispatcher")
 
       val loader = context.system.actorOf(loaderProps)
       loaders.put(source.id, loader)
       loaderSources.put(source.id, source)
+
+      if (idx < upMembers.size || idx % 50 == 0) {
+        logInfo(s"  Loader ${source.id} → ${targetAddress}")
+      }
     }
 
     // Queue all source IDs and kick off the first batch of index builds
@@ -198,8 +222,20 @@ class ProgressiveLoadDataManager(
     // Aggregate tick counts from this source into the global density map.
     // This enables adaptive window sizing — instead of a fixed tick range,
     // we walk through ticks accumulating actors until reaching the target.
+    // Note: Jackson CBOR deserializes Map keys as String even when typed as Long,
+    // so we cast to Map[Any, Any] and convert manually.
     val mutableCounts = mutable.TreeMap.from(aggregatedTickCounts)
-    event.tickCounts.foreach { case (tick, count) =>
+    event.tickCounts.asInstanceOf[Map[Any, Any]].foreach { case (rawTick, rawCount) =>
+      val tick: Tick = rawTick match {
+        case s: String          => s.toLong
+        case n: java.lang.Number => n.longValue()
+        case other              => other.toString.toLong
+      }
+      val count: Int = rawCount match {
+        case s: String          => s.toInt
+        case n: java.lang.Number => n.intValue()
+        case other              => other.toString.toInt
+      }
       mutableCounts.updateWith(tick) {
         case Some(existing) => Some(existing + count)
         case None           => Some(count)
