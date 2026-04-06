@@ -33,7 +33,7 @@ spec:
 
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.0.8-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.1.6-k8s
           resources:
             requests:
               cpu: "2"

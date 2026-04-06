@@ -16,6 +16,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.{ IdUtil, StringUtil }
 
 import scala.collection.mutable
+import scala.concurrent.duration.*
 
 /** Base abstract class for local time managers. Local time managers handle the actual execution of
   * simulation events and report progress back to the global time manager.
@@ -43,11 +44,36 @@ abstract class LocalTimeManagerBase(
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
 
-  override def onStart(): Unit =
+  // --- Watchdog: detects and recovers from stuck runningEvents ---
+  private case object RunningEventsWatchdog
+  private val WATCHDOG_INTERVAL_SECONDS = 60
+  private val STALE_WARNING_SECONDS = 120
+  private val FORCE_CLEAR_SECONDS = 300
+  protected var tickProcessingStartTime: Long = 0L
+  private var lastWatchdogRunningCount: Int = 0
+  private var consecutiveStaleChecks: Int = 0
+  private var watchdogTask: org.apache.pekko.actor.Cancellable = _
+
+  /** Reset watchdog counters when starting a new batch of events. */
+  protected def resetWatchdogState(): Unit = {
+    tickProcessingStartTime = System.currentTimeMillis()
+    consecutiveStaleChecks = 0
+    lastWatchdogRunningCount = 0
+  }
+
+  override def onStart(): Unit = {
     if (parentManager.nonEmpty) {
       // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
+    // Start watchdog to detect stuck runningEvents (e.g. from shard rebalancing)
+    watchdogTask = context.system.scheduler.scheduleWithFixedDelay(
+      WATCHDOG_INTERVAL_SECONDS.seconds,
+      WATCHDOG_INTERVAL_SECONDS.seconds,
+      self,
+      RunningEventsWatchdog
+    )(context.dispatcher)
+  }
 
   override def handleEvent: Receive = {
     case start: StartSimulationTimeEvent => startSimulation(start)
@@ -60,6 +86,7 @@ abstract class LocalTimeManagerBase(
       stopSimulation()
       forceDestructActiveActors()
       terminateSimulation()
+    case RunningEventsWatchdog           => handleRunningEventsWatchdog()
     case event => super.handleEvent(event)
   }
 
@@ -226,12 +253,16 @@ abstract class LocalTimeManagerBase(
     scheduledTicksOnFinish.remove(tick)
   }
 
-  protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit =
+  protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
+    if (actorsRef.nonEmpty && runningEvents.isEmpty) {
+      resetWatchdogState()
+    }
     actorsRef.foreach {
       identity =>
         runningEvents.add(identity)
         sendSpontaneousEvent(tick, identity)
     }
+  }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
     if (identity.actorType.isEmpty) {
@@ -262,9 +293,51 @@ abstract class LocalTimeManagerBase(
     actorRef ! SpontaneousEvent(tick = tick, actorRef = self)
   }
 
+  /**
+   * Watchdog: detects stuck runningEvents and force-advances the simulation.
+   * Prevents the LocalTM from being permanently stuck when actors
+   * don't respond with FinishEvent (e.g. due to shard rebalancing, crashes).
+   */
+  private def handleRunningEventsWatchdog(): Unit = {
+    if (runningEvents.nonEmpty && tickProcessingStartTime > 0) {
+      val elapsedMs = System.currentTimeMillis() - tickProcessingStartTime
+      val elapsedSec = elapsedMs / 1000
+      val currentCount = runningEvents.size
+
+      if (currentCount == lastWatchdogRunningCount && currentCount > 0) {
+        consecutiveStaleChecks += 1
+      } else {
+        consecutiveStaleChecks = 0
+      }
+      lastWatchdogRunningCount = currentCount
+
+      if (elapsedSec >= STALE_WARNING_SECONDS) {
+        val sampleIds = runningEvents.take(5).map(_.id).mkString(", ")
+        logWarn(
+          s"[Watchdog] $currentCount running events stuck for ${elapsedSec}s at tick $localTickOffset " +
+            s"(stale checks: $consecutiveStaleChecks). Sample IDs: $sampleIds"
+        )
+      }
+
+      if (elapsedSec >= FORCE_CLEAR_SECONDS && consecutiveStaleChecks >= 2) {
+        logWarn(
+          s"[Watchdog] FORCE-CLEARING $currentCount stale running events at tick $localTickOffset " +
+            s"after ${elapsedSec}s. Advancing to next tick."
+        )
+        runningEvents.clear()
+        onWatchdogForceAdvance()
+        advanceToNextTick()
+      }
+    }
+  }
+
+  /** Hook for subclasses to clean up state when watchdog force-advances. */
+  protected def onWatchdogForceAdvance(): Unit = ()
+
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
       isTerminated = true
+      if (watchdogTask != null) { watchdogTask.cancel(); watchdogTask = null }
       printSimulationDuration()
       logInfo("Local simulation terminated")
       reportGlobalTimeManager(hasScheduled = false)

@@ -10,11 +10,12 @@ import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, Pre
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent }
+import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, StartProgressiveLoadingEvent }
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
 
+import scala.collection.mutable
 import scala.compiletime.uninitialized
 
 class SimulationManager(
@@ -28,15 +29,17 @@ class SimulationManager(
   private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
+  private var progressiveLoadManager: ActorRef = _
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
 
   override def handleEvent: Receive = {
-    case event: PrepareSimulationEvent   => prepareSimulation(event)
-    case event: FinishLoadDataEvent      => startSimulation()
-    case event: TimeManagerRegisterEvent => registerPoolTimeManager(event)
-    case event: RegisterReportersEvent   => registerReporters(event)
-    case _: StopSimulationEvent          => handleStopSimulation()
+    case event: PrepareSimulationEvent               => prepareSimulation(event)
+    case event: FinishLoadDataEvent                  => startSimulation(event)
+    case event: TimeManagerRegisterEvent             => registerPoolTimeManager(event)
+    case event: RegisterReportersEvent               => registerReporters(event)
+    case event: ProgressiveLoadingCompleteEvent      => handleProgressiveLoadingComplete(event)
+    case _: StopSimulationEvent                      => handleStopSimulation()
   }
 
   override def onStart(): Unit =
@@ -44,10 +47,48 @@ class SimulationManager(
       configuration = simulationPath
     )
 
-  private def startSimulation(): Unit = {
+  private def startSimulation(event: FinishLoadDataEvent): Unit = {
     loadManager ! DestructEvent(actorRef = getPath)
+
+    val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
+
+    // If there are progressive sources, set up the ProgressiveLoadDataManager
+    if (event.progressiveSources.nonEmpty) {
+      logInfo(
+        s"Setting up progressive loading for ${event.progressiveSources.size} sources"
+      )
+
+      // lookAheadTicks is now a MAXIMUM bound for the tick window range.
+      // The ProgressiveLoadDataManager calculates the actual window size adaptively
+      // based on actor density per tick (targeting ~50K actors per window).
+      // Dense regions get shorter windows, sparse regions extend further.
+      val lookAheadTicks = configuration.duration match {
+        case d if d > 10000 => 10_000L
+        case d if d > 1000  => 5_000L
+        case _              => 1_000L
+      }
+
+      progressiveLoadManager = createSingletonProgressiveLoadManager()
+      val progressiveProxy = createSingletonProxy(PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME)
+
+      // Register the progressive load manager with the GlobalTimeManager
+      globalTimeManagerProxy ! RegisterProgressiveLoadManagerEvent(
+        progressiveLoadManager = progressiveProxy,
+        lookAheadTicks = lookAheadTicks
+      )
+
+      // Start progressive loading
+      progressiveProxy ! StartProgressiveLoadingEvent(
+        progressiveSources = event.progressiveSources,
+        creatorRef = event.creatorRef,
+        creatorPoolRef = event.creatorPoolRef,
+        timeManagerRef = globalTimeManagerProxy,
+        lookAheadTicks = lookAheadTicks
+      )
+    }
+
     logInfo("Start simulation")
-    createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME) ! StartSimulationTimeEvent(
+    globalTimeManagerProxy ! StartSimulationTimeEvent(
       startTick = configuration.startTick,
       actorRef = getPath,
       data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))
@@ -134,11 +175,38 @@ class SimulationManager(
       terminateMessage = StopSimulationEvent()
     )
 
+  private def createSingletonProgressiveLoadManager(): ActorRef =
+    createSingletonManager(
+      manager = ProgressiveLoadDataManager.props(
+        poolTimeManager = poolTimeManager,
+        simulationManager = getSelfProxy,
+        poolReporters = reporters
+      ),
+      name = PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
+    )
+
+  private def handleProgressiveLoadingComplete(event: ProgressiveLoadingCompleteEvent): Unit = {
+    logInfo(
+      s"Progressive loading complete: ${event.totalActorsCreated} actors created during simulation"
+    )
+    // Notify the GlobalTimeManager that it no longer needs to coordinate with the progressive loader
+    val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
+    // The GTM's onProgressiveLoadingComplete will be triggered by setting loaded to max
+    globalTimeManagerProxy ! org.interscity.htc.core.entity.event.control.load.TickWindowReady(
+      readyUpToTick = Long.MaxValue,
+      actorsCreated = 0
+    )
+  }
+
   private def handleStopSimulation(): Unit = {
     logInfo("Received StopSimulationEvent. Stopping simulation managers gracefully")
     try {
       if (loadManager != null) {
         createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
+      }
+      if (progressiveLoadManager != null) {
+        createSingletonProxy(PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
       }
       if (reportManager != null) {
         createSingletonProxy(REPORT_MANAGER_ACTOR_NAME) ! StopSimulationEvent()
