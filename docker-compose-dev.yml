@@ -136,6 +136,14 @@ services:
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 60
       
+      # JVM Configuration — same pattern as k8s/simulation-setup.yaml (JAVA_TOOL_OPTIONS is picked up
+      # by the JVM automatically regardless of exec-form CMD in Dockerfile)
+      JAVA_TOOL_OPTIONS: >-
+        -Xms512m
+        -Xmx4g
+        --add-opens=java.base/java.lang=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+
       # Report Manager Configuration  
       HTC_REPORT_CSV_INSTANCES: 2
       HTC_REPORT_CSV_PER_NODE: 1

@@ -65,7 +65,7 @@ data:
         static_configs:
           - targets: ['kube-state-metrics.monitoring.svc.cluster.local:8080']
 
-      # ── 4. cAdvisor: CPU e memória por container (via kubelet) ───
+      # ── 4. cAdvisor: CPU, memória e REDE por container (via kubelet) ─
       - job_name: 'kubernetes-cadvisor'
         scheme: https
         tls_config:
@@ -83,6 +83,22 @@ data:
             regex: (.+)
             target_label: __metrics_path__
             replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+        # Map cAdvisor container labels to standard pod/namespace labels
+        # so Grafana queries like {namespace="default", pod=~"htc-.*"} work.
+        # IMPORTANT: use regex: (.+) to only replace when source label is non-empty.
+        # Network metrics (container_network_*) are per-pod and may NOT have
+        # container_label_* labels — without the regex guard, we'd overwrite
+        # the native pod/namespace labels with empty strings.
+        metric_relabel_configs:
+          - source_labels: [container_label_io_kubernetes_pod_namespace]
+            regex: (.+)
+            target_label: namespace
+          - source_labels: [container_label_io_kubernetes_pod_name]
+            regex: (.+)
+            target_label: pod
+          - source_labels: [container_label_io_kubernetes_container_name]
+            regex: (.+)
+            target_label: container
 
       # ── 5. Prometheus self-monitoring ────────────────────────────
       - job_name: 'prometheus'

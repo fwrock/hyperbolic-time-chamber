@@ -61,7 +61,7 @@ metadata:
     app: htc-node
 spec:
   serviceName: htc-simulator
-  replicas: 8
+  replicas: 16
   # Parallel: all pods start simultaneously instead of waiting for each to be Ready.
   # Required because readinessProbe depends on cluster formation (min-nr-of-members),
   # and OrderedReady (default) creates a deadlock: pod-0 waits for 8 members,
@@ -91,14 +91,14 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.1.9-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.2.0-k8s
           resources:
             requests:
               cpu: "4"
-              memory: "16Gi"
+              memory: "12Gi"
             limits:
               cpu: "4"
-              memory: "16Gi"
+              memory: "12Gi"
           ports:
             - name: pekko-remote
               containerPort: 25520

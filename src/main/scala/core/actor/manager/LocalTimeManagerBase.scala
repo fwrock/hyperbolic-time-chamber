@@ -13,6 +13,7 @@ import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent }
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.{ IdUtil, StringUtil }
 
 import scala.collection.mutable
@@ -107,6 +108,10 @@ abstract class LocalTimeManagerBase(
     event.identify.foreach {
       identity =>
         registeredIdentities.put(event.actorId, identity)
+        // Prometheus: track actor registration by type
+        val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
+        MetricsServer.actorsRegistered.labels(actorType).inc()
+        MetricsServer.activeActors.labels(actorType).inc()
     }
     scheduleEvent(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
@@ -138,13 +143,12 @@ abstract class LocalTimeManagerBase(
 
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
+      MetricsServer.eventsProcessed.labels("finish").inc()
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
-      // Track whether this actor was actually processing a spontaneous event.
-      // Only spontaneous-event completions should trigger tick advancement.
-      // Calling onFinishSpontaneous from actInteractWith (e.g. handleMicroEnterLink) must
-      // NOT falsely report hasScheduled=false to the global TM and terminate the simulation.
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
+      // Prometheus: update running events gauge
+      MetricsServer.tmRunningEvents.set(runningEvents.size.toDouble)
 
       // If no scheduleTick provided (None), remove actor from ALL future scheduled ticks
       if (finish.scheduleTick.isEmpty) {
@@ -180,8 +184,14 @@ abstract class LocalTimeManagerBase(
 
   private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
+      MetricsServer.eventsProcessed.labels("destruct").inc()
       registeredActors.remove(finish.identify.id)
-      registeredIdentities.remove(finish.identify.id)
+      val removedIdentity = registeredIdentities.remove(finish.identify.id)
+      // Prometheus: decrement active actors gauge
+      removedIdentity.foreach { identity =>
+        val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
+        MetricsServer.activeActors.labels(actorType).dec()
+      }
       sendDestructEvent(finish)
     }
 
@@ -257,6 +267,9 @@ abstract class LocalTimeManagerBase(
     if (actorsRef.nonEmpty && runningEvents.isEmpty) {
       resetWatchdogState()
     }
+    // Prometheus: track scheduled and dispatched events
+    MetricsServer.tmScheduledActors.set(actorsRef.size.toDouble)
+    MetricsServer.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
     actorsRef.foreach {
       identity =>
         runningEvents.add(identity)

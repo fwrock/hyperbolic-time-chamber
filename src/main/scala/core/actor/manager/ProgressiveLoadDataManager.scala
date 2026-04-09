@@ -16,8 +16,9 @@ import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
 import org.interscity.htc.core.actor.manager.load.strategy.ProgressiveJsonLoadData
 import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.types.Tick
-import org.interscity.htc.core.util.ManagerConstantsUtil.PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME
+import org.interscity.htc.core.util.ManagerConstantsUtil.{PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.collection.immutable.TreeMap
@@ -49,7 +50,7 @@ class ProgressiveLoadDataManager(
       timeManager = null
     ) {
 
-  // References to creator pools (shared with LoadDataManager)
+  // Own creator pools — independent from LoadDataManager's (which are destroyed after eager loading)
   private var creatorRef: ActorRef = uninitialized
   private var creatorPoolRef: ActorRef = uninitialized
   private var globalTimeManagerRef: ActorRef = uninitialized
@@ -85,6 +86,13 @@ class ProgressiveLoadDataManager(
   private var currentLoadFromTick: Tick = 0L
   private var currentLoadToTick: Tick = 0L
 
+  // Gate against concurrent tick-window loads.
+  // GlobalTimeManager can fire TickWindowRequest for every tick advance; without
+  // this guard each call re-enters processTickWindowRequest, resets shared state,
+  // and sends N duplicate LoadActorsForTickRange messages to the same loader —
+  // multiplying CreateActorsEvent volume by N and overflowing the ShardRegion buffer.
+  private var loadInFlight = false
+
   // Max ticks per source (to know when all actors have been loaded)
   private val sourceMaxTicks = mutable.Map[String, Tick]()
 
@@ -116,8 +124,6 @@ class ProgressiveLoadDataManager(
    * and triggers tick index building.
    */
   private def startProgressiveLoading(event: StartProgressiveLoadingEvent): Unit = {
-    this.creatorRef = event.creatorRef
-    this.creatorPoolRef = event.creatorPoolRef
     this.globalTimeManagerRef = event.timeManagerRef
     this.maxLookAheadTicks = event.lookAheadTicks
 
@@ -127,6 +133,14 @@ class ProgressiveLoadDataManager(
       notifyTimeManagerReady(0L, 0)
       return
     }
+
+    // Create own creator pools — independent from LoadDataManager's pools which are
+    // destroyed (context.stop) when LoadDataManager finishes eager loading.
+    // Without this, CreateActorsEvent messages go to dead letters and actors are
+    // never initialized (state=null → NPE on actSpontaneous).
+    val totalSources = event.progressiveSources.size
+    this.creatorRef = createCreatorLoadData(totalSources)
+    this.creatorPoolRef = createCreatorPoolLoadData(totalSources)
 
     logInfo(
       s"Starting progressive loading for ${event.progressiveSources.size} sources " +
@@ -277,6 +291,10 @@ class ProgressiveLoadDataManager(
   /**
    * Handle a tick window request from the GlobalTimeManager.
    * Loads all actors with startTick in [loadedUpToTick+1, horizonTick].
+   *
+   * Requests arriving while a load is in-flight are queued (only the latest
+   * is kept — an older horizon is always superseded by a newer one). The
+   * queued request is processed as soon as the current load completes.
    */
   private def handleTickWindowRequest(request: TickWindowRequest): Unit = {
     if (allSourcesFullyLoaded) {
@@ -285,8 +303,14 @@ class ProgressiveLoadDataManager(
       return
     }
 
-    if (!fullyIndexed) {
-      logInfo(s"Tick window request received but indexing not complete. Queueing...")
+    if (!fullyIndexed || loadInFlight) {
+      if (!fullyIndexed)
+        logInfo(s"Tick window request received but indexing not complete. Queueing...")
+      else
+        logInfo(
+          s"Tick window request (horizon=${request.horizonTick}) arrived while load in-flight. " +
+            s"Queuing (replaces any earlier pending horizon)."
+        )
       pendingWindowRequest = Some(request)
       return
     }
@@ -354,6 +378,7 @@ class ProgressiveLoadDataManager(
         s"(${rest.size} queued, LOAD_BATCH_SIZE=$LOAD_BATCH_SIZE)"
     )
 
+    loadInFlight = true
     firstBatch.foreach { sourceId =>
       loaders(sourceId) ! LoadActorsForTickRange(fromTick = fromTick, toTick = toTick)
     }
@@ -367,6 +392,9 @@ class ProgressiveLoadDataManager(
     pendingRangeResponses.put(event.sourceId, true)
     pendingRangeActorsCount += event.actorsLoaded
     totalActorsCreated += event.actorsLoaded
+
+    // Prometheus: progressive loading metrics
+    MetricsServer.progressiveActorsCreated.inc(event.actorsLoaded.toDouble)
 
     val completed = pendingRangeResponses.count(_._2)
     val total = pendingRangeResponses.size
@@ -400,6 +428,15 @@ class ProgressiveLoadDataManager(
       )
 
       notifyTimeManagerReady(toTick, pendingRangeActorsCount)
+
+      // Release the gate and immediately process any window request that arrived
+      // while this load was running. Only the latest horizon matters — earlier
+      // ones are superseded and have already been replaced in pendingWindowRequest.
+      loadInFlight = false
+      pendingWindowRequest.foreach { pending =>
+        pendingWindowRequest = None
+        processTickWindowRequest(pending)
+      }
     }
   }
 
@@ -482,6 +519,9 @@ class ProgressiveLoadDataManager(
    * Notify the GlobalTimeManager that actors up to the given tick are ready.
    */
   private def notifyTimeManagerReady(readyUpToTick: Tick, actorsCreated: Long): Unit = {
+    // Prometheus: track progressive loading progress
+    MetricsServer.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
+    MetricsServer.progressiveWindowsLoaded.inc()
     globalTimeManagerRef ! TickWindowReady(
       readyUpToTick = readyUpToTick,
       actorsCreated = actorsCreated
@@ -501,7 +541,74 @@ class ProgressiveLoadDataManager(
     loaders.values.foreach { loaderRef =>
       loaderRef ! DestructEvent(actorRef = getPath)
     }
+    if (creatorRef != null) creatorRef ! DestructEvent(actorRef = getPath)
+    if (creatorPoolRef != null) creatorPoolRef ! DestructEvent(actorRef = getPath)
     selfDestruct()
+  }
+
+  /**
+   * Create an independent CreatorLoadData pool for progressive actor creation.
+   * These are children of THIS manager, so they live as long as progressive loading is active.
+   */
+  private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
+    val totalInstances = Math.max(1, amountDataSources)
+    val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
+    logInfo(
+      s"Creating progressive CreatorLoadData pool: totalInstances=$totalInstances, " +
+        s"maxInstancesPerNode=$maxInstancesPerNode"
+    )
+    context.actorOf(
+      ClusterRouterPool(
+        local = RoundRobinPool(0),
+        settings = ClusterRouterPoolSettings(
+          totalInstances = totalInstances,
+          maxInstancesPerNode = maxInstancesPerNode,
+          allowLocalRoutees = true
+        )
+      ).props(
+        CreatorLoadData.props(
+          CreatorProperties(
+            entityId = "progressive-creator-load-data",
+            loadDataManager = self,
+            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            reporters = poolReporters
+          )
+        )
+      ),
+      name = POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME
+    )
+  }
+
+  /**
+   * Create an independent CreatorPoolLoadData pool for progressive pool-distributed actor creation.
+   */
+  private def createCreatorPoolLoadData(amountDataSources: Int): ActorRef = {
+    val totalInstances = Math.max(1, amountDataSources)
+    val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
+    logInfo(
+      s"Creating progressive CreatorPoolLoadData pool: totalInstances=$totalInstances, " +
+        s"maxInstancesPerNode=$maxInstancesPerNode"
+    )
+    context.actorOf(
+      ClusterRouterPool(
+        local = RoundRobinPool(0),
+        settings = ClusterRouterPoolSettings(
+          totalInstances = totalInstances,
+          maxInstancesPerNode = maxInstancesPerNode,
+          allowLocalRoutees = true
+        )
+      ).props(
+        CreatorPoolLoadData.props(
+          CreatorProperties(
+            entityId = "progressive-creator-pool-load-data",
+            loadDataManager = self,
+            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            reporters = poolReporters
+          )
+        )
+      ),
+      name = POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
+    )
   }
 }
 

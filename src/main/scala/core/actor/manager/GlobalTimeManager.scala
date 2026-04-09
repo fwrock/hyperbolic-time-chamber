@@ -15,6 +15,7 @@ import org.htc.protobuf.core.entity.event.control.execution.{ LocalTimeReportEve
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
 import org.interscity.htc.core.entity.event.control.load.{ TickWindowReady, TickWindowRequest }
 import org.interscity.htc.core.entity.event.control.load.RegisterProgressiveLoadManagerEvent
+import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
 
 import scala.collection.mutable
@@ -50,6 +51,9 @@ class GlobalTimeManager(
   private var waitingForProgressiveLoad = false
   private var pendingNextTick: Option[Tick] = None
   private var progressiveLoadingComplete = false
+
+  // Tick duration measurement — tracks wall-clock time between global tick broadcasts
+  private var lastTickBroadcastNanos: Long = 0L
 
   // Adaptive pre-fetch: tracks the actual tick range of the last loaded window.
   // Used to compute a dynamic pre-fetch threshold instead of a static value.
@@ -257,7 +261,22 @@ class GlobalTimeManager(
     }
 
     val nextTick = scheduled.map(_.tick).min
-//    logInfo(s"Global tick coordination: selected nextTick=$nextTick from $scheduledCount scheduled manager(s)")
+
+    // ── Prometheus: tick metrics ──
+    MetricsServer.simulationTicks.inc()
+    MetricsServer.currentTick.set(nextTick.toDouble)
+    if (simulationDuration > 0) {
+      MetricsServer.simulationProgress.set(
+        Math.min(1.0, (nextTick - initialTick).toDouble / simulationDuration.toDouble)
+      )
+    }
+    // Measure tick cycle duration (wall-clock between consecutive broadcasts)
+    val nowNanos = System.nanoTime()
+    if (lastTickBroadcastNanos > 0) {
+      val durationSec = (nowNanos - lastTickBroadcastNanos) / 1e9
+      MetricsServer.tickDuration.observe(durationSec)
+    }
+    lastTickBroadcastNanos = nowNanos
 
     localTickOffset = nextTick
     tickOffset = nextTick - initialTick
@@ -278,6 +297,7 @@ class GlobalTimeManager(
       logInfo(
         s"Waiting for progressive load: nextTick=$nextTick > loadedUpTo=$progressiveLoadedUpToTick"
       )
+      MetricsServer.tmWaitingForProgressive.set(1)
       waitingForProgressiveLoad = true
       pendingNextTick = Some(nextTick)
       requestProgressiveLoad(nextTick)
@@ -378,6 +398,7 @@ class GlobalTimeManager(
     // CASE 2: We were waiting mid-simulation for the next window
     if (waitingForProgressiveLoad) {
       waitingForProgressiveLoad = false
+      MetricsServer.tmWaitingForProgressive.set(0)
       pendingNextTick.foreach { tick =>
         if (tick <= progressiveLoadedUpToTick) {
           logInfo(s"Resuming simulation after progressive load, advancing to tick $tick")
