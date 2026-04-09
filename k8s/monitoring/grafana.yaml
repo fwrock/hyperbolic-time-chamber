@@ -93,7 +93,7 @@ data:
         },
         {
           "id": 4, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-          "title": "Rede — Bytes/s por Pod",
+          "title": "Rede — Bytes/s por Pod (RX + TX)",
           "type": "timeseries",
           "targets": [{
             "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
@@ -101,6 +101,50 @@ data:
           }, {
             "expr": "sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} tx"
+          }],
+          "fieldConfig": {"defaults": {"unit": "Bps"}}
+        },
+        {
+          "id": 13, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48},
+          "title": "Rede — Pacotes/s por Pod",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "sum by (pod) (rate(container_network_receive_packets_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} rx pkts"
+          }, {
+            "expr": "sum by (pod) (rate(container_network_transmit_packets_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} tx pkts"
+          }],
+          "fieldConfig": {"defaults": {"unit": "pps"}}
+        },
+        {
+          "id": 14, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48},
+          "title": "Rede — Erros e Drops por Pod",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "sum by (pod) (rate(container_network_receive_errors_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} rx errors"
+          }, {
+            "expr": "sum by (pod) (rate(container_network_transmit_errors_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} tx errors"
+          }, {
+            "expr": "sum by (pod) (rate(container_network_receive_packets_dropped_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} rx drops"
+          }, {
+            "expr": "sum by (pod) (rate(container_network_transmit_packets_dropped_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "{{pod}} tx drops"
+          }]
+        },
+        {
+          "id": 15, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56},
+          "title": "Rede — Throughput Total do Cluster (todos os pods HTC)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "cluster rx total"
+          }, {
+            "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
+            "legendFormat": "cluster tx total"
           }],
           "fieldConfig": {"defaults": {"unit": "Bps"}}
         },
@@ -187,9 +231,133 @@ data:
           }],
           "fieldConfig": {"defaults": {"unit": "s"}}
         }
+        ,
+        {
+          "id": 16, "gridPos": {"h": 6, "w": 6, "x": 0, "y": 64},
+          "title": "Tick Atual da Simulação",
+          "type": "stat",
+          "targets": [{
+            "expr": "htc_simulation_current_tick{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "blue", "value": null}]}}}
+        },
+        {
+          "id": 17, "gridPos": {"h": 6, "w": 6, "x": 6, "y": 64},
+          "title": "Progresso da Simulação",
+          "type": "gauge",
+          "targets": [{
+            "expr": "htc_simulation_progress_ratio{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.25}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 0.75}]}}}
+        },
+        {
+          "id": 18, "gridPos": {"h": 6, "w": 12, "x": 12, "y": 64},
+          "title": "Atores Registrados (total por tipo)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "htc_actors_registered_total{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} {{actor_type}}"
+          }]
+        },
+        {
+          "id": 19, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 70},
+          "title": "Eventos Processados/s (por tipo)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} {{event_type}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 20, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 70},
+          "title": "Time Manager — Estado Interno",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "htc_tm_scheduled_actors{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} scheduled"
+          }, {
+            "expr": "htc_tm_running_events{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} running"
+          }]
+        },
+        {
+          "id": 21, "gridPos": {"h": 6, "w": 6, "x": 0, "y": 78},
+          "title": "TM Aguardando Progressive",
+          "type": "stat",
+          "targets": [{
+            "expr": "htc_tm_waiting_for_progressive{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Running", "color": "green"}, "1": {"text": "Waiting", "color": "orange"}}}]}}
+        },
+        {
+          "id": 22, "gridPos": {"h": 6, "w": 6, "x": 6, "y": 78},
+          "title": "Progressive — Loaded Up To Tick",
+          "type": "stat",
+          "targets": [{
+            "expr": "htc_progressive_loaded_up_to_tick{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "blue", "value": null}]}}}
+        },
+        {
+          "id": 23, "gridPos": {"h": 6, "w": 6, "x": 12, "y": 78},
+          "title": "Progressive — Atores Criados",
+          "type": "stat",
+          "targets": [{
+            "expr": "htc_progressive_actors_created_total{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "purple", "value": null}]}}}
+        },
+        {
+          "id": 24, "gridPos": {"h": 6, "w": 6, "x": 18, "y": 78},
+          "title": "Progressive — Janelas Carregadas",
+          "type": "stat",
+          "targets": [{
+            "expr": "htc_progressive_windows_loaded_total{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "purple", "value": null}]}}}
+        },
+        {
+          "id": 25, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 84},
+          "title": "Viagens Completadas (por tipo de veículo)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "htc_journeys_completed_total{job=\"htc-simulation\"}",
+            "legendFormat": "{{pod}} {{vehicle_type}}"
+          }]
+        },
+        {
+          "id": 26, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 84},
+          "title": "Viagens Iniciadas vs Completadas (taxa/s)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "sum(rate(htc_journeys_started_total{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "started/s"
+          }, {
+            "expr": "sum(rate(htc_journeys_completed_total{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "completed/s"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 27, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 92},
+          "title": "Eventos por Tipo (taxa/s)",
+          "type": "timeseries",
+          "targets": [{
+            "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
+            "legendFormat": "{{pod}} {{event_type}}"
+          }],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        }
       ],
       "schemaVersion": 39,
-      "version": 1
+      "version": 3
     }
 ---
 # ── Deployment Grafana ─────────────────────────────────────────────

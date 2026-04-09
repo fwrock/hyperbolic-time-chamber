@@ -34,14 +34,18 @@ object GPSUtil {
     useDynamicWeights: Boolean = true
   ): Option[(Double, mutable.Queue[(String, String)])] = {
 
+    // Short-circuit: same-node trip needs no routing.
+    // Returning a trivially empty route avoids a full A* traversal, suppresses
+    // "Nenhuma rota encontrada" errors, and eliminates log spam for at-location legs.
+    if (originId == destinationId) {
+      return Some((0.0, mutable.Queue.empty))
+    }
+
     val originNodeOpt = CityMapUtil.nodesById.get(originId)
     val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        System.err.println(
-          s"[GPSUtil] Calling route from ${originNode.id} to ${destinationNode.id}"
-        )
         // If using dynamic weights, create a weight function that queries the cache
         val weightFunc: (NodeGraph, NodeGraph) => Option[Double] = if (useDynamicWeights) {
           (source, target) =>

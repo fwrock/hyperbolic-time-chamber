@@ -81,8 +81,6 @@ class SimulationManager(
       // Start progressive loading
       progressiveProxy ! StartProgressiveLoadingEvent(
         progressiveSources = event.progressiveSources,
-        creatorRef = event.creatorRef,
-        creatorPoolRef = event.creatorPoolRef,
         timeManagerRef = globalTimeManagerProxy,
         lookAheadTicks = lookAheadTicks
       )

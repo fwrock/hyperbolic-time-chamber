@@ -27,14 +27,19 @@ import org.htc.protobuf.core.entity.actor.Identify
   *   Number of trips completed today
   */
 case class PersonState(
-  dailySchedule: List[Activity],
+  startTick: Tick = 0L,
+  scheduleOnTimeManager: Boolean = true,
+  dailySchedule: List[Activity] = List.empty,
   currentActivityIndex: Int = 0,
   ownedVehicles: Map[String, Identify] = Map.empty, // mode -> Identify(id, classType)
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0
-) extends BaseState {
+) extends BaseState(
+  startTick = startTick,
+  scheduleOnTimeManager = scheduleOnTimeManager
+) {
 
   /** Get current activity.
     */
@@ -112,12 +117,17 @@ case class Activity(
   *   Transportation mode ("car", "bicycle", "motorcycle", "walk", "transit")
   * @param vehicle
   *   Complete vehicle reference with id and classType (for private modes)
+  * @param instant
+  *   If true, skip routing — origin and destination are the same node or the
+  *   trip should be treated as zero-time (e.g. already-at-destination activities
+  *   after PT stop snapping collapsed two consecutive stops to the same road node)
   * @param driverAttributes
   *   Attributes affecting driving behavior
   */
 case class ArrivalLogistics(
   mode: String, // "car", "bicycle", "motorcycle", "walk", "transit"
   vehicle: Option[Identify] = None, // Required for private vehicles (contains id + classType)
+  instant: Boolean = false,         // skip routing when origin == destination
   driverAttributes: DriverAttributes = DriverAttributes()
 )
 

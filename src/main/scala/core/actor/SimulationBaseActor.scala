@@ -16,6 +16,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
+import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
 
@@ -289,6 +290,13 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
     currentTimeManager = event.actorRef
+    if (state == null) {
+      logWarn(
+        s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
+      )
+      onFinishSpontaneous(None)
+      return
+    }
     try actSpontaneous(event)
     catch
       case e: Exception =>
@@ -296,8 +304,9 @@ abstract class SimulationBaseActor[T <: BaseState](
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
         e.printStackTrace()
-        // Reschedule for retry instead of permanently unscheduling the actor
-        onFinishSpontaneous(Some(currentTick + 1))
+        // Unschedule if state is null (e.g. after shard restart); otherwise retry
+        if (state == null) onFinishSpontaneous(None)
+        else onFinishSpontaneous(Some(currentTick + 1))
     // save(event) // Event persistence disabled
   }
 
@@ -313,6 +322,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The interaction event
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
+    MetricsServer.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
     // Keep currentTick monotonically advancing: interaction events carry the sender's
     // currentTick, which may be newer than ours. Without this update, actors that
@@ -430,6 +440,19 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
+    // Prometheus: track report events by label
+    if (event.label != null) {
+      MetricsServer.eventsProcessed.labels(event.label).inc()
+      event.label match {
+        case "journey_started" =>
+          val vehicleType = getClass.getSimpleName
+          MetricsServer.journeysStarted.labels(vehicleType).inc()
+        case "journey_completed" =>
+          val vehicleType = getClass.getSimpleName
+          MetricsServer.journeysCompleted.labels(vehicleType).inc()
+        case _ => // other report labels tracked via eventsProcessed
+      }
+    }
     val defaultReportType = ReportTypeEnum.valueOf(
       Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")
     )
