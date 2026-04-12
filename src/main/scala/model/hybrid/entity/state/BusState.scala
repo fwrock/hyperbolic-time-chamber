@@ -21,6 +21,9 @@ import scala.collection.mutable
   *   - Bus stops along the route
   *   - In MICRO mode: larger vehicle, slower acceleration, lane restrictions
   *
+  * Route, path, cost, status, and reachedDestination are managed via accessor methods
+  * delegating to parent MovableState fields (single source of truth).
+  *
   * @param startTick
   *   Simulation start tick
   * @param label
@@ -39,22 +42,12 @@ import scala.collection.mutable
   *   Number of boarding doors
   * @param people
   *   Map of passenger IDs to identifiers
-  * @param bestRoute
-  *   Best route path
-  * @param currentPath
-  *   Current path segment
   * @param currentPathPosition
   *   Current position in path
   * @param origin
   *   Origin node ID
   * @param destination
   *   Destination node ID
-  * @param bestCost
-  *   Best route cost
-  * @param status
-  *   Current status
-  * @param reachedDestination
-  *   Whether bus reached destination
   * @param actorType
   *   Actor type (Bus)
   * @param size
@@ -65,7 +58,7 @@ import scala.collection.mutable
   *   Optional microscopic bus state
   */
 case class BusState(
-  // ========== Meso fields (inherited from BusState) ==========
+  // ========== Meso fields ==========
   override val startTick: Tick,
   val label: String,
   val capacity: Int,
@@ -75,14 +68,9 @@ case class BusState(
   var busStops: Map[String, String],
   val numberOfPorts: Int,
   val people: mutable.Map[String, Identify] = mutable.Map[String, Identify](),
-  var bestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var currentPath: Option[(String, String)] = None,
   var currentPathPosition: Int = 0,
   override val origin: String,
   override val destination: String,
-  var bestCost: Double = Double.MaxValue,
-  var status: MovableStatusEnum = Start,
-  var reachedDestination: Boolean = false,
   override val actorType: ActorTypeEnum = Bus,
   override val size: Double,
 
@@ -93,17 +81,27 @@ case class BusState(
   var microState: Option[MicroBusState] = None
 ) extends MovableState(
       startTick = startTick,
-      movableBestRoute = bestRoute,
-      movableCurrentPath = currentPath,
-      movableCurrentNode = null,
       origin = origin,
       destination = destination,
-      movableBestCost = bestCost,
-      movableStatus = status,
-      movableReachedDestination = reachedDestination,
       actorType = actorType,
       size = size
     ) {
+
+  // ========== Convenience accessors delegating to parent MovableState ==========
+  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+
+  def currentPath: Option[(String, String)] = movableCurrentPath
+  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
+
+  def reachedDestination: Boolean = movableReachedDestination
+  def reachedDestination_=(v: Boolean): Unit = movableReachedDestination = v
 
   def isMicroMode: Boolean = currentSimulationMode == SimulationModeEnum.MICRO
   def isMesoMode: Boolean = currentSimulationMode == SimulationModeEnum.MESO

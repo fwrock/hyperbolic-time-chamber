@@ -100,7 +100,7 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.5.4-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.6.0-k8s
           resources:
             requests:
               cpu: "4"

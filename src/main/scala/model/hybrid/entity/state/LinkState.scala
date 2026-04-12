@@ -44,14 +44,6 @@ import scala.collection.mutable
   *   Maximum vehicle capacity
   * @param freeSpeed
   *   Free-flow speed (m/s)
-  * @param jamDensity
-  *   Jam density (vehicles/m)
-  * @param permLanes
-  *   Permanent lanes
-  * @param typeLink
-  *   Link type (normal, highway, etc.)
-  * @param modes
-  *   Allowed transport modes
   * @param currentSpeed
   *   Current aggregate speed (for MESO mode)
   * @param congestionFactor
@@ -81,10 +73,6 @@ case class LinkState(
   speedLimit: Double,
   capacity: Double,
   freeSpeed: Double,
-  jamDensity: Double = 0.0,
-  permLanes: Double = 1.0,
-  typeLink: String = "normal",
-  modes: List[String] = List("car"),
   currentSpeed: Double = 0.0,
   congestionFactor: Double = 1.0,
   registered: mutable.Set[LinkRegister] = mutable.Set(),

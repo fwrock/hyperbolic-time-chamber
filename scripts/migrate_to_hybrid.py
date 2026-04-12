@@ -644,7 +644,6 @@ class HybridMigrator:
             "bestRoute": None,
             "currentNode": old_content['origin'],
             "distance": 0.0,
-            "eventCount": 0,
             
             # Driver attributes with variation
             "driverAttributes": {

@@ -15,7 +15,6 @@ import org.interscity.htc.model.hybrid.util.{ CityMapUtil, GPSUtil, SpeedUtil }
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{ DriverAttributes, MicroMotorcycleState, MotorcycleState }
 import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -52,11 +51,6 @@ class Motorcycle(
       properties = properties
     )
     with PrivateVehicle[MotorcycleState] {
-
-  /** Car-following model with lower randomness (more predictable).
-    */
-  private val carFollowingModel: CarFollowingModel =
-    KraussModel.withRandomness(0.15) // More aggressive
 
   /** Current link being traversed.
     */
@@ -280,8 +274,8 @@ class Motorcycle(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
-    val currentPathNode = state.movableCurrentPath.map(_._2).orNull
-    val routeDepleted = state.movableBestRoute.forall(_.isEmpty)
+    val currentPathNode = state.currentPath.map(_._2).orNull
+    val routeDepleted = state.bestRoute.forall(_.isEmpty)
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
@@ -381,11 +375,8 @@ class Motorcycle(
       GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
-          // CRITICAL: Also update parent MovableState field!
-          state.movableBestRoute = Some(pathQueue)
-          state.movableBestCost = cost
+          state.bestCost = cost
           state.status = Ready
-          state.movableStatus = Ready
           state.updateCurrentPath(None)
 
           // Report journey started
@@ -636,7 +627,7 @@ class Motorcycle(
       label = "leave_link"
     )
 
-    val routeDepleted = state.movableCurrentPath.isEmpty && state.movableBestRoute.forall(_.isEmpty)
+    val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
       onFinishPrivateVehicle(state.destination)

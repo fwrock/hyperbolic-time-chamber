@@ -18,7 +18,6 @@ import org.interscity.htc.model.hybrid.entity.state.{ BicycleState, DriverAttrib
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.model.hybrid.entity.event.data.person._
-import org.interscity.htc.model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -54,11 +53,6 @@ class Bicycle(
       properties = properties
     )
     with PrivateVehicle[BicycleState] {
-
-  /** Car-following model with bicycle parameters.
-    */
-  private val carFollowingModel: CarFollowingModel =
-    KraussModel.withRandomness(0.3) // Higher randomness
 
   /** Current link being traversed.
     */
@@ -273,8 +267,8 @@ class Bicycle(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
-    val currentPathNode = state.movableCurrentPath.map(_._2).orNull
-    val routeDepleted = state.movableBestRoute.forall(_.isEmpty)
+    val currentPathNode = state.currentPath.map(_._2).orNull
+    val routeDepleted = state.bestRoute.forall(_.isEmpty)
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
@@ -373,11 +367,8 @@ class Bicycle(
       GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
-          // CRITICAL: Also update parent MovableState field!
-          state.movableBestRoute = Some(pathQueue)
-          state.movableBestCost = cost
+          state.bestCost = cost
           state.status = Ready
-          state.movableStatus = Ready
           state.updateCurrentPath(None)
 
           // Report journey started
@@ -604,7 +595,7 @@ class Bicycle(
       label = "leave_link"
     )
 
-    val routeDepleted = state.movableCurrentPath.isEmpty && state.movableBestRoute.forall(_.isEmpty)
+    val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
       onFinishPrivateVehicle(state.destination)
@@ -737,7 +728,7 @@ class Bicycle(
   override def onDestruct(event: DestructEvent): Unit =
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
-        .orElse(state.movableCurrentPath.map(_._2))
+        .orElse(state.currentPath.map(_._2))
         .getOrElse("unknown")
       finishJourney("actor_destructed_before_completion", fallbackNode)
       onFinishPrivateVehicle(fallbackNode)

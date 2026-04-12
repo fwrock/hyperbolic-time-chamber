@@ -681,7 +681,6 @@ class HybridScenarioGenerator:
                     "bestRoute": None,
                     "currentNode": f"htcaid:node;{vehicle.origin}",
                     "distance": 0.0,
-                    "eventCount": 0,
                     "scheduleOnTimeManager": True
                 }
                 

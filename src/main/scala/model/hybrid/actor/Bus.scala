@@ -20,7 +20,6 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
@@ -51,10 +50,6 @@ class Bus(
 ) extends Movable[BusState](
       properties = properties
     ) {
-
-  /** Car-following model (same as car, but with bus parameters).
-    */
-  private val carFollowingModel: CarFollowingModel = KraussModel()
 
   /** Current link being traversed.
     */
@@ -144,7 +139,7 @@ class Bus(
             "bus_id" -> getEntityId,
             "origin" -> state.origin,
             "destination" -> state.destination,
-            "route_length" -> state.movableBestRoute.map(_.size).getOrElse(0),
+            "route_length" -> state.bestRoute.map(_.size).getOrElse(0),
             "tick" -> currentTick
           ),
           label = "journey_started"
@@ -235,8 +230,8 @@ class Bus(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
-    val currentPathNode = state.movableCurrentPath.map(_._2).orNull
-    val routeDepleted = state.movableBestRoute.forall(_.isEmpty)
+    val currentPathNode = state.currentPath.map(_._2).orNull
+    val routeDepleted = state.bestRoute.forall(_.isEmpty)
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       logInfo(s"Bus ${getEntityId} reached destination: $currentNodeId")
@@ -490,7 +485,7 @@ class Bus(
       label = "leave_link"
     )
 
-    val routeDepleted = state.movableCurrentPath.isEmpty && state.movableBestRoute.forall(_.isEmpty)
+    val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
       onFinishSpontaneous(None)
@@ -627,7 +622,7 @@ class Bus(
     mesoExitTick = None
     signalWaitUntilTick = None
     // Save the arrived-at node before super.leavingLink() clears movableCurrentPath
-    currentStopNode = state.movableCurrentPath.map(_._2)
+    currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
   }
@@ -815,7 +810,7 @@ class Bus(
   override def onDestruct(event: DestructEvent): Unit =
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
-        .orElse(state.movableCurrentPath.map(_._2))
+        .orElse(state.currentPath.map(_._2))
         .getOrElse("unknown")
       finishJourney("actor_destructed_before_completion", fallbackNode)
     }
