@@ -6,6 +6,9 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.cluster.Cluster
 import core.util.SimulationUtil.loadSimulationConfig
+import scala.concurrent.duration._
+import scala.concurrent.Future
+import scala.util.{ Failure, Success }
 
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
@@ -33,6 +36,13 @@ class SimulationManager(
   private var progressiveLoadManager: ActorRef = _
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
+  private var simulationPrepared: Boolean = false
+  private var clusterRetryScheduled: Boolean = false
+  private var configLoadInProgress: Boolean = false
+
+  private case object RetryPrepareSimulation
+  private final case class SimulationConfigLoaded(config: Simulation)
+  private final case class SimulationConfigLoadFailed(cause: Throwable)
 
   override def handleEvent: Receive = {
     case event: PrepareSimulationEvent               => prepareSimulation(event)
@@ -41,6 +51,11 @@ class SimulationManager(
     case event: RegisterReportersEvent               => registerReporters(event)
     case event: ProgressiveLoadingCompleteEvent      => handleProgressiveLoadingComplete(event)
     case _: StopSimulationEvent                      => handleStopSimulation()
+    case RetryPrepareSimulation                      =>
+      clusterRetryScheduled = false
+      prepareSimulation()
+    case event: SimulationConfigLoaded               => onSimulationConfigLoaded(event)
+    case event: SimulationConfigLoadFailed           => onSimulationConfigLoadFailed(event)
   }
 
   override def onStart(): Unit =
@@ -127,7 +142,42 @@ class SimulationManager(
     }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
-    configuration = loadSimulationConfig(event.configuration)
+    if (configuration == null && !configLoadInProgress) {
+      configLoadInProgress = true
+      val ioDispatcher = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+      Future(loadSimulationConfig(event.configuration))(ioDispatcher).onComplete {
+        case Success(loadedConfiguration) =>
+          self ! SimulationConfigLoaded(loadedConfiguration)
+        case Failure(cause) =>
+          self ! SimulationConfigLoadFailed(cause)
+      }(context.system.dispatcher)
+      logInfo("Loading simulation configuration on io-dispatcher...")
+      return
+    }
+
+    if (configuration == null) {
+      return
+    }
+
+    prepareSimulation()
+  }
+
+  private def onSimulationConfigLoaded(event: SimulationConfigLoaded): Unit = {
+    configuration = event.config
+    configLoadInProgress = false
+    prepareSimulation()
+  }
+
+  private def onSimulationConfigLoadFailed(event: SimulationConfigLoadFailed): Unit = {
+    configLoadInProgress = false
+    logError(s"Failed to load simulation configuration: ${event.cause.getMessage}", event.cause)
+    selfDestruct()
+  }
+
+  private def prepareSimulation(): Unit = {
+    if (simulationPrepared) {
+      return
+    }
 
     // Log cluster state for diagnostics — helps identify shard distribution issues
     val cluster = Cluster(context.system)
@@ -141,6 +191,22 @@ class SimulationManager(
     members.foreach { m =>
       logInfo(s"  Member: ${m.address} roles=${m.roles} status=${m.status}")
     }
+
+    if (members.size < minMembers) {
+      if (!clusterRetryScheduled) {
+        implicit val ec: scala.concurrent.ExecutionContext = context.system.dispatcher
+        clusterRetryScheduled = true
+        logWarn(
+          s"Waiting for cluster quorum before starting simulation: " +
+            s"${members.size}/$minMembers Up members. Retrying in 5 seconds."
+        )
+        context.system.scheduler.scheduleOnce(5.seconds, self, RetryPrepareSimulation)
+      }
+      return
+    }
+
+    clusterRetryScheduled = false
+    simulationPrepared = true
 
     logInfo(
       s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources"

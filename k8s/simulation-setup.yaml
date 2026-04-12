@@ -82,6 +82,15 @@ spec:
         prometheus.io/path:   "/metrics"
     spec:
       serviceAccountName: htc-service-account
+      # Reduce ndots from default 5 to 2.
+      # Pod DNS names like '10-75-130-6.default.pod.cluster.local' have 4 dots.
+      # With ndots=5, the resolver tries appending 3 search suffixes (all NXDOMAIN)
+      # before the absolute name, causing 4x DNS queries per probe × 16 pods = DNS storm.
+      # With ndots=2, names with 2+ dots are resolved as absolute names first.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       initContainers:
         - name: wait-for-data
           image: busybox
@@ -91,14 +100,14 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.2.0-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.5.4-k8s
           resources:
             requests:
               cpu: "4"
-              memory: "12Gi"
+              memory: "16Gi"
             limits:
-              cpu: "4"
-              memory: "12Gi"
+              cpu: "6"
+              memory: "16Gi"
           ports:
             - name: pekko-remote
               containerPort: 25520
@@ -131,18 +140,21 @@ spec:
             - name: JAVA_TOOL_OPTIONS
               value: >-
                 -Dconfig.resource=kubernetes.conf
-                -Xms8g -Xmx12g
+                -Xms6g -Xmx12g
                 -XX:+UseZGC -XX:+ZGenerational
                 -XX:ConcGCThreads=2
-                -XX:+AlwaysPreTouch
                 --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
                 --add-opens=java.base/java.lang=ALL-UNNAMED
-                -XX:+AlwaysPreTouch
             # Cluster quorum: wait for this many members before starting simulation.
             # Ensures shards are distributed across ALL pods from the start.
             # Set to the number of pods you expect to participate.
             - name: HTC_MIN_CLUSTER_MEMBERS
-              value: "8"
+              value: "16"
+            # More tolerance for transient CPU/network spikes before SBR downs nodes.
+            - name: HTC_SBR_STABLE_AFTER
+              value: "120s"
+            - name: HTC_HEARTBEAT_PAUSE
+              value: "180 s"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -150,11 +162,9 @@ spec:
             - name: CLUSTER_PORT
               value: "25520"
             - name: CLUSTER_IP
-              value: "$(POD_NAME).htc-simulator.default.svc.cluster.local"
-            - name: SEED_PORT_1600_TCP_ADDR
-              value: "htc-simulator-0.htc-simulator.default.svc.cluster.local"
-            - name: SEED_PORT_1600_TCP_PORT
-              value: "25520"
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: POD_IP
               valueFrom:
                 fieldRef:

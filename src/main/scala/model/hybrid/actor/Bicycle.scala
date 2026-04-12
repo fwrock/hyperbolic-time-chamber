@@ -147,6 +147,7 @@ class Bicycle(
   override protected def logVehicleInfo(message: String): Unit = logInfo(message)
   override protected def logVehicleWarn(message: String): Unit = logWarn(message)
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
+  override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
 
   // ===== End Accessor Methods =====
 
@@ -252,6 +253,11 @@ class Bicycle(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     if (handlePrivateVehicleEvent(event)) {
+      return
+    }
+
+    if (state == null) {
+      logWarn(s"${getEntityId} received interaction event while state is null (Parked), ignoring: ${event.eventType}")
       return
     }
 

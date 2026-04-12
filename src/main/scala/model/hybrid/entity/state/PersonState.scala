@@ -25,6 +25,12 @@ import org.htc.protobuf.core.entity.actor.Identify
   *   Total distance traveled today (meters)
   * @param completedTrips
   *   Number of trips completed today
+  * @param ptAlightingNodeId
+  *   Node ID where Person should alight from current PT vehicle.
+  *   Set when boarding a bus/subway, cleared on alighting.
+  * @param ptLine
+  *   Current PT line being used (e.g. "Bus Line 1").
+  *   Set when boarding, cleared on alighting.
   */
 case class PersonState(
   startTick: Tick = 0L,
@@ -35,7 +41,9 @@ case class PersonState(
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   totalDistanceTraveled: Double = 0.0,
-  completedTrips: Int = 0
+  completedTrips: Int = 0,
+  ptAlightingNodeId: Option[String] = None,
+  ptLine: Option[String] = None
 ) extends BaseState(
   startTick = startTick,
   scheduleOnTimeManager = scheduleOnTimeManager
@@ -86,7 +94,9 @@ case class PersonState(
       currentTripVehicleId = None,
       currentTripStartTick = None,
       totalDistanceTraveled = totalDistanceTraveled + distanceTraveled,
-      completedTrips = completedTrips + 1
+      completedTrips = completedTrips + 1,
+      ptAlightingNodeId = None,
+      ptLine = None
     )
 }
 
@@ -114,7 +124,7 @@ case class Activity(
 /** Logistics for arriving at an activity location.
   *
   * @param mode
-  *   Transportation mode ("car", "bicycle", "motorcycle", "walk", "transit")
+  *   Transportation mode ("car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway")
   * @param vehicle
   *   Complete vehicle reference with id and classType (for private modes)
   * @param instant
@@ -123,12 +133,28 @@ case class Activity(
   *   after PT stop snapping collapsed two consecutive stops to the same road node)
   * @param driverAttributes
   *   Attributes affecting driving behavior
+  * @param line
+  *   Bus/subway line label (e.g. "Bus Line 1"). Required for PT modes.
+  * @param boardingStopId
+  *   Actor ID of the BusStop/SubwayStation where Person boards (e.g. "htcaid:busstop;busstop_123").
+  *   Required for PT modes.
+  * @param boardingStopClassType
+  *   Class type of the boarding stop actor (e.g. "hybrid.actor.BusStop").
+  *   Required for PT modes.
+  * @param alightingNodeId
+  *   Node ID where Person should alight (destination node for this PT leg).
+  *   Required for PT modes. The Person responds isArrival=true to unload
+  *   requests at this node.
   */
 case class ArrivalLogistics(
-  mode: String, // "car", "bicycle", "motorcycle", "walk", "transit"
-  vehicle: Option[Identify] = None, // Required for private vehicles (contains id + classType)
-  instant: Boolean = false,         // skip routing when origin == destination
-  driverAttributes: DriverAttributes = DriverAttributes()
+  mode: String, // "car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway"
+  vehicle: Option[Identify] = None,          // Required for private vehicles (contains id + classType)
+  instant: Boolean = false,                  // skip routing when origin == destination
+  driverAttributes: DriverAttributes = DriverAttributes(),
+  line: Option[String] = None,               // PT line label
+  boardingStopId: Option[String] = None,     // BusStop/SubwayStation actor ID
+  boardingStopClassType: Option[String] = None, // BusStop/SubwayStation class type
+  alightingNodeId: Option[String] = None     // Node where Person alights
 )
 
 /** Driver attributes affecting vehicle behavior.

@@ -31,9 +31,7 @@ class TrafficSignal(
     super.onInitialize(event)
     // Agendar primeiro tick considerando o offset
     val firstTick = state.startTick + state.offset
-    logInfo(
-      s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}"
-    )
+    logInfo(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
     if (firstTick < simulationEnd) {
       scheduleEvent(firstTick)
     } else {
@@ -47,16 +45,14 @@ class TrafficSignal(
   private def handlePhaseTransition(currentTick: Tick): Unit = {
     // Calcular posição no ciclo atual
     val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
-
+    
     // Próximo tick é no início do próximo ciclo
     val ticksSinceStart = currentTick - state.startTick + state.offset
     val nextCycleStart = ((ticksSinceStart / state.cycleDuration) + 1) * state.cycleDuration
     val nextTickTime = state.startTick + nextCycleStart - state.offset
-
-    logDebug(
-      s"TrafficSignal tick=$currentTick, currentCycleTick=$currentCycleTick, nextTick=$nextTickTime"
-    )
-
+    
+    logDebug(s"TrafficSignal tick=$currentTick, currentCycleTick=$currentCycleTick, nextTick=$nextTickTime")
+    
     state.phases.foreach {
       phase =>
         val newState = calcNewState(currentCycleTick, phase)
@@ -82,7 +78,7 @@ class TrafficSignal(
             signalState.state = newState
         }
     }
-
+    
     // Agendar próximo tick (uma vez para todas as fases)
     if (nextTickTime < simulationEnd) {
       onFinishSpontaneous(Some(nextTickTime))
@@ -111,7 +107,7 @@ class TrafficSignal(
       ),
       label = "signal_phase_change"
     )
-
+    
     nodes.foreach {
       node =>
         val data = TrafficSignalChangeStatusData(

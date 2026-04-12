@@ -51,9 +51,21 @@ class Subway(
       case Ready =>
         enterLink()
       case Moving =>
-        state.status = Stopped
-        requestLoadPassenger()
-        requestUnloadPeopleData()
+        val nodeId = getCurrentNode
+        val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
+        stationOpt match {
+          case Some(_) =>
+            // At a station — begin passenger exchange (dual-flag: load + unload)
+            state.movableStatus = Stopped
+            requestUnloadPeopleData()
+            requestLoadPassenger()
+            // Unregister from TM while waiting for load/unload responses.
+            // Will be re-registered via scheduleEvent in onFinishNodeState when both complete.
+            onFinishSpontaneous(None)
+          case None =>
+            // Not at a station — skip passenger handling, leave link
+            leavingLink()
+        }
       case Stopped =>
         leavingLink()
       case _ =>
@@ -70,57 +82,57 @@ class Subway(
   }
 
   private def requestLoadPassenger(): Unit = {
-    state.movableStatus = WaitingLoadPassenger
-    val availableSpace = math.min(
-      x = state.capacity - state.passengers.size,
-      y = SubwayUtil.numberOfPassengerToBoarding(
-        numberOfPorts = state.numberOfPorts,
-        portsCapacity = state.capacity,
-        stopTime = state.stopTime,
-        boardingTimeByPassenger = state.boardingTimeByPassenger
-      )
-    )
-    state.currentPath match
-      case Some((node, _)) =>
-//        val station = retrieveSubwayStationFromNodeId(node.id)
-//        station match
-//          case Some(stationId) =>
-//            val dependency = getDependency(stationId)
-//            sendMessageTo(
-//              dependency.id,
-//              dependency.classType,
-//              data = SubwayRequestPassengerData(
-//                line = state.line,
-//                availableSpace = availableSpace
-//              )
-//            )
-//          case None =>
-//            logInfo("No has bus stop to load passenger")
+    val nodeId = getCurrentNode
+    val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
+    stationOpt match {
+      case Some(stationId) =>
+        val availableSpace = math.min(
+          x = state.capacity - state.passengers.size,
+          y = SubwayUtil.numberOfPassengerToBoarding(
+            numberOfPorts = state.numberOfPorts,
+            portsCapacity = state.capacity,
+            stopTime = state.stopTime,
+            boardingTimeByPassenger = state.boardingTimeByPassenger
+          )
+        )
+        sendMessageTo(
+          entityId = stationId,
+          shardId = "hybrid.actor.SubwayStation",
+          data = SubwayRequestPassengerData(
+            line = state.line,
+            availableSpace = availableSpace
+          )
+        )
       case None =>
-        logInfo("No path to load passenger")
+        // No station at this node — mark loaded immediately
+        state.nodeState.isLoaded = true
+        onFinishNodeState()
+    }
   }
 
-  private def requestUnloadPeopleData(): Unit =
-    state.currentPath match
-      case Some((node, _)) =>
-//        val busStop = retrieveSubwayStationFromNodeId(node.id)
-//        busStop match
-//          case Some(busStopId) =>
-//            state.passengers.foreach {
-//              person =>
-//                sendMessageTo(
-//                  person._2.id,
-//                  person._2.classType,
-//                  data = SubwayRequestUnloadPassengerData(
-//                    nodeId = node.id,
-//                    nodeRef = getActorRef(node.actorRef)
-//                  )
-//                )
-//            }
-//          case None =>
-//            logInfo("No has bus stop to unload passenger")
-      case None =>
-        logInfo("No path to unload passenger")
+  private def requestUnloadPeopleData(): Unit = {
+    if (state.passengers.isEmpty) {
+      // No passengers to unload — mark unloaded immediately
+      state.nodeState.isUnloaded = true
+      onFinishNodeState()
+      return
+    }
+
+    state.countUnloadReceived = 0
+    state.countUnloadPassenger = 0
+
+    val nodeId = getCurrentNode
+    state.passengers.foreach { case (_, person) =>
+      sendMessageTo(
+        entityId = person.id,
+        shardId = person.classType,
+        data = SubwayRequestUnloadPassengerData(
+          nodeId = nodeId,
+          nodeRef = self
+        )
+      )
+    }
+  }
 
   private def retrieveSubwayStationFromNodeId(value: String): Option[String] =
     state.subwayStations.find {
@@ -142,8 +154,14 @@ class Subway(
     data: SubwayUnloadPassengerData
   ): Unit = {
     state.countUnloadReceived += 1
-    state.countUnloadPassenger += (if (data.isArrival) 1 else 0)
-    if (state.countUnloadReceived == state.passengers.size) {
+    if (data.isArrival) {
+      state.passengers.remove(event.actorRefId)
+      state.countUnloadPassenger += 1
+    }
+    // Check if all responses received: alighted + remaining = original count
+    if (state.countUnloadReceived >= state.countUnloadPassenger + state.passengers.size) {
+      state.countUnloadReceived = 0
+      state.countUnloadPassenger = 0
       state.nodeState.isUnloaded = true
       onFinishNodeState()
     }
@@ -193,7 +211,9 @@ class Subway(
     if isEndNodeState then
       state.nodeState.isLoaded = false
       state.nodeState.isUnloaded = false
-      onFinishSpontaneous(Some(currentTick + state.stopTime), destruct = false)
+      // Use scheduleEvent (not onFinishSpontaneous) because FinishEvent was already
+      // sent from the Moving handler via onFinishSpontaneous(None).
+      scheduleEvent(currentTick + state.stopTime)
 
   private def isEndNodeState: Boolean =
     state.nodeState.isLoaded && state.nodeState.isUnloaded

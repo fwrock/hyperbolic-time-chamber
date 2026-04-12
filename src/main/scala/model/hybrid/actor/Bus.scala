@@ -90,6 +90,12 @@ class Bus(
     */
   private var signalWaitUntilTick: Option[Tick] = None
 
+  /** Number of passengers asked to unload at current stop. Used to track when all responses arrived. */
+  private var expectedUnloadResponses: Int = 0
+
+  /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
+  private var currentStopNode: Option[String] = None
+
   /** Maximum simulation end tick - vehicles must finish by this tick. */
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
@@ -147,7 +153,14 @@ class Bus(
         enterLink()
 
       case Ready =>
-        enterLink()
+        // Check if arrived-at node has a bus stop — if so, handle passengers before entering next link
+        val nodeId = currentStopNode.orNull
+        if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
+          requestUnloadPeopleData()
+        } else {
+          currentStopNode = None
+          enterLink()
+        }
 
       case Moving =>
         if (state.isMicroMode) {
@@ -180,8 +193,6 @@ class Bus(
               mesoExitTick = None
               requestSignalState()
           }
-//           requestLoadPassenger()
-//           requestUnloadPeopleData()
         }
 
       case WaitingSignal =>
@@ -195,10 +206,14 @@ class Bus(
             leavingLink()
         }
 
-      case WaitingLoadPassenger | WaitingUnloadPassenger =>
-//         if (isEndNodeState && nodeStateMaxTime == event.tick) {
-        leavingLink()
-//         }
+      case WaitingLoadPassenger =>
+        // Load response received (or loading delay elapsed) — continue to next link
+        currentStopNode = None
+        enterLink()
+
+      case WaitingUnloadPassenger =>
+        // Unload delay elapsed — now load new passengers
+        requestLoadPassenger()
 
       case _ =>
         logInfo(s"Event current status not handled ${state.status}")
@@ -487,14 +502,13 @@ class Bus(
 
   /** Handle passenger loading.
     */
-  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit =
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit = {
     if (data.people.nonEmpty) {
       val nextTickTime = currentTick + loadPersonTime(
         numberOfPorts = state.numberOfPorts,
         numberOfPassengers = data.people.size
       )
       sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
-      scheduleEvent(nextTickTime)
 
       for (person <- data.people)
         state.people.put(person.id, person)
@@ -512,7 +526,15 @@ class Bus(
         label = "bus_load_passengers"
       )
 
-    } else {}
+      // Schedule to resume after loading delay
+      state.status = WaitingLoadPassenger
+      scheduleEvent(nextTickTime)
+    } else {
+      // No passengers waiting — schedule to enter next link
+      state.status = WaitingLoadPassenger
+      scheduleEvent(currentTick + 1)
+    }
+  }
 
   /** Handle passenger unloading.
     */
@@ -522,24 +544,45 @@ class Bus(
   ): Unit = {
     state.countUnloadReceived += 1
 
-    if (state.countUnloadReceived == state.people.size) {
-      val nextTickTime = currentTick + BusUtil.unloadPersonTime(
-        numberOfPassengers = state.people.size,
-        numberOfPorts = state.numberOfPorts
-      )
-      sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
-      scheduleEvent(nextTickTime)
+    // Remove alighting passenger from bus
+    if (data.isArrival) {
+      state.people.remove(event.actorRefId)
+      state.countUnloadPassenger += 1
+    }
 
-      // Report passenger unloading
-      report(
-        data = Map(
-          "event_type" -> "bus_unload_passengers",
-          "bus_id" -> getEntityId,
-          "tick" -> currentTick
-        ),
-        label = "bus_unload_passengers"
-      )
+    if (state.countUnloadReceived >= expectedUnloadResponses) {
+      val unloadedCount = state.countUnloadPassenger
+      state.countUnloadReceived = 0
+      state.countUnloadPassenger = 0
+      expectedUnloadResponses = 0
 
+      if (unloadedCount > 0) {
+        val nextTickTime = currentTick + BusUtil.unloadPersonTime(
+          numberOfPassengers = unloadedCount,
+          numberOfPorts = state.numberOfPorts
+        )
+        sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
+
+        // Report passenger unloading
+        report(
+          data = Map(
+            "event_type" -> "bus_unload_passengers",
+            "bus_id" -> getEntityId,
+            "passengers_unloaded" -> unloadedCount,
+            "remaining_passengers" -> state.people.size,
+            "tick" -> currentTick
+          ),
+          label = "bus_unload_passengers"
+        )
+
+        // After unload delay, proceed to load new passengers
+        state.status = WaitingUnloadPassenger
+        scheduleEvent(nextTickTime)
+      } else {
+        // Nobody alighted — proceed to load at next tick
+        state.status = WaitingUnloadPassenger
+        scheduleEvent(currentTick + 1)
+      }
     }
   }
 
@@ -583,6 +626,8 @@ class Bus(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    // Save the arrived-at node before super.leavingLink() clears movableCurrentPath
+    currentStopNode = state.movableCurrentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
   }
@@ -620,6 +665,74 @@ class Bus(
   private def findNextBusStop(): Option[String] =
     // Simplified - would actually query route for next bus stop
     state.busStops.headOption.map(_._1)
+
+  /** Find bus stop at a given node.
+    * @return Some(busStopId) if a bus stop is mapped to this node, None otherwise.
+    */
+  private def findBusStopAtNode(nodeId: String): Option[String] =
+    state.busStops.find { case (_, stopNodeId) => stopNodeId == nodeId }.map(_._1)
+
+  /** Request passengers to unload at the current node.
+    * Sends BusRequestUnloadPassengerData to each passenger on board.
+    * If no passengers, proceeds directly to loading.
+    */
+  private def requestUnloadPeopleData(): Unit = {
+    if (state.people.isEmpty) {
+      // No passengers to unload — go straight to loading
+      requestLoadPassenger()
+      return
+    }
+
+    state.status = WaitingUnloadPassenger
+    expectedUnloadResponses = state.people.size
+    state.countUnloadReceived = 0
+    state.countUnloadPassenger = 0
+
+    val nodeId = currentStopNode.getOrElse("unknown")
+    state.people.foreach { case (_, person) =>
+      sendMessageTo(
+        entityId = person.id,
+        shardId = person.classType,
+        data = BusRequestUnloadPassengerData(
+          nodeId = nodeId,
+          nodeRef = self
+        ),
+        eventType = "RequestUnloadPassenger"
+      )
+    }
+    // Unregister from TM while waiting for passenger responses.
+    // Will be re-registered via scheduleEvent when all responses arrive.
+    onFinishSpontaneous(None)
+  }
+
+  /** Request passengers from bus stop at current node.
+    * Sends BusRequestPassengerData to the BusStop actor.
+    * If no bus stop is found, proceeds to enter next link.
+    */
+  private def requestLoadPassenger(): Unit = {
+    val nodeId = currentStopNode.getOrElse("unknown")
+    findBusStopAtNode(nodeId) match {
+      case Some(busStopId) =>
+        state.status = WaitingLoadPassenger
+        sendMessageTo(
+          entityId = busStopId,
+          shardId = "hybrid.actor.BusStop",
+          data = BusRequestPassengerData(
+            label = state.label,
+            availableSpace = state.capacity - state.people.size
+          ),
+          eventType = "RequestPassenger"
+        )
+        // Unregister from TM while waiting for BusStop response.
+        // Will be re-registered via scheduleEvent in handleBusLoadPeople.
+        onFinishSpontaneous(None)
+      case None =>
+        // No bus stop at this node — just continue
+        currentStopNode = None
+        state.status = Ready
+        enterLink()
+    }
+  }
 
   /** Get current link length.
     */

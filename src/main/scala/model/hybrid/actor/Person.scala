@@ -7,9 +7,10 @@ import core.types.Tick
 import core.entity.actor.properties.Properties
 import model.hybrid.entity.state.{PersonState, Activity, ArrivalLogistics, DriverAttributes}
 import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData}
+import model.hybrid.entity.event.data.bus.{RegisterPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData}
+import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{GPSUtil, CityMapUtil}
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
-import org.interscity.htc.core.util.SimulationUtil
 
 import scala.collection.mutable
 
@@ -40,9 +41,6 @@ class Person(
       properties = properties
     ) {
 
-  private lazy val simulationDurationTicks: Tick = SimulationUtil.loadSimulationConfig().duration
-  private lazy val maxTripWaitTicks: Tick = math.max(1L, simulationDurationTicks)
-  
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
       logWarn(s"${getEntityId} actSpontaneous called with null state at tick=$currentTick — unscheduling")
@@ -55,31 +53,22 @@ class Person(
       return
     }
     
-    // Check if currently in a trip (waiting for TripCompleted)
+    // Check if currently in a trip
     if (state.currentTripVehicleId.isDefined) {
-      val waitTicks = state.currentTripStartTick.map(start => currentTick - start).getOrElse(0L)
-      if (waitTicks >= maxTripWaitTicks) {
-        val vehicleId = state.currentTripVehicleId.getOrElse("unknown")
-        logWarn(
-          s"${getEntityId} timed out waiting TripCompleted from $vehicleId after $waitTicks ticks. Releasing stuck trip."
-        )
-        report(
-          data = Map(
-            "event_type" -> "trip_timeout",
-            "person_id" -> getEntityId,
-            "vehicle_id" -> vehicleId,
-            "wait_ticks" -> waitTicks,
-            "timeout_ticks" -> maxTripWaitTicks,
-            "tick" -> currentTick
-          ),
-          label = "person_trip_timeout"
-        )
-        state = state.completeTrip(0.0)
+      // Walking trips complete when scheduled arrival time is reached
+      if (state.currentTripVehicleId.contains("walking")) {
+        // Walking trip arrived — complete it and advance
         advanceToNextActivity()
-      } else {
-        // Trip in progress, wait for TripCompleted message
-        onFinishSpontaneous(Some(currentTick + 1))
+        return
       }
+
+      // Vehicle trip in progress — Person should NOT be on the TimeManager.
+      // The vehicle (Car/Bicycle/Motorcycle) owns TM communication during trips.
+      // Person resumes TM interaction only when TripCompleted arrives via
+      // actInteractWith → handleTripCompleted → advanceToNextActivity.
+      // This branch is a defensive guard; it should not normally execute.
+      logWarn(s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}")
+      onFinishSpontaneous(None) // Re-unregister from TM
       return
     }
     
@@ -90,10 +79,10 @@ class Person(
           logDebug(s"${getEntityId} completing activity ${activity.activityType} at ${activity.nodeId}")
           startNextTrip()
         } else {
-          // Still at activity, wait for next check
-          // Reschedule to check later
-          val waitTicks = Math.min(100L, getTickUntilActivityEnd(activity))
-          onFinishSpontaneous(Some(currentTick + waitTicks))
+          // Sleep directly until activity end time.
+          // No polling needed — nothing can interrupt an activity.
+          val endTick = currentTick + getTickUntilActivityEnd(activity)
+          onFinishSpontaneous(Some(endTick))
         }
       
       case None =>
@@ -104,7 +93,9 @@ class Person(
   
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     event.data match {
-      case d: TripCompletedData => handleTripCompleted(event, d)
+      case d: TripCompletedData              => handleTripCompleted(event, d)
+      case d: BusRequestUnloadPassengerData  => handlePTUnloadRequest(event, d.nodeId, "bus")
+      case d: SubwayRequestUnloadPassengerData => handlePTUnloadRequest(event, d.nodeId, "subway")
       case _ =>
         logWarn(s"Person event not handled: ${event.eventType}")
     }
@@ -134,7 +125,7 @@ class Person(
       Math.max(1L, endTick - currentTick)
     } catch {
       case _: NumberFormatException =>
-        100L  // Default check interval
+        1L  // Cannot parse — assume time reached on next tick
     }
   }
   
@@ -199,10 +190,8 @@ class Person(
             initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId)
           
           case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-            // Transit modes (simplified for now: instant arrival)
-            // Full implementation would route on transit network
-            logDebug(s"${getEntityId} taking ${logistics.mode} to ${nextActivity.nodeId}")
-            advanceToNextActivity()
+            // Public transport trip — register at boarding stop and wait for vehicle
+            initiatePTTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
           
           case _ =>
             logWarn(s"Unknown mode: ${logistics.mode}, assuming instant arrival")
@@ -272,6 +261,129 @@ class Person(
     }
   }
   
+  /** Initiate public transport trip (Bus or Subway).
+    *
+    * Person registers at the boarding stop (BusStop/SubwayStation) for the specified line,
+    * then unregisters from the TimeManager. The PT vehicle carries the Person and periodically
+    * asks "do you want to alight here?" via BusRequestUnloadPassengerData / SubwayRequestUnloadPassengerData.
+    * Person responds and, when at the alighting node, advances to next activity.
+    *
+    * Required ArrivalLogistics fields for PT:
+    *   - line: bus/subway line label
+    *   - boardingStopId: BusStop/SubwayStation actor ID
+    *   - boardingStopClassType: actor class type for shard routing
+    *   - alightingNodeId: node where Person should alight
+    */
+  private def initiatePTTrip(origin: String, destination: String, logistics: ArrivalLogistics): Unit = {
+    (logistics.line, logistics.boardingStopId, logistics.boardingStopClassType, logistics.alightingNodeId) match {
+      case (Some(line), Some(stopId), Some(stopClassType), Some(alightingNode)) =>
+        // Register at the boarding stop for the specified PT line
+        val registrationData = logistics.mode.toLowerCase match {
+          case "subway" => RegisterSubwayPassengerData(line = line)
+          case _        => RegisterPassengerData(label = line)
+        }
+        
+        sendMessageTo(
+          entityId = stopId,
+          shardId = stopClassType,
+          data = registrationData,
+          eventType = "RegisterPassenger",
+          actorType = LoadBalancedDistributed
+        )
+        
+        // Update state: mark as PT trip in progress
+        state = state.copy(
+          currentTripVehicleId = Some(s"pt:${logistics.mode}:$line"),
+          currentTripStartTick = Some(currentTick),
+          ptAlightingNodeId = Some(alightingNode),
+          ptLine = Some(line)
+        )
+        
+        logDebug(s"${getEntityId} registered at $stopId for $line, alighting at $alightingNode")
+        
+        // Report PT trip start
+        report(
+          data = Map(
+            "event_type" -> "pt_trip_start",
+            "person_id" -> getEntityId,
+            "mode" -> logistics.mode,
+            "line" -> line,
+            "origin" -> origin,
+            "destination" -> destination,
+            "boarding_stop" -> stopId,
+            "alighting_node" -> alightingNode,
+            "tick" -> currentTick
+          ),
+          label = "person_pt_trip_start"
+        )
+        
+        // Unregister from TimeManager — the PT vehicle owns TM communication.
+        // Person will re-register when alighting via handlePTUnloadRequest → advanceToNextActivity.
+        onFinishSpontaneous(None)
+        
+      case _ =>
+        // Missing PT routing info — fall back to instant arrival
+        logWarn(s"${getEntityId} PT trip missing routing info (line=${logistics.line}, " +
+          s"boardingStop=${logistics.boardingStopId}, alightingNode=${logistics.alightingNodeId}). " +
+          s"Falling back to instant arrival.")
+        advanceToNextActivity()
+    }
+  }
+  
+  /** Handle unload request from PT vehicle (Bus or Subway).
+    *
+    * The vehicle asks "are you getting off at this node?" Person checks
+    * if the node matches its alighting destination and responds accordingly.
+    * If alighting, Person completes the trip and re-registers with the TimeManager.
+    *
+    * @param event the interaction event from the vehicle
+    * @param nodeId the node ID the vehicle is currently at
+    * @param ptType "bus" or "subway" for logging and response routing
+    */
+  private def handlePTUnloadRequest(event: ActorInteractionEvent, nodeId: String, ptType: String): Unit = {
+    val isArrival = state.ptAlightingNodeId.contains(nodeId)
+    
+    // Send response back to the vehicle
+    val responseData = ptType match {
+      case "subway" => SubwayUnloadPassengerData(isArrival = isArrival)
+      case _        => BusUnloadPassengerData(isArrival = isArrival)
+    }
+    
+    sendMessageTo(
+      entityId = event.actorRefId,
+      shardId = event.actorClassType,
+      data = responseData,
+      eventType = "UnloadPassengerResponse"
+    )
+    
+    if (isArrival) {
+      val travelTime = state.currentTripStartTick.map(start => currentTick - start).getOrElse(0L)
+      
+      logDebug(s"${getEntityId} alighting from $ptType at node $nodeId after ${travelTime}s")
+      
+      // Report PT trip completion
+      report(
+        data = Map(
+          "event_type" -> "pt_trip_completed",
+          "person_id" -> getEntityId,
+          "pt_type" -> ptType,
+          "vehicle_id" -> event.actorRefId,
+          "line" -> state.ptLine.getOrElse("unknown"),
+          "alighting_node" -> nodeId,
+          "travel_time" -> travelTime,
+          "tick" -> currentTick
+        ),
+        label = "person_pt_trip_completed"
+      )
+      
+      // Complete the trip and advance to next activity
+      state = state.completeTrip(0.0)
+      advanceToNextActivity()
+    } else {
+      logDebug(s"${getEntityId} staying on $ptType at node $nodeId (alighting at ${state.ptAlightingNodeId.getOrElse("?")})")
+    }
+  }
+  
   /** Calculate total route distance by summing link lengths.
     */
   private def calculateRouteDistance(routeQueue: mutable.Queue[(String, String)]): Double = {
@@ -330,8 +442,9 @@ class Person(
             
             logDebug(s"${getEntityId} started trip with ${vehicleRef.id}: $origin -> $destination")
             
-            // Wait for TripCompleted
-            onFinishSpontaneous(Some(currentTick + 1))
+            // Unregister from TimeManager — the vehicle now owns TM communication.
+            // Person will re-register when TripCompleted arrives via actInteractWith.
+            onFinishSpontaneous(None)
           
           case _ =>
             logError(s"${getEntityId} does not own vehicle ${vehicleRef.id} for mode ${logistics.mode}")
@@ -423,9 +536,14 @@ class Person(
           label = "person_activity_start"
         )
         
-        // Activity just started, remain registered with TimeManager
-        // actSpontaneous will be called again to check when to leave
-        onFinishSpontaneous(Some(currentTick + 1))
+        // Sleep directly until this activity's end time.
+        // No polling — the TM will wake us at the exact tick.
+        val endTick = try {
+          Math.max(currentTick + 1, activity.endTime.toLong)
+        } catch {
+          case _: NumberFormatException => currentTick + 1
+        }
+        onFinishSpontaneous(Some(endTick))
       
       case None =>
         // Schedule complete

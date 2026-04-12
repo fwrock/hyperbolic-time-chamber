@@ -7,5 +7,5 @@ enum ActorTypeEnum:
     Person,
     Subway,
     Train,
-    Bike,
+    Bicycle,
     Motorcycle
