@@ -268,7 +268,6 @@ trait PrivateVehicle[T <: MovableState] {
         handleParkVehicle(event, d)
         true
       case d: TripCompletedData =>
-        // Should not receive this (we send it)
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
       case _ =>
