@@ -55,6 +55,10 @@ scripts/*
 */terraform.tfstate
 */terraform.tfstate.backup
 */terraform/
+terraform/*.tfvars
+terraform/gcp/terraform.tfstate
+terraform/gcp/terraform.tfstate.backup
+
 
 ### Python ###
 # Virtual environments
