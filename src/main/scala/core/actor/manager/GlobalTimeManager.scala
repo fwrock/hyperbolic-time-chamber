@@ -72,8 +72,9 @@ class GlobalTimeManager(
 
   private def createTimeManagersPool(): Unit = {
     // Read from config, with sensible defaults for cluster distribution.
-    // maxInstancesPerNode=1 ensures LocalTMs are spread across pods,
-    // preventing CPU hotspot on the singleton's node.
+    // Multiple LocalTMs per node spread the mailbox load: each TM processes
+    // FinishEvent/ScheduleEvent sequentially, so N TMs per node = N parallel
+    // mailbox processors for the pod's actors.
     val config = context.system.settings.config
     val totalInstances = config.getInt("htc.time-manager.total-instances")
     val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")

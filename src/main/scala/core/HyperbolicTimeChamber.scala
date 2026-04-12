@@ -14,10 +14,22 @@ import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
-/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter. */
+/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter.
+  * Also logs message type for diagnostics when dead letters are persistent.
+  */
 private class DeadLetterListener extends Actor {
+  import org.slf4j.LoggerFactory
+  private val log = LoggerFactory.getLogger(classOf[DeadLetterListener])
+
   override def receive: Receive = {
-    case _: DeadLetter => MetricsServer.deadLetters.inc()
+    case dl: DeadLetter =>
+      MetricsServer.deadLetters.inc()
+      log.debug(
+        "Dead letter: msg={} from={} to={}",
+        dl.message.getClass.getSimpleName,
+        dl.sender.path,
+        dl.recipient.path
+      )
   }
 }
 

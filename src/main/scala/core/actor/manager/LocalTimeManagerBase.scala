@@ -46,20 +46,28 @@ abstract class LocalTimeManagerBase(
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
 
   // --- Watchdog: detects and recovers from stuck runningEvents ---
+  // When actors don't respond with FinishEvent (e.g., cross-pod message loss during
+  // cluster formation, shard rebalancing, or actor crash), the watchdog retries
+  // sending SpontaneousEvent once before force-clearing.
   private case object RunningEventsWatchdog
-  private val WATCHDOG_INTERVAL_SECONDS = 60
-  private val STALE_WARNING_SECONDS = 120
-  private val FORCE_CLEAR_SECONDS = 300
+  private val WATCHDOG_INTERVAL_SECONDS: Int =
+    try config.getInt("htc.time-manager.watchdog-interval-seconds") catch { case _: Exception => 30 }
+  private val STALE_WARNING_SECONDS: Int =
+    try config.getInt("htc.time-manager.stale-warning-seconds") catch { case _: Exception => 60 }
+  private val FORCE_CLEAR_SECONDS: Int =
+    try config.getInt("htc.time-manager.force-clear-seconds") catch { case _: Exception => 120 }
   protected var tickProcessingStartTime: Long = 0L
   private var lastWatchdogRunningCount: Int = 0
   private var consecutiveStaleChecks: Int = 0
   private var watchdogTask: org.apache.pekko.actor.Cancellable = _
+  private var retriedStuckActors: Boolean = false
 
   /** Reset watchdog counters when starting a new batch of events. */
   protected def resetWatchdogState(): Unit = {
     tickProcessingStartTime = System.currentTimeMillis()
     consecutiveStaleChecks = 0
     lastWatchdogRunningCount = 0
+    retriedStuckActors = false
   }
 
   override def onStart(): Unit = {
@@ -309,7 +317,14 @@ abstract class LocalTimeManagerBase(
   /**
    * Watchdog: detects stuck runningEvents and force-advances the simulation.
    * Prevents the LocalTM from being permanently stuck when actors
-   * don't respond with FinishEvent (e.g. due to shard rebalancing, crashes).
+   * don't respond with FinishEvent (e.g. due to shard rebalancing, crashes,
+   * or cross-pod message loss with at-most-once delivery).
+   *
+   * Strategy:
+   * 1. After STALE_WARNING_SECONDS: log warning with stuck actor IDs
+   * 2. After warning + 1 interval: RETRY sending SpontaneousEvent to stuck actors
+   *    (handles transient message loss — the most common cause)
+   * 3. After FORCE_CLEAR_SECONDS: force-clear and advance
    */
   private def handleRunningEventsWatchdog(): Unit = {
     if (runningEvents.nonEmpty && tickProcessingStartTime > 0) {
@@ -330,6 +345,19 @@ abstract class LocalTimeManagerBase(
           s"[Watchdog] $currentCount running events stuck for ${elapsedSec}s at tick $localTickOffset " +
             s"(stale checks: $consecutiveStaleChecks). Sample IDs: $sampleIds"
         )
+
+        // Retry: resend SpontaneousEvent to stuck actors once.
+        // Most common cause is transient message loss (at-most-once Artery delivery)
+        // during cluster formation or under heavy load. A single retry resolves most cases.
+        if (!retriedStuckActors && consecutiveStaleChecks >= 1) {
+          retriedStuckActors = true
+          logInfo(
+            s"[Watchdog] RETRYING SpontaneousEvent for $currentCount stuck actors at tick $localTickOffset"
+          )
+          runningEvents.foreach { identity =>
+            sendSpontaneousEvent(localTickOffset, identity)
+          }
+        }
       }
 
       if (elapsedSec >= FORCE_CLEAR_SECONDS && consecutiveStaleChecks >= 2) {

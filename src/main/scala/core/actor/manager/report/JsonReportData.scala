@@ -79,6 +79,8 @@ class JsonReportData(
   private val actorUniqueId = java.util.UUID.randomUUID().toString.take(8)
   private val fileName = s"${prefix}${timeBasedId}_${actorUniqueId}_events.jsonl"
   private val filePath = s"$directory/$fileName"
+  private var persistentWriter: BufferedWriter = _
+  private var flushCount: Long = 0
 
   override def onReport(event: ReportEvent): Unit = {
     buffer += event
@@ -87,13 +89,24 @@ class JsonReportData(
     }
   }
 
+  /** Returns a persistent writer, reusing the same file handle across flushes.
+    * Opening/closing FileWriter per flush is expensive on network filesystems (GCS Fuse).
+    * The writer is only closed in postStop().
+    */
+  private def getOrCreateWriter(): BufferedWriter = {
+    if (persistentWriter == null) {
+      mkdir(directory)
+      // 64KB buffer reduces syscall frequency on network mounts
+      persistentWriter = new BufferedWriter(new FileWriter(filePath, true), 65536)
+    }
+    persistentWriter
+  }
+
   private def flushBuffer(): Unit = {
     if (buffer.isEmpty) return
 
-    mkdir(directory)
-
     try {
-      val writer = new BufferedWriter(new FileWriter(filePath, true))
+      val writer = getOrCreateWriter()
       buffer.foreach {
         report =>
           val jsonData = Map(
@@ -106,12 +119,24 @@ class JsonReportData(
           writer.write(JsonUtil.toJson(jsonData))
           writer.newLine()
       }
-      writer.close()
-      logInfo(s"Flushed ${buffer.size} events to $filePath")
+      writer.flush()
+      flushCount += 1
+      if (flushCount % 50 == 0) {
+        logInfo(s"Flushed ${buffer.size} events to $filePath (total flushes: $flushCount)")
+      }
       buffer.clear()
     } catch {
       case e: Exception =>
         logError(s"Failed to write report to file: ${e.getMessage}", e)
+        // Close broken writer so next flush creates a new one
+        closeWriter()
+    }
+  }
+
+  private def closeWriter(): Unit = {
+    if (persistentWriter != null) {
+      try { persistentWriter.close() } catch { case _: Exception => }
+      persistentWriter = null
     }
   }
 
@@ -122,8 +147,10 @@ class JsonReportData(
     }
   }
 
-  override def postStop(): Unit =
+  override def postStop(): Unit = {
     if (buffer.nonEmpty) {
       flushBuffer()
     }
+    closeWriter()
+  }
 }
