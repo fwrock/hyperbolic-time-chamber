@@ -22,12 +22,9 @@ import scala.collection.mutable
   * @param startTick Simulation start tick
   * @param origin Origin node ID
   * @param destination Destination node ID
-  * @param bestRoute Best route path
-  * @param currentNode Current node ID
   * @param distance Total distance traveled
   * @param actorType Actor type
   * @param size Vehicle size
-  * @param status Current status
   * @param currentSimulationMode Current mode (MESO or MICRO)
   * @param microState Optional microscopic bicycle state
   */
@@ -35,12 +32,9 @@ case class BicycleState(
   override val startTick: Tick,
   override val origin: String,
   override val destination: String,
-  var bestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var currentNode: String = null,
   var distance: Double = 0,
   override val actorType: ActorTypeEnum,
   override val size: Double,
-  var status: MovableStatusEnum = Start,
   
   // ========== Hybrid control ==========
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
@@ -49,14 +43,27 @@ case class BicycleState(
   var microState: Option[MicroBicycleState] = None
 ) extends MovableState(
       startTick = startTick,
-      movableBestRoute = bestRoute,
-      movableCurrentNode = currentNode,
       origin = origin,
       destination = destination,
-      movableStatus = status,
       actorType = actorType,
       size = size
     ) {
+
+  // ========== Convenience accessors delegating to parent MovableState ==========
+  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def currentNode: String = movableCurrentNode
+  def currentNode_=(v: String): Unit = movableCurrentNode = v
+
+  def currentPath: Option[(String, String)] = movableCurrentPath
+  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
   
   def isMicroMode: Boolean = currentSimulationMode == SimulationModeEnum.MICRO
   def isMesoMode: Boolean = currentSimulationMode == SimulationModeEnum.MESO

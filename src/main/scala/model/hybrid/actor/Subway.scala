@@ -44,9 +44,9 @@ class Subway(
     ) {
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
-    state.movableStatus match
+    state.status match
       case Start =>
-        state.movableStatus = Ready
+        state.status = Ready
         enterLink()
       case Ready =>
         enterLink()
@@ -56,7 +56,7 @@ class Subway(
         stationOpt match {
           case Some(_) =>
             // At a station — begin passenger exchange (dual-flag: load + unload)
-            state.movableStatus = Stopped
+            state.status = Stopped
             requestUnloadPeopleData()
             requestLoadPassenger()
             // Unregister from TM while waiting for load/unload responses.
@@ -69,7 +69,7 @@ class Subway(
       case Stopped =>
         leavingLink()
       case _ =>
-        logInfo(s"Event current status not handled ${state.movableStatus}")
+        logInfo(s"Event current status not handled ${state.status}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
@@ -173,7 +173,7 @@ class Subway(
   ): Unit = {
     state.distance += data.linkLength
     logDebug(s"Subway ${getEntityId} left rail link (total distance: ${state.distance}m)")
-    state.movableStatus = Ready
+    state.status = Ready
     onFinishSpontaneous(Some(currentTick + 1))
   }
 
@@ -190,12 +190,12 @@ class Subway(
     logDebug(s"  Length: ${data.linkLength}m")
     logDebug(s"  Speed: ${state.velocity} km/h")
     logDebug(s"  Travel time: ${time} ticks")
-    state.movableStatus = Moving
+    state.status = Moving
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
   override def getNextPath: Option[(String, String)] =
-    state.movableBestRoute match
+    state.bestRoute match
       case Some(routePath) =>
         if state.currentPathPosition < routePath.size then
           val nextPath = routePath(state.currentPathPosition)

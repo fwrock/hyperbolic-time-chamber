@@ -28,23 +28,27 @@ case class SubwayState(
   override val destination: String,
   nodeState: SubwayNodeState = SubwayNodeState(),
   passengers: mutable.Map[String, Identify] = mutable.Map.empty,
-  var bestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var currentPath: Option[(String, String)] = None,
   var currentPathPosition: Int = 0,
-  var bestCost: Double = Double.MaxValue,
   line: String,
-  override val actorType: ActorTypeEnum = Subway,
-  var status: MovableStatusEnum = Start
+  override val actorType: ActorTypeEnum = Subway
 ) extends MovableState(
       startTick = startTick,
-      movableBestRoute = bestRoute,
-      movableCurrentPath = currentPath,
-      movableCurrentNode = null,
       origin = origin,
       destination = destination,
-      movableBestCost = bestCost,
-      movableStatus = status,
-      movableReachedDestination = false,
       actorType = actorType,
       size = -1
-    )
+    ) {
+
+  // ========== Convenience accessors delegating to parent MovableState ==========
+  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+
+  def currentPath: Option[(String, String)] = movableCurrentPath
+  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
+}

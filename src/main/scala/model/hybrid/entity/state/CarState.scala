@@ -30,8 +30,6 @@ import scala.collection.mutable
   *   Type of reporter
   * @param scheduleOnTimeManager
   *   Whether to schedule on time manager
-  * @param name
-  *   Car identifier name
   * @param origin
   *   Origin node ID
   * @param destination
@@ -44,14 +42,8 @@ import scala.collection.mutable
   *   Current node ID
   * @param currentPath
   *   Current path segment
-  * @param lastNode
-  *   Last visited node
-  * @param digitalRails
-  *   Whether using predefined paths
   * @param distance
   *   Total distance traveled
-  * @param eventCount
-  *   Number of events generated
   * @param actorType
   *   Actor type enum
   * @param size
@@ -64,25 +56,16 @@ import scala.collection.mutable
   *   Optional microscopic state (active in MICRO links)
   */
 case class CarState(
-  // ========== Meso fields (inherited from CarState) ==========
+  // ========== Meso fields ==========
   override val startTick: Tick,
   override val reporterType: ReportTypeEnum = null,
   override val scheduleOnTimeManager: Boolean = true,
-  name: String = "",
   override val origin: String,
   override val destination: String = null,
   var precomputedRoute: Option[List[PrecomputedRouteItem]] = None,
-  var bestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var bestCost: Double = Double.MaxValue,
-  var currentNode: String = null,
-  var currentPath: Option[(String, String)] = None,
-  var lastNode: String = null,
-  var digitalRails: Boolean = false,
   var distance: Double = 0,
-  var eventCount: Int = 0,
   override val actorType: ActorTypeEnum,
   override val size: Double,
-  var status: MovableStatusEnum = Start,
 
   // ========== Hybrid control ==========
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
@@ -93,16 +76,27 @@ case class CarState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager,
-      movableBestRoute = bestRoute,
-      movableCurrentPath = currentPath,
-      movableCurrentNode = currentNode,
       origin = origin,
       destination = destination,
-      movableBestCost = bestCost,
-      movableStatus = status,
       actorType = actorType,
       size = size
     ) {
+
+  // ========== Convenience accessors delegating to parent MovableState ==========
+  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def currentNode: String = movableCurrentNode
+  def currentNode_=(v: String): Unit = movableCurrentNode = v
+
+  def currentPath: Option[(String, String)] = movableCurrentPath
+  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
 
   /** Check if car is currently in MICRO mode */
   def isMicroMode: Boolean = currentSimulationMode == SimulationModeEnum.MICRO

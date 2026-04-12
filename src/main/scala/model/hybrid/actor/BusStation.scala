@@ -246,19 +246,20 @@ class BusStation(
       timeManagers = properties.timeManagers,
       creatorManager = properties.creatorManager,
       reporters = properties.reporters,
-      data = toJson(
-        BusState(
+      data = toJson({
+        val busState = BusState(
           startTick = busStartTick,
           busStops = state.busStops.toMap, // Convert LinkedHashMap to Map
           capacity = bus.capacity,
           size = bus.size,
           origin = state.origin,
           destination = state.destination,
-          bestRoute = Some(route),
           numberOfPorts = bus.numberOfPorts,
           label = bus.label
         )
-      ),
+        busState.bestRoute = Some(route)
+        busState
+      }),
       dependencies = mutable.Map[String, Dependency](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType

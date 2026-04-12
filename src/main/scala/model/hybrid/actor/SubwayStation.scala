@@ -191,20 +191,21 @@ class SubwayStation(
       timeManagers = properties.timeManagers,
       creatorManager = properties.creatorManager,
       reporters = properties.reporters,
-      data = toJson(
-        SubwayState(
+      data = toJson({
+        val subwayState = SubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
           numberOfPorts = subway.numberOfPorts,
           velocity = subway.velocity,
           stopTime = subway.stopTime,
           line = subway.line,
-          bestRoute = Some(route),
           subwayStations = subwayStations,
           origin = state.nodeId,
           destination = subwayStations.values.last
         )
-      ),
+        subwayState.bestRoute = Some(route)
+        subwayState
+      }),
       dependencies = mutable.Map[String, Dependency](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType
