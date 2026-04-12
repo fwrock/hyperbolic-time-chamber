@@ -52,12 +52,26 @@ scripts/*
 ### Logs ###
 *.log
 
-*/terraform.tfstate
-*/terraform.tfstate.backup
-*/terraform/
-terraform/*.tfvars
+### Terraform ###
+# Provider binaries and plugin cache (.terraform directories)
+**/.terraform/
+.terraform/
+
+# State files (may contain sensitive infrastructure data)
+terraform.tfstate
+terraform.tfstate.backup
+**/*.tfstate
+**/*.tfstate.backup
 terraform/gcp/terraform.tfstate
 terraform/gcp/terraform.tfstate.backup
+
+# Variable files with secrets
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Terraform directories at any level
+*/terraform/
 
 
 ### Python ###

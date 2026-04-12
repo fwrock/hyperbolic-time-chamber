@@ -332,7 +332,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
-    actInteractWith(event)
+    try actInteractWith(event)
+    catch
+      case e: Exception =>
+        logError(
+          s"Exception during actInteractWith at tick=$currentTick for ${getEntityId} " +
+            s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
+        )
+        e.printStackTrace()
     // save(event) // Event persistence disabled
   }
 

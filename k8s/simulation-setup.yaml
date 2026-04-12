@@ -100,7 +100,7 @@ spec:
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.6.0-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.6.2-k8s
           resources:
             requests:
               cpu: "4"
@@ -155,6 +155,25 @@ spec:
               value: "120s"
             - name: HTC_HEARTBEAT_PAUSE
               value: "180 s"
+            # ── Time Manager Pool ───────────────────────────────────
+            # Multiple LocalTMs per pod prevent mailbox bottleneck.
+            # With 5M actors / 16 pods = 312K actors/pod.
+            # 1 TM/pod = 600K+ messages/tick in one mailbox (bottleneck).
+            # 8 TM/pod = ~75K messages/mailbox (8x throughput).
+            - name: HTC_TIME_MANAGER_INSTANCES
+              value: "128"
+            - name: HTC_TIME_MANAGER_PER_NODE
+              value: "8"
+            # ── Report Writers ──────────────────────────────────────
+            # Reporters run on io-dispatcher (virtual threads) to avoid
+            # blocking simulation threads. Fewer instances = fewer open
+            # file handles on GCS Fuse.
+            - name: HTC_REPORT_JSON_INSTANCES
+              value: "64"
+            - name: HTC_REPORT_JSON_PER_NODE
+              value: "16"
+            - name: HTC_REPORT_JSON_BATCH_SIZE
+              value: "500"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
