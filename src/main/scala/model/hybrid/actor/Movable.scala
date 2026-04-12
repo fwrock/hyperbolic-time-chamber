@@ -89,11 +89,16 @@ abstract class Movable[T <: MovableState](
         onFinishSpontaneous(Some(currentTick + 1))
     }
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit =
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    if (state == null) {
+      logWarn(s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}")
+      return
+    }
     event.data match {
       case d: LinkInfoData => handleLinkInfo(event, d)
       case _               => logWarn(s"Movable Event not handled: $event")
     }
+  }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
     waitingTicksCounter = 0

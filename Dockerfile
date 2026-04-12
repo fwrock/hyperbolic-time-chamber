@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN mkdir -p /app/logs
 
-COPY target/scala-3.3.5/hyperbolic-time-chamber-1.23.3.jar app.jar
+COPY target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar app.jar
 
 EXPOSE 1600-2700
 

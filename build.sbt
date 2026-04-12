@@ -48,7 +48,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    assembly / assemblyJarName := "hyperbolic-time-chamber-1.23.3.jar",
+    assembly / assemblyJarName := "hyperbolic-time-chamber-1.24.3.jar",
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first

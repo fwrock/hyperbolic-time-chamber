@@ -73,6 +73,12 @@ trait PrivateVehicle[T <: MovableState] {
   protected def logVehicleWarn(message: String): Unit
   protected def logVehicleDebug(message: String): Unit
 
+  /** Register this vehicle with the TimeManager pool for the first time.
+    * Must use scheduleEvent (TM pool router) instead of onFinishSpontaneous
+    * because passive vehicles (scheduleOnTimeManager=false) have null currentTimeManager.
+    */
+  protected def registerOnTimeManager(tick: Tick): Unit
+
   /** Initialize vehicle in Parked state.
     *
     * Override actSpontaneous in subclasses to call this. Vehicles should NOT auto-start; they wait
@@ -121,9 +127,12 @@ trait PrivateVehicle[T <: MovableState] {
       // Activate vehicle (transition from Parked to Start)
       setVehicleStatus(Start)
 
-      // Register with TimeManager (this will trigger route request)
-      // The existing actSpontaneous logic will handle Start status
-      scheduleNextTick(Some(getActorCurrentTick + 1))
+      // Register with TimeManager for the first time.
+      // Use registerOnTimeManager (routed via TM pool) instead of scheduleNextTick /
+      // onFinishSpontaneous, because the latter sends to currentTimeManager which
+      // is null for passive vehicles that never received a SpontaneousEvent
+      // (i.e., those created with scheduleOnTimeManager = false).
+      registerOnTimeManager(getActorCurrentTick + 1)
     } catch {
       case _: NullPointerException =>
         logVehicleDebug(s"${getActorEntityId} state not ready for StartTrip, deferring message")
