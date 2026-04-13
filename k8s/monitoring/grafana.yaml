@@ -391,6 +391,13 @@ spec:
               value: "false"
             - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
               value: /var/lib/grafana/dashboards/htc-performance.json
+            # ── Image Renderer (sidecar) ──
+            - name: GF_RENDERING_SERVER_URL
+              value: "http://localhost:8081/render"
+            - name: GF_RENDERING_CALLBACK_URL
+              value: "http://localhost:3000/"
+            - name: GF_LOG_FILTERS
+              value: "rendering:debug"
           resources:
             requests:
               cpu: "250m"
@@ -398,6 +405,24 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+        # ── Grafana Image Renderer sidecar ─────────────────────────
+        - name: renderer
+          image: grafana/grafana-image-renderer:3.10.5
+          ports:
+            - containerPort: 8081
+              name: renderer
+          env:
+            - name: ENABLE_METRICS
+              value: "true"
+            - name: HTTP_PORT
+              value: "8081"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
           volumeMounts:
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
