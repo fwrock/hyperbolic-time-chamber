@@ -14,7 +14,7 @@ object CityMapUtil {
   val edgeGraphIdExtractor: EdgeGraph => String = (edgeLabel: EdgeGraph) => edgeLabel.id
 
   // Carrega os dados do mapa da cidade uma vez, incluindo os mapas de consulta
-  private val loadedCityData: LoadedGraphData[NodeGraph, String, Double, EdgeGraph] =
+  private lazy val loadedCityData: LoadedGraphData[NodeGraph, String, Double, EdgeGraph] =
     Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
       // Obter o caminho do arquivo de uma variável de ambiente ou usar um padrão
       sys.env.get("HTC_MOBILITY_CITY_MAP_FILE").getOrElse("city_map.json"),
