@@ -1,8 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.TimeManagerBase
-import core.entity.control.ScheduledActors
+
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
 import core.enumeration.CreationTypeEnum
@@ -11,7 +10,6 @@ import core.types.Tick
 import core.util.{IdUtil, StringUtil}
 
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.*
