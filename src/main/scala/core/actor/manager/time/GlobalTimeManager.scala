@@ -4,7 +4,7 @@ package core.actor.manager.time
 import core.actor.manager.time.{GlobalTimeManager, TimeManagerBase}
 import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
-import core.entity.event.control.load.{RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
+import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
 import core.metrics.MetricsServer
@@ -127,6 +127,8 @@ class GlobalTimeManager(
       handleRegisterProgressiveLoadManager(event)
     case event: TickWindowReady =>
       handleTickWindowReady(event)
+    case event: ProgressiveLoadingCompleteEvent =>
+      onProgressiveLoadingComplete()
     case Terminated(ref) =>
       handleTimeManagerTerminated(ref)
     case event => super.handleEvent(event)
@@ -463,16 +465,24 @@ class GlobalTimeManager(
       MetricsServer.tmWaitingForProgressive.set(0)
       pendingNextTick.foreach { tick =>
         if (tick <= progressiveLoadedUpToTick) {
-        logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
-
-          localTimeManagers.keys.foreach { timeManager =>
-            localTimeManagers.update(
-              timeManager,
-              LocalTimeManagerTickInfo(tick = tick)
+          // If a migration pause is active, do NOT advance. The pending tick is preserved in
+          // pendingNextTick; handleMigrationComplete → calculateAndBroadcastNextGlobalTick will
+          // pick up from here once migration completes.
+          if (migrationPauseRequested) {
+            logInfo(
+              s"Progressive window ready at tick $tick but migration pause active — " +
+                s"holding until migration completes"
             )
+          } else {
+            logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
+            localTimeManagers.keys.foreach { timeManager =>
+              localTimeManagers.update(
+                timeManager,
+                LocalTimeManagerTickInfo(tick = tick)
+              )
+            }
+            notifyLocalManagers(UpdateGlobalTimeEvent(tick))
           }
-
-          notifyLocalManagers(UpdateGlobalTimeEvent(tick))
         }
       }
     }
