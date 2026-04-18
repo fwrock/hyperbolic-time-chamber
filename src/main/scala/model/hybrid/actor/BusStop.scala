@@ -20,8 +20,12 @@ class BusStop(
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  override def handlePostLoadRegistration(): Unit =
     getDependencyOption(state.nodeId) match {
       case Some(dependency) =>
         sendMessageTo(
@@ -37,7 +41,6 @@ class BusStop(
           s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
         )
     }
-  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

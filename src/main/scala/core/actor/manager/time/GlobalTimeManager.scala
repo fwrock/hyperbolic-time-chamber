@@ -1,22 +1,22 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.time
 
-import core.entity.control.{ LocalTimeManagerTickInfo, ScheduledActors }
-import core.entity.event.{ FinishEvent, SpontaneousEvent }
+import core.actor.manager.{GlobalTimeManager, TimeManagerBase}
+import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
+import core.entity.event.control.execution.TimeManagerRegisterEvent
+import core.entity.event.control.load.{RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
+import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
+import core.metrics.MetricsServer
 import core.types.Tick
+import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
-import org.apache.pekko.actor.{ ActorRef, Props, Terminated }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.actor.{ActorRef, Props, Terminated}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent }
-import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ TickWindowReady, TickWindowRequest }
-import org.interscity.htc.core.entity.event.control.load.RegisterProgressiveLoadManagerEvent
-import org.interscity.htc.core.metrics.MetricsServer
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
+import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent}
 
 import scala.collection.mutable
 
@@ -402,8 +402,7 @@ class GlobalTimeManager(
       MetricsServer.tmWaitingForProgressive.set(0)
       pendingNextTick.foreach { tick =>
         if (tick <= progressiveLoadedUpToTick) {
-          logInfo(s"Resuming simulation after progressive load, advancing to tick $tick")
-          pendingNextTick = None
+        logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
 
           localTimeManagers.keys.foreach { timeManager =>
             localTimeManagers.update(

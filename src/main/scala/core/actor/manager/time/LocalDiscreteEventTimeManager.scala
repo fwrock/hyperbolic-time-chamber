@@ -1,11 +1,12 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.time
 
+import core.actor.manager.{LocalDiscreteEventTimeManager, LocalTimeManagerBase}
 import core.types.Tick
+import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ActorRef, Props}
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
 import scala.collection.mutable
 
@@ -102,7 +103,7 @@ class LocalDiscreteEventTimeManager(
       count += 1
     }
     if (count > 0 && pendingTickActors.nonEmpty) {
-      logInfo(
+      logDebug(
         s"[LocalTM] Fired batch of $count actors at tick $currentBatchTick, " +
           s"${pendingTickActors.size} remaining, ${runningEvents.size} running"
       )

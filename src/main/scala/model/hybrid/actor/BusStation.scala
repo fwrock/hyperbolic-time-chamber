@@ -243,8 +243,8 @@ class BusStation(
     val busProperties = Properties(
       entityId = bus.actorId,
       resourceId = properties.resourceId,
-      timeManagers = properties.timeManagers,
-      creatorManager = properties.creatorManager,
+      timeManagers = timeManagers,
+      creatorManager = creatorManager,
       reporters = properties.reporters,
       data = toJson({
         val busState = BusState(

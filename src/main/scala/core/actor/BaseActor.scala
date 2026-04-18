@@ -12,7 +12,7 @@ import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, 
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, PostLoadRegistrationEvent }
 
 import java.util.UUID
 import scala.compiletime.uninitialized
@@ -115,13 +115,14 @@ abstract class BaseActor[T <: BaseState](
     log.error(s"$entityId: $eventInfo")
 
   override def receive: Receive = {
-    case event: DestructEvent                 => destruct(event)
-    case event: EntityEnvelopeEvent           => handleEnvelopeEvent(event)
-    case event: InitializeEvent               => onInitialize(event)
-    case event: ShardRegion.StartEntity       => handleStartEntity(event)
-    case SaveSnapshotSuccess(metadata)        =>
-    case SaveSnapshotFailure(metadata, cause) =>
-    case event                                => handleEvent(event)
+    case event: DestructEvent                  => destruct(event)
+    case event: EntityEnvelopeEvent            => handleEnvelopeEvent(event)
+    case event: PostLoadRegistrationEvent      => onPostLoadRegistration(event)
+    case event: InitializeEvent                => onInitialize(event)
+    case event: ShardRegion.StartEntity        => handleStartEntity(event)
+    case SaveSnapshotSuccess(metadata)         =>
+    case SaveSnapshotFailure(metadata, cause)  =>
+    case event                                 => handleEvent(event)
   }
 
   private def save(event: Any): Unit = ()
@@ -140,13 +141,24 @@ abstract class BaseActor[T <: BaseState](
     case _ => receive
   }
 
-  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
+  private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit = {
     entityEnvelopeEvent.event match {
-      case event: InitializeEvent         => onInitialize(event)
-      case event: DestructEvent           => destruct(event)
-      case event: ShardRegion.StartEntity => handleStartEntity(event)
-      case event                          => handleEvent(event)
+      case event: InitializeEvent              => onInitialize(event)
+      case event: DestructEvent                => destruct(event)
+      case event: ShardRegion.StartEntity      => handleStartEntity(event)
+      case event: PostLoadRegistrationEvent      => onPostLoadRegistration(event)
+      case event                               => handleEvent(event)
     }
+  }
+
+  /** Called after ALL eager sources have finished loading. Override in actors that need to
+    * register with other actors (e.g. BusStop → Node) to guarantee the target is already
+    * fully initialized before the registration message is sent.
+    * The actor MUST eventually call event.coordinatorRef ! PostLoadRegistrationAckEvent(entityId).
+    * SimulationBaseActor provides a default implementation that calls handlePostLoadRegistration()
+    * and then automatically sends the ACK.
+    */
+  protected def onPostLoadRegistration(event: PostLoadRegistrationEvent): Unit = {}
 
   private def handleStartEntity(event: ShardRegion.StartEntity): Unit =
     entityId = event.entityId

@@ -1,15 +1,17 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.report
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import core.actor.manager.{BaseManager, ReportManager}
+import core.entity.event.control.report.RegisterReportersEvent
+import core.entity.state.DefaultState
+import core.enumeration.ReportTypeEnum
+import core.util.ManagerConstantsUtil
+import core.util.ManagerConstantsUtil.{POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME}
+
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
-import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
-import org.interscity.htc.core.entity.state.DefaultState
-import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
 
 import java.time.LocalDateTime
 import scala.collection.mutable

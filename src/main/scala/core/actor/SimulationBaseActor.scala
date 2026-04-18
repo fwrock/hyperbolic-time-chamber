@@ -13,7 +13,7 @@ import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
 import org.interscity.htc.core.metrics.MetricsServer
@@ -137,6 +137,10 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   private def registerOnTimeManager(): Unit = {
     val timeManager = getTimeManager(currentTimeManagerType)
+    if (timeManager == null) {
+      logWarn(s"TimeManager is NULL for $entityId (type=$currentTimeManagerType). timeManagers map: size=${if (timeManagers == null) "NULL MAP" else timeManagers.size.toString} keys=${if (timeManagers == null) "" else timeManagers.keys.mkString(",")}")
+      return
+    }
     if (properties.actorType == LoadBalancedDistributed) {
       timeManager ! RegisterActorEvent(
         startTick = startTick,
@@ -175,26 +179,85 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManagers = event.data.timeManagers
       // Usa discrete-event como padrão
       currentTimeManagerType = TimeManagerTypeEnum.DISCRETE_EVENT
+    } else {
+      logWarn(s"onInitialize: timeManagers is NULL for $entityId (class=${getClass.getSimpleName})")
     }
     creatorManager = event.data.creatorManager
-    state = JsonUtil.convertValue[T](event.data.data)
+    try {
+      state = JsonUtil.convertValue[T](event.data.data)
+    } catch {
+      case e: Exception =>
+        logError(s"Failed to deserialize state for $entityId: ${e.getMessage}", e)
+    }
     dependencies.clear()
     dependencies ++= event.data.dependencies
     reporters = event.data.reporters
     if (state != null) {
       startTick = state.getStartTick
       if (state.isSetScheduleOnTimeManager) {
-        registerOnTimeManager()
+        try {
+          registerOnTimeManager()
+        } catch {
+          case e: Exception =>
+            logError(s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}", e)
+        }
       }
+    } else {
+      logWarn(s"$entityId: state is NULL after deserialization (class=${getClass.getSimpleName}). Will still send ACK.")
     }
-    // Send ack to the creator that initialization finished
+    // Send NeedsPostLoadRegistrationEvent BEFORE InitializeEntityAckEvent so the creator
+    // processes the registration signal before it processes the ACK that may complete the batch.
+    // Both messages go to the same actor (creatorManager == event.actorRef), so Pekko's
+    // FIFO ordering guarantee ensures the creator sees them in this order.
+    // Guard: only opt-in when state was successfully deserialized — if state is null,
+    // handlePostLoadRegistration() would NPE, the coordinator ACK would never arrive,
+    // and the simulation would deadlock.
+    if (requiresPostLoadRegistration && creatorManager != null && state != null) {
+      creatorManager ! NeedsPostLoadRegistrationEvent(
+        entityId = entityId,
+        classType = getClass.getName
+      )
+    } else if (requiresPostLoadRegistration && state == null) {
+      logWarn(s"$entityId: skipping NeedsPostLoadRegistrationEvent — state is NULL (class=${getClass.getSimpleName})")
+    }
+    // Always send ack to the creator that initialization finished (even on state deserialization
+    // failure) so that the loading pipeline does not deadlock waiting for this ack.
     try
       // InitializeEvent.actorRef is the creator/loader that requested initialization
       event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
     catch {
       case e: Exception =>
-        logWarn(s"Failed to send InitializeEntityAckEvent for $entityId: ${e.getMessage}")
+        logError(s"$entityId: FAILED to send InitializeEntityAckEvent: ${e.getClass.getName}: ${e.getMessage}", e)
     }
+  }
+
+  /** Return true to opt in to the post-load registration phase.
+    * The actor will receive PostLoadRegistrationEvent after all EAGER loading is complete,
+    * at which point handlePostLoadRegistration() will be called. The ACK is sent automatically.
+    */
+  protected def requiresPostLoadRegistration: Boolean = false
+
+  /** Override this (together with requiresPostLoadRegistration = true) to perform any
+    * cross-actor registration needed before the simulation starts (e.g. BusStop → Node).
+    * The PostLoadRegistrationAckEvent is sent back to the coordinator automatically after
+    * this method returns.
+    */
+  protected def handlePostLoadRegistration(): Unit = {}
+
+  /** Dispatched by BaseActor when PostLoadRegistrationEvent arrives.
+    * Calls handlePostLoadRegistration() then sends the ACK back to the coordinator.
+    * Subclasses should NOT override this — override handlePostLoadRegistration() instead.
+    * ACK is always sent even if handlePostLoadRegistration() throws, so the coordinator
+    * never deadlocks waiting for a missing reply.
+    */
+  override protected final def onPostLoadRegistration(event: PostLoadRegistrationEvent): Unit = {
+    try {
+      handlePostLoadRegistration()
+    } catch {
+      case e: Exception =>
+        logError(s"$entityId: handlePostLoadRegistration() threw ${e.getClass.getSimpleName}: ${e.getMessage} — sending ACK anyway", e)
+    }
+    event.coordinatorRef ! PostLoadRegistrationAckEvent(entityId = entityId)
   }
 
   /** Sends a message to another simulation actor.
@@ -291,9 +354,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     if (state == null) {
-      logWarn(
-        s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
-      )
+      // Shard-initiator probe entities or actors whose shard migrated before re-initialization.
+      // Unschedule silently — not a real simulation actor.
+      if (!getEntityId.endsWith("-shard-initiator")) {
+        logDebug(
+          s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
+        )
+      }
       onFinishSpontaneous(None)
       return
     }

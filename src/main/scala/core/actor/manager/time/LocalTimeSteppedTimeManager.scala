@@ -1,10 +1,11 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.time
 
+import core.actor.manager.{LocalTimeManagerBase, LocalTimeSteppedTimeManager}
 import core.types.Tick
+import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.interscity.htc.core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
+import org.apache.pekko.actor.{ActorRef, Props}
 
 import scala.collection.mutable
 

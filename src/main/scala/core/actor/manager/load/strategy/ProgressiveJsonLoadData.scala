@@ -63,6 +63,8 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   private var streamExhausted: Boolean = false
 
   private val CHUNK_SIZE = 500
+  // Keep CreateActorsEvent messages small enough for Pekko Artery max frame size.
+  private val CREATE_EVENT_MAX_ACTORS = 25
   private val activeBatches = mutable.Set[String]()
   private var totalLoadedActors = 0L
   private val creators = mutable.Set[ActorRef]()
@@ -102,8 +104,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
    * Only extracts startTick counts — does NOT retain ActorSimulation objects.
    */
   private def buildTickIndexAsync(): Unit = {
-    logInfo(s"Building light tick index for $sourceFilePath...")
-
     Future {
       TickIndexUtil.buildLightIndex(sourceFilePath)
     }.onComplete {
@@ -168,7 +168,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     )
 
     if (expectedCount == 0) {
-      logInfo(s"No actors in tick range [${request.fromTick}, ${request.toTick}] for $sourceId")
       managerRef ! TickRangeLoadedEvent(
         sourceId = sourceId,
         fromTick = request.fromTick,
@@ -251,17 +250,21 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       actorsToCreate.partition(_.actor.creationType == PoolDistributed)
 
     if (loadBalanced.nonEmpty) {
-      val batchId = UUID.randomUUID().toString
-      activeBatches.add(batchId)
       creators.add(creatorRef)
-      creatorRef ! CreateActorsEvent(id = batchId, actors = loadBalanced, actorRef = self)
+      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
+        val batchId = UUID.randomUUID().toString
+        activeBatches.add(batchId)
+        creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      }
     }
 
     if (poolDistributed.nonEmpty) {
-      val batchId = UUID.randomUUID().toString
-      activeBatches.add(batchId)
       creators.add(creatorPoolRef)
-      creatorPoolRef ! CreateActorsEvent(id = batchId, actors = poolDistributed, actorRef = self)
+      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
+        val batchId = UUID.randomUUID().toString
+        activeBatches.add(batchId)
+        creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      }
     }
 
     if (activeBatches.isEmpty) {

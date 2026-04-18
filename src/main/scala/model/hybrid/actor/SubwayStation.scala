@@ -32,8 +32,12 @@ class SubwayStation(
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
 
-  override def onInitialize(event: InitializeEvent): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  override def handlePostLoadRegistration(): Unit =
     getDependencyOption(state.nodeId) match {
       case Some(node) =>
         sendMessageTo(
@@ -51,7 +55,6 @@ class SubwayStation(
           s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
         )
     }
-  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {

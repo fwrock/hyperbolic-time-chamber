@@ -1,14 +1,15 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.time
 
-import core.entity.event.{ FinishEvent, SpontaneousEvent }
+import core.actor.manager.BaseManager
+import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
 import core.types.Tick
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ PauseSimulationEvent, RegisterActorEvent, ResumeSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.*
 
 import scala.collection.mutable
 
