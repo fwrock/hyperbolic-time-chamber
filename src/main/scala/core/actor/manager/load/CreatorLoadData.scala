@@ -17,7 +17,6 @@ import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initializ
 import org.interscity.htc.core.entity.control.loadbalance.SpatialEntityData
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, NeedsPostLoadRegistrationEvent, ProcessNextCreateChunk, RetryPendingAcks }
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk, RetryPendingAcks }
 import org.interscity.htc.core.entity.event.control.loadbalance.{ BatchShardAssignmentResponse, RegisterSpatialEntitiesBatchEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
