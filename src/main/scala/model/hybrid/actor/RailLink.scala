@@ -41,13 +41,6 @@ class RailLink(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-
-    // Don't send connections immediately - do it lazily on first use
-    // This avoids race conditions where nodes haven't started yet
-
-    logInfo(s"RailLink initialized: ${state.from} -> ${state.to} (${state.subwayLine})")
-    logInfo(s"  Length: ${state.length}m, SpeedLimit: ${state.speedLimit} km/h")
-    logInfo(s"  Gradient: ${state.gradient}%, Curvature: ${state.curvature}")
   }
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

@@ -10,5 +10,7 @@ import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
 case class LoadDataEvent(
   actorRef: ActorRef,
-  actorsDataSources: List[ActorDataSource]
+  actorsDataSources: List[ActorDataSource],
+  /** Short class names that should auto-register for post-load registration (from simulation config). */
+  postLoadRegistrationClasses: List[String] = List.empty
 ) extends BaseEvent[DefaultBaseEventData](actorRef = actorRef)

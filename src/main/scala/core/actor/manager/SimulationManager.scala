@@ -6,18 +6,21 @@ import core.entity.state.DefaultState
 import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.cluster.Cluster
 import core.util.SimulationUtil.loadSimulationConfig
-import scala.concurrent.duration._
-import scala.concurrent.Future
-import scala.util.{ Failure, Success }
 
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
+import scala.concurrent.duration.*
+import scala.concurrent.Future
+import scala.util.{Failure, Success}
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
+import org.interscity.htc.core.actor.manager.load.{LoadDataManager, ProgressiveLoadDataManager}
+import org.interscity.htc.core.actor.manager.report.ReportManager
+import org.interscity.htc.core.actor.manager.time.GlobalTimeManager
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{ FinishLoadDataEvent, LoadDataEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, StartProgressiveLoadingEvent }
+import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, LoadDataEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, SimulationConfigLoadFailedEvent, SimulationConfigLoadedEvent, StartProgressiveLoadingEvent}
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -41,8 +44,6 @@ class SimulationManager(
   private var configLoadInProgress: Boolean = false
 
   private case object RetryPrepareSimulation
-  private final case class SimulationConfigLoaded(config: Simulation)
-  private final case class SimulationConfigLoadFailed(cause: Throwable)
 
   override def handleEvent: Receive = {
     case event: PrepareSimulationEvent               => prepareSimulation(event)
@@ -54,8 +55,8 @@ class SimulationManager(
     case RetryPrepareSimulation                      =>
       clusterRetryScheduled = false
       prepareSimulation()
-    case event: SimulationConfigLoaded               => onSimulationConfigLoaded(event)
-    case event: SimulationConfigLoadFailed           => onSimulationConfigLoadFailed(event)
+    case event: SimulationConfigLoadedEvent               => onSimulationConfigLoaded(event)
+    case event: SimulationConfigLoadFailedEvent           => onSimulationConfigLoadFailed(event)
   }
 
   override def onStart(): Unit =
@@ -133,7 +134,8 @@ class SimulationManager(
       logInfo(s"Sending LoadDataEvent with ${configuration.actorsDataSources.size} data sources")
       createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
         actorRef = selfProxy,
-        actorsDataSources = configuration.actorsDataSources
+        actorsDataSources = configuration.actorsDataSources,
+        postLoadRegistrationClasses = configuration.postLoadRegistrationClasses
       )
     } else {
       logWarn(
@@ -147,9 +149,9 @@ class SimulationManager(
       val ioDispatcher = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
       Future(loadSimulationConfig(event.configuration))(ioDispatcher).onComplete {
         case Success(loadedConfiguration) =>
-          self ! SimulationConfigLoaded(loadedConfiguration)
+          self ! SimulationConfigLoadedEvent(loadedConfiguration)
         case Failure(cause) =>
-          self ! SimulationConfigLoadFailed(cause)
+          self ! SimulationConfigLoadFailedEvent(cause)
       }(context.system.dispatcher)
       logInfo("Loading simulation configuration on io-dispatcher...")
       return
@@ -162,13 +164,13 @@ class SimulationManager(
     prepareSimulation()
   }
 
-  private def onSimulationConfigLoaded(event: SimulationConfigLoaded): Unit = {
+  private def onSimulationConfigLoaded(event: SimulationConfigLoadedEvent): Unit = {
     configuration = event.config
     configLoadInProgress = false
     prepareSimulation()
   }
 
-  private def onSimulationConfigLoadFailed(event: SimulationConfigLoadFailed): Unit = {
+  private def onSimulationConfigLoadFailed(event: SimulationConfigLoadFailedEvent): Unit = {
     configLoadInProgress = false
     logError(s"Failed to load simulation configuration: ${event.cause.getMessage}", event.cause)
     selfDestruct()
@@ -179,7 +181,6 @@ class SimulationManager(
       return
     }
 
-    // Log cluster state for diagnostics — helps identify shard distribution issues
     val cluster = Cluster(context.system)
     val members = cluster.state.members.filter(_.status == org.apache.pekko.cluster.MemberStatus.Up)
     val minMembers = context.system.settings.config.getInt("pekko.cluster.min-nr-of-members")
@@ -188,9 +189,7 @@ class SimulationManager(
         s"(min-nr-of-members=$minMembers), selfAddress=${cluster.selfAddress}, " +
         s"leader=${cluster.state.leader.getOrElse("none")}"
     )
-    members.foreach { m =>
-      logInfo(s"  Member: ${m.address} roles=${m.roles} status=${m.status}")
-    }
+
 
     if (members.size < minMembers) {
       if (!clusterRetryScheduled) {
@@ -211,10 +210,6 @@ class SimulationManager(
     logInfo(
       s"Run simulation - Configuration loaded with ${configuration.actorsDataSources.size} data sources"
     )
-    configuration.actorsDataSources.foreach {
-      source =>
-        logInfo(s"  - Data source: ${source.id} (${source.classType}): ${source.dataSource}")
-    }
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
   }

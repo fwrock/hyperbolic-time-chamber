@@ -9,8 +9,9 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.hybrid.entity.state.NodeState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
@@ -32,6 +33,27 @@ class Node(
       properties = properties
     ) {
 
+  // BusStop and SubwayStation actors register after all EAGER loading is complete
+  // (orchestrated by PostLoadRegistrationCoordinator). Node is always initialized before
+  // registration messages arrive, so no pre-init buffering is needed here.
+  // TrafficSignal registrations (pendingSignals) are kept because they follow a different
+  // initialization ordering that is not yet covered by PostLoadRegistrationCoordinator.
+  private val pendingSignals: mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
+    mutable.Map.empty
+
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+
+    if (state != null) {
+      if (pendingSignals.nonEmpty) {
+        pendingSignals.foreach { case (phaseOrigin, signalState) =>
+          state.signals.put(phaseOrigin, signalState)
+        }
+        pendingSignals.clear()
+      }
+    }
+  }
+
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =
     onFinishSpontaneous(None)
 
@@ -51,7 +73,8 @@ class Node(
       state.busStops.put(data.label, event.toIdentity)
     } else {
       logWarn(
-        s"Node ${getEntityId} state not initialized, deferring bus stop registration for ${data.label}"
+        s"Node ${getEntityId}: RegisterBusStopData arrived before initialization for ${data.label}. " +
+          s"This should not happen — PostLoadRegistrationCoordinator guarantees Node is initialized first."
       )
     }
 
@@ -66,8 +89,8 @@ class Node(
       }
     } else {
       logWarn(
-        s"Node ${getEntityId} state not initialized, deferring subway station registration for lines: ${data.lines
-            .mkString(", ")}"
+        s"Node ${getEntityId}: RegisterSubwayStationData arrived before initialization for lines: ${data.lines.mkString(", ")}. " +
+          s"This should not happen — PostLoadRegistrationCoordinator guarantees Node is initialized first."
       )
     }
 
@@ -167,6 +190,7 @@ class Node(
     if (state != null) {
       state.signals.put(data.phaseOrigin, data.signalState)
     } else {
+      pendingSignals.put(data.phaseOrigin, data.signalState)
       logWarn(
         s"Node ${getEntityId} state not initialized, deferring signal change status for phase: ${data.phaseOrigin}"
       )

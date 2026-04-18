@@ -14,7 +14,7 @@ import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEven
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, ProcessNextCreateChunk, RetryPendingAcks }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, NeedsPostLoadRegistrationEvent, ProcessNextCreateChunk, RetryPendingAcks }
 import org.interscity.htc.core.entity.event.data.InitializeData
 
 import scala.collection.mutable
@@ -39,6 +39,9 @@ class CreatorLoadData(
 
   private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
   private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
+  // Keeps Initialization data for entities that received StartEntityAck but not InitializeEntityAckEvent yet,
+  // so we can resend the InitializeEvent if the entity crashed or stash-dropped it.
+  private val pendingInitAck = mutable.Map[String, Initialization]()
   private var amountActors = 0
 
   private val actorsToCreate: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
@@ -73,24 +76,69 @@ class CreatorLoadData(
     case event: StartCreationEvent         => handleStartCreation(event)
     case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
     case event: ShardRegion.StartEntityAck => handleInitialize(event)
-    case event: InitializeEntityAckEvent   => handleFinishInitialization(event)
-    case RetryPendingAcks                  => handleRetryPendingAcks()
+    case event: InitializeEntityAckEvent       => handleFinishInitialization(event)
+    case RetryPendingAcks                      => handleRetryPendingAcks()
+    case event: NeedsPostLoadRegistrationEvent => handleNeedsPostLoadRegistration(event)
 
     case _ =>
   }
 
   private def handleRetryPendingAcks(): Unit = {
-    var pendingCount = 0
+    var startEntityCount = 0
+    var initEventCount = 0
+    // Retry entities still waiting for StartEntityAck
     initializeData.foreach {
       case (_, entitiesMap) =>
         entitiesMap.foreach {
           case (entityId, initialization) =>
-            val shardRegion = getShardRef(StringUtil.getModelClassName(initialization.classType))
-            shardRegion ! ShardRegion.StartEntity(entityId)
-            pendingCount += 1
+            try {
+              val shardRegion = getShardRef(StringUtil.getModelClassName(initialization.classType))
+              shardRegion ! ShardRegion.StartEntity(entityId)
+              startEntityCount += 1
+            } catch {
+              case e: Exception =>
+                logError(s"Watchdog: failed to retry StartEntity for $entityId: ${e.getMessage}", e)
+            }
         }
     }
-    // if (pendingCount > 0) logWarn(s"Watchdog: Reenviando StartEntity para $pendingCount atores.")
+    // Retry entities that got StartEntityAck but never sent InitializeEntityAckEvent
+    pendingInitAck.foreach {
+      case (entityId, data) =>
+        try {
+          val initializeEvent = InitializeEvent(
+            id = data.id,
+            actorRef = self,
+            data = InitializeData(
+              data = data.data,
+              resourceId = data.resourceId,
+              timeManagers = data.timeManagers,
+              creatorManager = data.creatorManager,
+              reporters = data.reporters,
+              dependencies = data.dependencies.map {
+                case (_, dep) => IdUtil.format(dep.id) -> dep
+              }
+            )
+          )
+          getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(
+            entityId = entityId,
+            event = initializeEvent
+          )
+          initEventCount += 1
+        } catch {
+          case e: Exception =>
+            logError(s"Watchdog: failed to retry InitializeEvent for $entityId: ${e.getMessage}", e)
+        }
+    }
+    val total = startEntityCount + initEventCount
+    if (total > 0) {
+      val startClassBreakdown = initializeData.values.flatMap(_.values).groupBy(_.classType).map { case (k, v) => s"$k=${v.size}" }.mkString(", ")
+      val initClassBreakdown  = pendingInitAck.values.groupBy(_.classType).map { case (k, v) => s"$k=${v.size}" }.mkString(", ")
+      logWarn(s"Watchdog: retrying $total pending initializations ($startEntityCount awaiting StartEntityAck [$startClassBreakdown], $initEventCount awaiting InitializeEntityAck [$initClassBreakdown]).")
+      if (initEventCount > 0) {
+        val stuck = pendingInitAck.keys.take(10).mkString(", ")
+        logWarn(s"Watchdog: stuck actor IDs (sample): $stuck")
+      }
+    }
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {
@@ -188,44 +236,100 @@ class CreatorLoadData(
       case None =>
     }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit =
+  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+    val classTypeForLog = {
+      val bId = actorsBatches.getOrElse(event.entityId, "")
+      if (bId.nonEmpty) initializeData.get(bId).flatMap(_.get(event.entityId)).map(_.classType).getOrElse("unknown")
+      else if (pendingInitAck.contains(event.entityId)) pendingInitAck(event.entityId).classType
+      else "not-found"
+    }
     actorsBatches.get(event.entityId) match {
       case Some(batchId) =>
         initializeData.get(batchId).flatMap(_.get(event.entityId)) match {
           case Some(data) =>
-            val initializeEvent = InitializeEvent(
-              id = data.id,
-              actorRef = self,
-              data = InitializeData(
-                data = data.data,
-                resourceId = data.resourceId,
-                timeManagers = data.timeManagers,
-                creatorManager = data.creatorManager,
-                reporters = data.reporters,
-                dependencies = data.dependencies.map {
-                  case (_, dep) => IdUtil.format(dep.id) -> dep
-                }
+            try {
+              val initializeEvent = InitializeEvent(
+                id = data.id,
+                actorRef = self,
+                data = InitializeData(
+                  data = data.data,
+                  resourceId = data.resourceId,
+                  timeManagers = data.timeManagers,
+                  creatorManager = data.creatorManager,
+                  reporters = data.reporters,
+                  dependencies = data.dependencies.map {
+                    case (_, dep) => IdUtil.format(dep.id) -> dep
+                  }
+                )
               )
-            )
 
-            getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(
-              entityId = event.entityId,
-              event = initializeEvent
-            )
+              getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(
+                entityId = event.entityId,
+                event = initializeEvent
+              )
 
+              pendingInitAck.put(event.entityId, data)
+            } catch {
+              case e: Exception =>
+                logError(
+                  s"Failed to build InitializeEvent for ${event.entityId} (${data.classType}): ${e.getMessage}. Bypassing to unblock batch.",
+                  e
+                )
+                // Bypass the stuck entity so the batch can complete
+                removeOfInitializedAcknowledges(batchId, event.entityId)
+            }
             initializeData(batchId).remove(event.entityId)
             if (initializeData(batchId).isEmpty) initializeData.remove(batchId)
+            checkAndSendFinish(batchId)
 
           case None =>
         }
       case None =>
+        logWarn(s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) NOT FOUND in actorsBatches! Known batches: ${actorsBatches.size}")
     }
+  }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
+    val init = pendingInitAck.remove(event.entityId)
+    // If this entity's classType is in the config-level forced registration list, auto-register
+    // it with the coordinator regardless of whether the actor itself sent NeedsPostLoadRegistrationEvent.
+    // This allows including actors without modifying their input data files.
+    if (
+      init.isDefined &&
+      creatorProperties.postLoadCoordinator != null &&
+      creatorProperties.postLoadRegistrationClasses.contains(init.get.classType)
+    ) {
+      creatorProperties.postLoadCoordinator ! NeedsPostLoadRegistrationEvent(
+        entityId = event.entityId,
+        classType = init.get.classType
+      )
+    }
     val batchId = actorsBatches.getOrElse(event.entityId, "")
     if (batchId.nonEmpty) {
       removeOfInitializedAcknowledges(batchId, event.entityId)
       checkAndSendFinish(batchId)
+    } else {
+      // Late ACK after actorsBatches was cleaned — search all batches for ghost entries
+      initializedAcknowledges.foreach {
+        case (bId, acks) =>
+          if (acks.contains(event.entityId)) {
+            removeOfInitializedAcknowledges(bId, event.entityId)
+            checkAndSendFinish(bId)
+          }
+      }
+    }
+  }
+
+  /** Forwards NeedsPostLoadRegistrationEvent directly to PostLoadRegistrationCoordinator
+    * so it can accumulate registrations during the loading phase (before being triggered).
+    * The coordinator is the correct owner of this list, not LoadDataManager.
+    */
+  private def handleNeedsPostLoadRegistration(event: NeedsPostLoadRegistrationEvent): Unit = {
+    if (creatorProperties.postLoadCoordinator != null) {
+      logDebug(s"Forwarding NeedsPostLoadRegistration for ${event.entityId} (${event.classType}) to coordinator")
+      creatorProperties.postLoadCoordinator ! event
+    } else {
+      logWarn(s"No postLoadCoordinator set — dropping NeedsPostLoadRegistration for ${event.entityId}")
     }
   }
 

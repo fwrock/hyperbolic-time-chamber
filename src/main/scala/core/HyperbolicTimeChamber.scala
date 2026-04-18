@@ -37,7 +37,8 @@ object HyperbolicTimeChamber {
 
   def start(): Unit = {
     // Start Prometheus metrics server before actor system
-    core.metrics.MetricsServer.start(9001)
+    val metricsPort = sys.env.get("HTC_METRICS_PORT").flatMap(_.toIntOption).getOrElse(9001)
+    core.metrics.MetricsServer.start(metricsPort)
 
     val system = ActorSystem("hyperbolic-time-chamber")
 
