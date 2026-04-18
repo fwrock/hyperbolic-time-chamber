@@ -7,7 +7,7 @@
 
 **Root Cause:** When no actor data sources were configured, the router initialization failed with `totalInstances = 0`
 
-**Fix:** Modified [LoadDataManager.scala](../src/main/scala/core/actor/manager/LoadDataManager.scala):
+**Fix:** Modified [LoadDataManager.scala](../src/main/scala/core/actor/manager/load/LoadDataManager.scala):
 - Added validation to check if `dataSourceAmount == 0`
 - Early return if no data sources (skips router creation)
 - Added `Math.max(1, ...)` guards to ensure minimum 1 instance
@@ -126,5 +126,5 @@ python ../../scripts/split_vehicles.py data/vehicles.json data/
 ## See Also
 
 - [VEHICLE_ORGANIZATION.md](VEHICLE_ORGANIZATION.md) - Complete vehicle organization guide
-- [LoadDataManager.scala](../src/main/scala/core/actor/manager/LoadDataManager.scala) - Source code changes
+- [LoadDataManager.scala](../src/main/scala/core/actor/manager/load/LoadDataManager.scala) - Source code changes
 - [organized_vehicles_scenario.json](examples/organized_vehicles_scenario.json) - Example configuration

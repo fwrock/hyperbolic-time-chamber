@@ -74,6 +74,10 @@ terraform/gcp/terraform.tfstate.backup
 */terraform/
 
 
+.idea/*
+
+.idea/sbt.xml
+
 ### Python ###
 # Virtual environments
 venv/
