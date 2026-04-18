@@ -18,6 +18,7 @@ import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.event.data.{ ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.RequestRoute
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
 import org.interscity.htc.model.hybrid.util.GPSUtil
@@ -258,6 +259,7 @@ class BusStation(
           label = bus.label
         )
         busState.bestRoute = Some(route)
+        busState.status = MovableStatusEnum.Start
         busState
       }),
       dependencies = mutable.Map[String, Dependency](),

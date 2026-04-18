@@ -557,6 +557,12 @@ object Graph {
               val weight = jsonEdge.weight.getOrElse(defaultWeightForUnweighted)
               val edgeLabelObject: L = jsonEdge.label // Este é o EdgeGraph completo
 
+              if (edgeLabelObject == null) {
+                System.err.println(
+                  s"AVISO: Aresta ${jsonEdge.source_id} -> ${jsonEdge.target_id} ignorada: label é null no JSON."
+                )
+              } else {
+
               // Adiciona o label da aresta ao mapa de consulta de labels
               val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
               if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
@@ -579,6 +585,7 @@ object Graph {
               } else {
                 graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
               }
+              } // end else (edgeLabelObject != null)
             case (None, _) =>
               throw new NoSuchElementException(
                 s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado."
