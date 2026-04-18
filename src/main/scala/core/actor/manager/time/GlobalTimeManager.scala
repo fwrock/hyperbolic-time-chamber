@@ -17,6 +17,7 @@ import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent}
+import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
 
 import scala.collection.mutable
 
@@ -42,6 +43,14 @@ class GlobalTimeManager(
   private var timeManagersPool: ActorRef = _
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
   @volatile private var isTerminated = false
+
+  /** When true, the GlobalTimeManager will not advance to the next tick.
+    * Set by RequestMigrationPauseEvent from LoadBalanceManager, cleared by MigrationCompleteNotifyEvent.
+    */
+  private var migrationPauseRequested: Boolean = false
+
+  /** Reference to the LoadBalanceManager that requested the pause, for sending MigrationSafeEvent. */
+  private var migrationRequester: ActorRef = _
 
   // Progressive loading coordination
   private var progressiveLoadManager: ActorRef = _
@@ -110,6 +119,10 @@ class GlobalTimeManager(
       registerTimeManager(timeManagerRegisterEvent)
     case localTimeReport: LocalTimeReportEvent =>
       handleLocalTimeReport(localTimeReport)
+    case migrationPause: RequestMigrationPauseEvent =>
+      handleMigrationPauseRequest(migrationPause)
+    case _: MigrationCompleteNotifyEvent =>
+      handleMigrationComplete()
     case event: RegisterProgressiveLoadManagerEvent =>
       handleRegisterProgressiveLoadManager(event)
     case event: TickWindowReady =>
@@ -244,6 +257,12 @@ class GlobalTimeManager(
 
     if (localTimeManagers.values.forall(_.isProcessed)) {
       logDebug(s"All $totalCount managers reported, calculating next tick")
+      // If migration pause is pending, signal the requester that it's now safe
+      if (migrationPauseRequested && migrationRequester != null) {
+        logInfo(s"All local managers reported. Signaling migration safe at tick $localTickOffset")
+        migrationRequester ! MigrationSafeEvent(currentTick = localTickOffset)
+        // Do NOT advance — calculateAndBroadcastNextGlobalTick will hold
+      }
       calculateAndBroadcastNextGlobalTick()
     } else {
       logDebug(s"Waiting for more reports: $processedCount/$totalCount processed")
@@ -251,6 +270,13 @@ class GlobalTimeManager(
   }
 
   private def calculateAndBroadcastNextGlobalTick(): Unit = {
+    // If migration pause is active, do NOT advance to the next tick.
+    // The TimeManager waits until LoadBalanceManager sends MigrationCompleteNotifyEvent.
+    if (migrationPauseRequested) {
+      logInfo(s"Migration pause active — holding at tick $localTickOffset until migration completes")
+      return
+    }
+
     val totalManagers = localTimeManagers.size
     val scheduled = localTimeManagers.values.filter(_.hasSchedule)
     val scheduledCount = scheduled.size
@@ -349,6 +375,41 @@ class GlobalTimeManager(
     } else {
       Some(localTickOffset + 1)
     }
+
+  /** Handles a migration pause request from LoadBalanceManager.
+    *
+    * The GlobalTimeManager will finish processing all current tick's spontaneous events
+    * (via LocalTimeManagers) but will NOT advance to the next tick. Once all LocalTimeManagers
+    * have reported completion of the current tick, it sends MigrationSafeEvent back to the
+    * LoadBalanceManager with the current tick, confirming it's safe to migrate.
+    */
+  private def handleMigrationPauseRequest(event: RequestMigrationPauseEvent): Unit = {
+    logInfo(
+      s"Migration pause requested for shards ${event.shardIds} at tick $localTickOffset. " +
+        s"Will pause after current tick completes."
+    )
+    migrationPauseRequested = true
+    migrationRequester = event.requester
+
+    // If all local managers have already reported (i.e., we're between ticks), signal immediately
+    if (localTimeManagers.values.forall(_.isProcessed)) {
+      logInfo(s"All local managers idle. Signaling migration safe at tick $localTickOffset")
+      migrationRequester ! MigrationSafeEvent(currentTick = localTickOffset)
+    }
+    // Otherwise, the pause will take effect in calculateAndBroadcastNextGlobalTick
+    // when all local managers report — it will hold there and then send MigrationSafeEvent
+  }
+
+  /** Handles migration completion notification from LoadBalanceManager.
+    * Resumes normal tick advancement.
+    */
+  private def handleMigrationComplete(): Unit = {
+    logInfo(s"Migration complete. Resuming tick advancement from tick $localTickOffset")
+    migrationPauseRequested = false
+    migrationRequester = null
+    // Resume by recalculating the next global tick
+    calculateAndBroadcastNextGlobalTick()
+  }
 
   /**
    * Request progressive loading of actors starting from currentTick.

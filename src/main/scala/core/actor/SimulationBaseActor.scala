@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.state.BaseState
@@ -114,8 +115,85 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def getCurrentTimeManagerType: String = currentTimeManagerType
 
+  // ── Migration State Preservation ──────────────────────────────────────────
+
+  /** Builds a migration snapshot that includes simulation-specific metadata
+    * in addition to the base actor state.
+    *
+    * Captured fields:
+    *   - Domain state (via super)
+    *   - currentTick, startTick, lamportClock (time/ordering)
+    *   - currentTimeManagerType (which time manager was being used)
+    *   - dependencies (from_node, to_node, etc. — needed for routing lookups)
+    */
+  override protected def buildMigrationSnapshot(): MigrationSnapshot = {
+    val base = super.buildMigrationSnapshot()
+
+    // Convert dependencies to simple string maps for safe serialization
+    val depIds = dependencies.map { case (k, d) => k -> d.id }.toMap
+    val depTypes = dependencies.map { case (k, d) => k -> d.classType }.toMap
+    val depResourceIds = dependencies.map { case (k, d) => k -> d.resourceId }.toMap
+    val depActorTypes = dependencies.map { case (k, d) => k -> d.actorType }.toMap
+
+    base.copy(
+      currentTick = currentTick,
+      startTick = startTick,
+      lamportClock = lamportClock.getClock,
+      currentTimeManagerType = currentTimeManagerType,
+      dependencyIds = depIds,
+      dependencyTypes = depTypes,
+      dependencyResourceIds = depResourceIds,
+      dependencyActorTypes = depActorTypes
+    )
+  }
+
+  /** Restores simulation-specific metadata from a migration snapshot.
+    *
+    * Restores the domain state (via super), then applies:
+    *   - currentTick, startTick (simulation time position)
+    *   - lamportClock (causal ordering)
+    *   - currentTimeManagerType (active time manager)
+    *   - dependencies (rebuilt from stored string maps)
+    */
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    // Restore the base state first
+    super.applyMigrationSnapshot(snapshot)
+
+    // Restore simulation metadata
+    currentTick = snapshot.currentTick
+    startTick = snapshot.startTick
+    lamportClock.update(snapshot.lamportClock)
+    currentTimeManagerType = snapshot.currentTimeManagerType
+
+    // Rebuild dependencies from stored string maps
+    if (snapshot.dependencyIds.nonEmpty) {
+      dependencies.clear()
+      snapshot.dependencyIds.foreach { case (key, id) =>
+        val classType = snapshot.dependencyTypes.getOrElse(key, "")
+        val resourceId = snapshot.dependencyResourceIds.getOrElse(key, "")
+        val actorType = snapshot.dependencyActorTypes.getOrElse(key, "")
+        dependencies.put(key, Dependency(id = id, classType = classType, resourceId = resourceId, actorType = actorType))
+      }
+    }
+  }
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   override def preStart(): Unit = {
     super.preStart()
+
+    // Check for migration state first — if found, this entity was moved from another node
+    if (restoreMigrationState()) {
+      logInfo(s"Entity $entityId restored from migration. Tick: $currentTick, re-registering on TimeManager.")
+      if (state != null && state.isSetScheduleOnTimeManager) {
+        registerOnTimeManager()
+      }
+      onFinishInitialize()
+      onStart()
+      return
+    }
+
+    // Normal initialization from Properties (first creation)
     if (properties.data != null) {
       try {
         state = JsonUtil.convertValue[T](properties.data)
