@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.load
 
 import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator}
-import core.actor.manager.{BaseManager, LoadDataManager}
+import core.actor.manager.BaseManager
 import core.entity.actor.properties.{CreatorProperties, Properties}
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*

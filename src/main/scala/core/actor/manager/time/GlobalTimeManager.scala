@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.{GlobalTimeManager, TimeManagerBase}
+import core.actor.manager.time.{GlobalTimeManager, TimeManagerBase}
 import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.load.{RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}

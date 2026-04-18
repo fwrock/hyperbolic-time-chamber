@@ -25,8 +25,18 @@ class BusStop(
 
   override def requiresPostLoadRegistration: Boolean = true
 
-  override def handlePostLoadRegistration(): Unit =
-    getDependencyOption(state.nodeId) match {
+  override def handlePostLoadRegistration(): Unit = {
+    // Prefer lookup by nodeId; fall back to scanning dependencies for a Node entry
+    // (handles data generated with the legacy "node" field name instead of "nodeId")
+    val dependencyOpt =
+      getDependencyOption(state.nodeId).orElse(
+        if (state.nodeId == null || state.nodeId.isEmpty)
+          dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node"))
+        else
+          None
+      )
+
+    dependencyOpt match {
       case Some(dependency) =>
         sendMessageTo(
           dependency.id,
@@ -41,6 +51,7 @@ class BusStop(
           s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
         )
     }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

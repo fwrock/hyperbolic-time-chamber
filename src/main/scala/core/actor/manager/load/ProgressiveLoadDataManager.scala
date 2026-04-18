@@ -3,7 +3,7 @@ package core.actor.manager.load
 
 import core.actor.manager.load.strategy.ProgressiveJsonLoadData
 import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData}
-import core.actor.manager.{BaseManager, ProgressiveLoadDataManager}
+import core.actor.manager.BaseManager
 import core.entity.actor.properties.{CreatorProperties, Properties}
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*

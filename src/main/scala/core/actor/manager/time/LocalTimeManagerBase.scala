@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.{MicroAwareTimeManager, TimeManagerBase}
+import core.actor.manager.time.TimeManagerBase
 import core.entity.control.ScheduledActors
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}

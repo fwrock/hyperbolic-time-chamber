@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.{LocalDiscreteEventTimeManager, LocalTimeManagerBase}
+import core.actor.manager.time.{LocalDiscreteEventTimeManager, LocalTimeManagerBase}
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
