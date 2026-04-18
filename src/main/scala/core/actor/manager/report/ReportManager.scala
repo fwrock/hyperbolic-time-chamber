@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.report
 
-import core.actor.manager.{BaseManager, ReportManager}
+import core.actor.manager.BaseManager
 import core.entity.event.control.report.RegisterReportersEvent
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum

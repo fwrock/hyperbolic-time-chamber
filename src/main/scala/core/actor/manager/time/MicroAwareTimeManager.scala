@@ -1,11 +1,11 @@
 package org.interscity.htc
-package core.actor.manager
+package core.actor.manager.time
 
+import core.actor.manager.time.TimeManagerBase
 import core.types.Tick
+import model.hybrid.entity.event.data.GlobalTickEvent
 
 import org.apache.pekko.actor.ActorRef
-import org.interscity.htc.core.actor.manager.time.TimeManagerBase
-import org.interscity.htc.model.hybrid.entity.event.data.GlobalTickEvent
 
 /** Mixin trait for time managers that need to coordinate microscopic simulation.
   *

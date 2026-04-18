@@ -36,16 +36,16 @@ class BusStation(
     * deterministic route building and lookup.
     */
   private def orderedBusStopIds: List[String] = {
-    def suffixNumber(id: String): Option[Int] = {
+    def suffixNumber(id: String): Option[Long] = {
       val digits = id.reverse.takeWhile(_.isDigit).reverse
-      if (digits.nonEmpty) Some(digits.toInt) else None
+      if (digits.nonEmpty) Some(digits.toLong) else None
     }
 
     state.busStops.keys.toList.sortBy {
       id =>
         suffixNumber(id) match {
-          case Some(num) => (0, num, id)
-          case None      => (1, Int.MaxValue, id)
+          case Some(num) => (0L, num, id)
+          case None      => (1L, Long.MaxValue, id)
         }
     }
   }
