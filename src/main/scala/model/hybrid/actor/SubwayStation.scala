@@ -7,7 +7,8 @@ import org.interscity.htc.model.hybrid.entity.state.*
 import org.interscity.htc.model.hybrid.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -135,7 +136,7 @@ class SubwayStation(
               val subway = subwayQueue.dequeue()
               try {
                 val actorRef = createSubway(subway)
-                dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
+                dependencies(subway.actorId) = ShardActorId(subway.actorId, classOf[Subway].getName)
                 lines(line).nextTick = currentTick + lines(line).interval
               } catch {
                 case e: IllegalStateException =>
@@ -209,7 +210,7 @@ class SubwayStation(
         subwayState.bestRoute = Some(route)
         subwayState
       }),
-      dependencies = mutable.Map[String, Dependency](),
+      relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType
     )

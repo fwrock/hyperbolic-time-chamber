@@ -8,7 +8,6 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.NodeState
 import model.mobility.entity.state.enumeration.EventTypeEnum
 
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 

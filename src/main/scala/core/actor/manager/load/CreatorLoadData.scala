@@ -9,7 +9,7 @@ import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
 
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
 import org.interscity.htc.core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
@@ -130,8 +130,8 @@ class CreatorLoadData(
               timeManagers = data.timeManagers,
               creatorManager = data.creatorManager,
               reporters = data.reporters,
-              dependencies = data.dependencies.map {
-                case (_, dep) => IdUtil.format(dep.id) -> dep
+              relationships = data.relationships.map {
+                case (_, rel) => IdUtil.format(rel.entityId) -> rel
               }
             )
           )
@@ -272,7 +272,15 @@ class CreatorLoadData(
         timeManagers = timeManagers,
         creatorManager = self,
         reporters = reporters,
-        dependencies = mutable.Map[String, Dependency]() ++= actorCreation.actor.dependencies
+        relationships = {
+        val base = if (actorCreation.actor.relationships != null) actorCreation.actor.relationships
+                   else Map.empty[String, ShardActorId]
+        mutable.Map[String, ShardActorId]() ++= base.map { case (label, rel) =>
+          val bucket = if (rel.shardBucket.nonEmpty) rel.shardBucket
+                       else SpatialShardIdRegistry.getShardId(rel.entityId).getOrElse("")
+          label -> rel.copy(shardBucket = bucket)
+        }
+      }
       )
 
       addInitializeData(actorCreation.actor.id, batchId, initialization)
@@ -288,7 +296,8 @@ class CreatorLoadData(
         actorClassName = actorCreation.actor.typeActor,
         entityId = actorCreation.actor.id,
         timeManagers = timeManagers,
-        creatorManager = self
+        creatorManager = self,
+        reporters = reporters
       )
 
       shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
@@ -441,8 +450,8 @@ class CreatorLoadData(
                   timeManagers = data.timeManagers,
                   creatorManager = data.creatorManager,
                   reporters = data.reporters,
-                  dependencies = data.dependencies.map {
-                    case (_, dep) => IdUtil.format(dep.id) -> dep
+                  relationships = data.relationships.map {
+                    case (_, rel) => IdUtil.format(rel.entityId) -> rel
                   }
                 )
               )

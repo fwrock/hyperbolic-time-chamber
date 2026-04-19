@@ -4,7 +4,6 @@ package core.actor.manager
 import core.actor.BaseActor
 import core.entity.state.BaseState
 
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.util.{ ActorCreatorUtil, DistributedUtil }

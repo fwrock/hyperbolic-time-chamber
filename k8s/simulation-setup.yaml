@@ -196,6 +196,43 @@ spec:
             # Use "inmemory" when Kafka is not available, "kafka" when Managed Kafka is provisioned
             - name: HTC_CACHE_STRATEGY
               value: "inmemory"
+            # ── Load Balance Manager ────────────────────────────────
+            # Enable for multi-node cluster; disable for testing.
+            - name: HTC_LOAD_BALANCE_ENABLED
+              value: "false"
+            # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
+            - name: HTC_LOAD_BALANCE_STRATEGY
+              value: "hybrid"
+            # Geographic affinity weight (0.0 = pure load, 1.0 = pure geo, 0.4 recommended)
+            - name: HTC_LB_GEO_AFFINITY_WEIGHT
+              value: "0.4"
+            # Rebalance cycle interval in seconds
+            - name: HTC_LB_KDTREE_REBALANCE_INTERVAL
+              value: "30.0"
+            # Load threshold (0.0–1.0) above which a shard is overloaded
+            - name: HTC_LB_KDTREE_LOAD_THRESHOLD
+              value: "0.85"
+            # Maximum concurrent shard migrations
+            - name: HTC_LB_MIGRATION_MAX_CONCURRENT
+              value: "5"
+            # ── Migration Window Protocol ───────────────────────────
+            # Delay (ms) before broadcasting MigrationWindowOpenEvent.
+            # Entities flush snapshots to SnapshotManager in this window.
+            - name: HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS
+              value: "500"
+            # Timeout (ms) waiting for all nodes to ACK MigrationWindowOpenEvent
+            - name: HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS
+              value: "10000"
+            # Timeout (ms) waiting for all migrated entities to ACK restoration
+            # Increase for large entity counts or slow GCS Fuse deserialization.
+            - name: HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS
+              value: "60000"
+            # Timeout (ms) waiting for all nodes to ACK MigrationWindowCloseEvent
+            - name: HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS
+              value: "10000"
+            # Snapshot state store: "redis" for multi-node HA; "inmemory" for single-node
+            - name: HTC_LB_MIGRATION_STATE_STORE
+              value: "inmemory"
             # ── Managed Apache Kafka (Google Cloud) ─────────────────
             - name: HTC_KAFKA_BOOTSTRAP_SERVERS
               valueFrom:

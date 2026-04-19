@@ -5,7 +5,8 @@ import core.actor.SimulationBaseActor
 import model.mobility.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -113,7 +114,7 @@ class SubwayStation(
             if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
+              dependencies(subway.actorId) = ShardActorId(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
