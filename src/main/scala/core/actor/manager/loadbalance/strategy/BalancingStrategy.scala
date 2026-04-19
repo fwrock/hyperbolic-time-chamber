@@ -93,6 +93,16 @@ trait BalancingStrategy {
   /** Gets strategy-specific statistics for monitoring. */
   def getStats: Map[String, Any]
 
+  /** Records where a shard currently lives (populated from allocator's region index).
+    * Default no-op; strategies that maintain a kd-tree override this.
+    */
+  def recordShardLocation(shardId: String, address: Address): Unit = ()
+
+  /** Returns entity count per shard as tracked by the strategy at creation time.
+    * Default empty; strategies that track shard fill override this.
+    */
+  def getShardEntityCounts: Map[String, Int] = Map.empty
+
   /** Shuts down the strategy, releasing resources. */
   def shutdown(): Unit = ()
 }
