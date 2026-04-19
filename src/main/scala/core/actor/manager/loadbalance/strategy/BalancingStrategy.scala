@@ -108,5 +108,9 @@ case class StrategyConfig(
   maxConcurrentMigrations: Int = 3,
   enablePrediction: Boolean = true,
   enableTwoToOneBalance: Boolean = true,
-  flowVectorSamples: Int = 100
+  flowVectorSamples: Int = 100,
+  /** Weight for geographic affinity in GeoAffinityStrategy target scoring.
+    * 0.0 = pure load balancing; 1.0 = pure geographic affinity; 0.4 recommended.
+    */
+  geographicAffinityWeight: Double = 0.4
 )

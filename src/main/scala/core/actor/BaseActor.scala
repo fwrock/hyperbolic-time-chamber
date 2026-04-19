@@ -16,6 +16,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, PostLoadRegistrationEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.PrepareForMigrationEvent
+import core.entity.event.control.migration.SaveMigrationSnapshotEvent
 
 import java.util.UUID
 import scala.compiletime.uninitialized
@@ -73,6 +74,13 @@ abstract class BaseActor[T <: BaseState](
     * Override this method to perform any initialization.
     */
   protected def onStart(): Unit = ()
+
+  /** Called when the actor is restored from a migration snapshot (moved to another node).
+    * Distinct from [[onStart]] (first creation). Override to handle migration-specific
+    * re-initialization (e.g., re-registering with external actors that were not saved).
+    * Default: calls [[onStart]] for backward compatibility.
+    */
+  protected def onMigrationRestore(): Unit = onStart()
 
   /** Handles events that are not handled by default receive. Override this method to handle custom
     * events.
@@ -190,17 +198,40 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def onDestruct(event: DestructEvent): Unit = {}
 
-  /** Handles the PrepareForMigrationEvent by serializing the current state to the migration store.
+  /** Handles the PrepareForMigrationEvent by building a snapshot and sending it to the
+    * SnapshotManager (cluster singleton), so it is accessible from all nodes.
     *
-    * This is called BEFORE the hand-off begins, while the actor is still alive and has its state.
-    * The serialized state will be read back when the actor is re-created on the target node.
+    * The event now carries a batchId and lbmRef — these are forwarded in the snapshot
+    * save event so the SM can track which migration batch this entity belongs to.
     *
     * @param event
     *   The prepare-for-migration event
     */
   private def handlePrepareForMigration(event: PrepareForMigrationEvent): Unit = {
-    saveMigrationState()
-    logDebug(s"Migration state saved for entity $entityId (shard: ${event.shardId})")
+    if (state == null) {
+      logWarn(s"PrepareForMigrationEvent for $entityId but state is null — skipping snapshot")
+      return
+    }
+    try {
+      val snapshot = buildMigrationSnapshot()
+      MigrationStateStoreRegistry.getSnapshotManager match {
+        case Some(smRef) =>
+          smRef ! SaveMigrationSnapshotEvent(
+            entityId = IdUtil.format(entityId),  // formatted key matches TM routing ID
+            batchId  = event.batchId,
+            snapshot = snapshot
+          )
+          logDebug(s"Migration snapshot sent to SM for '$entityId' (batch=${event.batchId})")
+        case None =>
+          logWarn(
+            s"PrepareForMigrationEvent for '$entityId' but SnapshotManager proxy is not registered — " +
+              s"snapshot will be lost. Entity may not restore correctly after migration."
+          )
+      }
+    } catch {
+      case e: Exception =>
+        logError(s"Failed to build migration snapshot for '$entityId': ${e.getMessage}", e)
+    }
   }
 
   /** Serializes the current actor state to the [[MigrationStateStoreRegistry]] store.
@@ -239,8 +270,9 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def buildMigrationSnapshot(): MigrationSnapshot =
     MigrationSnapshot(
-      stateJson = JsonUtil.toJson(state),
-      stateClassName = state.getClass.getName
+      stateJson      = JsonUtil.toJson(state),
+      stateClassName = state.getClass.getName,
+      entityId       = entityId
     )
 
   /** Attempts to restore actor state from the migration state store.

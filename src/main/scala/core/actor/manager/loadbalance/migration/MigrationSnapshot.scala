@@ -34,6 +34,7 @@ package core.actor.manager.loadbalance.migration
 case class MigrationSnapshot(
   stateJson: String,
   stateClassName: String,
+  entityId: String = "",
   currentTick: Long = 0L,
   startTick: Long = Long.MinValue,
   lamportClock: Long = 0L,

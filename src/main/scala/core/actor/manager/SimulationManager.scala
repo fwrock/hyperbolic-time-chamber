@@ -21,11 +21,12 @@ import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, L
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.LoadBalanceReadyEvent
 import org.interscity.htc.core.actor.manager.loadbalance.LoadBalanceManager
+import org.interscity.htc.core.actor.manager.SnapshotManager
 import org.interscity.htc.core.actor.manager.loadbalance.strategy.StrategyConfig
 import org.interscity.htc.core.entity.control.loadbalance.SpatialBounds
 import org.interscity.htc.core.enumeration.LoadBalanceStrategyEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, LOAD_BALANCE_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME}
+import org.interscity.htc.core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, LOAD_BALANCE_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME, SNAPSHOT_MANAGER_ACTOR_NAME}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -42,6 +43,7 @@ class SimulationManager(
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
   private var loadBalanceManager: ActorRef = _
+  private var snapshotManager: ActorRef = _
   private var progressiveLoadManager: ActorRef = _
   private var configuration: Simulation = uninitialized
   private var selfProxy: ActorRef = null
@@ -138,6 +140,13 @@ class SimulationManager(
   private def startLoadData(): Unit =
     if (poolTimeManager != null && reporters != null) {
       loadManager = createSingletonLoadManager()
+      // Inject migration initialization context into SnapshotManager now that
+      // both poolTimeManager and reporters are available. This mirrors what
+      // CreatorLoadData does via InitializeEvent for fresh entity creation.
+      createSingletonProxy(SNAPSHOT_MANAGER_ACTOR_NAME) ! SnapshotManager.RegisterSnapshotContextEvent(
+        timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+        reporters = reporters
+      )
       logInfo(s"Sending LoadDataEvent with ${configuration.actorsDataSources.size} data sources")
       createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
         actorRef = selfProxy,
@@ -219,6 +228,7 @@ class SimulationManager(
     )
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
+    snapshotManager = createSingletonSnapshotManager()
     // LoadBalanceManager handles shard REBALANCING (migration between nodes).
     // LoadDataManager handles shard CREATION (initial actor placement).
     // Spatial-aware initial placement: When LoadBalanceManager is enabled, CreatorLoadData
@@ -248,6 +258,15 @@ class SimulationManager(
         startRealTime = configuration.startRealTime
       ),
       name = REPORT_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
+    )
+
+  private def createSingletonSnapshotManager(): ActorRef =
+    createSingletonManager(
+      manager = SnapshotManager.props(
+        timeManager = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
+      ),
+      name = SNAPSHOT_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
     )
 
@@ -300,14 +319,17 @@ class SimulationManager(
 
       val strategyConfig = try {
         StrategyConfig(
-          maxDepth = config.getInt("htc.load-balance-manager.quadtree.max-depth"),
-          maxEntitiesPerShard = config.getInt("htc.load-balance-manager.quadtree.max-actors-per-shard"),
-          minEntitiesPerShard = config.getInt("htc.load-balance-manager.quadtree.min-actors-per-shard"),
-          loadThreshold = config.getDouble("htc.load-balance-manager.kdtree.load-threshold"),
-          predictionWindowSeconds = config.getDouble("htc.load-balance-manager.prediction.prediction-window-seconds"),
-          enablePrediction = config.getBoolean("htc.load-balance-manager.prediction.enabled"),
-          maxConcurrentMigrations = config.getInt("htc.load-balance-manager.migration.max-concurrent"),
-          flowVectorSamples = config.getInt("htc.load-balance-manager.prediction.flow-vector-samples")
+          maxDepth                 = config.getInt("htc.load-balance-manager.quadtree.max-depth"),
+          maxEntitiesPerShard      = config.getInt("htc.load-balance-manager.quadtree.max-actors-per-shard"),
+          minEntitiesPerShard      = config.getInt("htc.load-balance-manager.quadtree.min-actors-per-shard"),
+          loadThreshold            = config.getDouble("htc.load-balance-manager.kdtree.load-threshold"),
+          predictionWindowSeconds  = config.getDouble("htc.load-balance-manager.prediction.prediction-window-seconds"),
+          rebalanceIntervalSeconds = config.getDouble("htc.load-balance-manager.rebalance-interval-seconds"),
+          enablePrediction         = config.getBoolean("htc.load-balance-manager.prediction.enabled"),
+          enableTwoToOneBalance    = config.getBoolean("htc.load-balance-manager.quadtree.enable-two-to-one-balance"),
+          maxConcurrentMigrations  = config.getInt("htc.load-balance-manager.migration.max-concurrent"),
+          flowVectorSamples        = config.getInt("htc.load-balance-manager.prediction.flow-vector-samples"),
+          geographicAffinityWeight = config.getDouble("htc.load-balance-manager.geo-affinity.weight")
         )
       } catch {
         case _: Exception => StrategyConfig()

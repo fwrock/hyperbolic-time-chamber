@@ -2,14 +2,21 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
-import core.actor.manager.loadbalance.migration.MigrationSnapshot
+import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
+import core.entity.event.control.migration.{
+  MigrationContextEvent,
+  MigrationRestoredAckEvent,
+  NoPendingMigrationEvent,
+  QueryMigrationEvent
+}
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
 import core.util.{ IdUtil, JsonUtil, StringUtil }
 
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
@@ -44,8 +51,14 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
-  protected val dependencies: mutable.Map[String, Dependency] =
-    if (properties != null) properties.dependencies else mutable.Map[String, Dependency]()
+  protected val relationships: mutable.Map[String, ShardActorId] =
+    if (properties != null) properties.relationships else mutable.Map[String, ShardActorId]()
+
+  /** Backward-compat alias for [[relationships]].
+    * @deprecated Use relationships instead.
+    */
+  @deprecated("Use relationships instead", "2.8.0")
+  protected def dependencies: mutable.Map[String, ShardActorId] = relationships
 
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
@@ -125,15 +138,18 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   - currentTick, startTick, lamportClock (time/ordering)
     *   - currentTimeManagerType (which time manager was being used)
     *   - dependencies (from_node, to_node, etc. — needed for routing lookups)
+    *
+    * reporters/timeManagers/creatorManager are NOT serialized here: they are
+    * injected via Properties at actor construction time on the target node (cluster-transparent).
     */
   override protected def buildMigrationSnapshot(): MigrationSnapshot = {
     val base = super.buildMigrationSnapshot()
 
-    // Convert dependencies to simple string maps for safe serialization
-    val depIds = dependencies.map { case (k, d) => k -> d.id }.toMap
-    val depTypes = dependencies.map { case (k, d) => k -> d.classType }.toMap
-    val depResourceIds = dependencies.map { case (k, d) => k -> d.resourceId }.toMap
-    val depActorTypes = dependencies.map { case (k, d) => k -> d.actorType }.toMap
+    // Convert relationships to simple string maps for safe serialization
+    val depIds = relationships.map { case (k, r) => k -> r.entityId }.toMap
+    val depTypes = relationships.map { case (k, r) => k -> r.classType }.toMap
+    val depResourceIds = relationships.map { case (k, r) => k -> r.shardBucket }.toMap
+    val depActorTypes = relationships.map { case (k, _) => k -> "" }.toMap
 
     base.copy(
       currentTick = currentTick,
@@ -154,6 +170,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   - lamportClock (causal ordering)
     *   - currentTimeManagerType (active time manager)
     *   - dependencies (rebuilt from stored string maps)
+    *
+    * reporters/timeManagers/creatorManager are already available via Properties
+    * (injected at construction time on the target node). They are cluster-transparent
+    * ActorRefs and do not need to be serialized across migration.
     */
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     // Restore the base state first
@@ -165,35 +185,61 @@ abstract class SimulationBaseActor[T <: BaseState](
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
 
-    // Rebuild dependencies from stored string maps
+    // Rebuild relationships from stored string maps
     if (snapshot.dependencyIds.nonEmpty) {
-      dependencies.clear()
+      relationships.clear()
       snapshot.dependencyIds.foreach { case (key, id) =>
         val classType = snapshot.dependencyTypes.getOrElse(key, "")
-        val resourceId = snapshot.dependencyResourceIds.getOrElse(key, "")
-        val actorType = snapshot.dependencyActorTypes.getOrElse(key, "")
-        dependencies.put(key, Dependency(id = id, classType = classType, resourceId = resourceId, actorType = actorType))
+        val shardBucket = snapshot.dependencyResourceIds.getOrElse(key, "")
+        relationships.put(key, ShardActorId(entityId = id, classType = classType, shardBucket = shardBucket))
       }
     }
   }
+
+  // ── Migration window awaiting state ───────────────────────────────────────
+
+  /** True while the actor has queried SM for its migration snapshot and is awaiting reply.
+    * All incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent
+    * arrives.
+    */
+  private var awaitingMigration: Boolean = false
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   override def preStart(): Unit = {
     super.preStart()
 
-    // Check for migration state first — if found, this entity was moved from another node
-    if (restoreMigrationState()) {
-      logInfo(s"Entity $entityId restored from migration. Tick: $currentTick, re-registering on TimeManager.")
-      if (state != null && state.isSetScheduleOnTimeManager) {
-        registerOnTimeManager()
+    // For cluster-sharded entities (LoadBalancedDistributed), Props carry the shard region's
+    // initiator ID — not this actor's actual entity ID. The correct ID is the actor's path name
+    // (= the shard routing key used in EntityEnvelopeEvent, which equals IdUtil.format(rawId)).
+    if (properties != null && properties.actorType == LoadBalancedDistributed) {
+      entityId = self.path.name
+    }
+
+    // Migration window check: if the distributed flag is active, this entity might have been
+    // migrated from another node. Query the SnapshotManager to find out.
+    if (MigrationStateStoreRegistry.isMigrationActive.get()) {
+      creatorManager = null // Safety: no creator manager during migration window
+      awaitingMigration = true
+      MigrationStateStoreRegistry.getSnapshotManager match {
+        case Some(smRef) =>
+          smRef ! QueryMigrationEvent(entityId = entityId, actorRef = self)
+        case None =>
+          logWarn(
+            s"Entity '$entityId': migration window active but SM proxy not registered — " +
+              s"proceeding with normal initialization."
+          )
+          awaitingMigration = false
+          proceedNormalInit()
       }
-      onFinishInitialize()
-      onStart()
       return
     }
 
-    // Normal initialization from Properties (first creation)
+    proceedNormalInit()
+  }
+
+  /** Normal (non-migration) initialization from Properties.data or onStart(). */
+  private def proceedNormalInit(): Unit = {
     if (properties.data != null) {
       try {
         state = JsonUtil.convertValue[T](properties.data)
@@ -267,8 +313,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       case e: Exception =>
         logError(s"Failed to deserialize state for $entityId: ${e.getMessage}", e)
     }
-    dependencies.clear()
-    dependencies ++= event.data.dependencies
+    relationships.clear()
+    relationships ++= event.data.relationships
     reporters = event.data.reporters
     if (state != null) {
       startTick = state.getStartTick
@@ -452,7 +498,6 @@ abstract class SimulationBaseActor[T <: BaseState](
         // Unschedule if state is null (e.g. after shard restart); otherwise retry
         if (state == null) onFinishSpontaneous(None)
         else onFinishSpontaneous(Some(currentTick + 1))
-    // save(event) // Event persistence disabled
   }
 
   /** Called when the actor receives a spontaneous event from the time manager. Override this method
@@ -496,9 +541,59 @@ abstract class SimulationBaseActor[T <: BaseState](
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
   override def receive: Receive = {
+    // ── Migration window: stash all until SM replies ─────────────────────────
+    case event: MigrationContextEvent if awaitingMigration =>
+      awaitingMigration = false
+      handleMigrationContext(event)
+      unstashAll()
+
+    case _: NoPendingMigrationEvent if awaitingMigration =>
+      // Not a migrated entity — proceed with normal init, then process stashed messages
+      awaitingMigration = false
+      unstashAll()
+      proceedNormalInit()
+
+    case _ if awaitingMigration =>
+      stash()
+
+    // ── Normal message routing ────────────────────────────────────────────────
+    case event: MigrationContextEvent => handleMigrationContext(event)
     case event: SpontaneousEvent      => handleSpontaneous(event)
     case event: ActorInteractionEvent => handleInteractWith(event)
     case event                        => super.receive(event)
+  }
+
+  private def handleMigrationContext(event: MigrationContextEvent): Unit = {
+    logInfo(
+      s"Entity '$entityId' received MigrationContextEvent: " +
+        s"timeManagers=${event.timeManagers.keys.mkString(",")}, " +
+        s"reporters=${event.reporters.size}, batchId=${event.batchId}"
+    )
+    // Restore domain state and simulation metadata from snapshot
+    applyMigrationSnapshot(event.snapshot)
+
+    // Restore the raw entity ID stored in the snapshot (entityId may currently be path.name)
+    if (event.snapshot.entityId.nonEmpty) {
+      entityId = event.snapshot.entityId
+    }
+
+    // Inject simulation context (timeManagers, reporters) from SnapshotManager
+    if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
+    if (event.reporters.nonEmpty)    reporters    = event.reporters
+    creatorManager = null
+
+    // Register with TimeManager now that state and context are fully available
+    if (state != null && state.isSetScheduleOnTimeManager) {
+      registerOnTimeManager()
+    }
+    onFinishInitialize()
+
+    // ACK to LoadBalanceManager so it can close the migration window once all entities are done
+    if (event.lbmRef != null) {
+      event.lbmRef ! MigrationRestoredAckEvent(entityId = entityId, batchId = event.batchId)
+    }
+
+    onMigrationRestore()
   }
 
   /** Finishes processing a spontaneous event and optionally schedules the next tick.
@@ -634,51 +729,63 @@ abstract class SimulationBaseActor[T <: BaseState](
     report(event)
   }
 
-  /** Gets a dependency by entity id.
+  /** Gets a relationship by entity id.
     * @param entityId
     *   The entity id
     * @return
-    *   The dependency
+    *   The relationship
     */
-  protected def getDependency(entityId: String): Dependency = {
+  protected def getRelationship(entityId: String): ShardActorId = {
     val formattedId = IdUtil.format(entityId)
-    dependencies.get(formattedId) match {
-      case Some(dependency) => dependency
+    relationships.get(formattedId) match {
+      case Some(relationship) => relationship
       case None =>
         logWarn(
-          s"Dependency not found for entityId: $entityId (formatted: $formattedId). Available dependencies: ${dependencies.keys
+          s"ShardActorId not found for entityId: $entityId (formatted: $formattedId). Available relationships: ${relationships.keys
               .mkString(", ")}"
         )
-        throw new NoSuchElementException(s"Dependency not found: $entityId")
+        throw new NoSuchElementException(s"ShardActorId not found: $entityId")
     }
   }
 
-  /** Safely gets a dependency by entity id, returning None if not found.
+  /** Safely gets a relationship by entity id, returning None if not found.
     * @param entityId
     *   The entity id
     * @return
-    *   The dependency wrapped in Option
+    *   The relationship wrapped in Option
     */
-  protected def getDependencyOption(entityId: String): Option[Dependency] = {
+  protected def getRelationshipOption(entityId: String): Option[ShardActorId] = {
     val formattedId = IdUtil.format(entityId)
-    dependencies.get(formattedId)
+    relationships.get(formattedId)
   }
 
-  /** Safely gets a dependency by entity id, throwing exception if not found.
+  /** Safely gets a relationship by entity id, throwing exception if not found.
     * @param entityId
     *   The entity id
     * @return
-    *   The dependency
+    *   The relationship
     * @throws NoSuchElementException
-    *   if dependency not found
+    *   if relationship not found
     */
-  protected def getDependencySafe(entityId: String): Dependency =
-    getDependencyOption(entityId) match {
-      case Some(dependency) => dependency
+  protected def getRelationshipSafe(entityId: String): ShardActorId =
+    getRelationshipOption(entityId) match {
+      case Some(relationship) => relationship
       case None =>
-        logError(s"Dependency not found: $entityId")
-        throw new NoSuchElementException(s"Dependency not found: $entityId")
+        logError(s"ShardActorId not found: $entityId")
+        throw new NoSuchElementException(s"ShardActorId not found: $entityId")
     }
+
+  /** @deprecated Use getRelationship instead. */
+  @deprecated("Use getRelationship instead", "2.8.0")
+  protected def getDependency(entityId: String): ShardActorId = getRelationship(entityId)
+
+  /** @deprecated Use getRelationshipOption instead. */
+  @deprecated("Use getRelationshipOption instead", "2.8.0")
+  protected def getDependencyOption(entityId: String): Option[ShardActorId] = getRelationshipOption(entityId)
+
+  /** @deprecated Use getRelationshipSafe instead. */
+  @deprecated("Use getRelationshipSafe instead", "2.8.0")
+  protected def getDependencySafe(entityId: String): ShardActorId = getRelationshipSafe(entityId)
 
   /** Gets the time manager actor reference (default: discrete-event).
     * @return

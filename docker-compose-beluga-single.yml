@@ -100,6 +100,22 @@ services:
       # ~1500+ CreateActor msgs per tick window, causing shard drops.
       HTC_SHARD_BUFFER_SIZE: 100000
 
+      # ── Load Balance Manager ─────────────────────────────────────────────
+      # Single-node: disabled. Enable for multi-node beluga runs.
+      HTC_LOAD_BALANCE_ENABLED: "true"
+      HTC_LOAD_BALANCE_STRATEGY: "type-aware"
+      HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
+      HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"
+      HTC_LB_KDTREE_LOAD_THRESHOLD: "0.85"
+      HTC_LB_MIGRATION_MAX_CONCURRENT: "5"
+
+      # ── Migration Window Protocol ────────────────────────────────────────
+      HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS: "500"
+      HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS: "10000"
+      HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS: "60000"
+      HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS: "10000"
+      HTC_LB_MIGRATION_STATE_STORE: "inmemory"
+
       # Time Manager Configuration
       # 256 TMs total / 32 per node for SP 100% scale (30M+ actors).
       # At peak ~10M active actors: 10M/256 = ~39K actors/TM — well within

@@ -8,10 +8,9 @@ import core.util.{ ActorCreatorUtil, IdUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ StartCreationEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization, ShardActorId }
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, ProcessNextCreateChunk }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
@@ -108,7 +107,7 @@ class CreatorPoolLoadData(
             creatorManager = self,
             reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,
-            dependencies = mutable.Map[String, Dependency](),
+            dependencies = mutable.Map[String, ShardActorId](),
             creationType = PoolDistributed
           )
 

@@ -4,7 +4,7 @@ package core.entity.actor.properties
 import core.enumeration.{ CreationTypeEnum, ReportTypeEnum, TimeManagerTypeEnum }
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.Dependency
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 import scala.collection.mutable
@@ -16,7 +16,7 @@ case class Properties(
   creatorManager: ActorRef = null,
   reporters: mutable.Map[ReportTypeEnum, ActorRef] = null,
   data: Any = null,
-  dependencies: mutable.Map[String, Dependency] = mutable.Map[String, Dependency](),
+  relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId](),
   actorType: CreationTypeEnum = LoadBalancedDistributed,
   defaultTimeManagerType: String = TimeManagerTypeEnum.DISCRETE_EVENT // Tipo padrão de time manager
 ) {

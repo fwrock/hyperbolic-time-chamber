@@ -3,18 +3,33 @@ package core.actor.manager.loadbalance
 
 import core.actor.manager.BaseManager
 import core.actor.manager.loadbalance.allocation.{ LoadBalanceShardAllocator, ShardAllocatorRegistry, SpatialShardIdRegistry }
-import core.actor.manager.loadbalance.migration.{ MigrationRequestResult, MigrationStateStore, MigrationStateStoreRegistry, InMemoryMigrationStateStore, RedisMigrationStateStore, ShardMigrationCoordinator }
+import core.actor.manager.loadbalance.migration.{
+  MigrationRequestResult,
+  MigrationStateStoreRegistry,
+  MigrationWindowSubscriber,
+  ShardMigrationCoordinator
+}
 import core.actor.manager.loadbalance.strategy.{ BalancingStrategy, StrategyConfig, StrategyFactory }
 import core.entity.control.loadbalance._
 import core.entity.event.EntityEnvelopeEvent
 import core.entity.event.control.loadbalance._
+import core.entity.event.control.migration.{
+  MigrationRestoredAckEvent,
+  MigrationWindowAckEvent,
+  MigrationWindowCloseEvent,
+  MigrationWindowOpenEvent,
+  RegisterMigrationBatchEvent
+}
 import core.entity.state.DefaultState
 import core.enumeration.{ LoadBalanceStrategyEnum, ShardTypeEnum }
-import core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
+import core.util.ManagerConstantsUtil.{ LOAD_BALANCE_MANAGER_ACTOR_NAME, SNAPSHOT_MANAGER_ACTOR_NAME }
+import core.util.IdUtil
 
 import org.apache.pekko.actor.{ ActorRef, Cancellable, Props }
 import org.apache.pekko.cluster.{ Cluster, MemberStatus }
-import org.apache.pekko.cluster.ClusterEvent.{ MemberEvent, MemberRemoved, MemberUp, UnreachableMember }
+import org.apache.pekko.cluster.ClusterEvent.{ CurrentClusterState, MemberEvent, MemberRemoved, MemberUp, UnreachableMember }
+import org.apache.pekko.cluster.pubsub.DistributedPubSub
+import org.apache.pekko.cluster.pubsub.DistributedPubSubMediator.Publish
 import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 
@@ -99,15 +114,35 @@ class LoadBalanceManager(
   /** Custom shard allocation strategy that we control */
   private val shardAllocator: LoadBalanceShardAllocator = LoadBalanceShardAllocator()
 
-  /** Migration state store for preserving actor state across shard hand-offs.
-    * Initialized in [[onStart]] based on config: "redis" or "inmemory".
-    */
-  private var migrationStateStore: Option[MigrationStateStore] = None
-
   /** Shard type classification: shard ID → ShardTypeEnum.
     * Static shards (Links, Nodes) are pinned; dynamic shards (Cars, Buses) are migratable.
     */
   private val shardTypes: mutable.Map[String, ShardTypeEnum] = mutable.Map.empty
+
+  // ── Migration Window State ────────────────────────────────────────────────
+
+  /** Tracks the in-progress migration wave (open/restore/close phases).
+    * None when no dynamic migration is active.
+    */
+  private var activeWave: Option[MigrationWaveState] = None
+
+  /** Lazy DistributedPubSub mediator reference for broadcasting window events. */
+  private lazy val mediatorRef: ActorRef = DistributedPubSub(context.system).mediator
+
+  // ── Internal command for the delayed window-open broadcast ────────────────
+
+  /** Self-message scheduled 200ms after entity notification to trigger the PubSub broadcast. */
+  private case class TriggerWindowOpenCommand(batchId: String, entityIds: Set[String])
+
+  /** Per-wave migration tracking state. */
+  private case class MigrationWaveState(
+    batchId: String,
+    plans: Seq[MigrationPlan],
+    allEntityIds: Set[String],
+    pendingWindowOpenNodeAcks: mutable.Set[String],
+    pendingRestoreEntityAcks: mutable.Set[String],
+    pendingWindowCloseNodeAcks: mutable.Set[String]
+  )
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -130,9 +165,6 @@ class LoadBalanceManager(
 
     // Register the shard allocator so ActorCreatorUtil uses it for future shard creations
     ShardAllocatorRegistry.register(shardAllocator)
-
-    // Initialize migration state store for preserving actor state during shard hand-offs
-    initializeMigrationStateStore()
 
     // Schedule periodic rebalancing
     if (strategy.isDefined) {
@@ -167,7 +199,21 @@ class LoadBalanceManager(
     // TimeManager coordination events
     case event: MigrationSafeEvent           => handleMigrationSafe(event)
 
+    // Migration window protocol
+    case cmd: TriggerWindowOpenCommand       => handleTriggerWindowOpen(cmd)
+    case event: MigrationWindowAckEvent      => handleWindowAck(event)
+    case event: MigrationRestoredAckEvent    => handleRestoredAck(event)
+
     // Cluster membership events
+    case state: CurrentClusterState =>
+      // Sent immediately on subscribe as a cluster snapshot — seed the strategy with all
+      // members that are already Up at the time the LBM singleton starts.
+      state.members.filter(_.status == MemberStatus.Up).foreach { m =>
+        strategy.foreach(_.registerNode(m.address))
+      }
+      logInfo(s"CurrentClusterState received: ${state.members.size} members, " +
+        s"${state.members.count(_.status == MemberStatus.Up)} Up")
+
     case MemberUp(member) =>
       logInfo(s"Cluster member joined: ${member.address}")
       strategy.foreach(_.registerNode(member.address))
@@ -329,7 +375,18 @@ class LoadBalanceManager(
   }
 
   /** Handles the TimeManager confirming it has paused at a safe tick boundary.
-    * Now we can execute all pending migrations safely.
+    *
+    * Separates static shard migrations (no window needed) from dynamic shard migrations
+    * (require the distributed migration window protocol to guarantee cross-node snapshot
+    * delivery before Pekko hands off the shard).
+    *
+    * Dynamic plan flow:
+    *   1. Register batch with SnapshotManager
+    *   2. Notify entities to serialize state to SM (PrepareForMigrationEvent with batchId)
+    *   3. Schedule window-open broadcast after 200ms (let snapshots reach SM)
+    *   4. Wait for open ACKs from all nodes → then trigger Pekko rebalance per plan
+    *   5. Wait for entity restore ACKs → then broadcast window-close
+    *   6. Wait for close ACKs → then notify TimeManager to resume
     */
   private def handleMigrationSafe(event: MigrationSafeEvent): Unit = {
     logInfo(s"TimeManager paused at tick ${event.currentTick}. Executing ${pendingMigrationPlans.size} pending migrations.")
@@ -341,21 +398,192 @@ class LoadBalanceManager(
       return
     }
 
-    // Execute all pending migrations
     val plansToExecute = pendingMigrationPlans.dequeueAll(_ => true)
-    plansToExecute.foreach(executeMigration)
+
+    // Static shards: execute immediately (no window)
+    val staticPlans = plansToExecute.filter { p =>
+      shardTypes.getOrElse(p.shardId, ShardTypeEnum.Dynamic) == ShardTypeEnum.Static
+    }
+    val dynamicPlans = plansToExecute.filter { p =>
+      shardTypes.getOrElse(p.shardId, ShardTypeEnum.Dynamic) != ShardTypeEnum.Static
+    }
+    staticPlans.foreach(executeMigration)
+
+    if (dynamicPlans.isEmpty) {
+      // Only static shards — handleMigrationComplete will notify TM when they finish
+      if (staticPlans.isEmpty) timeManagerProxy ! MigrationCompleteNotifyEvent()
+      return
+    }
+
+    // Collect entity IDs across all dynamic plans (use formatted IDs to match TM routing keys)
+    val batchId = java.util.UUID.randomUUID().toString.take(12)
+    val allEntityIds = dynamicPlans
+      .flatMap(p => SpatialShardIdRegistry.getEntitiesInShard(p.shardId).toSeq)
+      .map(IdUtil.format)  // Format to match shard routing keys used by TM
+      .toSet
+
+    val clusterNodeAddrs: mutable.Set[String] = mutable.Set.empty ++
+      cluster.state.members
+        .filter(_.status == MemberStatus.Up)
+        .map(_.address.toString)
+
+    // Register batch with SnapshotManager (SM needs batchId→lbmRef mapping)
+    MigrationStateStoreRegistry.getSnapshotManager.foreach { smRef =>
+      smRef ! RegisterMigrationBatchEvent(batchId, allEntityIds, getSelfProxy)
+    }
+
+    // Notify entities to serialize state to SM (fire-and-forget; window open gives 200ms buffer)
+    dynamicPlans.foreach { plan =>
+      notifyEntitiesForMigrationWithBatch(plan.shardId, plan.targetNode.toString, batchId)
+    }
+
+    // Track this wave
+    activeWave = Some(MigrationWaveState(
+      batchId                  = batchId,
+      plans                    = dynamicPlans.toSeq,
+      allEntityIds             = allEntityIds,
+      pendingWindowOpenNodeAcks  = clusterNodeAddrs,
+      pendingRestoreEntityAcks   = mutable.Set.empty ++ allEntityIds,
+      pendingWindowCloseNodeAcks = mutable.Set.empty
+    ))
+
+    // Schedule window-open broadcast after configurable delay (default 200ms).
+    // Gives entities time to flush their SaveMigrationSnapshotEvent to SM before
+    // the MigrationWindowOpenEvent sets the isMigrationActive flag on all nodes.
+    val windowOpenDelayMs = try {
+      context.system.settings.config.getInt("htc.load-balance-manager.migration.window-open-delay-ms")
+    } catch { case _: Exception => 200 }
+    context.system.scheduler.scheduleOnce(windowOpenDelayMs.milliseconds) {
+      getSelfProxy ! TriggerWindowOpenCommand(batchId, allEntityIds)
+    }
+
+    logInfo(
+      s"Migration wave '$batchId': ${dynamicPlans.size} dynamic plan(s), " +
+        s"${allEntityIds.size} entities, ${clusterNodeAddrs.size} cluster nodes"
+    )
   }
 
-  /** Handles migration completion. Releases buffers and starts next pending migration.
-    * When all active migrations complete, notifies TimeManager to resume.
+  /** Broadcasts MigrationWindowOpenEvent to all nodes via DistributedPubSub.
+    * Called 200ms after entity notification to allow snapshots to reach SM first.
+    */
+  private def handleTriggerWindowOpen(cmd: TriggerWindowOpenCommand): Unit = {
+    activeWave.filter(_.batchId == cmd.batchId) match {
+      case None =>
+        logWarn(s"TriggerWindowOpenCommand for unknown batch '${cmd.batchId}' — ignoring")
+      case Some(wave) =>
+        logInfo(
+          s"Broadcasting MigrationWindowOpenEvent for batch '${wave.batchId}' " +
+            s"(${cmd.entityIds.size} entities, ${wave.pendingWindowOpenNodeAcks.size} nodes)"
+        )
+        mediatorRef ! Publish(
+          MigrationWindowSubscriber.TOPIC,
+          MigrationWindowOpenEvent(
+            batchId   = wave.batchId,
+            entityIds = cmd.entityIds,
+            lbmRef    = getSelfProxy
+          )
+        )
+    }
+  }
+
+  /** Handles a MigrationWindowAckEvent from a cluster node subscriber.
+    *
+    * Open ACKs: count down. When all nodes ACKed → trigger Pekko rebalance per plan.
+    * Close ACKs: count down. When all nodes ACKed → notify TimeManager to resume.
+    */
+  private def handleWindowAck(event: MigrationWindowAckEvent): Unit = {
+    activeWave.filter(_.batchId == event.batchId) match {
+      case None =>
+        logWarn(s"MigrationWindowAckEvent for unknown batch '${event.batchId}' (phase=${event.phase}) — ignoring")
+      case Some(wave) =>
+        event.phase match {
+          case MigrationWindowSubscriber.PHASE_OPEN =>
+            wave.pendingWindowOpenNodeAcks -= event.nodeAddress
+            logDebug(
+              s"Window open ACK from '${event.nodeAddress}' " +
+                s"(remaining: ${wave.pendingWindowOpenNodeAcks.size})"
+            )
+            if (wave.pendingWindowOpenNodeAcks.isEmpty) {
+              logInfo(
+                s"All nodes ACKed window open for batch '${wave.batchId}'. " +
+                  s"Triggering Pekko shard rebalance for ${wave.plans.size} plans."
+              )
+              wave.plans.foreach(triggerPekkoHandoff)
+            }
+
+          case MigrationWindowSubscriber.PHASE_CLOSE =>
+            wave.pendingWindowCloseNodeAcks -= event.nodeAddress
+            logDebug(
+              s"Window close ACK from '${event.nodeAddress}' " +
+                s"(remaining: ${wave.pendingWindowCloseNodeAcks.size})"
+            )
+            if (wave.pendingWindowCloseNodeAcks.isEmpty) {
+              logInfo(
+                s"All nodes ACKed window close for batch '${wave.batchId}'. " +
+                  s"Notifying TimeManager to resume."
+              )
+              activeWave = None
+              timeManagerProxy ! MigrationCompleteNotifyEvent()
+            }
+
+          case other =>
+            logWarn(s"Unknown migration window ACK phase: '$other'")
+        }
+    }
+  }
+
+  /** Handles a MigrationRestoredAckEvent from a fully-restored entity on the target node.
+    *
+    * Counts down the pending restore set. When all entities in the wave have reported back,
+    * broadcasts MigrationWindowCloseEvent to end the distributed flag period.
+    */
+  private def handleRestoredAck(event: MigrationRestoredAckEvent): Unit = {
+    activeWave.filter(_.batchId == event.batchId) match {
+      case None =>
+        logDebug(
+          s"MigrationRestoredAckEvent from '${event.entityId}' for batch '${event.batchId}' — " +
+            s"no active wave (already closed or not a migration entity)"
+        )
+      case Some(wave) =>
+        wave.pendingRestoreEntityAcks -= event.entityId
+        logDebug(
+          s"Entity '${event.entityId}' restored. " +
+            s"Batch '${event.batchId}': ${wave.pendingRestoreEntityAcks.size} entities remaining."
+        )
+        if (wave.pendingRestoreEntityAcks.isEmpty) {
+          logInfo(
+            s"All ${wave.allEntityIds.size} entities restored for batch '${wave.batchId}'. " +
+              s"Broadcasting MigrationWindowCloseEvent."
+          )
+          val clusterNodeAddrs: Set[String] = cluster.state.members
+            .filter(_.status == MemberStatus.Up)
+            .map(_.address.toString)
+          wave.pendingWindowCloseNodeAcks ++= clusterNodeAddrs
+          mediatorRef ! Publish(
+            MigrationWindowSubscriber.TOPIC,
+            MigrationWindowCloseEvent(batchId = wave.batchId, lbmRef = getSelfProxy)
+          )
+        }
+    }
+  }
+
+
+  /** Handles migration completion (Pekko shard hand-off reported done by the monitor).
+    *
+    * If an active migration wave is in progress, the TimeManager notification is deferred
+    * until all entities have been restored (tracked via MigrationRestoredAckEvent) and
+    * the distributed window is closed. In that case, do NOT notify TM here.
+    *
+    * If there is no active wave (static-only migrations), notify TM when all shard
+    * hand-offs are complete.
     */
   private def handleMigrationComplete(event: MigrationCompleteEvent): Unit = {
     val nextPlan = migrationCoordinator.completeMigration(event.shardId, event.success)
 
     if (event.success) {
-      logInfo(s"Migration complete: shard '${event.shardId}' (${event.durationMs}ms)")
+      logInfo(s"Pekko shard hand-off complete: '${event.shardId}' (${event.durationMs}ms)")
     } else {
-      logWarn(s"Migration failed: shard '${event.shardId}'")
+      logWarn(s"Pekko shard hand-off reported failure: '${event.shardId}'")
     }
 
     // Start next queued migration if available
@@ -364,10 +592,11 @@ class LoadBalanceManager(
         getSelfProxy ! RequestMigrationEvent(plan)
     }
 
-    // If no more active migrations, notify TimeManager to resume simulation
+    // Only notify TM directly if no active migration wave is running.
+    // When a wave is active, TM notification is deferred until window close ACKs.
     val stats = migrationCoordinator.getStats
-    if (stats.activeMigrations == 0 && pendingMigrationPlans.isEmpty) {
-      logInfo("All migrations complete. Notifying TimeManager to resume.")
+    if (stats.activeMigrations == 0 && pendingMigrationPlans.isEmpty && activeWave.isEmpty) {
+      logInfo("All shard migrations complete (no wave active). Notifying TimeManager to resume.")
       timeManagerProxy ! MigrationCompleteNotifyEvent()
     }
 
@@ -416,21 +645,11 @@ class LoadBalanceManager(
     // Abort active migrations
     migrationCoordinator.abortAll()
 
-    // Clean up migration state store
-    migrationStateStore.foreach { store =>
-      val remaining = store.size
-      if (remaining > 0) {
-        logWarn(s"Clearing $remaining orphaned migration state entries from ${store.name}")
-      }
-      store.clear()
-    }
-    MigrationStateStoreRegistry.clear()
-    migrationStateStore = None
-
-    // If we were waiting for TimeManager, let it resume
-    if (awaitingMigrationPause) {
+    // If we were waiting for TimeManager (migration pause or window close), let it resume
+    if (awaitingMigrationPause || activeWave.isDefined) {
       timeManagerProxy ! MigrationCompleteNotifyEvent()
       awaitingMigrationPause = false
+      activeWave = None
     }
 
     // Shutdown strategy
@@ -446,37 +665,6 @@ class LoadBalanceManager(
   }
 
   // ── Internal Operations ────────────────────────────────────────────────────
-
-  /** Initializes the migration state store based on config.
-    *
-    * Reads `htc.load-balance-manager.migration.state-store` from application.conf:
-    *   - "redis"    → [[RedisMigrationStateStore]] (shared, multi-node safe)
-    *   - "inmemory"  → [[InMemoryMigrationStateStore]] (fast, single-node only)
-    *   - anything else → falls back to in-memory
-    *
-    * The store is registered globally in [[MigrationStateStoreRegistry]] so that
-    * actors can access it from [[BaseActor.saveMigrationState]] / [[BaseActor.restoreMigrationState]]
-    * without constructor injection.
-    */
-  private def initializeMigrationStateStore(): Unit = {
-    val storeType = try {
-      config.getString("htc.load-balance-manager.migration.state-store")
-    } catch {
-      case _: Exception => "inmemory"
-    }
-
-    val store: MigrationStateStore = storeType.toLowerCase match {
-      case "redis" =>
-        logInfo("Migration state store: Redis (shared, multi-node safe)")
-        new RedisMigrationStateStore()
-      case _ =>
-        logInfo("Migration state store: In-Memory (singleton-hosted, single-node)")
-        new InMemoryMigrationStateStore()
-    }
-
-    migrationStateStore = Some(store)
-    MigrationStateStoreRegistry.register(store)
-  }
 
   /** Sends [[PrepareForMigrationEvent]] to all entities in a shard, requesting them
     * to serialize their state to the migration store before hand-off.
@@ -513,6 +701,49 @@ class LoadBalanceManager(
       }
     } else {
       logDebug(s"No entity IDs tracked for shard '$shardId' — entities will save state on DestructEvent")
+    }
+  }
+
+  /** Notifies entities in a shard to save their state to the SnapshotManager (migration window).
+    *
+    * Same as [[notifyEntitiesForMigration]] but includes `batchId` and `lbmRef` in the
+    * PrepareForMigrationEvent so entities can:
+    *   1. Send [[core.entity.event.control.migration.SaveMigrationSnapshotEvent]] to SM
+    *   2. Later send [[core.entity.event.control.migration.MigrationRestoredAckEvent]] to LBM
+    */
+  private def notifyEntitiesForMigrationWithBatch(
+    shardId: String,
+    targetNode: String,
+    batchId: String
+  ): Unit = {
+    val entityIds = SpatialShardIdRegistry.getEntitiesInShard(shardId)
+    if (entityIds.nonEmpty) {
+      logInfo(
+        s"Notifying ${entityIds.size} entities in shard '$shardId' to save state " +
+          s"(batch='$batchId')"
+      )
+      entityIds.foreach { eid =>
+        try {
+          val shardRegionName = SpatialShardIdRegistry.getEntityClassName(eid)
+          shardRegionName.foreach { className =>
+            val region = ClusterSharding(context.system).shardRegion(className)
+            region ! EntityEnvelopeEvent(
+              eid,
+              PrepareForMigrationEvent(
+                shardId    = shardId,
+                targetNode = targetNode,
+                batchId    = batchId,
+                lbmRef     = getSelfProxy
+              )
+            )
+          }
+        } catch {
+          case e: Exception =>
+            logWarn(s"Failed to notify entity '$eid' for migration (batch=$batchId): ${e.getMessage}")
+        }
+      }
+    } else {
+      logDebug(s"No entity IDs tracked for shard '$shardId' (batch='$batchId')")
     }
   }
 
@@ -581,6 +812,9 @@ class LoadBalanceManager(
     *
     * Static shards (Links, Nodes, TrafficSignals) are skipped because they anchor the
     * spatial partition and should not move.
+    *
+    * NOTE: For dynamic shards use [[triggerPekkoHandoff]] after the migration window is open.
+    * This method is kept for static shard handling.
     */
   private def executeMigration(plan: MigrationPlan): Unit = {
     // Check shard type — Static shards should not be migrated
@@ -597,48 +831,53 @@ class LoadBalanceManager(
       return
     }
 
+    // For dynamic shards, delegate to triggerPekkoHandoff (called after window open ACKs)
+    triggerPekkoHandoff(plan)
+  }
+
+  /** Triggers the actual Pekko shard rebalance for a dynamic plan.
+    *
+    * Called after all cluster nodes have ACKed the migration window open — meaning all
+    * nodes have set isMigrationActive = true and entities on the target node will query
+    * the SnapshotManager for their snapshot upon recreation.
+    *
+    * Notifying entities to save state (PrepareForMigrationEvent) was already done in
+    * handleMigrationSafe; this method only tells the Pekko ShardCoordinator to move
+    * the shard and then monitors completion.
+    */
+  private def triggerPekkoHandoff(plan: MigrationPlan): Unit = {
     logInfo(
-      s"Executing migration: shard '${plan.shardId}' (type=$shardType) → ${plan.targetNode}"
+      s"Triggering Pekko hand-off: shard '${plan.shardId}' (type=${shardTypes.getOrElse(plan.shardId, ShardTypeEnum.Dynamic)}) → ${plan.targetNode}"
     )
 
-    // Find the target region ActorRef from the allocator's region index.
-    // The region index maps ActorRef → Set[ShardId], populated from Pekko's allocation snapshots.
     val targetRegion = shardAllocator.getRegionIndex
       .find { case (_, shards) => shards.nonEmpty }
       .map(_._1)
 
     targetRegion match {
       case Some(region) =>
-        // Notify entities to save state BEFORE hand-off begins
-        notifyEntitiesForMigration(plan.shardId, plan.targetNode.toString)
-
-        // Update allocator: next time Pekko calls allocateShard() for this shard, use target
         shardAllocator.requestRebalance(plan.shardId, region)
-
         logInfo(
           s"Shard '${plan.shardId}' marked for rebalance in allocator. " +
             s"Pekko ShardCoordinator will pick it up on next rebalance cycle."
         )
-
-        // Monitor shard hand-off completion. Pekko's rebalance is async: the ShardCoordinator
-        // calls rebalance() → sees our pending entry → passivates shard on source → re-allocates
-        // on target via allocateShard(). We poll until the shard is no longer in-transit.
         val startTime = System.currentTimeMillis()
         monitorMigrationCompletion(plan.shardId, startTime, attempt = 1)
 
       case None =>
-        // No regions known yet — this can happen early in startup
         logWarn(
           s"No target region found for shard '${plan.shardId}'. " +
             s"Region index is empty (cluster may still be forming). Reporting failure."
         )
         getSelfProxy ! MigrationCompleteEvent(
-          shardId = plan.shardId,
-          success = false,
+          shardId    = plan.shardId,
+          success    = false,
           durationMs = 0
         )
     }
   }
+
+
 
   /** Periodically checks whether a shard migration has completed.
     *

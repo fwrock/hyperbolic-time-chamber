@@ -117,6 +117,34 @@ services:
       # ~1500+ CreateActor msgs per tick window, causing shard drops.
       HTC_SHARD_BUFFER_SIZE: 100000
 
+      # ── Load Balance Manager ─────────────────────────────────────────────
+      # Disabled by default for single-node local testing. Enable for multi-node.
+      HTC_LOAD_BALANCE_ENABLED: "true"
+      # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
+      HTC_LOAD_BALANCE_STRATEGY: "type-aware"
+      # Geographic affinity weight for GeoAffinity/Hybrid strategy target scoring.
+      # 0.0 = pure load balance; 1.0 = pure geographic affinity; 0.4 recommended.
+      HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
+      # Rebalance cycle interval in seconds
+      HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"
+      # Load threshold (0.0–1.0) above which a shard is considered overloaded
+      HTC_LB_KDTREE_LOAD_THRESHOLD: "0.85"
+      # SBR / quadtree tuning
+      HTC_LB_MIGRATION_MAX_CONCURRENT: "3"
+
+      # ── Migration Window Protocol ────────────────────────────────────────
+      # Delay (ms) before broadcasting MigrationWindowOpenEvent after entity notification.
+      # Entities use this window to flush their snapshots to SnapshotManager.
+      HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS: "200"
+      # Timeout (ms) waiting for all cluster nodes to ACK MigrationWindowOpenEvent
+      HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS: "5000"
+      # Timeout (ms) waiting for all migrated entities to ACK restoration
+      HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS: "30000"
+      # Timeout (ms) waiting for all nodes to ACK MigrationWindowCloseEvent
+      HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS: "5000"
+      # Snapshot state store: "inmemory" (single-node) or "redis" (multi-node)
+      HTC_LB_MIGRATION_STATE_STORE: "inmemory"
+
       # Time Manager Configuration
       HTC_TIME_MANAGER_INSTANCES: 16
       HTC_TIME_MANAGER_PER_NODE: 16

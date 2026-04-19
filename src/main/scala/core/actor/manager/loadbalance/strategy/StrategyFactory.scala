@@ -15,9 +15,11 @@ object StrategyFactory {
     */
   def create(strategyType: LoadBalanceStrategyEnum): Option[BalancingStrategy] =
     strategyType match {
-      case LoadBalanceStrategyEnum.Hybrid  => Some(new HybridStrategy())
-      case LoadBalanceStrategyEnum.Default => Some(new DefaultStrategy())
-      case LoadBalanceStrategyEnum.Disabled => None
+      case LoadBalanceStrategyEnum.Hybrid      => Some(new HybridStrategy())
+      case LoadBalanceStrategyEnum.Default     => Some(new DefaultStrategy())
+      case LoadBalanceStrategyEnum.GeoAffinity => Some(new GeoAffinityStrategy())
+      case LoadBalanceStrategyEnum.TypeAware   => Some(new TypeAwareStrategy())
+      case LoadBalanceStrategyEnum.Disabled    => None
     }
 
   /** Creates a BalancingStrategy from a string name.
@@ -30,12 +32,14 @@ object StrategyFactory {
   def create(name: String): Option[BalancingStrategy] = {
     val normalized = name.trim.toLowerCase
     normalized match {
-      case "hybrid"   => create(LoadBalanceStrategyEnum.Hybrid)
-      case "default"  => create(LoadBalanceStrategyEnum.Default)
-      case "disabled" => create(LoadBalanceStrategyEnum.Disabled)
-      case _ =>
-        // Unknown strategy, fall back to disabled
-        None
+      case "hybrid"       => create(LoadBalanceStrategyEnum.Hybrid)
+      case "default"      => create(LoadBalanceStrategyEnum.Default)
+      case "geo-affinity" => create(LoadBalanceStrategyEnum.GeoAffinity)
+      case "geo_affinity" => create(LoadBalanceStrategyEnum.GeoAffinity)
+      case "type-aware"   => create(LoadBalanceStrategyEnum.TypeAware)
+      case "type_aware"   => create(LoadBalanceStrategyEnum.TypeAware)
+      case "disabled"     => create(LoadBalanceStrategyEnum.Disabled)
+      case _              => None
     }
   }
 }

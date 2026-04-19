@@ -9,7 +9,8 @@ import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSe
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
 import org.interscity.htc.core.entity.actor.PoolDistributedConfiguration
@@ -283,7 +284,7 @@ object ActorCreatorUtil {
     creatorManager: ActorRef,
     reporters: mutable.Map[ReportTypeEnum, ActorRef],
     data: Any,
-    dependencies: mutable.Map[String, Dependency],
+    dependencies: mutable.Map[String, ShardActorId],
     creationType: CreationTypeEnum
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)

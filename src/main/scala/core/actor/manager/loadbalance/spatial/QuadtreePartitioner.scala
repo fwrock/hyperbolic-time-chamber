@@ -107,6 +107,22 @@ class QuadtreePartitioner(
   /** Returns all leaf nodes (shards). */
   def getLeaves: List[QuadtreeLeaf] = collectLeaves(root)
 
+  /** Returns the shard IDs of all leaves that are spatially adjacent to the given shard.
+    *
+    * Two leaves are adjacent if their bounds share an edge or a corner (i.e., the given shard's
+    * bounds, expanded by a small epsilon, intersects the neighbor's bounds). The shard itself is
+    * excluded from the result.
+    *
+    * @param shardId
+    *   The base shard ID (without any prefix)
+    * @return
+    *   Set of adjacent shard IDs, empty if the shard is not found
+    */
+  def getAdjacentShardIds(shardId: String): Set[String] =
+    findLeafByShardId(root, shardId)
+      .map(leaf => findNeighboringLeaves(root, leaf).map(_.shardId).toSet)
+      .getOrElse(Set.empty)
+
   /** Adaptively refines the quadtree based on entity density.
     *
     * Splits leaves with too many entities and merges sparse siblings.

@@ -5,7 +5,8 @@ import core.actor.SimulationBaseActor
 import org.interscity.htc.model.hybrid.entity.state.*
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.data.BaseEventData
@@ -70,8 +71,8 @@ class BusStation(
             try {
               val actorRef = createBus(bus)
               val className = classOf[Bus].getName
-              dependencies(bus.actorId) = Dependency(
-                id = entityId,
+              dependencies(bus.actorId) = ShardActorId(
+                entityId = bus.actorId,
                 classType = className
               )
               onFinishSpontaneous(Some(currentTick + state.interval))
@@ -207,8 +208,8 @@ class BusStation(
         try {
           val actorRef = createBus(bus)
           val className = classOf[Bus].getName
-          dependencies(bus.actorId) = Dependency(
-            id = entityId,
+          dependencies(bus.actorId) = ShardActorId(
+            entityId = bus.actorId,
             classType = className
           )
           state.status = Working
@@ -262,7 +263,7 @@ class BusStation(
         busState.status = MovableStatusEnum.Start
         busState
       }),
-      dependencies = mutable.Map[String, Dependency](),
+      relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType
     )

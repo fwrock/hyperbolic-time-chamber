@@ -78,6 +78,13 @@ object HyperbolicTimeChamber {
 
     SimulationUtil.startShards(system)
 
+    // Start the per-node migration window subscriber.
+    // This actor subscribes to the "migration-window" DistributedPubSub topic and:
+    //   - Registers the SnapshotManager singleton proxy in MigrationStateStoreRegistry
+    //   - Sets/clears the isMigrationActive flag when the LBM opens/closes the window
+    // One instance per JVM node (not a singleton).
+    actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
+
     val simulation = system.actorOf(
       ClusterSingletonManager.props(
         singletonProps = Props(
