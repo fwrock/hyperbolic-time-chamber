@@ -42,6 +42,10 @@ class KdTreeLoadBalancer {
   def removeNode(address: Address): Unit =
     clusterNodes.remove(address)
 
+  /** Records where a shard currently lives (from external discovery, e.g. allocator index). */
+  def recordNodeAssignment(shardId: String, address: Address): Unit =
+    shardAssignment.put(shardId, address)
+
   /** Gets the current cluster node assignment for a shard. */
   def getAssignment(shardId: String): Option[Address] =
     shardAssignment.get(shardId)

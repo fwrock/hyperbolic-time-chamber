@@ -1,6 +1,9 @@
 package org.interscity.htc
 package core.entity.event.control.loadbalance
 
+import core.entity.event.BaseEvent
+import core.entity.event.data.DefaultBaseEventData
+
 /** Response to [[RegisterSpatialEntitiesBatchEvent]] containing all spatial shard assignments.
   *
   * Sent by [[core.actor.manager.loadbalance.LoadBalanceManager]] back to
@@ -22,4 +25,4 @@ case class BatchShardAssignmentResponse(
   positions: Map[String, (Double, Double)],
   batchId: String,
   chunkIndex: Int = 0
-)
+) extends BaseEvent[DefaultBaseEventData]

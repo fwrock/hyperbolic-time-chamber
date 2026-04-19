@@ -171,6 +171,11 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   override def getAllShardIds: Set[String] = knownShards.toSet
 
+  override def recordShardLocation(shardId: String, address: Address): Unit =
+    kdTree.recordNodeAssignment(shardId, address)
+
+  override def getShardEntityCounts: Map[String, Int] = shardCount.toMap
+
   /** All type-aware shards are migratable — there are no mixed static/dynamic buckets. */
   override def getShardType(shardId: String): ShardTypeEnum = ShardTypeEnum.Dynamic
 

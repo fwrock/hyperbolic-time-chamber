@@ -129,10 +129,7 @@ class LoadBalanceManager(
   /** Lazy DistributedPubSub mediator reference for broadcasting window events. */
   private lazy val mediatorRef: ActorRef = DistributedPubSub(context.system).mediator
 
-  // ── Internal command for the delayed window-open broadcast ────────────────
-
-  /** Self-message scheduled 200ms after entity notification to trigger the PubSub broadcast. */
-  private case class TriggerWindowOpenCommand(batchId: String, entityIds: Set[String])
+  // ── Per-wave migration tracking state ────────────────────────────────────
 
   /** Per-wave migration tracking state. */
   private case class MigrationWaveState(
@@ -195,12 +192,13 @@ class LoadBalanceManager(
     case event: RequestMigrationEvent                => handleMigrationRequest(event)
     case event: MigrationCompleteEvent               => handleMigrationComplete(event)
     case event: TriggerRebalanceEvent                => handleTriggerRebalance(event)
+    case _: CollectAndFeedMetricsEvent                  => handleCollectAndFeedMetrics()
 
     // TimeManager coordination events
     case event: MigrationSafeEvent           => handleMigrationSafe(event)
 
     // Migration window protocol
-    case cmd: TriggerWindowOpenCommand       => handleTriggerWindowOpen(cmd)
+    case cmd: TriggerWindowOpenEvent          => handleTriggerWindowOpen(cmd)
     case event: MigrationWindowAckEvent      => handleWindowAck(event)
     case event: MigrationRestoredAckEvent    => handleRestoredAck(event)
 
@@ -454,7 +452,7 @@ class LoadBalanceManager(
       context.system.settings.config.getInt("htc.load-balance-manager.migration.window-open-delay-ms")
     } catch { case _: Exception => 200 }
     context.system.scheduler.scheduleOnce(windowOpenDelayMs.milliseconds) {
-      getSelfProxy ! TriggerWindowOpenCommand(batchId, allEntityIds)
+      getSelfProxy ! TriggerWindowOpenEvent(batchId, allEntityIds)
     }
 
     logInfo(
@@ -466,10 +464,10 @@ class LoadBalanceManager(
   /** Broadcasts MigrationWindowOpenEvent to all nodes via DistributedPubSub.
     * Called 200ms after entity notification to allow snapshots to reach SM first.
     */
-  private def handleTriggerWindowOpen(cmd: TriggerWindowOpenCommand): Unit = {
+  private def handleTriggerWindowOpen(cmd: TriggerWindowOpenEvent): Unit = {
     activeWave.filter(_.batchId == cmd.batchId) match {
       case None =>
-        logWarn(s"TriggerWindowOpenCommand for unknown batch '${cmd.batchId}' — ignoring")
+        logWarn(s"TriggerWindowOpenEvent for unknown batch '${cmd.batchId}' — ignoring")
       case Some(wave) =>
         logInfo(
           s"Broadcasting MigrationWindowOpenEvent for batch '${wave.batchId}' " +
@@ -782,7 +780,16 @@ class LoadBalanceManager(
     logInfo(s"Rebalance scheduled every ${strategyConfig.rebalanceIntervalSeconds}s")
   }
 
-  /** Schedule periodic metrics collection/logging. */
+  /** Schedule periodic metrics collection.
+    *
+    * Every 60 seconds (first at 30s) we:
+    *   1. Pull shard→node location from the allocator's region index
+    *   2. Pull entity counts per shard from the strategy
+    *   3. Feed both into the kd-tree so getImbalanceRatio has real data
+    *
+    * This unblocks the periodic TriggerRebalanceEvent (every rebalanceIntervalSeconds)
+    * which was always a no-op because shardAssignment was empty.
+    */
   private def scheduleMetricsCollection(): Unit = {
     val interval = 60.seconds
     metricsScheduler = Some(
@@ -790,15 +797,53 @@ class LoadBalanceManager(
         initialDelay = 30.seconds,
         delay = interval
       ) { () =>
-        strategy.foreach {
-          s =>
-            val stats = s.getStats
-            logDebug(s"Load balance stats: $stats")
-            val migrationStats = migrationCoordinator.getStats
-            logDebug(s"Migration stats: $migrationStats")
-        }
+        getSelfProxy ! CollectAndFeedMetricsEvent()
       }
     )
+  }
+
+  /** Collect shard location + entity count data and feed it into the strategy's kd-tree.
+    *
+    * Uses the allocator's region index (ActorRef → Set[ShardId]) which is kept up-to-date
+    * by Pekko's ShardCoordinator calls to allocateShard/rebalance. No async ask needed.
+    *
+    * After this method the kd-tree has:
+    *   - shardAssignment populated (so getImbalanceRatio works)
+    *   - shardMetricsMap populated (so rebalance() weights shards correctly)
+    */
+  private def handleCollectAndFeedMetrics(): Unit = {
+    strategy.foreach { s =>
+      // Step 1: populate shard-to-node assignments from the allocator region index.
+      // For local ActorRefs (path has no host), fall back to cluster.selfAddress.
+      val regionIndex = shardAllocator.getRegionIndex
+      var assignedShards = 0
+      regionIndex.foreach { case (regionRef, shardIds) =>
+        val addr =
+          if (regionRef.path.address.hasLocalScope) cluster.selfAddress
+          else regionRef.path.address
+        shardIds.foreach { shardId =>
+          s.recordShardLocation(shardId, addr)
+          assignedShards += 1
+        }
+      }
+
+      // Step 2: feed entity counts per shard as ShardMetrics weights.
+      val entityCounts = s.getShardEntityCounts
+      entityCounts.foreach { case (shardId, count) =>
+        s.updateMetrics(ShardMetrics(
+          shardId     = shardId,
+          entityCount = count,
+          totalWeight = count.toDouble
+        ))
+      }
+
+      val imbalanceRatio = s.getStats.get("imbalanceRatio").getOrElse("n/a")
+      logInfo(
+        s"Shard metrics updated: ${assignedShards} shard-node assignments across " +
+          s"${regionIndex.size} regions, ${entityCounts.size} entity-count entries. " +
+          s"Imbalance ratio: $imbalanceRatio"
+      )
+    }
   }
 
   /** Execute the actual shard migration via Pekko cluster sharding.
