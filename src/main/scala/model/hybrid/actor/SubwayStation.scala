@@ -50,7 +50,7 @@ class SubwayStation(
           "RegisterSubwayStation",
           LoadBalancedDistributed
         )
-        logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+        logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None =>
         logWarn(
           s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
@@ -59,7 +59,7 @@ class SubwayStation(
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {
-      logInfo(
+      logDebug(
         s"SubwayStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
       )
       onFinishSpontaneous(None)
@@ -73,14 +73,14 @@ class SubwayStation(
           createSubwayFrom(filterLinesByNextTick())
           scheduleNextTick()
         case _ =>
-          logInfo(s"Event current status not handled ${state.status}")
+          logWarn(s"Event current status not handled ${state.status}")
           onFinishSpontaneous(None)
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
       case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
-      case _                              => logInfo("Event not handled")
+      case _                              => logWarn("Event not handled")
     }
 
   private def handleRegisterPassenger(
@@ -154,7 +154,7 @@ class SubwayStation(
               }
             }
           case None =>
-            logInfo(s"Subway not found for line $line")
+            logWarn(s"Subway not found for line $line")
     }
 
   private def scheduleNextTick(): Unit = {
@@ -262,7 +262,7 @@ class SubwayStation(
           routeEntry =>
             route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))
         }
-        logInfo(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
+        logDebug(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
       case None =>
         logWarn(s"No route found for line $line")
     }

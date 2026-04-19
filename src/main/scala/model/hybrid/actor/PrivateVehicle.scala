@@ -86,7 +86,7 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def initializeAsParked(): Unit = {
     setVehicleStatus(Parked)
-    logVehicleInfo(s"${getActorEntityId} initialized in Parked state")
+    logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
 
   /** Handle StartTrip message from Person.
@@ -104,7 +104,7 @@ trait PrivateVehicle[T <: MovableState] {
         return
       }
 
-      logVehicleInfo(
+          logVehicleDebug(
         s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}"
       )
 
@@ -158,7 +158,7 @@ trait PrivateVehicle[T <: MovableState] {
   /** Handle ParkVehicle message (optional explicit parking).
     */
   protected def handleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = {
-    logVehicleInfo(s"${getActorEntityId} parking at ${data.parkingNodeId}")
+        logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
 
     // Report trip completion (if trip was active)
     if (getVehicleStatus != Parked) {
@@ -198,7 +198,7 @@ trait PrivateVehicle[T <: MovableState] {
           actorType = LoadBalancedDistributed
         )
 
-        logVehicleInfo(
+            logVehicleDebug(
           s"${getActorEntityId} reported trip completion to ${personRef.id}: ${distanceTraveled}m in $travelTime ticks"
         )
     }
@@ -213,7 +213,7 @@ trait PrivateVehicle[T <: MovableState] {
     tripStartTick = None
     tripStartDistance = 0.0
 
-    logVehicleInfo(s"${getActorEntityId} deactivated (Parked)")
+        logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
 
     // Unregister from TimeManager (vehicle is now passive)
     // This prevents vehicle from receiving spontaneous events
@@ -254,6 +254,13 @@ trait PrivateVehicle[T <: MovableState] {
   /** Check if vehicle is parked.
     */
   protected def isParked: Boolean = getVehicleStatus == Parked
+
+  /** Private vehicles should only re-register on the TM after migration when they are
+    * NOT parked.  When parked they are waiting passively for a StartTrip message from
+    * Person; re-registering would fire a spurious spontaneous tick which is immediately
+    * discarded by the Parked guard in actSpontaneous — wasting a TM slot.
+    */
+  override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean = !isParked
 
   /** Handle private vehicle specific interaction events.
     *

@@ -86,7 +86,7 @@ abstract class BaseActor[T <: BaseState](
     * events.
     */
   protected def handleEvent: Receive = {
-    case event => logInfo(s"Event not handled $event")
+    case event => logWarn(s"Event not handled $event")
   }
 
   /** Handles initialization of the actor. Override this method to perform custom initialization

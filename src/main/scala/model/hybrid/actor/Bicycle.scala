@@ -165,7 +165,7 @@ class Bicycle(
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
-      logInfo(
+      logDebug(
         s"Bicycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
@@ -715,7 +715,7 @@ class Bicycle(
         state.updateMicroState(updatedMicro)
     }
 
-    logInfo(s"Bicycle ${getEntityId} configured with driver attributes")
+    logDebug(s"Bicycle ${getEntityId} configured with driver attributes")
   }
 
   /** Override onFinish to use PrivateVehicle completion.

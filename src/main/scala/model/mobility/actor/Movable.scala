@@ -39,7 +39,7 @@ abstract class Movable[T <: MovableState](
             enterLink()
           } else {
             state.movableStatus = Finished
-            logInfo("No path available between origin and destination, finishing.")
+            logWarn("No path available between origin and destination, finishing.")
             onFinishSpontaneous()
           }
         case None =>

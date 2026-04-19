@@ -167,7 +167,7 @@ class Motorcycle(
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
-      logInfo(
+      logDebug(
         s"Motorcycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
@@ -258,7 +258,7 @@ class Motorcycle(
     }
 
     if (state == null) {
-      logWarn(s"${getEntityId} received interaction event while state is null (Parked), ignoring: ${event.eventType}")
+      logDebug(s"${getEntityId} received interaction event while state is null (Parked), ignoring: ${event.eventType}")
       return
     }
 
@@ -761,7 +761,7 @@ class Motorcycle(
         state.updateMicroState(updatedMicro)
     }
 
-    logInfo(
+    logDebug(
       s"Motorcycle ${getEntityId} configured with driver attributes: aggressiveness=${attrs.aggressiveness}"
     )
   }

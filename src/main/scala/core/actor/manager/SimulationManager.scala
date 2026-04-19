@@ -298,10 +298,12 @@ class SimulationManager(
       }
 
       val strategyType = strategyName.toLowerCase match {
-        case "hybrid"   => LoadBalanceStrategyEnum.Hybrid
-        case "default"  => LoadBalanceStrategyEnum.Default
-        case "disabled" => LoadBalanceStrategyEnum.Disabled
-        case _          => LoadBalanceStrategyEnum.Hybrid
+        case "hybrid"      => LoadBalanceStrategyEnum.Hybrid
+        case "type-aware"  => LoadBalanceStrategyEnum.TypeAware
+        case "geo-affinity" => LoadBalanceStrategyEnum.GeoAffinity
+        case "default"     => LoadBalanceStrategyEnum.Default
+        case "disabled"    => LoadBalanceStrategyEnum.Disabled
+        case _             => LoadBalanceStrategyEnum.Hybrid
       }
 
       val worldBounds = try {

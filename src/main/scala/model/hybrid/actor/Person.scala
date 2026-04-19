@@ -41,6 +41,16 @@ class Person(
       properties = properties
     ) {
 
+  /** Person should only re-register on the TM after migration if it was actually
+    * registered at migration time.  During vehicle trips (and PT trips), Person calls
+    * onFinishSpontaneous(None) and yields TM ownership to the vehicle.  Walking trips
+    * keep Person on TM (scheduled to wake at arrival tick), so those are allowed.
+    */
+  override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
+    state != null &&
+      state.isSetScheduleOnTimeManager &&
+      state.currentTripVehicleId.forall(_ == "walking")
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
       logWarn(s"${getEntityId} actSpontaneous called with null state at tick=$currentTick — unscheduling")
@@ -67,7 +77,7 @@ class Person(
       // Person resumes TM interaction only when TripCompleted arrives via
       // actInteractWith → handleTripCompleted → advanceToNextActivity.
       // This branch is a defensive guard; it should not normally execute.
-      logWarn(s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}")
+      logDebug(s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}")
       onFinishSpontaneous(None) // Re-unregister from TM
       return
     }

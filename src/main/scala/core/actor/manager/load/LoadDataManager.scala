@@ -52,22 +52,10 @@ class LoadDataManager(
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
   // Tracks when each source type entered sourcesInCreation (epoch millis) for stuck-source detection.
-  private val sourcesInCreationTime: mutable.Map[String, Long] = mutable.Map[String, Long]()
   private var progressiveSources: List[ActorDataSource] = List.empty
-
-  // Internal watchdog message for stuck-source detection
-  private case object StuckSourceWatchdog
-  private val STUCK_SOURCE_WARN_MS = 3 * 60 * 1000L   // warn after 3 minutes
-  private val STUCK_SOURCE_FORCE_MS = 10 * 60 * 1000L  // give up and unblock after 10 minutes
 
   override def onStart(): Unit = {
     reporters = poolReporters
-    context.system.scheduler.scheduleWithFixedDelay(
-      60.seconds,
-      60.seconds,
-      self,
-      StuckSourceWatchdog
-    )(context.dispatcher)
   }
 
   override def handleEvent: Receive = {
@@ -76,7 +64,6 @@ class LoadDataManager(
     case _: LoadNextEvent                 => handleLoadNext()
     case _: StopSimulationEvent           => handleStopSimulation()
     case _: PostLoadRegistrationDoneEvent => handlePostLoadRegistrationDone()
-    case StuckSourceWatchdog              => checkStuckSources()
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
@@ -132,7 +119,6 @@ class LoadDataManager(
         if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
           val source = queue.dequeue()
           sourcesInCreation.add(key)
-          sourcesInCreationTime.put(key, System.currentTimeMillis())
           logInfo(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
@@ -219,7 +205,6 @@ class LoadDataManager(
     loaders(actorRef) = true
     logInfo(s"Total loaded data: ${loaders.values.count(_ == true)}/${loaders.size}")
     sourcesInCreation.remove(event.actorClassType)
-    sourcesInCreationTime.remove(event.actorClassType)
 
     actorRef ! DestructEvent(actorRef = getPath)
 
@@ -262,43 +247,6 @@ class LoadDataManager(
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values
       .forall(_.isEmpty)
-
-  private def checkStuckSources(): Unit = {
-    if (sourcesInCreation.isEmpty) return
-    val now = System.currentTimeMillis()
-    sourcesInCreation.foreach { key =>
-      val elapsed = now - sourcesInCreationTime.getOrElse(key, now)
-      if (elapsed >= STUCK_SOURCE_FORCE_MS) {
-        logWarn(
-          s"[StuckSourceWatchdog] Source $key has been in creation for ${elapsed / 1000}s (>${STUCK_SOURCE_FORCE_MS / 1000}s). " +
-            s"Forcing completion to unblock loading pipeline. " +
-            s"This usually means the JsonLoadData actor crashed without sending FinishLoadDataEvent."
-        )
-        // Force-mark the matching loader(s) as done and clear the stuck source.
-        // We can't easily find which ActorRef corresponds to this classType, so we mark
-        // all unfinished loaders as done — safe only when stuck for > 10 minutes.
-        loaders.foreach { case (ref, done) =>
-          if (!done) loaders(ref) = true
-        }
-        sourcesInCreation.remove(key)
-        sourcesInCreationTime.remove(key)
-        getSelfProxy ! LoadNextEvent()
-        if (isAllDataLoaded && !postLoadTriggerSent) {
-          postLoadTriggerSent = true
-          logWarn(
-            s"[StuckSourceWatchdog] Forcing post-load registration trigger after stuck source $key was cleared."
-          )
-          postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
-        }
-      } else if (elapsed >= STUCK_SOURCE_WARN_MS) {
-        logWarn(
-          s"[StuckSourceWatchdog] Source $key has been in creation for ${elapsed / 1000}s. " +
-            s"Still waiting for FinishLoadDataEvent. " +
-            s"Will force-complete at ${STUCK_SOURCE_FORCE_MS / 1000}s if unresolved."
-        )
-      }
-    }
-  }
 
   private def getSelfProxy: ActorRef =
     if (selfProxy == null) {

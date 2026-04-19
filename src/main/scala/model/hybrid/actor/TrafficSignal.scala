@@ -31,7 +31,7 @@ class TrafficSignal(
     super.onInitialize(event)
     // Agendar primeiro tick considerando o offset
     val firstTick = state.startTick + state.offset
-    logInfo(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
+    logDebug(s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}")
     if (firstTick < simulationEnd) {
       scheduleEvent(firstTick)
     } else {

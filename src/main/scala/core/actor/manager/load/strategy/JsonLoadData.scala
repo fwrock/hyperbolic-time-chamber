@@ -40,23 +40,10 @@ class JsonLoadData(private val properties: Properties)
   // Track when each batch was added so we can timeout stale batches.
   // If a CreatorLoadData routee dies mid-processing, FinishCreationEvent is never sent;
   // the timeout allows the loader to continue rather than stalling loading permanently.
-  private val batchCreationTimes = mutable.Map[String, Long]()
-  private val BATCH_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
   private var totalLoadedActors = 0L
   private var sourceClassType: String = _
   private var sourceId: String = _
   private val creators = mutable.Set[ActorRef]()
-
-  private case object BatchWatchdog
-
-  override def onStart(): Unit = {
-    context.system.scheduler.scheduleWithFixedDelay(
-      60.seconds,
-      60.seconds,
-      self,
-      BatchWatchdog
-    )(context.dispatcher)
-  }
 
   override def handleEvent: Receive = {
     case event: LoadDataSourceEvent => load(event)
@@ -65,7 +52,6 @@ class JsonLoadData(private val properties: Properties)
     case ChunkLoaded(data)          => sendBatch(data)
     case CloseAndFinish             => finishLoading()
     case event: FinishCreationEvent => handleFinishCreation(event)
-    case BatchWatchdog              => checkStaleBatches()
   }
 
   override protected def load(event: LoadDataSourceEvent): Unit = {
@@ -144,7 +130,6 @@ class JsonLoadData(private val properties: Properties)
       loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
         val batchId = UUID.randomUUID().toString
         activeBatches.add(batchId)
-        batchCreationTimes.put(batchId, System.currentTimeMillis())
         creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
@@ -154,7 +139,6 @@ class JsonLoadData(private val properties: Properties)
       poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
         val batchId = UUID.randomUUID().toString
         activeBatches.add(batchId)
-        batchCreationTimes.put(batchId, System.currentTimeMillis())
         creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
@@ -166,37 +150,9 @@ class JsonLoadData(private val properties: Properties)
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     activeBatches.remove(event.batchId)
-    batchCreationTimes.remove(event.batchId)
 
     if (activeBatches.isEmpty) {
       self ! ProcessNextChunk
-    }
-  }
-
-  /** Watchdog: timeout batches that have been stuck for BATCH_TIMEOUT_MS.
-    * This prevents the loader from stalling permanently when a CreatorLoadData routee
-    * dies mid-processing and never sends FinishCreationEvent back.
-    */
-  private def checkStaleBatches(): Unit = {
-    if (activeBatches.isEmpty) return
-    val now = System.currentTimeMillis()
-    val stale = activeBatches.filter { batchId =>
-      batchCreationTimes.get(batchId).exists(t => now - t > BATCH_TIMEOUT_MS)
-    }
-    if (stale.nonEmpty) {
-      logWarn(
-        s"[JsonLoadData] Timing out ${stale.size} stale batches for $sourceClassType " +
-          s"(stuck > ${BATCH_TIMEOUT_MS / 1000}s). Batches: ${stale.take(5).mkString(", ")}. " +
-          s"Remaining active: ${activeBatches.size - stale.size}. " +
-          s"This usually means a CreatorLoadData routee died before sending FinishCreationEvent."
-      )
-      stale.foreach { batchId =>
-        activeBatches.remove(batchId)
-        batchCreationTimes.remove(batchId)
-      }
-      if (activeBatches.isEmpty) {
-        self ! ProcessNextChunk
-      }
     }
   }
 

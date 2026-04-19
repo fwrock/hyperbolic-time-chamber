@@ -41,7 +41,7 @@ class LocalDiscreteEventTimeManager(
    * than this threshold, events are fired in batches to prevent overwhelming
    * the messaging system (e.g. 750K+ actors at tick 0).
    */
-  private val TICK_BATCH_SIZE = 5000
+  private val TICK_BATCH_SIZE = 500
   private val pendingTickActors = mutable.Queue[Identify]()
   private var currentBatchTick: Tick = -1
 
@@ -92,9 +92,6 @@ class LocalDiscreteEventTimeManager(
    * Resets the watchdog timestamp when starting a new batch.
    */
   private def fireNextBatch(): Unit = {
-    if (runningEvents.isEmpty && pendingTickActors.nonEmpty) {
-      resetWatchdogState()
-    }
     var count = 0
     while (pendingTickActors.nonEmpty && count < TICK_BATCH_SIZE) {
       val identity = pendingTickActors.dequeue()
@@ -119,14 +116,6 @@ class LocalDiscreteEventTimeManager(
       fireNextBatch()
     } else {
       super.advanceToNextTick()
-    }
-  }
-
-  /** Clear pending batch actors when watchdog force-advances. */
-  override protected def onWatchdogForceAdvance(): Unit = {
-    if (pendingTickActors.nonEmpty) {
-      logWarn(s"[Watchdog] Clearing ${pendingTickActors.size} pending batch actors")
-      pendingTickActors.clear()
     }
   }
 }

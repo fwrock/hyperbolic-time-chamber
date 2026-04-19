@@ -94,21 +94,21 @@ class BusStation(
             onFinishSpontaneous(Some(currentTick + state.interval))
           }
         case _ =>
-          logInfo(s"Event current status not handled ${state.status}")
+          logWarn(s"Event current status not handled ${state.status}")
           onFinishSpontaneous(None)
       }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
 
   /** Calculate all bus routes directly from the in-memory static map. This is synchronous and
     * doesn't require actor messages.
     */
   private def calculateRoutesFromMap(): Unit = {
-    logInfo(s"BusStation ${getEntityId} calculating routes from in-memory map")
+    logDebug(s"BusStation ${getEntityId} calculating routes from in-memory map")
 
     // Calculate going route (use existing mutable map)
     val goingStops = orderedBusStopIds
@@ -201,7 +201,7 @@ class BusStation(
 
     // Check if route calculation is complete
     if (isCalculateRoutingComplete) {
-      logInfo(s"BusStation ${getEntityId} route calculation complete")
+      logDebug(s"BusStation ${getEntityId} route calculation complete")
       state.status = Ready
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
@@ -223,7 +223,7 @@ class BusStation(
             state.buses.enqueue(bus)
         }
       } else {
-        logInfo("No buses to create, entering WorkingWithOutBus state")
+        logDebug("No buses to create, entering WorkingWithOutBus state")
         state.status = WorkingWithOutBus
         onFinishSpontaneous(None)
       }
@@ -268,7 +268,7 @@ class BusStation(
       defaultTimeManagerType = properties.defaultTimeManagerType
     )
 
-    logInfo(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
+    logDebug(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
 
     // Report bus creation
     report(
