@@ -69,7 +69,7 @@ class Subway(
       case Stopped =>
         leavingLink()
       case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
+        logWarn(s"Event current status not handled ${state.status}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
@@ -77,7 +77,7 @@ class Subway(
       case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
       case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
   }
 

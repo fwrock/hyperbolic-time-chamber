@@ -92,10 +92,12 @@ class Car(
 
     if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished) {
-      logInfo(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
+      logWarn(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing.")
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
-      // Notify the Link so it removes this car from vehiclesByLane
-      leavingLink()
+      // Do NOT call leavingLink() here — it triggers a round-trip (LeaveLinkData → ReceiveLeaveLinkInfo)
+      // but we selfDestruct immediately after, creating an orphaned reply that restarts the shard entity.
+      // Bicycle/Motorcycle correctly omit leavingLink() in their forced-exit paths.
+      // The Link's stale entry is acceptable since the simulation is ending.
       finishJourney("simulation_time_exceeded", finalNode)
       onFinishPrivateVehicle(finalNode)
       onFinishSpontaneous(None)
@@ -457,9 +459,9 @@ class Car(
     // cleanly finish its journey instead of silently vanishing.
     if (!model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
         && currentTick >= simulationEndTick && state.status != Finished) {
-      logInfo(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing.")
+      logDebug(s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing.")
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
-      leavingLink()
+      // Do NOT call leavingLink() — same reason as in actSpontaneous forced-exit path.
       finishJourney("simulation_time_exceeded", finalNode)
       onFinishPrivateVehicle(finalNode)
       onFinishSpontaneous(None)

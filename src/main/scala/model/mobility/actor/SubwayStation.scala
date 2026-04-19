@@ -37,7 +37,7 @@ class SubwayStation(
             lines = state.lines.keys.toSeq
           )
         )
-        logInfo(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+        logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None =>
         logWarn(
           s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
@@ -53,13 +53,13 @@ class SubwayStation(
       case Working =>
         createSubwayFrom(filterLinesByNextTick())
       case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
+        logWarn(s"Event current status not handled ${state.status}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
       case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
-      case _                              => logInfo("Event not handled")
+      case _                              => logWarn("Event not handled")
     }
 
   private def handleRegisterPassenger(
@@ -119,7 +119,7 @@ class SubwayStation(
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
           case None =>
-            logInfo(s"Subway not found for line $line")
+            logWarn(s"Subway not found for line $line")
     }
 
   private def createSubway(subway: SubwayInformation): ActorRef =

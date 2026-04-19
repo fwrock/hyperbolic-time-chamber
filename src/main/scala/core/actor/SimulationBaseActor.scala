@@ -2,6 +2,8 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.PoisonPill
+import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.migration.{
@@ -563,6 +565,28 @@ abstract class SimulationBaseActor[T <: BaseState](
     case event                        => super.receive(event)
   }
 
+  /** Returns true if this entity should re-register on the TimeManager after migration restore.
+    *
+    * Default: mirrors the static `scheduleOnTimeManager` config flag.
+    * Subclasses that dynamically unregister/re-register during their lifecycle
+    * (e.g. Person during vehicle trips) should override this to reflect runtime state.
+    */
+  protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
+    state != null && state.isSetScheduleOnTimeManager
+
+  /** For cluster-sharded (LoadBalancedDistributed) entities, use Pekko passivation instead of
+    * context.stop(self).  Passivation signals the ShardRegion to stop buffering messages for
+    * this entity ID, so stale in-flight messages go to Dead Letters instead of triggering a
+    * ghost restart with state == null.  Plain context.stop does NOT inform the shard, causing
+    * the entity to be recreated on the next incoming message.
+    */
+  override protected def selfDestruct(): Unit =
+    if (properties != null && properties.actorType == LoadBalancedDistributed) {
+      context.parent ! ShardRegion.Passivate(PoisonPill)
+    } else {
+      context.stop(self)
+    }
+
   private def handleMigrationContext(event: MigrationContextEvent): Unit = {
     logInfo(
       s"Entity '$entityId' received MigrationContextEvent: " +
@@ -582,8 +606,11 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (event.reporters.nonEmpty)    reporters    = event.reporters
     creatorManager = null
 
-    // Register with TimeManager now that state and context are fully available
-    if (state != null && state.isSetScheduleOnTimeManager) {
+    // Register with TimeManager now that state and context are fully available.
+    // Uses shouldRegisterOnTimeManagerAfterMigration() so subclasses can opt out
+    // when their domain state indicates they were NOT on the TM at migration time
+    // (e.g. Person in a vehicle trip, PT passenger).
+    if (shouldRegisterOnTimeManagerAfterMigration()) {
       registerOnTimeManager()
     }
     onFinishInitialize()

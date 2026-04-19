@@ -120,7 +120,7 @@ class Bus(
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
-      logInfo(
+      logWarn(
         s"Bus ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
@@ -211,7 +211,7 @@ class Bus(
         requestLoadPassenger()
 
       case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
+        logWarn(s"Event current status not handled ${state.status}")
         onFinishSpontaneous(Some(currentTick + 1))
     }
   }
@@ -234,7 +234,7 @@ class Bus(
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
-      logInfo(s"Bus ${getEntityId} reached destination: $currentNodeId")
+      logDebug(s"Bus ${getEntityId} reached destination: $currentNodeId")
       finishJourney(
         reason = "reached_destination",
         finalNode = Option(currentNodeId).getOrElse("unknown")

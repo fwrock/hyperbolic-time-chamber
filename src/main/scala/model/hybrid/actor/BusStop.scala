@@ -45,7 +45,7 @@ class BusStop(
             label = state.label
           )
         )
-        logInfo(s"BusStop ${getEntityId} registered with node ${dependency.id}")
+        logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
       case None =>
         logWarn(
           s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
@@ -58,7 +58,7 @@ class BusStop(
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
 
   private def handleBusRequestPassenger(

@@ -43,43 +43,11 @@ abstract class LocalTimeManagerBase(
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
 
-  // --- Watchdog: detects and recovers from stuck runningEvents ---
-  // When actors don't respond with FinishEvent (e.g., cross-pod message loss during
-  // cluster formation, shard rebalancing, or actor crash), the watchdog retries
-  // sending SpontaneousEvent once before force-clearing.
-  private case object RunningEventsWatchdog
-  private val WATCHDOG_INTERVAL_SECONDS: Int =
-    try config.getInt("htc.time-manager.watchdog-interval-seconds") catch { case _: Exception => 30 }
-  private val STALE_WARNING_SECONDS: Int =
-    try config.getInt("htc.time-manager.stale-warning-seconds") catch { case _: Exception => 60 }
-  private val FORCE_CLEAR_SECONDS: Int =
-    try config.getInt("htc.time-manager.force-clear-seconds") catch { case _: Exception => 120 }
-  protected var tickProcessingStartTime: Long = 0L
-  private var lastWatchdogRunningCount: Int = 0
-  private var consecutiveStaleChecks: Int = 0
-  private var watchdogTask: org.apache.pekko.actor.Cancellable = _
-  private var retriedStuckActors: Boolean = false
-
-  /** Reset watchdog counters when starting a new batch of events. */
-  protected def resetWatchdogState(): Unit = {
-    tickProcessingStartTime = System.currentTimeMillis()
-    consecutiveStaleChecks = 0
-    lastWatchdogRunningCount = 0
-    retriedStuckActors = false
-  }
-
   override def onStart(): Unit = {
     if (parentManager.nonEmpty) {
       // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
-    // Start watchdog to detect stuck runningEvents (e.g. from shard rebalancing)
-    watchdogTask = context.system.scheduler.scheduleWithFixedDelay(
-      WATCHDOG_INTERVAL_SECONDS.seconds,
-      WATCHDOG_INTERVAL_SECONDS.seconds,
-      self,
-      RunningEventsWatchdog
-    )(context.dispatcher)
   }
 
   override def handleEvent: Receive = {
@@ -93,7 +61,6 @@ abstract class LocalTimeManagerBase(
       stopSimulation()
       forceDestructActiveActors()
       terminateSimulation()
-    case RunningEventsWatchdog           => handleRunningEventsWatchdog()
     case event => super.handleEvent(event)
   }
 
@@ -270,9 +237,6 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    if (actorsRef.nonEmpty && runningEvents.isEmpty) {
-      resetWatchdogState()
-    }
     // Prometheus: track scheduled and dispatched events
     MetricsServer.tmScheduledActors.set(actorsRef.size.toDouble)
     MetricsServer.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
@@ -312,71 +276,9 @@ abstract class LocalTimeManagerBase(
     actorRef ! SpontaneousEvent(tick = tick, actorRef = self)
   }
 
-  /**
-   * Watchdog: detects stuck runningEvents and force-advances the simulation.
-   * Prevents the LocalTM from being permanently stuck when actors
-   * don't respond with FinishEvent (e.g. due to shard rebalancing, crashes,
-   * or cross-pod message loss with at-most-once delivery).
-   *
-   * Strategy:
-   * 1. After STALE_WARNING_SECONDS: log warning with stuck actor IDs
-   * 2. After warning + 1 interval: RETRY sending SpontaneousEvent to stuck actors
-   *    (handles transient message loss — the most common cause)
-   * 3. After FORCE_CLEAR_SECONDS: force-clear and advance
-   */
-  private def handleRunningEventsWatchdog(): Unit = {
-    if (runningEvents.nonEmpty && tickProcessingStartTime > 0) {
-      val elapsedMs = System.currentTimeMillis() - tickProcessingStartTime
-      val elapsedSec = elapsedMs / 1000
-      val currentCount = runningEvents.size
-
-      if (currentCount == lastWatchdogRunningCount && currentCount > 0) {
-        consecutiveStaleChecks += 1
-      } else {
-        consecutiveStaleChecks = 0
-      }
-      lastWatchdogRunningCount = currentCount
-
-      if (elapsedSec >= STALE_WARNING_SECONDS) {
-        val sampleIds = runningEvents.take(5).map(_.id).mkString(", ")
-        logWarn(
-          s"[Watchdog] $currentCount running events stuck for ${elapsedSec}s at tick $localTickOffset " +
-            s"(stale checks: $consecutiveStaleChecks). Sample IDs: $sampleIds"
-        )
-
-        // Retry: resend SpontaneousEvent to stuck actors once.
-        // Most common cause is transient message loss (at-most-once Artery delivery)
-        // during cluster formation or under heavy load. A single retry resolves most cases.
-        if (!retriedStuckActors && consecutiveStaleChecks >= 1) {
-          retriedStuckActors = true
-          logInfo(
-            s"[Watchdog] RETRYING SpontaneousEvent for $currentCount stuck actors at tick $localTickOffset"
-          )
-          runningEvents.foreach { identity =>
-            sendSpontaneousEvent(localTickOffset, identity)
-          }
-        }
-      }
-
-      if (elapsedSec >= FORCE_CLEAR_SECONDS && consecutiveStaleChecks >= 2) {
-        logWarn(
-          s"[Watchdog] FORCE-CLEARING $currentCount stale running events at tick $localTickOffset " +
-            s"after ${elapsedSec}s. Advancing to next tick."
-        )
-        runningEvents.clear()
-        onWatchdogForceAdvance()
-        advanceToNextTick()
-      }
-    }
-  }
-
-  /** Hook for subclasses to clean up state when watchdog force-advances. */
-  protected def onWatchdogForceAdvance(): Unit = ()
-
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
       isTerminated = true
-      if (watchdogTask != null) { watchdogTask.cancel(); watchdogTask = null }
       printSimulationDuration()
       logInfo("Local simulation terminated")
       reportGlobalTimeManager(hasScheduled = false)

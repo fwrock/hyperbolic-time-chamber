@@ -59,14 +59,14 @@ class BusStation(
           state.status = WorkingWithOutBus
         }
       case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
+        logWarn(s"Event current status not handled ${state.status}")
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case e: ReceiveRouteData => handleRequestRoute(event)
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
 
   private def handleRequestRoute(value: ActorInteractionEvent): Unit = {

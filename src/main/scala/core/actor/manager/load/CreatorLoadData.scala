@@ -16,7 +16,7 @@ import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Prop
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.control.loadbalance.SpatialEntityData
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
-import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, NeedsPostLoadRegistrationEvent, ProcessNextCreateChunk, RetryPendingAcks }
+import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, InitializeEvent, NeedsPostLoadRegistrationEvent, ProcessNextCreateChunk }
 import org.interscity.htc.core.entity.event.control.loadbalance.{ BatchShardAssignmentResponse, RegisterSpatialEntitiesBatchEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
@@ -53,10 +53,8 @@ class CreatorLoadData(
   private val batchesLoad: mutable.Map[String, ActorRef] = mutable.Map.empty
   private val batchesToCreate: mutable.Map[String, Seq[ActorSimulationCreation]] = mutable.Map.empty
 
-  private val CREATE_CHUNK_SIZE = 1000
+  private val CREATE_CHUNK_SIZE = 500
   private val DELAY_BETWEEN_CHUNKS = 100.milliseconds
-
-  private var retryTask: org.apache.pekko.actor.Cancellable = _
 
   /** Lazy singleton proxy to LoadBalanceManager (null if load balancing disabled). */
   private var loadBalanceProxy: ActorRef = _
@@ -71,16 +69,9 @@ class CreatorLoadData(
 
   override def onStart(): Unit = {
     super.onStart()
-    retryTask = context.system.scheduler.scheduleWithFixedDelay(
-      initialDelay = 5.seconds,
-      delay = 5.seconds,
-      receiver = self,
-      message = RetryPendingAcks
-    )
   }
 
   override def postStop(): Unit = {
-    if (retryTask != null) retryTask.cancel()
     super.postStop()
   }
 
@@ -93,68 +84,9 @@ class CreatorLoadData(
     case event: BatchShardAssignmentResponse    => handleBatchAssignmentResponse(event)
     case event: ShardRegion.StartEntityAck => handleInitialize(event)
     case event: InitializeEntityAckEvent       => handleFinishInitialization(event)
-    case RetryPendingAcks                      => handleRetryPendingAcks()
     case event: NeedsPostLoadRegistrationEvent => handleNeedsPostLoadRegistration(event)
 
     case _ =>
-  }
-
-  private def handleRetryPendingAcks(): Unit = {
-    var startEntityCount = 0
-    var initEventCount = 0
-    // Retry entities still waiting for StartEntityAck
-    initializeData.foreach {
-      case (_, entitiesMap) =>
-        entitiesMap.foreach {
-          case (entityId, initialization) =>
-            try {
-              val shardRegion = getShardRef(StringUtil.getModelClassName(initialization.classType))
-              shardRegion ! ShardRegion.StartEntity(entityId)
-              startEntityCount += 1
-            } catch {
-              case e: Exception =>
-                logError(s"Watchdog: failed to retry StartEntity for $entityId: ${e.getMessage}", e)
-            }
-        }
-    }
-    // Retry entities that got StartEntityAck but never sent InitializeEntityAckEvent
-    pendingInitAck.foreach {
-      case (entityId, data) =>
-        try {
-          val initializeEvent = InitializeEvent(
-            id = data.id,
-            actorRef = self,
-            data = InitializeData(
-              data = data.data,
-              resourceId = data.resourceId,
-              timeManagers = data.timeManagers,
-              creatorManager = data.creatorManager,
-              reporters = data.reporters,
-              relationships = data.relationships.map {
-                case (_, rel) => IdUtil.format(rel.entityId) -> rel
-              }
-            )
-          )
-          getShardRef(StringUtil.getModelClassName(data.classType)) ! EntityEnvelopeEvent(
-            entityId = entityId,
-            event = initializeEvent
-          )
-          initEventCount += 1
-        } catch {
-          case e: Exception =>
-            logError(s"Watchdog: failed to retry InitializeEvent for $entityId: ${e.getMessage}", e)
-        }
-    }
-    val total = startEntityCount + initEventCount
-    if (total > 0) {
-      val startClassBreakdown = initializeData.values.flatMap(_.values).groupBy(_.classType).map { case (k, v) => s"$k=${v.size}" }.mkString(", ")
-      val initClassBreakdown  = pendingInitAck.values.groupBy(_.classType).map { case (k, v) => s"$k=${v.size}" }.mkString(", ")
-      logWarn(s"Watchdog: retrying $total pending initializations ($startEntityCount awaiting StartEntityAck [$startClassBreakdown], $initEventCount awaiting InitializeEntityAck [$initClassBreakdown]).")
-      if (initEventCount > 0) {
-        val stuck = pendingInitAck.keys.take(10).mkString(", ")
-        logWarn(s"Watchdog: stuck actor IDs (sample): $stuck")
-      }
-    }
   }
 
   private def handleCreateActors(event: CreateActorsEvent): Unit = {

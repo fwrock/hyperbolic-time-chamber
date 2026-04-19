@@ -793,9 +793,9 @@ class LoadBalanceManager(
         strategy.foreach {
           s =>
             val stats = s.getStats
-            logInfo(s"Load balance stats: $stats")
+            logDebug(s"Load balance stats: $stats")
             val migrationStats = migrationCoordinator.getStats
-            logInfo(s"Migration stats: $migrationStats")
+            logDebug(s"Migration stats: $migrationStats")
         }
       }
     )

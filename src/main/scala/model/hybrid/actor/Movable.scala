@@ -27,11 +27,11 @@ abstract class Movable[T <: MovableState](
   private val MaxWaitingTicks: Int = 100
 
   protected def requestRoute(): Unit = {
-    logInfo(s"Requesting route from ${state.origin} to ${state.destination}")
+    logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
     try
       GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
         case Some((cost, pathQueue)) =>
-          logInfo(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
+          logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
           state.movableCurrentPath = None
@@ -39,7 +39,7 @@ abstract class Movable[T <: MovableState](
             enterLink()
           } else {
             state.movableStatus = Finished
-            logInfo("No path available between origin and destination, finishing.")
+            logWarn("No path available between origin and destination, finishing.")
             onFinish(state.origin)
           }
         case None =>
@@ -60,7 +60,7 @@ abstract class Movable[T <: MovableState](
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
       case Start =>
-        logInfo(s"Starting route request from ${state.origin} to ${state.destination}")
+        logDebug(s"Starting route request from ${state.origin} to ${state.destination}")
         requestRoute()
 
       case Ready =>
