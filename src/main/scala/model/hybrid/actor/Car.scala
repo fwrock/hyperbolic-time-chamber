@@ -33,6 +33,9 @@ class Car(
   private var currentLinkLength: Double = 0.0
   private var linkEntryTick: Option[Tick] = None
   private var mesoExitTick: Option[Tick] = None
+  // Prevents double-counting when leavingLink() already accumulated MICRO distance
+  // synchronously (before MicroLeaveLinkData, which is async, arrives).
+  private var microDistanceAccumulated: Boolean = false
 
   // SUMO TripInfo variables
   private var sumoDepartTick: Option[Tick] = None
@@ -312,6 +315,8 @@ class Car(
     if (state.destination == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       val finalNode = Option(currentPathNode).orElse(Option(currentNodeId)).getOrElse(state.destination)
+      // NOTE: Distance accumulation for MICRO mode is handled in leavingLink() below,
+      // so it applies consistently for both intermediate and final links.
       // Notify the Link so it removes this car from vehiclesByLane;
       // without this, Link keeps sending MicroUpdateData to a dead actor,
       // causing shard to re-create an uninitialized Car → NPE.
@@ -386,6 +391,15 @@ class Car(
   }
 
   override def leavingLink(): Unit = {
+    // Accumulate MICRO-mode distance here (before currentLinkId changes to the next link).
+    // For intermediate links: MicroLeaveLinkData arrives after currentLinkId has already
+    // changed → the stale guard in handleMicroLeaveLink discards it → distance would be lost.
+    // For the final link: this runs before finishJourney(), so journey_completed gets the
+    // correct total. microState is None in MESO mode so this is a safe no-op.
+    state.microState.foreach { micro =>
+      state.distance += micro.positionInLink
+      microDistanceAccumulated = true  // signal handleMicroLeaveLink to skip distance
+    }
     mesoExitTick = None
     signalWaitUntilTick = None
     state.status = Ready
@@ -402,6 +416,7 @@ class Car(
     currentLinkId = Some(data.linkId)
     currentLinkLength = data.linkLength
     linkEntryTick = Some(currentTick)
+    microDistanceAccumulated = false  // reset: leavingLink() of previous link already ran
 
     // speedLimit from LinkState is stored in km/h; Link micro physics converts with /3.6
     val speedLimitMs = data.speedLimit / 3.6
@@ -507,7 +522,14 @@ class Car(
 
     val travelTime = linkEntryTick.map(entryTick => currentTick - entryTick).getOrElse(0L)
 
-    state.distance += data.distanceTraveled
+    // leavingLink() accumulates distance synchronously to avoid the race condition where
+    // MicroLeaveLinkData arrives after currentLinkId has changed to the next link.
+    // If the flag is not set, leavingLink() was NOT called before (unexpected path), so
+    // we fall back to adding the distance from the data here.
+    if (!microDistanceAccumulated) {
+      state.distance += data.distanceTraveled
+    }
+    microDistanceAccumulated = false
     sumoArrivalSpeed = data.finalVelocity
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition

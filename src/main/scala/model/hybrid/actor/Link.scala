@@ -119,6 +119,30 @@ class Link(
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false
 
+  /**
+   * Grace-period counter for MICRO links.
+   *
+   * When vehiclesByLane becomes empty, the link stays alive for
+   * MICRO_GRACE_TICKS additional ticks before deregistering from the TM.
+   * This prevents a race condition where:
+   *   1. The last vehicle in batch-N sends LeaveLinkData and empties vehiclesByLane.
+   *   2. The link's next actSpontaneous sees vehicleCount=0 and calls
+   *      onFinishSpontaneous(None), stopping the link.
+   *   3. Vehicles from batch-(N+1) arrive (tens to hundreds of ticks later due
+   *      to queue buildup in earlier links) and call scheduleEvent(currentTick+1),
+   *      but currentTick is now stale and the TM may have advanced or terminated.
+   *
+   * With a grace period the link remains scheduled in the TM, so batch-(N+1)
+   * vehicles always find a live link that will process them on the next tick.
+   * The counter is reset to 0 whenever new vehicles are present.
+   */
+  private var emptyGraceTick: Int = 0
+  // Safety-net grace period: keep the link scheduled in the TM for a few extra ticks
+  // after vehiclesByLane empties. The real fix is in LocalTimeManagerBase.finishEvent
+  // (actor added to scheduledActors atomically), but this guard prevents edge cases where
+  // the TM advances past the scheduled tick before the actor is picked up.
+  private val MICRO_GRACE_TICKS: Int = 5
+
   /** Configuration: interval between dynamic cost publications (ticks) */
   private val costPublishInterval: Int = {
     try { com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval") }
@@ -228,19 +252,42 @@ class Link(
     val hasVehicles = vehicleCount > 0
 
     if (!hasVehicles) {
-      microTickScheduled = false
-      onFinishSpontaneous(None)
+      emptyGraceTick += 1
+      if (emptyGraceTick <= MICRO_GRACE_TICKS) {
+        // Stay alive during grace period so late-arriving vehicles can enter and
+        // find a scheduled link without needing a TM reschedule from actInteractWith.
+        onFinishSpontaneous(Some(currentTick + 1))
+      } else {
+        emptyGraceTick = 0
+        microTickScheduled = false
+        onFinishSpontaneous(None)
+      }
       return
     }
 
+    emptyGraceTick = 0  // reset whenever vehicles are present
+    microTickScheduled = true
     handleGlobalTick(currentTick)
 
     val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0
     if (hasVehiclesAfterTick) {
+      emptyGraceTick = 0
       onFinishSpontaneous(Some(currentTick + 1))
     } else {
-      microTickScheduled = false
-      onFinishSpontaneous(None)
+      // Apply the same grace period when the last vehicle exits DURING tick processing.
+      // Without this, the link calls onFinishSpontaneous(None) immediately, but an
+      // incoming vehicle (whose EnterLinkData message is already in-flight) will call
+      // scheduleEvent() AFTER the TM has already reported hasScheduled=false to GlobalTM,
+      // causing GlobalTM to terminate prematurely while vehicles are still in transit.
+      emptyGraceTick += 1
+      if (emptyGraceTick <= MICRO_GRACE_TICKS) {
+        // Stay alive: an incoming vehicle may arrive within the grace window
+        onFinishSpontaneous(Some(currentTick + 1))
+      } else {
+        emptyGraceTick = 0
+        microTickScheduled = false
+        onFinishSpontaneous(None)
+      }
     }
   }
 
