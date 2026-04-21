@@ -55,27 +55,32 @@ class DefaultMicroSimulationStrategy(
     microTicksPerGlobalTick: Int,
     vehicleWaitingSeconds: mutable.Map[String, Double]
   ): Seq[MicroVehicleUpdate] = {
-    
-    val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
-    
-    vehiclesByLane.foreach { case (laneId, vehicles) =>
-      if (vehicles.nonEmpty) {
-        val laneUpdates = processMicroLane(
-          laneId = laneId,
-          vehicles = vehicles,
-          subTick = subTick,
-          tick = tick,
-          linkLength = linkLength,
-          speedLimit = speedLimit,
-          microTimeStep = microTimeStep,
-          microTicksPerGlobalTick = microTicksPerGlobalTick,
-          vehicleWaitingSeconds = vehicleWaitingSeconds
-        )
-        updates ++= laneUpdates
+    // Iterate all sub-ticks internally (Link calls this once per global tick with subTick=0).
+    // We keep only the last update per vehicle (later sub-ticks overwrite earlier ones),
+    // so the car receives exactly one MicroUpdateData per global tick.
+    val lastUpdateByVehicle = mutable.LinkedHashMap[String, MicroVehicleUpdate]()
+    val nSubTicks = math.max(1, microTicksPerGlobalTick)
+
+    for (st <- 0 until nSubTicks) {
+      vehiclesByLane.foreach { case (laneId, vehicles) =>
+        if (vehicles.nonEmpty) {
+          val laneUpdates = processMicroLane(
+            laneId = laneId,
+            vehicles = vehicles,
+            subTick = st,
+            tick = tick,
+            linkLength = linkLength,
+            speedLimit = speedLimit,
+            microTimeStep = microTimeStep,
+            microTicksPerGlobalTick = nSubTicks,
+            vehicleWaitingSeconds = vehicleWaitingSeconds
+          )
+          laneUpdates.foreach(u => lastUpdateByVehicle.put(u.vehicleId, u))
+        }
       }
     }
-    
-    updates.toSeq
+
+    lastUpdateByVehicle.values.toSeq
   }
   
   /**
@@ -137,9 +142,15 @@ class DefaultMicroSimulationStrategy(
           speedLimit / 3.6
       }
       
-      // Smooth velocity change (damped acceleration)
+      // Krauss-style acceleration: apply max acceleration or deceleration per sub-tick
       val safeTargetVel = if (targetVel.isNaN || targetVel.isInfinite) 0.0 else targetVel
-      val velChange = (safeTargetVel - vehicle.velocity) * 0.5 * microTimeStep
+      val maxAcceleration = 2.6  // m/s² (car default)
+      val maxDeceleration = 4.5  // m/s²
+      val velDiff = safeTargetVel - vehicle.velocity
+      val velChange = if (velDiff >= 0)
+        math.min(velDiff, maxAcceleration * microTimeStep)
+      else
+        math.max(velDiff, -maxDeceleration * microTimeStep)
       val rawNewVelocity = vehicle.velocity + velChange
       val cappedVelocity = math.max(0.0, math.min(
         if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity,
