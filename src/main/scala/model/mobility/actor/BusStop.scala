@@ -21,7 +21,11 @@ class BusStop(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    getDependencyOption(state.nodeId) match {
+    val dependencyOpt =
+      getDependencyOption(state.nodeId)
+        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+
+    dependencyOpt match {
       case Some(dependency) =>
         sendMessageTo(
           dependency.id,
