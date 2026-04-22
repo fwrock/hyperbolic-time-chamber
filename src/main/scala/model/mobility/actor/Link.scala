@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
@@ -20,7 +20,7 @@ import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnection
 
 class Link(
   private val properties: Properties
-) extends BaseActor[LinkState](
+) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
 
@@ -31,7 +31,7 @@ class Link(
   }
 
   override def onInitialize(event: InitializeEvent): Unit =
-    super.onStart()
+    super.onInitialize(event)
 //    sendConnections(state.to, IdentifyUtil.fromDependency(getDependency(state.to)))
 //    sendConnections(state.from, IdentifyUtil.fromDependency(getDependency(state.from)))
 
@@ -56,7 +56,7 @@ class Link(
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     model.mobility.util.LinkMessageStats.incrementEnterLink()
-    
+
     val dataLink = if (state == null) {
       LinkInfoData(
         linkCapacity = Int.MaxValue,
@@ -94,7 +94,7 @@ class Link(
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     model.mobility.util.LinkMessageStats.incrementLeaveLink()
-    
+
     state.registered.filterInPlace(_.actorId != data.actorId)
     val dataLink = LinkInfoData(
       linkLength = state.length,

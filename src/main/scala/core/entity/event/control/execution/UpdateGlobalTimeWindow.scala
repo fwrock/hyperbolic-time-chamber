@@ -4,7 +4,7 @@ package core.entity.event.control.execution
 import core.types.Tick
 
 /** Event to notify local time managers about a new time window
-  * 
+  *
   * @param windowStart
   *   Start tick of the window (inclusive)
   * @param windowEnd

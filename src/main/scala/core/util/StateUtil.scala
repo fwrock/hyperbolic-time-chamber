@@ -4,8 +4,7 @@ package core.util
 import core.entity.state.State
 
 import org.htc.protobuf.core.entity.actor
-import org.htc.protobuf.core.entity.actor.Relationship
-import org.interscity.htc.core.entity.actor.Property
+import org.interscity.htc.core.entity.actor.{Property, ShardActorId}
 
 object StateUtil {
 
@@ -36,12 +35,12 @@ object StateUtil {
     }
 
   def getRelationshipValue(state: State, relationshipName: String): Option[String] =
-    state.relationships.get(relationshipName).map(_.id)
+    state.relationships.get(relationshipName).map(_.entityId)
 
   def getProperty(state: State, propertyName: String): Option[Property] =
     state.properties.get(propertyName)
 
-  def getRelationship(state: State, relationshipName: String): Option[Relationship] =
+  def getRelationship(state: State, relationshipName: String): Option[ShardActorId] =
     state.relationships.get(relationshipName)
 
   def getPropertyValue[T](state: State, propertyName: String, defaultValue: T): T =

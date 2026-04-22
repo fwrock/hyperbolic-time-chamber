@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: htc-node
+  ports:
+    - name: pekko-remote
+      port: 25520
+      targetPort: 25520
+    - name: management
+      port: 8558
+      targetPort: 8558
+    - name: metrics
+      port: 9001
+      targetPort: 9001

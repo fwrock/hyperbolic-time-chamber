@@ -8,7 +8,7 @@ enum MovableStatusEnum:
     Moving,
     WaitingSignal,
     WaitingSignalState,
-    WaitingLinkEntry,  // Event-driven: waiting for EnterLinkConfirm
+    WaitingLinkEntry, // Event-driven: waiting for EnterLinkConfirm
     Stopped,
     Waiting,
     WaitingLoadPassenger,

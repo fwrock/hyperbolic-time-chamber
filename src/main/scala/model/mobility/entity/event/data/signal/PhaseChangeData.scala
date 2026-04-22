@@ -7,13 +7,17 @@ import model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum
 
 /** Event-driven: Traffic signal phase transition (pre-scheduled)
   *
-  * Replaces continuous phase checking every tick. All phase transitions
-  * are pre-scheduled during initialization.
+  * Replaces continuous phase checking every tick. All phase transitions are pre-scheduled during
+  * initialization.
   *
-  * @param phaseId     Phase identifier
-  * @param phaseOrigin Origin node for this phase
-  * @param newState    New phase state (Green/Red)
-  * @param validUntil  Tick until state remains stable
+  * @param phaseId
+  *   Phase identifier
+  * @param phaseOrigin
+  *   Origin node for this phase
+  * @param newState
+  *   New phase state (Green/Red)
+  * @param validUntil
+  *   Tick until state remains stable
   */
 case class PhaseChangeData(
   phaseId: String,

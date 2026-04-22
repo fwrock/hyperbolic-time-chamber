@@ -46,6 +46,10 @@
     </appender>
 
     <!-- Define o nível de log geral da aplicação -->
+
+    <!-- Silence noisy Pekko ClusterSingletonProxy INFO spam -->
+    <logger name="org.apache.pekko.cluster.singleton.ClusterSingletonProxy" level="WARN" />
+
     <root level="INFO">
 <!--        <appender-ref ref="FILE" />-->
         <!-- Usar ASYNC em vez de STDOUT direto -->

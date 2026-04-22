@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
@@ -15,26 +15,39 @@ import scala.collection.mutable
 
 class BusStop(
   private val properties: Properties
-) extends BaseActor[BusStopState](
+) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit =
-    val dependency = getDependency(state.nodeId)
-    sendMessageTo(
-      dependency.id,
-      dependency.classType,
-      RegisterBusStopData(
-        label = state.label
-      )
-    )
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+    val dependencyOpt =
+      getDependencyOption(state.nodeId)
+        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+
+    dependencyOpt match {
+      case Some(dependency) =>
+        sendMessageTo(
+          dependency.id,
+          dependency.classType,
+          RegisterBusStopData(
+            label = state.label
+          )
+        )
+        logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
+      case None =>
+        logWarn(
+          s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
+    }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
 
   private def handleBusRequestPassenger(

@@ -11,4 +11,7 @@ case class Identify(
 ) {
   def toDependency: Dependency =
     Dependency(id = id, resourceId = shardId, classType = classType)
+
+  def toRelationship: ShardActorId =
+    ShardActorId(entityId = id, classType = classType, shardBucket = shardId)
 }

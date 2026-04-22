@@ -9,6 +9,9 @@ class RedisClientManager {
 
   private val pool = new JedisPool(new JedisPoolConfig(), redisHost, redisPort)
 
+  /** Expose pool for direct Jedis access */
+  def getPool: JedisPool = pool
+
   def save(key: String, value: Array[Byte]): Unit = {
     val jedis = pool.getResource
     try

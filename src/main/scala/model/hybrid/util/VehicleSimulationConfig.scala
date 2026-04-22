@@ -1,0 +1,35 @@
+package org.interscity.htc
+package model.hybrid.util
+
+import core.types.Tick
+import core.util.SimulationUtil
+
+/** Shared simulation configuration for all vehicle actors.
+  *
+  * Provides lazy-loaded simulation limits to prevent vehicles from running indefinitely past the
+  * configured simulation end time.
+  */
+object VehicleSimulationConfig {
+
+  /** Simulation end tick - used only when extendSimulationIfPendingEventsAfterEnd is false. When
+    * extension is enabled, vehicles are allowed to finish their trips naturally.
+    */
+  lazy val simulationEndTick: Tick =
+    try {
+      val config = SimulationUtil.loadSimulationConfig()
+      config.duration
+    } catch {
+      case _: Exception => 86400L // Default: 24 hours in seconds
+    }
+
+  /** Whether the simulation should extend beyond the configured duration to allow pending vehicles
+    * to complete their trips.
+    */
+  lazy val extendSimulationIfPendingEventsAfterEnd: Boolean =
+    try {
+      val config = SimulationUtil.loadSimulationConfig()
+      config.extendSimulationIfPendingEventsAfterEnd
+    } catch {
+      case _: Exception => false
+    }
+}

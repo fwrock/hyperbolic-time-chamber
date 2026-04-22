@@ -36,7 +36,7 @@ class Subway(
       case Stopped =>
         leavingLink()
       case _ =>
-        logInfo(s"Event current status not handled ${state.movableStatus}")
+        logWarn(s"Event current status not handled ${state.movableStatus}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
@@ -44,7 +44,7 @@ class Subway(
       case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
       case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
       case _ =>
-        logInfo("Event not handled")
+        logWarn("Event not handled")
     }
   }
 
@@ -74,9 +74,9 @@ class Subway(
 //              )
 //            )
 //          case None =>
-//            logInfo("No has bus stop to load passenger")
+//            logWarn("No has bus stop to load passenger")
       case None =>
-        logInfo("No path to load passenger")
+        logWarn("No path to load passenger")
   }
 
   private def requestUnloadPeopleData(): Unit =
@@ -97,9 +97,9 @@ class Subway(
 //                )
 //            }
 //          case None =>
-//            logInfo("No has bus stop to unload passenger")
+//            logWarn("No has bus stop to unload passenger")
       case None =>
-        logInfo("No path to unload passenger")
+        logWarn("No path to unload passenger")
 
   private def retrieveSubwayStationFromNodeId(value: String): Option[String] =
     state.subwayStations.find {

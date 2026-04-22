@@ -1,0 +1,277 @@
+# 1. Service Account do Kubernetes (O "crachá" do Pod)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: htc-service-account
+  annotations:
+    iam.gke.io/gcp-service-account: htc-simulator-sa@simedape-362519.iam.gserviceaccount.com
+---
+# 2. RBAC: Permite que os nós se descubram para formar o Cluster Pekko
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+subjects:
+  - kind: ServiceAccount
+    name: htc-service-account
+    namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# 3. Service headless para descoberta dos pods no cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: htc-node
+  ports:
+    - name: pekko-remote
+      port: 25520
+      targetPort: 25520
+    - name: management
+      port: 8558
+      targetPort: 8558
+    - name: metrics
+      port: 9001
+      targetPort: 9001
+---
+# 4. StatefulSet dos Simuladores
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: htc-simulator
+  labels:
+    app: htc-node
+spec:
+  serviceName: htc-simulator
+  replicas: 16
+  # Parallel: all pods start simultaneously instead of waiting for each to be Ready.
+  # Required because readinessProbe depends on cluster formation (min-nr-of-members),
+  # and OrderedReady (default) creates a deadlock: pod-0 waits for 8 members,
+  # but pod-1 won't start until pod-0 is Ready.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: htc-node
+  template:
+    metadata:
+      labels:
+        app: htc-node
+      annotations:
+        gke-gcsfuse/volumes: "true" # Ativa o sidecar gerenciado do GCS Fuse
+        # Prometheus scrape configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9001"
+        prometheus.io/path:   "/metrics"
+    spec:
+      serviceAccountName: htc-service-account
+      # Reduce ndots from default 5 to 2.
+      # Pod DNS names like '10-75-130-6.default.pod.cluster.local' have 4 dots.
+      # With ndots=5, the resolver tries appending 3 search suffixes (all NXDOMAIN)
+      # before the absolute name, causing 4x DNS queries per probe × 16 pods = DNS storm.
+      # With ndots=2, names with 2+ dots are resolved as absolute names first.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+      initContainers:
+        - name: wait-for-data
+          image: busybox
+          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+      containers:
+        - name: simulator
+          image: uxhabam/hyperbolic-time-chamber:2.6.2-k8s
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+            limits:
+              cpu: "6"
+              memory: "16Gi"
+          ports:
+            - name: pekko-remote
+              containerPort: 25520
+            - name: management
+              containerPort: 8558
+            - name: metrics
+              containerPort: 9001
+          # Health checks: prevent Kubernetes from killing busy pods.
+          # Uses Pekko Management health endpoints (port 8558).
+          # GENEROUS timeouts because simulation pods run at high CPU.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            # Allow 10 consecutive failures (= 5 min) before killing the pod.
+            # Prevents killing pods during CPU saturation or progressive loading.
+            failureThreshold: 10
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: >-
+                -Dconfig.resource=kubernetes.conf
+                -Xms6g -Xmx12g
+                -XX:+UseZGC -XX:+ZGenerational
+                -XX:ConcGCThreads=2
+                --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+                --add-opens=java.base/java.lang=ALL-UNNAMED
+            # Cluster quorum: wait for this many members before starting simulation.
+            # Ensures shards are distributed across ALL pods from the start.
+            # Set to the number of pods you expect to participate.
+            - name: HTC_MIN_CLUSTER_MEMBERS
+              value: "16"
+            # More tolerance for transient CPU/network spikes before SBR downs nodes.
+            - name: HTC_SBR_STABLE_AFTER
+              value: "120s"
+            - name: HTC_HEARTBEAT_PAUSE
+              value: "180 s"
+            # ── Time Manager Pool ───────────────────────────────────
+            # Multiple LocalTMs per pod prevent mailbox bottleneck.
+            # With 5M actors / 16 pods = 312K actors/pod.
+            # 1 TM/pod = 600K+ messages/tick in one mailbox (bottleneck).
+            # 8 TM/pod = ~75K messages/mailbox (8x throughput).
+            - name: HTC_TIME_MANAGER_INSTANCES
+              value: "128"
+            - name: HTC_TIME_MANAGER_PER_NODE
+              value: "8"
+            # ── Report Writers ──────────────────────────────────────
+            # Reporters run on io-dispatcher (virtual threads) to avoid
+            # blocking simulation threads. Fewer instances = fewer open
+            # file handles on GCS Fuse.
+            - name: HTC_REPORT_JSON_INSTANCES
+              value: "64"
+            - name: HTC_REPORT_JSON_PER_NODE
+              value: "16"
+            - name: HTC_REPORT_JSON_BATCH_SIZE
+              value: "500"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLUSTER_PORT
+              value: "25520"
+            - name: CLUSTER_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HTC_SIMULATION_CONFIG_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json"
+            - name: HTC_MOBILITY_CITY_MAP_FILE
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json"
+            # ── Cache Strategy ──────────────────────────────────────
+            # Use "inmemory" when Kafka is not available, "kafka" when Managed Kafka is provisioned
+            - name: HTC_CACHE_STRATEGY
+              value: "inmemory"
+            # ── Load Balance Manager ────────────────────────────────
+            # Enable for multi-node cluster; disable for testing.
+            - name: HTC_LOAD_BALANCE_ENABLED
+              value: "false"
+            # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
+            - name: HTC_LOAD_BALANCE_STRATEGY
+              value: "hybrid"
+            # Geographic affinity weight (0.0 = pure load, 1.0 = pure geo, 0.4 recommended)
+            - name: HTC_LB_GEO_AFFINITY_WEIGHT
+              value: "0.4"
+            # Rebalance cycle interval in seconds
+            - name: HTC_LB_KDTREE_REBALANCE_INTERVAL
+              value: "30.0"
+            # Load threshold (0.0–1.0) above which a shard is overloaded
+            - name: HTC_LB_KDTREE_LOAD_THRESHOLD
+              value: "0.85"
+            # Maximum concurrent shard migrations
+            - name: HTC_LB_MIGRATION_MAX_CONCURRENT
+              value: "5"
+            # ── Migration Window Protocol ───────────────────────────
+            # Delay (ms) before broadcasting MigrationWindowOpenEvent.
+            # Entities flush snapshots to SnapshotManager in this window.
+            - name: HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS
+              value: "500"
+            # Timeout (ms) waiting for all nodes to ACK MigrationWindowOpenEvent
+            - name: HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS
+              value: "10000"
+            # Timeout (ms) waiting for all migrated entities to ACK restoration
+            # Increase for large entity counts or slow GCS Fuse deserialization.
+            - name: HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS
+              value: "60000"
+            # Timeout (ms) waiting for all nodes to ACK MigrationWindowCloseEvent
+            - name: HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS
+              value: "10000"
+            # Snapshot state store: "redis" for multi-node HA; "inmemory" for single-node
+            - name: HTC_LB_MIGRATION_STATE_STORE
+              value: "inmemory"
+            # ── Managed Apache Kafka (Google Cloud) ─────────────────
+            - name: HTC_KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+                  optional: true
+            # Dynamic routing Kafka (htc.kafka.bootstrap.servers)
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+                  optional: true
+            - name: HTC_KAFKA_REPORTING_ENABLED
+              value: "false"
+            - name: HTC_KAFKA_EVENT_STREAMING_ENABLED
+              value: "false"
+            - name: HTC_KAFKA_STATE_SYNC_ENABLED
+              value: "false"
+            - name: HTC_KAFKA_PRODUCER_BATCH_SIZE
+              value: "65536"
+            - name: HTC_KAFKA_PRODUCER_LINGER_MS
+              value: "10"
+          volumeMounts:
+            - name: gcs-fuse-vol
+              mountPath: /app/hyperbolic-time-chamber/simulations/input
+            - name: gcs-output-vol
+              mountPath: /app/hyperbolic-time-chamber/output
+      volumes:
+        - name: gcs-fuse-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-data-unique"
+              mountOptions: "implicit-dirs"
+        - name: gcs-output-vol
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: "htc-simulation-output-unique"
+              mountOptions: "implicit-dirs"

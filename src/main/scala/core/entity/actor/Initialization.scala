@@ -2,7 +2,6 @@ package org.interscity.htc
 package core.entity.actor
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 
@@ -13,21 +12,21 @@ case class Initialization(
   resourceId: String,
   classType: String,
   data: Any,
-  timeManager: ActorRef,
+  timeManagers: mutable.Map[String, ActorRef],
   creatorManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
-  dependencies: mutable.Map[String, actor.Dependency] = mutable.Map[String, actor.Dependency]()
+  relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId]()
 ) {
 
   def toInitializeData: InitializeData =
     InitializeData(
       data = data,
       resourceId = resourceId,
-      timeManager = timeManager,
       creatorManager = creatorManager,
       reporters = reporters,
-      dependencies = dependencies.map {
-        case (label, dep) => dep.id -> dep
-      }
+      relationships = relationships.map {
+        case (label, rel) => rel.entityId -> rel
+      },
+      timeManagers = timeManagers
     )
 }
