@@ -73,7 +73,7 @@ services:
         reservations:
           memory: 4G
   node1:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -209,7 +209,7 @@ services:
           memory: 64G
 
   node2:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -338,7 +338,7 @@ services:
           memory: 64G
 
   node3:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -467,7 +467,7 @@ services:
           memory: 64G
 
   node4:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -596,7 +596,7 @@ services:
           memory: 64G
 
   node5:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -725,7 +725,7 @@ services:
           memory: 64G
 
   node6:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -854,7 +854,7 @@ services:
           memory: 64G
 
   node7:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -983,7 +983,7 @@ services:
           memory: 64G
 
   node8:
-    image: uxhabam/hyperbolic-time-chamber:3.3.25-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
