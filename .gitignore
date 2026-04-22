@@ -64,6 +64,7 @@ terraform.tfstate.backup
 **/*.tfstate.backup
 terraform/gcp/terraform.tfstate
 terraform/gcp/terraform.tfstate.backup
+terraform/gcp/vm/.terraform.lock.hcl
 
 # Variable files with secrets
 *.tfvars
