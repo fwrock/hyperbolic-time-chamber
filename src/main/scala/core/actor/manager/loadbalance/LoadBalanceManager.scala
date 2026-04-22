@@ -13,6 +13,7 @@ import core.actor.manager.loadbalance.strategy.{ BalancingStrategy, StrategyConf
 import core.entity.control.loadbalance._
 import core.entity.event.EntityEnvelopeEvent
 import core.entity.event.control.loadbalance._
+import core.entity.event.control.loadbalance.ShardRegionMetricsCollectedEvent
 import core.entity.event.control.migration.{
   MigrationRestoredAckEvent,
   MigrationWindowAckEvent,
@@ -30,12 +31,15 @@ import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.cluster.ClusterEvent.{ CurrentClusterState, MemberEvent, MemberRemoved, MemberUp, UnreachableMember }
 import org.apache.pekko.cluster.pubsub.DistributedPubSub
 import org.apache.pekko.cluster.pubsub.DistributedPubSubMediator.Publish
-import org.apache.pekko.cluster.sharding.ClusterSharding
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.pattern.ask
+import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.util.{ Failure, Success }
 
 /** LoadBalanceManager
   *
@@ -193,6 +197,7 @@ class LoadBalanceManager(
     case event: MigrationCompleteEvent               => handleMigrationComplete(event)
     case event: TriggerRebalanceEvent                => handleTriggerRebalance(event)
     case _: CollectAndFeedMetricsEvent                  => handleCollectAndFeedMetrics()
+    case event: ShardRegionMetricsCollectedEvent         => handleShardRegionMetricsCollected(event)
 
     // TimeManager coordination events
     case event: MigrationSafeEvent           => handleMigrationSafe(event)
@@ -782,13 +787,14 @@ class LoadBalanceManager(
 
   /** Schedule periodic metrics collection.
     *
-    * Every 60 seconds (first at 30s) we:
-    *   1. Pull shard→node location from the allocator's region index
-    *   2. Pull entity counts per shard from the strategy
-    *   3. Feed both into the kd-tree so getImbalanceRatio has real data
+    * Every 60 seconds (first at 30s) we query each registered shard region for its
+    * current shard set and feed the shard→node assignments + entity counts into the
+    * strategy's kd-tree.
     *
-    * This unblocks the periodic TriggerRebalanceEvent (every rebalanceIntervalSeconds)
-    * which was always a no-op because shardAssignment was empty.
+    * We use ClusterSharding.shardTypeNames (no ask needed) to enumerate registered types,
+    * then ShardRegion.GetShardRegionState (ask) per region to discover which shards each
+    * node currently owns. This is robust against the LBM starting after the shard regions
+    * have already been registered with the default allocator.
     */
   private def scheduleMetricsCollection(): Unit = {
     val interval = 60.seconds
@@ -804,8 +810,11 @@ class LoadBalanceManager(
 
   /** Collect shard location + entity count data and feed it into the strategy's kd-tree.
     *
-    * Uses the allocator's region index (ActorRef → Set[ShardId]) which is kept up-to-date
-    * by Pekko's ShardCoordinator calls to allocateShard/rebalance. No async ask needed.
+    * Queries every registered shard region via `ShardRegion.GetShardRegionState` (ask) to
+    * discover which shards each cluster node currently owns. This approach is correct
+    * regardless of whether the LBM's custom allocator was used at region startup time —
+    * it interrogates Pekko's actual runtime state rather than relying on callbacks that may
+    * never fire (e.g. when regions were registered with the default allocation strategy).
     *
     * After this method the kd-tree has:
     *   - shardAssignment populated (so getImbalanceRatio works)
@@ -813,37 +822,78 @@ class LoadBalanceManager(
     */
   private def handleCollectAndFeedMetrics(): Unit = {
     strategy.foreach { s =>
-      // Step 1: populate shard-to-node assignments from the allocator region index.
-      // For local ActorRefs (path has no host), fall back to cluster.selfAddress.
-      val regionIndex = shardAllocator.getRegionIndex
-      var assignedShards = 0
-      regionIndex.foreach { case (regionRef, shardIds) =>
-        val addr =
-          if (regionRef.path.address.hasLocalScope) cluster.selfAddress
-          else regionRef.path.address
-        shardIds.foreach { shardId =>
-          s.recordShardLocation(shardId, addr)
-          assignedShards += 1
+      val sharding = ClusterSharding(context.system)
+      val regionNames = sharding.shardTypeNames
+
+      if (regionNames.isEmpty) {
+        logInfo(
+          "Shard metrics updated: 0 shard-node assignments across 0 regions, " +
+            s"${s.getShardEntityCounts.size} entity-count entries. " +
+            s"Imbalance ratio: ${s.getStats.get("imbalanceRatio").getOrElse("n/a")} " +
+            "(no shard regions registered yet)"
+        )
+      } else {
+        implicit val timeout: Timeout = Timeout(5.seconds)
+        var totalAssigned = 0
+
+        // Fire an ask per registered region; results are processed asynchronously.
+        // The kd-tree will converge over successive collection windows.
+        regionNames.foreach { typeName =>
+          try {
+            val regionRef = sharding.shardRegion(typeName)
+            (regionRef ? ShardRegion.GetShardRegionState).onComplete {
+              case Success(ShardRegion.CurrentShardRegionState(shards)) =>
+                // `shards` is a Set[ShardRegion.ShardState]; each has a `shardId`
+                // The host address is the region actor's remote address (or selfAddress for local).
+                val addr =
+                  if (regionRef.path.address.hasLocalScope) cluster.selfAddress
+                  else regionRef.path.address
+                shards.foreach { shardState =>
+                  s.recordShardLocation(shardState.shardId, addr)
+                }
+                getSelfProxy ! ShardRegionMetricsCollectedEvent(typeName, shards.size)
+
+              case Success(other) =>
+                logWarn(s"Unexpected response from shard region '$typeName': $other")
+
+              case Failure(ex) =>
+                logWarn(s"Failed to query shard region '$typeName': ${ex.getMessage}")
+            }
+          } catch {
+            case ex: Exception =>
+              logWarn(s"Could not reach shard region '$typeName': ${ex.getMessage}")
+          }
         }
-      }
 
-      // Step 2: feed entity counts per shard as ShardMetrics weights.
-      val entityCounts = s.getShardEntityCounts
-      entityCounts.foreach { case (shardId, count) =>
-        s.updateMetrics(ShardMetrics(
-          shardId     = shardId,
-          entityCount = count,
-          totalWeight = count.toDouble
-        ))
-      }
+        // Step 2: feed entity counts per shard as ShardMetrics weights.
+        // These come from the strategy's own counters (populated during assignShard).
+        val entityCounts = s.getShardEntityCounts
+        entityCounts.foreach { case (shardId, count) =>
+          s.updateMetrics(ShardMetrics(
+            shardId     = shardId,
+            entityCount = count,
+            totalWeight = count.toDouble
+          ))
+        }
 
-      val imbalanceRatio = s.getStats.get("imbalanceRatio").getOrElse("n/a")
-      logInfo(
-        s"Shard metrics updated: ${assignedShards} shard-node assignments across " +
-          s"${regionIndex.size} regions, ${entityCounts.size} entity-count entries. " +
-          s"Imbalance ratio: $imbalanceRatio"
-      )
+        val imbalanceRatio = s.getStats.get("imbalanceRatio").getOrElse("n/a")
+        logInfo(
+          s"Shard metrics collection triggered for ${regionNames.size} region type(s). " +
+            s"${entityCounts.size} entity-count entries fed. " +
+            s"Imbalance ratio: $imbalanceRatio"
+        )
+      }
     }
+  }
+
+  /** Handles the async acknowledgement from a shard region state query.
+    *
+    * Fired after `ShardRegion.GetShardRegionState` resolves for a given shard type.
+    * Purely informational — the actual `recordShardLocation` calls happen in the Future
+    * callback inside `handleCollectAndFeedMetrics`.
+    */
+  private def handleShardRegionMetricsCollected(event: ShardRegionMetricsCollectedEvent): Unit = {
+    logDebug(s"Shard region '${event.typeName}': ${event.shardCount} shards located.")
   }
 
   /** Execute the actual shard migration via Pekko cluster sharding.

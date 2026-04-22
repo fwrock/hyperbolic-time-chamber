@@ -41,10 +41,17 @@ class LoadBalanceShardAllocator(
     */
   private val shardsToRebalance: mutable.Set[ShardId] = mutable.Set.empty
 
-  /** Tracks which region ActorRef corresponds to which logical node address.
-    * Populated dynamically as allocate/rebalance calls reveal the currentShardAllocations.
+  /** Tracks which region ActorRef holds which shard IDs.
+    *
+    * Updated via a MERGE strategy from `currentShardAllocations` snapshots passed in by
+    * `allocateShard` and `rebalance`. We intentionally do NOT clear this map between Pekko
+    * callbacks: clearing would make `getRegionIndex` return an empty map whenever
+    * `handleCollectAndFeedMetrics` runs outside of a Pekko callback window.
+    *
+    * The merge approach keeps the last-known allocation for every region. Regions that have
+    * left the cluster are evicted only when `clearAll` is called (simulation shutdown).
     */
-  private val regionIndex: mutable.Map[ActorRef, Set[ShardId]] = mutable.Map.empty
+  private val regionIndex: mutable.Map[ActorRef, mutable.Set[ShardId]] = mutable.Map.empty
 
   // ── ShardAllocationStrategy API ──────────────────────────────────────────
 
@@ -64,7 +71,7 @@ class LoadBalanceShardAllocator(
     shardId: ShardId,
     currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]]
   ): Future[ActorRef] = synchronized {
-    updateRegionIndex(currentShardAllocations)
+    mergeRegionIndex(currentShardAllocations)
 
     // If LoadBalanceManager has a desired allocation, use it
     val target = desiredAllocations.get(shardId) match {
@@ -101,7 +108,7 @@ class LoadBalanceShardAllocator(
     currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]],
     rebalanceInProgress: Set[ShardId]
   ): Future[Set[ShardId]] = synchronized {
-    updateRegionIndex(currentShardAllocations)
+    mergeRegionIndex(currentShardAllocations)
 
     // Take all pending rebalance requests, excluding already-in-progress ones
     val toRebalance = shardsToRebalance.diff(rebalanceInProgress).toSet
@@ -153,10 +160,11 @@ class LoadBalanceShardAllocator(
     desiredAllocations.remove(shardId)
   }
 
-  /** Clears all desired allocations and pending rebalances. */
+  /** Clears all desired allocations, pending rebalances, and the region index. */
   def clearAll(): Unit = synchronized {
     desiredAllocations.clear()
     shardsToRebalance.clear()
+    regionIndex.clear()
   }
 
   /** Returns the current desired allocations for monitoring. */
@@ -169,9 +177,15 @@ class LoadBalanceShardAllocator(
     shardsToRebalance.toSet
   }
 
-  /** Gets the current region index (region → shards). */
+  /** Gets the current region index (region → shards).
+    *
+    * Returns the last-known allocation for every region seen in at least one Pekko callback.
+    * Because we use a merge strategy in [[mergeRegionIndex]], this map is kept alive between
+    * Pekko callbacks so that [[LoadBalanceManager.handleCollectAndFeedMetrics]] always sees
+    * real data rather than an empty snapshot.
+    */
   def getRegionIndex: Map[ActorRef, Set[ShardId]] = synchronized {
-    regionIndex.toMap
+    regionIndex.view.mapValues(_.toSet).toMap
   }
 
   /** Finds a region by checking which region hosts a given shard in the index. */
@@ -181,14 +195,25 @@ class LoadBalanceShardAllocator(
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
-  /** Updates the region index from the current allocations snapshot. */
-  private def updateRegionIndex(
+  /** Merges the Pekko-provided allocation snapshot into the persistent region index.
+    *
+    * Unlike a destructive clear+repopulate, this approach:
+    *   1. Adds any new regions seen in `currentShardAllocations`.
+    *   2. Replaces the shard set for regions already tracked (snapshot is authoritative).
+    *   3. Preserves entries for regions absent in this snapshot (they may have no shards
+    *      right now rather than having left the cluster).
+    *
+    * This ensures `getRegionIndex` always reflects at least the most recent known state
+    * even between Pekko ShardCoordinator callback windows.
+    */
+  private def mergeRegionIndex(
     currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]]
   ): Unit = {
-    regionIndex.clear()
     currentShardAllocations.foreach {
       case (region, shards) =>
-        regionIndex.put(region, shards.toSet)
+        val entry = regionIndex.getOrElseUpdate(region, mutable.Set.empty)
+        entry.clear()
+        entry ++= shards
     }
   }
 

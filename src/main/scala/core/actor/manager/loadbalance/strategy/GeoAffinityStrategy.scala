@@ -167,6 +167,35 @@ class GeoAffinityStrategy extends BalancingStrategy {
     baseIds.flatMap(id => Set(STATIC_PREFIX + id, DYNAMIC_PREFIX + id))
   }
 
+  /** Returns entity counts per prefixed shard ID.
+    *
+    * The quadtree tracks counts by base shard ID (without prefix). We re-key them here
+    * using the prefix that was assigned during [[assignShard]] — consulting `shardTypeMap`
+    * to determine which prefix each base shard received. Base shards that appear in both
+    * namespaces (one static entity and one dynamic entity at the same quadrant) will produce
+    * two entries summed from the quadtree count.
+    *
+    * In practice every base shard is populated with entities of a single type, so the map
+    * will have either a `"static-*"` or a `"dynamic-*"` entry per quadrant.
+    */
+  override def getShardEntityCounts: Map[String, Int] = {
+    val baseCounts = quadtree.getShardEntityCounts
+    baseCounts.flatMap { case (baseId, count) =>
+      val staticKey  = STATIC_PREFIX  + baseId
+      val dynamicKey = DYNAMIC_PREFIX + baseId
+      val hasStatic  = shardTypeMap.get(staticKey).isDefined
+      val hasDynamic = shardTypeMap.get(dynamicKey).isDefined
+      // Emit only the prefixed keys that were actually registered via assignShard
+      Seq(
+        if (hasStatic)  Some(staticKey  -> count) else None,
+        if (hasDynamic) Some(dynamicKey -> count) else None
+      ).flatten
+    }
+  }
+
+  override def recordShardLocation(shardId: String, address: Address): Unit =
+    kdTree.recordNodeAssignment(shardId, address)
+
   /** Shard type is encoded in the ID prefix — no need to consult the shardTypeMap. */
   override def getShardType(shardId: String): ShardTypeEnum =
     if (shardId.startsWith(STATIC_PREFIX)) ShardTypeEnum.Static

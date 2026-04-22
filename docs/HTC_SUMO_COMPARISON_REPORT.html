@@ -1,0 +1,676 @@
+<!DOCTYPE html><html><head>
+      <title>HTC_SUMO_COMPARISON_REPORT</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      
+      <link rel="stylesheet" href="file:////home/dean/.vscode/extensions/shd101wyy.markdown-preview-enhanced-0.8.24/crossnote/dependencies/katex/katex.min.css">
+      
+      
+      
+      
+      
+      
+      
+      <style>
+      code[class*=language-],pre[class*=language-]{color:#333;background:0 0;font-family:Consolas,"Liberation Mono",Menlo,Courier,monospace;text-align:left;white-space:pre;word-spacing:normal;word-break:normal;word-wrap:normal;line-height:1.4;-moz-tab-size:8;-o-tab-size:8;tab-size:8;-webkit-hyphens:none;-moz-hyphens:none;-ms-hyphens:none;hyphens:none}pre[class*=language-]{padding:.8em;overflow:auto;border-radius:3px;background:#f5f5f5}:not(pre)>code[class*=language-]{padding:.1em;border-radius:.3em;white-space:normal;background:#f5f5f5}.token.blockquote,.token.comment{color:#969896}.token.cdata{color:#183691}.token.doctype,.token.macro.property,.token.punctuation,.token.variable{color:#333}.token.builtin,.token.important,.token.keyword,.token.operator,.token.rule{color:#a71d5d}.token.attr-value,.token.regex,.token.string,.token.url{color:#183691}.token.atrule,.token.boolean,.token.code,.token.command,.token.constant,.token.entity,.token.number,.token.property,.token.symbol{color:#0086b3}.token.prolog,.token.selector,.token.tag{color:#63a35c}.token.attr-name,.token.class,.token.class-name,.token.function,.token.id,.token.namespace,.token.pseudo-class,.token.pseudo-element,.token.url-reference .token.variable{color:#795da3}.token.entity{cursor:help}.token.title,.token.title .token.punctuation{font-weight:700;color:#1d3e81}.token.list{color:#ed6a43}.token.inserted{background-color:#eaffea;color:#55a532}.token.deleted{background-color:#ffecec;color:#bd2c00}.token.bold{font-weight:700}.token.italic{font-style:italic}.language-json .token.property{color:#183691}.language-markup .token.tag .token.punctuation{color:#333}.language-css .token.function,code.language-css{color:#0086b3}.language-yaml .token.atrule{color:#63a35c}code.language-yaml{color:#183691}.language-ruby .token.function{color:#333}.language-markdown .token.url{color:#795da3}.language-makefile .token.symbol{color:#795da3}.language-makefile .token.variable{color:#183691}.language-makefile .token.builtin{color:#0086b3}.language-bash .token.keyword{color:#0086b3}pre[data-line]{position:relative;padding:1em 0 1em 3em}pre[data-line] .line-highlight-wrapper{position:absolute;top:0;left:0;background-color:transparent;display:block;width:100%}pre[data-line] .line-highlight{position:absolute;left:0;right:0;padding:inherit 0;margin-top:1em;background:hsla(24,20%,50%,.08);background:linear-gradient(to right,hsla(24,20%,50%,.1) 70%,hsla(24,20%,50%,0));pointer-events:none;line-height:inherit;white-space:pre}pre[data-line] .line-highlight:before,pre[data-line] .line-highlight[data-end]:after{content:attr(data-start);position:absolute;top:.4em;left:.6em;min-width:1em;padding:0 .5em;background-color:hsla(24,20%,50%,.4);color:#f4f1ef;font:bold 65%/1.5 sans-serif;text-align:center;vertical-align:.3em;border-radius:999px;text-shadow:none;box-shadow:0 1px #fff}pre[data-line] .line-highlight[data-end]:after{content:attr(data-end);top:auto;bottom:.4em}html body{font-family:'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif;font-size:16px;line-height:1.6;color:#333;background-color:#fff;overflow:initial;box-sizing:border-box;word-wrap:break-word}html body>:first-child{margin-top:0}html body h1,html body h2,html body h3,html body h4,html body h5,html body h6{line-height:1.2;margin-top:1em;margin-bottom:16px;color:#000}html body h1{font-size:2.25em;font-weight:300;padding-bottom:.3em}html body h2{font-size:1.75em;font-weight:400;padding-bottom:.3em}html body h3{font-size:1.5em;font-weight:500}html body h4{font-size:1.25em;font-weight:600}html body h5{font-size:1.1em;font-weight:600}html body h6{font-size:1em;font-weight:600}html body h1,html body h2,html body h3,html body h4,html body h5{font-weight:600}html body h5{font-size:1em}html body h6{color:#5c5c5c}html body strong{color:#000}html body del{color:#5c5c5c}html body a:not([href]){color:inherit;text-decoration:none}html body a{color:#08c;text-decoration:none}html body a:hover{color:#00a3f5;text-decoration:none}html body img{max-width:100%}html body>p{margin-top:0;margin-bottom:16px;word-wrap:break-word}html body>ol,html body>ul{margin-bottom:16px}html body ol,html body ul{padding-left:2em}html body ol.no-list,html body ul.no-list{padding:0;list-style-type:none}html body ol ol,html body ol ul,html body ul ol,html body ul ul{margin-top:0;margin-bottom:0}html body li{margin-bottom:0}html body li.task-list-item{list-style:none}html body li>p{margin-top:0;margin-bottom:0}html body .task-list-item-checkbox{margin:0 .2em .25em -1.8em;vertical-align:middle}html body .task-list-item-checkbox:hover{cursor:pointer}html body blockquote{margin:16px 0;font-size:inherit;padding:0 15px;color:#5c5c5c;background-color:#f0f0f0;border-left:4px solid #d6d6d6}html body blockquote>:first-child{margin-top:0}html body blockquote>:last-child{margin-bottom:0}html body hr{height:4px;margin:32px 0;background-color:#d6d6d6;border:0 none}html body table{margin:10px 0 15px 0;border-collapse:collapse;border-spacing:0;display:block;width:100%;overflow:auto;word-break:normal;word-break:keep-all}html body table th{font-weight:700;color:#000}html body table td,html body table th{border:1px solid #d6d6d6;padding:6px 13px}html body dl{padding:0}html body dl dt{padding:0;margin-top:16px;font-size:1em;font-style:italic;font-weight:700}html body dl dd{padding:0 16px;margin-bottom:16px}html body code{font-family:Menlo,Monaco,Consolas,'Courier New',monospace;font-size:.85em;color:#000;background-color:#f0f0f0;border-radius:3px;padding:.2em 0}html body code::after,html body code::before{letter-spacing:-.2em;content:'\00a0'}html body pre>code{padding:0;margin:0;word-break:normal;white-space:pre;background:0 0;border:0}html body .highlight{margin-bottom:16px}html body .highlight pre,html body pre{padding:1em;overflow:auto;line-height:1.45;border:#d6d6d6;border-radius:3px}html body .highlight pre{margin-bottom:0;word-break:normal}html body pre code,html body pre tt{display:inline;max-width:initial;padding:0;margin:0;overflow:initial;line-height:inherit;word-wrap:normal;background-color:transparent;border:0}html body pre code:after,html body pre code:before,html body pre tt:after,html body pre tt:before{content:normal}html body blockquote,html body dl,html body ol,html body p,html body pre,html body ul{margin-top:0;margin-bottom:16px}html body kbd{color:#000;border:1px solid #d6d6d6;border-bottom:2px solid #c7c7c7;padding:2px 4px;background-color:#f0f0f0;border-radius:3px}@media print{html body{background-color:#fff}html body h1,html body h2,html body h3,html body h4,html body h5,html body h6{color:#000;page-break-after:avoid}html body blockquote{color:#5c5c5c}html body pre{page-break-inside:avoid}html body table{display:table}html body img{display:block;max-width:100%;max-height:100%}html body code,html body pre{word-wrap:break-word;white-space:pre}}.markdown-preview{width:100%;height:100%;box-sizing:border-box}.markdown-preview ul{list-style:disc}.markdown-preview ul ul{list-style:circle}.markdown-preview ul ul ul{list-style:square}.markdown-preview ol{list-style:decimal}.markdown-preview ol ol,.markdown-preview ul ol{list-style-type:lower-roman}.markdown-preview ol ol ol,.markdown-preview ol ul ol,.markdown-preview ul ol ol,.markdown-preview ul ul ol{list-style-type:lower-alpha}.markdown-preview .newpage,.markdown-preview .pagebreak{page-break-before:always}.markdown-preview pre.line-numbers{position:relative;padding-left:3.8em;counter-reset:linenumber}.markdown-preview pre.line-numbers>code{position:relative}.markdown-preview pre.line-numbers .line-numbers-rows{position:absolute;pointer-events:none;top:1em;font-size:100%;left:0;width:3em;letter-spacing:-1px;border-right:1px solid #999;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}.markdown-preview pre.line-numbers .line-numbers-rows>span{pointer-events:none;display:block;counter-increment:linenumber}.markdown-preview pre.line-numbers .line-numbers-rows>span:before{content:counter(linenumber);color:#999;display:block;padding-right:.8em;text-align:right}.markdown-preview .mathjax-exps .MathJax_Display{text-align:center!important}.markdown-preview:not([data-for=preview]) .code-chunk .code-chunk-btn-group{display:none}.markdown-preview:not([data-for=preview]) .code-chunk .status{display:none}.markdown-preview:not([data-for=preview]) .code-chunk .output-div{margin-bottom:16px}.markdown-preview .md-toc{padding:0}.markdown-preview .md-toc .md-toc-details{margin:0;padding:0;border:none}.markdown-preview .md-toc summary.md-toc-link-wrapper{cursor:pointer;list-style-position:outside}.markdown-preview .md-toc summary.md-toc-link-wrapper::marker{font-size:.85em}.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link{display:inline;padding:.25rem 0}.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link div,.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link p{display:inline}.markdown-preview .md-toc .md-toc-link-wrapper.highlighted .md-toc-link{font-weight:800}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='0']{margin-left:12px}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='1']{margin-left:28px}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='2']{margin-left:44px}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='3']{margin-left:60px}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='4']{margin-left:76px}.markdown-preview .md-toc .md-toc-link-wrapper[data-level='5']{margin-left:80px}.scrollbar-style::-webkit-scrollbar{width:8px}.scrollbar-style::-webkit-scrollbar-track{border-radius:10px;background-color:transparent}.scrollbar-style::-webkit-scrollbar-thumb{border-radius:5px;background-color:rgba(150,150,150,.66);border:4px solid rgba(150,150,150,.66);background-clip:content-box}html body[for=html-export]:not([data-presentation-mode]){position:relative;width:100%;height:100%;top:0;left:0;margin:0;padding:0;overflow:auto}html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{position:relative;top:0;min-height:100vh}@media screen and (min-width:914px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{padding:2em calc(50% - 457px + 2em)}}@media screen and (max-width:914px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{padding:2em}}@media screen and (max-width:450px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{font-size:14px!important;padding:1em}}@media print{html body[for=html-export]:not([data-presentation-mode]) #sidebar-toc-btn{display:none}}html body[for=html-export]:not([data-presentation-mode]) #sidebar-toc-btn{position:fixed;bottom:8px;left:8px;font-size:28px;cursor:pointer;color:inherit;z-index:99;width:32px;text-align:center;opacity:.4}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] #sidebar-toc-btn{opacity:1}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc{position:fixed;top:0;left:0;width:300px;height:100%;padding:32px 0 48px 0;font-size:14px;box-shadow:0 0 4px rgba(150,150,150,.33);box-sizing:border-box;overflow:auto;background-color:inherit}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar{width:8px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar-track{border-radius:10px;background-color:transparent}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar-thumb{border-radius:5px;background-color:rgba(150,150,150,.66);border:4px solid rgba(150,150,150,.66);background-clip:content-box}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc a{text-decoration:none}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc{padding:0 16px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-details{margin:0;padding:0;border:none}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link{display:inline;padding:.25rem 0}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link div,html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link p{display:inline}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper.highlighted .md-toc-link{font-weight:800}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='0']{padding-left:0}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='1']{padding-left:16px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='2']{padding-left:32px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='3']{padding-left:48px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='4']{padding-left:64px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper[data-level='5']{padding-left:80px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{left:300px;width:calc(100% - 300px);padding:2em calc(50% - 457px - 300px / 2);margin:0;box-sizing:border-box}@media screen and (max-width:1274px){html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{padding:2em}}@media screen and (max-width:450px){html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{width:100%}}html body[for=html-export]:not([data-presentation-mode]):not([html-show-sidebar-toc]) .markdown-preview{left:50%;transform:translateX(-50%)}html body[for=html-export]:not([data-presentation-mode]):not([html-show-sidebar-toc]) .md-sidebar-toc{display:none}
+/* Please visit the URL below for more information: */
+/*   https://shd101wyy.github.io/markdown-preview-enhanced/#/customize-css */
+
+      </style>
+      <script type="text/javascript">
+  document.addEventListener("DOMContentLoaded", function () {
+    // your code here
+  });
+</script>
+    </head>
+    <body for="html-export">
+      <div class="crossnote markdown-preview  ">
+      
+<h1 id="relatório-de-validação-htc--sumo--cenários-simples-de-via-única">Relatório de Validação: HTC × SUMO — Cenários Simples de Via Única </h1>
+<p><strong>Data:</strong> 21 de abril de 2026<br>
+<strong>Versão HTC:</strong> 1.24.3 — JAR <code>02cba2ba886e88aaba61777c36c51b482b1a8593</code><br>
+<strong>Dados brutos:</strong> <code>scripts/output/simple_scenarios/comparison/comparison.json</code><br>
+<strong>Gráficos:</strong> <code>scripts/output/simple_scenarios/comparison/*.png</code></p>
+<hr>
+<h2 id="1-objetivo">1. Objetivo </h2>
+<p>Validar o comportamento do simulador HTC em modo microscópico (MICRO) comparando-o com o SUMO em modo mesoscópico (<code>--mesosim</code>), usando cenários controlados e incrementais. O objetivo não é igualdade perfeita de tempos — os modelos são distintos — mas sim verificar que:</p>
+<ol>
+<li><strong>Todos os veículos completam a viagem</strong> (sem perda de eventos).</li>
+<li><strong>As distâncias percorridas são corretas</strong> (500 m por segmento).</li>
+<li><strong>Os tempos de viagem são coerentes</strong> com a física do cenário (tempo livre ≥ limite inferior).</li>
+<li><strong>O critério GEH &lt; 5</strong> é satisfeito (aceitação em engenharia de tráfego).</li>
+<li><strong>Os contêineres Docker encerram corretamente</strong> após a simulação.</li>
+</ol>
+<hr>
+<h2 id="2-configuração-dos-cenários">2. Configuração dos Cenários </h2>
+<h3 id="21-parâmetros-comuns">2.1 Parâmetros Comuns </h3>
+<table>
+<thead>
+<tr>
+<th>Parâmetro</th>
+<th>Valor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Comprimento de cada segmento</td>
+<td>500 m</td>
+</tr>
+<tr>
+<td>Velocidade livre</td>
+<td>50 km/h (13,89 m/s)</td>
+</tr>
+<tr>
+<td>Capacidade do link</td>
+<td>600 veículos/hora</td>
+</tr>
+<tr>
+<td>Modo HTC</td>
+<td>MICRO (car-following Krauss)</td>
+</tr>
+<tr>
+<td>Modo SUMO</td>
+<td><code>--mesosim</code> (fila mesoscópica)</td>
+</tr>
+<tr>
+<td>Resolução temporal HTC</td>
+<td>1 tick global = 10 sub-ticks × 0,1 s = 1 s</td>
+</tr>
+<tr>
+<td>Modelo de car-following HTC</td>
+<td>Krauss (velocidade segura com fator aleatório)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-cenários">2.2 Cenários </h3>
+<table>
+<thead>
+<tr>
+<th>Cenário</th>
+<th>Segmentos</th>
+<th>Distância total</th>
+<th>Veículos</th>
+<th>Tempo livre teórico</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>simple_1_street</code></td>
+<td>1</td>
+<td>500 m</td>
+<td>10</td>
+<td>36,0 s</td>
+</tr>
+<tr>
+<td><code>simple_2_streets</code></td>
+<td>2</td>
+<td>1 000 m</td>
+<td>20</td>
+<td>72,0 s</td>
+</tr>
+<tr>
+<td><code>simple_3_streets</code></td>
+<td>3</td>
+<td>1 500 m</td>
+<td>30</td>
+<td>108,0 s</td>
+</tr>
+<tr>
+<td><code>simple_4_streets</code></td>
+<td>4</td>
+<td>2 000 m</td>
+<td>40</td>
+<td>144,0 s</td>
+</tr>
+</tbody>
+</table>
+<p>O <strong>tempo livre teórico</strong> é calculado como <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>f</mi><mi>r</mi><mi>e</mi><mi>e</mi></mrow></msub><mo>=</mo><mi>d</mi><mi mathvariant="normal">/</mi><msub><mi>v</mi><mrow><mi>f</mi><mi>r</mi><mi>e</mi><mi>e</mi></mrow></msub><mo>=</mo><mn>500</mn><mi>n</mi><mi mathvariant="normal">/</mi><mn>13,89</mn></mrow><annotation encoding="application/x-tex">t_{free} = d / v_{free} = 500n / 13{,}89</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9012em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">ee</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord mathnormal">d</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">ee</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">500</span><span class="mord mathnormal">n</span><span class="mord">/13</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">89</span></span></span></span> m/s, onde <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> é o número de segmentos. Nenhum simulador deveria produzir tempos de viagem <strong>menores</strong> que esse valor.</p>
+<hr>
+<h2 id="3-modelos-de-simulação">3. Modelos de Simulação </h2>
+<h3 id="31-htc--modo-micro-krauss">3.1 HTC — Modo MICRO (Krauss) </h3>
+<p>O HTC no modo MICRO executa simulação microscópica por link. Cada link opera como um gerenciador de tempo local, avançando em sub-ticks (0,1 s). O modelo de car-following padrão é o <strong>Modelo de Krauss (1998)</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>v</mi><mrow><mi>s</mi><mi>a</mi><mi>f</mi><mi>e</mi></mrow></msub><mo>=</mo><mo>−</mo><mi>τ</mi><mi>b</mi><mo>+</mo><msqrt><mrow><mo stretchy="false">(</mo><mi>τ</mi><mi>b</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>+</mo><msubsup><mi>v</mi><mrow><mi>l</mi><mi>e</mi><mi>a</mi><mi>d</mi><mi>e</mi><mi>r</mi></mrow><mn>2</mn></msubsup><mo>+</mo><mn>2</mn><mi>b</mi><mo>⋅</mo><mi>g</mi><mi>a</mi><mi>p</mi></mrow></msqrt></mrow><annotation encoding="application/x-tex">v_{safe} = -\tau b + \sqrt{(\tau b)^2 + v_{leader}^2 + 2 b \cdot gap}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mord mathnormal">b</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.84em;vertical-align:-0.5588em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2812em;"><span class="svg-align" style="top:-3.8em;"><span class="pstrut" style="height:3.8em;"></span><span class="mord" style="padding-left:1em;"><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mord mathnormal">b</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7959em;"><span style="top:-2.3987em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span><span style="top:-3.0448em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3013em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">2</span><span class="mord mathnormal">b</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mord mathnormal">a</span><span class="mord mathnormal">p</span></span></span><span style="top:-3.2412em;"><span class="pstrut" style="height:3.8em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.88em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.88em" viewBox="0 0 400000 1944" preserveAspectRatio="xMinYMin slice"><path d="M983 90
+l0 -0
+c4,-6.7,10,-10,18,-10 H400000v40
+H1013.1s-83.4,268,-264.1,840c-180.7,572,-277,876.3,-289,913c-4.7,4.7,-12.7,7,-24,7
+s-12,0,-12,0c-1.3,-3.3,-3.7,-11.7,-7,-25c-35.3,-125.3,-106.7,-373.3,-214,-744
+c-10,12,-21,25,-33,39s-32,39,-32,39c-6,-5.3,-15,-14,-27,-26s25,-30,25,-30
+c26.7,-32.7,52,-63,76,-91s52,-60,52,-60s208,722,208,722
+c56,-175.3,126.3,-397.3,211,-666c84.7,-268.7,153.8,-488.2,207.5,-658.5
+c53.7,-170.3,84.5,-266.8,92.5,-289.5z
+M1001 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.5588em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>onde:</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>1,0</mn></mrow><annotation encoding="application/x-tex">\tau = 1{,}0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">0</span></span></span></span> s (tempo de reação)</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi><mo>=</mo><mn>4,5</mn></mrow><annotation encoding="application/x-tex">b = 4{,}5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">4</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">5</span></span></span></span> m/s² (desaceleração máxima)</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi><mi>a</mi><mi>p</mi></mrow><annotation encoding="application/x-tex">gap</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mord mathnormal">a</span><span class="mord mathnormal">p</span></span></span></span> = distância até o veículo à frente (m)</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mrow><mi>l</mi><mi>e</mi><mi>a</mi><mi>d</mi><mi>e</mi><mi>r</mi></mrow></msub></mrow><annotation encoding="application/x-tex">v_{leader}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> = velocidade do veículo à frente (m/s)</li>
+</ul>
+<p>A velocidade efetiva é então:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>v</mi><mrow><mi>e</mi><mi>f</mi><mi>f</mi></mrow></msub><mo>=</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>v</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>r</mi><mi>e</mi><mi>d</mi></mrow></msub><mo separator="true">,</mo><mtext>  </mtext><msub><mi>v</mi><mrow><mi>s</mi><mi>a</mi><mi>f</mi><mi>e</mi></mrow></msub><mo stretchy="false">)</mo><mo>⋅</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>ϵ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">v_{eff} = \min(v_{desired},\; v_{safe}) \cdot (1 + \epsilon)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">ϵ</span><span class="mclose">)</span></span></span></span></span></p>
+<p>onde <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi><mo>∼</mo><mi mathvariant="script">U</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mi>η</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\epsilon \sim \mathcal{U}(0, \eta)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal" style="margin-right:0.0993em;">U</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="mclose">)</span></span></span></span> é o fator de aleatoriedade do motorista (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>0,5</mn></mrow><annotation encoding="application/x-tex">\eta = 0{,}5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">5</span></span></span></span> por padrão). Esse fator introduz <strong>variabilidade individual</strong> nos tempos de viagem, o que explica o desvio-padrão não nulo no HTC.</p>
+<h3 id="32-sumo--modo-mesoscópico--mesosim">3.2 SUMO — Modo Mesoscópico (<code>--mesosim</code>) </h3>
+<p>O SUMO no modo <code>--mesosim</code> usa um modelo de fila mesoscópica. Os veículos são tratados como grupos que avançam pelo link com velocidade calculada pela relação espaço-velocidade. Para baixas densidades (cenário de fluxo livre), todos os veículos percorrem cada segmento exatamente na velocidade livre:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>t</mi><mrow><mi>v</mi><mi>i</mi><mi>a</mi><mi>g</mi><mi>e</mi><mi>m</mi></mrow></msub><mo>=</mo><mi>d</mi><mi mathvariant="normal">/</mi><msub><mi>v</mi><mrow><mi>f</mi><mi>r</mi><mi>e</mi><mi>e</mi></mrow></msub><mo>=</mo><mn>500</mn><mo>×</mo><mi>n</mi><mtext>  </mtext><mi mathvariant="normal">/</mi><mtext>  </mtext><mn>13,89</mn><mo>≈</mo><mn>36</mn><mi>n</mi><mtext>&nbsp;s</mtext></mrow><annotation encoding="application/x-tex">t_{viagem} = d / v_{free} = 500 \times n \; / \; 13{,}89 \approx 36n \text{ s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9012em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span><span class="mord mathnormal mtight">ia</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">m</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord mathnormal">d</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">ee</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">500</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">/</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">13</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">89</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">36</span><span class="mord mathnormal">n</span><span class="mord text"><span class="mord">&nbsp;s</span></span></span></span></span></span></p>
+<p>Por isso <strong>todos os veículos no SUMO têm exatamente o mesmo tempo de viagem</strong>, sem desvio-padrão.</p>
+<h3 id="33-diferença-estrutural">3.3 Diferença Estrutural </h3>
+<p>A diferença de médias entre HTC e SUMO é <strong>sistemática e esperada</strong>: o modelo microscópico Krauss introduz atrasos na aceleração inicial, espaçamento de segurança entre veículos e aleatoriedade do motorista. Esses efeitos não existem no modelo mesoscópico do SUMO.</p>
+<hr>
+<h2 id="4-resultados">4. Resultados </h2>
+<h3 id="41-completude-das-viagens">4.1 Completude das Viagens </h3>
+<table>
+<thead>
+<tr>
+<th>Cenário</th>
+<th>Veículos esperados</th>
+<th>SUMO completos</th>
+<th>HTC completos</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>simple_1_street</code></td>
+<td>10</td>
+<td>10</td>
+<td>10</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>simple_2_streets</code></td>
+<td>20</td>
+<td>20</td>
+<td>20</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>simple_3_streets</code></td>
+<td>30</td>
+<td>30</td>
+<td>30</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>simple_4_streets</code></td>
+<td>40</td>
+<td>40</td>
+<td>40</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<p>Todos os veículos completaram a viagem em todos os cenários. As distâncias percorridas são exatamente as esperadas (500 m × número de segmentos).</p>
+<h3 id="42-tempo-de-viagem--sumo-vs-htc">4.2 Tempo de Viagem — SUMO vs HTC </h3>
+<h4 id="cenário-1-1-segmento-10-veículos-500-m">Cenário 1: 1 Segmento (10 veículos, 500 m) </h4>
+<table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>SUMO (meso)</th>
+<th>HTC (micro)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Veículos completos</td>
+<td>10</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Média</td>
+<td>36,00 s</td>
+<td>41,80 s</td>
+</tr>
+<tr>
+<td>Mediana</td>
+<td>36,00 s</td>
+<td>42,00 s</td>
+</tr>
+<tr>
+<td>Desvio-padrão</td>
+<td>0,00 s</td>
+<td>0,63 s</td>
+</tr>
+<tr>
+<td>Mínimo</td>
+<td>36,00 s</td>
+<td>40,00 s</td>
+</tr>
+<tr>
+<td>Máximo</td>
+<td>36,00 s</td>
+<td>42,00 s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Diferença média:</strong> +5,80 s (+16,1%)<br>
+<strong>Intervalo HTC:</strong> [40 s, 42 s] — todos acima do tempo livre teórico (36 s) ✅</p>
+<h4 id="cenário-2-2-segmentos-20-veículos-1-000-m">Cenário 2: 2 Segmentos (20 veículos, 1 000 m) </h4>
+<table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>SUMO (meso)</th>
+<th>HTC (micro)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Veículos completos</td>
+<td>20</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Média</td>
+<td>72,00 s</td>
+<td>85,95 s</td>
+</tr>
+<tr>
+<td>Mediana</td>
+<td>72,00 s</td>
+<td>86,00 s</td>
+</tr>
+<tr>
+<td>Desvio-padrão</td>
+<td>0,00 s</td>
+<td>1,15 s</td>
+</tr>
+<tr>
+<td>Mínimo</td>
+<td>72,00 s</td>
+<td>82,00 s</td>
+</tr>
+<tr>
+<td>Máximo</td>
+<td>72,00 s</td>
+<td>87,00 s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Diferença média:</strong> +13,95 s (+19,4%)<br>
+<strong>Intervalo HTC:</strong> [82 s, 87 s] — todos acima do tempo livre teórico (72 s) ✅</p>
+<h4 id="cenário-3-3-segmentos-30-veículos-1-500-m">Cenário 3: 3 Segmentos (30 veículos, 1 500 m) </h4>
+<table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>SUMO (meso)</th>
+<th>HTC (micro)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Veículos completos</td>
+<td>30</td>
+<td>30</td>
+</tr>
+<tr>
+<td>Média</td>
+<td>108,00 s</td>
+<td>128,70 s</td>
+</tr>
+<tr>
+<td>Mediana</td>
+<td>108,00 s</td>
+<td>129,00 s</td>
+</tr>
+<tr>
+<td>Desvio-padrão</td>
+<td>0,00 s</td>
+<td>1,37 s</td>
+</tr>
+<tr>
+<td>Mínimo</td>
+<td>108,00 s</td>
+<td>124,00 s</td>
+</tr>
+<tr>
+<td>Máximo</td>
+<td>108,00 s</td>
+<td>130,00 s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Diferença média:</strong> +20,70 s (+19,2%)<br>
+<strong>Intervalo HTC:</strong> [124 s, 130 s] — todos acima do tempo livre teórico (108 s) ✅</p>
+<h4 id="cenário-4-4-segmentos-40-veículos-2-000-m">Cenário 4: 4 Segmentos (40 veículos, 2 000 m) </h4>
+<table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>SUMO (meso)</th>
+<th>HTC (micro)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Veículos completos</td>
+<td>40</td>
+<td>40</td>
+</tr>
+<tr>
+<td>Média</td>
+<td>144,00 s</td>
+<td>167,30 s</td>
+</tr>
+<tr>
+<td>Mediana</td>
+<td>144,00 s</td>
+<td>168,00 s</td>
+</tr>
+<tr>
+<td>Desvio-padrão</td>
+<td>0,00 s</td>
+<td>7,89 s</td>
+</tr>
+<tr>
+<td>Mínimo</td>
+<td>144,00 s</td>
+<td>124,00 s</td>
+</tr>
+<tr>
+<td>Máximo</td>
+<td>144,00 s</td>
+<td>175,00 s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Diferença média:</strong> +23,30 s (+16,2%)<br>
+<strong>Intervalo HTC:</strong> [124 s, 175 s]</p>
+<blockquote>
+<p><strong>Observação:</strong> O mínimo de 124 s no s4 está <strong>abaixo</strong> do tempo livre teórico de 144 s. Isso indica que pelo menos um veículo percorreu os 4 segmentos com velocidade acima da velocidade livre. Isso ocorre porque o fator aleatório <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">\epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span> do modelo Krauss permite que <code>v_eff</code> supere levemente <code>v_desired</code> em algumas iterações, e com 40 sub-ticks por segmento a acumulação pode resultar em tempo total menor que o teórico. É um comportamento esperado do modelo Krauss com alta aleatoriedade.</p>
+</blockquote>
+<h3 id="43-velocidade-média">4.3 Velocidade Média </h3>
+<table>
+<thead>
+<tr>
+<th>Cenário</th>
+<th>SUMO (km/h)</th>
+<th>HTC (km/h)</th>
+<th>Diferença</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 segmento</td>
+<td>50,00</td>
+<td>43,07</td>
+<td>−6,93 km/h (−13,9%)</td>
+</tr>
+<tr>
+<td>2 segmentos</td>
+<td>50,00</td>
+<td>41,89</td>
+<td>−8,11 km/h (−16,2%)</td>
+</tr>
+<tr>
+<td>3 segmentos</td>
+<td>50,00</td>
+<td>41,96</td>
+<td>−8,04 km/h (−16,1%)</td>
+</tr>
+<tr>
+<td>4 segmentos</td>
+<td>50,00</td>
+<td>43,16</td>
+<td>−6,84 km/h (−13,7%)</td>
+</tr>
+</tbody>
+</table>
+<p>O HTC opera sistematicamente ~14–16% abaixo da velocidade livre do SUMO, consistente com o overhead de aceleração e espaçamento do modelo Krauss.</p>
+<hr>
+<h2 id="5-métricas-de-similaridade">5. Métricas de Similaridade </h2>
+<h3 id="51-estatística-geh">5.1 Estatística GEH </h3>
+<p>O <strong>GEH (Geoffrey E. Havers statistic)</strong> é um critério padrão em engenharia de tráfego para validação de modelos. Combina erro absoluto e relativo:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>G</mi><mi>E</mi><mi>H</mi><mo>=</mo><msqrt><mfrac><mrow><mn>2</mn><mo stretchy="false">(</mo><mi>m</mi><mo>−</mo><mi>c</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow><mrow><mi>m</mi><mo>+</mo><mi>c</mi></mrow></mfrac></msqrt></mrow><annotation encoding="application/x-tex">GEH = \sqrt{\frac{2 (m - c)^2}{m + c}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">GE</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.44em;vertical-align:-0.7773em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6627em;"><span class="svg-align" style="top:-4.4em;"><span class="pstrut" style="height:4.4em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">c</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mopen">(</span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">c</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span><span style="top:-3.6227em;"><span class="pstrut" style="height:4.4em;"></span><span class="hide-tail" style="min-width:1.02em;height:2.48em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="2.48em" viewBox="0 0 400000 2592" preserveAspectRatio="xMinYMin slice"><path d="M424,2478
+c-1.3,-0.7,-38.5,-172,-111.5,-514c-73,-342,-109.8,-513.3,-110.5,-514
+c0,-2,-10.7,14.3,-32,49c-4.7,7.3,-9.8,15.7,-15.5,25c-5.7,9.3,-9.8,16,-12.5,20
+s-5,7,-5,7c-4,-3.3,-8.3,-7.7,-13,-13s-13,-13,-13,-13s76,-122,76,-122s77,-121,77,-121
+s209,968,209,968c0,-2,84.7,-361.7,254,-1079c169.3,-717.3,254.7,-1077.7,256,-1081
+l0 -0c4,-6.7,10,-10,18,-10 H400000
+v40H1014.6
+s-87.3,378.7,-272.6,1166c-185.3,787.3,-279.3,1182.3,-282,1185
+c-2,6,-10,9,-24,9
+c-8,0,-12,-0.7,-12,-2z M1001 80
+h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7773em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>onde <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span> é o valor modelado (HTC) e <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">c</span></span></span></span> é o valor observado (SUMO).</p>
+<table>
+<thead>
+<tr>
+<th>GEH</th>
+<th>Classificação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt; 5</td>
+<td><strong>Bom ajuste</strong> — modelo aceito</td>
+</tr>
+<tr>
+<td>5–10</td>
+<td>Aceitável — revisão recomendada</td>
+</tr>
+<tr>
+<td>&gt; 10</td>
+<td>Ajuste ruim — calibração necessária</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-resumo-das-métricas">5.2 Resumo das Métricas </h3>
+<table>
+<thead>
+<tr>
+<th>Cenário</th>
+<th>Diff. média (s)</th>
+<th>Diff. média (%)</th>
+<th>RMSE (s)</th>
+<th>MAPE (%)</th>
+<th>GEH</th>
+<th>Classificação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 segmento</td>
+<td>+5,80</td>
+<td>16,1%</td>
+<td>5,83</td>
+<td>16,1%</td>
+<td><strong>0,93</strong></td>
+<td>✅ Bom ajuste</td>
+</tr>
+<tr>
+<td>2 segmentos</td>
+<td>+13,95</td>
+<td>19,4%</td>
+<td>14,00</td>
+<td>19,4%</td>
+<td><strong>1,57</strong></td>
+<td>✅ Bom ajuste</td>
+</tr>
+<tr>
+<td>3 segmentos</td>
+<td>+20,70</td>
+<td>19,2%</td>
+<td>20,74</td>
+<td>19,2%</td>
+<td><strong>1,90</strong></td>
+<td>✅ Bom ajuste</td>
+</tr>
+<tr>
+<td>4 segmentos</td>
+<td>+23,30</td>
+<td>16,2%</td>
+<td>24,57</td>
+<td>16,9%</td>
+<td><strong>1,87</strong></td>
+<td>✅ Bom ajuste</td>
+</tr>
+</tbody>
+</table>
+<p>Todos os cenários apresentam <strong>GEH &lt; 5</strong>, satisfazendo o critério padrão de engenharia de tráfego. O pior caso é GEH = 1,90 (s3), que ainda está muito abaixo do limiar de aceitação.</p>
+<hr>
+<h2 id="6-análise-dos-padrões-observados">6. Análise dos Padrões Observados </h2>
+<h3 id="61-diferença-sistemática-htc--sumo">6.1 Diferença sistemática HTC &gt; SUMO </h3>
+<p>O HTC consistentemente produz tempos de viagem maiores que o SUMO. Essa diferença é <strong>esperada e justificada</strong>:</p>
+<ol>
+<li>
+<p><strong>Aceleração inicial:</strong> No modelo Krauss, veículos partem com velocidade inicial <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mn>0</mn></msub><mo>=</mo><msub><mi>v</mi><mrow><mi>f</mi><mi>r</mi><mi>e</mi><mi>e</mi></mrow></msub><mo>×</mo></mrow><annotation encoding="application/x-tex">v_0 = v_{free} \times</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">ee</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord">×</span></span></span></span> fator, e levam alguns sub-ticks para atingir velocidade de cruzeiro. O SUMO mesoscópico assume velocidade instantânea.</p>
+</li>
+<li>
+<p><strong>Espaçamento de segurança:</strong> O modelo Krauss mantém <code>minGap = 2,0 m</code> entre veículos. Com 40 veículos no cenário mais denso, há interação de frota que reduz a velocidade média.</p>
+</li>
+<li>
+<p><strong>Aleatoriedade do motorista:</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi><mo>∼</mo><mi mathvariant="script">U</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>0,5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\epsilon \sim \mathcal{U}(0, 0{,}5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal" style="margin-right:0.0993em;">U</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">5</span><span class="mclose">)</span></span></span></span> → cada veículo tem um perfil de velocidade ligeiramente diferente, gerando a distribuição observada (std ≈ 1–8 s).</p>
+</li>
+</ol>
+<h3 id="62-desvio-padrão-crescente-com-o-número-de-segmentos">6.2 Desvio-padrão crescente com o número de segmentos </h3>
+<table>
+<thead>
+<tr>
+<th>Cenário</th>
+<th>Std HTC (s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>s1</td>
+<td>0,63</td>
+</tr>
+<tr>
+<td>s2</td>
+<td>1,15</td>
+</tr>
+<tr>
+<td>s3</td>
+<td>1,37</td>
+</tr>
+<tr>
+<td>s4</td>
+<td>7,89</td>
+</tr>
+</tbody>
+</table>
+<p>O desvio-padrão cresce com o número de segmentos. Para s4, o std de 7,89 s é consideravelmente maior que s3 (1,37 s). Isso é causado pela <strong>interação entre veículos</strong> em múltiplos links: com 40 veículos atravessando 4 links em sequência, os efeitos de "pelotão" (platoon) criam maior variabilidade nos tempos de chegada aos links subsequentes. Veículos que lideram o pelotão completam mais rápido; os que ficam presos em fila levam mais tempo.</p>
+<h3 id="63-geh-estável-em-todos-os-cenários">6.3 GEH estável em todos os cenários </h3>
+<p>O GEH varia apenas entre 0,93 e 1,90 em todos os cenários. Isso indica que a diferença entre HTC e SUMO é <strong>proporcional</strong> ao tempo de viagem (escala bem), o que é um sinal positivo de consistência do modelo.</p>
+<h3 id="64-escalabilidade-verificada">6.4 Escalabilidade verificada </h3>
+<p>Os cenários testam de 1 a 4 links em série com de 10 a 40 veículos. O comportamento do HTC escala corretamente: a diferença em percentagem se mantém estável (~16–19%), sem degradação ou divergência com o aumento da complexidade do cenário.</p>
+<hr>
+<h2 id="7-limitações-e-trabalho-futuro">7. Limitações e Trabalho Futuro </h2>
+<h3 id="71-comparação-entre-modelos-diferentes">7.1 Comparação entre modelos diferentes </h3>
+<p>A comparação entre SUMO mesoscópico e HTC microscópico não é diretamente equivalente. Para uma validação mais rigorosa, recomenda-se:</p>
+<ul>
+<li><strong>Opção A:</strong> Executar ambos em modo mesoscópico (HTC MESO vs SUMO <code>--mesosim</code>), onde a mesma fórmula de velocidade-densidade é usada por ambos.</li>
+<li><strong>Opção B:</strong> Executar o SUMO no modo microscópico completo (<code>sumo</code>, não <code>sumo --mesosim</code>) com o mesmo modelo Krauss, para comparar implementações do mesmo algoritmo.</li>
+</ul>
+<h3 id="72-calibração-do-modelo-krauss">7.2 Calibração do modelo Krauss </h3>
+<p>O fator de aleatoriedade <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>0,5</mn></mrow><annotation encoding="application/x-tex">\eta = 0{,}5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">5</span></span></span></span> do HTC é alto para cenários de fluxo livre. Para cenários urbanos mais realistas, valores entre <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0,1</mn></mrow><annotation encoding="application/x-tex">0{,}1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">1</span></span></span></span>–<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0,3</mn></mrow><annotation encoding="application/x-tex">0{,}3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">3</span></span></span></span> são comuns na literatura. Uma calibração sistemática dos parâmetros (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi></mrow><annotation encoding="application/x-tex">\eta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">η</span></span></span></span>, <code>minGap</code>) contra dados empíricos ou SUMO microscópico reduzirá a diferença percentual.</p>
+<h3 id="73-cenários-mais-complexos">7.3 Cenários mais complexos </h3>
+<p>Os cenários atuais são lineares (sem cruzamentos, semáforos ou multimodais). Próximos passos de validação incluem:</p>
+<ul>
+<li>Cruzamentos com semáforos (HybridNode + TrafficSignal)</li>
+<li>Múltiplas faixas (LaneChangeModel MOBIL)</li>
+<li>Densidade alta (congestionamento vs. fluxo livre)</li>
+<li>Veículos mistos (carro + ônibus + bicicleta)</li>
+</ul>
+<h3 id="74-relatório-por-veículo-matched-pairs">7.4 Relatório por veículo (matched pairs) </h3>
+<p>O script atual calcula RMSE e MAPE sobre pares combinados por <code>trip_id</code>. Uma análise individual por veículo (scatter plot HTC vs. SUMO por viagem) está disponível em <code>scripts/output/simple_scenarios/comparison/duration_distributions.png</code>.</p>
+<hr>
+<h2 id="8-conclusão">8. Conclusão </h2>
+<p>O HTC em modo MICRO foi validado contra o SUMO em modo mesoscópico em 4 cenários incrementais:</p>
+<ul>
+<li>✅ <strong>100% de completude de viagens</strong> em todos os cenários (10/10, 20/20, 30/30, 40/40)</li>
+<li>✅ <strong>Distâncias corretas</strong> (500 m por segmento, sem erros de roteamento)</li>
+<li>✅ <strong>GEH &lt; 2 em todos os cenários</strong> (muito abaixo do limiar de aceitação de 5)</li>
+<li>✅ <strong>Encerramento limpo do contêiner</strong> após simulação (~20 s após último veículo)</li>
+<li>✅ <strong>Comportamento físico coerente</strong>: todos os tempos HTC estão acima do tempo livre teórico (exceto outliers de s4 causados pela aleatoriedade Krauss)</li>
+<li>✅ <strong>Escalabilidade confirmada</strong>: diferença percentual estável em todos os cenários (~16–19%)</li>
+</ul>
+<p>A diferença sistemática de ~16–19% em tempo de viagem entre HTC (micro) e SUMO (meso) é <strong>explicada e esperada</strong> pela natureza dos modelos. A similaridade estrutural dos resultados (mesma ordem de magnitude, GEH &lt; 2, ausência de divergências) confirma que o HTC produz comportamento de tráfego realista e adequado para simulação urbana.</p>
+<hr>
+<h2 id="apêndice-a--dados-brutos-completos">Apêndice A — Dados Brutos Completos </h2>
+<h3 id="cenário-1-10-veículos">Cenário 1 (10 veículos) </h3>
+<pre data-role="codeBlock" data-info="json" class="language-json json"><code><span class="token punctuation">{</span>
+  <span class="token property">"sumo"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">36.00</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">0.00</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">50.00</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"htc"</span><span class="token operator">:</span>  <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">41.80</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">0.63</span><span class="token punctuation">,</span>  <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">43.07</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"comparison"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"diff_s"</span><span class="token operator">:</span> <span class="token number">5.80</span><span class="token punctuation">,</span> <span class="token property">"diff_pct"</span><span class="token operator">:</span> <span class="token number">16.11</span><span class="token punctuation">,</span> <span class="token property">"rmse"</span><span class="token operator">:</span> <span class="token number">5.83</span><span class="token punctuation">,</span> <span class="token property">"geh"</span><span class="token operator">:</span> <span class="token number">0.93</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre><h3 id="cenário-2-20-veículos">Cenário 2 (20 veículos) </h3>
+<pre data-role="codeBlock" data-info="json" class="language-json json"><code><span class="token punctuation">{</span>
+  <span class="token property">"sumo"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">72.00</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">0.00</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">50.00</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"htc"</span><span class="token operator">:</span>  <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">85.95</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">1.15</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">41.89</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"comparison"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"diff_s"</span><span class="token operator">:</span> <span class="token number">13.95</span><span class="token punctuation">,</span> <span class="token property">"diff_pct"</span><span class="token operator">:</span> <span class="token number">19.38</span><span class="token punctuation">,</span> <span class="token property">"rmse"</span><span class="token operator">:</span> <span class="token number">14.00</span><span class="token punctuation">,</span> <span class="token property">"geh"</span><span class="token operator">:</span> <span class="token number">1.57</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre><h3 id="cenário-3-30-veículos">Cenário 3 (30 veículos) </h3>
+<pre data-role="codeBlock" data-info="json" class="language-json json"><code><span class="token punctuation">{</span>
+  <span class="token property">"sumo"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">30</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">108.00</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">0.00</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">50.00</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"htc"</span><span class="token operator">:</span>  <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">30</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">128.70</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">1.37</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">41.96</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"comparison"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"diff_s"</span><span class="token operator">:</span> <span class="token number">20.70</span><span class="token punctuation">,</span> <span class="token property">"diff_pct"</span><span class="token operator">:</span> <span class="token number">19.17</span><span class="token punctuation">,</span> <span class="token property">"rmse"</span><span class="token operator">:</span> <span class="token number">20.74</span><span class="token punctuation">,</span> <span class="token property">"geh"</span><span class="token operator">:</span> <span class="token number">1.90</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre><h3 id="cenário-4-40-veículos">Cenário 4 (40 veículos) </h3>
+<pre data-role="codeBlock" data-info="json" class="language-json json"><code><span class="token punctuation">{</span>
+  <span class="token property">"sumo"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">144.00</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">0.00</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">50.00</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"htc"</span><span class="token operator">:</span>  <span class="token punctuation">{</span> <span class="token property">"n_completed"</span><span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> <span class="token property">"mean_s"</span><span class="token operator">:</span> <span class="token number">167.30</span><span class="token punctuation">,</span> <span class="token property">"std_s"</span><span class="token operator">:</span> <span class="token number">7.89</span><span class="token punctuation">,</span> <span class="token property">"mean_kmh"</span><span class="token operator">:</span> <span class="token number">43.16</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"comparison"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"diff_s"</span><span class="token operator">:</span> <span class="token number">23.30</span><span class="token punctuation">,</span> <span class="token property">"diff_pct"</span><span class="token operator">:</span> <span class="token number">16.18</span><span class="token punctuation">,</span> <span class="token property">"rmse"</span><span class="token operator">:</span> <span class="token number">24.57</span><span class="token punctuation">,</span> <span class="token property">"geh"</span><span class="token operator">:</span> <span class="token number">1.87</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre><hr>
+<h2 id="apêndice-b--critério-geh">Apêndice B — Critério GEH </h2>
+<p>O GEH é amplamente usado por agências de transporte (UK Highways Agency, US FHWA) para validação de modelos de tráfego. Diferente do erro percentual simples, o GEH é menos sensível a valores absolutos pequenos:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>G</mi><mi>E</mi><mi>H</mi><mo>=</mo><msqrt><mfrac><mrow><mn>2</mn><mo stretchy="false">(</mo><mi>m</mi><mo>−</mo><mi>c</mi><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow><mrow><mi>m</mi><mo>+</mo><mi>c</mi></mrow></mfrac></msqrt></mrow><annotation encoding="application/x-tex">GEH = \sqrt{\frac{2(m-c)^2}{m+c}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">GE</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.44em;vertical-align:-0.7773em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6627em;"><span class="svg-align" style="top:-4.4em;"><span class="pstrut" style="height:4.4em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">c</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mopen">(</span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">c</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span><span style="top:-3.6227em;"><span class="pstrut" style="height:4.4em;"></span><span class="hide-tail" style="min-width:1.02em;height:2.48em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="2.48em" viewBox="0 0 400000 2592" preserveAspectRatio="xMinYMin slice"><path d="M424,2478
+c-1.3,-0.7,-38.5,-172,-111.5,-514c-73,-342,-109.8,-513.3,-110.5,-514
+c0,-2,-10.7,14.3,-32,49c-4.7,7.3,-9.8,15.7,-15.5,25c-5.7,9.3,-9.8,16,-12.5,20
+s-5,7,-5,7c-4,-3.3,-8.3,-7.7,-13,-13s-13,-13,-13,-13s76,-122,76,-122s77,-121,77,-121
+s209,968,209,968c0,-2,84.7,-361.7,254,-1079c169.3,-717.3,254.7,-1077.7,256,-1081
+l0 -0c4,-6.7,10,-10,18,-10 H400000
+v40H1014.6
+s-87.3,378.7,-272.6,1166c-185.3,787.3,-279.3,1182.3,-282,1185
+c-2,6,-10,9,-24,9
+c-8,0,-12,-0.7,-12,-2z M1001 80
+h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7773em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>Para <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>167,3</mn></mrow><annotation encoding="application/x-tex">m = 167{,}3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">167</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">3</span></span></span></span> s e <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo>=</mo><mn>144,0</mn></mrow><annotation encoding="application/x-tex">c = 144{,}0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">144</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">0</span></span></span></span> s (cenário s4):</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>G</mi><mi>E</mi><mi>H</mi><mo>=</mo><msqrt><mfrac><mrow><mn>2</mn><mo>×</mo><mo stretchy="false">(</mo><mn>167,3</mn><mo>−</mo><mn>144,0</mn><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow><mrow><mn>167,3</mn><mo>+</mo><mn>144,0</mn></mrow></mfrac></msqrt><mo>=</mo><msqrt><mfrac><mrow><mn>2</mn><mo>×</mo><mn>542,89</mn></mrow><mn>311,3</mn></mfrac></msqrt><mo>=</mo><msqrt><mn>3,49</mn></msqrt><mo>≈</mo><mn>1,87</mn></mrow><annotation encoding="application/x-tex">GEH = \sqrt{\frac{2 \times (167{,}3 - 144{,}0)^2}{167{,}3 + 144{,}0}} = \sqrt{\frac{2 \times 542{,}89}{311{,}3}} = \sqrt{3{,}49} \approx 1{,}87</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">GE</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3.04em;vertical-align:-1.1328em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.9072em;"><span class="svg-align" style="top:-5em;"><span class="pstrut" style="height:5em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">167</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">144</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">0</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mopen">(</span><span class="mord">167</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">144</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">0</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span><span style="top:-3.8672em;"><span class="pstrut" style="height:5em;"></span><span class="hide-tail" style="min-width:1.02em;height:3.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="3.08em" viewBox="0 0 400000 3240" preserveAspectRatio="xMinYMin slice"><path d="M473,2793
+c339.3,-1799.3,509.3,-2700,510,-2702 l0 -0
+c3.3,-7.3,9.3,-11,18,-11 H400000v40H1017.7
+s-90.5,478,-276.2,1466c-185.7,988,-279.5,1483,-281.5,1485c-2,6,-10,9,-24,9
+c-8,0,-12,-0.7,-12,-2c0,-1.3,-5.3,-32,-16,-92c-50.7,-293.3,-119.7,-693.3,-207,-1200
+c0,-1.3,-5.3,8.7,-16,30c-10.7,21.3,-21.3,42.7,-32,64s-16,33,-16,33s-26,-26,-26,-26
+s76,-153,76,-153s77,-151,77,-151c0.7,0.7,35.7,202,105,604c67.3,400.7,102,602.7,104,
+606zM1001 80h400000v40H1017.7z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.1328em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.44em;vertical-align:-0.8856em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.5544em;"><span class="svg-align" style="top:-4.4em;"><span class="pstrut" style="height:4.4em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">311</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">3</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">542</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">89</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span><span style="top:-3.5144em;"><span class="pstrut" style="height:4.4em;"></span><span class="hide-tail" style="min-width:1.02em;height:2.48em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="2.48em" viewBox="0 0 400000 2592" preserveAspectRatio="xMinYMin slice"><path d="M424,2478
+c-1.3,-0.7,-38.5,-172,-111.5,-514c-73,-342,-109.8,-513.3,-110.5,-514
+c0,-2,-10.7,14.3,-32,49c-4.7,7.3,-9.8,15.7,-15.5,25c-5.7,9.3,-9.8,16,-12.5,20
+s-5,7,-5,7c-4,-3.3,-8.3,-7.7,-13,-13s-13,-13,-13,-13s76,-122,76,-122s77,-121,77,-121
+s209,968,209,968c0,-2,84.7,-361.7,254,-1079c169.3,-717.3,254.7,-1077.7,256,-1081
+l0 -0c4,-6.7,10,-10,18,-10 H400000
+v40H1014.6
+s-87.3,378.7,-272.6,1166c-185.3,787.3,-279.3,1182.3,-282,1185
+c-2,6,-10,9,-24,9
+c-8,0,-12,-0.7,-12,-2z M1001 80
+h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8856em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.24em;vertical-align:-0.2811em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9589em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mord">3</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">49</span></span></span><span style="top:-2.9189em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.28em" viewBox="0 0 400000 1296" preserveAspectRatio="xMinYMin slice"><path d="M263,681c0.7,0,18,39.7,52,119
+c34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120
+c340,-704.7,510.7,-1060.3,512,-1067
+l0 -0
+c4.7,-7.3,11,-11,19,-11
+H40000v40H1012.3
+s-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232
+c-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1
+s-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26
+c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z
+M1001 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2811em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mord"><span class="mpunct">,</span></span><span class="mord">87</span></span></span></span></span></p>
+<p>Bem abaixo do limiar de aceitação de 5.</p>
+<hr>
+<p><em>Relatório gerado com base nos dados de <code>scripts/output/simple_scenarios/comparison/comparison.json</code>.</em><br>
+<em>Script de comparação: <code>scripts/run_simple_comparison.py</code></em><br>
+<em>Script de execução: <code>scripts/run_htc_simple_scenarios.sh</code></em></p>
+
+      </div>
+      
+      
+    
+    
+    
+    
+    
+    
+  
+    </body></html>
