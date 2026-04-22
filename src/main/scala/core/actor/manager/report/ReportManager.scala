@@ -37,6 +37,15 @@ class ReportManager(
   }
 
   private def createReporters(): Unit = {
+    val reportingEnabled =
+      try config.getBoolean("htc.report-manager.enabled")
+      catch { case _: Exception => true }
+
+    if (!reportingEnabled) {
+      logInfo("Reporting is disabled (htc.report-manager.enabled = false). No reporters created.")
+      return
+    }
+
     val enabledStrategies = Some(
       config.getStringList("htc.report-manager.enabled-strategies").toArray.toList.map(_.toString)
     ).getOrElse(List("csv"))
