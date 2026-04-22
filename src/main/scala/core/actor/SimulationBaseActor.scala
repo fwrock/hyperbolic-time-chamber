@@ -53,8 +53,16 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
+  // Each actor instance gets its own fresh map — never aliased to properties.relationships.
+  // properties.relationships is a mutable.Map held in the Props object, which is shared across
+  // all actor instances of the same shard type. Aliasing it caused concurrent HashMap corruption
+  // (ArrayIndexOutOfBoundsException in growTable) when multiple actors processed onInitialize
+  // simultaneously on different dispatcher threads.
   protected val relationships: mutable.Map[String, ShardActorId] =
-    if (properties != null) properties.relationships else mutable.Map[String, ShardActorId]()
+    if (properties != null && properties.relationships != null && properties.relationships.nonEmpty)
+      mutable.Map[String, ShardActorId]() ++= properties.relationships
+    else
+      mutable.Map[String, ShardActorId]()
 
   /** Backward-compat alias for [[relationships]].
     * @deprecated Use relationships instead.

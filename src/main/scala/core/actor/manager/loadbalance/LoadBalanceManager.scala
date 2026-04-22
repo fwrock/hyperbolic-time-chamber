@@ -281,13 +281,14 @@ class LoadBalanceManager(
     strategy match {
       case Some(s) =>
         val assignments = mutable.Map[String, String]()
-        val positions = mutable.Map[String, (Double, Double)]()
+        val positions = mutable.Map[String, Array[Double]]()
 
         event.entities.foreach { entity =>
           val shardId = s.assignShard(entity)
 
           assignments.put(entity.spatialEntityId, shardId)
-          positions.put(entity.spatialEntityId, entity.position)
+          val pos = entity.position
+          positions.put(entity.spatialEntityId, Array(pos._1, pos._2))
 
           // Classify shard type based on entity (merge if mixed)
           val entityType = classifyEntityType(entity.spatialEntityId)
@@ -843,6 +844,16 @@ class LoadBalanceManager(
           s"${regionIndex.size} regions, ${entityCounts.size} entity-count entries. " +
           s"Imbalance ratio: $imbalanceRatio"
       )
+
+      // Diagnostic: warn if entity counts are empty (LB not receiving registrations)
+      if (entityCounts.isEmpty) {
+        logWarn(
+          s"[LB-DIAG] entityCounts vazio — nenhuma entidade foi registrada via assignShard(). " +
+            s"ShardAllocatorRegistry.isRegistered=${ShardAllocatorRegistry.isRegistered}, " +
+            s"regionIndex.size=${regionIndex.size}, " +
+            s"shardTypes.size=${shardTypes.size}"
+        )
+      }
     }
   }
 

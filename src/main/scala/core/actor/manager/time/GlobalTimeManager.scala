@@ -284,6 +284,24 @@ class GlobalTimeManager(
     val scheduledCount = scheduled.size
 
     if (scheduled.isEmpty) {
+      // Before terminating, check if progressive loading still has actors to spawn.
+      // This handles the case where all currently loaded actors are passive (e.g. parked
+      // vehicles waiting for Person actors to activate them), but future progressive windows
+      // contain actors with scheduled events (persons, etc.). Without this guard the
+      // simulation would terminate prematurely — persons would never be created because
+      // the TM shuts down before reaching their startTick.
+      if (progressiveLoadingEnabled && !progressiveLoadingComplete && !waitingForProgressiveLoad) {
+        val nextLoadTick = progressiveLoadedUpToTick + 1
+        logInfo(
+          s"No scheduled events but progressive loading not complete " +
+            s"(loadedUpTo=$progressiveLoadedUpToTick). Requesting next window from tick $nextLoadTick."
+        )
+        MetricsServer.tmWaitingForProgressive.set(1)
+        waitingForProgressiveLoad = true
+        pendingNextTick = Some(nextLoadTick)
+        requestProgressiveLoad(nextLoadTick)
+        return
+      }
       logInfo("No more scheduled events across local time managers. Terminating simulation")
       terminateSimulation()
       return

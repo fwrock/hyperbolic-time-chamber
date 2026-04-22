@@ -38,8 +38,12 @@ class SubwayStation(
 
   override def requiresPostLoadRegistration: Boolean = true
 
-  override def handlePostLoadRegistration(): Unit =
-    getDependencyOption(state.nodeId) match {
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(state.nodeId)
+        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+
+    dependencyOpt match {
       case Some(node) =>
         sendMessageTo(
           node.id,
@@ -56,6 +60,7 @@ class SubwayStation(
           s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
         )
     }
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {

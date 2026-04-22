@@ -26,15 +26,13 @@ class BusStop(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // Prefer lookup by nodeId; fall back to scanning dependencies for a Node entry
-    // (handles data generated with the legacy "node" field name instead of "nodeId")
+    // Prefer lookup by nodeId (entity ID as key); fall back to scanning dependencies for a
+    // Node entry by class type. This handles both data formats:
+    //   - entity ID as key: {"htcaid_node_123": {entityId: "htcaid:node;123", ...}}
+    //   - label as key:     {"node":            {entityId: "htcaid:node;123", ...}}
     val dependencyOpt =
-      getDependencyOption(state.nodeId).orElse(
-        if (state.nodeId == null || state.nodeId.isEmpty)
-          dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node"))
-        else
-          None
-      )
+      getDependencyOption(state.nodeId)
+        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
 
     dependencyOpt match {
       case Some(dependency) =>
