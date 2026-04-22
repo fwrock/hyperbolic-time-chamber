@@ -8,6 +8,6 @@ terraform {
 }
 
 provider "google" {
-  project = "simedape-362519"
+  project = "your-project-id" # Substitua pelo ID do seu projeto GCP
   region  = "us-central1"
 }
