@@ -15,8 +15,15 @@ package core.entity.control.loadbalance
   * @param computationalWeight
   *   Estimated cost per tick (default 1.0)
   */
+/** NOTE: position is split into `lon`/`lat` primitives to remain Jackson-serializable across
+  * cluster nodes. Scala Tuple2 is not supported by Jackson CBOR without the Scala module.
+  * The `position` getter reconstructs the tuple in-memory for use by strategies.
+  */
 case class SpatialEntityData(
   spatialEntityId: String,
-  position: (Double, Double),
+  lon: Double,
+  lat: Double,
   override val computationalWeight: Double = 1.0
-) extends SpatialEntity
+) extends SpatialEntity {
+  override def position: (Double, Double) = (lon, lat)
+}

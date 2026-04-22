@@ -132,6 +132,14 @@ class Bus(
 
     state.status match {
       case Start =>
+        // Restore route from storedBestRoute if movableBestRoute was lost during JSON roundtrip.
+        // This can happen because movableBestRoute lives in the parent abstract class and may not
+        // survive Jackson setter-injection deserialization with full generic type information.
+        if (state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
+          logDebug(s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)")
+          state.movableBestRoute = state.storedBestRoute.map(lst => scala.collection.mutable.Queue(lst: _*))
+          state.storedBestRoute = None
+        }
         report(
           data = Map(
             "event_type" -> "journey_started",

@@ -119,7 +119,7 @@ services:
 
       # ── Load Balance Manager ─────────────────────────────────────────────
       # Disabled by default for single-node local testing. Enable for multi-node.
-      HTC_LOAD_BALANCE_ENABLED: "true"
+      HTC_LOAD_BALANCE_ENABLED: "false"
       # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
       HTC_LOAD_BALANCE_STRATEGY: "type-aware"
       # Geographic affinity weight for GeoAffinity/Hybrid strategy target scoring.

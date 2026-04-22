@@ -78,7 +78,13 @@ case class BusState(
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
 
   // ========== Micro state (activated in MICRO links) ==========
-  var microState: Option[MicroBusState] = None
+  var microState: Option[MicroBusState] = None,
+
+  // ========== Route serialization backup ==========
+  // movableBestRoute (in parent MovableState) may not survive JSON roundtrip when
+  // deserialized via setter injection. This List-based copy is a constructor parameter
+  // so Jackson uses constructor-based deserialization with full generic type information.
+  var storedBestRoute: Option[List[(String, String)]] = None
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

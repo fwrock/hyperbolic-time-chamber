@@ -79,14 +79,11 @@ class BusStation(
             } catch {
               case e: IllegalStateException =>
                 logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-                // Put the bus back in the queue for later retry
-                state.buses.enqueue(bus)
-                state.status = RouteWaiting // Go back to waiting for route
+                // Bus cannot be created (no valid route) — skip it permanently
                 onFinishSpontaneous(Some(currentTick + state.interval))
               case e: Exception =>
                 logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-                state.buses.enqueue(bus)
-                state.status = RouteWaiting
+                // Skip bus and continue scheduling
                 onFinishSpontaneous(Some(currentTick + state.interval))
             }
           } else {
@@ -217,10 +214,14 @@ class BusStation(
         } catch {
           case e: IllegalStateException =>
             logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-            state.buses.enqueue(bus)
+            // Bus cannot be created (no valid route) — skip it permanently to avoid infinite retry
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
           case e: Exception =>
             logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-            state.buses.enqueue(bus)
+            // Skip bus and continue
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
         }
       } else {
         logDebug("No buses to create, entering WorkingWithOutBus state")
@@ -257,9 +258,10 @@ class BusStation(
           origin = state.origin,
           destination = state.destination,
           numberOfPorts = bus.numberOfPorts,
-          label = bus.label
+          label = bus.label,
+          storedBestRoute = Some(route.toList) // backup for JSON roundtrip safety
         )
-        busState.bestRoute = Some(route)
+        busState.bestRoute = Some(route.clone())
         busState.status = MovableStatusEnum.Start
         busState
       }),
@@ -353,11 +355,15 @@ class BusStation(
   ): Boolean =
     route match
       case Some(r) =>
-        // Calculate expected number of route segments (overlapping pairs)
-        val expectedSize = if (state.busStops.size > 1) state.busStops.size - 1 else 0
-        val actualSize = r.keys.size
-        logDebug(s"Route completion check: actual=$actualSize, expected=$expectedSize")
-        actualSize == expectedSize
+        if (state.busStops.size <= 1) {
+          // Cannot build a route with 0 or 1 stops — no route possible
+          false
+        } else {
+          val expectedSize = state.busStops.size - 1
+          val actualSize = r.keys.size
+          logDebug(s"Route completion check: actual=$actualSize, expected=$expectedSize")
+          actualSize == expectedSize
+        }
       case None => false
 
   override def onDestruct(event: DestructEvent): Unit =

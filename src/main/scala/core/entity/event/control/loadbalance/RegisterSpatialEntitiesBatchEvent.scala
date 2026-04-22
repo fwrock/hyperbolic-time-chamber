@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event.control.loadbalance
 
-import core.entity.control.loadbalance.SpatialEntity
+import core.entity.control.loadbalance.SpatialEntityData
 import core.entity.event.BaseEvent
 import core.entity.event.data.DefaultBaseEventData
 
@@ -21,7 +21,7 @@ import core.entity.event.data.DefaultBaseEventData
   *   Index of the chunk within the batch (for tracking)
   */
 case class RegisterSpatialEntitiesBatchEvent(
-  entities: Seq[SpatialEntity],
+  entities: Seq[SpatialEntityData],
   batchId: String,
   chunkIndex: Int = 0
 ) extends BaseEvent[DefaultBaseEventData]

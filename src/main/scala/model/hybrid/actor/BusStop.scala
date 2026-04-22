@@ -27,10 +27,8 @@ class BusStop(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // 1) Prefer lookup by nodeId in relationships map (key = IdUtil.format(nodeId)).
-    // 2) Fall back to scanning relationships by classType (handles key format edge cases).
-    // 3) Last resort: use state.nodeId directly via hash-based shard routing
-    //    (handles actor restart that resets relationships before PostLoadRegistrationEvent).
+    // Prefer lookup by nodeId; fall back to scanning dependencies for a Node entry
+    // (handles data generated with the legacy "node" field name instead of "nodeId")
     val dependencyOpt =
       getDependencyOption(IdUtil.format(state.nodeId)).orElse(
         relationships.get(IdUtil.format(state.nodeId)).orElse(
