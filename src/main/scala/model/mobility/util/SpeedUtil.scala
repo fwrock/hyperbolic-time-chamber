@@ -15,12 +15,11 @@ object SpeedUtil {
     lanes: Int = 1
   ): Double = {
     speedCalculationCount += 1
-    
+
     if numberOfCars >= capacity then {
       capacityExceededCount += 1
       1.0
-    }
-    else {
+    } else {
       // Optimized: alpha=1.0 → pow(x, 1.0) = x (eliminates outer pow)
       // Only need: freeSpeed * (1 - pow(density, beta))
       val density = numberOfCars.toDouble / capacity

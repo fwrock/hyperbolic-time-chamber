@@ -3,8 +3,7 @@ package core.entity.actor
 
 import core.enumeration.CreationTypeEnum
 
-import com.fasterxml.jackson.annotation.{ JsonCreator, JsonProperty }
-import org.htc.protobuf.core.entity.actor.Dependency
+import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, Simple }
 
 case class ActorSimulation @JsonCreator() (
@@ -15,5 +14,5 @@ case class ActorSimulation @JsonCreator() (
   @JsonProperty("poolConfiguration") poolConfiguration: PoolDistributedConfiguration =
     PoolDistributedConfiguration(),
   @JsonProperty("data") data: ActorDataSimulation,
-  @JsonProperty("dependencies") dependencies: Map[String, Dependency] = null
+  @JsonAlias(Array("dependencies")) @JsonProperty("relationships") relationships: Map[String, ShardActorId] = null
 )

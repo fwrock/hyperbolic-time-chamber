@@ -1,6 +1,82 @@
 ---
 services:
 
+  # Zookeeper for Kafka coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: htc-zookeeper
+    hostname: zookeeper
+    network_mode: host
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+
+  # Kafka broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: htc-kafka
+    hostname: kafka
+    network_mode: host
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      # Performance optimizations for HTC
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # Schema Registry for Avro schemas
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    container_name: htc-schema-registry
+    hostname: schema-registry
+    network_mode: host
+    depends_on:
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: localhost:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: WARNhybrid_scenario_2
+
+  # Kafka UI for monitoring (optional but recommended)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: htc-kafka-ui
+    hostname: kafka-ui
+    network_mode: host
+    depends_on:
+      - kafka
+      - schema-registry
+    environment:
+      KAFKA_CLUSTERS_0_NAME: htc-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: localhost:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: localhost:2181
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://localhost:8081
+      LOGGING_LEVEL_COM_PROVECTUS: WARN
+    ports:
+      - "8080:8080"
+
   redis:
     image: redis:latest
     container_name: htc-redis
@@ -9,20 +85,67 @@ services:
       - redis_data:/data
 
   node1:
-    image: uxhabam/hyperbolic-time-chamber:1.23.2
+    build: .
     container_name: node_1
     hostname: node1
     network_mode: host
+    depends_on:
+      - redis
+      - kafka
+      - schema-registry
     environment:
+      # Cluster Configuration
       CLUSTER_PORT: 1600
       CLUSTER_IP: 127.0.0.1
       CLUSTER_NAME: node1
       SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      
+      # Redis Configuration
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
-      MANAGEMENT_HTTP_PORT: 8558
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/data/city_map.json
+      
+      # Management
+      MANAGEMENT_HTTP_PORT: 8558 
+      
+      # Simulation Configuration
+      HTC_SCENARIO_NAME: toulouse_1_pct_meso
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_meso/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_meso/data/city_map.json
+      
+      # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
+      # Default Pekko value (1000) is too small when progressive loader bursts
+      # ~1500+ CreateActor msgs per tick window, causing shard drops.
+      HTC_SHARD_BUFFER_SIZE: 100000
+
+      # ── Load Balance Manager ─────────────────────────────────────────────
+      # Disabled by default for single-node local testing. Enable for multi-node.
+      HTC_LOAD_BALANCE_ENABLED: "false"
+      # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
+      HTC_LOAD_BALANCE_STRATEGY: "type-aware"
+      # Geographic affinity weight for GeoAffinity/Hybrid strategy target scoring.
+      # 0.0 = pure load balance; 1.0 = pure geographic affinity; 0.4 recommended.
+      HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
+      # Rebalance cycle interval in seconds
+      HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"
+      # Load threshold (0.0–1.0) above which a shard is considered overloaded
+      HTC_LB_KDTREE_LOAD_THRESHOLD: "0.85"
+      # SBR / quadtree tuning
+      HTC_LB_MIGRATION_MAX_CONCURRENT: "3"
+
+      # ── Migration Window Protocol ────────────────────────────────────────
+      # Delay (ms) before broadcasting MigrationWindowOpenEvent after entity notification.
+      # Entities use this window to flush their snapshots to SnapshotManager.
+      HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS: "200"
+      # Timeout (ms) waiting for all cluster nodes to ACK MigrationWindowOpenEvent
+      HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS: "5000"
+      # Timeout (ms) waiting for all migrated entities to ACK restoration
+      HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS: "30000"
+      # Timeout (ms) waiting for all nodes to ACK MigrationWindowCloseEvent
+      HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS: "5000"
+      # Snapshot state store: "inmemory" (single-node) or "redis" (multi-node)
+      HTC_LB_MIGRATION_STATE_STORE: "inmemory"
+
+      # Time Manager Configuration
       HTC_TIME_MANAGER_INSTANCES: 16
       HTC_TIME_MANAGER_PER_NODE: 16
       HTC_TIME_MANAGER_LOOKAHEAD: 10
@@ -33,12 +156,76 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      
+      # JVM Configuration — same pattern as k8s/simulation-setup.yaml
+      JAVA_TOOL_OPTIONS: >-
+        -Xms1g
+        -Xmx8g
+        --add-opens=java.base/java.lang=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+
+      # Report Manager Configuration  
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 16
       HTC_REPORT_JSON_PER_NODE: 8
+      
+      # === KAFKA CONFIGURATION ===
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
+      HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
+      
+      # Kafka Topics
+      HTC_KAFKA_EVENTS_TOPIC: "htc.events"
+      HTC_KAFKA_REPORTS_TOPIC: "htc.reports" 
+      HTC_KAFKA_COMMANDS_TOPIC: "htc.commands"
+      HTC_KAFKA_STATE_SYNC_TOPIC: "htc.state-sync"
+      HTC_KAFKA_ROUTE_REQUESTS_TOPIC: "htc.route-requests"
+      HTC_KAFKA_ROUTE_RESPONSES_TOPIC: "htc.route-responses"
+      HTC_KAFKA_STATUS_TOPIC: "htc.status"
+      HTC_KAFKA_CUSTOM_REPORTS_TOPIC: "htc.custom-reports"
+      
+      # Kafka Producer Configuration (optimized for throughput)
+      HTC_KAFKA_PRODUCER_ACKS: "all"
+      HTC_KAFKA_PRODUCER_RETRIES: "3" 
+      HTC_KAFKA_PRODUCER_BATCH_SIZE: "32768"
+      HTC_KAFKA_PRODUCER_LINGER_MS: "10"
+      HTC_KAFKA_PRODUCER_COMPRESSION_TYPE: "snappy"
+      
+      # Kafka Consumer Configuration (optimized for performance)
+      HTC_KAFKA_MAX_POLL_RECORDS: "1000"
+      HTC_KAFKA_ENABLE_AUTO_COMMIT: "true"
+      
+      # === KAFKA INTEGRATIONS (Enable for production) ===
+      HTC_KAFKA_EVENT_STREAMING_ENABLED: "false"
+      HTC_KAFKA_EVENT_STREAMING_BATCH_SIZE: "500"
+      HTC_KAFKA_EVENT_STREAMING_USE_AVRO: "true"
+      
+      HTC_KAFKA_REPORTING_ENABLED: "true"
+      HTC_KAFKA_REPORTING_BATCH_SIZE: "100" 
+      HTC_KAFKA_REPORTING_USE_AVRO: "true"
+      
+      HTC_KAFKA_STATE_SYNC_ENABLED: "false"
+      HTC_KAFKA_STATE_SYNC_INTERVAL: "1000"
+      HTC_KAFKA_STATE_SYNC_USE_AVRO: "true"
+      
+      HTC_KAFKA_COMMAND_CONTROL_ENABLED: "false"
+      
+      HTC_KAFKA_EXTERNAL_INTEGRATION_ENABLED: "false"
+      HTC_KAFKA_EXTERNAL_INTEGRATION_TIMEOUT: "30000"
+      
+      # High-performance vehicle streaming (Avro only)
+      HTC_KAFKA_VEHICLE_STREAMING_ENABLED: "true"
+      HTC_KAFKA_VEHICLE_STREAMING_BATCH_SIZE: "2000"
+      
+      # Ultra high-performance micro simulation streaming (Avro only)  
+      HTC_KAFKA_MICRO_SIMULATION_ENABLED: "false"
+      HTC_KAFKA_MICRO_SIMULATION_BATCH_SIZE: "5000"
     volumes:
       - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
 
 volumes:
   redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:

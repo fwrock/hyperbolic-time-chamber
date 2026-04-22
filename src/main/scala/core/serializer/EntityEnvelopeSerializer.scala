@@ -27,7 +27,7 @@ class EntityEnvelopeSerializer(
 
         val payloadManifest: String = payloadSerializer match {
           case s: SerializerWithStringManifest => s.manifest(payload)
-          case _                               => ""
+          case _ => payload.getClass.getName // Store class name for non-manifest serializers (e.g., protobuf)
         }
         val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(payload))
 
@@ -72,6 +72,10 @@ class EntityEnvelopeSerializer(
         case Success(deserializedPayload) =>
           EntityEnvelopeEvent(proto.entityId, deserializedPayload)
         case Failure(exception) =>
+          system.log.error(
+            exception,
+            s"[DIAG-SER] DESERIALIZATION FAILED for entity=${proto.entityId} manifest=$payloadManifest serializerId=$payloadSerializerId — ${exception.getClass.getName}: ${exception.getMessage}"
+          )
           throw new IllegalArgumentException(
             s"Failed to deserialize nested payload using serializerId [$payloadSerializerId] " +
               s"and manifest [$payloadManifest]. Check Pekko serialization configuration for this payload type.",
@@ -81,6 +85,10 @@ class EntityEnvelopeSerializer(
     } match {
       case Success(event) => event
       case Failure(ex) =>
+        system.log.error(
+          ex,
+          s"[DIAG-SER] ENVELOPE DESERIALIZATION FAILED manifest=$manifest — ${ex.getClass.getName}: ${ex.getMessage}"
+        )
         throw new IllegalArgumentException(
           s"Failed to deserialize EntityEnvelopeEvent from binary. " +
             s"Manifest provided was [$manifest]. Error: ${ex.getMessage}",

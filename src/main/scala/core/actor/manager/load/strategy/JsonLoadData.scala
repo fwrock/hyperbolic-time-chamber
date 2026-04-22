@@ -2,26 +2,28 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
-import core.util.{IdUtil, JsonStreamingUtil, JsonUtil}
+import core.util.{ IdUtil, JsonStreamingUtil, JsonUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.actor.{ActorSimulation, ActorSimulationCreation}
+import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
 import com.fasterxml.jackson.core.JsonParser
 
-import java.io.{BufferedInputStream, File, FileInputStream, InputStream}
+import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
 import java.util.UUID
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration.*
+import scala.util.{ Failure, Success }
 import scala.jdk.CollectionConverters.*
 
 class JsonLoadData(private val properties: Properties)
-  extends LoadDataStrategy(properties = properties) {
+    extends LoadDataStrategy(properties = properties) {
 
-  private implicit def ec: ExecutionContext = context.dispatcher
+  // Use io-dispatcher for I/O-bound file operations with virtual threads
+  private implicit def ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
 
   private var managerRef: ActorRef = _
   private var creatorRef: ActorRef = _
@@ -32,7 +34,12 @@ class JsonLoadData(private val properties: Properties)
   private var sourceFilePath: String = _
 
   private val CHUNK_SIZE = 100
+  // Keep CreateActorsEvent messages small enough for Pekko Artery max frame size.
+  private val CREATE_EVENT_MAX_ACTORS = 25
   private val activeBatches = mutable.Set[String]()
+  // Track when each batch was added so we can timeout stale batches.
+  // If a CreatorLoadData routee dies mid-processing, FinishCreationEvent is never sent;
+  // the timeout allows the loader to continue rather than stalling loading permanently.
   private var totalLoadedActors = 0L
   private var sourceClassType: String = _
   private var sourceId: String = _
@@ -83,7 +90,7 @@ class JsonLoadData(private val properties: Properties)
     }
   }
 
-  private def readNextChunkAsync(): Unit = {
+  private def readNextChunkAsync(): Unit =
     Future {
       this.synchronized {
         if (currentIterator != null && currentIterator.hasNext) {
@@ -103,32 +110,37 @@ class JsonLoadData(private val properties: Properties)
         logError("Error of  I/O in JSON reading", e)
         self ! CloseAndFinish
     }
-  }
 
   private def sendBatch(actors: List[ActorSimulation]): Unit = {
     totalLoadedActors += actors.size
 
-    val actorsToCreate = actors.map(actor =>
-      ActorSimulationCreation(
-        resourceId = IdUtil.format(sourceId),
-        actor = actor.copy(id = IdUtil.format(actor.id))
-      )
+    val actorsToCreate = actors.map(
+      actor =>
+        ActorSimulationCreation(
+          resourceId = IdUtil.format(sourceId),
+          actor = actor.copy(id = IdUtil.format(actor.id))
+        )
     )
 
-    val (poolDistributed, loadBalanced) = actorsToCreate.partition(_.actor.creationType == PoolDistributed)
+    val (poolDistributed, loadBalanced) =
+      actorsToCreate.partition(_.actor.creationType == PoolDistributed)
 
     if (loadBalanced.nonEmpty) {
-      val batchId = UUID.randomUUID().toString
-      activeBatches.add(batchId)
       creators.add(creatorRef)
-      creatorRef ! CreateActorsEvent(id = batchId, actors = loadBalanced, actorRef = self)
+      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
+        val batchId = UUID.randomUUID().toString
+        activeBatches.add(batchId)
+        creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      }
     }
 
     if (poolDistributed.nonEmpty) {
-      val batchId = UUID.randomUUID().toString
-      activeBatches.add(batchId)
       creators.add(creatorPoolRef)
-      creatorPoolRef ! CreateActorsEvent(id = batchId, actors = poolDistributed, actorRef = self)
+      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
+        val batchId = UUID.randomUUID().toString
+        activeBatches.add(batchId)
+        creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      }
     }
 
     if (activeBatches.isEmpty) {
@@ -148,7 +160,8 @@ class JsonLoadData(private val properties: Properties)
     logInfo(s"End of file, size: $totalLoadedActors")
 
     if (currentInputStream != null) {
-      try currentInputStream.close() catch { case _: Exception => }
+      try currentInputStream.close()
+      catch { case _: Exception => }
       currentInputStream = null
       currentIterator = null
     }
@@ -163,7 +176,8 @@ class JsonLoadData(private val properties: Properties)
 
   override def postStop(): Unit = {
     if (currentInputStream != null) {
-      try currentInputStream.close() catch { case _: Exception => }
+      try currentInputStream.close()
+      catch { case _: Exception => }
     }
     super.postStop()
   }

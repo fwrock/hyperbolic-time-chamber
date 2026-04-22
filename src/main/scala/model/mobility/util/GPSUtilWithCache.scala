@@ -18,7 +18,7 @@ object GPSUtilWithCache {
   @volatile private var cacheHits: Long = 0
   @volatile private var cacheMisses: Long = 0
   @volatile private var cacheStores: Long = 0
-  
+
   // Função heurística (exemplo, substitua pela sua)
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>
     current.euclideanDistance(goal)
@@ -91,7 +91,8 @@ object GPSUtilWithCache {
   }
 
   /** Get cache statistics
-    * @return (hits, misses, stores, hitRate)
+    * @return
+    *   (hits, misses, stores, hitRate)
     */
   def getCacheStats: (Long, Long, Long, Double) = {
     val hits = cacheHits
@@ -101,7 +102,7 @@ object GPSUtilWithCache {
     val hitRate = if (total > 0) (hits.toDouble / total.toDouble) * 100.0 else 0.0
     (hits, misses, stores, hitRate)
   }
-  
+
   /** Print cache statistics with timing analysis */
   def printCacheStats(): Unit = {
     val (hits, misses, stores, hitRate) = getCacheStats
@@ -124,7 +125,7 @@ object GPSUtilWithCache {
     println(s"Consider profiling actor interactions and link calculations.")
     println(s"===================================")
   }
-  
+
   /** Reset cache statistics */
   def resetCacheStats(): Unit = {
     cacheHits = 0

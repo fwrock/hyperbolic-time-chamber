@@ -1,0 +1,236 @@
+# ─────────────────────────────────────────────────────────────────
+# Kafka Connect + GCS Sink Connector
+#
+# Pipeline: Pods HTC → Kafka topics → Kafka Connect → GCS (Parquet)
+#
+# Dados brutos dos relatórios são consumidos dos tópicos Kafka e
+# escritos como arquivos Parquet comprimidos no GCS.
+#
+# Benefícios:
+#   • Barato: GCS Standard ~$0.02/GB/mês
+#   • Formato colunar (Parquet) — 5-10x menor que JSONL
+#   • Compatível com BigQuery external tables (sem custo de ingestão)
+#   • Processável com Spark, DuckDB, pandas, polars
+#
+# NOTA: Requer a imagem com o plugin GCS Sink instalado.
+# ─────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-connect-config
+  namespace: default
+data:
+  connect-distributed.properties: |
+    # Kafka Connect distributed mode
+    bootstrap.servers=${KAFKA_BOOTSTRAP_SERVERS}
+    group.id=htc-connect-cluster
+    
+    key.converter=org.apache.kafka.connect.storage.StringConverter
+    value.converter=org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable=false
+    
+    # Offsets, config, status armazenados no próprio Kafka
+    offset.storage.topic=connect-offsets
+    offset.storage.replication.factor=3
+    offset.storage.partitions=6
+    config.storage.topic=connect-configs
+    config.storage.replication.factor=3
+    status.storage.topic=connect-status
+    status.storage.replication.factor=3
+    
+    # REST API
+    rest.port=8083
+    rest.advertised.port=8083
+    
+    # Performance
+    offset.flush.interval.ms=10000
+    producer.compression.type=snappy
+
+  # ── GCS Sink para relatórios ────────────────────────────────────
+  gcs-sink-reports.json: |
+    {
+      "name": "htc-gcs-sink-reports",
+      "config": {
+        "connector.class": "io.confluent.connect.gcs.GcsSinkConnector",
+        "tasks.max": "3",
+        "topics": "htc.reports,htc.custom-reports",
+        "gcs.bucket.name": "htc-simulation-output-unique",
+        "gcs.part.size": 26214400,
+        "flush.size": "10000",
+        "rotate.interval.ms": "60000",
+        "topics.dir": "kafka-sink/reports",
+        "path.format": "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH",
+        "format.class": "io.confluent.connect.gcs.format.parquet.ParquetFormat",
+        "parquet.codec": "snappy",
+        "locale": "en-US",
+        "timezone": "UTC",
+        "storage.class": "io.confluent.connect.gcs.storage.GcsStorage",
+        "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",
+        "timestamp.extractor": "Record",
+        "schema.compatibility": "NONE",
+        "behavior.on.null.values": "ignore",
+        "errors.tolerance": "all",
+        "errors.log.enable": true,
+        "errors.deadletterqueue.topic.name": "htc.dlq.reports",
+        "errors.deadletterqueue.topic.replication.factor": 3
+      }
+    }
+
+  # ── GCS Sink para eventos da simulação ──────────────────────────
+  gcs-sink-events.json: |
+    {
+      "name": "htc-gcs-sink-events",
+      "config": {
+        "connector.class": "io.confluent.connect.gcs.GcsSinkConnector",
+        "tasks.max": "3",
+        "topics": "htc.events",
+        "gcs.bucket.name": "htc-simulation-output-unique",
+        "gcs.part.size": 26214400,
+        "flush.size": "50000",
+        "rotate.interval.ms": "120000",
+        "topics.dir": "kafka-sink/events",
+        "path.format": "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH",
+        "format.class": "io.confluent.connect.gcs.format.parquet.ParquetFormat",
+        "parquet.codec": "snappy",
+        "locale": "en-US",
+        "timezone": "UTC",
+        "storage.class": "io.confluent.connect.gcs.storage.GcsStorage",
+        "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",
+        "timestamp.extractor": "Record",
+        "schema.compatibility": "NONE",
+        "behavior.on.null.values": "ignore",
+        "errors.tolerance": "all",
+        "errors.log.enable": true
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-connect
+  namespace: default
+  labels:
+    app: kafka-connect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-connect
+  template:
+    metadata:
+      labels:
+        app: kafka-connect
+      annotations:
+        gke-gcsfuse/volumes: "true"
+    spec:
+      serviceAccountName: htc-service-account
+      containers:
+        - name: kafka-connect
+          # Imagem Confluent com plugin GCS pré-instalado
+          image: confluentinc/cp-kafka-connect:7.6.1
+          ports:
+            - containerPort: 8083
+              name: rest-api
+          env:
+            - name: CONNECT_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-bootstrap
+                  key: bootstrap-servers
+            - name: CONNECT_GROUP_ID
+              value: "htc-connect-cluster"
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: "connect-configs"
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: "connect-offsets"
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: "connect-status"
+            - name: CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: CONNECT_STATUS_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: CONNECT_KEY_CONVERTER
+              value: "org.apache.kafka.connect.storage.StringConverter"
+            - name: CONNECT_VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE
+              value: "false"
+            - name: CONNECT_REST_PORT
+              value: "8083"
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: CONNECT_PLUGIN_PATH
+              value: "/usr/share/java,/usr/share/confluent-hub-components"
+            - name: CONNECT_PRODUCER_COMPRESSION_TYPE
+              value: "snappy"
+            # GCS auth via Workload Identity (automático)
+            - name: CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY
+              value: "All"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          # Instalar plugin GCS no startup (se não estiver na imagem)
+          command:
+            - bash
+            - -c
+            - |
+              echo "Instalando plugin GCS Sink..."
+              confluent-hub install --no-prompt confluentinc/kafka-connect-gcs:10.1.1
+              echo "Iniciando Kafka Connect..."
+              /etc/confluent/docker/run &
+              CONNECT_PID=$!
+              
+              # Aguardar o Connect ficar pronto
+              echo "Aguardando REST API..."
+              until curl -s http://localhost:8083/connectors > /dev/null 2>&1; do
+                sleep 5
+              done
+              echo "REST API pronta. Registrando conectores..."
+              
+              # Registrar connectors
+              for f in /tmp/connector-configs/gcs-sink-*.json; do
+                echo "  → Registrando $(basename $f)..."
+                curl -s -X PUT \
+                  -H "Content-Type: application/json" \
+                  --data "$(cat $f)" \
+                  "http://localhost:8083/connectors/$(jq -r .name $f)/config" || true
+              done
+              
+              echo "✓ Conectores registrados!"
+              wait $CONNECT_PID
+          volumeMounts:
+            - name: connector-configs
+              mountPath: /tmp/connector-configs
+              readOnly: true
+      volumes:
+        - name: connector-configs
+          configMap:
+            name: kafka-connect-config
+            items:
+              - key: gcs-sink-reports.json
+                path: gcs-sink-reports.json
+              - key: gcs-sink-events.json
+                path: gcs-sink-events.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect
+  namespace: default
+  labels:
+    app: kafka-connect
+spec:
+  selector:
+    app: kafka-connect
+  ports:
+    - name: rest-api
+      port: 8083
+      targetPort: 8083

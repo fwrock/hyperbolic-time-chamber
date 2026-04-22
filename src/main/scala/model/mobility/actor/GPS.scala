@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.GPSState
 
 import org.htc.protobuf.core.entity.actor.Identify
@@ -23,7 +23,7 @@ import scala.compiletime.uninitialized
 
 class GPS(
   private val properties: Properties
-) extends BaseActor[GPSState](
+) extends SimulationBaseActor[GPSState](
       properties = properties
     ) {
 
@@ -31,8 +31,10 @@ class GPS(
 
   private val redisManager = RedisClientManager()
 
-  override def onInitialize(event: InitializeEvent): Unit =
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
     loadCityMap()
+  }
 
   override def onStart(): Unit =
     loadCityMap()

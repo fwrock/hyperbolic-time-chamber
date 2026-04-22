@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.MovableState
 
 import org.htc.protobuf.core.entity.actor.Identify
@@ -21,7 +21,7 @@ import scala.collection.mutable
 abstract class Movable[T <: MovableState](
   private val properties: Properties
 )(implicit m: Manifest[T])
-    extends BaseActor[T](
+    extends SimulationBaseActor[T](
       properties = properties
     ) {
 
@@ -39,7 +39,7 @@ abstract class Movable[T <: MovableState](
             enterLink()
           } else {
             state.movableStatus = Finished
-            logInfo("No path available between origin and destination, finishing.")
+            logWarn("No path available between origin and destination, finishing.")
             onFinishSpontaneous()
           }
         case None =>
@@ -56,7 +56,6 @@ abstract class Movable[T <: MovableState](
         onFinishSpontaneous()
     }
   }
-
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match

@@ -1,0 +1,154 @@
+---
+# docker-compose for simple HTC × SUMO validation scenarios
+# Variables set at runtime (see scripts/run_htc_simple_scenarios.sh):
+#   HTC_SCENARIO_NAME        — e.g. simple_1_street
+#   HTC_SIMULATION_CONFIG    — full docker path to simulation.json
+#   HTC_CITY_MAP_FILE        — full docker path to city_map.json
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: htc-zookeeper-val
+    hostname: zookeeper
+    network_mode: host
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper_val_data:/var/lib/zookeeper/data
+      - zookeeper_val_logs:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: htc-kafka-val
+    hostname: kafka
+    network_mode: host
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_NUM_PARTITIONS: 4
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 1
+    volumes:
+      - kafka_val_data:/var/lib/kafka/data
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    container_name: htc-schema-registry-val
+    hostname: schema-registry
+    network_mode: host
+    depends_on:
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: localhost:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: WARN
+
+  redis:
+    image: redis:latest
+    container_name: htc-redis-val
+    network_mode: host
+    volumes:
+      - redis_val_data:/data
+
+  node1:
+    build: .
+    container_name: node_1_val
+    hostname: node1
+    network_mode: host
+    depends_on:
+      - redis
+      - kafka
+      - schema-registry
+    environment:
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node1
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      MANAGEMENT_HTTP_PORT: 8558
+
+      HTC_SCENARIO_NAME: ${HTC_SCENARIO_NAME:-simple_1_street}
+      HTC_SIMULATION_CONFIG_FILE: ${HTC_SIMULATION_CONFIG:-/app/hyperbolic-time-chamber/simulations/input/simple_1_street/simulation.json}
+      HTC_MOBILITY_CITY_MAP_FILE: ${HTC_CITY_MAP_FILE:-/app/hyperbolic-time-chamber/simulations/input/simple_1_street/data/city_map.json}
+
+      HTC_SHARD_BUFFER_SIZE: 10000
+
+      HTC_LOAD_BALANCE_ENABLED: "false"
+      HTC_LOAD_BALANCE_STRATEGY: "disabled"
+
+      # Small scenario — minimal TM instances needed
+      HTC_TIME_MANAGER_INSTANCES: 4
+      HTC_TIME_MANAGER_PER_NODE: 4
+      HTC_TIME_MANAGER_LOOKAHEAD: 5
+      HTC_TIME_MANAGER_WINDOW_SIZE: 10
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 5000
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 30000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 30000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 60
+
+      JAVA_TOOL_OPTIONS: >-
+        -Xms256m
+        -Xmx2g
+        --add-opens=java.base/java.lang=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+
+      HTC_REPORT_CSV_INSTANCES: 2
+      HTC_REPORT_CSV_PER_NODE: 1
+      HTC_REPORT_JSON_INSTANCES: 2
+      HTC_REPORT_JSON_PER_NODE: 2
+
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_GROUP_ID_SUFFIX: "htc-val-group"
+      HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
+      HTC_KAFKA_EVENTS_TOPIC: "htc.events"
+      HTC_KAFKA_REPORTS_TOPIC: "htc.reports"
+      HTC_KAFKA_COMMANDS_TOPIC: "htc.commands"
+      HTC_KAFKA_STATE_SYNC_TOPIC: "htc.state-sync"
+      HTC_KAFKA_ROUTE_REQUESTS_TOPIC: "htc.route-requests"
+      HTC_KAFKA_ROUTE_RESPONSES_TOPIC: "htc.route-responses"
+      HTC_KAFKA_STATUS_TOPIC: "htc.status"
+      HTC_KAFKA_CUSTOM_REPORTS_TOPIC: "htc.custom-reports"
+
+      HTC_KAFKA_PRODUCER_ACKS: "1"
+      HTC_KAFKA_PRODUCER_RETRIES: "1"
+      HTC_KAFKA_PRODUCER_BATCH_SIZE: "16384"
+      HTC_KAFKA_PRODUCER_LINGER_MS: "5"
+      HTC_KAFKA_PRODUCER_COMPRESSION_TYPE: "none"
+      HTC_KAFKA_MAX_POLL_RECORDS: "500"
+      HTC_KAFKA_ENABLE_AUTO_COMMIT: "true"
+
+      HTC_KAFKA_EVENT_STREAMING_ENABLED: "false"
+      HTC_KAFKA_REPORTING_ENABLED: "true"
+      HTC_KAFKA_REPORTING_BATCH_SIZE: "50"
+      HTC_KAFKA_REPORTING_USE_AVRO: "false"
+      HTC_KAFKA_STATE_SYNC_ENABLED: "false"
+      HTC_KAFKA_COMMAND_CONTROL_ENABLED: "false"
+      HTC_KAFKA_EXTERNAL_INTEGRATION_ENABLED: "false"
+      HTC_KAFKA_VEHICLE_STREAMING_ENABLED: "false"
+      HTC_KAFKA_MICRO_SIMULATION_ENABLED: "false"
+
+    volumes:
+      - /home/dean/hyperbolic-time-chamber:/app/hyperbolic-time-chamber
+
+volumes:
+  redis_val_data:
+  kafka_val_data:
+  zookeeper_val_data:
+  zookeeper_val_logs:

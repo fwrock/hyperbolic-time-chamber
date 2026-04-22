@@ -8,10 +8,9 @@ import core.util.{ ActorCreatorUtil, IdUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createPoolActor
 
-import org.htc.protobuf.core.entity.actor.Dependency
 import org.htc.protobuf.core.entity.event.control.load.{ StartCreationEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
-import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
+import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization, ShardActorId }
 import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, FinishCreationEvent, ProcessNextCreateChunk }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
@@ -26,13 +25,15 @@ class CreatorPoolLoadData(
       properties = Properties(
         entityId = creatorProperties.entityId,
         resourceId = creatorProperties.shardId,
-        creatorManager = creatorProperties.creatorManager,
-        timeManager = creatorProperties.timeManager,
-        reporters = creatorProperties.reporters,
-        data = creatorProperties.data,
-        actorType = creatorProperties.actorType
+        data = creatorProperties.data
       )
     ) {
+
+  // Fields needed for actor creation (not for simulation)
+  private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
+  private val creatorManager: ActorRef = creatorProperties.creatorManager
+  private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] =
+    creatorProperties.reporters
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
@@ -102,11 +103,11 @@ class CreatorPoolLoadData(
             entityId = IdUtil.format(actorCreation.actor.id),
             poolConfiguration = actorCreation.actor.poolConfiguration,
             resourceId = IdUtil.format(actorCreation.resourceId),
-            timeManager = timeManager,
+            timeManagers = timeManagers,
             creatorManager = self,
             reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,
-            dependencies = mutable.Map[String, Dependency](),
+            dependencies = mutable.Map[String, ShardActorId](),
             creationType = PoolDistributed
           )
 

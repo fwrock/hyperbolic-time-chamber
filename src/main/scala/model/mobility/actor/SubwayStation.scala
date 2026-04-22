@@ -1,11 +1,12 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.actor.BaseActor
+import core.actor.SimulationBaseActor
 import model.mobility.entity.state.{ SubwayState, SubwayStationState }
 
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -21,19 +22,32 @@ import scala.collection.mutable
 
 class SubwayStation(
   private val properties: Properties
-) extends BaseActor[SubwayStationState](
+) extends SimulationBaseActor[SubwayStationState](
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit =
-    val node = getDependency(state.nodeId)
-    sendMessageTo(
-      node.id,
-      node.classType,
-      RegisterSubwayStationData(
-        lines = state.lines.keys.toSeq
-      )
-    )
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+    val dependencyOpt =
+      getDependencyOption(state.nodeId)
+        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+
+    dependencyOpt match {
+      case Some(node) =>
+        sendMessageTo(
+          node.id,
+          node.classType,
+          RegisterSubwayStationData(
+            lines = state.lines.keys.toSeq
+          )
+        )
+        logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+      case None =>
+        logWarn(
+          s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+        )
+    }
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.status match
@@ -43,13 +57,13 @@ class SubwayStation(
       case Working =>
         createSubwayFrom(filterLinesByNextTick())
       case _ =>
-        logInfo(s"Event current status not handled ${state.status}")
+        logWarn(s"Event current status not handled ${state.status}")
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
       case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
-      case _                              => logInfo("Event not handled")
+      case _                              => logWarn("Event not handled")
     }
 
   private def handleRegisterPassenger(
@@ -104,12 +118,12 @@ class SubwayStation(
             if (subways.nonEmpty && state.garage) {
               val subway = subways.dequeue()
               val actorRef = createSubway(subway)
-              dependencies(subway.actorId) = Dependency(subway.actorId, classOf[Subway].getName)
+              dependencies(subway.actorId) = ShardActorId(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
             }
           case None =>
-            logInfo(s"Subway not found for line $line")
+            logWarn(s"Subway not found for line $line")
     }
 
   private def createSubway(subway: SubwayInformation): ActorRef =
