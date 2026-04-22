@@ -3,7 +3,7 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.actor.{ ActorRef, Cancellable, Props }
 import core.util.{ ActorCreatorUtil, DistributedUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
@@ -55,6 +55,7 @@ class CreatorLoadData(
 
   private val CREATE_CHUNK_SIZE = 500
   private val DELAY_BETWEEN_CHUNKS = 100.milliseconds
+  private val LB_CHUNK_TIMEOUT = 10.seconds
 
   /** Lazy singleton proxy to LoadBalanceManager (null if load balancing disabled). */
   private var loadBalanceProxy: ActorRef = _
@@ -64,7 +65,10 @@ class CreatorLoadData(
     */
   private val pendingChunks: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
 
-  /** Whether we've checked for the LoadBalanceManager proxy (avoid repeated lookups). */
+  /** Scheduled timeout cancellables for pending LBM chunks. Cancelled on response. */
+  private val pendingChunkTimeouts: mutable.Map[String, Cancellable] = mutable.Map.empty
+
+  /** Whether this instance has already attempted proxy initialisation (avoids repeat config reads). */
   private var lbProxyChecked: Boolean = false
 
   override def onStart(): Unit = {
@@ -82,6 +86,7 @@ class CreatorLoadData(
     case event: StartCreationEvent         => handleStartCreation(event)
     case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
     case event: BatchShardAssignmentResponse    => handleBatchAssignmentResponse(event)
+    case event: CreatorLoadData.LbChunkTimeout  => handleLbChunkTimeout(event)
     case event: ShardRegion.StartEntityAck => handleInitialize(event)
     case event: InitializeEntityAckEvent       => handleFinishInitialization(event)
     case event: NeedsPostLoadRegistrationEvent => handleNeedsPostLoadRegistration(event)
@@ -127,29 +132,39 @@ class CreatorLoadData(
     if (chunk.nonEmpty) {
       val lbProxy = getLoadBalanceProxy
       if (lbProxy.isDefined) {
-        // Phase 1: Extract spatial data and send batch registration to LoadBalanceManager
-        val spatialEntities = chunk.flatMap { actorCreation =>
-          extractSpatialPosition(actorCreation).map { position =>
-            SpatialEntityData(
-              spatialEntityId = actorCreation.actor.id,
-              position = position
-            )
-          }
+        // Phase 1: Build spatial entity list for LoadBalanceManager.
+        // Entities with known positions get their real coordinates; entities without positions
+        // (BusStop, BusStation, Person, etc.) get (0.0, 0.0) as a fallback — non-spatial
+        // strategies like TypeAware ignore position entirely and only use the entity ID.
+        val spatialEntities = chunk.map { actorCreation =>
+          val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
+          SpatialEntityData(
+            spatialEntityId = actorCreation.actor.id,
+            lon = position._1,
+            lat = position._2
+          )
         }
 
-        if (spatialEntities.nonEmpty) {
-          // Store chunk as pending — will be processed in handleBatchAssignmentResponse
-          pendingChunks.put(batchId, chunk)
-          lbProxy.get ! RegisterSpatialEntitiesBatchEvent(
-            entities = spatialEntities,
-            batchId = batchId
-          )
-          // Don't advance yet — wait for BatchShardAssignmentResponse
-          return
-        }
+        val withRealPos = spatialEntities.count { e => e.position != (0.0, 0.0) }
+
+        // Store chunk as pending — will be processed in handleBatchAssignmentResponse
+        pendingChunks.put(batchId, chunk)
+        // Safety net: if LBM never replies, fall back to hash routing after LB_CHUNK_TIMEOUT
+        val timeout = context.system.scheduler.scheduleOnce(
+          LB_CHUNK_TIMEOUT,
+          self,
+          CreatorLoadData.LbChunkTimeout(batchId)
+        )
+        pendingChunkTimeouts.put(batchId, timeout)
+        lbProxy.get ! RegisterSpatialEntitiesBatchEvent(
+          entities = spatialEntities,
+          batchId = batchId
+        )
+        // Don't advance yet — wait for BatchShardAssignmentResponse
+        return
       }
 
-      // No load balancing or no spatial data — create immediately with hash-based routing
+      // No load balancing — create immediately with hash-based routing
       createEntitiesFromChunk(chunk, batchId)
       advanceToNextChunk(batchId, chunk.size)
     } else {
@@ -173,6 +188,9 @@ class CreatorLoadData(
       s"Received spatial assignments for batch '${response.batchId}': " +
         s"${response.assignments.size} entities assigned"
     )
+
+    // Cancel the safety-net timeout (response arrived in time)
+    pendingChunkTimeouts.remove(response.batchId).foreach(_.cancel())
 
     // Retrieve and process the pending chunk
     pendingChunks.remove(response.batchId) match {
@@ -299,6 +317,13 @@ class CreatorLoadData(
             if (pos.isDefined) return pos
           }
 
+          // BusStop / BusStation / SubwayStation: look up associated node position
+          if (map.containsKey("nodeId")) {
+            val nodeId = map.get("nodeId").asInstanceOf[String]
+            val pos = SpatialShardIdRegistry.getPosition(nodeId)
+            if (pos.isDefined) return pos
+          }
+
           None
 
         case _ => None
@@ -310,29 +335,60 @@ class CreatorLoadData(
 
   /** Lazily obtains a singleton proxy to LoadBalanceManager, if load balancing is enabled.
     *
-    * Uses [[ShardAllocatorRegistry.isRegistered]] as the gate — if the allocator
-    * hasn't been registered by LoadBalanceManager, spatial registration is skipped.
+    * Uses a JVM-level cache in the companion object so all [[CreatorLoadData]] instances on the
+    * same node share one proxy actor, instead of each creating their own.
+    *
+    * Gate is config `htc.load-balance-manager.enabled` — valid on all cluster nodes, unlike
+    * [[ShardAllocatorRegistry]] which is only populated on the singleton host node.
     */
   private def getLoadBalanceProxy: Option[ActorRef] = {
+    // Fast path: return already-resolved proxy for this instance
     if (lbProxyChecked) return Option(loadBalanceProxy)
 
-    if (ShardAllocatorRegistry.isRegistered) {
+    // Check JVM-level cache before creating a new actor
+    val cached = CreatorLoadData.globalLbProxy.get()
+    if (cached != null) {
+      loadBalanceProxy = cached
+      lbProxyChecked = true
+      return Some(loadBalanceProxy)
+    }
+
+    lbProxyChecked = true
+    val lbEnabled = try { config.getBoolean("htc.load-balance-manager.enabled") } catch { case _: Exception => false }
+    if (lbEnabled) {
       try {
-        loadBalanceProxy = DistributedUtil.createSingletonProxy(
+        val proxy = DistributedUtil.createSingletonProxy(
           context.system,
           LOAD_BALANCE_MANAGER_ACTOR_NAME
         )
-        lbProxyChecked = true
+        // Race: only one proxy wins; stop the losers to avoid orphaned actors
+        if (!CreatorLoadData.globalLbProxy.compareAndSet(null, proxy)) {
+          context.stop(proxy)
+        }
+        loadBalanceProxy = CreatorLoadData.globalLbProxy.get()
         Some(loadBalanceProxy)
       } catch {
         case e: Exception =>
           logWarn(s"Failed to create LoadBalanceManager proxy: ${e.getMessage}. Using hash-based shard routing.")
-          lbProxyChecked = true
           loadBalanceProxy = null
           None
       }
     } else {
       None // Load balancing not enabled
+    }
+  }
+
+  /** Fallback handler: fires when a pending LBM chunk hasn't received a response within
+    * [[LB_CHUNK_TIMEOUT]]. Proceeds with hash-based routing so entity creation isn't stalled.
+    */
+  private def handleLbChunkTimeout(event: CreatorLoadData.LbChunkTimeout): Unit = {
+    pendingChunkTimeouts.remove(event.batchId)
+    pendingChunks.remove(event.batchId) match {
+      case Some(chunk) =>
+        createEntitiesFromChunk(chunk, event.batchId)
+        advanceToNextChunk(event.batchId, chunk.size)
+      case None =>
+        // Response already arrived just before the timeout fired — nothing to do
     }
   }
 
@@ -486,6 +542,14 @@ class CreatorLoadData(
 }
 
 object CreatorLoadData {
+
+  /** JVM-level cache: all [[CreatorLoadData]] instances on the same node share one proxy actor. */
+  private[load] val globalLbProxy: java.util.concurrent.atomic.AtomicReference[ActorRef] =
+    new java.util.concurrent.atomic.AtomicReference[ActorRef](null)
+
+  /** Internal message: fires when an LBM chunk response hasn't arrived within the timeout. */
+  final case class LbChunkTimeout(batchId: String)
+
   def props(
     creatorProperties: CreatorProperties
   ): Props =

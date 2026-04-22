@@ -20,9 +20,12 @@ import core.entity.event.data.DefaultBaseEventData
   * @param chunkIndex
   *   The chunk index from the original request (for correlation)
   */
+/** NOTE: positions use Array[Double] (index 0 = lon, 1 = lat) instead of Tuple2 to remain
+  * Jackson-serializable across cluster nodes. Tuple2 is not handled by Jackson CBOR.
+  */
 case class BatchShardAssignmentResponse(
   assignments: Map[String, String],
-  positions: Map[String, (Double, Double)],
+  positions: Map[String, Array[Double]],
   batchId: String,
   chunkIndex: Int = 0
 ) extends BaseEvent[DefaultBaseEventData]

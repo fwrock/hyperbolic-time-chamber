@@ -102,7 +102,7 @@ services:
 
       # ── Load Balance Manager ─────────────────────────────────────────────
       # Single-node: disabled. Enable for multi-node beluga runs.
-      HTC_LOAD_BALANCE_ENABLED: "true"
+      HTC_LOAD_BALANCE_ENABLED: "false"
       HTC_LOAD_BALANCE_STRATEGY: "type-aware"
       HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
       HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"

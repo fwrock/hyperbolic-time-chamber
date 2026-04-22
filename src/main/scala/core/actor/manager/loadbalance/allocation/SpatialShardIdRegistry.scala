@@ -64,9 +64,11 @@ object SpatialShardIdRegistry {
   def putAllShardIds(assignments: Map[String, String]): Unit =
     assignments.foreach { case (entityId, shardId) => shardAssignments.put(entityId, shardId) }
 
-  /** Stores multiple entity positions at once. */
-  def putAllPositions(positions: Map[String, (Double, Double)]): Unit =
-    positions.foreach { case (entityId, pos) => entityPositions.put(entityId, pos) }
+  /** Stores multiple entity positions at once.
+    * Accepts Array[Double] (index 0 = lon, 1 = lat) from the wire-safe response format.
+    */
+  def putAllPositions(positions: Map[String, Array[Double]]): Unit =
+    positions.foreach { case (entityId, arr) => entityPositions.put(entityId, (arr(0), arr(1))) }
 
   // ── Reverse lookup: shard → entities ─────────────────────────────────────
 
