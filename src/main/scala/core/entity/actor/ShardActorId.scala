@@ -20,9 +20,9 @@ import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
   *   or legacy `"resourceId"`.
   */
 case class ShardActorId @JsonCreator() (
-  @JsonAlias(Array("id")) @JsonProperty("entityId") entityId: String,
+  @JsonAlias(Array("entityId")) @JsonProperty("id") entityId: String,
   @JsonProperty("classType") classType: String,
-  @JsonAlias(Array("resourceId")) @JsonProperty("shardBucket") shardBucket: String = ""
+  @JsonAlias(Array("shardBucket")) @JsonProperty("resourceId") shardBucket: String = ""
 ) {
 
   /** Backward-compat alias for [[entityId]].

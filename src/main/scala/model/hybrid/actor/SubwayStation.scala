@@ -38,8 +38,15 @@ class SubwayStation(
 
   override def requiresPostLoadRegistration: Boolean = true
 
-  override def handlePostLoadRegistration(): Unit =
-    getDependencyOption(state.nodeId) match {
+  override def handlePostLoadRegistration(): Unit = {
+    // 1) Prefer lookup by nodeId in relationships map (key = IdUtil.format(nodeId)).
+    // 2) Fall back to scanning relationships by classType (handles key format edge cases).
+    // 3) Last resort: use state.nodeId directly via hash-based shard routing
+    //    (handles actor restart that resets relationships before PostLoadRegistrationEvent).
+    val nodeOpt = getDependencyOption(state.nodeId).orElse(
+      relationships.values.find(d => d.classType != null && d.classType.endsWith("Node"))
+    )
+    nodeOpt match {
       case Some(node) =>
         sendMessageTo(
           node.id,
@@ -51,11 +58,26 @@ class SubwayStation(
           LoadBalancedDistributed
         )
         logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
+      case None if state.nodeId != null && state.nodeId.nonEmpty =>
+        logWarn(
+          s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys.mkString(", ")}]). " +
+            s"Registering with node ${state.nodeId} via direct routing."
+        )
+        sendMessageTo(
+          state.nodeId,
+          "hybrid.actor.Node",
+          RegisterSubwayStationData(
+            lines = state.lines.keys.toList
+          ),
+          "RegisterSubwayStation",
+          LoadBalancedDistributed
+        )
       case None =>
         logWarn(
-          s"SubwayStation ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+          s"SubwayStation ${getEntityId}: could not find node dependency and nodeId is null. Registration skipped."
         )
     }
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     if (currentTick >= simulationEnd) {

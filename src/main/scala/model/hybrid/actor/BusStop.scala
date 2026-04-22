@@ -2,14 +2,15 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
-import org.interscity.htc.model.hybrid.entity.state.*
 
+import org.interscity.htc.model.hybrid.entity.state.*
 import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
-import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
+import org.interscity.htc.core.util.IdUtil
+import org.interscity.htc.model.hybrid.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData}
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
 
 import scala.collection.mutable
@@ -26,14 +27,15 @@ class BusStop(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // Prefer lookup by nodeId; fall back to scanning dependencies for a Node entry
-    // (handles data generated with the legacy "node" field name instead of "nodeId")
+    // 1) Prefer lookup by nodeId in relationships map (key = IdUtil.format(nodeId)).
+    // 2) Fall back to scanning relationships by classType (handles key format edge cases).
+    // 3) Last resort: use state.nodeId directly via hash-based shard routing
+    //    (handles actor restart that resets relationships before PostLoadRegistrationEvent).
     val dependencyOpt =
-      getDependencyOption(state.nodeId).orElse(
-        if (state.nodeId == null || state.nodeId.isEmpty)
-          dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node"))
-        else
-          None
+      getDependencyOption(IdUtil.format(state.nodeId)).orElse(
+        relationships.get(IdUtil.format(state.nodeId)).orElse(
+          relationships.values.find(_.classType == "hybrid.actor.Node")
+        )
       )
 
     dependencyOpt match {
@@ -46,9 +48,21 @@ class BusStop(
           )
         )
         logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
+      case None if state.nodeId != null && state.nodeId.nonEmpty =>
+        logWarn(
+          s"BusStop ${getEntityId}: relationships map empty (available keys: [${relationships.keys.mkString(", ")}]). " +
+            s"Registering with node ${state.nodeId} via direct routing."
+        )
+        sendMessageTo(
+          state.nodeId,
+          "hybrid.actor.Node",
+          RegisterBusStopData(
+            label = state.label
+          )
+        )
       case None =>
         logWarn(
-          s"BusStop ${getEntityId} could not find node dependency: ${state.nodeId}. Registration with node skipped."
+          s"BusStop ${getEntityId}: could not find node dependency and nodeId is null. Registration skipped."
         )
     }
   }

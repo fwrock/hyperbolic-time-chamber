@@ -160,6 +160,12 @@ class HybridStrategy extends BalancingStrategy {
   override def getAllShardIds: Set[String] =
     quadtree.getAllShardIds
 
+  override def getShardEntityCounts: Map[String, Int] =
+    quadtree.getShardEntityCounts
+
+  override def recordShardLocation(shardId: String, address: Address): Unit =
+    kdTree.recordNodeAssignment(shardId, address)
+
   override def getShardType(shardId: String): ShardTypeEnum =
     shardTypeMap.getOrElse(shardId, ShardTypeEnum.Dynamic)
 

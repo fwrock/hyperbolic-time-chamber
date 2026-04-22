@@ -161,7 +161,7 @@ abstract class LocalTimeManagerBase(
           case (_, actors) => actors.nonEmpty
         }
         if (removedFromTicks > 0) {
-          logInfo(s"Unregistered ${actorClass} (${actorId}) from $removedFromTicks future ticks")
+//          logDebug(s"Unregistered ${actorClass} (${actorId}) from $removedFromTicks future ticks")
         }
       }
 
