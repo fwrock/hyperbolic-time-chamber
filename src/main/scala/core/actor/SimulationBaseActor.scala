@@ -713,6 +713,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
+    if (reporters.isEmpty) return
     // Prometheus: track report events by label
     if (event.label != null) {
       MetricsServer.eventsProcessed.labels(event.label).inc()

@@ -142,7 +142,8 @@ services:
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
