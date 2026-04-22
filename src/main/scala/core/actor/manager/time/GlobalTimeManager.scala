@@ -11,7 +11,7 @@ import core.metrics.MetricsServer
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
-import org.apache.pekko.actor.{ActorRef, Props, Terminated}
+import org.apache.pekko.actor.{ActorRef, CoordinatedShutdown, Props, Terminated}
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
@@ -523,6 +523,11 @@ class GlobalTimeManager(
       notifyLocalManagers(
         org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
       )
+      // Notify SimulationManager so it can flush reporters and stop gracefully
+      simulationManager ! org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+      // Explicitly shut down the actor system so the JVM (container) exits.
+      // Without this, non-daemon threads keep the JVM alive indefinitely.
+      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
     }
   }
 

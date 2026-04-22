@@ -656,25 +656,9 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManager = currentTimeManager,
       destruct = destruct
     )
-    scheduleTick.foreach(
-      tick =>
-        // CRITICAL: Send ScheduleEvent to the SAME TimeManager that received the FinishEvent.
-        // Using getTimeManager(currentTimeManagerType) could route to a different TM instance
-        // (pool router), causing cross-TM scheduling inconsistencies and simulation hangs.
-        currentTimeManager ! ScheduleEvent(
-          tick = tick,
-          actorRef = getPath,
-          identify = Some(
-            Identify(
-              id = IdUtil.format(getEntityId),
-              resourceId = IdUtil.format(properties.resourceId),
-              classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
-              actorRef = getPath,
-              actorType = properties.actorType.toString
-            )
-          )
-        )
-    )
+    // NOTE: No separate ScheduleEvent needed here.
+    // The TM fix in finishEvent atomically adds the actor to scheduledActors[scheduleTick],
+    // so a separate ScheduleEvent would cause double-scheduling (actor runs twice per tick).
   }
 
   /** Sends a spontaneous event to itself. */
@@ -682,11 +666,17 @@ abstract class SimulationBaseActor[T <: BaseState](
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
   /** Schedules an event at a specific tick.
+    * CRITICAL: Send to currentTimeManager (same TM that sent last SpontaneousEvent), NOT to the
+    * pool router. Using getTimeManager() routes round-robin to any pool member; if that member
+    * differs from currentTimeManager, the ScheduleEvent and FinishEvent(None) go to different TMs.
+    * When all TMs (including currentTimeManager) report hasScheduled=false, the global TM
+    * terminates the simulation — even though another TM has the actor scheduled.
     * @param tick
     *   The tick at which the event should be scheduled
     */
-  protected def scheduleEvent(tick: Tick): Unit =
-    getTimeManager(currentTimeManagerType) ! ScheduleEvent(
+  protected def scheduleEvent(tick: Tick): Unit = {
+    val tm = if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
+    tm ! ScheduleEvent(
       tick = tick,
       actorRef = getPath,
       identify = Some(
@@ -699,6 +689,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         )
       )
     )
+  }
 
   /** Reports data to the reporting system.
     * @param data
