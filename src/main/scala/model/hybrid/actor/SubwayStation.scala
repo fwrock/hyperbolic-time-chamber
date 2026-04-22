@@ -101,7 +101,7 @@ class SubwayStation(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
-      case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
+      case d: SubwayRequestPassengerData => handleSubwayRequestPassenger(event, d)
       case _                              => logWarn("Event not handled")
     }
 
