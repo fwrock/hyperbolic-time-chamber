@@ -118,6 +118,28 @@ abstract class LocalTimeManagerBase(
     if (finish.timeManager == self) {
       MetricsServer.eventsProcessed.labels("finish").inc()
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
+
+      // CRITICAL FIX: When scheduleTick is set, add the actor to scheduledActors immediately
+      // (in addition to scheduledTicksOnFinish).
+      //
+      // Race condition without this fix:
+      //   1. Actor sends FinishEvent(Some(T)) then ScheduleEvent(T) to TM (same sender → FIFO order)
+      //   2. TM processes FinishEvent → advanceToNextTick() → reportGlobalTimeManager(hasScheduled=true, T)
+      //   3. Global TM immediately sends UpdateGlobalTimeEvent(T) back to TM
+      //   4. UpdateGlobalTimeEvent(T) arrives at TM BEFORE ScheduleEvent(T) from the actor
+      //      (different senders: global TM vs actor → no ordering guarantee)
+      //   5. processTick(T) fires with empty scheduledActors[T] → no SpontaneousEvent sent
+      //   6. ScheduleEvent(T) arrives → bumped to T+1, but global TM may already be terminating
+      //
+      // Fix: by adding the actor to scheduledActors[T] atomically here (in the same message
+      // processing step as the FinishEvent), processTick(T) always finds the actor.
+      finish.scheduleTick.foreach { tickStr =>
+        val tick = tickStr.toLong
+        val effectiveTick = if (tick <= localTickOffset) localTickOffset + 1 else tick
+        val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
+        actorsSet.add(finish.identify)
+      }
+
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
       // Prometheus: update running events gauge
