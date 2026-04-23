@@ -10,6 +10,7 @@ import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSing
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap
 import org.interscity.htc.core.actor.manager.SimulationManager
+import org.interscity.htc.core.api.ConfigApiServer
 import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
@@ -41,6 +42,9 @@ object HyperbolicTimeChamber {
     core.metrics.MetricsServer.start(metricsPort)
 
     val system = ActorSystem("hyperbolic-time-chamber")
+
+    // Start optional REST API server for configuration management
+    ConfigApiServer.start(system)
 
     // Subscribe to dead letters for Prometheus monitoring
     val deadLetterListener = system.actorOf(Props(new DeadLetterListener), "dead-letter-listener")

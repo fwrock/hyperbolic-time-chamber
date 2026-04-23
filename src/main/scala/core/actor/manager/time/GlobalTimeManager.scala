@@ -18,6 +18,7 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent}
 import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
+import core.api.SimulatorSettingsRegistry
 
 import scala.collection.mutable
 
@@ -85,8 +86,9 @@ class GlobalTimeManager(
     // FinishEvent/ScheduleEvent sequentially, so N TMs per node = N parallel
     // mailbox processors for the pod's actors.
     val config = context.system.settings.config
-    val totalInstances = config.getInt("htc.time-manager.total-instances")
-    val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")
+    // SimulatorSettingsRegistry takes priority over application.conf, enabling API-driven overrides
+    val totalInstances      = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
+    val maxInstancesPerNode = SimulatorSettingsRegistry.getInt("htc.time-manager.max-instances-per-node", config)
     logInfo(
       s"Creating LocalTM pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
