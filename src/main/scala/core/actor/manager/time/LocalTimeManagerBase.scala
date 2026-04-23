@@ -196,7 +196,7 @@ abstract class LocalTimeManagerBase(
     }
 
   private def syncWithGlobalTime(globalTick: Tick): Unit = {
-    if (globalTick % 10000 == 0) {
+    if (globalTick % 1000 == 0) {
       logInfo(
         s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
       )

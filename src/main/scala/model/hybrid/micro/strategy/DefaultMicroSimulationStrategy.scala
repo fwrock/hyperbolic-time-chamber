@@ -193,7 +193,8 @@ class DefaultMicroSimulationStrategy(
           leaderVehicle = leader.map(_.actorId),
           gapToLeader = gap,
           leaderVelocity = leaderVel,
-          safeVelocity = actualVelocity
+          safeVelocity = actualVelocity,
+          reachedEnd = newPosition >= linkLength
         )
       }
     }

@@ -25,6 +25,18 @@ import org.htc.protobuf.core.entity.actor.Identify
 trait PrivateVehicle[T <: MovableState] {
   self: Movable[T] =>
 
+  /** True once this vehicle has ever been activated by a Person actor.
+    * Once set, it is NEVER cleared — even between trips.
+    * A person-centric vehicle must NOT selfDestruct() after completing a trip;
+    * it returns to Parked and waits for the next StartTrip from its owner Person.
+    */
+  private var personCentric: Boolean = false
+
+  /** Whether this vehicle is managed by a Person actor.
+    * Determines lifecycle: person-centric → survive between trips; standalone → selfDestruct on finish.
+    */
+  protected def isPersonCentric: Boolean = personCentric
+
   /** Owner person reference with id and classType (set when vehicle is activated).
     */
   private var ownerPersonRef: Option[Identify] = None
@@ -89,6 +101,12 @@ trait PrivateVehicle[T <: MovableState] {
     logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
 
+  /** Hook called at the beginning of each new trip (before activation).
+    * Subclasses must override to reset all per-trip variables (metrics, SUMO stats, link tracking).
+    * This is critical for person-centric vehicles that serve multiple trips without being destroyed.
+    */
+  protected def resetTripState(): Unit = {}
+
   /** Handle StartTrip message from Person.
     *
     * Activates the vehicle, configures it with driver attributes, and begins the trip.
@@ -104,7 +122,13 @@ trait PrivateVehicle[T <: MovableState] {
         return
       }
 
-          logVehicleDebug(
+      // Mark this vehicle as person-centric (permanent — survives between trips)
+      personCentric = true
+
+      // Reset all per-trip state so metrics/route tracking start fresh for this trip
+      resetTripState()
+
+      logVehicleDebug(
         s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}"
       )
 
