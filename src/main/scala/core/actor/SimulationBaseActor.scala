@@ -756,6 +756,25 @@ abstract class SimulationBaseActor[T <: BaseState](
     report(event)
   }
 
+  /** Sends an event directly to a specific reporter type if registered.
+    * No-op if that reporter is not in the enabled strategies — simulation
+    * continues without any error or performance penalty.
+    */
+  protected def reportToSpecificReporter(
+    reportType: ReportTypeEnum,
+    data: Any,
+    label: String = null
+  ): Unit =
+    reporters.get(reportType).foreach { reporter =>
+      reporter ! ReportEvent(
+        entityId = entityId,
+        tick = currentTick,
+        lamportTick = getLamportClock,
+        data = data,
+        label = label
+      )
+    }
+
   /** Gets a relationship by entity id.
     * @param entityId
     *   The entity id
