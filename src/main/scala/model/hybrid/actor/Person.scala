@@ -204,7 +204,10 @@ class Person(
             initiatePTTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
           
           case _ =>
-            logWarn(s"Unknown mode: ${logistics.mode}, assuming instant arrival")
+            // Mode not yet implemented (e.g. car_passenger, carpool).
+            // Advance to next activity using the pre-defined schedule time.
+            // TODO: model unsupported modes properly when needed.
+            logDebug(s"Mode '${logistics.mode}' not yet implemented, advancing to next activity using scheduled time")
             advanceToNextActivity()
         }
       
@@ -332,10 +335,12 @@ class Person(
         onFinishSpontaneous(None)
         
       case _ =>
-        // Missing PT routing info — fall back to instant arrival
-        logWarn(s"${getEntityId} PT trip missing routing info (line=${logistics.line}, " +
+        // Missing PT routing info (line, boardingStop, alightingNode) — not modelled yet
+        // or data not present in activity plan. Advance using scheduled time.
+        // TODO: handle gracefully when PT routing data is partially available.
+        logDebug(s"${getEntityId} PT trip missing routing info (line=${logistics.line}, " +
           s"boardingStop=${logistics.boardingStopId}, alightingNode=${logistics.alightingNodeId}). " +
-          s"Falling back to instant arrival.")
+          s"Advancing to next activity using scheduled time.")
         advanceToNextActivity()
     }
   }

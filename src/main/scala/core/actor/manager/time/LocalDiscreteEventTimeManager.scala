@@ -62,7 +62,7 @@ class LocalDiscreteEventTimeManager(
           s"${classType.split('.').lastOption.getOrElse(classType)}=$count"
       }.mkString(", ")
 
-      if (tick % 10000 == 0 || actorsSet.size > TICK_BATCH_SIZE) {
+      if (tick % 1000 == 0 || actorsSet.size > TICK_BATCH_SIZE) {
         logInfo(
           s"[LocalDiscreteEvent] Processing tick $tick with ${actorsSet.size} scheduled actors ($actorSummary)"
         )

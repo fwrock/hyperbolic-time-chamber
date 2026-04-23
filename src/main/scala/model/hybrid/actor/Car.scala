@@ -33,9 +33,6 @@ class Car(
   private var currentLinkLength: Double = 0.0
   private var linkEntryTick: Option[Tick] = None
   private var mesoExitTick: Option[Tick] = None
-  // Prevents double-counting when leavingLink() already accumulated MICRO distance
-  // synchronously (before MicroLeaveLinkData, which is async, arrives).
-  private var microDistanceAccumulated: Boolean = false
 
   // SUMO TripInfo variables
   private var sumoDepartTick: Option[Tick] = None
@@ -86,6 +83,39 @@ class Car(
   override protected def logVehicleWarn(message: String): Unit = logWarn(message)
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
   override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
+
+  /** Reset all per-trip tracking variables so metrics start fresh for each new trip.
+    * Called by PrivateVehicle.handleStartTrip before each activation.
+    * Critical for person-centric vehicles that serve multiple trips without being destroyed.
+    */
+  override protected def resetTripState(): Unit = {
+    if (state == null) return
+    journeyFinishedReported = false
+    currentLinkId = None
+    currentLinkLength = 0.0
+    linkEntryTick = None
+    mesoExitTick = None
+    sumoDepartTick = None
+    sumoDepartSpeed = 0.0
+    sumoArrivalSpeed = 0.0
+    sumoDepartLane = None
+    sumoDepartPos = 0.0
+    sumoArrivalLane = None
+    sumoArrivalPos = 0.0
+    sumoWaitingTimeSeconds = 0.0
+    sumoWaitingCount = 0
+    sumoStopTimeSeconds = 0.0
+    sumoIdealTravelTimeSeconds = 0.0
+    sumoCurrentMicroTimeStepSeconds = 1.0
+    sumoIsHalting = false
+    sumoRerouteNo = 0
+    sumoTripInfoReported = false
+    signalWaitUntilTick = None
+    signalStateRetryCounter = 0
+    // Clear previous trip's route; new route will be calculated from tripOrigin/tripDestination
+    state.bestRoute = None
+    state.deactivateMicroMode()
+  }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null || state.status == Parked) {
@@ -159,9 +189,24 @@ class Car(
       return
     }
 
-    // Guard: ignore link/signal events when state is null (car already parked/deactivated)
+    // Guard: ignore link/signal events when state is null.
+    // This happens due to a Pekko cluster sharding ghost restart: selfDestruct() sends
+    // Passivate(PoisonPill) to the shard, but in-flight messages (already queued in the
+    // shard mailbox) cause the shard to recreate a new entity instance with state == null
+    // before the passivation is finalized. We discard the stale message and immediately
+    // re-passivate the ghost entity so it does not linger in memory.
     if (state == null) {
-      logWarn(s"${getEntityId} received interaction event while state is null (Parked), ignoring: ${event.eventType}")
+      // With the corrected flow (Link sends MicroLeaveLinkData proactively), this should
+      // not occur in normal operation. If it does, simply discard — do NOT selfDestruct():
+      // this Car is a PrivateVehicle that may serve multiple trips, and without state
+      // persistence there is nothing to recover from. Destroying it here would break
+      // subsequent StartTrip activations from the owning Person actor.
+      event.data match {
+        case _: MicroLeaveLinkData | _: MicroUpdateData =>
+          logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+        case _ =>
+          logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
+      }
       return
     }
 
@@ -203,8 +248,9 @@ class Car(
         enterLink()
       } else {
         finishJourney("already_at_destination", state.origin)
+        onFinishPrivateVehicle(state.origin)
         onFinishSpontaneous(None)
-        selfDestruct()
+        if (!isPersonCentric) selfDestruct()
       }
       return
     }
@@ -221,8 +267,9 @@ class Car(
         enterLink()
       } else {
         finishJourney("already_at_destination", state.origin)
+        onFinishPrivateVehicle(state.origin)
         onFinishSpontaneous(None)
-        selfDestruct()
+        if (!isPersonCentric) selfDestruct()
       }
       return
     }
@@ -234,8 +281,9 @@ class Car(
 
     if (origin == null || destination == null) {
       finishJourney("null_origin_or_destination", state.origin)
+      onFinishPrivateVehicle(state.origin)
       onFinishSpontaneous(None)
-      selfDestruct()
+      if (!isPersonCentric) selfDestruct()
       return
     }
 
@@ -253,22 +301,25 @@ class Car(
             enterLink()
           } else {
             finishJourney("already_at_destination", state.origin)
+            onFinishPrivateVehicle(state.origin)
             onFinishSpontaneous(None)
-            selfDestruct()
+            if (!isPersonCentric) selfDestruct()
           }
 
         case None =>
           logError(s"Failed to calculate route from ${state.origin} to ${state.destination}")
           finishJourney("route_calculation_failed", state.origin)
+          onFinishPrivateVehicle(state.origin)
           onFinishSpontaneous(None)
-          selfDestruct()
+          if (!isPersonCentric) selfDestruct()
       }
     } catch {
       case e: Exception =>
         logError(s"Exception during route request: ${e.getMessage}", e)
         finishJourney("exception_during_route_request", state.origin)
+        onFinishPrivateVehicle(state.origin)
         onFinishSpontaneous(None)
-        selfDestruct()
+        if (!isPersonCentric) selfDestruct()
     }
   }
 
@@ -324,7 +375,7 @@ class Car(
       finishJourney("reached_destination", finalNode)
       onFinishPrivateVehicle(finalNode)
       onFinishSpontaneous(None)
-      selfDestruct()
+      if (!isPersonCentric) selfDestruct()
     } else {
       state.status = WaitingSignalState
       val nodeId = getCurrentNode
@@ -391,15 +442,6 @@ class Car(
   }
 
   override def leavingLink(): Unit = {
-    // Accumulate MICRO-mode distance here (before currentLinkId changes to the next link).
-    // For intermediate links: MicroLeaveLinkData arrives after currentLinkId has already
-    // changed → the stale guard in handleMicroLeaveLink discards it → distance would be lost.
-    // For the final link: this runs before finishJourney(), so journey_completed gets the
-    // correct total. microState is None in MESO mode so this is a safe no-op.
-    state.microState.foreach { micro =>
-      state.distance += micro.positionInLink
-      microDistanceAccumulated = true  // signal handleMicroLeaveLink to skip distance
-    }
     mesoExitTick = None
     signalWaitUntilTick = None
     state.status = Ready
@@ -416,7 +458,6 @@ class Car(
     currentLinkId = Some(data.linkId)
     currentLinkLength = data.linkLength
     linkEntryTick = Some(currentTick)
-    microDistanceAccumulated = false  // reset: leavingLink() of previous link already ran
 
     // speedLimit from LinkState is stored in km/h; Link micro physics converts with /3.6
     val speedLimitMs = data.speedLimit / 3.6
@@ -499,10 +540,6 @@ class Car(
       sumoArrivalSpeed = data.velocity
       // NOTE: Don't track halting state per update - Link accumulates waiting time
       // across all sub-ticks and sends the total in MicroLeaveLinkData
-
-      if (data.position >= getCurrentLinkLength && state.status == Moving) {
-        requestSignalState()
-      }
     }
   }
 
@@ -522,14 +559,7 @@ class Car(
 
     val travelTime = linkEntryTick.map(entryTick => currentTick - entryTick).getOrElse(0L)
 
-    // leavingLink() accumulates distance synchronously to avoid the race condition where
-    // MicroLeaveLinkData arrives after currentLinkId has changed to the next link.
-    // If the flag is not set, leavingLink() was NOT called before (unexpected path), so
-    // we fall back to adding the distance from the data here.
-    if (!microDistanceAccumulated) {
-      state.distance += data.distanceTraveled
-    }
-    microDistanceAccumulated = false
+    state.distance += data.distanceTraveled
     sumoArrivalSpeed = data.finalVelocity
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition
@@ -565,7 +595,9 @@ class Car(
     currentLinkLength = 0.0
     linkEntryTick = None
 
-    onFinishSpontaneous(Some(currentTick + 1))
+    // MicroLeaveLinkData is the Link's signal that the vehicle has physically exited.
+    // Request signal state now: green → leavingLink() → next link; red → wait then leavingLink().
+    requestSignalState()
   }
 
   override def actHandleReceiveEnterLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
@@ -666,7 +698,7 @@ class Car(
       finishJourney("reached_destination", state.destination)
       onFinishPrivateVehicle(state.destination)
       onFinishSpontaneous(None)
-      selfDestruct()
+      if (!isPersonCentric) selfDestruct()
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }

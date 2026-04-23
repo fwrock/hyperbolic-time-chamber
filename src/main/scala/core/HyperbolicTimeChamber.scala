@@ -46,19 +46,18 @@ object HyperbolicTimeChamber {
     val deadLetterListener = system.actorOf(Props(new DeadLetterListener), "dead-letter-listener")
     system.eventStream.subscribe(deadLetterListener, classOf[DeadLetter])
 
-    // 🎲 Inicializar RandomSeedManager com configuração da simulação
     try {
       val simulationConfig = SimulationUtil.loadSimulationConfig()
       actor.manager.RandomSeedManager.initialize(simulationConfig)
       system.log.info(
-        s"🎲 RandomSeedManager inicializado com seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}"
+        s"RandomSeedManager initialized using seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}"
       )
     } catch {
       case e: Exception =>
         system.log.warning(
-          s"⚠️ Não foi possível carregar configuração da simulação para RandomSeedManager: ${e.getMessage}"
+          s"⚠️ It was not possible load random seed configuration for RandomSeedManager: ${e.getMessage}"
         )
-        system.log.warning("🎲 RandomSeedManager será inicializado sob demanda")
+        system.log.warning("🎲 RandomSeedManager will be initialized with timestamp-based seed")
     }
 
     PekkoManagement(system).start()
@@ -77,12 +76,7 @@ object HyperbolicTimeChamber {
     }
 
     SimulationUtil.startShards(system)
-
-    // Start the per-node migration window subscriber.
-    // This actor subscribes to the "migration-window" DistributedPubSub topic and:
-    //   - Registers the SnapshotManager singleton proxy in MigrationStateStoreRegistry
-    //   - Sets/clears the isMigrationActive flag when the LBM opens/closes the window
-    // One instance per JVM node (not a singleton).
+    
     actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
     val simulation = system.actorOf(

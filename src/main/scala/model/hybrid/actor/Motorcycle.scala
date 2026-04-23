@@ -145,6 +145,35 @@ class Motorcycle(
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
   override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
 
+  /** Reset all per-trip tracking variables so metrics start fresh for each new trip.
+    * Called by PrivateVehicle.handleStartTrip before each activation.
+    */
+  override protected def resetTripState(): Unit = {
+    if (state == null) return
+    currentLinkId = None
+    linkEntryTick = None
+    mesoExitTick = None
+    sumoDepartTick = None
+    sumoDepartSpeed = 0.0
+    sumoArrivalSpeed = 0.0
+    sumoDepartLane = None
+    sumoDepartPos = 0.0
+    sumoArrivalLane = None
+    sumoArrivalPos = 0.0
+    sumoWaitingTimeSeconds = 0.0
+    sumoWaitingCount = 0
+    sumoStopTimeSeconds = 0.0
+    sumoIdealTravelTimeSeconds = 0.0
+    sumoCurrentMicroTimeStepSeconds = 1.0
+    sumoIsHalting = false
+    sumoRerouteNo = 0
+    sumoTripInfoReported = false
+    signalWaitUntilTick = None
+    signalStateRetryCounter = 0
+    state.bestRoute = None
+    state.deactivateMicroMode()
+  }
+
   // ===== End Accessor Methods =====
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
@@ -198,26 +227,11 @@ class Motorcycle(
 
       case Moving =>
         if (state.isMicroMode) {
-          // MICRO mode: check position and possibly filter lanes
-          var shouldLeave = false
-          state.microState.foreach {
-            micro =>
-              // Check if can filter between lanes (if traffic is slow)
-              if (shouldAttemptLaneFiltering(micro)) {
-                logDebug(s"Motorcycle attempting lane filtering")
-              }
-
-              if (micro.positionInLink >= getCurrentLinkLength) {
-                shouldLeave = true
-              }
-          }
-
-          if (shouldLeave) {
-            leavingLink()
-          } else {
-            // Continue in MICRO mode, schedule next check
-            onFinishSpontaneous(Some(currentTick + 1))
-          }
+          // MICRO mode: the Link drives exit via proactive MicroLeaveLinkData.
+          // Spontaneous events should not arrive in normal MICRO operation
+          // (they were stopped by onFinishSpontaneous(None) in handleMicroEnterLink).
+          // If one arrives here (stale tick), quietly deregister to stay clean.
+          onFinishSpontaneous(None)
         } else {
           // MESO mode: only request signal state after travel time has elapsed
           mesoExitTick match {
@@ -258,7 +272,12 @@ class Motorcycle(
     }
 
     if (state == null) {
-      logDebug(s"${getEntityId} received interaction event while state is null (Parked), ignoring: ${event.eventType}")
+      event.data match {
+        case _: MicroLeaveLinkData | _: MicroUpdateData =>
+          logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+        case _ =>
+          logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
+      }
       return
     }
 
@@ -286,7 +305,7 @@ class Motorcycle(
         onFinishPrivateVehicle("unknown")
       }
       onFinishSpontaneous(None)
-      selfDestruct()
+      if (!isPersonCentric) selfDestruct()
     } else {
       state.status = WaitingSignalState
       getCurrentNode match {
@@ -542,12 +561,13 @@ class Motorcycle(
       label = "leave_micro_link"
     )
 
-    // Deactivate MICRO mode
     state.deactivateMicroMode()
     currentLinkId = None
     linkEntryTick = None
 
-    onFinishSpontaneous(Some(currentTick + 1))
+    // MicroLeaveLinkData is the Link's signal that the vehicle has physically exited.
+    // Request signal state now: green → leavingLink() → next link; red → wait then leavingLink().
+    requestSignalState()
   }
 
   /** Handle entering MESO link.
@@ -632,7 +652,7 @@ class Motorcycle(
       finishJourney("reached_destination", state.destination)
       onFinishPrivateVehicle(state.destination)
       onFinishSpontaneous(None)
-      selfDestruct()
+      if (!isPersonCentric) selfDestruct()
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }

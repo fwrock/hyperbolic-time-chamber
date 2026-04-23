@@ -103,5 +103,8 @@ case class MicroVehicleUpdate(
   leaderVehicle: Option[String],
   gapToLeader: Double,
   leaderVelocity: Double,
-  safeVelocity: Double
+  safeVelocity: Double,
+  // True when vehicle has reached the end of the link (position >= linkLength).
+  // Link uses this flag to send MicroLeaveLinkData instead of MicroUpdateData.
+  reachedEnd: Boolean = false
 )

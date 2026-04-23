@@ -566,11 +566,27 @@ class Link(
    * @param entryTick Tick when vehicle entered (for travel time)
    */
   private def sendLeaveLinkMicro(event: ActorInteractionEvent, data: LeaveLinkData, entryTick: Long): Unit = {
+    // Check whether the vehicle was already proactively sent MicroLeaveLinkData in handleGlobalTick.
+    // In the correct flow: Link sends MicroLeaveLinkData → car requests signal → leavingLink() sends
+    // LeaveLinkData back here. The vehicle was already removed from vehiclesByLane at exit time, so
+    // there is nothing left to do except cleanup (state.registered was already cleaned in handleLeaveLink).
+    val stillInLanes = state.vehiclesByLane.values.exists(q => q.exists(_.actorId == data.actorId))
+
+    if (!stillInLanes) {
+      // Normal path: vehicle exited proactively. Just ensure lane queues are clean (no-op if already empty).
+      logDebug(s"${data.actorId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
+      if (state.totalVehiclesInMicro == 0 && microTickScheduled) {
+        microTickScheduled = false
+      }
+      return
+    }
+
+    // Fallback path (should not normally occur): vehicle sent LeaveLinkData before Link sent MicroLeaveLinkData.
+    // Send MicroLeaveLinkData now as a fallback so the car can still process stats.
     state.vehiclesByLane.foreach { case (_, queue) =>
       queue.dequeueAll(_.actorId == data.actorId)
     }
 
-    // BUGFIX: Send accumulated waiting time from Link to Car
     val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(data.actorId, 0.0)
     vehicleWaitingSeconds.remove(data.actorId)
 
@@ -676,12 +692,65 @@ class Link(
       // Strategy mutates state.vehiclesByLane, no need to copy back
       // (queues are shared references)
       
-      // Send updates to vehicles
-      updates.foreach(sendMicroUpdateToVehicle)
+      // Send updates to vehicles: proactive MicroLeaveLinkData for those that reached the end,
+      // regular MicroUpdateData for others. This makes the Link the authority on exit, preventing
+      // the ghost-restart race condition that occurred when vehicles detected exit themselves.
+      updates.foreach { update =>
+        if (update.reachedEnd) sendMicroLeaveLinkToVehicle(update)
+        else sendMicroUpdateToVehicle(update)
+      }
     }
 
     tickProcessingDurationMs = (System.nanoTime() - processingStartedAt) / 1000000L
     emitSumoSummaryStep(tick)
+  }
+
+  /**
+   * Sends a proactive MicroLeaveLinkData to a vehicle that has reached the end of the link.
+   * This is the correct trigger for the vehicle to request signal state — the Link is the
+   * authority on when a vehicle exits, not the vehicle itself.
+   *
+   * The vehicle is removed from vehiclesByLane here; when its LeaveLinkData arrives later
+   * (after signal is green), sendLeaveLinkMicro will skip sending MicroLeaveLinkData again.
+   *
+   * @param update Vehicle update with reachedEnd=true
+   */
+  private def sendMicroLeaveLinkToVehicle(update: model.hybrid.micro.strategy.MicroVehicleUpdate): Unit = {
+    // Remove vehicle from lane queues immediately — it has physically exited the link
+    state.vehiclesByLane.foreach { case (_, queue) =>
+      queue.dequeueAll(_.actorId == update.vehicleId)
+    }
+
+    val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(update.vehicleId, 0.0)
+    vehicleWaitingSeconds.remove(update.vehicleId)
+
+    val entryTick = vehicleEntryTick.getOrElse(update.vehicleId, currentTick)
+    val elapsedTicks = math.max(1L, currentTick - entryTick + 1)
+    val avgSpeed = if (elapsedTicks > 0 && state.microTimeStep > 0)
+      state.length / (elapsedTicks * state.microTimeStep)
+    else update.velocity
+
+    val microLeaveData = MicroLeaveLinkData(
+      linkId = getEntityId,
+      finalPosition = update.position,
+      finalVelocity = update.velocity,
+      travelTime = elapsedTicks,
+      distanceTraveled = state.length,
+      averageSpeed = avgSpeed,
+      waitingTimeSeconds = accumulatedWaitingTime
+    )
+
+    sendMessageTo(
+      entityId = update.vehicleId,
+      shardId = update.shardId,
+      data = microLeaveData,
+      eventType = "MicroLeaveLink",
+      actorType = LoadBalancedDistributed
+    )
+
+    if (state.totalVehiclesInMicro == 0 && microTickScheduled) {
+      microTickScheduled = false
+    }
   }
 
   /**
