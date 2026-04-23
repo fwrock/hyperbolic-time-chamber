@@ -68,10 +68,19 @@ class SimulationManager(
     case event: SimulationConfigLoadFailedEvent           => onSimulationConfigLoadFailed(event)
   }
 
-  override def onStart(): Unit =
-    getSelfProxy ! PrepareSimulationEvent(
-      configuration = simulationPath
-    )
+  override def onStart(): Unit = {
+    val apiEnabled = sys.env
+      .getOrElse("HTC_API_ENABLED",
+        try context.system.settings.config.getString("htc.api.enabled")
+        catch { case _: Exception => "false" })
+      .equalsIgnoreCase("true")
+
+    if (apiEnabled) {
+      logInfo("Simulator API enabled — simulation is IDLE. Waiting for POST /api/v1/simulation/start")
+    } else {
+      getSelfProxy ! PrepareSimulationEvent(configuration = simulationPath)
+    }
+  }
 
   private def startSimulation(event: FinishLoadDataEvent): Unit = {
     loadManager ! DestructEvent(actorRef = getPath)
