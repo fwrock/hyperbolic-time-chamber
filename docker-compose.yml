@@ -84,6 +84,41 @@ services:
     volumes:
       - redis_data:/data
 
+  # ── ClickHouse: time-series database for vehicle flow metrics ─────────────
+  # Optional — the simulation runs normally if this service is not started.
+  # Activate ClickHouse reporting by setting:
+  #   HTC_CLICKHOUSE_ENABLED: "true"
+  #   and adding "clickhouse" to enabled-strategies in application.conf or via
+  #   HTC_REPORT_CLICKHOUSE_ENABLED env var.
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: htc-clickhouse
+    network_mode: host
+    environment:
+      CLICKHOUSE_DB: htc
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ── ch-ui: web interface for ClickHouse (queries, table browser, charts) ──
+  # Available at http://localhost:5521
+  ch-ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    container_name: htc-ch-ui
+    network_mode: host
+    environment:
+      VITE_CLICKHOUSE_URL: http://localhost:8123
+      VITE_CLICKHOUSE_USER: default
+      VITE_CLICKHOUSE_PASS: ""
+    depends_on:
+      - clickhouse
+
   node1:
     build: .
     container_name: node_1
@@ -229,3 +264,5 @@ volumes:
   kafka_data:
   zookeeper_data:
   zookeeper_logs:
+  clickhouse_data:
+  clickhouse_logs:
