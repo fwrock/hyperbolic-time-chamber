@@ -261,8 +261,7 @@ class Motorcycle(
         }
 
       case _ =>
-        logWarn(s"Motorcycle status not handled: ${state.status}")
-        onFinishSpontaneous(Some(currentTick + 1))
+        super.actSpontaneous(event)
     }
   }
 
@@ -275,6 +274,8 @@ class Motorcycle(
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
           logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+        case _: LinkInfoData =>
+          logDebug(s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}")
         case _ =>
           logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
       }
@@ -627,6 +628,12 @@ class Motorcycle(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
+    if (state.status == Parked || state.status == Finished) {
+      logDebug(s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
+        s"(status=${state.status}, trip already finalized).")
+      return
+    }
+
     state.distance += data.linkLength
     sumoArrivalSpeed = 0.0
     sumoArrivalLane = Some(s"${event.actorRefId}_0")

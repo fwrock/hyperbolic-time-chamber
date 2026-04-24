@@ -24,6 +24,8 @@ import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.model.hybrid.micro.strategy.{MicroSimulationStrategy, DefaultMicroSimulationStrategy, LaneChangeStrategy, NoLaneChangeStrategy}
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 
 import scala.collection.mutable
 
@@ -303,19 +305,17 @@ class Link(
     ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
 
-    report(
-      data = Map(
-        "event_type" -> "vehicle_entered_link",
-        "link_id" -> getEntityId,
-        "vehicle_id" -> data.actorId,
-        "vehicle_type" -> data.actorType,
-        "link_length" -> state.length,
-        "simulation_mode" -> state.simulationMode.toString,
-        "current_congestion" -> state.congestionFactor,
-        "vehicles_in_link" -> state.registered.size,
-        "tick" -> currentTick
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = getEntityId,
+        eventType = "enter",
+        vehicleId = data.actorId,
+        actorType = data.actorType.toString,
+        actorCreationType = data.actorCreationType.toString,
+        vehicleCountOnLink = state.registered.size
       ),
-      label = "link_vehicle_entered"
+      "vehicle_link_flow"
     )
 
     if (state.isMicroMode) {
@@ -523,17 +523,17 @@ class Link(
     val wasRegistered = state.registered.exists(_.actorId == data.actorId)
     val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
 
-    report(
-      data = Map(
-        "event_type" -> "vehicle_left_link",
-        "link_id" -> getEntityId,
-        "vehicle_id" -> data.actorId,
-        "vehicle_type" -> data.actorType.toString,
-        "link_length" -> state.length,
-        "vehicles_remaining" -> vehiclesRemaining,
-        "tick" -> currentTick
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = getEntityId,
+        eventType = "leave",
+        vehicleId = data.actorId,
+        actorType = data.actorType.toString,
+        actorCreationType = data.actorCreationType.toString,
+        vehicleCountOnLink = vehiclesRemaining
       ),
-      label = "link_vehicle_left"
+      "vehicle_link_flow"
     )
 
     state.registered.filterInPlace(_.actorId != data.actorId)

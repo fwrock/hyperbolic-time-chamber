@@ -20,6 +20,13 @@ Port (default `8080`):
 | Environment variable | `HTC_API_PORT=8080` |
 | `application.conf` | `htc.api.port = 8080` |
 
+Scenarios directory (default `/app/simulations`):
+
+| Method | Value |
+|---|---|
+| Environment variable | `HTC_SCENARIOS_DIR=/app/simulations` |
+| `application.conf` | `htc.api.scenarios-dir = "/app/simulations"` |
+
 When the API is enabled the simulator starts in **Idle** state and waits for a `POST /api/v1/simulation/start` before executing.
 
 ---
@@ -212,6 +219,113 @@ Stops the simulation and triggers a graceful shutdown of all manager singletons.
 
 ---
 
+### Scenarios
+
+The scenarios endpoints allow browsing simulation scenarios available on disk, reading their metadata, and loading one into memory before starting the simulation.
+
+Scenarios are sub-directories under the configured `HTC_SCENARIOS_DIR`, each containing:
+- `simulation.json` — required: the full `Simulation` config
+- `metadata.json` — optional: human-readable descriptor
+
+**`metadata.json` format** (all fields optional):
+```json
+{
+  "description": "Toulouse morning peak — 1% sample",
+  "version": "2.1",
+  "author": "HTC Team",
+  "tags": ["toulouse", "urban", "1pct"],
+  "notes": "Requires at least 4 worker nodes"
+}
+```
+
+**Directory layout expected:**
+```
+/app/simulations/
+  toulouse_1pct/
+    simulation.json
+    metadata.json
+  sao_paulo_10pct/
+    simulation.json
+    metadata.json
+```
+
+---
+
+#### `GET /api/v1/scenarios`
+
+Lists all scenarios found in the configured directory.
+
+**Response `200`**
+```json
+{
+  "scenariosDir": "/app/simulations",
+  "count": 2,
+  "scenarios": [
+    {
+      "name": "toulouse_1pct",
+      "hasMetadata": true,
+      "meta": {
+        "description": "Toulouse morning peak — 1% sample",
+        "version": "2.1",
+        "author": "HTC Team",
+        "tags": ["toulouse", "urban", "1pct"],
+        "notes": null
+      },
+      "simulationName": "toulouse morning peak",
+      "simulationDescription": "1% vehicle sample, morning peak",
+      "duration": 7200,
+      "timeUnit": "seconds",
+      "startTick": 0,
+      "endTick": null
+    }
+  ]
+}
+```
+
+---
+
+#### `GET /api/v1/scenarios/{name}`
+
+Returns the full detail for a single scenario: metadata + complete `Simulation` config.
+
+**Response `200`**
+```json
+{
+  "name": "toulouse_1pct",
+  "hasMetadata": true,
+  "meta": { "description": "...", "tags": ["toulouse"], "author": "HTC Team" },
+  "simulation": { ...full Simulation object... }
+}
+```
+
+**Response `404`** — scenario not found
+```json
+{ "status": "error", "message": "Scenario 'xyz' not found in '/app/simulations'" }
+```
+
+---
+
+#### `POST /api/v1/scenarios/{name}/load`
+
+Loads the scenario's `simulation.json` into the API config registry. This is the **recommended way** to select a scenario — equivalent to doing a `PUT /api/v1/simulation/config` with the file contents, but without having to send the entire JSON body. After calling this endpoint, the scenario is active and a `POST /api/v1/simulation/start` will use it.
+
+**Response `200`**
+```json
+{
+  "status": "ok",
+  "message": "Scenario loaded — call POST /api/v1/simulation/start to begin",
+  "name": "toulouse_1pct",
+  "simulationName": "toulouse morning peak"
+}
+```
+
+**Response `404`** — scenario not found
+```json
+{ "status": "error", "message": "Scenario 'xyz' not found in '/app/simulations'" }
+```
+
+---
+
 ### Settings
 
 The settings endpoints expose the `htc.*` parameters that are normally set via env vars in the docker-compose file. Overrides apply on top of env vars and `application.conf`.
@@ -345,6 +459,8 @@ Clears the API override for a single setting.
 | `htc.load-balance-manager.enabled` | `HTC_LOAD_BALANCE_ENABLED` | `false` | Enable load balance manager |
 | `htc.load-balance-manager.strategy` | `HTC_LOAD_BALANCE_STRATEGY` | `default` | Load balance strategy: `hybrid` \| `default` \| `disabled` |
 | `htc.simulation.config-file` | `HTC_SIMULATION_CONFIG_FILE` | _(none)_ | Path to simulation JSON configuration file |
+| `htc.simulation.id` | `HTC_SIMULATION_ID` | _(none)_ | Human-readable ID for output files and reports. Defaults to simulation name. |
+| `htc.mobility.city-map-file` | `HTC_MOBILITY_CITY_MAP_FILE` | `city_map.json` | Path to the city map JSON (Node/Link graph). **Required for mobility simulations** (Car, Bus, Bicycle, Motorcycle, etc.). |
 
 ---
 
@@ -362,7 +478,7 @@ Scenario config follows the same hierarchy:
 
 ```
 1. configFile field in POST /api/v1/simulation/start body
-2. PUT /api/v1/simulation/config (ApiConfigRegistry)
+2. POST /api/v1/scenarios/{name}/load  or  PUT /api/v1/simulation/config  (ApiConfigRegistry)
 3. HTC_SIMULATION_CONFIG_FILE env var
 4. htc.simulation.config-file in application.conf
 ```
@@ -371,31 +487,57 @@ Scenario config follows the same hierarchy:
 
 ## Typical Workflow (API mode)
 
+### Option A — Browse and load a scenario from disk (recommended)
+
 ```bash
 BASE=http://localhost:8080/api/v1
 
-# 1. Upload the scenario
+# 1. See what scenarios are available
+curl $BASE/scenarios
+
+# 2. Inspect a specific scenario (metadata + full simulation config)
+curl $BASE/scenarios/toulouse_1pct
+
+# 3. Load the chosen scenario into memory
+curl -X POST $BASE/scenarios/toulouse_1pct/load
+
+# 4. Optionally edit the loaded config before starting
+#    (GET returns the config currently in memory)
+curl $BASE/simulation/config
+#    Modify what you need, then PUT it back:
 curl -X PUT $BASE/simulation/config \
      -H "Content-Type: application/json" \
-     -d @simulation.json
+     -d '{...modified Simulation JSON...}'
 
-# 2. Optionally tweak settings
+# 5. Optionally tweak infrastructure settings
 curl -X PUT $BASE/settings \
      -H "Content-Type: application/json" \
      -d '{"htc.time-manager.total-instances":"64"}'
 
-# 3. Start the simulation
+# 6. Start the simulation
 curl -X POST $BASE/simulation/start
 
-# 4. Monitor progress
+# 7. Monitor progress
 curl $BASE/simulation/status
 
-# 5. Pause / resume if needed
+# 8. Pause / resume if needed
 curl -X POST $BASE/simulation/pause
 curl -X POST $BASE/simulation/resume
 
-# 6. Stop
+# 9. Stop
 curl -X POST $BASE/simulation/stop
+```
+
+### Option B — Upload the scenario JSON directly
+
+```bash
+# Upload scenario config
+curl -X PUT $BASE/simulation/config \
+     -H "Content-Type: application/json" \
+     -d @simulation.json
+
+# Start
+curl -X POST $BASE/simulation/start
 ```
 
 ### Start with everything in one call
@@ -420,7 +562,37 @@ curl -X POST $BASE/simulation/start \
 environment:
   HTC_API_ENABLED: "true"
   HTC_API_PORT: "8080"
-  # HTC_SIMULATION_CONFIG_FILE is now optional — can be sent via API
+  HTC_API_CORS_ORIGINS: "http://localhost:3000"
+  # Directory with scenario sub-folders (each containing simulation.json + optional metadata.json)
+  HTC_SCENARIOS_DIR: "/app/simulations"
+  # HTC_SIMULATION_CONFIG_FILE is now optional — scenario can be selected via API
 ports:
   - "8080:8080"
+volumes:
+  - ./simulations:/app/simulations:ro
 ```
+
+---
+
+## Endpoint Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/health` | Liveness check |
+| `GET` | `/api/v1/scenarios` | List all available scenarios |
+| `GET` | `/api/v1/scenarios/{name}` | Full detail: metadata + simulation config |
+| `POST` | `/api/v1/scenarios/{name}/load` | Load scenario into memory |
+| `GET` | `/api/v1/simulation/config` | Get active scenario config (and source) |
+| `PUT` | `/api/v1/simulation/config` | Set scenario config from request body |
+| `DELETE` | `/api/v1/simulation/config` | Clear scenario API override |
+| `GET` | `/api/v1/simulation/status` | Status + tick metrics |
+| `POST` | `/api/v1/simulation/start` | Start simulation |
+| `POST` | `/api/v1/simulation/pause` | Pause simulation |
+| `POST` | `/api/v1/simulation/resume` | Resume simulation |
+| `POST` | `/api/v1/simulation/stop` | Stop simulation |
+| `GET` | `/api/v1/settings` | List all settings + effective values |
+| `GET` | `/api/v1/settings/{key}` | Get a single setting |
+| `PUT` | `/api/v1/settings` | Set multiple settings |
+| `PUT` | `/api/v1/settings/{key}` | Set a single setting |
+| `DELETE` | `/api/v1/settings` | Clear all setting overrides |
+| `DELETE` | `/api/v1/settings/{key}` | Clear a single setting override |

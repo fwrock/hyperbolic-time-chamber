@@ -204,6 +204,11 @@ class Car(
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
           logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+        case _: LinkInfoData =>
+          // ReceiveLeaveLinkInfo / ReceiveEnterLinkInfo arriving after shard passivation —
+          // expected artifact of the MESO leave-link round-trip when the car was already
+          // destroyed or evicted by the shard cluster. Safe to discard silently.
+          logDebug(s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}")
         case _ =>
           logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
       }
@@ -651,6 +656,16 @@ class Car(
   }
 
   override def actHandleReceiveLeaveLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    // Guard: this callback arrives AFTER leavingLink() was called. For the last link of a
+    // trip, the car already finalized the journey in requestSignalState() (or actHandleReceiveLeaveLinkInfo
+    // for intermediate links) before this response arrived from the Link. Discard to prevent
+    // double distance accumulation, double finishJourney(), and spurious onFinishSpontaneous().
+    if (state.status == Parked || state.status == Finished) {
+      logDebug(s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
+        s"(status=${state.status}, trip already finalized).")
+      return
+    }
+
     state.distance += data.linkLength
     sumoArrivalSpeed = 0.0
     sumoArrivalLane = Some(s"${event.actorRefId}_0")

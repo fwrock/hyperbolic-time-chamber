@@ -62,7 +62,21 @@ object ConfigApiServer {
     implicit val mat: Materializer        = Materializer(system)
     implicit val ec                       = system.dispatcher
 
-    val allRoutes = concat(SimulationRoutes.routes, SettingsRoutes.routes)
+    val allowedOrigins = sys.env
+      .getOrElse("HTC_API_CORS_ORIGINS",
+        try system.settings.config.getString("htc.api.cors-origins")
+        catch { case _: Exception => "*" })
+
+    val scenariosDir = sys.env
+      .getOrElse("HTC_SCENARIOS_DIR",
+        try system.settings.config.getString("htc.api.scenarios-dir")
+        catch { case _: Exception => "/app/simulations" })
+
+    ScenarioRegistry.configure(scenariosDir)
+
+    val allRoutes = CorsSupport.cors(allowedOrigins)(
+      concat(SimulationRoutes.routes, SettingsRoutes.routes, ScenarioRoutes.routes)
+    )
 
     Http(system)
       .newServerAt("0.0.0.0", port)
