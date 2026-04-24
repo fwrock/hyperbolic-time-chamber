@@ -95,8 +95,8 @@ class Link(
           linkId = entityId,
           eventType = "enter",
           vehicleId = data.actorId,
-          actorType = data.actorType,
-          actorCreationType = data.actorCreationType,
+          actorType = data.actorType.toString,
+          actorCreationType = data.actorCreationType.toString,
           vehicleCountOnLink = state.registered.size
         ),
         "vehicle_link_flow"
@@ -121,8 +121,8 @@ class Link(
         linkId = entityId,
         eventType = "leave",
         vehicleId = data.actorId,
-        actorType = data.actorType,
-        actorCreationType = data.actorCreationType,
+        actorType = data.actorType.toString,
+        actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
       "vehicle_link_flow"

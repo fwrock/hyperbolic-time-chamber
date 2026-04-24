@@ -56,6 +56,7 @@ lazy val root = (project in file("."))
       case PathList("reference.conf", _*)         => MergeStrategy.concat
       case "application.conf"                     => MergeStrategy.concat
       case "logback.xml"                          => MergeStrategy.concat
+      case x if x.endsWith(".proto")              => MergeStrategy.discard
       case x => MergeStrategy.first
     },
     libraryDependencies ++= Seq(

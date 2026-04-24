@@ -67,7 +67,12 @@ object SimulatorSettingsRegistry {
       "Load balance strategy: hybrid | default | disabled", "default"),
     // ── Simulation ────────────────────────────────────────────────────────────
     SettingDef("htc.simulation.config-file", "HTC_SIMULATION_CONFIG_FILE",
-      "Path to simulation JSON configuration file", "")
+      "Path to simulation JSON configuration file", ""),
+    SettingDef("htc.simulation.id", "HTC_SIMULATION_ID",
+      "Human-readable ID for output files and reports. Defaults to simulation name.", ""),
+    // ── Mobility ──────────────────────────────────────────────────────────────
+    SettingDef("htc.mobility.city-map-file", "HTC_MOBILITY_CITY_MAP_FILE",
+      "Path to the city map JSON (Node/Link graph). Required for mobility simulations.", "city_map.json")
   )
 
   private val catalogByPath: Map[String, SettingDef] = catalog.map(d => d.configPath -> d).toMap

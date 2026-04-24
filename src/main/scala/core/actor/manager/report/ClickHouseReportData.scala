@@ -118,8 +118,8 @@ class ClickHouseReportData(
     sb.append(",\"link_id\":\"").append(escape(flow.linkId)).append('"')
     sb.append(",\"event_type\":\"").append(flow.eventType).append('"')
     sb.append(",\"vehicle_id\":\"").append(escape(flow.vehicleId)).append('"')
-    sb.append(",\"actor_type\":\"").append(flow.actorType.toString).append('"')
-    sb.append(",\"actor_creation_type\":\"").append(flow.actorCreationType.toString).append('"')
+    sb.append(",\"actor_type\":\"").append(escape(flow.actorType)).append('"')
+    sb.append(",\"actor_creation_type\":\"").append(escape(flow.actorCreationType)).append('"')
     sb.append(",\"vehicle_count_on_link\":").append(flow.vehicleCountOnLink)
     sb.append('}')
     sb.toString
