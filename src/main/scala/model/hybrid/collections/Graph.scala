@@ -448,6 +448,205 @@ case class Graph[V, W, L] private (
 
   // Outros métodos de A* e Dijkstra e reconstrução podem ser mantidos ou adaptados similarmente.
   // Por brevidade, focarei no aStarEdgeTargets que é usado no GPSUtil.
+
+  // ---------------------------------------------------------------------------
+  // Contraction Hierarchies – preprocessing
+  // ---------------------------------------------------------------------------
+
+  /** Builds a [[ContractionHierarchiesIndex]] for this graph.
+    *
+    * Preprocessing contracts nodes in order of their *edge-difference* importance
+    * (|shortcuts| − |incoming + outgoing edges|). Shortcuts are added to preserve
+    * shortest-path distances through the contracted node. The resulting index supports
+    * extremely fast bidirectional Dijkstra queries via
+    * [[ContractionHierarchiesIndex.query]].
+    *
+    * Complexity: O(n · k²) worst case, where k is the average degree. In practice
+    * road-network graphs have small k, so preprocessing is fast.
+    *
+    * @return A pre-computed [[ContractionHierarchiesIndex]] ready for queries.
+    */
+  def buildContractionHierarchies(implicit num: Numeric[W]): graph.ContractionHierarchiesIndex[V, W, L] = {
+    val weightToDouble: W => Double = num.toDouble(_)
+
+    // Mutable adjacency for the augmented graph (original + shortcuts)
+    // forward: u -> v -> weight
+    // backward: v -> u -> weight (for finding predecessors)
+    val fwd = mutable.Map[V, mutable.Map[V, Double]]()
+    val bwd = mutable.Map[V, mutable.Map[V, Double]]()
+
+    // Edge labels for original edges only (used in path unpacking)
+    val origLabels = mutable.Map[(V, V), (Double, L)]()
+
+    // Initialise from immutable adjacency list
+    adjacencyList.foreach {
+      case (u, nbrs) =>
+        val fm = fwd.getOrElseUpdate(u, mutable.Map.empty)
+        nbrs.foreach {
+          case (v, info) =>
+            val w = weightToDouble(info.weight)
+            fm(v) = w
+            bwd.getOrElseUpdate(v, mutable.Map.empty)(u) = w
+            origLabels((u, v)) = (w, info.label)
+        }
+    }
+
+    // Ensure every vertex has an entry (even if isolated)
+    vertices.foreach { v =>
+      fwd.getOrElseUpdate(v, mutable.Map.empty)
+      bwd.getOrElseUpdate(v, mutable.Map.empty)
+    }
+
+    // shortcuts: (u, w) -> via-node
+    val shortcuts = mutable.Map[(V, V), V]()
+
+    // Contraction rank assigned to each node
+    val rank = mutable.Map[V, Int]()
+
+    // Set of not-yet contracted nodes
+    val remaining = mutable.Set[V]() ++= vertices
+
+    /** Witness search: find shortest path from `src` to `tgt` in the graph,
+      * but *skipping* node `skip`, up to distance `maxDist`.
+      * Uses a small Dijkstra limited to `maxSettled` settlements for speed.
+      */
+    def witnessExists(src: V, tgt: V, skip: V, maxDist: Double, maxSettled: Int): Boolean = {
+      val dist = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
+      val pq = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
+      dist(src) = 0.0
+      pq.enqueue((0.0, src))
+      var settled = 0
+      while (pq.nonEmpty && settled < maxSettled) {
+        val (d, u) = pq.dequeue()
+        if (d <= dist(u)) {
+          if (u == tgt && d <= maxDist) return true
+          if (u != skip) {
+            settled += 1
+            fwd.getOrElse(u, mutable.Map.empty).foreach {
+              case (nb, w) =>
+                val nd = d + w
+                if (nd < dist(nb)) {
+                  dist(nb) = nd; pq.enqueue((nd, nb))
+                }
+            }
+          }
+        }
+      }
+      dist(tgt) <= maxDist
+    }
+
+    /** Compute edge-difference for `v` (heuristic node importance). */
+    def edgeDifference(v: V): Int = {
+      val preds = bwd.getOrElse(v, mutable.Map.empty).keys.filter(remaining.contains).toSeq
+      val succs = fwd.getOrElse(v, mutable.Map.empty).keys.filter(remaining.contains).toSeq
+      var shortcutCount = 0
+      preds.foreach {
+        u =>
+          val duv = fwd(u)(v)
+          succs.foreach {
+            w =>
+              if (u != w) {
+                val maxDist = duv + fwd(v)(w)
+                if (!witnessExists(u, w, v, maxDist, 200))
+                  shortcutCount += 1
+              }
+          }
+      }
+      shortcutCount - (preds.size + succs.size)
+    }
+
+    // Priority queue ordered by edge-difference (ascending = contract cheapest first)
+    val importancePQ =
+      mutable.PriorityQueue[(Int, V)]()(Ordering.by[(Int, V), Int](_._1).reverse)
+    vertices.foreach { v => importancePQ.enqueue((edgeDifference(v), v)) }
+
+    var orderIdx = 0
+
+    while (remaining.nonEmpty && importancePQ.nonEmpty) {
+      // Lazily re-evaluate the top candidate (lazy update pattern)
+      var contracted = false
+      while (!contracted && importancePQ.nonEmpty) {
+        val (_, v) = importancePQ.dequeue()
+        if (!remaining.contains(v)) {
+          // Already contracted, skip
+        } else {
+          // Re-check importance to handle stale entries
+          val currentImportance = edgeDifference(v)
+          if (importancePQ.nonEmpty && currentImportance > importancePQ.head._1) {
+            // A cheaper node exists; re-insert and try again
+            importancePQ.enqueue((currentImportance, v))
+          } else {
+            // Contract v
+            rank(v) = orderIdx
+            orderIdx += 1
+            remaining.remove(v)
+
+            val preds = bwd.getOrElse(v, mutable.Map.empty).keys.filter(remaining.contains).toSeq
+            val succs = fwd.getOrElse(v, mutable.Map.empty).keys.filter(remaining.contains).toSeq
+
+            preds.foreach {
+              u =>
+                val duv = fwd(u)(v)
+                succs.foreach {
+                  w =>
+                    if (u != w) {
+                      val maxDist = duv + fwd(v)(w)
+                      if (!witnessExists(u, w, v, maxDist, 200)) {
+                        val scWeight = duv + fwd(v)(w)
+                        // Add shortcut u->w if it improves current best
+                        if (scWeight < fwd.getOrElse(u, mutable.Map.empty).getOrElse(w, Double.PositiveInfinity)) {
+                          fwd.getOrElseUpdate(u, mutable.Map.empty)(w) = scWeight
+                          bwd.getOrElseUpdate(w, mutable.Map.empty)(u) = scWeight
+                          shortcuts((u, w)) = v
+                        }
+                      }
+                    }
+                }
+            }
+            contracted = true
+          }
+        }
+      }
+    }
+
+    // Assign remaining uncontracted nodes a rank (shouldn't happen in connected graphs)
+    remaining.foreach {
+      v => rank(v) = orderIdx; orderIdx += 1
+    }
+
+    // Build upward / downward edge maps using final ranks
+    // upward:   u -> v where rank(v) > rank(u)
+    // downward: v -> u (reversed upward) used by backward Dijkstra
+    val upward = mutable.Map[V, mutable.Map[V, (Double, Option[L])]]()
+    val downward = mutable.Map[V, mutable.Map[V, (Double, Option[L])]]()
+
+    vertices.foreach { v =>
+      upward.getOrElseUpdate(v, mutable.Map.empty)
+      downward.getOrElseUpdate(v, mutable.Map.empty)
+    }
+
+    fwd.foreach {
+      case (u, nbrs) =>
+        val rankU = rank.getOrElse(u, 0)
+        nbrs.foreach {
+          case (v, w) =>
+            val rankV = rank.getOrElse(v, 0)
+            val label: Option[L] = origLabels.get((u, v)).map(_._2)
+            if (rankV > rankU) {
+              upward(u)(v) = (w, label)
+              downward(v)(u) = (w, label)
+            }
+        }
+    }
+
+    graph.ContractionHierarchiesIndex(
+      upward.view.mapValues(_.toMap).toMap,
+      downward.view.mapValues(_.toMap).toMap,
+      shortcuts.toMap,
+      rank.toMap,
+      origLabels.view.mapValues(identity).toMap
+    )
+  }
 }
 
 object Graph {
