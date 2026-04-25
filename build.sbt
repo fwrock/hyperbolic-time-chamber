@@ -13,7 +13,7 @@ val scalaTestVersion = "3.2.20"
 val scalapbVersion = "0.11.11"
 
 // Apache Pekko
-val pekkoVersion = "1.4.0"
+val pekkoVersion = "1.5.0"
 val pekkoManagementVersion = "1.2.1"
 val jacksonVersion = "2.21.2"
 val pekkoHttpVersion = "1.3.0"
@@ -26,26 +26,22 @@ val logbackVersion = "1.5.32"
 val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
-val kryoVersion = "1.5.0"
+val kryoVersion = "1.5.1"
 val protobufVersion = "4.34.1"
 val pekkoProtobuf = "1.0.3"
 val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
 // Parquet
-// 1.15.2: fixes CVE-2025-30065 (RCE 9.8) and CVE-2025-46762 (RCE 9.8)
-val parquetVersion = "1.15.2"
-// 1.12.1: fixes CVE-2025-33042 (7.8)
+val parquetVersion = "1.17.0"
 val avroVersion2 = "1.12.1"
-val snappyVersion = "1.1.10.7"
-val zstdVersion = "1.5.6-8"
-// Minimal Hadoop stubs needed by parquet-hadoop (Configuration, FileSystem).
-// We do NOT pull hadoop-common to avoid its large transitive dependency tree.
-val hadoopVersion = "3.4.1"
+val snappyVersion = "1.1.10.8"
+val zstdVersion = "1.5.7-7"
+val hadoopVersion = "3.5.0"
 
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "7.4.0"
+val jedisVersion = "7.4.1"
 val levelDBVersion = "1.8"
 
 // Prometheus Metrics
