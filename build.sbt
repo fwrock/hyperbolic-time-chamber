@@ -33,8 +33,10 @@ val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
 // Parquet
-val parquetVersion = "1.14.4"
-val avroVersion2 = "1.12.0"
+// 1.15.2: fixes CVE-2025-30065 (RCE 9.8) and CVE-2025-46762 (RCE 9.8)
+val parquetVersion = "1.15.2"
+// 1.12.1: fixes CVE-2025-33042 (7.8)
+val avroVersion2 = "1.12.1"
 val snappyVersion = "1.1.10.7"
 val zstdVersion = "1.5.6-8"
 // Minimal Hadoop stubs needed by parquet-hadoop (Configuration, FileSystem).
@@ -116,13 +118,10 @@ lazy val root = (project in file("."))
       "org.apache.avro" % "avro" % avroVersion2 exclude("org.yaml", "snakeyaml"),
       "org.xerial.snappy" % "snappy-java" % snappyVersion,
       "com.github.luben" % "zstd-jni" % zstdVersion,
-      // Minimal Hadoop stubs for parquet-hadoop's Configuration / codec-level APIs.
-      // hadoop-client-runtime is the shaded uber-jar that bundles all implementations
-      // (including woodstox XML parser) needed by parquet-hadoop at runtime.
-      // hadoop-client-api is API-only stubs — parquet crashes at runtime without this.
-      "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion
-        exclude("org.slf4j", "slf4j-reload4j")
-        exclude("log4j", "log4j"),
+
+      ("org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion)
+        .exclude("org.slf4j", "slf4j-reload4j")
+        .exclude("log4j", "log4j"),
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
