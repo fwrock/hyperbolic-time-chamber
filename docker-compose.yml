@@ -142,13 +142,13 @@ services:
       # Management
       MANAGEMENT_HTTP_PORT: 8558 
 
-      HTC_API_ENABLED: "true"
+      HTC_API_ENABLED: "false"
       HTC_API_PORT: 9804
       
       # Simulation Configuration
-      HTC_SCENARIO_NAME: toulouse_hybrid_1pct
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_1pct/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_1pct/data/city_map.json
+      HTC_SCENARIO_NAME: interscsimulator_1M
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts

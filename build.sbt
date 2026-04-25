@@ -32,6 +32,15 @@ val pekkoProtobuf = "1.0.3"
 val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
+// Parquet
+val parquetVersion = "1.14.4"
+val avroVersion2 = "1.12.0"
+val snappyVersion = "1.1.10.7"
+val zstdVersion = "1.5.6-8"
+// Minimal Hadoop stubs needed by parquet-hadoop (Configuration, FileSystem).
+// We do NOT pull hadoop-common to avoid its large transitive dependency tree.
+val hadoopVersion = "3.4.1"
+
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
 val jedisVersion = "7.4.0"
@@ -52,6 +61,7 @@ lazy val root = (project in file("."))
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
+      case PathList("META-INF", "services", _*) => MergeStrategy.filterDistinctLines
       case PathList("META-INF", _*) => MergeStrategy.discard
       case PathList("reference.conf", _*)         => MergeStrategy.concat
       case "application.conf"                     => MergeStrategy.concat
@@ -101,11 +111,18 @@ lazy val root = (project in file("."))
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
 
-      // TODO: Re-enable Avro dependencies when snakeyaml conflicts are resolved
-      // "org.apache.avro" % "avro" % avroVersion,
-
-      // Force specific SnakeYAML version - stable release
-      // "org.yaml" % "snakeyaml" % "1.33",
+      // Parquet columnar format with Avro schema support
+      "org.apache.parquet" % "parquet-avro" % parquetVersion,
+      "org.apache.avro" % "avro" % avroVersion2 exclude("org.yaml", "snakeyaml"),
+      "org.xerial.snappy" % "snappy-java" % snappyVersion,
+      "com.github.luben" % "zstd-jni" % zstdVersion,
+      // Minimal Hadoop stubs for parquet-hadoop's Configuration / codec-level APIs.
+      // hadoop-client-runtime is the shaded uber-jar that bundles all implementations
+      // (including woodstox XML parser) needed by parquet-hadoop at runtime.
+      // hadoop-client-api is API-only stubs — parquet crashes at runtime without this.
+      "org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion
+        exclude("org.slf4j", "slf4j-reload4j")
+        exclude("log4j", "log4j"),
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
