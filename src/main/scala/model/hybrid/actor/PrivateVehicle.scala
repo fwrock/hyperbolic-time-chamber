@@ -182,7 +182,7 @@ trait PrivateVehicle[T <: MovableState] {
   /** Handle ParkVehicle message (optional explicit parking).
     */
   protected def handleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = {
-        logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
+    logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
 
     // Report trip completion (if trip was active)
     if (getVehicleStatus != Parked) {

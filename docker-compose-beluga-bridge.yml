@@ -1,11 +1,18 @@
 ---
+networks:
+  htc-net:
+    driver: bridge
+
 services:
   
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: htc-zookeeper
     hostname: zookeeper
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -19,14 +26,18 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     container_name: htc-kafka
     hostname: kafka
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "9092:9092"
+      - "29092:29092"
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -49,12 +60,15 @@ services:
     image: confluentinc/cp-schema-registry:7.4.0
     container_name: htc-schema-registry
     hostname: schema-registry
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "8081:8081"
     depends_on:
       - kafka
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: localhost:9092
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
       SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: WARN
 
@@ -62,7 +76,10 @@ services:
   redis:
     image: redis:latest
     container_name: htc-redis
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -73,7 +90,7 @@ services:
         reservations:
           memory: 4G
   node1:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -81,19 +98,24 @@ services:
     depends_on:
       - redis
     hostname: node1
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1600:1600"
+      - "8558:8558"
+      - "9101:9101"
     environment:
       CLUSTER_PORT: 1600
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node1
       CLUSTER_NAME: node1
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
-      REDIS_HOST: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
       MANAGEMENT_HTTP_PORT: 8558
       HTC_METRICS_PORT: 9101
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -143,14 +165,14 @@ services:
         -XX:SoftMaxHeapSize=64g
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -210,7 +232,7 @@ services:
           memory: 64G
 
   node2:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -218,19 +240,24 @@ services:
     depends_on:
       - redis
     hostname: node2
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1601:1601"
+      - "8559:8559"
+      - "9102:9102"
     environment:
       CLUSTER_PORT: 1601
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node2
       CLUSTER_NAME: node2
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8559
       HTC_METRICS_PORT: 9102
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -273,14 +300,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -340,7 +367,7 @@ services:
           memory: 64G
 
   node3:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -348,19 +375,24 @@ services:
     depends_on:
       - redis
     hostname: node3
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1602:1602"
+      - "8560:8560"
+      - "9103:9103"
     environment:
       CLUSTER_PORT: 1602
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node3
       CLUSTER_NAME: node3
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8560
       HTC_METRICS_PORT: 9103
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -403,14 +435,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -470,7 +502,7 @@ services:
           memory: 64G
 
   node4:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -478,19 +510,24 @@ services:
     depends_on:
       - redis
     hostname: node4
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1603:1603"
+      - "8561:8561"
+      - "9104:9104"
     environment:
       CLUSTER_PORT: 1603
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node4
       CLUSTER_NAME: node4
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8561
       HTC_METRICS_PORT: 9104
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -533,14 +570,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -600,7 +637,7 @@ services:
           memory: 64G
 
   node5:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -608,19 +645,24 @@ services:
     depends_on:
       - redis
     hostname: node5
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1604:1604"
+      - "8562:8562"
+      - "9105:9105"
     environment:
       CLUSTER_PORT: 1604
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node5
       CLUSTER_NAME: node5
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8562
       HTC_METRICS_PORT: 9105
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -663,14 +705,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -730,7 +772,7 @@ services:
           memory: 64G
 
   node6:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -738,19 +780,24 @@ services:
     depends_on:
       - redis
     hostname: node6
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1605:1605"
+      - "8563:8563"
+      - "9106:9106"
     environment:
       CLUSTER_PORT: 1605
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node6
       CLUSTER_NAME: node6
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8563
       HTC_METRICS_PORT: 9106
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -793,14 +840,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -860,7 +907,7 @@ services:
           memory: 64G
 
   node7:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -868,19 +915,24 @@ services:
     depends_on:
       - redis
     hostname: node7
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1606:1606"
+      - "8564:8564"
+      - "9107:9107"
     environment:
       CLUSTER_PORT: 1606
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node7
       CLUSTER_NAME: node7
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8564
       HTC_METRICS_PORT: 9107
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -923,14 +975,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
@@ -990,7 +1042,7 @@ services:
           memory: 64G
 
   node8:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.2.0-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -998,19 +1050,24 @@ services:
     depends_on:
       - redis
     hostname: node8
-    network_mode: host
+    networks:
+      - htc-net
+    ports:
+      - "1607:1607"
+      - "8565:8565"
+      - "9108:9108"
     environment:
       CLUSTER_PORT: 1607
-      CLUSTER_IP: 127.0.0.1
+      CLUSTER_IP: node8
       CLUSTER_NAME: node8
-      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+      SEED_PORT_1600_TCP_ADDR: node1
       MANAGEMENT_HTTP_PORT: 8565
       HTC_METRICS_PORT: 9108
-      REDIS_HOST: 127.0.0.1
+      REDIS_HOST: htc-redis
       REDIS_PORT: 6379
-      HTC_SCENARIO_NAME: toulouse_1_pct_micro
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_micro/data/city_map.json
+      HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -1053,14 +1110,14 @@ services:
         -XX:+ZGenerational
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
       HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
-      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
       HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
       
