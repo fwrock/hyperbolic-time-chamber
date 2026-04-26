@@ -44,7 +44,6 @@ object SimulationRoutes {
   def routes(implicit mat: Materializer, ec: ExecutionContext): Route =
     pathPrefix("api" / "v1") {
       concat(
-        // ── Health ────────────────────────────────────────────────────────
         path("health") {
           get {
             complete(ok(
@@ -56,7 +55,6 @@ object SimulationRoutes {
         pathPrefix("simulation") {
           concat(
 
-            // ── Scenario config ──────────────────────────────────────────
             path("config") {
               concat(
                 get {
@@ -92,7 +90,6 @@ object SimulationRoutes {
               )
             },
 
-            // ── Status ───────────────────────────────────────────────────
             path("status") {
               get {
                 val s            = SimulationController.status
@@ -110,7 +107,6 @@ object SimulationRoutes {
               }
             },
 
-            // ── Lifecycle ─────────────────────────────────────────────────
             path("start") {
               post {
                 entity(as[String]) { body =>
@@ -156,7 +152,6 @@ object SimulationRoutes {
       )
     }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private def ok(json: String) =
     HttpResponse(StatusCodes.OK, entity = HttpEntity(ContentTypes.`application/json`, json))

@@ -39,19 +39,13 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
-  // The coordinator is created once at the start of loadData() and lives through both phases.
-  // During loading, creators forward NeedsPostLoadRegistrationEvent to it directly.
-  // After all EAGER loading, LoadDataManager sends TriggerPostLoadRegistrationEvent to kick off
-  // the fan-out phase. The coordinator replies with PostLoadRegistrationDoneEvent when done.
   private var postLoadCoordinator: ActorRef = null
   private var postLoadRegistrationClassesConfig: Set[String] = Set.empty
-  // Guard: prevent double-triggering the coordinator and double-processing the done event.
   private var postLoadTriggerSent: Boolean = false
   private var postLoadDone: Boolean = false
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
-  // Tracks when each source type entered sourcesInCreation (epoch millis) for stuck-source detection.
   private var progressiveSources: List[ActorDataSource] = List.empty
 
   override def onStart(): Unit = {
@@ -67,7 +61,6 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    // Split data sources into EAGER (loaded before simulation) and PROGRESSIVE (loaded during simulation)
     val (eagerSources, progressive) = event.actorsDataSources.partition(
       _.loadingStrategy == LoadingStrategyEnum.EAGER
     )
@@ -85,8 +78,6 @@ class LoadDataManager(
       return
     }
 
-    // Create coordinator early so creators can forward NeedsPostLoadRegistrationEvent to it
-    // directly during the loading phase (accumulation phase).
     postLoadCoordinator = context.actorOf(
       PostLoadRegistrationCoordinator.props(getSelfProxy),
       "post-load-registration-coordinator"
@@ -122,7 +113,6 @@ class LoadDataManager(
           logInfo(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
-          // Create loader with io-dispatcher for I/O-bound file operations
           val props = Props(
             source.dataSource.sourceType.clazz,
             Properties(

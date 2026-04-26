@@ -19,12 +19,10 @@ import scala.jdk.CollectionConverters._
 
 object JsonUtil {
 
-  // Custom key deserializer for SubRoutePair
   class SubRoutePairKeyDeserializer extends KeyDeserializer {
     override def deserializeKey(key: String, ctxt: DeserializationContext): Object = {
       val parts = key.split(":")
       if (parts.length == 2) {
-        // Try both hybrid and mobility versions
         try
           org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0), parts(1))
         catch {
@@ -37,7 +35,6 @@ object JsonUtil {
     }
   }
 
-  // Custom deserializer for Tuple2 with SubwayStationNode
   class SubwayStationNodeTupleDeserializer
       extends JsonDeserializer[
         (org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)
@@ -61,7 +58,6 @@ object JsonUtil {
           throw new RuntimeException("Invalid SubwayStationNode tuple format")
         }
       } else {
-        // Try array format [{"stationId": "...", "nodeId": "..."}, "link_id"]
         val codec = p.getCodec
         val array = codec.readValue(p, classOf[Array[Object]])
         if (array.length == 2) {
@@ -85,10 +81,8 @@ object JsonUtil {
   mapper.registerModule(DefaultScalaModule)
   mapper.registerModule(new JavaTimeModule())
   mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-  // Allow int→long conversion for randomSeed and similar fields
   mapper.configure(DeserializationFeature.USE_LONG_FOR_INTS, true)
 
-  // Register custom key deserializers for SubRoutePair
   private val subRoutePairModule = new SimpleModule()
   subRoutePairModule.addKeyDeserializer(
     classOf[org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair],
@@ -99,7 +93,6 @@ object JsonUtil {
     new SubRoutePairKeyDeserializer
   )
 
-  // Register custom deserializer for SubwayStationNode tuples
   subRoutePairModule.addDeserializer(
     classOf[(org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)],
     new SubwayStationNodeTupleDeserializer
@@ -169,33 +162,25 @@ object JsonUtil {
   )(implicit elementManifest: Manifest[A]): List[A] = {
     val typeFactory = TypeFactory.defaultInstance()
 
-    // 1. Construir o JavaType para java.util.List<A>
-    //    elementManifest.runtimeClass fornecerá a classe de 'A' (ex: ActorSimulation.class)
     val javaListType: JavaType = typeFactory.constructCollectionType(
-      classOf[java.util.List[_]], // Alvo: java.util.List genérico
-      elementManifest.runtimeClass // Classe dos elementos
+      classOf[java.util.List[_]], 
+      elementManifest.runtimeClass 
     )
 
-    // 2. Desserializar para uma java.util.List<A>
     val javaList: java.util.List[A] = mapper.readValue(jsonStream, javaListType)
 
-    // 3. Converter a lista Java para uma lista Scala imutável
     javaList.asScala.toList
   }
 
-  // fromJsonStream genérico (com a mesma ressalva para construção de JavaType para genéricos complexos)
   def fromJsonStream[T](jsonStream: InputStream)(implicit m: Manifest[T]): T = {
     val typeFactory = TypeFactory.defaultInstance()
     val javaType: JavaType =
       if (m.runtimeClass == classOf[List[_]] && m.typeArguments.length == 1) {
-        // Para List[SpecificType], vamos usar a abordagem de desserializar para java.util.List e converter
-        // (se T é List[SpecificType], m.typeArguments.head.runtimeClass é SpecificType.class)
         typeFactory.constructCollectionType(
           classOf[java.util.List[_]],
           m.typeArguments.head.runtimeClass
         )
       } else if (m.runtimeClass == classOf[Seq[_]] && m.typeArguments.length == 1) {
-        // Similar para Seq[SpecificType]
         typeFactory.constructCollectionType(
           classOf[java.util.List[_]],
           m.typeArguments.head.runtimeClass
@@ -208,7 +193,6 @@ object JsonUtil {
 
     val result = mapper.readValue(jsonStream, javaType)
 
-    // Se o tipo T original era um Scala List/Seq e desserializamos para java.util.List, convertemos agora.
     if (
       (m.runtimeClass == classOf[List[_]] || m.runtimeClass == classOf[
         Seq[_]
@@ -218,7 +202,7 @@ object JsonUtil {
         .asInstanceOf[java.util.List[Any]]
         .asScala
         .toList
-        .asInstanceOf[T] // Cuidado com 'Any' aqui, idealmente o tipo do elemento seria usado
+        .asInstanceOf[T]
     } else {
       result.asInstanceOf[T]
     }

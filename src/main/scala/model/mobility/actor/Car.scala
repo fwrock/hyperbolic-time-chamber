@@ -1,7 +1,6 @@
 package org.interscity.htc
 package model.mobility.actor
 
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.CarState
 
 import org.interscity.htc.core.entity.actor.properties.Properties

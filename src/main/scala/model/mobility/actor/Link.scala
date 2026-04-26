@@ -7,13 +7,10 @@ import model.mobility.entity.state.LinkState
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
 import model.mobility.entity.event.data.{
   EnterLinkData,
-  ForwardRouteData,
   LeaveLinkData,
-  RequestRouteData,
   VehicleLinkFlowData
 }
 

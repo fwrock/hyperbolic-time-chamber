@@ -37,16 +37,13 @@ private class DeadLetterListener extends Actor {
 object HyperbolicTimeChamber {
 
   def start(): Unit = {
-    // Start Prometheus metrics server before actor system
     val metricsPort = sys.env.get("HTC_METRICS_PORT").flatMap(_.toIntOption).getOrElse(9001)
     core.metrics.MetricsServer.start(metricsPort)
 
     val system = ActorSystem("hyperbolic-time-chamber")
 
-    // Start optional REST API server for configuration management
     ConfigApiServer.start(system)
 
-    // Subscribe to dead letters for Prometheus monitoring
     val deadLetterListener = system.actorOf(Props(new DeadLetterListener), "dead-letter-listener")
     system.eventStream.subscribe(deadLetterListener, classOf[DeadLetter])
 
@@ -59,9 +56,9 @@ object HyperbolicTimeChamber {
     } catch {
       case e: Exception =>
         system.log.warning(
-          s"⚠️ It was not possible load random seed configuration for RandomSeedManager: ${e.getMessage}"
+          s"It was not possible load random seed configuration for RandomSeedManager: ${e.getMessage}"
         )
-        system.log.warning("🎲 RandomSeedManager will be initialized with timestamp-based seed")
+        system.log.warning("RandomSeedManager will be initialized with timestamp-based seed")
     }
 
     PekkoManagement(system).start()

@@ -4,8 +4,7 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 
 import org.interscity.htc.model.hybrid.entity.state.*
-import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{Dependency, Identify}
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -27,8 +26,6 @@ class BusStop(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // Prefer lookup by nodeId; fall back to scanning dependencies for a Node entry
-    // (handles data generated with the legacy "node" field name instead of "nodeId")
     val dependencyOpt =
       getDependencyOption(IdUtil.format(state.nodeId)).orElse(
         relationships.get(IdUtil.format(state.nodeId)).orElse(
@@ -82,7 +79,6 @@ class BusStop(
         val peopleToLoad = people.take(data.availableSpace)
         state.people.put(data.label, people.drop(data.availableSpace))
 
-        // Report passenger loading
         report(
           data = Map(
             "event_type" -> "passengers_loaded",
@@ -123,7 +119,6 @@ class BusStop(
       case Some(people) =>
         state.people.put(data.label, people :+ person)
 
-        // Report passenger arrival at bus stop
         report(
           data = Map(
             "event_type" -> "passenger_arrived_at_stop",

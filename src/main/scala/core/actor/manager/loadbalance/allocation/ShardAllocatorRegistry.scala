@@ -1,8 +1,6 @@
 package org.interscity.htc
 package core.actor.manager.loadbalance.allocation
 
-import org.apache.pekko.actor.ActorSystem
-
 import java.util.concurrent.atomic.AtomicReference
 
 /** Global registry for the [[LoadBalanceShardAllocator]] instance.

@@ -4,27 +4,22 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import org.interscity.htc.model.hybrid.entity.state.*
 
-import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.hybrid.entity.state.NodeState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
-import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 
 class Node(
@@ -33,11 +28,6 @@ class Node(
       properties = properties
     ) {
 
-  // BusStop and SubwayStation actors register after all EAGER loading is complete
-  // (orchestrated by PostLoadRegistrationCoordinator). Node is always initialized before
-  // registration messages arrive, so no pre-init buffering is needed here.
-  // TrafficSignal registrations (pendingSignals) are kept because they follow a different
-  // initialization ordering that is not yet covered by PostLoadRegistrationCoordinator.
   private val pendingSignals: mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
     mutable.Map.empty
 

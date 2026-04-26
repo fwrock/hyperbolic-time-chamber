@@ -63,10 +63,6 @@ class ReportManager(
     val maxInstancesPerNode = Some(
       config.getInt(s"htc.report-manager.$reportType.number-of-instances-per-node")
     ).getOrElse(8)
-    // Use io-dispatcher for report writers: they perform blocking file I/O
-    // (FileWriter/BufferedWriter). Without this, 256 reporter actors share the
-    // default-dispatcher ForkJoin pool (16 threads) with simulation actors,
-    // causing thread starvation under load.
     val reporterProps = Props(reportType.clazz, getSelfProxy, startRealTime)
       .withDispatcher("pekko.actor.io-dispatcher")
 

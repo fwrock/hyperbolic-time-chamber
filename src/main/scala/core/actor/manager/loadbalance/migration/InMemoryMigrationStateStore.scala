@@ -26,8 +26,6 @@ class InMemoryMigrationStateStore extends MigrationStateStore {
     ttlSeconds: Int = 300
   ): Unit = {
     store.put(entityId, (stateBytes, className))
-    // Note: TTL is not enforced in-memory. Entries are cleaned on clear() or simulation stop.
-    // For long-running simulations, consider adding a scheduled cleanup.
   }
 
   override def loadAndRemoveState(entityId: String): Option[(Array[Byte], String)] =

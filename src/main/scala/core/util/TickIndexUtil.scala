@@ -5,9 +5,9 @@ import core.types.Tick
 import core.entity.actor.ActorSimulation
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.core.{ JsonParser, JsonToken }
+import com.fasterxml.jackson.core.JsonParser
 
-import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
+import java.io.{ BufferedInputStream, File, FileInputStream }
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 

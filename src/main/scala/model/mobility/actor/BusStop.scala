@@ -3,8 +3,7 @@ package model.mobility.actor
 
 import core.actor.SimulationBaseActor
 
-import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
+import org.htc.protobuf.core.entity.actor.{ Identify }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent

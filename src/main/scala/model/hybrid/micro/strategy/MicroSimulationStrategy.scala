@@ -71,7 +71,6 @@ trait MicroSimulationStrategy {
     vehicleId: String,
     vehicleLength: Double
   ): Int = {
-    // Default: least occupied lane
     if (vehiclesByLane.isEmpty) 0
     else vehiclesByLane.minBy(_._2.size)._1
   }
@@ -104,7 +103,5 @@ case class MicroVehicleUpdate(
   gapToLeader: Double,
   leaderVelocity: Double,
   safeVelocity: Double,
-  // True when vehicle has reached the end of the link (position >= linkLength).
-  // Link uses this flag to send MicroLeaveLinkData instead of MicroUpdateData.
   reachedEnd: Boolean = false
 )

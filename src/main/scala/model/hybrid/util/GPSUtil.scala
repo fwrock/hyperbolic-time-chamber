@@ -1,11 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
-import org.interscity.htc.core.util.JsonUtil
-import org.interscity.htc.core.util.JsonUtil.writeJsonBytes
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
-import org.interscity.htc.system.database.redis.RedisClientManager
 
-import java.util.UUID
 import scala.collection.mutable
 
 /** GPS Utility for route calculation with dynamic weight support.
@@ -34,9 +30,6 @@ object GPSUtil {
     useDynamicWeights: Boolean = true
   ): Option[(Double, mutable.Queue[(String, String)])] = {
 
-    // Short-circuit: same-node trip needs no routing.
-    // Returning a trivially empty route avoids a full A* traversal, suppresses
-    // "Nenhuma rota encontrada" errors, and eliminates log spam for at-location legs.
     if (originId == destinationId) {
       return Some((0.0, mutable.Queue.empty))
     }
@@ -46,29 +39,23 @@ object GPSUtil {
 
     (originNodeOpt, destinationNodeOpt) match {
       case (Some(originNode), Some(destinationNode)) =>
-        // If using dynamic weights, create a weight function that queries the cache
         val weightFunc: (NodeGraph, NodeGraph) => Option[Double] = if (useDynamicWeights) {
           (source, target) =>
-            // Get the edge label to find the link ID
             CityMapUtil.cityMap.label(source, target).map {
               edgeLabel =>
                 val staticWeight = CityMapUtil.cityMap.weight(source, target).getOrElse(0.0)
-                // Query dynamic weight cache, fallback to static if not found
                 DynamicWeightCache.getWeight(edgeLabel.id, staticWeight)
             }
         } else {
-          // Use static weights from graph
           (source, target) => CityMapUtil.cityMap.weight(source, target)
         }
 
-        // Use shortest path by hops for now, but with dynamic weight consideration
         // TODO: Implement A* with custom weight function
         val pathResult =
           CityMapUtil.cityMap.dijkstraEdgeTargetsOptimized(originNode, destinationNode)
 
         pathResult match {
           case Some((hopCount, path)) =>
-            // Recalculate cost using dynamic weights
             val dynamicCost = if (useDynamicWeights) {
               path.foldLeft(0.0) {
                 case (acc, (edgeObject, targetNode)) =>
@@ -84,7 +71,6 @@ object GPSUtil {
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach {
               case (edgeObject, targetNodeOfEdgeInPath) =>
-                // Keep original IDs (with : and ;) for CityMapUtil lookups
                 routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
             }
             Some((dynamicCost, routeQueue))
@@ -92,14 +78,14 @@ object GPSUtil {
             System.err.println(
               s"GPSUtil: Nenhuma rota encontrada de $originId para $destinationId."
             )
-            None // Nenhuma rota encontrada
+            None
         }
       case (None, _) =>
         System.err.println(s"GPSUtil: Nó de origem $originId não encontrado no mapa.")
-        None // Nó de origem não encontrado
+        None
       case (_, None) =>
         System.err.println(s"GPSUtil: Nó de destino $destinationId não encontrado no mapa.")
-        None // Nó de destino não encontrado
+        None
     }
   }
 

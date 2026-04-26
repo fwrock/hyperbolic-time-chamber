@@ -1,15 +1,12 @@
 package org.interscity.htc
 package core.metrics
 
-import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.Counter
 import io.prometheus.client.Gauge
 import io.prometheus.client.Histogram
 import io.prometheus.client.exporter.HTTPServer
 import io.prometheus.client.hotspot.DefaultExports
 import org.slf4j.LoggerFactory
-
-import java.net.InetSocketAddress
 
 /**
  * Prometheus metrics server for the HTC simulation.
@@ -55,9 +52,7 @@ object MetricsServer {
 
   private val logger = LoggerFactory.getLogger(getClass)
   private var server: Option[HTTPServer] = None
-
-  // ── Simulation Progress ────────────────────────────────────────
-
+  
   val simulationTicks: Counter = Counter.build()
     .name("htc_simulation_ticks_total")
     .help("Total number of global simulation ticks processed")
@@ -78,9 +73,7 @@ object MetricsServer {
     .help("Duration of each global tick cycle in seconds (from all-TMs-reported to next broadcast)")
     .buckets(0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
     .register()
-
-  // ── Actors ─────────────────────────────────────────────────────
-
+  
   val actorsRegistered: Counter = Counter.build()
     .name("htc_actors_registered_total")
     .help("Total actors registered on local time managers")
@@ -98,9 +91,7 @@ object MetricsServer {
     .help("Total spontaneous events dispatched by local time managers")
     .labelNames("event_type")
     .register()
-
-  // ── Time Manager ───────────────────────────────────────────────
-
+  
   val tmScheduledActors: Gauge = Gauge.build()
     .name("htc_tm_scheduled_actors")
     .help("Number of actors scheduled for current tick on this local TM")
@@ -115,9 +106,7 @@ object MetricsServer {
     .name("htc_tm_waiting_for_progressive")
     .help("1 if GlobalTimeManager is blocked waiting for progressive load, 0 otherwise")
     .register()
-
-  // ── Progressive Loading ────────────────────────────────────────
-
+  
   val progressiveActorsCreated: Counter = Counter.build()
     .name("htc_progressive_actors_created_total")
     .help("Total actors created via progressive loading")
@@ -132,9 +121,7 @@ object MetricsServer {
     .name("htc_progressive_windows_loaded_total")
     .help("Number of progressive tick windows fully loaded")
     .register()
-
-  // ── Journeys ────────────────────────────────────────────────────
-
+  
   val journeysCompleted: Counter = Counter.build()
     .name("htc_journeys_completed_total")
     .help("Total vehicle journeys completed (arrived at destination)")
@@ -146,9 +133,7 @@ object MetricsServer {
     .help("Total vehicle journeys started")
     .labelNames("vehicle_type")
     .register()
-
-  // ── Infrastructure ─────────────────────────────────────────────
-
+  
   val deadLetters: Counter = Counter.build()
     .name("htc_dead_letters_total")
     .help("Total dead letters in the actor system")
@@ -172,19 +157,17 @@ object MetricsServer {
     }
 
     try {
-      // Register all default JVM collectors (memory, GC, threads, CPU, etc.)
       DefaultExports.initialize()
 
-      // Start HTTP server
       val httpServer = new HTTPServer.Builder()
         .withPort(port)
         .build()
 
       server = Some(httpServer)
-      logger.info(s"✅ Prometheus metrics server started on port $port — /metrics endpoint ready")
+      logger.info(s"Prometheus metrics server started on port $port — /metrics endpoint ready")
     } catch {
       case e: Exception =>
-        logger.error(s"❌ Failed to start Prometheus metrics server on port $port: ${e.getMessage}", e)
+        logger.error(s"Failed to start Prometheus metrics server on port $port: ${e.getMessage}", e)
     }
   }
 

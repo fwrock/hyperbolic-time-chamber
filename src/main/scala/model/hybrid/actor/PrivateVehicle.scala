@@ -112,7 +112,6 @@ trait PrivateVehicle[T <: MovableState] {
     * Activates the vehicle, configures it with driver attributes, and begins the trip.
     */
   protected def handleStartTrip(event: ActorInteractionEvent, data: StartTripData): Unit =
-    // Guard: wrap all state access in try-catch, defer if not ready
     try {
       val status = getVehicleStatus
       if (status != Parked) {
@@ -122,21 +121,18 @@ trait PrivateVehicle[T <: MovableState] {
         return
       }
 
-      // Mark this vehicle as person-centric (permanent — survives between trips)
       personCentric = true
 
-      // Reset all per-trip state so metrics/route tracking start fresh for this trip
       resetTripState()
 
       logVehicleDebug(
         s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}"
       )
 
-      // Store owner reference (complete Identify with id + classType)
       ownerPersonRef = Some(
         Identify(
           id = data.personId,
-          classType = event.actorClassType // Person's shard/classType from event sender
+          classType = event.actorClassType 
         )
       )
       tripOrigin = Some(data.origin)
@@ -145,17 +141,10 @@ trait PrivateVehicle[T <: MovableState] {
       tripStartTick = Some(data.startTick)
       tripStartDistance = getCurrentDistance
 
-      // Configure vehicle with driver attributes
       applyDriverAttributes(driverAttributes)
 
-      // Activate vehicle (transition from Parked to Start)
       setVehicleStatus(Start)
 
-      // Register with TimeManager for the first time.
-      // Use registerOnTimeManager (routed via TM pool) instead of scheduleNextTick /
-      // onFinishSpontaneous, because the latter sends to currentTimeManager which
-      // is null for passive vehicles that never received a SpontaneousEvent
-      // (i.e., those created with scheduleOnTimeManager = false).
       registerOnTimeManager(getActorCurrentTick + 1)
     } catch {
       case _: NullPointerException =>
@@ -184,12 +173,10 @@ trait PrivateVehicle[T <: MovableState] {
   protected def handleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = {
     logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
 
-    // Report trip completion (if trip was active)
     if (getVehicleStatus != Parked) {
       reportTripCompletion("parked_by_person", data.parkingNodeId)
     }
 
-    // Deactivate vehicle
     deactivateVehicle()
   }
 
@@ -205,10 +192,9 @@ trait PrivateVehicle[T <: MovableState] {
           .getOrElse(0L)
         val distanceTraveled = getCurrentDistance - tripStartDistance
 
-        // Send TripCompleted message to Person using correct shard
         sendVehicleMessage(
           entityId = personRef.id,
-          shardId = personRef.classType, // Use Person's actual shard (from Identify)
+          shardId = personRef.classType,
           data = TripCompletedData(
             vehicleId = getActorEntityId,
             personId = personRef.id,
@@ -239,9 +225,7 @@ trait PrivateVehicle[T <: MovableState] {
 
         logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
 
-    // Unregister from TimeManager (vehicle is now passive)
-    // This prevents vehicle from receiving spontaneous events
-    scheduleNextTick(None) // No next tick scheduled
+    scheduleNextTick(None)
   }
 
   /** Apply driver attributes to vehicle physics parameters.
@@ -254,12 +238,6 @@ trait PrivateVehicle[T <: MovableState] {
       s"Applying driver attributes: aggressiveness=${attrs.aggressiveness}, " +
         s"maxSpeedFactor=${attrs.maxSpeedFactor}, reactionTime=${attrs.reactionTime}"
     )
-
-    // Subclasses override to apply to their specific micro state
-    // For example:
-    // - Update microState.desiredVelocity *= attrs.maxSpeedFactor
-    // - Update microState.reactionTime = attrs.reactionTime
-    // - Update microState.minGap *= attrs.minGapFactor
 
   /** Override onFinish to report trip completion.
     */
@@ -302,6 +280,6 @@ trait PrivateVehicle[T <: MovableState] {
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
       case _ =>
-        false // Not a private vehicle event
+        false 
     }
 }

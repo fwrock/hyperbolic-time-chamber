@@ -10,14 +10,13 @@ import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, Spontaneous
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.event.data.signal.{ PhaseChangeData, SignalStatePredictionData, TrafficSignalChangeStatusData }
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ PhaseChange, RequestSignalPrediction, TrafficSignalChangeStatus }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.{ RequestSignalPrediction, TrafficSignalChangeStatus }
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState }
 import org.interscity.htc.core.util.SimulationUtil
 
 import scala.collection.mutable
-import scala.collection.mutable.PriorityQueue
 
 class TrafficSignal(
   private val properties: Properties
@@ -25,7 +24,6 @@ class TrafficSignal(
       properties = properties
     ) {
 
-  // Event-driven: Pre-schedule all phase transitions during initialization
   private val scheduledTransitions = mutable.PriorityQueue.empty[(Tick, PhaseChangeData)](
     Ordering.by[(Tick, PhaseChangeData), Tick](_._1).reverse
   )
@@ -33,7 +31,6 @@ class TrafficSignal(
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
 
-    // Pre-calculate all phase transitions for entire simulation
     scheduleAllPhaseTransitions()
   }
 
@@ -48,8 +45,7 @@ class TrafficSignal(
       state.phases.foreach {
         phase =>
           val currentCycleTick = cycleTick % state.cycleDuration
-
-          // Schedule green start
+          
           val greenStartTick = cycleTick + phase.greenStart
           if (greenStartTick < simulationEnd) {
             val greenEndTick = greenStartTick + phase.greenDuration
@@ -66,7 +62,6 @@ class TrafficSignal(
             )
           }
 
-          // Schedule green end (red start)
           val redStartTick = cycleTick + phase.greenStart + phase.greenDuration
           if (redStartTick < simulationEnd) {
             val nextCycleTick = cycleTick + state.cycleDuration
@@ -90,7 +85,6 @@ class TrafficSignal(
 
     logDebug(s"Scheduled ${scheduledTransitions.size} phase transitions")
 
-    // Schedule first transition
     if (scheduledTransitions.nonEmpty) {
       val (firstTick, _) = scheduledTransitions.head
       onFinishSpontaneous(Some(firstTick))
@@ -113,7 +107,6 @@ class TrafficSignal(
 
     executePhaseTransition(transitionTick, phaseChange)
 
-    // Schedule next transition
     if (scheduledTransitions.nonEmpty) {
       val (nextTick, _) = scheduledTransitions.head
       onFinishSpontaneous(Some(nextTick))
@@ -124,14 +117,12 @@ class TrafficSignal(
 
   /** Execute single phase transition and notify nodes */
   private def executePhaseTransition(currentTick: Tick, phaseChange: PhaseChangeData): Unit =
-    // Update internal state
     state.signalStates.get(phaseChange.phaseOrigin).foreach {
       signalState =>
         val oldState = signalState.state
         signalState.state = phaseChange.newState
         signalState.remainingTime = phaseChange.validUntil - currentTick
 
-        // Only notify if state actually changed
         if (oldState != phaseChange.newState) {
           logDebug(
             s"Phase transition: ${phaseChange.phaseOrigin} $oldState -> ${phaseChange.newState} @ $currentTick"
@@ -161,12 +152,10 @@ class TrafficSignal(
 
   /** Provide time-bounded signal state prediction for vehicle planning */
   private def handleSignalPredictionRequest(event: ActorInteractionEvent): Unit = {
-    // Extract request parameters (would come from event data)
     val requestor = event.toIdentity
     val queryTick = event.tick
-    val horizonTick = queryTick + 100 // Default horizon, should come from request
+    val horizonTick = queryTick + 100
 
-    // Get all phases and find next transitions
     state.phases.foreach {
       phase =>
         val prediction = getSignalStatePrediction(phase.origin, queryTick, horizonTick)
@@ -192,7 +181,6 @@ class TrafficSignal(
       .map(_.state)
       .getOrElse(Red)
 
-    // Find next transition within horizon
     val nextTransition = scheduledTransitions.find {
       case (tick, change) =>
         change.phaseOrigin == phaseOrigin && tick > queryTick && tick <= horizonTick
@@ -206,7 +194,6 @@ class TrafficSignal(
     )
   }
 
-  // Legacy tick-driven method (kept for backward compatibility during migration)
   private def handlePhaseTransitionLegacy(currentTick: Tick): Unit =
     state.phases.foreach {
       phase =>

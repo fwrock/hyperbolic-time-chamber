@@ -6,7 +6,7 @@ import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.Start
-import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
 
 import scala.collection.mutable
 
@@ -15,7 +15,7 @@ case class BusStationState(
   name: String,
   origin: String,
   destination: String = null,
-  busStops: mutable.LinkedHashMap[String, String], // Preserves insertion order
+  busStops: mutable.LinkedHashMap[String, String],
   interval: Tick,
   buses: mutable.Queue[BusInformation],
   goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] = Some(

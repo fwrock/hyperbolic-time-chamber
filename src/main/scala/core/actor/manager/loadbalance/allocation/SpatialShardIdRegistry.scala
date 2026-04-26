@@ -31,9 +31,7 @@ object SpatialShardIdRegistry {
     * node positions for entities like links and cars that reference node IDs.
     */
   private val entityPositions = new ConcurrentHashMap[String, (Double, Double)]()
-
-  // ── Shard ID operations ──────────────────────────────────────────────────
-
+  
   /** Stores a spatial shard assignment for an entity. */
   def putShardId(entityId: String, shardId: String): Unit =
     shardAssignments.put(entityId, shardId)
@@ -57,9 +55,7 @@ object SpatialShardIdRegistry {
   /** Retrieves a previously stored entity position, if any. */
   def getPosition(entityId: String): Option[(Double, Double)] =
     Option(entityPositions.get(entityId))
-
-  // ── Bulk operations ──────────────────────────────────────────────────────
-
+  
   /** Stores multiple shard assignments at once. */
   def putAllShardIds(assignments: Map[String, String]): Unit =
     assignments.foreach { case (entityId, shardId) => shardAssignments.put(entityId, shardId) }
@@ -69,9 +65,7 @@ object SpatialShardIdRegistry {
     */
   def putAllPositions(positions: Map[String, Array[Double]]): Unit =
     positions.foreach { case (entityId, arr) => entityPositions.put(entityId, (arr(0), arr(1))) }
-
-  // ── Reverse lookup: shard → entities ─────────────────────────────────────
-
+  
   /** Returns all entity IDs assigned to a given shard.
     *
     * This performs a linear scan over all assignments — suitable for migration
@@ -84,9 +78,7 @@ object SpatialShardIdRegistry {
       .map(_.getKey)
       .toSet
   }
-
-  // ── Entity class name tracking ───────────────────────────────────────────
-
+  
   /** Entity ID → fully qualified shard region class name (for routing messages). */
   private val entityClassNames = new ConcurrentHashMap[String, String]()
 
@@ -101,8 +93,6 @@ object SpatialShardIdRegistry {
   /** Stores multiple entity class names at once. */
   def putAllEntityClassNames(names: Map[String, String]): Unit =
     names.foreach { case (entityId, className) => entityClassNames.put(entityId, className) }
-
-  // ── Lifecycle ────────────────────────────────────────────────────────────
 
   /** Clears all registry data. Called on simulation stop. */
   def clear(): Unit = {

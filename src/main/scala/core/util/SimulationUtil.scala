@@ -6,7 +6,6 @@ import core.exception.SimulationEnvConfigFoundException
 import core.api.ApiConfigRegistry
 
 import com.typesafe.config.ConfigFactory
-import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.configuration.{ Simulation, SimulationWrapper }
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion
@@ -19,7 +18,6 @@ import scala.language.postfixOps
 object SimulationUtil {
 
   def loadSimulationConfig(configuration: String = null): Simulation = {
-    // Treat empty string the same as null (protobuf String fields default to "")
     val path = if (configuration == null || configuration.isEmpty) null else configuration
     if (path != null) {
       val content = readJsonFile(path)
@@ -29,7 +27,6 @@ object SimulationUtil {
         case _: Exception => fromJson[Simulation](content)
       }
     } else {
-      // Priority: API registry > application.conf > HTC_SIMULATION_CONFIG_FILE env var
       ApiConfigRegistry.get match {
         case Some(config) => config
         case None         => loadSimulationConfigFromFileOrEnv()
@@ -70,7 +67,6 @@ object SimulationUtil {
       )
       .foreach {
         source =>
-          // 🎲 Usar UUID determinístico para shard initiator
           val initiatorId =
             try
               s"${core.actor.manager.RandomSeedManager.deterministicUUID()}-shard-initiator"

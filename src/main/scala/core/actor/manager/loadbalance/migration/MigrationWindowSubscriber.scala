@@ -39,7 +39,6 @@ class MigrationWindowSubscriber extends Actor with ActorLogging {
   private val nodeAddr  = cluster.selfAddress.toString
 
   override def preStart(): Unit = {
-    // Register SM singleton proxy in the JVM-local registry so entities can find it
     val smProxy = DistributedUtil.createSingletonProxy(
       context.system,
       ManagerConstantsUtil.SNAPSHOT_MANAGER_ACTOR_NAME
@@ -47,7 +46,6 @@ class MigrationWindowSubscriber extends Actor with ActorLogging {
     MigrationStateStoreRegistry.registerSnapshotManager(smProxy)
     log.info("MigrationWindowSubscriber: SM proxy registered in MigrationStateStoreRegistry")
 
-    // Subscribe to the migration-window broadcast topic
     mediator ! Subscribe(MigrationWindowSubscriber.TOPIC, self)
   }
 

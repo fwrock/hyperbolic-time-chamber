@@ -4,11 +4,8 @@ package model.hybrid.entity.state
 import core.types.Tick
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.MovableState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.state.MicroCarState
 import org.interscity.htc.model.hybrid.entity.state.model.PrecomputedRouteItem
 
 import scala.collection.mutable
@@ -56,7 +53,6 @@ import scala.collection.mutable
   *   Optional microscopic state (active in MICRO links)
   */
 case class CarState(
-  // ========== Meso fields ==========
   override val startTick: Tick,
   override val reporterType: ReportTypeEnum = null,
   override val scheduleOnTimeManager: Boolean = true,
@@ -67,10 +63,8 @@ case class CarState(
   override val actorType: ActorTypeEnum,
   override val size: Double,
 
-  // ========== Hybrid control ==========
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
 
-  // ========== Micro state (activated in MICRO links) ==========
   var microState: Option[MicroCarState] = None
 ) extends MovableState(
       startTick = startTick,
@@ -82,7 +76,6 @@ case class CarState(
       size = size
     ) {
 
-  // ========== Convenience accessors delegating to parent MovableState ==========
   def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
 
@@ -130,5 +123,5 @@ case class CarState(
   /** Get current velocity (works in both modes) */
   def getCurrentVelocity: Option[Double] =
     if (isMicroMode) microState.map(_.velocity)
-    else None // In MESO mode, velocity is aggregate
+    else None
 }

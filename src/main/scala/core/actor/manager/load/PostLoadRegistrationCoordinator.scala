@@ -44,10 +44,8 @@ class PostLoadRegistrationCoordinator(
       actorId = "post-load-registration-coordinator"
     ) {
 
-  // entityId → classType; populated during accumulation phase
   private val pendingRegistrations: mutable.Map[String, String] = mutable.Map.empty
 
-  // entityIds still awaiting PostLoadRegistrationAckEvent; populated at trigger time
   private val pendingAcks: mutable.Set[String] = mutable.Set.empty
 
   private var triggered: Boolean = false
@@ -58,7 +56,6 @@ class PostLoadRegistrationCoordinator(
   private val RETRY_INTERVAL: FiniteDuration = 10.seconds
   private val MAX_RETRIES: Int = 12 // 120 s total before giving up
 
-  // Internal message used by the scheduled retry task
   private case object RetryPostLoadRegistration
 
   override def handleEvent: Receive = {
@@ -67,9 +64,7 @@ class PostLoadRegistrationCoordinator(
     case event: PostLoadRegistrationAckEvent   => handleAck(event)
     case RetryPostLoadRegistration             => handleRetry()
   }
-
-  // ── Accumulation phase ──────────────────────────────────────────────────
-
+  
   private def handleNeedsRegistration(event: NeedsPostLoadRegistrationEvent): Unit =
     if (!triggered) {
       pendingRegistrations.put(event.entityId, event.classType)
@@ -78,9 +73,7 @@ class PostLoadRegistrationCoordinator(
         s"Received NeedsPostLoadRegistrationEvent after trigger — ignoring (${event.entityId})"
       )
     }
-
-  // ── Execution phase ─────────────────────────────────────────────────────
-
+  
   private def handleTrigger(): Unit = {
     if (triggered) {
       logWarn(
@@ -134,16 +127,12 @@ class PostLoadRegistrationCoordinator(
     toRemove.foreach(pendingAcks.remove)
     if (pendingAcks.isEmpty) finish()
   }
-
-  // ── ACK collection ───────────────────────────────────────────────────────
-
+  
   private def handleAck(event: PostLoadRegistrationAckEvent): Unit = {
     pendingAcks.remove(event.entityId)
     if (pendingAcks.isEmpty) finish()
   }
-
-  // ── Retry watchdog ───────────────────────────────────────────────────────
-
+  
   private def handleRetry(): Unit = {
     retryCount += 1
     if (retryCount >= MAX_RETRIES) {
@@ -162,9 +151,7 @@ class PostLoadRegistrationCoordinator(
       sendRegistrationEvents()
     }
   }
-
-  // ── Completion ───────────────────────────────────────────────────────────
-
+  
   private def finish(): Unit = {
     if (retryTask != null) retryTask.cancel()
     logInfo(

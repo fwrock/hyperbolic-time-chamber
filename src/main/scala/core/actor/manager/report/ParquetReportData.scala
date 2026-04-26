@@ -50,7 +50,6 @@ class ParquetReportData(
       startRealTime = startRealTime
     ) {
 
-  // ── Avro schema ──────────────────────────────────────────────────────────
 
   private val SCHEMA_JSON =
     """{
@@ -69,9 +68,7 @@ class ParquetReportData(
       |}""".stripMargin
 
   private val SCHEMA = new Schema.Parser().parse(SCHEMA_JSON)
-
-  // ── Config ───────────────────────────────────────────────────────────────
-
+  
   private val prefix =
     try config.getString("htc.report-manager.parquet.prefix")
     catch { case _: Exception => "htc_simulation_" }
@@ -88,23 +85,14 @@ class ParquetReportData(
     try config.getInt("htc.report-manager.parquet.batch-size")
     catch { case _: Exception => 10000 }
 
-  // Row-group size controls how much uncompressed data Parquet buffers internally
-  // before flushing a column chunk to disk. This is NOT the actor-level batch size.
-  // Smaller = data appears on disk sooner, less heap per actor.
-  // Larger = better compression ratio (more data for the codec to find patterns).
-  // 16 MB default: good balance for simulations of all sizes. Files become visible
-  // on disk after ~16 MB of raw events per actor instead of waiting for shutdown.
   private val rowGroupBytes: Long =
     try config.getLong("htc.report-manager.parquet.row-group-size-mb") * 1024L * 1024L
     catch { case _: Exception => 16L * 1024 * 1024 }
 
-  // ZSTD compression level [1-22]. Higher = smaller files, more CPU.
-  // Level 6 is a good sweet-spot (≈15% smaller than default level 3, ~1.3× slower).
   private val zstdLevel: Int =
     try config.getInt("htc.report-manager.parquet.zstd-level")
     catch { case _: Exception => 6 }
 
-  // ── Codec ────────────────────────────────────────────────────────────────
 
   private val codec: CompressionCodecName = compressionCodecName match {
     case "snappy"        => CompressionCodecName.SNAPPY
@@ -115,8 +103,7 @@ class ParquetReportData(
       logWarn(s"Unknown Parquet compression codec '$other', falling back to SNAPPY")
       CompressionCodecName.SNAPPY
   }
-
-  // ── File path ────────────────────────────────────────────────────────────
+  
 
   private val dateFormatter      = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
@@ -150,22 +137,16 @@ class ParquetReportData(
 
   private lazy val directory = s"$baseDirectory/$simulationId"
 
-  // filePath is a def (not lazy val) so a new unique path is generated after a
-  // writer failure. If closeWriter() is called due to an error, the next
-  // getOrCreateWriter() creates a fresh file instead of overwriting the broken one.
   private def newFilePath(): String = {
     val freshId = java.util.UUID.randomUUID().toString.take(8)
     s"$directory/${prefix}${timeBasedId}_${freshId}_events${extension}"
   }
 
-  // ── State ────────────────────────────────────────────────────────────────
 
   private val buffer                                = mutable.ArrayBuffer.empty[ReportEvent]
   private var writer: ParquetWriter[GenericRecord]  = _
   private var currentFilePath: String               = _
   private var flushCount: Long                      = 0L
-
-  // ── Writer lifecycle ─────────────────────────────────────────────────────
 
   private def getOrCreateWriter(): ParquetWriter[GenericRecord] = {
     if (writer == null) {
@@ -173,12 +154,7 @@ class ParquetReportData(
       currentFilePath = newFilePath()
       val outputFile = new LocalOutputFile(Paths.get(currentFilePath))
 
-      // Build a Hadoop Configuration to control codec-level settings.
-      // This is required even without a real Hadoop cluster — the Parquet
-      // library reads these keys internally before writing column chunks.
       val hadoopConf = new Configuration(false)
-      // ZSTD compression level (1-22). Parquet reads this Hadoop conf key when codec = ZSTD.
-      // The constant ParquetOutputFormat.ZSTD_LEVEL was never public in 1.x — use the string key directly.
       hadoopConf.setInt("parquet.compression.codec.zstd.level", zstdLevel)
 
       writer = AvroParquetWriter
@@ -188,22 +164,10 @@ class ParquetReportData(
         .withDataModel(GenericData.get())
         .withCompressionCodec(codec)
         .withRowGroupSize(rowGroupBytes)
-        // 256 KB pages: better balance for GCS Fuse / S3 (fewer seeks vs 64 KB)
-        // and still fine for predicate pushdown in Spark / DuckDB.
         .withPageSize(256 * 1024)
-        // PARQUET_2_0 enables delta-encoding for int64 columns (tick, real_time_ms,
-        // lamport_tick). tick is monotonically increasing → delta values are tiny
-        // → additional 20-40% size reduction on numeric columns vs PARQUET_1_0.
         .withWriterVersion(ParquetProperties.WriterVersion.PARQUET_2_0)
-        // Enable dictionary encoding globally; Parquet auto-falls-back to plain
-        // encoding when the per-column dict exceeds 1MB, so high-cardinality columns
-        // (e.g. `data` JSON payloads) are not penalised.
         .withDictionaryEncoding(true)
-        // Disable dictionary for `data`: JSON payloads are almost always unique per row.
-        // Forcing a dict on them wastes CPU building a dictionary that immediately overflows.
         .withDictionaryEncoding("data", false)
-        // Page-level CRC32 checksums. Detects silent corruption on GCS Fuse / HDFS.
-        // Overhead is negligible (<1% CPU) for the safety guarantee on network FS.
         .withPageWriteChecksumEnabled(true)
         .build()
       logInfo(s"Opened Parquet writer: $currentFilePath (codec=$compressionCodecName, version=PARQUET_2_0)")
@@ -217,15 +181,12 @@ class ParquetReportData(
       catch { case e: Exception => logError(s"Error closing Parquet writer: ${e.getMessage}", e) }
       writer = null
     }
-
-  // ── Receive ──────────────────────────────────────────────────────────────
-
+  
   override def onReport(event: ReportEvent): Unit = {
     buffer += event
     if (buffer.size >= batchSize) flushBuffer()
   }
-
-  // ── Flush ─────────────────────────────────────────────────────────────────
+  
 
   private def flushBuffer(): Unit = {
     if (buffer.isEmpty) return
@@ -251,20 +212,16 @@ class ParquetReportData(
     } catch {
       case e: Exception =>
         logError(s"Failed to write Parquet report: ${e.getMessage}", e)
-        // closeWriter invalidates currentFilePath; next getOrCreateWriter() generates
-        // a fresh UUID path so buffered events are retried into a new clean file.
         closeWriter()
     }
   }
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  
 
   override def postStop(): Unit = {
     if (buffer.nonEmpty) flushBuffer()
     closeWriter()
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private def mkdir(dir: String): Unit = {
     val dirPath: Path = Paths.get(dir)

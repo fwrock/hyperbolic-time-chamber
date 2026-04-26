@@ -3,13 +3,9 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
-import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.MovableState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.ActorTypeEnum.Bus
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 
 import scala.collection.mutable
@@ -74,16 +70,10 @@ case class BusState(
   override val actorType: ActorTypeEnum = Bus,
   override val size: Double,
 
-  // ========== Hybrid control ==========
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
 
-  // ========== Micro state (activated in MICRO links) ==========
   var microState: Option[MicroBusState] = None,
 
-  // ========== Route serialization backup ==========
-  // movableBestRoute (in parent MovableState) may not survive JSON roundtrip when
-  // deserialized via setter injection. This List-based copy is a constructor parameter
-  // so Jackson uses constructor-based deserialization with full generic type information.
   var storedBestRoute: Option[List[(String, String)]] = None
 ) extends MovableState(
       startTick = startTick,
@@ -93,7 +83,6 @@ case class BusState(
       size = size
     ) {
 
-  // ========== Convenience accessors delegating to parent MovableState ==========
   def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
 

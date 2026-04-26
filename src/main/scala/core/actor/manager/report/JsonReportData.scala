@@ -30,7 +30,6 @@ class JsonReportData(
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
-  // Generate simulation ID using same logic as CassandraReportData
   private lazy val simulationId: String = {
     val simulationConfigId =
       try {
@@ -96,7 +95,6 @@ class JsonReportData(
   private def getOrCreateWriter(): BufferedWriter = {
     if (persistentWriter == null) {
       mkdir(directory)
-      // 64KB buffer reduces syscall frequency on network mounts
       persistentWriter = new BufferedWriter(new FileWriter(filePath, true), 65536)
     }
     persistentWriter
@@ -128,7 +126,6 @@ class JsonReportData(
     } catch {
       case e: Exception =>
         logError(s"Failed to write report to file: ${e.getMessage}", e)
-        // Close broken writer so next flush creates a new one
         closeWriter()
     }
   }

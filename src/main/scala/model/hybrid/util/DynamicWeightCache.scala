@@ -44,7 +44,7 @@ object DynamicWeightCache {
       try
         config.getString("htc.routing.cache-strategy")
       catch {
-        case _: Exception => "kafka" // Default to Kafka
+        case _: Exception => "kafka"
       }
 
     implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
@@ -71,9 +71,7 @@ object DynamicWeightCache {
       case _       => new DisabledCacheStrategy()
     }
   }
-
-  // Delegate all operations to strategy
-
+  
   def publishCost(cost: DynamicLinkCost, ttlSeconds: Int = 60): Try[Unit] =
     strategy.publishCost(cost, ttlSeconds)
 

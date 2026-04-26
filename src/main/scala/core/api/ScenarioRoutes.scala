@@ -34,7 +34,6 @@ object ScenarioRoutes {
     pathPrefix("api" / "v1" / "scenarios") {
       concat(
 
-        // ── GET /api/v1/scenarios ──────────────────────────────────────────
         pathEndOrSingleSlash {
           get {
             val scenarios = ScenarioRegistry.listScenarios()
@@ -65,7 +64,6 @@ object ScenarioRoutes {
         pathPrefix(Segment) { name =>
           concat(
 
-            // ── GET /api/v1/scenarios/{name} ────────────────────────────────
             pathEndOrSingleSlash {
               get {
                 ScenarioRegistry.getScenario(name) match {
@@ -113,7 +111,6 @@ object ScenarioRoutes {
       )
     }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
 
   private def ok(json: String) =
     HttpResponse(StatusCodes.OK, entity = HttpEntity(ContentTypes.`application/json`, json))

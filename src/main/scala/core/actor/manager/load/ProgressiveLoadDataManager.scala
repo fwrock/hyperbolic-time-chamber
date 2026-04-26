@@ -51,61 +51,42 @@ class ProgressiveLoadDataManager(
       timeManager = null
     ) {
 
-  // Own creator pools — independent from LoadDataManager's (which are destroyed after eager loading)
   private var creatorRef: ActorRef = uninitialized
   private var creatorPoolRef: ActorRef = uninitialized
   private var globalTimeManagerRef: ActorRef = uninitialized
 
-  // Progressive loader actors (one per data source file)
-  private val loaders = mutable.Map[String, ActorRef]() // sourceId -> loaderActorRef
-  private val loaderSources = mutable.Map[String, ActorDataSource]() // sourceId -> source config
-  private val indexedSources = mutable.Set[String]() // sources that have completed indexing
+  private val loaders = mutable.Map[String, ActorRef]()
+  private val loaderSources = mutable.Map[String, ActorDataSource]()
+  private val indexedSources = mutable.Set[String]()
 
-  // Tick window management
   private var loadedUpToTick: Tick = -1L
   private var maxLookAheadTicks: Tick = 1000L
   private var totalActorsCreated: Long = 0L
   private var allSourcesFullyLoaded = false
 
-  // Adaptive window sizing — density-aware horizon calculation
-  // Aggregated actor counts per tick across all progressive sources.
-  // Built from TickIndexBuiltEvent data after all sources complete indexing.
   private var aggregatedTickCounts: TreeMap[Tick, Int] = TreeMap.empty
   private val TARGET_ACTORS_PER_WINDOW: Int = 50_000
   private val MIN_LOOK_AHEAD_TICKS: Tick = 100
 
-  // Pending tick window request tracking
   private var pendingWindowRequest: Option[TickWindowRequest] = None
-  private val pendingRangeResponses = mutable.Map[String, Boolean]() // sourceId -> isDone
+  private val pendingRangeResponses = mutable.Map[String, Boolean]()
   private var pendingRangeActorsCount: Long = 0L
 
-  // Sliding-window load batching — limits concurrent file re-reads.
-  // Each loader that has actors in the range re-reads its entire file, so we
-  // limit how many do this concurrently to control memory usage.
   private val LOAD_BATCH_SIZE = 10
-  private var pendingLoadQueue: List[String] = List.empty // sourceIds awaiting load
+  private var pendingLoadQueue: List[String] = List.empty
   private var currentLoadFromTick: Tick = 0L
   private var currentLoadToTick: Tick = 0L
 
-  // Gate against concurrent tick-window loads.
-  // GlobalTimeManager can fire TickWindowRequest for every tick advance; without
-  // this guard each call re-enters processTickWindowRequest, resets shared state,
-  // and sends N duplicate LoadActorsForTickRange messages to the same loader —
-  // multiplying CreateActorsEvent volume by N and overflowing the ShardRegion buffer.
   private var loadInFlight = false
 
-  // Max ticks per source (to know when all actors have been loaded)
   private val sourceMaxTicks = mutable.Map[String, Tick]()
 
   private var selfProxy: ActorRef = null
   private var fullyIndexed = false
 
-  // Batched index building — avoid GC pressure by limiting concurrent index builds.
-  // Light indexing is cheap (only counts, no ActorSimulation retention), so we can
-  // run more in parallel than before. Still batched to avoid I/O contention.
   private val INDEX_BUILD_BATCH_SIZE = 30
-  private var pendingIndexSources: List[String] = List.empty // sourceIds awaiting index build
-  private var currentIndexBatchSize: Int = 0 // number of sources in the current batch
+  private var pendingIndexSources: List[String] = List.empty
+  private var currentIndexBatchSize: Int = 0
 
   override def onStart(): Unit =
     reporters = poolReporters
@@ -135,10 +116,6 @@ class ProgressiveLoadDataManager(
       return
     }
 
-    // Create own creator pools — independent from LoadDataManager's pools which are
-    // destroyed (context.stop) when LoadDataManager finishes eager loading.
-    // Without this, CreateActorsEvent messages go to dead letters and actors are
-    // never initialized (state=null → NPE on actSpontaneous).
     val totalSources = event.progressiveSources.size
     this.creatorRef = createCreatorLoadData(totalSources)
     this.creatorPoolRef = createCreatorPoolLoadData(totalSources)
@@ -149,10 +126,6 @@ class ProgressiveLoadDataManager(
         s"indexBuildBatchSize=$INDEX_BUILD_BATCH_SIZE"
     )
 
-    // Distribute loaders across ALL cluster nodes (round-robin).
-    // Previously all loaders ran on the singleton's pod, concentrating
-    // JSON parsing + file I/O on one node (CPU hotspot). Since all pods
-    // have GCS FUSE mounted at the same path, any pod can read the files.
     val cluster = Cluster(context.system)
     val upMembers = cluster.state.members
       .filter(_.status == MemberStatus.Up)
@@ -164,9 +137,6 @@ class ProgressiveLoadDataManager(
         s"${upMembers.size} cluster members"
     )
 
-    // Create loader actors distributed round-robin across cluster nodes.
-    // Each loader is individually addressable (stored in `loaders` map by sourceId)
-    // so we can send LoadActorsForTickRange to specific loaders.
     event.progressiveSources.zipWithIndex.foreach { case (source, idx) =>
       val targetAddress = upMembers(idx % upMembers.size).address
       val loaderProps = Props(
@@ -191,8 +161,7 @@ class ProgressiveLoadDataManager(
       }
     }
 
-    // Queue all source IDs and kick off the first batch of index builds
-    pendingIndexSources = event.progressiveSources.map(_.id).toList
+    pendingIndexSources = event.progressiveSources.map(_.id)
     startNextIndexBatch()
   }
 
@@ -234,11 +203,6 @@ class ProgressiveLoadDataManager(
     indexedSources.add(event.sourceId)
     sourceMaxTicks.put(event.sourceId, event.maxTick)
 
-    // Aggregate tick counts from this source into the global density map.
-    // This enables adaptive window sizing — instead of a fixed tick range,
-    // we walk through ticks accumulating actors until reaching the target.
-    // Note: Jackson CBOR deserializes Map keys as String even when typed as Long,
-    // so we cast to Map[Any, Any] and convert manually.
     val mutableCounts = mutable.TreeMap.from(aggregatedTickCounts)
     event.tickCounts.asInstanceOf[Map[Any, Any]].foreach { case (rawTick, rawCount) =>
       val tick: Tick = rawTick match {
@@ -274,14 +238,10 @@ class ProgressiveLoadDataManager(
           s"unique ticks=${aggregatedTickCounts.size}. Ready for adaptive tick window requests."
       )
 
-      // If there's a pending request that came in before indexing completed, process it now
       pendingWindowRequest.foreach { req =>
         processTickWindowRequest(req)
       }
     } else if (pendingIndexSources.nonEmpty) {
-      // Check if the current batch is fully indexed; if so, start the next batch.
-      // A batch is complete when (indexedSources.size % INDEX_BUILD_BATCH_SIZE == 0)
-      // or we've indexed all sources sent so far.
       val totalSent = loaders.size - pendingIndexSources.size
       if (indexedSources.size >= totalSent) {
         startNextIndexBatch()
@@ -299,7 +259,6 @@ class ProgressiveLoadDataManager(
    */
   private def handleTickWindowRequest(request: TickWindowRequest): Unit = {
     if (allSourcesFullyLoaded) {
-      // All progressive actors have been created, just acknowledge
       notifyTimeManagerReady(request.horizonTick, 0)
       return
     }
@@ -326,14 +285,10 @@ class ProgressiveLoadDataManager(
     val maxHorizon = request.horizonTick
 
     if (fromTick > maxHorizon) {
-      // Already loaded up to this horizon
       notifyTimeManagerReady(maxHorizon, 0)
       return
     }
 
-    // Calculate the adaptive horizon based on actor density instead of using
-    // the fixed horizon from the request. This ensures windows with many actors
-    // are smaller (faster to load) while sparse windows extend further ahead.
     val toTick = calculateAdaptiveHorizon(fromTick, maxHorizon)
 
     logInfo(
@@ -341,33 +296,26 @@ class ProgressiveLoadDataManager(
         s"adaptive range [$fromTick, $toTick] (requested max=$maxHorizon)"
     )
 
-    // Track which loaders need to respond
     pendingRangeResponses.clear()
     pendingRangeActorsCount = 0
 
-    // Only send to loaders whose maxTick >= fromTick (they might have actors in range)
     val relevantLoaders = loaders.filter {
       case (sourceId, _) =>
         sourceMaxTicks.get(sourceId).exists(_ >= fromTick)
     }
 
     if (relevantLoaders.isEmpty) {
-      // No more actors to load from any source in this range
       loadedUpToTick = toTick
       checkAllSourcesFullyLoaded(toTick)
       notifyTimeManagerReady(toTick, 0)
       return
     }
 
-    // Register all relevant loaders as pending
     relevantLoaders.foreach {
       case (sourceId, _) =>
         pendingRangeResponses.put(sourceId, false)
     }
 
-    // Use sliding-window batching: only LOAD_BATCH_SIZE loaders re-read files
-    // concurrently. As each finishes, the next one starts. This caps peak memory
-    // during the load phase.
     val allIds = relevantLoaders.keys.toList
     val (firstBatch, rest) = allIds.splitAt(LOAD_BATCH_SIZE)
     pendingLoadQueue = rest
@@ -394,7 +342,6 @@ class ProgressiveLoadDataManager(
     pendingRangeActorsCount += event.actorsLoaded
     totalActorsCreated += event.actorsLoaded
 
-    // Prometheus: progressive loading metrics
     MetricsServer.progressiveActorsCreated.inc(event.actorsLoaded.toDouble)
 
     val completed = pendingRangeResponses.count(_._2)
@@ -406,7 +353,6 @@ class ProgressiveLoadDataManager(
         s"Progress: $completed/$total (${pendingLoadQueue.size} queued)"
     )
 
-    // Sliding window: start the next queued loader
     if (pendingLoadQueue.nonEmpty) {
       val nextId = pendingLoadQueue.head
       pendingLoadQueue = pendingLoadQueue.tail
@@ -416,7 +362,6 @@ class ProgressiveLoadDataManager(
       )
     }
 
-    // Check if all loaders have responded for this range
     if (completed == total) {
       val toTick = currentLoadToTick
       loadedUpToTick = toTick
@@ -430,9 +375,6 @@ class ProgressiveLoadDataManager(
 
       notifyTimeManagerReady(toTick, pendingRangeActorsCount)
 
-      // Release the gate and immediately process any window request that arrived
-      // while this load was running. Only the latest horizon matters — earlier
-      // ones are superseded and have already been replaced in pendingWindowRequest.
       loadInFlight = false
       pendingWindowRequest.foreach { pending =>
         pendingWindowRequest = None
@@ -465,14 +407,11 @@ class ProgressiveLoadDataManager(
       val minHorizon = fromTick + MIN_LOOK_AHEAD_TICKS
       val cappedMaxHorizon = Math.min(maxHorizon, fromTick + maxLookAheadTicks)
 
-      // Walk through ticks in sorted order, accumulating actor counts
       val relevantTicks = aggregatedTickCounts.rangeFrom(fromTick).rangeTo(cappedMaxHorizon)
 
       val iter = relevantTicks.iterator
       while (iter.hasNext && !exceeded) {
         val (tick, count) = iter.next()
-        // If adding this tick would exceed the target AND we've already passed the minimum range,
-        // stop at the previous tick boundary to keep the window manageable.
         if (actorCount + count > TARGET_ACTORS_PER_WINDOW && tick > minHorizon) {
           logInfo(
             s"Adaptive horizon: $lastTickWithActors " +
@@ -488,7 +427,6 @@ class ProgressiveLoadDataManager(
       if (exceeded) {
         lastTickWithActors
       } else {
-        // All ticks in range fit within the target — extend up to max horizon
         logInfo(
           s"Adaptive horizon: $cappedMaxHorizon " +
             s"(all $actorCount actors in range fit within target $TARGET_ACTORS_PER_WINDOW)"
@@ -520,7 +458,6 @@ class ProgressiveLoadDataManager(
    * Notify the GlobalTimeManager that actors up to the given tick are ready.
    */
   private def notifyTimeManagerReady(readyUpToTick: Tick, actorsCreated: Long): Unit = {
-    // Prometheus: track progressive loading progress
     MetricsServer.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
     MetricsServer.progressiveWindowsLoaded.inc()
     globalTimeManagerRef ! TickWindowReady(
@@ -530,7 +467,6 @@ class ProgressiveLoadDataManager(
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    // Forward to the appropriate loader (they track their own batches)
   }
 
   private def handleSourceFinished(event: FinishLoadDataEvent): Unit = {

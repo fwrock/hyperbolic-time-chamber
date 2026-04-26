@@ -26,7 +26,7 @@ object JsonStreamingUtil {
     if (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.START_ARRAY) {
       throw new IllegalStateException("JSON deve começar com '['")
     }
-    parser.nextToken() // Pula o '['
+    parser.nextToken()
     val iter = mapper.readValues[ActorSimulation](parser, classOf[ActorSimulation]).asScala
     (parser, iter)
   }

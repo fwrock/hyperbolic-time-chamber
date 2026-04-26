@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.api
 
-import org.apache.pekko.http.scaladsl.model.HttpMethods._
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.model.headers.RawHeader
 import org.apache.pekko.http.scaladsl.server.Directives._
@@ -28,7 +27,6 @@ object CorsSupport {
 
     respondWithHeaders(headers) {
       options {
-        // Handle all preflight OPTIONS requests
         complete(StatusCodes.OK)
       } ~ route
     }

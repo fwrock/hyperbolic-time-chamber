@@ -51,21 +51,15 @@ class SnapshotManager(timeManager: ActorRef)
 
   import SnapshotManager.RegisterSnapshotContextEvent
 
-  // ── Simulation context (injected once by SimulationManager) ───────────────
   private var poolTimeManagers: mutable.Map[String, ActorRef] = mutable.Map.empty
   private var poolReporters: mutable.Map[ReportTypeEnum, ActorRef]  = mutable.Map.empty
 
-  // ── Snapshot storage: entityId → (snapshot, batchId) ─────────────────────
   private val pendingSnapshots: mutable.Map[String, (MigrationSnapshot, String)] = mutable.Map.empty
 
-  // ── Batch tracking: batchId → (pendingEntityIds, lbmRef) ─────────────────
   private val batchTracking: mutable.Map[String, (mutable.Set[String], ActorRef)] = mutable.Map.empty
 
-  // ──────────────────────────────────────────────────────────────────────────
 
   override def onStart(): Unit = {
-    // Note: SM no longer registers itself in MigrationStateStoreRegistry.
-    // The MigrationWindowSubscriber creates the SM proxy and registers it on each node.
     logInfo("SnapshotManager started")
   }
 
@@ -77,7 +71,6 @@ class SnapshotManager(timeManager: ActorRef)
     case _: StopSimulationEvent              => handleStop()
   }
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
 
   private def handleRegisterContext(event: RegisterSnapshotContextEvent): Unit = {
     poolTimeManagers = event.timeManagers
@@ -114,7 +107,6 @@ class SnapshotManager(timeManager: ActorRef)
           batchId      = batchId,
           lbmRef       = lbmRef
         )
-        // Remove entity from batch tracking; if batch is now empty notify LBM
         batchTracking.get(batchId).foreach { case (pendingIds, lbm) =>
           pendingIds -= event.entityId
           if (pendingIds.isEmpty && lbm != null) {

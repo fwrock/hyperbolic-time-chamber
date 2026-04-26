@@ -3,16 +3,12 @@ package model.mobility.actor
 
 import core.actor.SimulationBaseActor
 
-import org.apache.pekko.actor.ActorRef
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import model.mobility.entity.state.NodeState
 import model.mobility.entity.state.enumeration.EventTypeEnum
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
-import scala.collection.mutable
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.bus.RegisterBusStopData
@@ -20,7 +16,6 @@ import org.interscity.htc.model.mobility.entity.event.data.link.LinkConnectionsD
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.mobility.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.mobility.entity.event.data.{ ForwardRouteData, ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 

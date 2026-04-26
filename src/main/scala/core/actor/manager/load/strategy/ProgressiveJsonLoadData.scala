@@ -9,7 +9,6 @@ import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCr
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
-import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.TickIndexUtil.LightTickIndex
 
 import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
@@ -51,25 +50,20 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   private var sourceClassType: String = _
   private var sourceId: String = _
 
-  // Lightweight index — only tick counts, no ActorSimulation objects
   private var lightIndex: LightTickIndex = _
 
-  // Track consumed tick ranges to avoid re-loading from file
   private var fullyConsumed = false
 
-  // Streaming state — file handle kept open between chunks
   private var activeInputStream: InputStream = _
   private var activeIterator: Iterator[ActorSimulation] = _
   private var streamExhausted: Boolean = false
 
   private val CHUNK_SIZE = 500
-  // Keep CreateActorsEvent messages small enough for Pekko Artery max frame size.
   private val CREATE_EVENT_MAX_ACTORS = 25
   private val activeBatches = mutable.Set[String]()
   private var totalLoadedActors = 0L
   private val creators = mutable.Set[ActorRef]()
 
-  // Current tick range being processed
   private var activeRequest: LoadActorsForTickRange = _
   private var pendingActorsSent = 0
 
@@ -131,11 +125,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit = {
     managerRef ! event
   }
-
-  // ---------------------------------------------------------------------------
-  // Phase 2: Chunked streaming — read file in small chunks with back-pressure
-  // ---------------------------------------------------------------------------
-
+  
   /**
    * Start streaming actors for a tick range. Opens the file and kicks off
    * the first chunk read.
@@ -161,8 +151,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       )
       return
     }
-
-    // Check lightweight counts first — skip file read entirely if no actors match
+    
     val expectedCount = TickIndexUtil.countActorsInRange(
       lightIndex.tickCounts, request.fromTick, request.toTick
     )
@@ -182,7 +171,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
         s"[${request.fromTick}, ${request.toTick}] from $sourceId"
     )
 
-    // Open the file for chunked streaming
     activeInputStream = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
     val (_, iter) = JsonStreamingUtil.createParser(activeInputStream)
     activeIterator = iter
@@ -190,7 +178,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     pendingActorsSent = 0
     streamExhausted = false
 
-    // Start reading the first chunk
     startNextChunkRead()
   }
 
@@ -224,10 +211,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
 
     if (actors.nonEmpty) {
       sendActorsToCreators(actors)
-      // After all FinishCreationEvents, handleFinishCreation will
-      // either read the next chunk or close the stream
     } else {
-      // No more matching actors — close file and report
       closeStreamAndReport()
     }
   }
@@ -268,7 +252,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
 
     if (activeBatches.isEmpty) {
-      // No batches to wait for (shouldn't happen since actors.nonEmpty)
       if (!streamExhausted) startNextChunkRead()
       else closeStreamAndReport()
     }
@@ -294,7 +277,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
    * Close the active file stream and report completion to the manager.
    */
   private def closeStreamAndReport(): Unit = {
-    // Close the file handle
     if (activeInputStream != null) {
       try activeInputStream.close()
       catch { case _: Exception => }
@@ -302,12 +284,10 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       activeIterator = null
     }
 
-    // Track consumption
     if (lightIndex != null && activeRequest != null && activeRequest.toTick >= lightIndex.maxTick) {
       fullyConsumed = true
     }
 
-    // Report to manager
     if (activeRequest != null) {
       logInfo(
         s"Finished streaming $pendingActorsSent actors for tick range " +
@@ -328,7 +308,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       s"ProgressiveJsonLoadData: finished, total actors loaded: $totalLoadedActors"
     )
 
-    // Ensure stream is closed
     if (activeInputStream != null) {
       try activeInputStream.close()
       catch { case _: Exception => }

@@ -4,7 +4,6 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import model.hybrid.entity.state.MovableState
 
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum

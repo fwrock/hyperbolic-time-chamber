@@ -52,10 +52,8 @@ trait LaneChangeStrategy {
     targetLane: Int,
     vehiclesByLane: mutable.Map[Int, mutable.Queue[VehicleInLane]]
   ): Boolean = {
-    // Default: simple gap check
     vehiclesByLane.get(targetLane) match {
       case Some(queue) =>
-        // Find vehicles ahead and behind in target lane
         val ahead = queue.find(_.position > vehicle.position)
         val behind = queue.reverse.find(_.position < vehicle.position)
         
@@ -69,7 +67,6 @@ trait LaneChangeStrategy {
           case None => Double.MaxValue
         }
         
-        // Require minimum 5m gap on both sides
         gapAhead > 5.0 && gapBehind > 5.0
         
       case None => false

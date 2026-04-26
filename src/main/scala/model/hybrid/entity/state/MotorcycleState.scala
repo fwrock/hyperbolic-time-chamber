@@ -26,18 +26,13 @@ import scala.collection.mutable
  * @param microState Optional microscopic motorcycle state
  */
 case class MotorcycleState(
-                            // ========== Meso fields ==========
                             override val startTick: Tick,
                             override val origin: String,
                             override val destination: String,
                             var distance: Double = 0,
                             override val actorType: ActorTypeEnum,
                             override val size: Double,
-
-                            // ========== Hybrid control ==========
                             var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-
-                            // ========== Micro state (activated in MICRO links) ==========
                             var microState: Option[MicroMotorcycleState] = None
                                 ) extends MovableState(
   startTick = startTick,
@@ -47,7 +42,6 @@ case class MotorcycleState(
   size = size
 ) {
 
-  // ========== Convenience accessors delegating to parent MovableState ==========
   def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
 

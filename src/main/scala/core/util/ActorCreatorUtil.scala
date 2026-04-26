@@ -161,7 +161,6 @@ object ActorCreatorUtil {
         )
       )
 
-      // Use custom allocator from LoadBalanceManager if registered, otherwise Pekko default
       ShardAllocatorRegistry.get match {
         case Some(allocator) =>
           sharding.start(

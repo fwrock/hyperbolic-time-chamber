@@ -30,7 +30,6 @@ class RedisMigrationStateStore extends MigrationStateStore {
     ttlSeconds: Int = 300
   ): Unit = {
     val key = KEY_PREFIX + entityId
-    // Pack: className bytes + separator + state bytes
     val classNameBytes = className.getBytes("UTF-8")
     val separator = Array[Byte]('\n')
     val packed = classNameBytes ++ separator ++ stateBytes
@@ -50,10 +49,8 @@ class RedisMigrationStateStore extends MigrationStateStore {
       val packed = jedis.get(key.getBytes("UTF-8"))
       if (packed == null) return None
 
-      // Delete after reading (consume-once semantics)
       jedis.del(key.getBytes("UTF-8"))
 
-      // Unpack: find first newline separator
       val separatorIndex = packed.indexOf('\n'.toByte)
       if (separatorIndex < 0) return None
 
