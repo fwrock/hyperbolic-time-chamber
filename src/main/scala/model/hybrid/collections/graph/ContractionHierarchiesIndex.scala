@@ -76,13 +76,11 @@ case class ContractionHierarchiesIndex[V, W, L](
   def queryAStar(source: V, target: V, heuristic: (V, V) => Double): Option[(Double, List[(L, V)])] = {
     if (source == target) return Some((0.0, List.empty))
 
-    // g-scores (actual distances from each side)
     val distF = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val prevF = mutable.Map[V, V]()
     val distB = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
     val prevB = mutable.Map[V, V]()
 
-    // Priority queues keyed on f = g + h
     val pqF = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
     val pqB = mutable.PriorityQueue[(Double, V)]()(Ordering.by[(Double, V), Double](_._1).reverse)
 
@@ -167,7 +165,6 @@ case class ContractionHierarchiesIndex[V, W, L](
     expandShortcuts(raw.toList)
   }
 
-  // Reconstruct backward path (mid → target) using prevB map (prevB goes target→mid direction)
   private def unpackBackward(prevB: mutable.Map[V, V], mid: V, target: V): List[V] = {
     val raw = mutable.ListBuffer[V]()
     var cur = target
@@ -176,7 +173,6 @@ case class ContractionHierarchiesIndex[V, W, L](
       cur = prevB(cur); raw.prepend(cur)
     }
     val segment = raw.toList
-    // Remove mid from backward segment to avoid duplication
     if (segment.headOption.contains(mid)) expandShortcuts(segment.tail)
     else expandShortcuts(segment)
   }

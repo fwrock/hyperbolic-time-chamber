@@ -41,8 +41,6 @@ object ConfigApiServer {
         catch { case _: Exception => "false" })
       .equalsIgnoreCase("true")
 
-    // Always initialise the controller — even when the API is disabled it tracks
-    // that we are in auto-start mode (status = Running immediately).
     SimulationController.initialize(system, apiEnabled)
 
     if (!apiEnabled) {

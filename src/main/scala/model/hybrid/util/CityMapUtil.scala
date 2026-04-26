@@ -3,28 +3,23 @@ package org.interscity.htc.model.hybrid.util
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.model.hybrid.collections.{ Graph, LoadedGraphData }
 import org.interscity.htc.model.hybrid.collections.graph.ContractionHierarchiesIndex
-// Importa NodeGraph e EdgeGraph do novo pacote em Model.scala
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
 import scala.util.{ Failure, Success }
 
 object CityMapUtil {
 
-  // Extrator de ID para NodeGraph (V)
   val nodeGraphIdExtractor: NodeGraph => String = (node: NodeGraph) => node.id
 
-  // Extrator de ID para EdgeGraph (L - label da aresta)
   val edgeGraphIdExtractor: EdgeGraph => String = (edgeLabel: EdgeGraph) => edgeLabel.id
 
-  // Carrega os dados do mapa da cidade uma vez, incluindo os mapas de consulta
   private lazy val loadedCityData: LoadedGraphData[NodeGraph, String, Double, EdgeGraph] =
     Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-      // Priority: API registry override > HTC_MOBILITY_CITY_MAP_FILE env var > default
       SimulatorSettingsRegistry.get("htc.mobility.city-map-file")
         .orElse(sys.env.get("HTC_MOBILITY_CITY_MAP_FILE"))
         .getOrElse("city_map.json"),
       nodeGraphIdExtractor,
-      edgeGraphIdExtractor, // Passa o extrator de ID para EdgeGraph
-      0.0 // Peso padrão para arestas sem peso especificado
+      edgeGraphIdExtractor,
+      0.0
     ) match {
       case Success(data) =>
         println("Mapa da cidade carregado com sucesso.")
@@ -32,11 +27,9 @@ object CityMapUtil {
       case Failure(e) =>
         System.err.println(s"Falha crítica ao carregar o mapa da cidade: ${e.getMessage}")
         e.printStackTrace()
-        // Em um sistema real, você pode querer parar a aplicação aqui
         throw new IllegalStateException("Não foi possível carregar os dados do mapa da cidade.", e)
     }
 
-  // Expõe o grafo e os mapas de consulta para acesso rápido
   lazy val cityMap: Graph[NodeGraph, Double, EdgeGraph] = loadedCityData.graph
   lazy val nodesById: Map[String, NodeGraph] = loadedCityData.nodesById
   lazy val edgeLabelsById: Map[String, EdgeGraph] = loadedCityData.edgeLabelsById
@@ -50,11 +43,7 @@ object CityMapUtil {
   /** Static weights indexed by link ID — used for blocked-link threshold checks. */
   lazy val staticWeightsByLinkId: Map[String, Double] =
     cityMap.edges.map(e => e.label.id -> e.weight).toMap
-
-  // ---------------------------------------------------------------------------
-  // Adaptive CH index (rebuilt on policy triggers)
-  // ---------------------------------------------------------------------------
-
+    
   private val _adaptiveCHIndex =
     new java.util.concurrent.atomic.AtomicReference[
       ContractionHierarchiesIndex[NodeGraph, Double, EdgeGraph]
@@ -86,7 +75,6 @@ object CityMapUtil {
 
     if (current == null || scheduledNow || blocked) {
       _rebuildLock.synchronized {
-        // Double-check: another thread may have just rebuilt
         val c2           = _adaptiveCHIndex.get()
         val scheduled2   = policy.scheduledTicks.contains(currentTick) && currentTick != _lastRebuildTick
         val blocked2     = c2 == null || hasBlockedLinks(policy.blockThresholdFactor)
@@ -125,12 +113,10 @@ object CityMapUtil {
     println(s"[CityMapUtil] CH warm-up complete.")
   }
 
-  // Exemplo de como verificar se o mapa foi carregado (opcional)
   def printMapStats(): Unit = {
     println(s"Nós carregados: ${nodesById.size}")
     println(s"Labels de Arestas (EdgeGraphs) carregados: ${edgeLabelsById.size}")
     println(s"Total de arestas no grafo: ${cityMap.edges.size}")
-    // Cuidado: cityMap.edges ainda reconstrói o conjunto, use com moderação fora da inicialização/debug.
   }
 }
 

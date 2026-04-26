@@ -9,15 +9,12 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
-import org.interscity.htc.core.util.IdentifyUtil
-import org.htc.protobuf.core.entity.actor.Identify
+
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.EntityEnvelopeEvent
 import core.util.{IdUtil, StringUtil}
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.event.data.*
-import org.interscity.htc.model.hybrid.micro.model.{CarFollowingModel, KraussModel}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{DynamicLinkCost, LinkRegister, VehicleInLane}
 import org.interscity.htc.model.hybrid.entity.event.data.*
@@ -88,13 +85,11 @@ class Link(
     state.length * state.congestionFactor + speedFactor
   }
 
-  // Strategy pattern for microscopic simulation
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
   private val laneChangeStrategy: LaneChangeStrategy = NoLaneChangeStrategy()
 
   private var lastCostPublishTick: Tick = 0
 
-  // === Metrics tracking ===
   /** Current tick being summarized for metrics */
   private var summaryTick: Tick = Long.MinValue
   /** Vehicles loaded in current tick */
@@ -139,10 +134,6 @@ class Link(
    * The counter is reset to 0 whenever new vehicles are present.
    */
   private var emptyGraceTick: Int = 0
-  // Safety-net grace period: keep the link scheduled in the TM for a few extra ticks
-  // after vehiclesByLane empties. The real fix is in LocalTimeManagerBase.finishEvent
-  // (actor added to scheduledActors atomically), but this guard prevents edge cases where
-  // the TM advances past the scheduled tick before the actor is picked up.
   private val MICRO_GRACE_TICKS: Int = 5
 
   /** Configuration: interval between dynamic cost publications (ticks) */
@@ -191,7 +182,6 @@ class Link(
       state = state.initializeMicroLanes()
     }
 
-    // Initialize strategies with link parameters
     microSimulationStrategy.initialize(
       linkLength = state.length,
       speedLimit = state.speedLimit,
@@ -256,8 +246,6 @@ class Link(
     if (!hasVehicles) {
       emptyGraceTick += 1
       if (emptyGraceTick <= MICRO_GRACE_TICKS) {
-        // Stay alive during grace period so late-arriving vehicles can enter and
-        // find a scheduled link without needing a TM reschedule from actInteractWith.
         onFinishSpontaneous(Some(currentTick + 1))
       } else {
         emptyGraceTick = 0
@@ -267,7 +255,7 @@ class Link(
       return
     }
 
-    emptyGraceTick = 0  // reset whenever vehicles are present
+    emptyGraceTick = 0
     microTickScheduled = true
     handleGlobalTick(currentTick)
 
@@ -276,14 +264,8 @@ class Link(
       emptyGraceTick = 0
       onFinishSpontaneous(Some(currentTick + 1))
     } else {
-      // Apply the same grace period when the last vehicle exits DURING tick processing.
-      // Without this, the link calls onFinishSpontaneous(None) immediately, but an
-      // incoming vehicle (whose EnterLinkData message is already in-flight) will call
-      // scheduleEvent() AFTER the TM has already reported hasScheduled=false to GlobalTM,
-      // causing GlobalTM to terminate prematurely while vehicles are still in transit.
       emptyGraceTick += 1
       if (emptyGraceTick <= MICRO_GRACE_TICKS) {
-        // Stay alive: an incoming vehicle may arrive within the grace window
         onFinishSpontaneous(Some(currentTick + 1))
       } else {
         emptyGraceTick = 0
@@ -454,12 +436,6 @@ class Link(
 
     if (!microTickScheduled) {
       microTickScheduled = true
-      // CRITICAL: Use currentTick (the link's own tick, always >= event.tick) rather than
-      // entryTick (event.tick, the car's tick when it sent the message).
-      // In MICRO mode cars stop scheduling their own spontaneous events, so their currentTick
-      // lags behind. When they send EnterLinkData, event.tick may already be < link's currentTick.
-      // scheduleEvent with a past tick is silently ignored by the TimeManager (nextTick filters
-      // ticks < localTickOffset), causing the link to never run its micro simulation.
       scheduleEvent(currentTick + 1)
     }
   }
@@ -566,14 +542,9 @@ class Link(
    * @param entryTick Tick when vehicle entered (for travel time)
    */
   private def sendLeaveLinkMicro(event: ActorInteractionEvent, data: LeaveLinkData, entryTick: Long): Unit = {
-    // Check whether the vehicle was already proactively sent MicroLeaveLinkData in handleGlobalTick.
-    // In the correct flow: Link sends MicroLeaveLinkData → car requests signal → leavingLink() sends
-    // LeaveLinkData back here. The vehicle was already removed from vehiclesByLane at exit time, so
-    // there is nothing left to do except cleanup (state.registered was already cleaned in handleLeaveLink).
     val stillInLanes = state.vehiclesByLane.values.exists(q => q.exists(_.actorId == data.actorId))
 
     if (!stillInLanes) {
-      // Normal path: vehicle exited proactively. Just ensure lane queues are clean (no-op if already empty).
       logDebug(s"${data.actorId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
       if (state.totalVehiclesInMicro == 0 && microTickScheduled) {
         microTickScheduled = false
@@ -581,8 +552,6 @@ class Link(
       return
     }
 
-    // Fallback path (should not normally occur): vehicle sent LeaveLinkData before Link sent MicroLeaveLinkData.
-    // Send MicroLeaveLinkData now as a fallback so the car can still process stats.
     state.vehiclesByLane.foreach { case (_, queue) =>
       queue.dequeueAll(_.actorId == data.actorId)
     }
@@ -671,11 +640,9 @@ class Link(
       lastCostPublishTick = tick
     }
 
-    // Execute micro simulation via strategy
     if (state.isMicroMode) {
       if (state.totalVehiclesInMicro == 0) return
 
-      // Convert immutable Map to mutable for strategy (it will mutate the queues)
       val mutableLanes = scala.collection.mutable.Map.from(state.vehiclesByLane)
       
       val updates = microSimulationStrategy.executeSubTick(
@@ -689,12 +656,6 @@ class Link(
         vehicleWaitingSeconds = vehicleWaitingSeconds
       )
 
-      // Strategy mutates state.vehiclesByLane, no need to copy back
-      // (queues are shared references)
-      
-      // Send updates to vehicles: proactive MicroLeaveLinkData for those that reached the end,
-      // regular MicroUpdateData for others. This makes the Link the authority on exit, preventing
-      // the ghost-restart race condition that occurred when vehicles detected exit themselves.
       updates.foreach { update =>
         if (update.reachedEnd) sendMicroLeaveLinkToVehicle(update)
         else sendMicroUpdateToVehicle(update)
@@ -716,7 +677,6 @@ class Link(
    * @param update Vehicle update with reachedEnd=true
    */
   private def sendMicroLeaveLinkToVehicle(update: model.hybrid.micro.strategy.MicroVehicleUpdate): Unit = {
-    // Remove vehicle from lane queues immediately — it has physically exited the link
     state.vehiclesByLane.foreach { case (_, queue) =>
       queue.dequeueAll(_.actorId == update.vehicleId)
     }
@@ -906,7 +866,7 @@ class Link(
     )
 
     DynamicWeightCache.publishCost(dynamicCost, cacheTtl) match {
-      case scala.util.Success(_) => // Silencioso no sucesso para evitar log spam
+      case scala.util.Success(_) =>
       case scala.util.Failure(e) =>
         logWarn(s"Failed to publish dynamic cost to Kafka: ${e.getMessage}")
     }

@@ -60,7 +60,7 @@ trait LaneChangeModel {
   def evaluateLaneChange(
     vehicleState: MicroMovableState,
     currentLane: Int,
-    leaderInCurrentLane: Option[(String, Double, Double)], // (id, gap, velocity)
+    leaderInCurrentLane: Option[(String, Double, Double)],
     followerInCurrentLane: Option[(String, Double, Double)],
     leaderInTargetLane: Option[(String, Double, Double)],
     followerInTargetLane: Option[(String, Double, Double)],
@@ -77,7 +77,7 @@ trait LaneChangeModel {
     *   Target lane
     * @param laneRestrictions
     *   Lane restrictions
-    * @return
+    * @return/ Registrar no TimeManager para receber ticks
     *   True if lane is available
     */
   def isLaneAvailable(
@@ -159,32 +159,28 @@ case class SimpleLaneChange(
     laneRestrictions: Map[Int, String]
   ): LaneChangeDecision = {
 
-    // Check if lane is available
     if (!isLaneAvailable(vehicleState, targetLane, laneRestrictions)) {
       return LaneChangeDecision(false, None, "Lane restricted", 0.0)
     }
 
-    // Check if target lane exists
     if (targetLane < 0 || targetLane >= numberOfLanes) {
       return LaneChangeDecision(false, None, "Lane out of bounds", 0.0)
     }
 
-    // Check gaps in target lane
     val frontGapSafe = leaderInTargetLane match {
       case Some((_, gap, _)) => gap > minGapForChange
-      case None              => true // No leader, front is clear
+      case None              => true
     }
 
     val rearGapSafe = followerInTargetLane match {
       case Some((_, gap, _)) => gap > minGapForChange
-      case None              => true // No follower, rear is clear
+      case None              => true 
     }
 
     if (!frontGapSafe || !rearGapSafe) {
       return LaneChangeDecision(false, None, "Insufficient gap", 0.0)
     }
 
-    // Check if target lane is faster
     val currentLeaderVelocity =
       leaderInCurrentLane.map(_._3).getOrElse(vehicleState.desiredVelocity)
     val targetLeaderVelocity = leaderInTargetLane.map(_._3).getOrElse(vehicleState.desiredVelocity)
@@ -193,7 +189,6 @@ case class SimpleLaneChange(
       return LaneChangeDecision(true, Some(targetLane), "Overtaking slower leader", 0.5)
     }
 
-    // Keep right rule (prefer rightmost lane when free)
     if (targetLane < currentLane && targetLeaderVelocity >= vehicleState.desiredVelocity * 0.9) {
       return LaneChangeDecision(true, Some(targetLane), "Keep right", 0.2)
     }
@@ -207,10 +202,10 @@ case class SimpleLaneChange(
     laneRestrictions: Map[Int, String]
   ): Boolean =
     laneRestrictions.get(targetLane) match {
-      case Some("bus_lane")  => false // Only buses can use (would need vehicle type check)
-      case Some("bike_lane") => false // Only bikes can use
-      case Some("emergency") => false // Emergency vehicles only
-      case _                 => true // Normal lane
+      case Some("bus_lane")  => false
+      case Some("bike_lane") => false
+      case Some("emergency") => false 
+      case _                 => true
     }
 
   override def updateLaneChangeProgress(

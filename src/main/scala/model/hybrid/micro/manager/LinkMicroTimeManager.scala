@@ -1,7 +1,6 @@
 package org.interscity.htc
 package model.hybrid.micro.manager
 
-import core.actor.BaseActor
 import core.types.Tick
 import org.apache.pekko.actor.typed.{ ActorRef, Behavior }
 import org.apache.pekko.actor.typed.scaladsl.{ ActorContext, Behaviors }
@@ -123,7 +122,6 @@ class LinkMicroTimeManager(
 
     vehiclesByLane.get(lane) match {
       case Some(queue) =>
-        // Insert in sorted order (front to back by position)
         val insertIndex = queue.indexWhere(_.position < position)
         if (insertIndex >= 0) {
           queue.insert(insertIndex, vehicle)
@@ -160,16 +158,13 @@ class LinkMicroTimeManager(
       s"[$linkId] Executing global tick $globalTick with $ticksPerGlobalTick sub-ticks"
     )
 
-    // Execute all sub-ticks
     for (subTick <- 0 until ticksPerGlobalTick) {
       currentSubTick = subTick
       executeSubTick(subTick)
     }
 
-    // Notify all vehicles that global tick completed
     vehicleActors.values.foreach {
       actor =>
-        // Send completion signal (would need to define this message)
         context.log.trace(s"[$linkId] Notifying vehicle of tick completion")
     }
 
@@ -181,14 +176,11 @@ class LinkMicroTimeManager(
   private def executeSubTick(subTick: Int)(implicit context: ActorContext[Command]): Unit = {
     context.log.trace(s"[$linkId] Executing sub-tick $subTick")
 
-    // Process each lane
     vehiclesByLane.foreach {
       case (laneId, vehicles) =>
         processLane(laneId, vehicles, subTick)
     }
 
-    // Process lane changes
-    // (In full implementation, would evaluate and execute lane changes here)
   }
 
   /** Process all vehicles in a lane for one sub-tick.
@@ -201,40 +193,32 @@ class LinkMicroTimeManager(
 
     if (vehicles.isEmpty) return
 
-    // Process from front to back
     for (i <- vehicles.indices) {
       val vehicle = vehicles(i)
 
-      // Find leader (vehicle ahead in same lane)
       val leader = if (i > 0) Some(vehicles(i - 1)) else None
 
-      // Calculate gap and leader velocity
       val (gap, leaderVelocity) = leader match {
         case Some(l) =>
           val g = l.position - vehicle.position - vehicle.vehicleLength
           (g, l.velocity)
         case None =>
-          // No leader: free road
           (linkLength - vehicle.position, vehicle.velocity)
       }
 
-      // Apply car-following model (simplified - would need full MicroMovableState)
       val newVelocity = if (gap > 0) {
-        // Simple update: move towards leader velocity or maintain speed
         val targetVel =
-          math.min(leader.map(_.velocity).getOrElse(vehicle.velocity + 2.0), 13.89) // 50 km/h max
-        val velChange = (targetVel - vehicle.velocity) * 0.5 // Smooth transition
+          math.min(leader.map(_.velocity).getOrElse(vehicle.velocity + 2.0), 13.89)
+        val velChange = (targetVel - vehicle.velocity) * 0.5 
         math.max(0.0, vehicle.velocity + velChange)
       } else {
-        math.max(0.0, leaderVelocity - 1.0) // Emergency deceleration
+        math.max(0.0, leaderVelocity - 1.0) 
       }
 
       val newPosition = vehicle.position + newVelocity * microTimeStep
 
-      // Update vehicle state
       vehicles(i) = vehicle.copy(position = newPosition, velocity = newVelocity)
 
-      // Send update to vehicle actor
       vehicleActors.get(vehicle.actorId).foreach {
         actor =>
           actor ! MicroUpdateData(
@@ -250,10 +234,8 @@ class LinkMicroTimeManager(
           )
       }
 
-      // Check if vehicle reached end of link
       if (newPosition >= linkLength) {
         context.log.debug(s"[$linkId] Vehicle ${vehicle.actorId} reached end of link")
-        // Would send MicroLeaveLinkData here
       }
     }
   }
@@ -286,17 +268,13 @@ class LinkMicroTimeManager(
 
     context.log.debug(s"[$linkId] Lane change request: $vehicleId from $fromLane to $toLane")
 
-    // Find vehicle in current lane
     vehiclesByLane.get(fromLane).flatMap {
       fromQueue =>
         fromQueue.find(_.actorId == vehicleId).map {
           vehicle =>
-            // Check if target lane is valid
             if (toLane >= 0 && toLane < numberOfLanes) {
-              // Remove from current lane
               fromQueue.dequeueAll(_.actorId == vehicleId)
 
-              // Add to target lane (maintaining sorted order)
               vehiclesByLane.get(toLane).foreach {
                 toQueue =>
                   val insertIndex = toQueue.indexWhere(_.position < vehicle.position)

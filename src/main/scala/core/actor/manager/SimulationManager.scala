@@ -21,7 +21,6 @@ import org.interscity.htc.core.entity.event.control.load.{FinishLoadDataEvent, L
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.LoadBalanceReadyEvent
 import org.interscity.htc.core.actor.manager.loadbalance.LoadBalanceManager
-import org.interscity.htc.core.actor.manager.SnapshotManager
 import org.interscity.htc.core.actor.manager.loadbalance.strategy.StrategyConfig
 import org.interscity.htc.core.entity.control.loadbalance.SpatialBounds
 import org.interscity.htc.core.enumeration.LoadBalanceStrategyEnum
@@ -87,16 +86,11 @@ class SimulationManager(
 
     val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
 
-    // If there are progressive sources, set up the ProgressiveLoadDataManager
     if (event.progressiveSources.nonEmpty) {
       logInfo(
         s"Setting up progressive loading for ${event.progressiveSources.size} sources"
       )
 
-      // lookAheadTicks is now a MAXIMUM bound for the tick window range.
-      // The ProgressiveLoadDataManager calculates the actual window size adaptively
-      // based on actor density per tick (targeting ~50K actors per window).
-      // Dense regions get shorter windows, sparse regions extend further.
       val lookAheadTicks = configuration.duration match {
         case d if d > 10000 => 10_000L
         case d if d > 1000  => 5_000L
@@ -106,13 +100,11 @@ class SimulationManager(
       progressiveLoadManager = createSingletonProgressiveLoadManager()
       val progressiveProxy = createSingletonProxy(PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME)
 
-      // Register the progressive load manager with the GlobalTimeManager
       globalTimeManagerProxy ! RegisterProgressiveLoadManagerEvent(
         progressiveLoadManager = progressiveProxy,
         lookAheadTicks = lookAheadTicks
       )
 
-      // Start progressive loading
       progressiveProxy ! StartProgressiveLoadingEvent(
         progressiveSources = event.progressiveSources,
         timeManagerRef = globalTimeManagerProxy,
@@ -149,9 +141,6 @@ class SimulationManager(
   private def startLoadData(): Unit =
     if (poolTimeManager != null && reporters != null) {
       loadManager = createSingletonLoadManager()
-      // Inject migration initialization context into SnapshotManager now that
-      // both poolTimeManager and reporters are available. This mirrors what
-      // CreatorLoadData does via InitializeEvent for fresh entity creation.
       createSingletonProxy(SNAPSHOT_MANAGER_ACTOR_NAME) ! SnapshotManager.RegisterSnapshotContextEvent(
         timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
         reporters = reporters
@@ -238,12 +227,6 @@ class SimulationManager(
     timeSingletonManager = createSingletonTimeManager()
     reportManager = createSingletonReportManager()
     snapshotManager = createSingletonSnapshotManager()
-    // LoadBalanceManager handles shard REBALANCING (migration between nodes).
-    // LoadDataManager handles shard CREATION (initial actor placement).
-    // Spatial-aware initial placement: When LoadBalanceManager is enabled, CreatorLoadData
-    // sends RegisterSpatialEntitiesBatchEvent → LoadBalanceManager → BatchShardAssignmentResponse,
-    // which stores shard assignments in SpatialShardIdRegistry. The extractShardId function
-    // in ActorCreatorUtil checks this registry first, falling back to hash-based routing.
     createLoadBalanceManagerIfEnabled()
   }
 
@@ -324,7 +307,6 @@ class SimulationManager(
         )
       } catch {
         case _: Exception =>
-          // Default world bounds (roughly covers most cities)
           SpatialBounds(-180.0, -90.0, 180.0, 90.0)
       }
 
@@ -384,9 +366,7 @@ class SimulationManager(
     logInfo(
       s"Progressive loading complete: ${event.totalActorsCreated} actors created during simulation"
     )
-    // Notify the GlobalTimeManager that it no longer needs to coordinate with the progressive loader
     val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
-    // The GTM's onProgressiveLoadingComplete will be triggered by setting loaded to max
     globalTimeManagerProxy ! org.interscity.htc.core.entity.event.control.load.TickWindowReady(
       readyUpToTick = Long.MaxValue,
       actorsCreated = 0

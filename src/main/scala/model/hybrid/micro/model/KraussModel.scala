@@ -48,16 +48,12 @@ case class KraussModel(
     deltaT: Double
   ): Double = {
 
-    // Effective gap (subtract minimum safe gap)
     val effectiveGap = max(0.0, gap - minGap)
 
-    // If no effective gap, must decelerate to match leader or stop
     if (effectiveGap <= 0.0) {
       return max(0.0, leaderVelocity - maxDeceleration * deltaT)
     }
 
-    // Krauss safe velocity formula
-    // v_safe = -τ·b + √((τ·b)² + v_leader² + 2·b·gap)
     val tau_b = reactionTime * maxDeceleration
     val discriminant =
       tau_b * tau_b + leaderVelocity * leaderVelocity + 2.0 * maxDeceleration * effectiveGap
@@ -65,11 +61,9 @@ case class KraussModel(
     val safeVelocity = if (discriminant >= 0.0) {
       -tau_b + sqrt(discriminant)
     } else {
-      // Negative discriminant: emergency braking required
       0.0
     }
 
-    // Safe velocity cannot be negative
     max(0.0, safeVelocity)
   }
 
@@ -82,20 +76,15 @@ case class KraussModel(
     deltaT: Double
   ): Double = {
 
-    // Maximum possible velocity considering acceleration constraint
     val maxPossibleVelocity = currentVelocity + maxAcceleration * deltaT
 
-    // Target velocity is minimum of desired, safe, and max possible
     val targetVelocity = min(desiredVelocity, min(safeVelocity, maxPossibleVelocity))
 
-    // Apply randomness (driver variability)
     val randomFactor = 1.0 - randomness * random.nextDouble()
     val randomizedTargetVelocity = targetVelocity * randomFactor
 
-    // Calculate acceleration needed to reach target
     val acceleration = (randomizedTargetVelocity - currentVelocity) / deltaT
 
-    // Constrain acceleration to vehicle capabilities
     val constrainedAcceleration = max(
       -maxDeceleration - epsilonAccel,
       min(maxAcceleration, acceleration)
@@ -114,7 +103,6 @@ case class KraussModel(
     val currentVelocity = state.velocity
     val currentPosition = state.positionInLink
 
-    // Calculate safe velocity
     val safeVelocity = calculateSafeVelocity(
       currentVelocity = currentVelocity,
       desiredVelocity = state.desiredVelocity,
@@ -127,7 +115,6 @@ case class KraussModel(
       deltaT = deltaT
     )
 
-    // Calculate acceleration
     val acceleration = calculateAcceleration(
       currentVelocity = currentVelocity,
       desiredVelocity = state.desiredVelocity,
@@ -137,10 +124,8 @@ case class KraussModel(
       deltaT = deltaT
     )
 
-    // Update velocity (ensure non-negative)
     val newVelocity = max(0.0, currentVelocity + acceleration * deltaT)
 
-    // Update position (use average velocity for accuracy)
     val averageVelocity = (currentVelocity + newVelocity) / 2.0
     val newPosition = currentPosition + averageVelocity * deltaT
 

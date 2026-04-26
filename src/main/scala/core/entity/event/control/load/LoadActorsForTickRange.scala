@@ -2,7 +2,6 @@ package org.interscity.htc
 package core.entity.event.control.load
 
 import core.types.Tick
-import core.entity.actor.ActorSimulation
 
 /**
  * Internal event sent to ProgressiveJsonLoadData to request

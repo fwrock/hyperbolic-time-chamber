@@ -5,7 +5,6 @@ import org.apache.pekko.http.scaladsl.model._
 import org.apache.pekko.http.scaladsl.server.Directives._
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.stream.Materializer
-import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext

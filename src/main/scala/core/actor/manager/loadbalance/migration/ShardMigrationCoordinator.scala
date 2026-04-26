@@ -126,11 +126,11 @@ case class MigrationState(
 
 /** Phases of a shard migration. */
 enum MigrationPhase:
-  case Preparing    // Coordinating with TimeManager
-  case Serializing  // Compacting shard state
-  case Transferring // State in transit
-  case Rehydrating  // Rebuilding on target node
-  case Completing   // Releasing buffers, finalizing
+  case Preparing
+  case Serializing
+  case Transferring
+  case Rehydrating
+  case Completing
 
 /** Result of a migration request. */
 enum MigrationRequestResult:

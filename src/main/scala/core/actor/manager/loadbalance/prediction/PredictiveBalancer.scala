@@ -70,8 +70,7 @@ class PredictiveBalancer(
       case (shardId, history) if history.size >= 2 =>
         val current = history.last
         val currentLoad = current.loadScore(maxShardWeight)
-
-        // Already overloaded
+        
         if (currentLoad >= loadThreshold) {
           results += PredictionResult(
             shardId = shardId,
@@ -81,11 +80,9 @@ class PredictiveBalancer(
             isAlreadyOverloaded = true
           )
         } else {
-          // Calculate load trend (dL/dt)
           val loadTrend = calculateLoadTrend(history, maxShardWeight)
 
           if (loadTrend > 0) {
-            // Time until threshold is reached
             val timeToThreshold = (loadThreshold - currentLoad) / loadTrend
             val predictedLoad = currentLoad + loadTrend * predictionWindowSeconds
 
@@ -101,7 +98,7 @@ class PredictiveBalancer(
           }
         }
 
-      case _ => () // Not enough history
+      case _ => ()
     }
 
     results.toList.sortBy(_.timeToSaturationSeconds)
@@ -125,7 +122,7 @@ class PredictiveBalancer(
   /** Clears all history for a shard (e.g., after migration). */
   def clearHistory(shardId: String): Unit = {
     metricsHistory.remove(shardId)
-    flowHistory.remove(shardId)
+    flowHistory.remove(shardId)// Not enough history
   }
 
   /** Clears all history. */
@@ -133,9 +130,7 @@ class PredictiveBalancer(
     metricsHistory.clear()
     flowHistory.clear()
   }
-
-  // ── Internal Calculations ────────────────────────────────────────────────
-
+  
   /** Calculate load trend (dL/dt) from historical metrics using simple linear regression.
     *
     * @return
@@ -154,7 +149,6 @@ class PredictiveBalancer(
         (t, l)
     }
 
-    // Simple linear regression: find slope
     val n = points.size.toDouble
     val sumT = points.map(_._1).sum
     val sumL = points.map(_._2).sum

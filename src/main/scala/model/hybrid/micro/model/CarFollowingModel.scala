@@ -97,7 +97,7 @@ trait CarFollowingModel {
     gap: Double,
     leaderVelocity: Double,
     deltaT: Double
-  ): (Double, Double, Double) // (newPosition, newVelocity, acceleration)
+  ): (Double, Double, Double)
 
   /** Model name for debugging/logging.
     *
@@ -127,8 +127,6 @@ object CarFollowingModel {
     */
   def byName(name: String): CarFollowingModel = name.toLowerCase match {
     case "krauss" => KraussModel()
-    // Future: case "idm" => IDMModel()
-    // Future: case "gipps" => GippsModel()
-    case _ => KraussModel() // Default fallback
+    case _ => KraussModel()
   }
 }

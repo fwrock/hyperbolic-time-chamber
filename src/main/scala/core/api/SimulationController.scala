@@ -66,9 +66,7 @@ object SimulationController {
       SimulationStatus.Running
     else s
   }
-
-  // ── Lifecycle operations ──────────────────────────────────────────────────
-
+  
   /** Trigger simulation start. Applies any pending settings overrides, then
     * sends [[PrepareSimulationEvent]] to the SimulationManager singleton.
     *
@@ -88,7 +86,6 @@ object SimulationController {
 
     withSystem { sys =>
       val proxy = DistributedUtil.createSingletonProxy(sys, SIMULATION_MANAGER_ACTOR_NAME)
-      // Pass configFile as path override; null/empty means use ApiConfigRegistry/file/env chain
       val configArg = configFile.filter(_.nonEmpty).orNull
       proxy ! PrepareSimulationEvent(configuration = configArg)
       _status.set(SimulationStatus.Loading)
@@ -130,7 +127,6 @@ object SimulationController {
     }
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
 
   private def withSystem(f: ActorSystem => Unit): Either[String, Unit] =
     _system.get() match {

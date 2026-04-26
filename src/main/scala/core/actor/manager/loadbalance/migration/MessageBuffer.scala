@@ -44,7 +44,7 @@ class MessageBuffer(
 
     val queue = buffers.getOrElseUpdate(shardId, mutable.Queue.empty)
     if (queue.size >= maxBufferSize) {
-      false // Buffer overflow — caller should handle
+      false
     } else {
       queue.enqueue(BufferedMessage(message, senderId, System.nanoTime()))
       true
@@ -78,7 +78,7 @@ class MessageBuffer(
 
   /** Aborts buffering for a shard (migration failed), returns messages for retry. */
   def abortBuffering(shardId: String): List[BufferedMessage] = synchronized {
-    drainBuffer(shardId) // Same as drain, ensures cleanup
+    drainBuffer(shardId)
   }
 
   /** Clears all buffers. */

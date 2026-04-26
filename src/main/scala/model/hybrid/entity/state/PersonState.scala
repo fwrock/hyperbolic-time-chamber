@@ -37,7 +37,7 @@ case class PersonState(
   scheduleOnTimeManager: Boolean = true,
   dailySchedule: List[Activity] = List.empty,
   currentActivityIndex: Int = 0,
-  ownedVehicles: Map[String, Identify] = Map.empty, // mode -> Identify(id, classType)
+  ownedVehicles: Map[String, Identify] = Map.empty,
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   totalDistanceTraveled: Double = 0.0,
@@ -148,13 +148,13 @@ case class Activity(
   */
 case class ArrivalLogistics(
   mode: String, // "car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway"
-  vehicle: Option[Identify] = None,          // Required for private vehicles (contains id + classType)
-  instant: Boolean = false,                  // skip routing when origin == destination
+  vehicle: Option[Identify] = None,         
+  instant: Boolean = false,                  
   driverAttributes: DriverAttributes = DriverAttributes(),
-  line: Option[String] = None,               // PT line label
-  boardingStopId: Option[String] = None,     // BusStop/SubwayStation actor ID
-  boardingStopClassType: Option[String] = None, // BusStop/SubwayStation class type
-  alightingNodeId: Option[String] = None     // Node where Person alights
+  line: Option[String] = None,               
+  boardingStopId: Option[String] = None,     
+  boardingStopClassType: Option[String] = None, 
+  alightingNodeId: Option[String] = None   
 )
 
 /** Driver attributes affecting vehicle behavior.

@@ -66,7 +66,6 @@ case class RailLinkState(
   capacity: Double,
   freeSpeed: Double,
 
-  // Rail-specific attributes
   railType: String = "SUBWAY",
   subwayLine: String = "",
   fromStation: String = "",
@@ -74,10 +73,8 @@ case class RailLinkState(
   gradient: Double = 0.0,
   curvature: Double = 0.0,
 
-  // Hybrid mode support (typically MESO for rails)
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
 
-  // Registration
   registered: mutable.Set[LinkRegister] = mutable.Set.empty,
   scheduleOnTimeManager: Boolean = false
 ) extends BaseState(
@@ -97,17 +94,15 @@ case class RailLinkState(
   def effectiveSpeed: Double = {
     var speed = freeSpeed
 
-    // Reduce speed for uphill (gradient > 0)
     if (gradient > 0) {
-      speed = speed * (1.0 - (gradient * 0.1)) // 10% reduction per 1% gradient
+      speed = speed * (1.0 - (gradient * 0.1))
     }
 
-    // Reduce speed for curves
     if (curvature > 0) {
-      speed = speed * (1.0 - (curvature * 0.05)) // 5% reduction per curvature unit
+      speed = speed * (1.0 - (curvature * 0.05))
     }
 
-    math.max(speed, speedLimit * 0.5) // Min 50% of speed limit
+    math.max(speed, speedLimit * 0.5) 
   }
 
   /** Check if a vehicle type can use this rail link.

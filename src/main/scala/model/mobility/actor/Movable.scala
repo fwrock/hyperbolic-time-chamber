@@ -4,7 +4,6 @@ package model.mobility.actor
 import core.actor.SimulationBaseActor
 import model.mobility.entity.state.MovableState
 
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
@@ -15,8 +14,6 @@ import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtilWithCache }
-
-import scala.collection.mutable
 
 abstract class Movable[T <: MovableState](
   private val properties: Properties

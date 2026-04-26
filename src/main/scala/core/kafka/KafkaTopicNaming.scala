@@ -25,15 +25,13 @@ object KafkaTopicNaming {
 
   private val config = ConfigFactory.load()
 
-  // Environment prefix (dev, staging, prod)
   private val envPrefix: String =
     try
       config.getString("htc.kafka.topic.environment-prefix")
     catch {
-      case _: Exception => "dev" // Default to dev
+      case _: Exception => "dev"
     }
 
-  // Base HTC topic prefix
   private val basePrefix = s"$envPrefix.htc"
 
   /** Routing domain topics */
@@ -102,43 +100,39 @@ object KafkaTopicNaming {
 
   def getTopicConfig(topicName: String): TopicConfig =
     topicName match {
-      // High-frequency, short retention for routing
       case Routing.DynamicCosts =>
         TopicConfig(
           name = topicName,
           partitions = 12,
           replicationFactor = 1,
-          retentionMs = 300000L, // 5 minutes
+          retentionMs = 300000L, 
           cleanupPolicy = "delete"
         )
 
-      // Medium frequency for mobility updates
       case Mobility.VehicleUpdates =>
         TopicConfig(
           name = topicName,
           partitions = 8,
           replicationFactor = 1,
-          retentionMs = 3600000L, // 1 hour
+          retentionMs = 3600000L,
           cleanupPolicy = "delete"
         )
 
-      // Low frequency, longer retention for system events
       case System.ActorLifecycle | System.PerformanceMetrics =>
         TopicConfig(
           name = topicName,
           partitions = 4,
           replicationFactor = 1,
-          retentionMs = 86400000L, // 24 hours
+          retentionMs = 86400000L,
           cleanupPolicy = "delete"
         )
 
-      // Default configuration
       case _ =>
         TopicConfig(
           name = topicName,
           partitions = 6,
           replicationFactor = 1,
-          retentionMs = 3600000L, // 1 hour
+          retentionMs = 3600000L,
           cleanupPolicy = "delete"
         )
     }
@@ -146,14 +140,14 @@ object KafkaTopicNaming {
   /** Print all topics with their configurations (for debugging)
     */
   def printTopicConfiguration(): Unit = {
-    println(s"🏷️  Kafka Topic Configuration (Environment: $envPrefix)")
+    println(s"Kafka Topic Configuration (Environment: $envPrefix)")
     println("=" * 60)
 
     val topics = getAllTopics.toSeq.sorted
     topics.foreach {
       topic =>
         val config = getTopicConfig(topic)
-        println(f"📍 ${config.name}")
+        println(f"${config.name}")
         println(
           f"   Partitions: ${config.partitions}%2d | Replication: ${config.replicationFactor} | Retention: ${config.retentionMs / 60000}%3d min"
         )

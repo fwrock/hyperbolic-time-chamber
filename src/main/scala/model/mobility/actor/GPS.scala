@@ -5,7 +5,7 @@ import core.actor.SimulationBaseActor
 import model.mobility.entity.state.GPSState
 
 import org.htc.protobuf.core.entity.actor.Identify
-import org.htc.protobuf.model.mobility.entity.model.model.{ IdentifyPair, Route }
+import org.htc.protobuf.model.mobility.entity.model.model.IdentifyPair
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -18,7 +18,6 @@ import org.interscity.htc.system.database.redis.RedisClientManager
 
 import java.util.UUID
 import scala.collection.mutable
-import scala.util.{ Failure, Success }
 import scala.compiletime.uninitialized
 
 class GPS(

@@ -39,10 +39,6 @@ class SubwayStation(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // 1) Prefer lookup by nodeId in relationships map (key = IdUtil.format(nodeId)).
-    // 2) Fall back to scanning relationships by classType (handles key format edge cases).
-    // 3) Last resort: use state.nodeId directly via hash-based shard routing
-    //    (handles actor restart that resets relationships before PostLoadRegistrationEvent).
     val nodeOpt = getDependencyOption(state.nodeId).orElse(
       relationships.values.find(d => d.classType != null && d.classType.endsWith("Node"))
     )
@@ -165,13 +161,11 @@ class SubwayStation(
                   logError(
                     s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}"
                   )
-                  // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
                 case e: Exception =>
                   logError(
                     s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}"
                   )
-                  // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
               }
             }
@@ -237,7 +231,6 @@ class SubwayStation(
       defaultTimeManagerType = properties.defaultTimeManagerType
     )
 
-    // Report subway creation
     report(
       data = Map(
         "event_type" -> "subway_created",
@@ -278,8 +271,6 @@ class SubwayStation(
 
     lineRoute match {
       case Some(routeQueue) =>
-        // linesRoute format: Queue[SubwayRouteEntry]
-        // Output format: Queue[(rail_link_id, node_id)]
         routeQueue.foreach {
           routeEntry =>
             route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))

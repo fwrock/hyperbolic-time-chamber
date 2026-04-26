@@ -1,13 +1,13 @@
 package org.interscity.htc
 package core.actor.manager.loadbalance.allocation
 
-import org.apache.pekko.actor.{ ActorRef, ActorSystem }
+import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.cluster.sharding.ShardRegion.ShardId
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardCoordinator }
+import org.apache.pekko.cluster.sharding.ShardCoordinator
 
 import scala.collection.immutable
 import scala.collection.mutable
-import scala.concurrent.{ Future, Promise }
+import scala.concurrent.Future
 
 /** Custom [[ShardCoordinator.ShardAllocationStrategy]] that delegates allocation and rebalance
   * decisions to the [[core.actor.manager.loadbalance.LoadBalanceManager]].
@@ -73,15 +73,12 @@ class LoadBalanceShardAllocator(
   ): Future[ActorRef] = synchronized {
     mergeRegionIndex(currentShardAllocations)
 
-    // If LoadBalanceManager has a desired allocation, use it
     val target = desiredAllocations.get(shardId) match {
       case Some(region) if currentShardAllocations.contains(region) =>
         region
       case _ =>
-        // Fallback: allocate to the region with fewest shards (standard heuristic)
         fallbackStrategy match {
           case Some(fb) =>
-            // Delegate to fallback (returns Future, but we unwrap for simplicity)
             return fb.allocateShard(requester, shardId, currentShardAllocations)
           case None =>
             leastShardsRegion(currentShardAllocations, requester)
@@ -110,15 +107,12 @@ class LoadBalanceShardAllocator(
   ): Future[Set[ShardId]] = synchronized {
     mergeRegionIndex(currentShardAllocations)
 
-    // Take all pending rebalance requests, excluding already-in-progress ones
     val toRebalance = shardsToRebalance.diff(rebalanceInProgress).toSet
     shardsToRebalance.clear()
 
     Future.successful(toRebalance)
   }
-
-  // ── LoadBalanceManager API ─────────────────────────────────────────────────
-
+  
   /** Sets the desired allocation for a shard. Called by LoadBalanceManager.
     *
     * @param shardId
@@ -192,9 +186,7 @@ class LoadBalanceShardAllocator(
   def findRegionForShard(shardId: ShardId): Option[ActorRef] = synchronized {
     regionIndex.find { case (_, shards) => shards.contains(shardId) }.map(_._1)
   }
-
-  // ── Internal ────────────────────────────────────────────────────────────────
-
+  
   /** Merges the Pekko-provided allocation snapshot into the persistent region index.
     *
     * Unlike a destructive clear+repopulate, this approach:
@@ -226,7 +218,6 @@ class LoadBalanceShardAllocator(
     else {
       val (minRegion, _) = allocations.minBy {
         case (region, shards) =>
-          // Prefer requester on ties (add a tiny offset so requester wins)
           val tieBreaker = if (region == requester) -0.5 else 0.0
           shards.size + tieBreaker
       }

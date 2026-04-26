@@ -26,7 +26,6 @@ abstract class BaseManager[T <: BaseState](
       )
     ) {
 
-  // Managers may need access to reporters
   protected var reporters
     : mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] = null
   protected var timeManagerRef: ActorRef = timeManager

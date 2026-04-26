@@ -33,7 +33,7 @@ object DynamicLinkCostAvro {
         try java.net.InetAddress.getLocalHost.getHostName
         catch { case _ => "unknown" }
       )
-      .setSimulationMode(SimulationMode.MESO) // Default for now
+      .setSimulationMode(SimulationMode.MESO)
       .build()
 
   /** Convert event to internal model.
@@ -80,7 +80,6 @@ object DynamicLinkCostAvro {
       serialized <- serialize(cost)
       deserialized <- deserialize(serialized)
     } yield {
-      // Basic validation
       require(deserialized.linkId == cost.linkId, "LinkId mismatch")
       require(math.abs(deserialized.totalCost - cost.totalCost) < 0.001, "TotalCost mismatch")
       require(deserialized.lastUpdateTick == cost.lastUpdateTick, "Tick mismatch")
@@ -91,10 +90,9 @@ object DynamicLinkCostAvro {
   */
 object DynamicLinkCostAvroExample {
   def main(args: Array[String]): Unit = {
-    println("🧪 Testing Avro serialization for DynamicLinkCost")
+    println("Testing Avro serialization for DynamicLinkCost")
     println("=" * 50)
 
-    // Create test data
     val testCost = DynamicLinkCost(
       linkId = "htcaid:link;test_link_123",
       baseCost = 100.0,
@@ -109,37 +107,33 @@ object DynamicLinkCostAvroExample {
     )
 
     println(s"📊 Original cost: ${testCost.linkId} -> ${testCost.totalCost}")
-
-    // Test serialization
+    
     DynamicLinkCostAvro.serialize(testCost) match {
       case Success(bytes) =>
-        println(s"✅ Serialized to ${bytes.length} bytes")
+        println(s"Serialized to ${bytes.length} bytes")
 
-        // Test deserialization
         DynamicLinkCostAvro.deserialize(bytes) match {
           case Success(deserialized) =>
-            println(s"✅ Deserialized: ${deserialized.linkId} -> ${deserialized.totalCost}")
+            println(s"Deserialized: ${deserialized.linkId} -> ${deserialized.totalCost}")
 
-            // Validate round-trip
             DynamicLinkCostAvro.validate(testCost) match {
               case Success(_) =>
-                println("✅ Round-trip validation passed")
+                println("Round-trip validation passed")
               case Failure(e) =>
-                println(s"❌ Validation failed: ${e.getMessage}")
+                println(s"Validation failed: ${e.getMessage}")
             }
 
           case Failure(e) =>
-            println(s"❌ Deserialization failed: ${e.getMessage}")
+            println(s"Deserialization failed: ${e.getMessage}")
         }
 
       case Failure(e) =>
-        println(s"❌ Serialization failed: ${e.getMessage}")
+        println(s"Serialization failed: ${e.getMessage}")
     }
 
-    // Show schema
-    println("\n📋 Avro Schema:")
+    println("\nAvro Schema:")
     println(DynamicLinkCostAvro.getSchemaJson)
 
-    println("\n🎉 Avro testing complete!")
+    println("\nAvro testing complete!")
   }
 }

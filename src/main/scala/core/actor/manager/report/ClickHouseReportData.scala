@@ -28,9 +28,7 @@ class ClickHouseReportData(
       reportManager = reportManager,
       startRealTime = startRealTime
     ) {
-
-  // ── Config ──────────────────────────────────────────────────────────────
-
+  
   private val host     = sys.env.getOrElse("HTC_CLICKHOUSE_HOST",
     try config.getString("htc.report-manager.clickhouse.host") catch { case _: Exception => "localhost" })
   private val port     = sys.env.get("HTC_CLICKHOUSE_PORT")
@@ -44,9 +42,7 @@ class ClickHouseReportData(
     try config.getString("htc.report-manager.clickhouse.password") catch { case _: Exception => "" })
   private val batchSize =
     try config.getInt("htc.report-manager.clickhouse.batch-size") catch { case _: Exception => 50000 }
-
-  // ── Simulation ID (same resolution order as JsonReportData) ─────────────
-
+  
   private lazy val simulationId: String = {
     val fromConfig =
       try Some(core.util.SimulationUtil.loadSimulationConfig().id).flatten
@@ -57,9 +53,7 @@ class ClickHouseReportData(
       catch { case _: Exception => None }
     fromConfig.orElse(fromEnv).orElse(fromConf).getOrElse("sim")
   }
-
-  // ── ClickHouse client ────────────────────────────────────────────────────
-
+  
   private val ch = new ClickHouseClientManager(host, port, database, username, password)
 
   /** Flag: false if CH was unreachable at startup (skip all flushes silently). */
@@ -74,27 +68,21 @@ class ClickHouseReportData(
         logWarn(s"ClickHouse unavailable ($error). Flow reporting disabled for this actor.")
     }
   }
-
-  // ── Buffer ───────────────────────────────────────────────────────────────
-
+  
   private val buffer = mutable.ArrayBuffer.empty[String]
-
-  // ── Receive ──────────────────────────────────────────────────────────────
-
+  
   override def onReport(event: ReportEvent): Unit =
     event.data match {
       case flow: VehicleLinkFlowData =>
         buffer += toJsonLine(event, flow)
         if (buffer.size >= batchSize) flush()
-      case _ => // other event types are not handled by this reporter
+      case _ =>
     }
 
   override def postStop(): Unit = {
     if (buffer.nonEmpty) flush()
   }
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-
+  
   private def flush(): Unit = {
     if (!chAvailable || buffer.isEmpty) {
       buffer.clear()

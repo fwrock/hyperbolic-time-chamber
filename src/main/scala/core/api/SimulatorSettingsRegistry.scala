@@ -32,7 +32,6 @@ object SimulatorSettingsRegistry {
 
   /** Catalog of all known settings exposed via the API. */
   val catalog: List[SettingDef] = List(
-    // ── Time Manager ──────────────────────────────────────────────────────────
     SettingDef("htc.time-manager.total-instances",        "HTC_TIME_MANAGER_INSTANCES",
       "Total LocalTM routees across the cluster", "128"),
     SettingDef("htc.time-manager.max-instances-per-node", "HTC_TIME_MANAGER_PER_NODE",
@@ -51,7 +50,6 @@ object SimulatorSettingsRegistry {
       "Enable verbose time manager logging", "true"),
     SettingDef("htc.time-manager.snapshot-interval",      "HTC_TIME_MANAGER_SNAPSHOT_INTERVAL",
       "Snapshot interval in ticks", "10000000"),
-    // ── Report Manager ────────────────────────────────────────────────────────
     SettingDef("htc.report-manager.enabled",                        "HTC_REPORT_ENABLED",
       "Enable report manager", "true"),
     SettingDef("htc.report-manager.json.number-of-instances",       "HTC_REPORT_JSON_INSTANCES",
@@ -60,17 +58,14 @@ object SimulatorSettingsRegistry {
       "JSON reporter instances per node", "16"),
     SettingDef("htc.report-manager.json.batch-size",                "HTC_REPORT_JSON_BATCH_SIZE",
       "JSON reporter batch size", "500"),
-    // ── Load Balance Manager ──────────────────────────────────────────────────
     SettingDef("htc.load-balance-manager.enabled",  "HTC_LOAD_BALANCE_ENABLED",
       "Enable load balance manager", "false"),
     SettingDef("htc.load-balance-manager.strategy", "HTC_LOAD_BALANCE_STRATEGY",
       "Load balance strategy: hybrid | default | disabled", "default"),
-    // ── Simulation ────────────────────────────────────────────────────────────
     SettingDef("htc.simulation.config-file", "HTC_SIMULATION_CONFIG_FILE",
       "Path to simulation JSON configuration file", ""),
     SettingDef("htc.simulation.id", "HTC_SIMULATION_ID",
       "Human-readable ID for output files and reports. Defaults to simulation name.", ""),
-    // ── Mobility ──────────────────────────────────────────────────────────────
     SettingDef("htc.mobility.city-map-file", "HTC_MOBILITY_CITY_MAP_FILE",
       "Path to the city map JSON (Node/Link graph). Required for mobility simulations.", "city_map.json")
   )
@@ -78,17 +73,14 @@ object SimulatorSettingsRegistry {
   private val catalogByPath: Map[String, SettingDef] = catalog.map(d => d.configPath -> d).toMap
   private val overrides = new ConcurrentHashMap[String, String]()
 
-  // Loaded once; reflects application.conf + env vars (NOT api overrides)
   private lazy val baseConfig: Config = ConfigFactory.load()
 
-  // ── Write ─────────────────────────────────────────────────────────────────
 
   def set(key: String, value: String): Unit    = overrides.put(key, value)
   def setAll(settings: Map[String, String]): Unit = settings.foreach { case (k, v) => set(k, v) }
   def clear(key: String): Unit                 = overrides.remove(key)
   def clearAll(): Unit                         = overrides.clear()
 
-  // ── Read ──────────────────────────────────────────────────────────────────
 
   def get(key: String): Option[String] = Option(overrides.get(key))
   def getAll: Map[String, String]      = overrides.asScala.toMap
@@ -109,8 +101,6 @@ object SimulatorSettingsRegistry {
       case Some(_) => "env_var"
       case None    => "application_conf"
     }
-
-  // ── Typed helpers for actors ──────────────────────────────────────────────
 
   /** Int setting: checks registry override before `fallbackConfig`. */
   def getInt(path: String, fallbackConfig: Config): Int =

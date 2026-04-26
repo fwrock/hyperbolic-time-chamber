@@ -1,20 +1,14 @@
 package org.interscity.htc
 package model.hybrid.actor
 
-import org.apache.pekko.actor.ActorRef
-import org.htc.protobuf.core.entity.actor.{ Dependency, Identify }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.interscity.htc.model.hybrid.entity.state.SubwayState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, WaitingLoadPassenger }
-import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped }
 import org.interscity.htc.model.hybrid.util.SubwayUtil
 import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
-
-import scala.collection.mutable
 
 /** Subway actor - Metro train following predefined rail routes.
   *
@@ -55,15 +49,11 @@ class Subway(
         val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
         stationOpt match {
           case Some(_) =>
-            // At a station — begin passenger exchange (dual-flag: load + unload)
             state.status = Stopped
             requestUnloadPeopleData()
             requestLoadPassenger()
-            // Unregister from TM while waiting for load/unload responses.
-            // Will be re-registered via scheduleEvent in onFinishNodeState when both complete.
             onFinishSpontaneous(None)
           case None =>
-            // Not at a station — skip passenger handling, leave link
             leavingLink()
         }
       case Stopped =>
@@ -104,7 +94,6 @@ class Subway(
           )
         )
       case None =>
-        // No station at this node — mark loaded immediately
         state.nodeState.isLoaded = true
         onFinishNodeState()
     }
@@ -112,7 +101,6 @@ class Subway(
 
   private def requestUnloadPeopleData(): Unit = {
     if (state.passengers.isEmpty) {
-      // No passengers to unload — mark unloaded immediately
       state.nodeState.isUnloaded = true
       onFinishNodeState()
       return
@@ -158,7 +146,6 @@ class Subway(
       state.passengers.remove(event.actorRefId)
       state.countUnloadPassenger += 1
     }
-    // Check if all responses received: alighted + remaining = original count
     if (state.countUnloadReceived >= state.countUnloadPassenger + state.passengers.size) {
       state.countUnloadReceived = 0
       state.countUnloadPassenger = 0
@@ -211,8 +198,6 @@ class Subway(
     if isEndNodeState then
       state.nodeState.isLoaded = false
       state.nodeState.isUnloaded = false
-      // Use scheduleEvent (not onFinishSpontaneous) because FinishEvent was already
-      // sent from the Moving handler via onFinishSpontaneous(None).
       scheduleEvent(currentTick + state.stopTime)
 
   private def isEndNodeState: Boolean =

@@ -37,7 +37,7 @@ object KafkaTopicManager {
     */
   def initializeAllTopics(): Try[Unit] =
     Try {
-      println("🏗️  Initializing Kafka topics for HTC simulation...")
+      println("Initializing Kafka topics for HTC simulation...")
 
       val allTopics = KafkaTopicNaming.getAllTopics
       val topicsToCreate = allTopics.map {
@@ -48,20 +48,18 @@ object KafkaTopicManager {
 
       val createResult: CreateTopicsResult = adminClient.createTopics(topicsToCreate.asJava)
 
-      // Wait for all topics to be created
       createResult.all().get(30, TimeUnit.SECONDS)
 
-      println(s"✅ Successfully initialized ${allTopics.size} Kafka topics")
+      println(s"Successfully initialized ${allTopics.size} Kafka topics")
       KafkaTopicNaming.printTopicConfiguration()
 
     }.recoverWith {
       case e: Exception =>
-        // Check if failure is just because topics already exist
         if (e.getCause != null && e.getCause.isInstanceOf[TopicExistsException]) {
-          println("ℹ️  Topics already exist, continuing...")
+          println("ℹTopics already exist, continuing...")
           Success(())
         } else {
-          println(s"❌ Failed to initialize Kafka topics: ${e.getMessage}")
+          println(s"Failed to initialize Kafka topics: ${e.getMessage}")
           Failure(e)
         }
     }
@@ -76,15 +74,15 @@ object KafkaTopicManager {
       val createResult = adminClient.createTopics(List(newTopic).asJava)
       createResult.all().get(10, TimeUnit.SECONDS)
 
-      println(s"✅ Topic created: ${config.name}")
+      println(s"Topic created: ${config.name}")
 
     }.recoverWith {
       case e: Exception =>
         if (e.getCause != null && e.getCause.isInstanceOf[TopicExistsException]) {
-          println(s"ℹ️  Topic already exists: $topicName")
+          println(s"ℹTopic already exists: $topicName")
           Success(())
         } else {
-          println(s"❌ Failed to create topic $topicName: ${e.getMessage}")
+          println(s"Failed to create topic $topicName: ${e.getMessage}")
           Failure(e)
         }
     }
@@ -92,7 +90,6 @@ object KafkaTopicManager {
   private def createNewTopic(config: KafkaTopicNaming.TopicConfig): NewTopic = {
     val topic = new NewTopic(config.name, config.partitions, config.replicationFactor.toShort)
 
-    // Set topic-specific configurations
     val topicConfigs = Map(
       "retention.ms" -> config.retentionMs.toString,
       "cleanup.policy" -> config.cleanupPolicy,
@@ -122,15 +119,15 @@ object KafkaTopicManager {
         val missingTopics = requiredTopics -- existingTopics
 
         if (missingTopics.nonEmpty) {
-          println(s"⚠️  Missing topics: ${missingTopics.mkString(", ")}")
+          println(s"Missing topics: ${missingTopics.mkString(", ")}")
           false
         } else {
-          println(s"✅ All ${requiredTopics.size} HTC topics exist")
+          println(s"All ${requiredTopics.size} HTC topics exist")
           true
         }
 
       case Failure(e) =>
-        println(s"❌ Failed to check topics: ${e.getMessage}")
+        println(s"Failed to check topics: ${e.getMessage}")
         false
     }
 
@@ -153,22 +150,22 @@ object KafkaTopicManagerApp {
       case Some("init") =>
         KafkaTopicManager.initializeAllTopics() match {
           case Success(_) =>
-            println("🎉 Topic initialization completed successfully!")
+            println("Topic initialization completed successfully!")
             sys.exit(0)
           case Failure(e) =>
-            println(s"💥 Topic initialization failed: ${e.getMessage}")
+            println(s"Topic initialization failed: ${e.getMessage}")
             sys.exit(1)
         }
 
       case Some("list") =>
         KafkaTopicManager.listExistingTopics() match {
           case Success(topics) =>
-            println(s"📋 Existing topics (${topics.size}):")
+            println(s"Existing topics (${topics.size}):")
             topics.toSeq.sorted.foreach(
               topic => println(s"   - $topic")
             )
           case Failure(e) =>
-            println(s"❌ Failed to list topics: ${e.getMessage}")
+            println(s"Failed to list topics: ${e.getMessage}")
             sys.exit(1)
         }
 

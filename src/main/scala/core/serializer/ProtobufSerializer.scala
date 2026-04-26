@@ -1,12 +1,9 @@
 package org.interscity.htc
 package core.serializer
 
-import scalapb.{ GeneratedMessage, Message }
+import scalapb.GeneratedMessage
 import org.apache.pekko.actor.ExtendedActorSystem
 import org.apache.pekko.serialization.SerializerWithStringManifest
-
-import java.io.NotSerializableException
-import scala.util.{ Failure, Success, Try }
 
 class ProtobufSerializer(
   val system: ExtendedActorSystem

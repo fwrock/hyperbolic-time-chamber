@@ -72,7 +72,7 @@ class QuadtreePartitioner(
     val newShardId = getShardId(newX, newY)
     entityShardMap.get(entityId) match {
       case Some(currentShardId) if currentShardId == newShardId =>
-        None // Same shard, no change
+        None 
       case Some(currentShardId) =>
         shardEntities.get(currentShardId).foreach(_.remove(entityId))
         entityShardMap.put(entityId, newShardId)
@@ -241,12 +241,10 @@ class QuadtreePartitioner(
     val leaves = collectLeaves(node)
     var needsAnotherPass = false
 
-    // Check each leaf against its spatial neighbors
     for (leaf <- leaves) {
       val neighbors = findNeighboringLeaves(node, leaf)
       for (neighbor <- neighbors) {
         if (leaf.depth - neighbor.depth > 1) {
-          // Neighbor is too coarse — needs splitting
           needsAnotherPass = true
         }
       }
@@ -254,7 +252,6 @@ class QuadtreePartitioner(
 
     if (needsAnotherPass) {
       val refined = forceBalanceSplit(node)
-      // Iterate until stable
       balanceTwoToOne(refined)
     } else {
       node
@@ -267,7 +264,6 @@ class QuadtreePartitioner(
       val neighbors = findNeighboringLeaves(root, leaf)
       val maxNeighborDepth = if (neighbors.nonEmpty) neighbors.map(_.depth).max else leaf.depth
       if (maxNeighborDepth - leaf.depth > 1) {
-        // Split this leaf to reduce depth gap
         val (nwB, neB, swB, seB) = leaf.bounds.quadrants
         QuadtreeBranch(
           leaf.mortonCode,
@@ -299,7 +295,6 @@ class QuadtreePartitioner(
     root: QuadtreeNode,
     target: QuadtreeLeaf
   ): List[QuadtreeLeaf] = {
-    // Expand target bounds slightly to find adjacent leaves
     val epsilon = target.bounds.width * 0.01
     val searchBounds = SpatialBounds(
       target.bounds.minX - epsilon,
@@ -331,8 +326,6 @@ class QuadtreePartitioner(
   private def mortonCode(parentCode: Long, childIndex: Int, parentDepth: Int): Long =
     (parentCode << 2) | childIndex.toLong
 }
-
-// ── Quadtree Node Types ──────────────────────────────────────────────────────
 
 /** Base trait for quadtree nodes. */
 sealed trait QuadtreeNode {

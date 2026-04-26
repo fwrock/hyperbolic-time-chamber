@@ -58,19 +58,16 @@ case class MicroBicycleState(
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
 
-  // Bicycle-specific parameters
-  maxAcceleration: Double = 1.0, // m/s² (lower than car)
-  maxDeceleration: Double = 3.0, // m/s²
-  minGap: Double = 1.5, // m (smaller than car)
-  desiredVelocity: Double = 5.56, // m/s (20 km/h)
-  reactionTime: Double = 1.2, // s
-  vehicleLength: Double = 2.0, // m
+  maxAcceleration: Double = 1.0,
+  maxDeceleration: Double = 3.0,
+  minGap: Double = 1.5,
+  desiredVelocity: Double = 5.56,
+  reactionTime: Double = 1.2,
+  vehicleLength: Double = 2.0,
 
-  // Bicycle-specific behavior
   prefersBikeLane: Boolean = true,
   canUseSidewalk: Boolean = false,
 
-  // Lane change
   desiredLane: Option[Int] = None,
   laneChangeProgress: Double = 0.0
 ) extends MicroMovableState {

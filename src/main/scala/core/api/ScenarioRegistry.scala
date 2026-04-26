@@ -81,9 +81,7 @@ object ScenarioRegistry {
   }
 
   def directory: String = scenariosDir
-
-  // ── List ────────────────────────────────────────────────────────────────
-
+  
   def listScenarios(): List[ScenarioSummary] = {
     val dir = new File(scenariosDir)
     if (!dir.exists() || !dir.isDirectory) {
@@ -112,9 +110,7 @@ object ScenarioRegistry {
       }
       .toList
   }
-
-  // ── Get single ──────────────────────────────────────────────────────────
-
+  
   def getScenario(name: String): Either[String, ScenarioDetail] = {
     val scenarioDir = new File(scenariosDir, name)
     if (!scenarioDir.exists() || !scenarioDir.isDirectory)
@@ -136,16 +132,12 @@ object ScenarioRegistry {
         ))
     }
   }
-
-  // ── Path helper (used by SimulationController.start) ────────────────────
-
+  
   def simulationFilePath(name: String): Option[String] = {
     val f = new File(new File(scenariosDir, name), "simulation.json")
     if (f.exists()) Some(f.getAbsolutePath) else None
   }
-
-  // ── Private helpers ─────────────────────────────────────────────────────
-
+  
   private def loadSimulation(file: File): Option[Simulation] =
     Try {
       val content = Source.fromFile(file).mkString

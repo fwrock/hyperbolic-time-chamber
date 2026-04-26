@@ -2,17 +2,14 @@ package org.interscity.htc
 package core.actor.manager
 
 import core.entity.configuration.Simulation
-import core.types.Tick
 
 import java.util.{ Random => JavaRandom }
 import scala.util.{ Random => ScalaRandom }
-import java.time.LocalDateTime
 
 /** Gerenciador de seeds para garantir reprodutibilidade determinística
   */
 object RandomSeedManager {
 
-  // Random generators com seed controlado
   private var javaRandom: Option[JavaRandom] = None
   private var scalaRandom: Option[ScalaRandom] = None
   private var currentSeed: Option[Long] = None
@@ -24,18 +21,16 @@ object RandomSeedManager {
   def initialize(simulation: Simulation): Unit = {
     val seed = simulation.randomSeed.getOrElse(System.currentTimeMillis())
 
-    println(s"🎲 Configurando random seed: $seed")
+    println(s"Configurando random seed: $seed")
 
-    // Configurar geradores globais
     ScalaRandom.setSeed(seed)
     System.setProperty("java.util.Random.seed", seed.toString)
 
-    // Criar instâncias controladas
     javaRandom = Some(new JavaRandom(seed))
     scalaRandom = Some(new ScalaRandom(new JavaRandom(seed)))
     currentSeed = Some(seed)
 
-    println(s"✅ Random seed $seed configurado para reprodutibilidade")
+    println(s"Random seed $seed configurado para reprodutibilidade")
   }
 
   /** Gera UUID determinístico baseado no seed + contador
@@ -88,12 +83,12 @@ object RandomSeedManager {
       name = "default",
       description = "Default simulation for random seed initialization",
       id = None,
-      startTick = 0L, // Tick é type alias para Long
+      startTick = 0L,
       startRealTime = LocalDateTime.now(),
       timeUnit = "seconds",
       timeStep = 1L,
-      duration = 100L, // Tick é type alias para Long
-      randomSeed = Some(42L), // Seed padrão conhecido
+      duration = 100L,
+      randomSeed = Some(42L),
       actorsDataSources = List.empty
     )
   }

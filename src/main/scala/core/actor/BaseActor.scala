@@ -13,7 +13,7 @@ import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, 
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, PostLoadRegistrationEvent }
+import org.interscity.htc.core.entity.event.control.load.PostLoadRegistrationEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.PrepareForMigrationEvent
 import core.entity.event.control.migration.SaveMigrationSnapshotEvent
@@ -217,7 +217,7 @@ abstract class BaseActor[T <: BaseState](
       MigrationStateStoreRegistry.getSnapshotManager match {
         case Some(smRef) =>
           smRef ! SaveMigrationSnapshotEvent(
-            entityId = IdUtil.format(entityId),  // formatted key matches TM routing ID
+            entityId = IdUtil.format(entityId),
             batchId  = event.batchId,
             snapshot = snapshot
           )

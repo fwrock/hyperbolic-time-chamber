@@ -2,14 +2,11 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
-import core.types.Tick
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
-import org.interscity.htc.core.util.IdentifyUtil
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.hybrid.entity.state.RailLinkState
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
@@ -67,7 +64,6 @@ class RailLink(
       logError(s"  Subway line: ${state.subwayLine}")
       logError(s"Rejecting vehicle ${data.actorId}")
 
-      // Send rejection signal
       val errorInfo = LinkInfoData(
         linkLength = 0,
         linkCapacity = 0,
@@ -84,10 +80,9 @@ class RailLink(
         actorType = LoadBalancedDistributed
       )
 
-      return // DO NOT REGISTER
+      return
     }
 
-    // Register vehicle (valid subway)
     state.registered.add(
       LinkRegister(
         actorId = data.actorId,
@@ -98,13 +93,11 @@ class RailLink(
       )
     )
 
-    // Calculate effective speed (considering gradient and curvature)
     val effectiveSpeed = state.effectiveSpeed
 
     logDebug(s"Subway ${data.actorId} entering rail link")
     logDebug(s"  Effective speed: $effectiveSpeed km/h")
 
-    // Send link info to subway
     val linkInfo = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,
@@ -125,14 +118,12 @@ class RailLink(
   /** Handle vehicle leaving rail link.
     */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
-    // Unregister vehicle
     state.registered.find(_.actorId == event.actorRefId).foreach {
       reg =>
         state.registered.remove(reg)
         logDebug(s"Subway ${event.actorRefId} left rail link")
     }
 
-    // Send confirmation
     val linkInfo = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,

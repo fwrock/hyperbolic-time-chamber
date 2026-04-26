@@ -33,7 +33,6 @@ case class ClusterNodeLoad(
   /** Overall load score combining weight and resource usage. */
   def loadScore: Double = {
     val weightScore = if (totalWeight > 0) math.min(1.0, totalWeight / 10000.0) else 0.0
-    // Weight 60% computational, 25% CPU, 15% memory
     0.60 * weightScore + 0.25 * cpuUsage + 0.15 * memoryUsage
   }
 }

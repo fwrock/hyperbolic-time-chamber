@@ -13,4 +13,4 @@ enum MovableStatusEnum:
     WaitingLoadPassenger,
     WaitingUnloadPassenger,
     Finished,
-    Parked // NEW: For passive private vehicles (Car, Bicycle, Motorcycle)
+    Parked

@@ -48,16 +48,10 @@ abstract class SimulationBaseActor[T <: BaseState](
 )(implicit m: Manifest[T])
     extends BaseActor[T](properties) {
 
-  // Simulation-specific fields
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
-  // Each actor instance gets its own fresh map — never aliased to properties.relationships.
-  // properties.relationships is a mutable.Map held in the Props object, which is shared across
-  // all actor instances of the same shard type. Aliasing it caused concurrent HashMap corruption
-  // (ArrayIndexOutOfBoundsException in growTable) when multiple actors processed onInitialize
-  // simultaneously on different dispatcher threads.
   protected val relationships: mutable.Map[String, ShardActorId] =
     if (properties != null && properties.relationships != null && properties.relationships.nonEmpty)
       mutable.Map[String, ShardActorId]() ++= properties.relationships
@@ -73,12 +67,10 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
 
-  // Suporte para múltiplos time managers
   protected var timeManagers: mutable.Map[String, ActorRef] =
     if (properties != null && properties.timeManagers != null) properties.timeManagers
     else mutable.Map[String, ActorRef]()
 
-  // Tipo de time manager atualmente em uso (padrão: discrete-event)
   protected var currentTimeManagerType: String =
     if (properties != null) properties.defaultTimeManagerType
     else TimeManagerTypeEnum.DISCRETE_EVENT
@@ -113,13 +105,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def switchTimeManager(newManagerType: String): Boolean =
     if (timeManagers != null && timeManagers.contains(newManagerType)) {
-      // Unregister from current time manager if needed
-      // (implementation depends on requirements)
-
-      // Switch to new time manager
       currentTimeManagerType = newManagerType
 
-      // Register with new time manager
       registerOnTimeManager()
 
       logInfo(s"Switched time manager to: $newManagerType")
@@ -186,16 +173,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     * ActorRefs and do not need to be serialized across migration.
     */
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
-    // Restore the base state first
     super.applyMigrationSnapshot(snapshot)
 
-    // Restore simulation metadata
     currentTick = snapshot.currentTick
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
 
-    // Rebuild relationships from stored string maps
     if (snapshot.dependencyIds.nonEmpty) {
       relationships.clear()
       snapshot.dependencyIds.foreach { case (key, id) =>
@@ -206,30 +190,21 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
   }
 
-  // ── Migration window awaiting state ───────────────────────────────────────
-
   /** True while the actor has queried SM for its migration snapshot and is awaiting reply.
     * All incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent
     * arrives.
     */
   private var awaitingMigration: Boolean = false
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
-
+  
   override def preStart(): Unit = {
     super.preStart()
 
-    // For cluster-sharded entities (LoadBalancedDistributed), Props carry the shard region's
-    // initiator ID — not this actor's actual entity ID. The correct ID is the actor's path name
-    // (= the shard routing key used in EntityEnvelopeEvent, which equals IdUtil.format(rawId)).
     if (properties != null && properties.actorType == LoadBalancedDistributed) {
       entityId = self.path.name
     }
 
-    // Migration window check: if the distributed flag is active, this entity might have been
-    // migrated from another node. Query the SnapshotManager to find out.
     if (MigrationStateStoreRegistry.isMigrationActive.get()) {
-      creatorManager = null // Safety: no creator manager during migration window
+      creatorManager = null
       awaitingMigration = true
       MigrationStateStoreRegistry.getSnapshotManager match {
         case Some(smRef) =>
@@ -308,10 +283,8 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
     entityId = event.id
-    // Configura time managers
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
-      // Usa discrete-event como padrão
       currentTimeManagerType = TimeManagerTypeEnum.DISCRETE_EVENT
     } else {
       logWarn(s"onInitialize: timeManagers is NULL for $entityId (class=${getClass.getSimpleName})")
@@ -339,13 +312,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     } else {
       logWarn(s"$entityId: state is NULL after deserialization (class=${getClass.getSimpleName}). Will still send ACK.")
     }
-    // Send NeedsPostLoadRegistrationEvent BEFORE InitializeEntityAckEvent so the creator
-    // processes the registration signal before it processes the ACK that may complete the batch.
-    // Both messages go to the same actor (creatorManager == event.actorRef), so Pekko's
-    // FIFO ordering guarantee ensures the creator sees them in this order.
-    // Guard: only opt-in when state was successfully deserialized — if state is null,
-    // handlePostLoadRegistration() would NPE, the coordinator ACK would never arrive,
-    // and the simulation would deadlock.
+
     if (requiresPostLoadRegistration && creatorManager != null && state != null) {
       creatorManager ! NeedsPostLoadRegistrationEvent(
         entityId = entityId,
@@ -354,10 +321,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     } else if (requiresPostLoadRegistration && state == null) {
       logWarn(s"$entityId: skipping NeedsPostLoadRegistrationEvent — state is NULL (class=${getClass.getSimpleName})")
     }
-    // Always send ack to the creator that initialization finished (even on state deserialization
-    // failure) so that the loading pipeline does not deadlock waiting for this ack.
     try
-      // InitializeEvent.actorRef is the creator/loader that requested initialization
       event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
     catch {
       case e: Exception =>
@@ -488,8 +452,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     if (state == null) {
-      // Shard-initiator probe entities or actors whose shard migrated before re-initialization.
-      // Unschedule silently — not a real simulation actor.
       if (!getEntityId.endsWith("-shard-initiator")) {
         logDebug(
           s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
@@ -505,7 +467,6 @@ abstract class SimulationBaseActor[T <: BaseState](
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
         e.printStackTrace()
-        // Unschedule if state is null (e.g. after shard restart); otherwise retry
         if (state == null) onFinishSpontaneous(None)
         else onFinishSpontaneous(Some(currentTick + 1))
   }
@@ -524,11 +485,6 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     MetricsServer.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
-    // Keep currentTick monotonically advancing: interaction events carry the sender's
-    // currentTick, which may be newer than ours. Without this update, actors that
-    // unregister from the TimeManager (e.g., MICRO-mode vehicles driven by Link events)
-    // retain a stale currentTick. When they later call onFinishSpontaneous(Some(currentTick + 1)),
-    // they schedule for an already-processed tick, and the TimeManager never dispatches them again.
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
@@ -540,7 +496,6 @@ abstract class SimulationBaseActor[T <: BaseState](
             s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
         )
         e.printStackTrace()
-    // save(event) // Event persistence disabled
   }
 
   /** Called when the actor receives an interaction event from another actor. Override this method
@@ -551,14 +506,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
   override def receive: Receive = {
-    // ── Migration window: stash all until SM replies ─────────────────────────
     case event: MigrationContextEvent if awaitingMigration =>
       awaitingMigration = false
       handleMigrationContext(event)
       unstashAll()
 
     case _: NoPendingMigrationEvent if awaitingMigration =>
-      // Not a migrated entity — proceed with normal init, then process stashed messages
       awaitingMigration = false
       unstashAll()
       proceedNormalInit()
@@ -566,7 +519,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     case _ if awaitingMigration =>
       stash()
 
-    // ── Normal message routing ────────────────────────────────────────────────
     case event: MigrationContextEvent => handleMigrationContext(event)
     case event: SpontaneousEvent      => handleSpontaneous(event)
     case event: ActorInteractionEvent => handleInteractWith(event)
@@ -601,29 +553,21 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"timeManagers=${event.timeManagers.keys.mkString(",")}, " +
         s"reporters=${event.reporters.size}, batchId=${event.batchId}"
     )
-    // Restore domain state and simulation metadata from snapshot
     applyMigrationSnapshot(event.snapshot)
 
-    // Restore the raw entity ID stored in the snapshot (entityId may currently be path.name)
     if (event.snapshot.entityId.nonEmpty) {
       entityId = event.snapshot.entityId
     }
 
-    // Inject simulation context (timeManagers, reporters) from SnapshotManager
     if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
     if (event.reporters.nonEmpty)    reporters    = event.reporters
     creatorManager = null
 
-    // Register with TimeManager now that state and context are fully available.
-    // Uses shouldRegisterOnTimeManagerAfterMigration() so subclasses can opt out
-    // when their domain state indicates they were NOT on the TM at migration time
-    // (e.g. Person in a vehicle trip, PT passenger).
     if (shouldRegisterOnTimeManagerAfterMigration()) {
       registerOnTimeManager()
     }
     onFinishInitialize()
 
-    // ACK to LoadBalanceManager so it can close the migration window once all entities are done
     if (event.lbmRef != null) {
       event.lbmRef ! MigrationRestoredAckEvent(entityId = entityId, batchId = event.batchId)
     }
@@ -656,9 +600,6 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManager = currentTimeManager,
       destruct = destruct
     )
-    // NOTE: No separate ScheduleEvent needed here.
-    // The TM fix in finishEvent atomically adds the actor to scheduledActors[scheduleTick],
-    // so a separate ScheduleEvent would cause double-scheduling (actor runs twice per tick).
   }
 
   /** Sends a spontaneous event to itself. */
@@ -714,7 +655,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def report(event: ReportEvent): Unit = {
     if (reporters.isEmpty) return
-    // Prometheus: track report events by label
     if (event.label != null) {
       MetricsServer.eventsProcessed.labels(event.label).inc()
       event.label match {
@@ -724,7 +664,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         case "journey_completed" =>
           val vehicleType = getClass.getSimpleName
           MetricsServer.journeysCompleted.labels(vehicleType).inc()
-        case _ => // other report labels tracked via eventsProcessed
+        case _ =>
       }
     }
     val defaultReportType = ReportTypeEnum.valueOf(
