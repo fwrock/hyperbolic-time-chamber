@@ -1,4 +1,4 @@
-# 🚀 Hyperbolic Time Chamber - Complete Documentation
+# Hyperbolic Time Chamber *(HTC)*
 
 ![HTC Banner](https://github.com/user-attachments/assets/dddd6245-f4bd-43fc-8888-6ef73d01a221)
 
@@ -8,24 +8,24 @@ A distributed, event-driven multi-agent system built with Scala and Apache Pekko
 
 ---
 
-## 🎯 **What is Hyperbolic Time Chamber?**
+## **What is Hyperbolic Time Chamber?**
 
 The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simulation framework designed for:
 
-### **🏢 Core Capabilities**
+### **Core Capabilities**
 - **Multi-Agent Simulation**: Actor-based architecture using Apache Pekko
 - **Mesoscopic Mobility Model**: Built-in implementation for urban traffic simulation
 - **Distributed Computing**: Horizontal scaling across multiple nodes
 - **Event-Driven Design**: Discrete event simulation with precise time management
 - **Flexible Data Sources**: JSON, CSV, and database input support
 
-### **📊 Analysis & Research**
+### **Analysis & Research**
 - **Traffic Flow Analysis**: Comprehensive traffic pattern analysis
 - **Performance Metrics**: Detailed performance and scalability measurements
 - **Academic Research**: Publication-ready analysis and validation capabilities
 - **Extensible Framework**: Support for custom mobility models and scenarios
 
-### **� Extensibility**
+### **Extensibility**
 - **Plugin Architecture**: Easy integration of new actor types
 - **Custom Events**: Support for domain-specific event types
 - **Reporting Framework**: Flexible data collection and analysis
@@ -33,7 +33,7 @@ The Hyperbolic Time Chamber (HTC) is a general-purpose, distributed traffic simu
 
 ---
 
-## 🚀 **Quick Start**
+## **Quick Start**
 
 ```bash
 cd hyperbolic-time-chamber
@@ -70,7 +70,13 @@ sbt scalafix --check
 
 ---
 
-## 🎓 **Academic Usage**
+## **Scenario Modeling**
+
+To build or customise an urban mobility scenario for the hybrid model — including road networks, public transit, traffic signals, and agent populations — see the **[Scenario Modeling Guide](docs/SCENARIO_MODELING.md)**.
+
+---
+
+## **Academic Usage**
 
 This system was developed for research in **urban mobility** and **traffic simulation**.
 
@@ -89,24 +95,24 @@ This system was developed for research in **urban mobility** and **traffic simul
 
 ---
 
-## 📄 **License**
+## **License**
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-## 🌟 **Key Features Summary**
+## **Key Features Summary**
 
-✨ **Core Advantages:**
-- 🏗️ **Actor-based architecture** with horizontal scaling
-- ⚡ **High-performance** discrete event simulation
-- 🚗 **Built-in mesoscopic model** for realistic traffic simulation
-- 🗄️ **Time-series data storage** with Cassandra integration
-- 🔧 **Flexible configuration** and scenario management
-- 📊 **Comprehensive reporting** and analysis capabilities
-- 🐳 **Docker deployment** for easy setup and scaling
+**Core Advantages:**
+- **Actor-based architecture** with horizontal scaling
+- **High-performance** discrete event simulation
+- **Built-in mesoscopic model** for realistic traffic simulation
+- **Time-series data storage** with Cassandra integration
+- **Flexible configuration** and scenario management
+- **Comprehensive reporting** and analysis capabilities
+- **Docker deployment** for easy setup and scaling
 
-🚀 **Use Cases:**
+**Use Cases:**
 - **Urban Traffic Analysis**: City-scale traffic simulation and optimization
 - **Transportation Research**: Academic research and validation studies  
 - **Policy Evaluation**: Impact assessment of transportation policies
@@ -115,6 +121,6 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ---
 
-**🎉 Ready for large-scale traffic simulation and urban mobility research!**
+**Ready for large-scale traffic simulation and urban mobility research!**
 
 *Inspired by the legendary "Hyperbolic Time Chamber" from Dragon Ball, where 1 day = 1 year of training, our simulator allows for accelerated time analysis of traffic patterns and urban mobility scenarios.*
