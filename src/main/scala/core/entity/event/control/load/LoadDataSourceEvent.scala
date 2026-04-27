@@ -6,9 +6,6 @@ import core.entity.event.BaseEvent
 import core.entity.configuration.ActorDataSource
 
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
-import org.interscity.htc.core.enumeration.ReportTypeEnum
-
-import scala.collection.mutable
 
 case class LoadDataSourceEvent(
   actorDataSource: ActorDataSource,

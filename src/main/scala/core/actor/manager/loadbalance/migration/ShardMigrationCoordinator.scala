@@ -38,7 +38,7 @@ class ShardMigrationCoordinator(
   val messageBuffer: MessageBuffer = new MessageBuffer()
 
   /** Attempts to start a migration. Returns true if started, false if queued or rejected. */
-  def requestMigration(plan: MigrationPlan): MigrationRequestResult = {
+  def requestMigration(plan: MigrationPlan): MigrationRequestResult =
     if (activeMigrations.contains(plan.shardId)) {
       MigrationRequestResult.AlreadyMigrating
     } else if (activeMigrations.size >= maxConcurrentMigrations) {
@@ -48,7 +48,6 @@ class ShardMigrationCoordinator(
       startMigration(plan)
       MigrationRequestResult.Started
     }
-  }
 
   /** Marks a migration as complete. Returns the next pending migration if available. */
   def completeMigration(shardId: String, success: Boolean): Option[MigrationPlan] = {
@@ -126,11 +125,11 @@ case class MigrationState(
 
 /** Phases of a shard migration. */
 enum MigrationPhase:
-  case Preparing    // Coordinating with TimeManager
-  case Serializing  // Compacting shard state
-  case Transferring // State in transit
-  case Rehydrating  // Rebuilding on target node
-  case Completing   // Releasing buffers, finalizing
+  case Preparing
+  case Serializing
+  case Transferring
+  case Rehydrating
+  case Completing
 
 /** Result of a migration request. */
 enum MigrationRequestResult:

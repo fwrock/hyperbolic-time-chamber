@@ -7,9 +7,9 @@ import core.entity.event.data.DefaultBaseEventData
 /** Response to [[RegisterSpatialEntitiesBatchEvent]] containing all spatial shard assignments.
   *
   * Sent by [[core.actor.manager.loadbalance.LoadBalanceManager]] back to
-  * [[core.actor.manager.load.CreatorLoadData]] with the spatial shard ID for each
-  * registered entity. Positions are also included so that subsequent entities
-  * (links, cars) can resolve node coordinates.
+  * [[core.actor.manager.load.CreatorLoadData]] with the spatial shard ID for each registered
+  * entity. Positions are also included so that subsequent entities (links, cars) can resolve node
+  * coordinates.
   *
   * @param assignments
   *   Map of entity ID → assigned shard ID (spatial partitioning)

@@ -6,12 +6,12 @@ import core.entity.event.data.DefaultBaseEventData
 
 import org.apache.pekko.actor.ActorRef
 
-/** Sent by a simulation actor to the SnapshotManager immediately after it successfully
-  * restores its state from a migration snapshot.
+/** Sent by a simulation actor to the SnapshotManager immediately after it successfully restores its
+  * state from a migration snapshot.
   *
-  * The SnapshotManager responds with [[MigrationContextEvent]] carrying the full
-  * initialization context (timeManagers, reporters) so the actor can complete its
-  * bring-up without relying on a CreatorLoadData that may no longer be alive.
+  * The SnapshotManager responds with [[MigrationContextEvent]] carrying the full initialization
+  * context (timeManagers, reporters) so the actor can complete its bring-up without relying on a
+  * CreatorLoadData that may no longer be alive.
   *
   * @param entityId
   *   The ID of the restored entity

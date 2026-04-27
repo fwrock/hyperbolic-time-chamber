@@ -6,12 +6,7 @@ import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
-import core.entity.event.control.migration.{
-  MigrationContextEvent,
-  MigrationRestoredAckEvent,
-  NoPendingMigrationEvent,
-  QueryMigrationEvent
-}
+import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
@@ -48,16 +43,10 @@ abstract class SimulationBaseActor[T <: BaseState](
 )(implicit m: Manifest[T])
     extends BaseActor[T](properties) {
 
-  // Simulation-specific fields
   protected var startTick: Tick = MinValue
   private val lamportClock = new LamportClock()
   protected var currentTick: Tick = 0
 
-  // Each actor instance gets its own fresh map — never aliased to properties.relationships.
-  // properties.relationships is a mutable.Map held in the Props object, which is shared across
-  // all actor instances of the same shard type. Aliasing it caused concurrent HashMap corruption
-  // (ArrayIndexOutOfBoundsException in growTable) when multiple actors processed onInitialize
-  // simultaneously on different dispatcher threads.
   protected val relationships: mutable.Map[String, ShardActorId] =
     if (properties != null && properties.relationships != null && properties.relationships.nonEmpty)
       mutable.Map[String, ShardActorId]() ++= properties.relationships
@@ -65,7 +54,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       mutable.Map[String, ShardActorId]()
 
   /** Backward-compat alias for [[relationships]].
-    * @deprecated Use relationships instead.
+    * @deprecated
+    *   Use relationships instead.
     */
   @deprecated("Use relationships instead", "2.8.0")
   protected def dependencies: mutable.Map[String, ShardActorId] = relationships
@@ -73,12 +63,10 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var reporters: mutable.Map[ReportTypeEnum, ActorRef] =
     if (properties != null) properties.reporters else null
 
-  // Suporte para múltiplos time managers
   protected var timeManagers: mutable.Map[String, ActorRef] =
     if (properties != null && properties.timeManagers != null) properties.timeManagers
     else mutable.Map[String, ActorRef]()
 
-  // Tipo de time manager atualmente em uso (padrão: discrete-event)
   protected var currentTimeManagerType: String =
     if (properties != null) properties.defaultTimeManagerType
     else TimeManagerTypeEnum.DISCRETE_EVENT
@@ -113,13 +101,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def switchTimeManager(newManagerType: String): Boolean =
     if (timeManagers != null && timeManagers.contains(newManagerType)) {
-      // Unregister from current time manager if needed
-      // (implementation depends on requirements)
-
-      // Switch to new time manager
       currentTimeManagerType = newManagerType
 
-      // Register with new time manager
       registerOnTimeManager()
 
       logInfo(s"Switched time manager to: $newManagerType")
@@ -140,8 +123,8 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   // ── Migration State Preservation ──────────────────────────────────────────
 
-  /** Builds a migration snapshot that includes simulation-specific metadata
-    * in addition to the base actor state.
+  /** Builds a migration snapshot that includes simulation-specific metadata in addition to the base
+    * actor state.
     *
     * Captured fields:
     *   - Domain state (via super)
@@ -149,17 +132,25 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   - currentTimeManagerType (which time manager was being used)
     *   - dependencies (from_node, to_node, etc. — needed for routing lookups)
     *
-    * reporters/timeManagers/creatorManager are NOT serialized here: they are
-    * injected via Properties at actor construction time on the target node (cluster-transparent).
+    * reporters/timeManagers/creatorManager are NOT serialized here: they are injected via
+    * Properties at actor construction time on the target node (cluster-transparent).
     */
   override protected def buildMigrationSnapshot(): MigrationSnapshot = {
     val base = super.buildMigrationSnapshot()
 
     // Convert relationships to simple string maps for safe serialization
-    val depIds = relationships.map { case (k, r) => k -> r.entityId }.toMap
-    val depTypes = relationships.map { case (k, r) => k -> r.classType }.toMap
-    val depResourceIds = relationships.map { case (k, r) => k -> r.shardBucket }.toMap
-    val depActorTypes = relationships.map { case (k, _) => k -> "" }.toMap
+    val depIds = relationships.map {
+      case (k, r) => k -> r.entityId
+    }.toMap
+    val depTypes = relationships.map {
+      case (k, r) => k -> r.classType
+    }.toMap
+    val depResourceIds = relationships.map {
+      case (k, r) => k -> r.shardBucket
+    }.toMap
+    val depActorTypes = relationships.map {
+      case (k, _) => k -> ""
+    }.toMap
 
     base.copy(
       currentTick = currentTick,
@@ -181,55 +172,46 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   - currentTimeManagerType (active time manager)
     *   - dependencies (rebuilt from stored string maps)
     *
-    * reporters/timeManagers/creatorManager are already available via Properties
-    * (injected at construction time on the target node). They are cluster-transparent
-    * ActorRefs and do not need to be serialized across migration.
+    * reporters/timeManagers/creatorManager are already available via Properties (injected at
+    * construction time on the target node). They are cluster-transparent ActorRefs and do not need
+    * to be serialized across migration.
     */
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
-    // Restore the base state first
     super.applyMigrationSnapshot(snapshot)
 
-    // Restore simulation metadata
     currentTick = snapshot.currentTick
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
 
-    // Rebuild relationships from stored string maps
     if (snapshot.dependencyIds.nonEmpty) {
       relationships.clear()
-      snapshot.dependencyIds.foreach { case (key, id) =>
-        val classType = snapshot.dependencyTypes.getOrElse(key, "")
-        val shardBucket = snapshot.dependencyResourceIds.getOrElse(key, "")
-        relationships.put(key, ShardActorId(entityId = id, classType = classType, shardBucket = shardBucket))
+      snapshot.dependencyIds.foreach {
+        case (key, id) =>
+          val classType = snapshot.dependencyTypes.getOrElse(key, "")
+          val shardBucket = snapshot.dependencyResourceIds.getOrElse(key, "")
+          relationships.put(
+            key,
+            ShardActorId(entityId = id, classType = classType, shardBucket = shardBucket)
+          )
       }
     }
   }
 
-  // ── Migration window awaiting state ───────────────────────────────────────
-
-  /** True while the actor has queried SM for its migration snapshot and is awaiting reply.
-    * All incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent
-    * arrives.
+  /** True while the actor has queried SM for its migration snapshot and is awaiting reply. All
+    * incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent arrives.
     */
   private var awaitingMigration: Boolean = false
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   override def preStart(): Unit = {
     super.preStart()
 
-    // For cluster-sharded entities (LoadBalancedDistributed), Props carry the shard region's
-    // initiator ID — not this actor's actual entity ID. The correct ID is the actor's path name
-    // (= the shard routing key used in EntityEnvelopeEvent, which equals IdUtil.format(rawId)).
     if (properties != null && properties.actorType == LoadBalancedDistributed) {
       entityId = self.path.name
     }
 
-    // Migration window check: if the distributed flag is active, this entity might have been
-    // migrated from another node. Query the SnapshotManager to find out.
     if (MigrationStateStoreRegistry.isMigrationActive.get()) {
-      creatorManager = null // Safety: no creator manager during migration window
+      creatorManager = null
       awaitingMigration = true
       MigrationStateStoreRegistry.getSnapshotManager match {
         case Some(smRef) =>
@@ -272,7 +254,11 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def registerOnTimeManager(): Unit = {
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) {
-      logWarn(s"TimeManager is NULL for $entityId (type=$currentTimeManagerType). timeManagers map: size=${if (timeManagers == null) "NULL MAP" else timeManagers.size.toString} keys=${if (timeManagers == null) "" else timeManagers.keys.mkString(",")}")
+      logWarn(
+        s"TimeManager is NULL for $entityId (type=$currentTimeManagerType). timeManagers map: size=${
+            if (timeManagers == null) "NULL MAP" else timeManagers.size.toString
+          } keys=${if (timeManagers == null) "" else timeManagers.keys.mkString(",")}"
+      )
       return
     }
     if (properties.actorType == LoadBalancedDistributed) {
@@ -308,18 +294,16 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
     entityId = event.id
-    // Configura time managers
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
-      // Usa discrete-event como padrão
       currentTimeManagerType = TimeManagerTypeEnum.DISCRETE_EVENT
     } else {
       logWarn(s"onInitialize: timeManagers is NULL for $entityId (class=${getClass.getSimpleName})")
     }
     creatorManager = event.data.creatorManager
-    try {
+    try
       state = JsonUtil.convertValue[T](event.data.data)
-    } catch {
+    catch {
       case e: Exception =>
         logError(s"Failed to deserialize state for $entityId: ${e.getMessage}", e)
     }
@@ -329,67 +313,71 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (state != null) {
       startTick = state.getStartTick
       if (state.isSetScheduleOnTimeManager) {
-        try {
+        try
           registerOnTimeManager()
-        } catch {
+        catch {
           case e: Exception =>
-            logError(s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}", e)
+            logError(
+              s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
+              e
+            )
         }
       }
     } else {
-      logWarn(s"$entityId: state is NULL after deserialization (class=${getClass.getSimpleName}). Will still send ACK.")
+      logWarn(
+        s"$entityId: state is NULL after deserialization (class=${getClass.getSimpleName}). Will still send ACK."
+      )
     }
-    // Send NeedsPostLoadRegistrationEvent BEFORE InitializeEntityAckEvent so the creator
-    // processes the registration signal before it processes the ACK that may complete the batch.
-    // Both messages go to the same actor (creatorManager == event.actorRef), so Pekko's
-    // FIFO ordering guarantee ensures the creator sees them in this order.
-    // Guard: only opt-in when state was successfully deserialized — if state is null,
-    // handlePostLoadRegistration() would NPE, the coordinator ACK would never arrive,
-    // and the simulation would deadlock.
+
     if (requiresPostLoadRegistration && creatorManager != null && state != null) {
       creatorManager ! NeedsPostLoadRegistrationEvent(
         entityId = entityId,
         classType = getClass.getName
       )
     } else if (requiresPostLoadRegistration && state == null) {
-      logWarn(s"$entityId: skipping NeedsPostLoadRegistrationEvent — state is NULL (class=${getClass.getSimpleName})")
+      logWarn(
+        s"$entityId: skipping NeedsPostLoadRegistrationEvent — state is NULL (class=${getClass.getSimpleName})"
+      )
     }
-    // Always send ack to the creator that initialization finished (even on state deserialization
-    // failure) so that the loading pipeline does not deadlock waiting for this ack.
     try
-      // InitializeEvent.actorRef is the creator/loader that requested initialization
       event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
     catch {
       case e: Exception =>
-        logError(s"$entityId: FAILED to send InitializeEntityAckEvent: ${e.getClass.getName}: ${e.getMessage}", e)
+        logError(
+          s"$entityId: FAILED to send InitializeEntityAckEvent: ${e.getClass.getName}: ${e.getMessage}",
+          e
+        )
     }
   }
 
-  /** Return true to opt in to the post-load registration phase.
-    * The actor will receive PostLoadRegistrationEvent after all EAGER loading is complete,
-    * at which point handlePostLoadRegistration() will be called. The ACK is sent automatically.
+  /** Return true to opt in to the post-load registration phase. The actor will receive
+    * PostLoadRegistrationEvent after all EAGER loading is complete, at which point
+    * handlePostLoadRegistration() will be called. The ACK is sent automatically.
     */
   protected def requiresPostLoadRegistration: Boolean = false
 
-  /** Override this (together with requiresPostLoadRegistration = true) to perform any
-    * cross-actor registration needed before the simulation starts (e.g. BusStop → Node).
-    * The PostLoadRegistrationAckEvent is sent back to the coordinator automatically after
-    * this method returns.
+  /** Override this (together with requiresPostLoadRegistration = true) to perform any cross-actor
+    * registration needed before the simulation starts (e.g. BusStop → Node). The
+    * PostLoadRegistrationAckEvent is sent back to the coordinator automatically after this method
+    * returns.
     */
   protected def handlePostLoadRegistration(): Unit = {}
 
-  /** Dispatched by BaseActor when PostLoadRegistrationEvent arrives.
-    * Calls handlePostLoadRegistration() then sends the ACK back to the coordinator.
-    * Subclasses should NOT override this — override handlePostLoadRegistration() instead.
-    * ACK is always sent even if handlePostLoadRegistration() throws, so the coordinator
-    * never deadlocks waiting for a missing reply.
+  /** Dispatched by BaseActor when PostLoadRegistrationEvent arrives. Calls
+    * handlePostLoadRegistration() then sends the ACK back to the coordinator. Subclasses should NOT
+    * override this — override handlePostLoadRegistration() instead. ACK is always sent even if
+    * handlePostLoadRegistration() throws, so the coordinator never deadlocks waiting for a missing
+    * reply.
     */
   override protected final def onPostLoadRegistration(event: PostLoadRegistrationEvent): Unit = {
-    try {
+    try
       handlePostLoadRegistration()
-    } catch {
+    catch {
       case e: Exception =>
-        logError(s"$entityId: handlePostLoadRegistration() threw ${e.getClass.getSimpleName}: ${e.getMessage} — sending ACK anyway", e)
+        logError(
+          s"$entityId: handlePostLoadRegistration() threw ${e.getClass.getSimpleName}: ${e.getMessage} — sending ACK anyway",
+          e
+        )
     }
     event.coordinatorRef ! PostLoadRegistrationAckEvent(entityId = entityId)
   }
@@ -488,8 +476,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     if (state == null) {
-      // Shard-initiator probe entities or actors whose shard migrated before re-initialization.
-      // Unschedule silently — not a real simulation actor.
       if (!getEntityId.endsWith("-shard-initiator")) {
         logDebug(
           s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
@@ -505,7 +491,6 @@ abstract class SimulationBaseActor[T <: BaseState](
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
         e.printStackTrace()
-        // Unschedule if state is null (e.g. after shard restart); otherwise retry
         if (state == null) onFinishSpontaneous(None)
         else onFinishSpontaneous(Some(currentTick + 1))
   }
@@ -524,11 +509,6 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     MetricsServer.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
-    // Keep currentTick monotonically advancing: interaction events carry the sender's
-    // currentTick, which may be newer than ours. Without this update, actors that
-    // unregister from the TimeManager (e.g., MICRO-mode vehicles driven by Link events)
-    // retain a stale currentTick. When they later call onFinishSpontaneous(Some(currentTick + 1)),
-    // they schedule for an already-processed tick, and the TimeManager never dispatches them again.
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
@@ -540,7 +520,6 @@ abstract class SimulationBaseActor[T <: BaseState](
             s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
         )
         e.printStackTrace()
-    // save(event) // Event persistence disabled
   }
 
   /** Called when the actor receives an interaction event from another actor. Override this method
@@ -551,14 +530,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
   override def receive: Receive = {
-    // ── Migration window: stash all until SM replies ─────────────────────────
     case event: MigrationContextEvent if awaitingMigration =>
       awaitingMigration = false
       handleMigrationContext(event)
       unstashAll()
 
     case _: NoPendingMigrationEvent if awaitingMigration =>
-      // Not a migrated entity — proceed with normal init, then process stashed messages
       awaitingMigration = false
       unstashAll()
       proceedNormalInit()
@@ -566,7 +543,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     case _ if awaitingMigration =>
       stash()
 
-    // ── Normal message routing ────────────────────────────────────────────────
     case event: MigrationContextEvent => handleMigrationContext(event)
     case event: SpontaneousEvent      => handleSpontaneous(event)
     case event: ActorInteractionEvent => handleInteractWith(event)
@@ -575,18 +551,18 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   /** Returns true if this entity should re-register on the TimeManager after migration restore.
     *
-    * Default: mirrors the static `scheduleOnTimeManager` config flag.
-    * Subclasses that dynamically unregister/re-register during their lifecycle
-    * (e.g. Person during vehicle trips) should override this to reflect runtime state.
+    * Default: mirrors the static `scheduleOnTimeManager` config flag. Subclasses that dynamically
+    * unregister/re-register during their lifecycle (e.g. Person during vehicle trips) should
+    * override this to reflect runtime state.
     */
   protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
     state != null && state.isSetScheduleOnTimeManager
 
   /** For cluster-sharded (LoadBalancedDistributed) entities, use Pekko passivation instead of
-    * context.stop(self).  Passivation signals the ShardRegion to stop buffering messages for
-    * this entity ID, so stale in-flight messages go to Dead Letters instead of triggering a
-    * ghost restart with state == null.  Plain context.stop does NOT inform the shard, causing
-    * the entity to be recreated on the next incoming message.
+    * context.stop(self). Passivation signals the ShardRegion to stop buffering messages for this
+    * entity ID, so stale in-flight messages go to Dead Letters instead of triggering a ghost
+    * restart with state == null. Plain context.stop does NOT inform the shard, causing the entity
+    * to be recreated on the next incoming message.
     */
   override protected def selfDestruct(): Unit =
     if (properties != null && properties.actorType == LoadBalancedDistributed) {
@@ -601,29 +577,21 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"timeManagers=${event.timeManagers.keys.mkString(",")}, " +
         s"reporters=${event.reporters.size}, batchId=${event.batchId}"
     )
-    // Restore domain state and simulation metadata from snapshot
     applyMigrationSnapshot(event.snapshot)
 
-    // Restore the raw entity ID stored in the snapshot (entityId may currently be path.name)
     if (event.snapshot.entityId.nonEmpty) {
       entityId = event.snapshot.entityId
     }
 
-    // Inject simulation context (timeManagers, reporters) from SnapshotManager
     if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
-    if (event.reporters.nonEmpty)    reporters    = event.reporters
+    if (event.reporters.nonEmpty) reporters = event.reporters
     creatorManager = null
 
-    // Register with TimeManager now that state and context are fully available.
-    // Uses shouldRegisterOnTimeManagerAfterMigration() so subclasses can opt out
-    // when their domain state indicates they were NOT on the TM at migration time
-    // (e.g. Person in a vehicle trip, PT passenger).
     if (shouldRegisterOnTimeManagerAfterMigration()) {
       registerOnTimeManager()
     }
     onFinishInitialize()
 
-    // ACK to LoadBalanceManager so it can close the migration window once all entities are done
     if (event.lbmRef != null) {
       event.lbmRef ! MigrationRestoredAckEvent(entityId = entityId, batchId = event.batchId)
     }
@@ -640,7 +608,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
-  ): Unit = {
+  ): Unit =
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
@@ -656,26 +624,23 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManager = currentTimeManager,
       destruct = destruct
     )
-    // NOTE: No separate ScheduleEvent needed here.
-    // The TM fix in finishEvent atomically adds the actor to scheduledActors[scheduleTick],
-    // so a separate ScheduleEvent would cause double-scheduling (actor runs twice per tick).
-  }
 
   /** Sends a spontaneous event to itself. */
   protected def selfSpontaneous(): Unit =
     self ! SpontaneousEvent(currentTick, currentTimeManager)
 
-  /** Schedules an event at a specific tick.
-    * CRITICAL: Send to currentTimeManager (same TM that sent last SpontaneousEvent), NOT to the
-    * pool router. Using getTimeManager() routes round-robin to any pool member; if that member
-    * differs from currentTimeManager, the ScheduleEvent and FinishEvent(None) go to different TMs.
-    * When all TMs (including currentTimeManager) report hasScheduled=false, the global TM
-    * terminates the simulation — even though another TM has the actor scheduled.
+  /** Schedules an event at a specific tick. CRITICAL: Send to currentTimeManager (same TM that sent
+    * last SpontaneousEvent), NOT to the pool router. Using getTimeManager() routes round-robin to
+    * any pool member; if that member differs from currentTimeManager, the ScheduleEvent and
+    * FinishEvent(None) go to different TMs. When all TMs (including currentTimeManager) report
+    * hasScheduled=false, the global TM terminates the simulation — even though another TM has the
+    * actor scheduled.
     * @param tick
     *   The tick at which the event should be scheduled
     */
   protected def scheduleEvent(tick: Tick): Unit = {
-    val tm = if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
+    val tm =
+      if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
     tm ! ScheduleEvent(
       tick = tick,
       actorRef = getPath,
@@ -713,7 +678,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
-    // Prometheus: track report events by label
+    if (reporters.isEmpty) return
     if (event.label != null) {
       MetricsServer.eventsProcessed.labels(event.label).inc()
       event.label match {
@@ -723,7 +688,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         case "journey_completed" =>
           val vehicleType = getClass.getSimpleName
           MetricsServer.journeysCompleted.labels(vehicleType).inc()
-        case _ => // other report labels tracked via eventsProcessed
+        case _ =>
       }
     }
     val defaultReportType = ReportTypeEnum.valueOf(
@@ -754,6 +719,25 @@ abstract class SimulationBaseActor[T <: BaseState](
     )
     report(event)
   }
+
+  /** Sends an event directly to a specific reporter type if registered. No-op if that reporter is
+    * not in the enabled strategies — simulation continues without any error or performance penalty.
+    */
+  protected def reportToSpecificReporter(
+    reportType: ReportTypeEnum,
+    data: Any,
+    label: String = null
+  ): Unit =
+    reporters.get(reportType).foreach {
+      reporter =>
+        reporter ! ReportEvent(
+          entityId = entityId,
+          tick = currentTick,
+          lamportTick = getLamportClock,
+          data = data,
+          label = label
+        )
+    }
 
   /** Gets a relationship by entity id.
     * @param entityId
@@ -807,7 +791,9 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   /** @deprecated Use getRelationshipOption instead. */
   @deprecated("Use getRelationshipOption instead", "2.8.0")
-  protected def getDependencyOption(entityId: String): Option[ShardActorId] = getRelationshipOption(entityId)
+  protected def getDependencyOption(entityId: String): Option[ShardActorId] = getRelationshipOption(
+    entityId
+  )
 
   /** @deprecated Use getRelationshipSafe instead. */
   @deprecated("Use getRelationshipSafe instead", "2.8.0")

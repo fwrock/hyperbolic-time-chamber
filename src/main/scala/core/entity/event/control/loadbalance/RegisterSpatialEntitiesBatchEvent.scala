@@ -9,9 +9,8 @@ import core.entity.event.data.DefaultBaseEventData
   * [[core.actor.manager.loadbalance.LoadBalanceManager]] in a single message.
   *
   * Sent by [[core.actor.manager.load.CreatorLoadData]] during entity creation to obtain
-  * spatially-aware shard assignments for a chunk of entities. The LoadBalanceManager
-  * processes all entities through its strategy and replies with
-  * [[BatchShardAssignmentResponse]].
+  * spatially-aware shard assignments for a chunk of entities. The LoadBalanceManager processes all
+  * entities through its strategy and replies with [[BatchShardAssignmentResponse]].
   *
   * @param entities
   *   Sequence of spatial entities to register for shard assignment

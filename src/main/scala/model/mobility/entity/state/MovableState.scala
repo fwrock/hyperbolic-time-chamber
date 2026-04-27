@@ -1,13 +1,11 @@
 package org.interscity.htc
 package model.mobility.entity.state
 
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.RouteWaiting
-import org.interscity.htc.model.mobility.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
 
@@ -18,7 +16,7 @@ abstract class MovableState(
   var movableBestRoute: Option[mutable.Queue[(String, String)]] = None,
   var movableCurrentPath: Option[(String, String)] = None,
   var movableCurrentNode: String = null,
-  var movableCurrentLink: String = null, // Event-driven: current link
+  var movableCurrentLink: String = null,
   val origin: String,
   val destination: String,
   val gpsId: String = null,
@@ -27,7 +25,7 @@ abstract class MovableState(
   var movableReachedDestination: Boolean = false,
   val actorType: ActorTypeEnum,
   val size: Double,
-  var movableNextScheduledTick: Option[Tick] = None // Event-driven: safe horizon
+  var movableNextScheduledTick: Option[Tick] = None
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

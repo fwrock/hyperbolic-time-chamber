@@ -4,7 +4,6 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import model.hybrid.entity.state.MovableState
 
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
@@ -91,7 +90,9 @@ abstract class Movable[T <: MovableState](
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     if (state == null) {
-      logWarn(s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}")
+      logWarn(
+        s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}"
+      )
       return
     }
     event.data match {

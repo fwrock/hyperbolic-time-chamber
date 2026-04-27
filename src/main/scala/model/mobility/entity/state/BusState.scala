@@ -1,12 +1,11 @@
 package org.interscity.htc
 package model.mobility.entity.state
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Bus
-import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ RouteWaiting, Start }
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.Start
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
-import org.interscity.htc.model.mobility.entity.state.model.{ BusNodeState, RoutePathItem }
+import org.interscity.htc.model.mobility.entity.state.model.BusNodeState
 
 import scala.collection.mutable
 

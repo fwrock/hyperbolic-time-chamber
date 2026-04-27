@@ -1,11 +1,7 @@
 package org.interscity.htc.model.mobility.util
 
-import org.interscity.htc.core.util.JsonUtil
-import org.interscity.htc.core.util.JsonUtil.writeJsonBytes
 import org.interscity.htc.model.mobility.entity.state.model.{ EdgeGraph, NodeGraph }
-import org.interscity.htc.system.database.redis.RedisClientManager
 
-import java.util.UUID
 import scala.collection.mutable
 
 object GPSUtil {
@@ -34,11 +30,10 @@ object GPSUtil {
           destinationNode,
           heuristicFunc
         ) match {
-          case Some((cost, path)) => // path é List[(Edge[NodeGraph, Double, EdgeGraph], NodeGraph)]
+          case Some((cost, path)) =>
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach {
               case (edgeObject, targetNodeOfEdgeInPath) =>
-                // Armazena o ID do EdgeGraph (label da aresta) e o ID do nó de destino dessa aresta no caminho
                 routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
             }
             Some((cost, routeQueue))
@@ -46,14 +41,14 @@ object GPSUtil {
             System.err.println(
               s"GPSUtil: Nenhuma rota encontrada de $originId para $destinationId."
             )
-            None // Nenhuma rota encontrada pelo A*
+            None
         }
       case (None, _) =>
         System.err.println(s"GPSUtil: Nó de origem $originId não encontrado no mapa.")
-        None // Nó de origem não encontrado
+        None
       case (_, None) =>
         System.err.println(s"GPSUtil: Nó de destino $destinationId não encontrado no mapa.")
-        None // Nó de destino não encontrado
+        None
     }
   }
 

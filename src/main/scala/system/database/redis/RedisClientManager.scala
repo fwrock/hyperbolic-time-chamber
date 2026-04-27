@@ -17,7 +17,7 @@ class RedisClientManager {
     try
       jedis.set(key.getBytes, value)
     finally
-      jedis.close() // devolve ao pool
+      jedis.close()
   }
 
   def load(key: String): Option[Array[Byte]] = {

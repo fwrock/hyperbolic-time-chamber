@@ -12,11 +12,11 @@ import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, Spontaneous
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, IdentifyUtil, JsonUtil }
+import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.model.mobility.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.SubwayStationStateEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
-import org.interscity.htc.model.mobility.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
+import org.interscity.htc.model.mobility.entity.state.model.{ SubwayInformation, SubwayLineInformation }
 
 import scala.collection.mutable
 
@@ -30,7 +30,11 @@ class SubwayStation(
     super.onInitialize(event)
     val dependencyOpt =
       getDependencyOption(state.nodeId)
-        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+        .orElse(
+          dependencies.values.find(
+            d => d.classType != null && d.classType.endsWith("Node")
+          )
+        )
 
     dependencyOpt match {
       case Some(node) =>

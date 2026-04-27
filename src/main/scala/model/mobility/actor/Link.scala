@@ -5,10 +5,10 @@ import core.actor.SimulationBaseActor
 import model.mobility.entity.state.LinkState
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.ForwardRoute
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import model.mobility.entity.event.data.{ EnterLinkData, ForwardRouteData, LeaveLinkData, RequestRouteData }
+import model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData, VehicleLinkFlowData }
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -82,6 +82,18 @@ class Link(
           actorCreationType = data.actorCreationType
         )
       )
+      reportToSpecificReporter(
+        ReportTypeEnum.clickhouse,
+        VehicleLinkFlowData(
+          linkId = entityId,
+          eventType = "enter",
+          vehicleId = data.actorId,
+          actorType = data.actorType.toString,
+          actorCreationType = data.actorCreationType.toString,
+          vehicleCountOnLink = state.registered.size
+        ),
+        "vehicle_link_flow"
+      )
     }
     sendMessageTo(
       entityId = event.actorRefId,
@@ -96,6 +108,18 @@ class Link(
     model.mobility.util.LinkMessageStats.incrementLeaveLink()
 
     state.registered.filterInPlace(_.actorId != data.actorId)
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = entityId,
+        eventType = "leave",
+        vehicleId = data.actorId,
+        actorType = data.actorType.toString,
+        actorCreationType = data.actorCreationType.toString,
+        vehicleCountOnLink = state.registered.size
+      ),
+      "vehicle_link_flow"
+    )
     val dataLink = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,

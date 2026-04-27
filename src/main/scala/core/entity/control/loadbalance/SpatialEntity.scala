@@ -22,8 +22,8 @@ trait SpatialEntity {
     */
   def bounds: Option[SpatialBounds] = None
 
-  /** Estimated computational cost of this entity per tick. Default is 1.0 (uniform cost).
-    * Override for entities with known variable cost (e.g., micro-mode links cost more).
+  /** Estimated computational cost of this entity per tick. Default is 1.0 (uniform cost). Override
+    * for entities with known variable cost (e.g., micro-mode links cost more).
     */
   def computationalWeight: Double = 1.0
 }

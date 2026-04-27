@@ -30,7 +30,6 @@ class JsonReportData(
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
-  // Generate simulation ID using same logic as CassandraReportData
   private lazy val simulationId: String = {
     val simulationConfigId =
       try {
@@ -89,14 +88,13 @@ class JsonReportData(
     }
   }
 
-  /** Returns a persistent writer, reusing the same file handle across flushes.
-    * Opening/closing FileWriter per flush is expensive on network filesystems (GCS Fuse).
-    * The writer is only closed in postStop().
+  /** Returns a persistent writer, reusing the same file handle across flushes. Opening/closing
+    * FileWriter per flush is expensive on network filesystems (GCS Fuse). The writer is only closed
+    * in postStop().
     */
   private def getOrCreateWriter(): BufferedWriter = {
     if (persistentWriter == null) {
       mkdir(directory)
-      // 64KB buffer reduces syscall frequency on network mounts
       persistentWriter = new BufferedWriter(new FileWriter(filePath, true), 65536)
     }
     persistentWriter
@@ -128,17 +126,16 @@ class JsonReportData(
     } catch {
       case e: Exception =>
         logError(s"Failed to write report to file: ${e.getMessage}", e)
-        // Close broken writer so next flush creates a new one
         closeWriter()
     }
   }
 
-  private def closeWriter(): Unit = {
+  private def closeWriter(): Unit =
     if (persistentWriter != null) {
-      try { persistentWriter.close() } catch { case _: Exception => }
+      try persistentWriter.close()
+      catch { case _: Exception => }
       persistentWriter = null
     }
-  }
 
   private def mkdir(directory: String): Unit = {
     val dirPath: Path = Paths.get(directory)

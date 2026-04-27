@@ -25,14 +25,11 @@ class CsvReportData(
   private val baseDirectory = Some(config.getString("htc.report-manager.csv.directory"))
     .getOrElse("/tmp/reports/csv")
 
-  // Create readable directory name with timestamp
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
-  // Generate simulation ID using same logic as CassandraReportData
   private lazy val simulationId: String = {
-    // 1. Try simulation config
     val simulationConfigId =
       try {
         val simulationConfig = core.util.SimulationUtil.loadSimulationConfig()
@@ -41,10 +38,8 @@ class CsvReportData(
         case _: Exception => None
       }
 
-    // 2. Try environment variable
     val envSimId = sys.env.get("HTC_SIMULATION_ID")
 
-    // 3. Try application.conf
     val configSimId =
       try
         Some(config.getString("htc.simulation.id"))
@@ -52,7 +47,6 @@ class CsvReportData(
         case _: Exception => None
       }
 
-    // 4. Generate fallback ID
     simulationConfigId
       .orElse(envSimId)
       .orElse(configSimId)
@@ -79,7 +73,6 @@ class CsvReportData(
 
   private val buffer = mutable.ListBuffer[ReportEvent]()
 
-  // Create readable filename
   private val fileName = s"${prefix}${timeBasedId}_events.csv"
   private val filePath = s"$directory/$fileName"
 
@@ -99,13 +92,11 @@ class CsvReportData(
     try {
       val writer = new FileWriter(filePath, true)
 
-      // Write header only if file doesn't exist or is empty
       if (!fileExists || Files.size(Paths.get(filePath)) == 0) {
         writer.write("entity_id,tick,real_time,lamport_tick,event_type,simulation_id,data\n")
       }
 
       for (report <- buffer) {
-        // Clean and escape data field for CSV format
         val cleanData =
           report.data.toString.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ")
         writer.write(

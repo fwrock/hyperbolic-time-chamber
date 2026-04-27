@@ -11,7 +11,7 @@ import core.util.ActorCreatorUtil.createShardRegion
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartCreationEvent }
-import org.interscity.htc.core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
+import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 import org.interscity.htc.core.entity.actor.properties.{ CreatorProperties, Properties }
 import org.interscity.htc.core.entity.actor.{ ActorSimulationCreation, Initialization }
 import org.interscity.htc.core.entity.control.loadbalance.SpatialEntityData
@@ -35,7 +35,6 @@ class CreatorLoadData(
       )
     ) {
 
-  // Fields needed for actor creation (not for simulation)
   private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
   private val creatorManager: ActorRef = creatorProperties.creatorManager
   private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] =
@@ -43,8 +42,6 @@ class CreatorLoadData(
 
   private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
   private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
-  // Keeps Initialization data for entities that received StartEntityAck but not InitializeEntityAckEvent yet,
-  // so we can resend the InitializeEvent if the entity crashed or stash-dropped it.
   private val pendingInitAck = mutable.Map[String, Initialization]()
   private var amountActors = 0
 
@@ -60,34 +57,33 @@ class CreatorLoadData(
   /** Lazy singleton proxy to LoadBalanceManager (null if load balancing disabled). */
   private var loadBalanceProxy: ActorRef = _
 
-  /** Pending chunks awaiting BatchShardAssignmentResponse from LoadBalanceManager.
-    * Key: batchId, Value: the chunk of actors waiting for spatial assignment.
+  /** Pending chunks awaiting BatchShardAssignmentResponse from LoadBalanceManager. Key: batchId,
+    * Value: the chunk of actors waiting for spatial assignment.
     */
   private val pendingChunks: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
 
   /** Scheduled timeout cancellables for pending LBM chunks. Cancelled on response. */
   private val pendingChunkTimeouts: mutable.Map[String, Cancellable] = mutable.Map.empty
 
-  /** Whether this instance has already attempted proxy initialisation (avoids repeat config reads). */
+  /** Whether this instance has already attempted proxy initialisation (avoids repeat config reads).
+    */
   private var lbProxyChecked: Boolean = false
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     super.onStart()
-  }
 
-  override def postStop(): Unit = {
+  override def postStop(): Unit =
     super.postStop()
-  }
 
   override def handleEvent: Receive = {
     case event: CreateActorsEvent =>
       logDebug(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
       handleCreateActors(event)
-    case event: StartCreationEvent         => handleStartCreation(event)
-    case event: ProcessNextCreateChunk     => handleProcessNextCreateChunk(event.batchId)
-    case event: BatchShardAssignmentResponse    => handleBatchAssignmentResponse(event)
-    case event: CreatorLoadData.LbChunkTimeout  => handleLbChunkTimeout(event)
-    case event: ShardRegion.StartEntityAck => handleInitialize(event)
+    case event: StartCreationEvent             => handleStartCreation(event)
+    case event: ProcessNextCreateChunk         => handleProcessNextCreateChunk(event.batchId)
+    case event: BatchShardAssignmentResponse   => handleBatchAssignmentResponse(event)
+    case event: CreatorLoadData.LbChunkTimeout => handleLbChunkTimeout(event)
+    case event: ShardRegion.StartEntityAck     => handleInitialize(event)
     case event: InitializeEntityAckEvent       => handleFinishInitialization(event)
     case event: NeedsPostLoadRegistrationEvent => handleNeedsPostLoadRegistration(event)
 
@@ -118,9 +114,9 @@ class CreatorLoadData(
 
   /** Process the next chunk of entities for a batch.
     *
-    * Two-phase creation when load balancing is enabled:
-    *   Phase 1: Extract spatial positions → send batch to LoadBalanceManager → wait
-    *   Phase 2: On BatchShardAssignmentResponse → store mappings → create entities
+    * Two-phase creation when load balancing is enabled: Phase 1: Extract spatial positions → send
+    * batch to LoadBalanceManager → wait Phase 2: On BatchShardAssignmentResponse → store mappings →
+    * create entities
     *
     * When load balancing is disabled, entities are created immediately with hash-based routing.
     */
@@ -132,24 +128,21 @@ class CreatorLoadData(
     if (chunk.nonEmpty) {
       val lbProxy = getLoadBalanceProxy
       if (lbProxy.isDefined) {
-        // Phase 1: Build spatial entity list for LoadBalanceManager.
-        // Entities with known positions get their real coordinates; entities without positions
-        // (BusStop, BusStation, Person, etc.) get (0.0, 0.0) as a fallback — non-spatial
-        // strategies like TypeAware ignore position entirely and only use the entity ID.
-        val spatialEntities = chunk.map { actorCreation =>
-          val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
-          SpatialEntityData(
-            spatialEntityId = actorCreation.actor.id,
-            lon = position._1,
-            lat = position._2
-          )
+        val spatialEntities = chunk.map {
+          actorCreation =>
+            val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
+            SpatialEntityData(
+              spatialEntityId = actorCreation.actor.id,
+              lon = position._1,
+              lat = position._2
+            )
         }
 
-        val withRealPos = spatialEntities.count { e => e.position != (0.0, 0.0) }
+        val withRealPos = spatialEntities.count {
+          e => e.position != (0.0, 0.0)
+        }
 
-        // Store chunk as pending — will be processed in handleBatchAssignmentResponse
         pendingChunks.put(batchId, chunk)
-        // Safety net: if LBM never replies, fall back to hash routing after LB_CHUNK_TIMEOUT
         val timeout = context.system.scheduler.scheduleOnce(
           LB_CHUNK_TIMEOUT,
           self,
@@ -160,11 +153,9 @@ class CreatorLoadData(
           entities = spatialEntities,
           batchId = batchId
         )
-        // Don't advance yet — wait for BatchShardAssignmentResponse
         return
       }
 
-      // No load balancing — create immediately with hash-based routing
       createEntitiesFromChunk(chunk, batchId)
       advanceToNextChunk(batchId, chunk.size)
     } else {
@@ -178,10 +169,8 @@ class CreatorLoadData(
     * [[SpatialShardIdRegistry]], then creates the entities using the assigned shard IDs.
     */
   private def handleBatchAssignmentResponse(response: BatchShardAssignmentResponse): Unit = {
-    // Store all spatial shard assignments so extractShardId can use them
     SpatialShardIdRegistry.putAllShardIds(response.assignments)
 
-    // Store entity positions for lookup by subsequent entities (links → node positions)
     SpatialShardIdRegistry.putAllPositions(response.positions)
 
     logDebug(
@@ -189,10 +178,8 @@ class CreatorLoadData(
         s"${response.assignments.size} entities assigned"
     )
 
-    // Cancel the safety-net timeout (response arrived in time)
     pendingChunkTimeouts.remove(response.batchId).foreach(_.cancel())
 
-    // Retrieve and process the pending chunk
     pendingChunks.remove(response.batchId) match {
       case Some(chunk) =>
         createEntitiesFromChunk(chunk, response.batchId)
@@ -206,53 +193,56 @@ class CreatorLoadData(
     }
   }
 
-  /** Creates entities from a chunk — the actual creation loop extracted from handleProcessNextCreateChunk.
-    * This is shared by both the immediate path (no LB) and the deferred path (after spatial assignment).
+  /** Creates entities from a chunk — the actual creation loop extracted from
+    * handleProcessNextCreateChunk. This is shared by both the immediate path (no LB) and the
+    * deferred path (after spatial assignment).
     */
   private def createEntitiesFromChunk(
     chunk: List[ActorSimulationCreation],
     batchId: String
-  ): Unit = {
-    chunk.foreach { actorCreation =>
-      val initialization = Initialization(
-        id = actorCreation.actor.id,
-        resourceId = actorCreation.resourceId,
-        classType = actorCreation.actor.typeActor,
-        data = actorCreation.actor.data.content,
-        timeManagers = timeManagers,
-        creatorManager = self,
-        reporters = reporters,
-        relationships = {
-        val base = if (actorCreation.actor.relationships != null) actorCreation.actor.relationships
-                   else Map.empty[String, ShardActorId]
-        mutable.Map[String, ShardActorId]() ++= base.map { case (label, rel) =>
-          val bucket = if (rel.shardBucket.nonEmpty) rel.shardBucket
-                       else SpatialShardIdRegistry.getShardId(rel.entityId).getOrElse("")
-          label -> rel.copy(shardBucket = bucket)
-        }
-      }
-      )
+  ): Unit =
+    chunk.foreach {
+      actorCreation =>
+        val initialization = Initialization(
+          id = actorCreation.actor.id,
+          resourceId = actorCreation.resourceId,
+          classType = actorCreation.actor.typeActor,
+          data = actorCreation.actor.data.content,
+          timeManagers = timeManagers,
+          creatorManager = self,
+          reporters = reporters,
+          relationships = {
+            val base =
+              if (actorCreation.actor.relationships != null) actorCreation.actor.relationships
+              else Map.empty[String, ShardActorId]
+            mutable.Map[String, ShardActorId]() ++= base.map {
+              case (label, rel) =>
+                val bucket =
+                  if (rel.shardBucket.nonEmpty) rel.shardBucket
+                  else SpatialShardIdRegistry.getShardId(rel.entityId).getOrElse("")
+                label -> rel.copy(shardBucket = bucket)
+            }
+          }
+        )
 
-      addInitializeData(actorCreation.actor.id, batchId, initialization)
-      addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+        addInitializeData(actorCreation.actor.id, batchId, initialization)
+        addToInitializedAcknowledges(batchId, actorCreation.actor.id)
 
-      // Track entity class name in spatial registry for migration routing
-      val fullClassName = StringUtil.getModelClassName(actorCreation.actor.typeActor)
-      SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id, fullClassName)
+        val fullClassName = StringUtil.getModelClassName(actorCreation.actor.typeActor)
+        SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id, fullClassName)
 
-      val shardRegion = createShardRegion(
-        system = context.system,
-        resourceId = actorCreation.resourceId,
-        actorClassName = actorCreation.actor.typeActor,
-        entityId = actorCreation.actor.id,
-        timeManagers = timeManagers,
-        creatorManager = self,
-        reporters = reporters
-      )
+        val shardRegion = createShardRegion(
+          system = context.system,
+          resourceId = actorCreation.resourceId,
+          actorClassName = actorCreation.actor.typeActor,
+          entityId = actorCreation.actor.id,
+          timeManagers = timeManagers,
+          creatorManager = self,
+          reporters = reporters
+        )
 
-      shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
     }
-  }
 
   /** Advances to the next chunk or finishes if no more actors remain. */
   private def advanceToNextChunk(batchId: String, chunkSize: Int): Unit = {
@@ -275,15 +265,17 @@ class CreatorLoadData(
     *   - Cars/Buses/Vehicles: Look up `origin` or `currentNode` position via registry
     *   - Unknown: None (falls back to hash-based routing)
     *
-    * @return Some((longitude, latitude)) if spatial data is available, None otherwise
+    * @return
+    *   Some((longitude, latitude)) if spatial data is available, None otherwise
     */
-  private def extractSpatialPosition(actorCreation: ActorSimulationCreation): Option[(Double, Double)] = {
-    try {
+  private def extractSpatialPosition(
+    actorCreation: ActorSimulationCreation
+  ): Option[(Double, Double)] =
+    try
       actorCreation.actor.data.content match {
         case contentMap: java.util.Map[?, ?] =>
           val map = contentMap.asInstanceOf[java.util.Map[String, Any]]
 
-          // Direct coordinates (nodes and other entities with lat/long)
           if (map.containsKey("latitude") && map.containsKey("longitude")) {
             val lat = map.get("latitude") match {
               case n: Number => n.doubleValue()
@@ -296,28 +288,24 @@ class CreatorLoadData(
             return Some((lon, lat))
           }
 
-          // Links: look up source node position
           if (map.containsKey("from")) {
             val fromNodeId = map.get("from").asInstanceOf[String]
             val pos = SpatialShardIdRegistry.getPosition(fromNodeId)
             if (pos.isDefined) return pos
           }
 
-          // Vehicles: look up origin node position
           if (map.containsKey("origin")) {
             val originNodeId = map.get("origin").asInstanceOf[String]
             val pos = SpatialShardIdRegistry.getPosition(originNodeId)
             if (pos.isDefined) return pos
           }
 
-          // Fallback: currentNode
           if (map.containsKey("currentNode")) {
             val nodeId = map.get("currentNode").asInstanceOf[String]
             val pos = SpatialShardIdRegistry.getPosition(nodeId)
             if (pos.isDefined) return pos
           }
 
-          // BusStop / BusStation / SubwayStation: look up associated node position
           if (map.containsKey("nodeId")) {
             val nodeId = map.get("nodeId").asInstanceOf[String]
             val pos = SpatialShardIdRegistry.getPosition(nodeId)
@@ -328,10 +316,9 @@ class CreatorLoadData(
 
         case _ => None
       }
-    } catch {
+    catch {
       case _: Exception => None
     }
-  }
 
   /** Lazily obtains a singleton proxy to LoadBalanceManager, if load balancing is enabled.
     *
@@ -342,10 +329,8 @@ class CreatorLoadData(
     * [[ShardAllocatorRegistry]] which is only populated on the singleton host node.
     */
   private def getLoadBalanceProxy: Option[ActorRef] = {
-    // Fast path: return already-resolved proxy for this instance
     if (lbProxyChecked) return Option(loadBalanceProxy)
 
-    // Check JVM-level cache before creating a new actor
     val cached = CreatorLoadData.globalLbProxy.get()
     if (cached != null) {
       loadBalanceProxy = cached
@@ -354,7 +339,9 @@ class CreatorLoadData(
     }
 
     lbProxyChecked = true
-    val lbEnabled = try { config.getBoolean("htc.load-balance-manager.enabled") } catch { case _: Exception => false }
+    val lbEnabled =
+      try config.getBoolean("htc.load-balance-manager.enabled")
+      catch { case _: Exception => false }
     if (lbEnabled) {
       try {
         val proxy = DistributedUtil.createSingletonProxy(
@@ -369,7 +356,9 @@ class CreatorLoadData(
         Some(loadBalanceProxy)
       } catch {
         case e: Exception =>
-          logWarn(s"Failed to create LoadBalanceManager proxy: ${e.getMessage}. Using hash-based shard routing.")
+          logWarn(
+            s"Failed to create LoadBalanceManager proxy: ${e.getMessage}. Using hash-based shard routing."
+          )
           loadBalanceProxy = null
           None
       }
@@ -388,7 +377,7 @@ class CreatorLoadData(
         createEntitiesFromChunk(chunk, event.batchId)
         advanceToNextChunk(event.batchId, chunk.size)
       case None =>
-        // Response already arrived just before the timeout fired — nothing to do
+      // Response already arrived just before the timeout fired — nothing to do
     }
   }
 
@@ -420,7 +409,8 @@ class CreatorLoadData(
   private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
     val classTypeForLog = {
       val bId = actorsBatches.getOrElse(event.entityId, "")
-      if (bId.nonEmpty) initializeData.get(bId).flatMap(_.get(event.entityId)).map(_.classType).getOrElse("unknown")
+      if (bId.nonEmpty)
+        initializeData.get(bId).flatMap(_.get(event.entityId)).map(_.classType).getOrElse("unknown")
       else if (pendingInitAck.contains(event.entityId)) pendingInitAck(event.entityId).classType
       else "not-found"
     }
@@ -466,15 +456,14 @@ class CreatorLoadData(
           case None =>
         }
       case None =>
-        logWarn(s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) NOT FOUND in actorsBatches! Known batches: ${actorsBatches.size}")
+        logWarn(
+          s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) NOT FOUND in actorsBatches! Known batches: ${actorsBatches.size}"
+        )
     }
   }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
     val init = pendingInitAck.remove(event.entityId)
-    // If this entity's classType is in the config-level forced registration list, auto-register
-    // it with the coordinator regardless of whether the actor itself sent NeedsPostLoadRegistrationEvent.
-    // This allows including actors without modifying their input data files.
     if (
       init.isDefined &&
       creatorProperties.postLoadCoordinator != null &&
@@ -490,7 +479,6 @@ class CreatorLoadData(
       removeOfInitializedAcknowledges(batchId, event.entityId)
       checkAndSendFinish(batchId)
     } else {
-      // Late ACK after actorsBatches was cleaned — search all batches for ghost entries
       initializedAcknowledges.foreach {
         case (bId, acks) =>
           if (acks.contains(event.entityId)) {
@@ -501,18 +489,21 @@ class CreatorLoadData(
     }
   }
 
-  /** Forwards NeedsPostLoadRegistrationEvent directly to PostLoadRegistrationCoordinator
-    * so it can accumulate registrations during the loading phase (before being triggered).
-    * The coordinator is the correct owner of this list, not LoadDataManager.
+  /** Forwards NeedsPostLoadRegistrationEvent directly to PostLoadRegistrationCoordinator so it can
+    * accumulate registrations during the loading phase (before being triggered). The coordinator is
+    * the correct owner of this list, not LoadDataManager.
     */
-  private def handleNeedsPostLoadRegistration(event: NeedsPostLoadRegistrationEvent): Unit = {
+  private def handleNeedsPostLoadRegistration(event: NeedsPostLoadRegistrationEvent): Unit =
     if (creatorProperties.postLoadCoordinator != null) {
-      logDebug(s"Forwarding NeedsPostLoadRegistration for ${event.entityId} (${event.classType}) to coordinator")
+      logDebug(
+        s"Forwarding NeedsPostLoadRegistration for ${event.entityId} (${event.classType}) to coordinator"
+      )
       creatorProperties.postLoadCoordinator ! event
     } else {
-      logWarn(s"No postLoadCoordinator set — dropping NeedsPostLoadRegistration for ${event.entityId}")
+      logWarn(
+        s"No postLoadCoordinator set — dropping NeedsPostLoadRegistration for ${event.entityId}"
+      )
     }
-  }
 
   private def checkAndSendFinish(batchId: String): Unit = {
     val hasPendingCreation = actorsToCreate.get(batchId).exists(_.nonEmpty)

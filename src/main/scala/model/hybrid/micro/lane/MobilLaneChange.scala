@@ -56,20 +56,16 @@ case class MobilLaneChange(
     laneRestrictions: Map[Int, String]
   ): LaneChangeDecision = {
 
-    // Check if lane is available
     if (!isLaneAvailable(vehicleState, targetLane, laneRestrictions)) {
       return LaneChangeDecision(false, None, "Lane restricted", 0.0)
     }
 
-    // Check if target lane exists
     if (targetLane < 0 || targetLane >= numberOfLanes) {
       return LaneChangeDecision(false, None, "Lane out of bounds", 0.0)
     }
 
-    // Safety criterion: Check if follower in target lane can brake safely
     val isSafe = followerInTargetLane match {
       case Some((_, gap, followerVel)) =>
-        // Follower must be able to decelerate safely
         val requiredDeceleration = calculateRequiredDeceleration(
           followerVel,
           vehicleState.velocity,
@@ -77,51 +73,42 @@ case class MobilLaneChange(
           vehicleState.vehicleLength
         )
         requiredDeceleration <= safeDeceleration
-      case None => true // No follower, safe
+      case None => true
     }
 
     if (!isSafe) {
       return LaneChangeDecision(false, None, "Unsafe for follower", 0.0)
     }
 
-    // Incentive criterion: Calculate acceleration advantages
-
-    // 1. Current acceleration in current lane
     val currentAccel = calculateAcceleration(
       vehicleState,
       leaderInCurrentLane
     )
 
-    // 2. Prospective acceleration in target lane
     val targetAccel = calculateAcceleration(
       vehicleState,
       leaderInTargetLane
     )
 
-    // 3. Current follower's acceleration in current lane
     val followerCurrentAccel = followerInCurrentLane.map {
       case (_, gap, followerVel) =>
         calculateFollowerAcceleration(followerVel, vehicleState.velocity, gap)
     }.getOrElse(0.0)
 
-    // 4. Current follower's new acceleration after we change
     val followerNewAccel = followerInCurrentLane.map {
       case (_, gap, followerVel) =>
         leaderInCurrentLane match {
           case Some((_, leaderGap, leaderVel)) =>
-            // Follower will now follow our current leader
             calculateFollowerAcceleration(
               followerVel,
               leaderVel,
               gap + leaderGap + vehicleState.vehicleLength
             )
           case None =>
-            // Follower will have free road
-            0.5 // Assume moderate positive acceleration
+            0.5
         }
     }.getOrElse(0.0)
 
-    // 5. Target lane follower's current acceleration
     val targetFollowerCurrentAccel = followerInTargetLane.map {
       case (_, gap, followerVel) =>
         leaderInTargetLane match {
@@ -131,14 +118,11 @@ case class MobilLaneChange(
         }
     }.getOrElse(0.0)
 
-    // 6. Target lane follower's new acceleration after we change
     val targetFollowerNewAccel = followerInTargetLane.map {
       case (_, gap, followerVel) =>
         calculateFollowerAcceleration(followerVel, vehicleState.velocity, gap)
     }.getOrElse(0.0)
 
-    // MOBIL incentive criterion:
-    // a_new - a_current + p * (Δa_current_follower + Δa_target_follower) + a_bias > a_th
     val incentive = (targetAccel - currentAccel) +
       politeness * ((followerNewAccel - followerCurrentAccel) + (targetFollowerNewAccel - targetFollowerCurrentAccel)) +
       calculateBias(currentLane, targetLane)
@@ -192,14 +176,11 @@ case class MobilLaneChange(
     leaderVel: Double,
     gap: Double
   ): Double = {
-    // Simplified: assume follower wants to maintain safe gap
-    val desiredGap = 2.0 + followerVel * 1.0 // minGap + reactionTime * velocity
+    val desiredGap = 2.0 + followerVel * 1.0
     val gapError = gap - desiredGap
 
-    // Proportional controller
     val accel = 0.5 * gapError + 0.3 * (leaderVel - followerVel)
 
-    // Constrain to reasonable limits
     max(-4.0, math.min(2.0, accel))
   }
 
@@ -214,9 +195,8 @@ case class MobilLaneChange(
     val effectiveGap = max(0.1, gap - leaderLength)
     val relativeVel = followerVel - leaderVel
 
-    if (relativeVel <= 0) return 0.0 // Follower is slower, no deceleration needed
+    if (relativeVel <= 0) return 0.0
 
-    // Required deceleration: v² = 2 * a * d
     val requiredDecel = (relativeVel * relativeVel) / (2.0 * effectiveGap)
     requiredDecel
   }
@@ -225,9 +205,9 @@ case class MobilLaneChange(
     */
   private def calculateBias(currentLane: Int, targetLane: Int): Double =
     if (targetLane < currentLane) {
-      biasToRight // Incentive to move right
+      biasToRight
     } else {
-      0.0 // No bias for left moves
+      0.0
     }
 
   override def isLaneAvailable(
@@ -236,7 +216,7 @@ case class MobilLaneChange(
     laneRestrictions: Map[Int, String]
   ): Boolean =
     laneRestrictions.get(targetLane) match {
-      case Some("bus_lane")  => false // Would need vehicle type check
+      case Some("bus_lane")  => false
       case Some("bike_lane") => false
       case Some("emergency") => false
       case _                 => true

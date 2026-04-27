@@ -25,6 +25,18 @@ import org.htc.protobuf.core.entity.actor.Identify
 trait PrivateVehicle[T <: MovableState] {
   self: Movable[T] =>
 
+  /** True once this vehicle has ever been activated by a Person actor. Once set, it is NEVER
+    * cleared — even between trips. A person-centric vehicle must NOT selfDestruct() after
+    * completing a trip; it returns to Parked and waits for the next StartTrip from its owner
+    * Person.
+    */
+  private var personCentric: Boolean = false
+
+  /** Whether this vehicle is managed by a Person actor. Determines lifecycle: person-centric →
+    * survive between trips; standalone → selfDestruct on finish.
+    */
+  protected def isPersonCentric: Boolean = personCentric
+
   /** Owner person reference with id and classType (set when vehicle is activated).
     */
   private var ownerPersonRef: Option[Identify] = None
@@ -73,9 +85,9 @@ trait PrivateVehicle[T <: MovableState] {
   protected def logVehicleWarn(message: String): Unit
   protected def logVehicleDebug(message: String): Unit
 
-  /** Register this vehicle with the TimeManager pool for the first time.
-    * Must use scheduleEvent (TM pool router) instead of onFinishSpontaneous
-    * because passive vehicles (scheduleOnTimeManager=false) have null currentTimeManager.
+  /** Register this vehicle with the TimeManager pool for the first time. Must use scheduleEvent (TM
+    * pool router) instead of onFinishSpontaneous because passive vehicles
+    * (scheduleOnTimeManager=false) have null currentTimeManager.
     */
   protected def registerOnTimeManager(tick: Tick): Unit
 
@@ -89,12 +101,17 @@ trait PrivateVehicle[T <: MovableState] {
     logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
 
+  /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
+    * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
+    * person-centric vehicles that serve multiple trips without being destroyed.
+    */
+  protected def resetTripState(): Unit = {}
+
   /** Handle StartTrip message from Person.
     *
     * Activates the vehicle, configures it with driver attributes, and begins the trip.
     */
   protected def handleStartTrip(event: ActorInteractionEvent, data: StartTripData): Unit =
-    // Guard: wrap all state access in try-catch, defer if not ready
     try {
       val status = getVehicleStatus
       if (status != Parked) {
@@ -104,15 +121,18 @@ trait PrivateVehicle[T <: MovableState] {
         return
       }
 
-          logVehicleDebug(
+      personCentric = true
+
+      resetTripState()
+
+      logVehicleDebug(
         s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}"
       )
 
-      // Store owner reference (complete Identify with id + classType)
       ownerPersonRef = Some(
         Identify(
           id = data.personId,
-          classType = event.actorClassType // Person's shard/classType from event sender
+          classType = event.actorClassType
         )
       )
       tripOrigin = Some(data.origin)
@@ -121,17 +141,10 @@ trait PrivateVehicle[T <: MovableState] {
       tripStartTick = Some(data.startTick)
       tripStartDistance = getCurrentDistance
 
-      // Configure vehicle with driver attributes
       applyDriverAttributes(driverAttributes)
 
-      // Activate vehicle (transition from Parked to Start)
       setVehicleStatus(Start)
 
-      // Register with TimeManager for the first time.
-      // Use registerOnTimeManager (routed via TM pool) instead of scheduleNextTick /
-      // onFinishSpontaneous, because the latter sends to currentTimeManager which
-      // is null for passive vehicles that never received a SpontaneousEvent
-      // (i.e., those created with scheduleOnTimeManager = false).
       registerOnTimeManager(getActorCurrentTick + 1)
     } catch {
       case _: NullPointerException =>
@@ -158,14 +171,12 @@ trait PrivateVehicle[T <: MovableState] {
   /** Handle ParkVehicle message (optional explicit parking).
     */
   protected def handleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = {
-        logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
+    logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
 
-    // Report trip completion (if trip was active)
     if (getVehicleStatus != Parked) {
       reportTripCompletion("parked_by_person", data.parkingNodeId)
     }
 
-    // Deactivate vehicle
     deactivateVehicle()
   }
 
@@ -181,10 +192,9 @@ trait PrivateVehicle[T <: MovableState] {
           .getOrElse(0L)
         val distanceTraveled = getCurrentDistance - tripStartDistance
 
-        // Send TripCompleted message to Person using correct shard
         sendVehicleMessage(
           entityId = personRef.id,
-          shardId = personRef.classType, // Use Person's actual shard (from Identify)
+          shardId = personRef.classType,
           data = TripCompletedData(
             vehicleId = getActorEntityId,
             personId = personRef.id,
@@ -198,7 +208,7 @@ trait PrivateVehicle[T <: MovableState] {
           actorType = LoadBalancedDistributed
         )
 
-            logVehicleDebug(
+        logVehicleDebug(
           s"${getActorEntityId} reported trip completion to ${personRef.id}: ${distanceTraveled}m in $travelTime ticks"
         )
     }
@@ -213,11 +223,9 @@ trait PrivateVehicle[T <: MovableState] {
     tripStartTick = None
     tripStartDistance = 0.0
 
-        logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
+    logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
 
-    // Unregister from TimeManager (vehicle is now passive)
-    // This prevents vehicle from receiving spontaneous events
-    scheduleNextTick(None) // No next tick scheduled
+    scheduleNextTick(None)
   }
 
   /** Apply driver attributes to vehicle physics parameters.
@@ -230,12 +238,6 @@ trait PrivateVehicle[T <: MovableState] {
       s"Applying driver attributes: aggressiveness=${attrs.aggressiveness}, " +
         s"maxSpeedFactor=${attrs.maxSpeedFactor}, reactionTime=${attrs.reactionTime}"
     )
-
-    // Subclasses override to apply to their specific micro state
-    // For example:
-    // - Update microState.desiredVelocity *= attrs.maxSpeedFactor
-    // - Update microState.reactionTime = attrs.reactionTime
-    // - Update microState.minGap *= attrs.minGapFactor
 
   /** Override onFinish to report trip completion.
     */
@@ -255,10 +257,10 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def isParked: Boolean = getVehicleStatus == Parked
 
-  /** Private vehicles should only re-register on the TM after migration when they are
-    * NOT parked.  When parked they are waiting passively for a StartTrip message from
-    * Person; re-registering would fire a spurious spontaneous tick which is immediately
-    * discarded by the Parked guard in actSpontaneous — wasting a TM slot.
+  /** Private vehicles should only re-register on the TM after migration when they are NOT parked.
+    * When parked they are waiting passively for a StartTrip message from Person; re-registering
+    * would fire a spurious spontaneous tick which is immediately discarded by the Parked guard in
+    * actSpontaneous — wasting a TM slot.
     */
   override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean = !isParked
 
@@ -278,6 +280,6 @@ trait PrivateVehicle[T <: MovableState] {
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
       case _ =>
-        false // Not a private vehicle event
+        false
     }
 }

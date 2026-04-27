@@ -1,15 +1,12 @@
 package org.interscity.htc
 package model.mobility.entity.state
 
-import core.entity.state.BaseState
-
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Subway
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.Start
-import org.interscity.htc.model.mobility.entity.state.model.{ RoutePathItem, SubwayNodeState }
+import org.interscity.htc.model.mobility.entity.state.model.SubwayNodeState
 
 import scala.collection.mutable
 

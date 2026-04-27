@@ -5,7 +5,6 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.model.hybrid.actor.Movable
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
@@ -18,7 +17,6 @@ import org.interscity.htc.model.hybrid.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
-import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -85,7 +83,9 @@ class Bus(
     */
   private var signalWaitUntilTick: Option[Tick] = None
 
-  /** Number of passengers asked to unload at current stop. Used to track when all responses arrived. */
+  /** Number of passengers asked to unload at current stop. Used to track when all responses
+    * arrived.
+    */
   private var expectedUnloadResponses: Int = 0
 
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
@@ -115,7 +115,6 @@ class Bus(
       return
     }
 
-    // Safety net: Force-finish vehicles that exceed simulation end time (only when extension is disabled)
     if (
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
@@ -132,12 +131,13 @@ class Bus(
 
     state.status match {
       case Start =>
-        // Restore route from storedBestRoute if movableBestRoute was lost during JSON roundtrip.
-        // This can happen because movableBestRoute lives in the parent abstract class and may not
-        // survive Jackson setter-injection deserialization with full generic type information.
         if (state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
-          logDebug(s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)")
-          state.movableBestRoute = state.storedBestRoute.map(lst => scala.collection.mutable.Queue(lst: _*))
+          logDebug(
+            s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)"
+          )
+          state.movableBestRoute = state.storedBestRoute.map(
+            lst => scala.collection.mutable.Queue(lst: _*)
+          )
           state.storedBestRoute = None
         }
         report(
@@ -156,7 +156,6 @@ class Bus(
         enterLink()
 
       case Ready =>
-        // Check if arrived-at node has a bus stop — if so, handle passengers before entering next link
         val nodeId = currentStopNode.orNull
         if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
           requestUnloadPeopleData()
@@ -167,14 +166,11 @@ class Bus(
 
       case Moving =>
         if (state.isMicroMode) {
-          // MICRO mode: check position and handle bus stops
           var shouldLeave = false
           state.microState.foreach {
             micro =>
-              // Check if at bus stop
               checkBusStopAtPosition(micro.positionInLink)
 
-              // Check if reached end of link
               if (micro.positionInLink >= getCurrentLinkLength) {
                 shouldLeave = true
               }
@@ -187,10 +183,8 @@ class Bus(
             onFinishSpontaneous(Some(currentTick + 1))
           }
         } else {
-          // MESO mode: only request signal state after travel time has elapsed
           mesoExitTick match {
             case Some(exitTick) if currentTick < exitTick =>
-              // Travel time hasn't elapsed yet, wait
               onFinishSpontaneous(Some(exitTick))
             case _ =>
               mesoExitTick = None
@@ -199,8 +193,6 @@ class Bus(
         }
 
       case WaitingSignal =>
-        // Gate on signalWaitUntilTick to prevent stale poll ticks from
-        // triggering premature leavingLink before the red signal phase ends.
         signalWaitUntilTick match {
           case Some(waitTick) if currentTick < waitTick =>
             onFinishSpontaneous(Some(waitTick))
@@ -210,12 +202,10 @@ class Bus(
         }
 
       case WaitingLoadPassenger =>
-        // Load response received (or loading delay elapsed) — continue to next link
         currentStopNode = None
         enterLink()
 
       case WaitingUnloadPassenger =>
-        // Unload delay elapsed — now load new passengers
         requestLoadPassenger()
 
       case _ =>
@@ -263,7 +253,6 @@ class Bus(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                  // Schedule to wait for signal response
                   onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
                   logWarn("No next link available")
@@ -288,31 +277,29 @@ class Bus(
     currentLinkId = Some(data.linkId)
     linkEntryTick = Some(currentTick)
 
-    // Initialize microscopic state with bus parameters
     val initialMicroState = MicroBusState(
       positionInLink = 0.0,
-      velocity = state.microState.map(_.velocity).getOrElse(data.speedLimit * 0.7), // Buses slower
+      velocity = state.microState.map(_.velocity).getOrElse(data.speedLimit * 0.7),
       acceleration = 0.0,
       currentLane = data.assignedLane,
       leaderVehicle = None,
       gapToLeader = data.linkLength,
       leaderVelocity = data.speedLimit,
-      maxAcceleration = 1.2, // Bus-specific (slower than car)
+      maxAcceleration = 1.2,
       maxDeceleration = 3.5,
-      minGap = 3.0, // Larger gap
-      desiredVelocity = math.min(data.speedLimit, 11.11), // 40 km/h max for bus
-      reactionTime = 1.5, // Longer reaction time
-      vehicleLength = 12.0, // Bus length
+      minGap = 3.0,
+      desiredVelocity = math.min(data.speedLimit, 11.11),
+      reactionTime = 1.5,
+      vehicleLength = 12.0,
       capacity = state.capacity,
       currentPassengers = state.people.size,
       nextBusStop = findNextBusStop(),
-      busLaneRestricted = true, // Prefer bus lanes
-      desiredLane = if (data.assignedLane == 2) Some(2) else None, // Prefer lane 2 if bus lane
+      busLaneRestricted = true,
+      desiredLane = if (data.assignedLane == 2) Some(2) else None,
       laneChangeProgress = 0.0,
-      canChangeLane = false // Buses typically stay in lane
+      canChangeLane = false
     )
 
-    // Activate MICRO mode
     state.activateMicroMode(initialMicroState)
     state.status = Moving
     sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
@@ -325,7 +312,6 @@ class Bus(
       sumoDepartPos = 0.0
     }
 
-    // Report micro enter
     report(
       data = Map(
         "event_type" -> "enter_micro_link",
@@ -351,7 +337,6 @@ class Bus(
   private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
     state.microState.foreach {
       micro =>
-        // Update microscopic state
         val updatedMicro = micro.copy(
           positionInLink = data.position,
           velocity = data.velocity,
@@ -360,7 +345,7 @@ class Bus(
           leaderVehicle = data.leaderVehicle,
           gapToLeader = data.gapToLeader,
           leaderVelocity = data.leaderVelocity,
-          currentPassengers = state.people.size // Update passenger count
+          currentPassengers = state.people.size
         )
 
         state.updateMicroState(updatedMicro)
@@ -371,7 +356,6 @@ class Bus(
           s"Bus micro update: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}"
         )
 
-        // Check for bus stop proximity
         checkBusStopAtPosition(data.position)
     }
 
@@ -392,7 +376,6 @@ class Bus(
     sumoArrivalPos = data.finalPosition
     updateHaltingState(data.finalVelocity, 0.0)
 
-    // Report micro leave
     report(
       data = Map(
         "event_type" -> "leave_micro_link",
@@ -410,7 +393,6 @@ class Bus(
       label = "leave_micro_link"
     )
 
-    // Deactivate MICRO mode
     state.deactivateMicroMode()
     currentLinkId = None
     linkEntryTick = None
@@ -445,7 +427,6 @@ class Bus(
       sumoDepartPos = 0.0
     }
 
-    // Report meso enter
     report(
       data = Map(
         "event_type" -> "enter_link",
@@ -479,7 +460,6 @@ class Bus(
     updateHaltingState(0.0, 0.0)
     mesoExitTick = None
 
-    // Report meso leave
     report(
       data = Map(
         "event_type" -> "leave_link",
@@ -505,7 +485,7 @@ class Bus(
 
   /** Handle passenger loading.
     */
-  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit = {
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit =
     if (data.people.nonEmpty) {
       val nextTickTime = currentTick + loadPersonTime(
         numberOfPorts = state.numberOfPorts,
@@ -516,7 +496,6 @@ class Bus(
       for (person <- data.people)
         state.people.put(person.id, person)
 
-      // Report passenger loading
       report(
         data = Map(
           "event_type" -> "bus_load_passengers",
@@ -529,15 +508,12 @@ class Bus(
         label = "bus_load_passengers"
       )
 
-      // Schedule to resume after loading delay
       state.status = WaitingLoadPassenger
       scheduleEvent(nextTickTime)
     } else {
-      // No passengers waiting — schedule to enter next link
       state.status = WaitingLoadPassenger
       scheduleEvent(currentTick + 1)
     }
-  }
 
   /** Handle passenger unloading.
     */
@@ -547,7 +523,6 @@ class Bus(
   ): Unit = {
     state.countUnloadReceived += 1
 
-    // Remove alighting passenger from bus
     if (data.isArrival) {
       state.people.remove(event.actorRefId)
       state.countUnloadPassenger += 1
@@ -566,7 +541,6 @@ class Bus(
         )
         sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
 
-        // Report passenger unloading
         report(
           data = Map(
             "event_type" -> "bus_unload_passengers",
@@ -578,11 +552,9 @@ class Bus(
           label = "bus_unload_passengers"
         )
 
-        // After unload delay, proceed to load new passengers
         state.status = WaitingUnloadPassenger
         scheduleEvent(nextTickTime)
       } else {
-        // Nobody alighted — proceed to load at next tick
         state.status = WaitingUnloadPassenger
         scheduleEvent(currentTick + 1)
       }
@@ -592,7 +564,6 @@ class Bus(
   /** Handle signal state.
     */
   private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
-    // Guard against stale/duplicate SignalStateData responses caused by the retry mechanism.
     if (state.status != WaitingSignalState) {
       logDebug(
         s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
@@ -606,7 +577,6 @@ class Bus(
       if (waitTicks > 0) {
         updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
       }
-      // Report signal waiting event
       report(
         data = Map(
           "event_type" -> "signal_wait",
@@ -629,7 +599,6 @@ class Bus(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
-    // Save the arrived-at node before super.leavingLink() clears movableCurrentPath
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
@@ -657,8 +626,6 @@ class Bus(
       micro =>
         micro.nextBusStop.foreach {
           stopId =>
-            // Check if close to bus stop (within 10m)
-            // This is simplified - actual implementation would query bus stop positions
             log.debug(s"Bus at position $position, next stop: $stopId")
         }
     }
@@ -666,22 +633,22 @@ class Bus(
   /** Find next bus stop on route.
     */
   private def findNextBusStop(): Option[String] =
-    // Simplified - would actually query route for next bus stop
     state.busStops.headOption.map(_._1)
 
   /** Find bus stop at a given node.
-    * @return Some(busStopId) if a bus stop is mapped to this node, None otherwise.
+    * @return
+    *   Some(busStopId) if a bus stop is mapped to this node, None otherwise.
     */
   private def findBusStopAtNode(nodeId: String): Option[String] =
-    state.busStops.find { case (_, stopNodeId) => stopNodeId == nodeId }.map(_._1)
+    state.busStops.find {
+      case (_, stopNodeId) => stopNodeId == nodeId
+    }.map(_._1)
 
-  /** Request passengers to unload at the current node.
-    * Sends BusRequestUnloadPassengerData to each passenger on board.
-    * If no passengers, proceeds directly to loading.
+  /** Request passengers to unload at the current node. Sends BusRequestUnloadPassengerData to each
+    * passenger on board. If no passengers, proceeds directly to loading.
     */
   private def requestUnloadPeopleData(): Unit = {
     if (state.people.isEmpty) {
-      // No passengers to unload — go straight to loading
       requestLoadPassenger()
       return
     }
@@ -692,25 +659,23 @@ class Bus(
     state.countUnloadPassenger = 0
 
     val nodeId = currentStopNode.getOrElse("unknown")
-    state.people.foreach { case (_, person) =>
-      sendMessageTo(
-        entityId = person.id,
-        shardId = person.classType,
-        data = BusRequestUnloadPassengerData(
-          nodeId = nodeId,
-          nodeRef = self
-        ),
-        eventType = "RequestUnloadPassenger"
-      )
+    state.people.foreach {
+      case (_, person) =>
+        sendMessageTo(
+          entityId = person.id,
+          shardId = person.classType,
+          data = BusRequestUnloadPassengerData(
+            nodeId = nodeId,
+            nodeRef = self
+          ),
+          eventType = "RequestUnloadPassenger"
+        )
     }
-    // Unregister from TM while waiting for passenger responses.
-    // Will be re-registered via scheduleEvent when all responses arrive.
     onFinishSpontaneous(None)
   }
 
-  /** Request passengers from bus stop at current node.
-    * Sends BusRequestPassengerData to the BusStop actor.
-    * If no bus stop is found, proceeds to enter next link.
+  /** Request passengers from bus stop at current node. Sends BusRequestPassengerData to the BusStop
+    * actor. If no bus stop is found, proceeds to enter next link.
     */
   private def requestLoadPassenger(): Unit = {
     val nodeId = currentStopNode.getOrElse("unknown")
@@ -726,11 +691,8 @@ class Bus(
           ),
           eventType = "RequestPassenger"
         )
-        // Unregister from TM while waiting for BusStop response.
-        // Will be re-registered via scheduleEvent in handleBusLoadPeople.
         onFinishSpontaneous(None)
       case None =>
-        // No bus stop at this node — just continue
         currentStopNode = None
         state.status = Ready
         enterLink()

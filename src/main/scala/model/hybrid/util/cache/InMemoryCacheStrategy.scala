@@ -24,18 +24,16 @@ import scala.jdk.CollectionConverters._
   *   - When cluster synchronization not needed
   *
   * Trade-offs:
-  *   - ✅ Extremely fast reads (in-memory)
-  *   - ✅ No external dependencies
-  *   - ✅ Simple implementation
-  *   - ❌ No cluster synchronization (each node has own cache)
-  *   - ❌ Higher memory usage per node
+  *   - Extremely fast reads (in-memory)
+  *   - No external dependencies
+  *   - Simple implementation
+  *   - No cluster synchronization (each node has own cache)
+  *   - Higher memory usage per node
   */
 class InMemoryCacheStrategy extends WeightCacheStrategy {
 
-  // Local cache for ultra-fast reads
   private val localCache = new ConcurrentHashMap[String, (DynamicLinkCost, Long)]()
 
-  // Daemon scheduler for TTL expiration - no ActorSystem needed
   private val scheduler = Executors.newSingleThreadScheduledExecutor {
     r =>
       val t = new Thread(r, "inmemory-cache-expiry")
@@ -55,11 +53,9 @@ class InMemoryCacheStrategy extends WeightCacheStrategy {
 
   override def publishCost(cost: DynamicLinkCost, ttlSeconds: Int): Try[Unit] =
     Try {
-      // Update local cache immediately (fast)
       val expiryTime = System.currentTimeMillis() + (ttlSeconds * 1000)
       localCache.put(cost.linkId, (cost, expiryTime))
 
-      // Schedule removal after TTL
       scheduleExpiration(cost.linkId, ttlSeconds)
     } match {
       case Success(_) => Success(())
@@ -71,13 +67,11 @@ class InMemoryCacheStrategy extends WeightCacheStrategy {
     }
 
   override def getCost(linkId: String): Option[DynamicLinkCost] =
-    // Ultra-fast local read (no network, no serialization)
     Option(localCache.get(linkId)).flatMap {
       case (cost, expiryTime) =>
         if (System.currentTimeMillis() < expiryTime) {
           Some(cost)
         } else {
-          // Expired, remove it
           localCache.remove(linkId)
           None
         }
@@ -90,7 +84,6 @@ class InMemoryCacheStrategy extends WeightCacheStrategy {
     }
 
   override def getBatchWeights(linkWeights: Map[String, Double]): Map[String, Double] =
-    // Extremely fast batch operation (all local)
     linkWeights.map {
       case (linkId, staticWeight) =>
         linkId -> getWeight(linkId, staticWeight)

@@ -5,8 +5,8 @@ import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
 
 /** A typed reference to another actor that this actor needs to communicate with.
   *
-  * Replaces the older [[Dependency]] / protobuf Dependency concept with a richer type that
-  * carries the assigned shard bucket so that cross-shard routing works correctly even when the
+  * Replaces the older [[Dependency]] / protobuf Dependency concept with a richer type that carries
+  * the assigned shard bucket so that cross-shard routing works correctly even when the
   * LoadBalanceManager assigns non-hash-based buckets.
   *
   * @param entityId

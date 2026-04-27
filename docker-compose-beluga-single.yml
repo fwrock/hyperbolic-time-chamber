@@ -94,7 +94,11 @@ services:
       HTC_SCENARIO_NAME: toulouse_100_pct_meso
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json
-      
+
+
+      HTC_API_ENABLED: "false"
+      HTC_API_PORT: 9804
+
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
       # ~1500+ CreateActor msgs per tick window, causing shard drops.
@@ -142,7 +146,8 @@ services:
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128

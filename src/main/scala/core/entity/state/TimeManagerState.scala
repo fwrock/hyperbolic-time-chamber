@@ -25,20 +25,17 @@ case class TimeManagerState(
   var isPaused: Boolean = false,
   var isStopped: Boolean = false,
   var lookaheadWindow: Tick = 1,
-  // Window-based execution
   var windowSize: Tick = 1,
   var currentWindowStart: Tick = 0,
   var currentWindowEnd: Tick = 0,
   var windowExecutionEnabled: Boolean = false,
-  // Throughput metrics
-  var simulationStartWallTime: Long = 0, // Wall clock when simulation started
+  var simulationStartWallTime: Long = 0,
   var lastMetricsTick: Tick = 0,
   var lastMetricsTime: Long = 0,
   var ticksProcessedSinceLastMetric: Long = 0,
-  // Diagnostic counters
   var totalSpontaneousEventsSent: Long = 0,
   var totalActorWakeups: Long = 0,
-  var idleTicksCount: Long = 0, // Ticks with no scheduled actors
+  var idleTicksCount: Long = 0,
   registeredActors: mutable.Set[String] = mutable.Set[String](),
   scheduledActors: mutable.Map[Tick, ScheduledActors] = mutable.Map[Tick, ScheduledActors](),
   scheduledTicksOnFinish: mutable.Set[Tick] = mutable.Set[Tick](),

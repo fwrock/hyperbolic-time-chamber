@@ -26,18 +26,17 @@ import org.htc.protobuf.core.entity.actor.Identify
   * @param completedTrips
   *   Number of trips completed today
   * @param ptAlightingNodeId
-  *   Node ID where Person should alight from current PT vehicle.
-  *   Set when boarding a bus/subway, cleared on alighting.
+  *   Node ID where Person should alight from current PT vehicle. Set when boarding a bus/subway,
+  *   cleared on alighting.
   * @param ptLine
-  *   Current PT line being used (e.g. "Bus Line 1").
-  *   Set when boarding, cleared on alighting.
+  *   Current PT line being used (e.g. "Bus Line 1"). Set when boarding, cleared on alighting.
   */
 case class PersonState(
   startTick: Tick = 0L,
   scheduleOnTimeManager: Boolean = true,
   dailySchedule: List[Activity] = List.empty,
   currentActivityIndex: Int = 0,
-  ownedVehicles: Map[String, Identify] = Map.empty, // mode -> Identify(id, classType)
+  ownedVehicles: Map[String, Identify] = Map.empty,
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   totalDistanceTraveled: Double = 0.0,
@@ -45,9 +44,9 @@ case class PersonState(
   ptAlightingNodeId: Option[String] = None,
   ptLine: Option[String] = None
 ) extends BaseState(
-  startTick = startTick,
-  scheduleOnTimeManager = scheduleOnTimeManager
-) {
+      startTick = startTick,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    ) {
 
   /** Get current activity.
     */
@@ -128,9 +127,9 @@ case class Activity(
   * @param vehicle
   *   Complete vehicle reference with id and classType (for private modes)
   * @param instant
-  *   If true, skip routing — origin and destination are the same node or the
-  *   trip should be treated as zero-time (e.g. already-at-destination activities
-  *   after PT stop snapping collapsed two consecutive stops to the same road node)
+  *   If true, skip routing — origin and destination are the same node or the trip should be treated
+  *   as zero-time (e.g. already-at-destination activities after PT stop snapping collapsed two
+  *   consecutive stops to the same road node)
   * @param driverAttributes
   *   Attributes affecting driving behavior
   * @param line
@@ -139,22 +138,20 @@ case class Activity(
   *   Actor ID of the BusStop/SubwayStation where Person boards (e.g. "htcaid:busstop;busstop_123").
   *   Required for PT modes.
   * @param boardingStopClassType
-  *   Class type of the boarding stop actor (e.g. "hybrid.actor.BusStop").
-  *   Required for PT modes.
+  *   Class type of the boarding stop actor (e.g. "hybrid.actor.BusStop"). Required for PT modes.
   * @param alightingNodeId
-  *   Node ID where Person should alight (destination node for this PT leg).
-  *   Required for PT modes. The Person responds isArrival=true to unload
-  *   requests at this node.
+  *   Node ID where Person should alight (destination node for this PT leg). Required for PT modes.
+  *   The Person responds isArrival=true to unload requests at this node.
   */
 case class ArrivalLogistics(
   mode: String, // "car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway"
-  vehicle: Option[Identify] = None,          // Required for private vehicles (contains id + classType)
-  instant: Boolean = false,                  // skip routing when origin == destination
+  vehicle: Option[Identify] = None,
+  instant: Boolean = false,
   driverAttributes: DriverAttributes = DriverAttributes(),
-  line: Option[String] = None,               // PT line label
-  boardingStopId: Option[String] = None,     // BusStop/SubwayStation actor ID
-  boardingStopClassType: Option[String] = None, // BusStop/SubwayStation class type
-  alightingNodeId: Option[String] = None     // Node where Person alights
+  line: Option[String] = None,
+  boardingStopId: Option[String] = None,
+  boardingStopClassType: Option[String] = None,
+  alightingNodeId: Option[String] = None
 )
 
 /** Driver attributes affecting vehicle behavior.

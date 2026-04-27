@@ -26,7 +26,6 @@ enum EventTypeEnum:
     ReceiveLeaveNodeInfo,
     TrafficSignalChangeStatus,
     RequestSignalState,
-    // Event-driven events (new)
     RequestEnterLink,
     EnterLinkConfirm,
     ArriveAtNode,

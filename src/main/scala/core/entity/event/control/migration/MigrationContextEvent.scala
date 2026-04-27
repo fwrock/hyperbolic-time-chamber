@@ -12,9 +12,9 @@ import scala.collection.mutable
 
 /** Sent by the SnapshotManager to a restored actor in response to [[QueryMigrationEvent]].
   *
-  * Carries the full initialization context (timeManagers, reporters) AND the migration
-  * snapshot so the entity can restore its domain state and simulation metadata in a single
-  * message. Also carries batch tracking fields so the entity can ACK directly to the LBM.
+  * Carries the full initialization context (timeManagers, reporters) AND the migration snapshot so
+  * the entity can restore its domain state and simulation metadata in a single message. Also
+  * carries batch tracking fields so the entity can ACK directly to the LBM.
   *
   * @param timeManagers
   *   Map of time manager type → ActorRef (cluster-transparent)

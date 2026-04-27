@@ -73,7 +73,7 @@ services:
         reservations:
           memory: 4G
   node1:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -142,7 +142,8 @@ services:
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -209,7 +210,7 @@ services:
           memory: 64G
 
   node2:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -271,7 +272,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -338,7 +340,7 @@ services:
           memory: 64G
 
   node3:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -400,7 +402,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -467,7 +470,7 @@ services:
           memory: 64G
 
   node4:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -529,7 +532,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -596,7 +600,7 @@ services:
           memory: 64G
 
   node5:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -658,7 +662,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -725,7 +730,7 @@ services:
           memory: 64G
 
   node6:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -787,7 +792,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -854,7 +860,7 @@ services:
           memory: 64G
 
   node7:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -916,7 +922,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
@@ -983,7 +990,7 @@ services:
           memory: 64G
 
   node8:
-    image: uxhabam/hyperbolic-time-chamber:3.3.26-beluga
+    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
     command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -1045,7 +1052,8 @@ services:
         -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
-      # Report Manager Configuration  
+      # Report Manager Configuration
+      HTC_REPORT_ENABLED: "true"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128

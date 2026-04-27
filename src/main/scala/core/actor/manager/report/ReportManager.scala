@@ -6,12 +6,12 @@ import core.entity.event.control.report.RegisterReportersEvent
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum
 import core.util.ManagerConstantsUtil
-import core.util.ManagerConstantsUtil.{POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME}
+import core.util.ManagerConstantsUtil.{ POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME }
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 
 import java.time.LocalDateTime
 import scala.collection.mutable
@@ -37,6 +37,15 @@ class ReportManager(
   }
 
   private def createReporters(): Unit = {
+    val reportingEnabled =
+      try config.getBoolean("htc.report-manager.enabled")
+      catch { case _: Exception => true }
+
+    if (!reportingEnabled) {
+      logInfo("Reporting is disabled (htc.report-manager.enabled = false). No reporters created.")
+      return
+    }
+
     val enabledStrategies = Some(
       config.getStringList("htc.report-manager.enabled-strategies").toArray.toList.map(_.toString)
     ).getOrElse(List("csv"))
@@ -54,10 +63,6 @@ class ReportManager(
     val maxInstancesPerNode = Some(
       config.getInt(s"htc.report-manager.$reportType.number-of-instances-per-node")
     ).getOrElse(8)
-    // Use io-dispatcher for report writers: they perform blocking file I/O
-    // (FileWriter/BufferedWriter). Without this, 256 reporter actors share the
-    // default-dispatcher ForkJoin pool (16 threads) with simulation actors,
-    // causing thread starvation under load.
     val reporterProps = Props(reportType.clazz, getSelfProxy, startRealTime)
       .withDispatcher("pekko.actor.io-dispatcher")
 

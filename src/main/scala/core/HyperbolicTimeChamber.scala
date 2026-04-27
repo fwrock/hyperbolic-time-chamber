@@ -10,12 +10,13 @@ import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSing
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap
 import org.interscity.htc.core.actor.manager.SimulationManager
+import org.interscity.htc.core.api.ConfigApiServer
 import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
-/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter.
-  * Also logs message type for diagnostics when dead letters are persistent.
+/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter. Also logs
+  * message type for diagnostics when dead letters are persistent.
   */
 private class DeadLetterListener extends Actor {
   import org.slf4j.LoggerFactory
@@ -36,29 +37,28 @@ private class DeadLetterListener extends Actor {
 object HyperbolicTimeChamber {
 
   def start(): Unit = {
-    // Start Prometheus metrics server before actor system
     val metricsPort = sys.env.get("HTC_METRICS_PORT").flatMap(_.toIntOption).getOrElse(9001)
     core.metrics.MetricsServer.start(metricsPort)
 
     val system = ActorSystem("hyperbolic-time-chamber")
 
-    // Subscribe to dead letters for Prometheus monitoring
+    ConfigApiServer.start(system)
+
     val deadLetterListener = system.actorOf(Props(new DeadLetterListener), "dead-letter-listener")
     system.eventStream.subscribe(deadLetterListener, classOf[DeadLetter])
 
-    // 🎲 Inicializar RandomSeedManager com configuração da simulação
     try {
       val simulationConfig = SimulationUtil.loadSimulationConfig()
       actor.manager.RandomSeedManager.initialize(simulationConfig)
       system.log.info(
-        s"🎲 RandomSeedManager inicializado com seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}"
+        s"RandomSeedManager initialized using seed: ${simulationConfig.randomSeed.getOrElse("timestamp-based")}"
       )
     } catch {
       case e: Exception =>
         system.log.warning(
-          s"⚠️ Não foi possível carregar configuração da simulação para RandomSeedManager: ${e.getMessage}"
+          s"It was not possible load random seed configuration for RandomSeedManager: ${e.getMessage}"
         )
-        system.log.warning("🎲 RandomSeedManager será inicializado sob demanda")
+        system.log.warning("RandomSeedManager will be initialized with timestamp-based seed")
     }
 
     PekkoManagement(system).start()
@@ -78,11 +78,6 @@ object HyperbolicTimeChamber {
 
     SimulationUtil.startShards(system)
 
-    // Start the per-node migration window subscriber.
-    // This actor subscribes to the "migration-window" DistributedPubSub topic and:
-    //   - Registers the SnapshotManager singleton proxy in MigrationStateStoreRegistry
-    //   - Sets/clears the isMigrationActive flag when the LBM opens/closes the window
-    // One instance per JVM node (not a singleton).
     actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
     val simulation = system.actorOf(
