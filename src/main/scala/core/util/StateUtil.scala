@@ -4,7 +4,7 @@ package core.util
 import core.entity.state.State
 
 import org.htc.protobuf.core.entity.actor
-import org.interscity.htc.core.entity.actor.{Property, ShardActorId}
+import org.interscity.htc.core.entity.actor.{ Property, ShardActorId }
 
 object StateUtil {
 

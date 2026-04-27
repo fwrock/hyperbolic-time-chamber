@@ -1,21 +1,21 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator}
+import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator }
 import core.actor.manager.BaseManager
-import core.entity.actor.properties.{CreatorProperties, Properties}
+import core.entity.actor.properties.{ CreatorProperties, Properties }
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
-import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
+import core.enumeration.{ LoadingStrategyEnum, ReportTypeEnum }
 import core.util.ActorCreatorUtil.createActor
-import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME}
-import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
+import core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
+import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -48,9 +48,8 @@ class LoadDataManager(
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
   private var progressiveSources: List[ActorDataSource] = List.empty
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     reporters = poolReporters
-  }
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent             => loadData(event)
@@ -104,7 +103,7 @@ class LoadDataManager(
     getSelfProxy ! LoadNextEvent()
   }
 
-  private def handleLoadNext(): Unit = {
+  private def handleLoadNext(): Unit =
     sourcesToCreate.foreach {
       (key, queue) =>
         if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
@@ -133,7 +132,6 @@ class LoadDataManager(
           )
         }
     }
-  }
 
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = Math.max(1, amountDataSources)
@@ -208,7 +206,9 @@ class LoadDataManager(
       )
       postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
     } else if (postLoadTriggerSent) {
-      logWarn(s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)")
+      logWarn(
+        s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)"
+      )
     }
   }
 
@@ -218,11 +218,13 @@ class LoadDataManager(
       return
     }
     postLoadDone = true
-    logInfo("PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager.")
+    logInfo(
+      "PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager."
+    )
     sendFinishToSimulationManager()
   }
 
-  private def sendFinishToSimulationManager(): Unit = {
+  private def sendFinishToSimulationManager(): Unit =
     simulationManager ! FinishLoadDataEvent(
       actorRef = selfProxy,
       amount = loadDataTotalAmount,
@@ -232,7 +234,6 @@ class LoadDataManager(
       creatorRef = creatorRef,
       creatorPoolRef = creatorPoolRef
     )
-  }
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values

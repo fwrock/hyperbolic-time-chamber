@@ -60,22 +60,19 @@ case class MicroBusState(
   leaderVehicle: Option[String] = None,
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
-
   maxAcceleration: Double = 1.2,
   maxDeceleration: Double = 3.5,
   minGap: Double = 3.0,
   desiredVelocity: Double = 11.11,
   reactionTime: Double = 1.5,
   vehicleLength: Double = 12.0,
-
   capacity: Int = 80,
   currentPassengers: Int = 0,
   nextBusStop: Option[String] = None,
   busLaneRestricted: Boolean = true,
-
   desiredLane: Option[Int] = None,
   laneChangeProgress: Double = 0.0,
-  canChangeLane: Boolean = false 
+  canChangeLane: Boolean = false
 ) extends MicroMovableState {
 
   /** Create a copy with updated kinematics */

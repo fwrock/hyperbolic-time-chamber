@@ -14,16 +14,16 @@ import scala.math.Numeric
 
 /** Estrutura para uma aresta no JSON, usando IDs de referência. */
 private case class JsonEdgeRefFormat[ID, W, L](
-  source_id: ID, 
-  target_id: ID, 
+  source_id: ID,
+  target_id: ID,
   weight: Option[W],
-  label: L 
+  label: L
 )
 
 /** Estrutura que representa o formato JSON completo com referências. */
 private case class JsonGraphRefFormat[V, ID, W, L](
-  nodes: List[V], 
-  edges: List[JsonEdgeRefFormat[ID, W, L]], 
+  nodes: List[V],
+  edges: List[JsonEdgeRefFormat[ID, W, L]],
   directed: Boolean
 )
 
@@ -137,7 +137,7 @@ case class Graph[V, W, L] private (
       }
     dfsRecursive(List(startNode), Set.empty, List.empty)
   }
-  
+
   /** A* que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta no
     * Caminho).
     */
@@ -213,8 +213,8 @@ case class Graph[V, W, L] private (
           path => (gScore(goalNode), path)
         )
       } else {
-        if (!closedSet.contains(current)) { 
-          closedSet.add(current) 
+        if (!closedSet.contains(current)) {
+          closedSet.add(current)
 
           neighbors(current).foreach {
             case (neighbor, edgeInfoObj) =>
@@ -230,7 +230,7 @@ case class Graph[V, W, L] private (
         }
       }
     }
-    None 
+    None
   }
 
   /** Dijkstra que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta
@@ -356,7 +356,7 @@ case class Graph[V, W, L] private (
       }
     }
 
-    None 
+    None
   }
 
   /** Dijkstra para encontrar as distâncias mais curtas de um nó para todos os outros. */
@@ -409,12 +409,12 @@ case class Graph[V, W, L] private (
           edgeInfo(prev, curr) match {
             case Some(info) =>
               val edge = Edge(prev, curr, info.weight, info.label)
-              val tuple = (edge, curr) 
+              val tuple = (edge, curr)
               if (prev == startNode) Some(tuple :: acc)
               else loop(prev, tuple :: acc)
-            case None => None 
+            case None => None
           }
-        case None => if (curr == startNode) Some(acc) else None 
+        case None => if (curr == startNode) Some(acc) else None
       }
     loop(endNode, Nil)
   }
@@ -532,25 +532,25 @@ object Graph {
                 )
               } else {
 
-              val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
-              if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
-                edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
-                seenEdgeLabelIds.add(currentEdgeLabelId)
-              } else {
-                val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
-                if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
-                  System.err.println(
-                    s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado."
-                  )
+                val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
+                if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
+                  edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
+                  seenEdgeLabelIds.add(currentEdgeLabelId)
+                } else {
+                  val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
+                  if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
+                    System.err.println(
+                      s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado."
+                    )
+                  }
+                }
+
+                if (jsonGraph.directed) {
+                  graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
+                } else {
+                  graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
                 }
               }
-
-              if (jsonGraph.directed) {
-                graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
-              } else {
-                graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
-              }
-              } 
             case (None, _) =>
               throw new NoSuchElementException(
                 s"Nó de origem com ID '${jsonEdge.source_id}' não encontrado."
@@ -566,7 +566,7 @@ object Graph {
       case e: com.fasterxml.jackson.core.JsonProcessingException =>
         throw new Exception(s"Erro no parsing do JSON (Jackson): ${e.getMessage}", e)
       case e @ (_: IllegalArgumentException | _: NoSuchElementException) =>
-        throw e 
+        throw e
       case e: Exception =>
         throw new Exception(s"Erro ao processar o JSON ou construir o grafo: ${e.getMessage}", e)
     }

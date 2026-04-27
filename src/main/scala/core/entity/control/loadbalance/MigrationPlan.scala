@@ -33,7 +33,7 @@ case class MigrationPlan(
 /** Reasons why a migration is triggered. */
 enum MigrationReason:
   case PredictiveOverload
-  case ReactiveOverload 
-  case Rebalance        
-  case NodeJoin            
+  case ReactiveOverload
+  case Rebalance
+  case NodeJoin
   case NodeLeave

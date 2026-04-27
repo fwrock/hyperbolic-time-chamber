@@ -46,7 +46,7 @@ case class Properties(
       timeManagers
         .get(defaultTimeManagerType)
         .orElse(timeManagers.get(TimeManagerTypeEnum.DISCRETE_EVENT))
-        .orNull 
+        .orNull
     } else {
       null
     }

@@ -5,8 +5,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** In-memory migration state store for single-node setups or testing.
   *
-  * Uses a [[ConcurrentHashMap]] to store serialized actor state during shard migration.
-  * This is simpler and faster than Redis but has limitations:
+  * Uses a [[ConcurrentHashMap]] to store serialized actor state during shard migration. This is
+  * simpler and faster than Redis but has limitations:
   *   - Only accessible from the node hosting the LoadBalanceManager singleton
   *   - State is lost if the LBM node crashes during migration
   *
@@ -24,9 +24,8 @@ class InMemoryMigrationStateStore extends MigrationStateStore {
     stateBytes: Array[Byte],
     className: String,
     ttlSeconds: Int = 300
-  ): Unit = {
+  ): Unit =
     store.put(entityId, (stateBytes, className))
-  }
 
   override def loadAndRemoveState(entityId: String): Option[(Array[Byte], String)] =
     Option(store.remove(entityId))

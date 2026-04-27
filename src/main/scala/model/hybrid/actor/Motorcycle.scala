@@ -145,8 +145,8 @@ class Motorcycle(
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
   override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
 
-  /** Reset all per-trip tracking variables so metrics start fresh for each new trip.
-    * Called by PrivateVehicle.handleStartTrip before each activation.
+  /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
+    * PrivateVehicle.handleStartTrip before each activation.
     */
   override protected def resetTripState(): Unit = {
     if (state == null) return
@@ -174,7 +174,6 @@ class Motorcycle(
     state.deactivateMicroMode()
   }
 
-
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
       logWarn(
@@ -188,7 +187,7 @@ class Motorcycle(
       onFinishSpontaneous(None)
       return
     }
-    
+
     if (
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
@@ -261,11 +260,17 @@ class Motorcycle(
     if (state == null) {
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
-          logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+          logDebug(
+            s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}"
+          )
         case _: LinkInfoData =>
-          logDebug(s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}")
+          logDebug(
+            s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}"
+          )
         case _ =>
-          logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
+          logWarn(
+            s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}"
+          )
       }
       return
     }
@@ -432,7 +437,7 @@ class Motorcycle(
       gapToLeader = data.linkLength,
       leaderVelocity = data.speedLimit,
       maxAcceleration = 3.5,
-      maxDeceleration = 5.0, 
+      maxDeceleration = 5.0,
       minGap = 1.5,
       desiredVelocity = math.min(data.speedLimit, 16.67),
       reactionTime = 0.9,
@@ -603,8 +608,10 @@ class Motorcycle(
     data: LinkInfoData
   ): Unit = {
     if (state.status == Parked || state.status == Finished) {
-      logDebug(s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
-        s"(status=${state.status}, trip already finalized).")
+      logDebug(
+        s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
+          s"(status=${state.status}, trip already finalized)."
+      )
       return
     }
 
@@ -740,7 +747,6 @@ class Motorcycle(
       linkId =>
         org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(500.0)
-
 
   /** Apply driver attributes to motorcycle physics.
     */

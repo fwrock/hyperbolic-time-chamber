@@ -11,15 +11,14 @@ import scala.concurrent.ExecutionContext
 
 /** REST routes for htc.* simulator settings.
   *
-  * GET  /api/v1/settings             — all known settings with current effective values
-  * GET  /api/v1/settings/{key}       — a single setting by config-path key
-  * PUT  /api/v1/settings             — set multiple settings (body: JSON object)
-  * PUT  /api/v1/settings/{key}       — set a single setting (body: plain value string)
-  * DELETE /api/v1/settings           — clear all API overrides
-  * DELETE /api/v1/settings/{key}     — clear a specific API override
+  * GET /api/v1/settings — all known settings with current effective values GET
+  * /api/v1/settings/{key} — a single setting by config-path key PUT /api/v1/settings — set multiple
+  * settings (body: JSON object) PUT /api/v1/settings/{key} — set a single setting (body: plain
+  * value string) DELETE /api/v1/settings — clear all API overrides DELETE /api/v1/settings/{key} —
+  * clear a specific API override
   *
-  * Key format: use the htc.* config path, e.g. "htc.time-manager.total-instances".
-  * The env-var equivalent is shown in the GET response for reference.
+  * Key format: use the htc.* config path, e.g. "htc.time-manager.total-instances". The env-var
+  * equivalent is shown in the GET response for reference.
   */
 object SettingsRoutes {
 
@@ -31,10 +30,11 @@ object SettingsRoutes {
         pathEndOrSingleSlash {
           concat(
             get {
-              val entries = SimulatorSettingsRegistry.catalog.map { d =>
-                val value  = SimulatorSettingsRegistry.effectiveValue(d.configPath)
-                val source = SimulatorSettingsRegistry.effectiveSource(d.configPath)
-                s"""|    {
+              val entries = SimulatorSettingsRegistry.catalog.map {
+                d =>
+                  val value = SimulatorSettingsRegistry.effectiveValue(d.configPath)
+                  val source = SimulatorSettingsRegistry.effectiveSource(d.configPath)
+                  s"""|    {
                     |      "key": "${d.configPath}",
                     |      "envVar": "${d.envVar}",
                     |      "description": "${d.description}",
@@ -44,86 +44,119 @@ object SettingsRoutes {
                     |    }""".stripMargin
               }.mkString(",\n")
 
-              complete(HttpResponse(
-                status = StatusCodes.OK,
-                entity = HttpEntity(ContentTypes.`application/json`,
-                  s"""{\n  "settings": [\n$entries\n  ]\n}""")
-              ))
+              complete(
+                HttpResponse(
+                  status = StatusCodes.OK,
+                  entity = HttpEntity(
+                    ContentTypes.`application/json`,
+                    s"""{\n  "settings": [\n$entries\n  ]\n}"""
+                  )
+                )
+              )
             },
             put {
-              entity(as[String]) { body =>
-                try {
-                  val parsed = parseJsonObject(body)
-                  SimulatorSettingsRegistry.setAll(parsed)
-                  logger.info(s"Settings API: ${parsed.size} setting(s) updated")
-                  complete(HttpResponse(
-                    status = StatusCodes.OK,
-                    entity = HttpEntity(ContentTypes.`application/json`,
-                      s"""{"status":"ok","updated":${parsed.size}}""")
-                  ))
-                } catch {
-                  case e: Exception =>
-                    complete(HttpResponse(
-                      status = StatusCodes.BadRequest,
-                      entity = HttpEntity(ContentTypes.`application/json`,
-                        s"""{"status":"error","message":${jsonString(e.getMessage)}}""")
-                    ))
-                }
+              entity(as[String]) {
+                body =>
+                  try {
+                    val parsed = parseJsonObject(body)
+                    SimulatorSettingsRegistry.setAll(parsed)
+                    logger.info(s"Settings API: ${parsed.size} setting(s) updated")
+                    complete(
+                      HttpResponse(
+                        status = StatusCodes.OK,
+                        entity = HttpEntity(
+                          ContentTypes.`application/json`,
+                          s"""{"status":"ok","updated":${parsed.size}}"""
+                        )
+                      )
+                    )
+                  } catch {
+                    case e: Exception =>
+                      complete(
+                        HttpResponse(
+                          status = StatusCodes.BadRequest,
+                          entity = HttpEntity(
+                            ContentTypes.`application/json`,
+                            s"""{"status":"error","message":${jsonString(e.getMessage)}}"""
+                          )
+                        )
+                      )
+                  }
               }
             },
             delete {
               SimulatorSettingsRegistry.clearAll()
               logger.info("Settings API: all overrides cleared")
-              complete(HttpResponse(
-                status = StatusCodes.OK,
-                entity = HttpEntity(ContentTypes.`application/json`,
-                  """{"status":"ok","message":"All setting overrides cleared"}""")
-              ))
+              complete(
+                HttpResponse(
+                  status = StatusCodes.OK,
+                  entity = HttpEntity(
+                    ContentTypes.`application/json`,
+                    """{"status":"ok","message":"All setting overrides cleared"}"""
+                  )
+                )
+              )
             }
           )
         },
-        path(Remaining) { key =>
-          concat(
-            get {
-              val decodedKey = java.net.URLDecoder.decode(key, "UTF-8")
-              val value  = SimulatorSettingsRegistry.effectiveValue(decodedKey)
-              val source = SimulatorSettingsRegistry.effectiveSource(decodedKey)
-              val meta   = SimulatorSettingsRegistry.catalog.find(_.configPath == decodedKey)
-              complete(HttpResponse(
-                status = StatusCodes.OK,
-                entity = HttpEntity(ContentTypes.`application/json`,
-                  s"""|{
+        path(Remaining) {
+          key =>
+            concat(
+              get {
+                val decodedKey = java.net.URLDecoder.decode(key, "UTF-8")
+                val value = SimulatorSettingsRegistry.effectiveValue(decodedKey)
+                val source = SimulatorSettingsRegistry.effectiveSource(decodedKey)
+                val meta = SimulatorSettingsRegistry.catalog.find(_.configPath == decodedKey)
+                complete(
+                  HttpResponse(
+                    status = StatusCodes.OK,
+                    entity = HttpEntity(
+                      ContentTypes.`application/json`,
+                      s"""|{
                       |  "key": ${jsonString(decodedKey)},
                       |  "envVar": ${jsonString(meta.map(_.envVar).getOrElse(""))},
                       |  "currentValue": ${jsonString(value)},
                       |  "source": "$source"
-                      |}""".stripMargin)
-              ))
-            },
-            put {
-              entity(as[String]) { rawValue =>
+                      |}""".stripMargin
+                    )
+                  )
+                )
+              },
+              put {
+                entity(as[String]) {
+                  rawValue =>
+                    val decodedKey = java.net.URLDecoder.decode(key, "UTF-8")
+                    val value = rawValue.trim.stripPrefix("\"").stripSuffix("\"")
+                    SimulatorSettingsRegistry.set(decodedKey, value)
+                    logger.info(s"Settings API: $decodedKey = $value")
+                    complete(
+                      HttpResponse(
+                        status = StatusCodes.OK,
+                        entity = HttpEntity(
+                          ContentTypes.`application/json`,
+                          s"""{"status":"ok","key":${jsonString(decodedKey)},"value":${jsonString(
+                              value
+                            )}}"""
+                        )
+                      )
+                    )
+                }
+              },
+              delete {
                 val decodedKey = java.net.URLDecoder.decode(key, "UTF-8")
-                val value      = rawValue.trim.stripPrefix("\"").stripSuffix("\"")
-                SimulatorSettingsRegistry.set(decodedKey, value)
-                logger.info(s"Settings API: $decodedKey = $value")
-                complete(HttpResponse(
-                  status = StatusCodes.OK,
-                  entity = HttpEntity(ContentTypes.`application/json`,
-                    s"""{"status":"ok","key":${jsonString(decodedKey)},"value":${jsonString(value)}}""")
-                ))
+                SimulatorSettingsRegistry.clear(decodedKey)
+                logger.info(s"Settings API: override cleared for $decodedKey")
+                complete(
+                  HttpResponse(
+                    status = StatusCodes.OK,
+                    entity = HttpEntity(
+                      ContentTypes.`application/json`,
+                      s"""{"status":"ok","message":"Override cleared for ${decodedKey}"}"""
+                    )
+                  )
+                )
               }
-            },
-            delete {
-              val decodedKey = java.net.URLDecoder.decode(key, "UTF-8")
-              SimulatorSettingsRegistry.clear(decodedKey)
-              logger.info(s"Settings API: override cleared for $decodedKey")
-              complete(HttpResponse(
-                status = StatusCodes.OK,
-                entity = HttpEntity(ContentTypes.`application/json`,
-                  s"""{"status":"ok","message":"Override cleared for ${decodedKey}"}""")
-              ))
-            }
-          )
+            )
         }
       )
     }
@@ -131,16 +164,18 @@ object SettingsRoutes {
   /** Naïve JSON object parser (no deps). Handles flat {"key":"value",...} bodies. */
   private def parseJsonObject(json: String): Map[String, String] = {
     val body = json.trim.stripPrefix("{").stripSuffix("}")
-    body.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")
+    body
+      .split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")
       .map(_.trim)
       .filter(_.nonEmpty)
-      .flatMap { pair =>
-        val parts = pair.split(":", 2)
-        if (parts.length == 2) {
-          val k = parts(0).trim.stripPrefix("\"").stripSuffix("\"")
-          val v = parts(1).trim.stripPrefix("\"").stripSuffix("\"")
-          Some(k -> v)
-        } else None
+      .flatMap {
+        pair =>
+          val parts = pair.split(":", 2)
+          if (parts.length == 2) {
+            val k = parts(0).trim.stripPrefix("\"").stripSuffix("\"")
+            val v = parts(1).trim.stripPrefix("\"").stripSuffix("\"")
+            Some(k -> v)
+          } else None
       }
       .toMap
   }

@@ -14,12 +14,13 @@ object CityMapUtil {
 
   private lazy val loadedCityData: LoadedGraphData[NodeGraph, String, Double, EdgeGraph] =
     Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-      SimulatorSettingsRegistry.get("htc.mobility.city-map-file")
+      SimulatorSettingsRegistry
+        .get("htc.mobility.city-map-file")
         .orElse(sys.env.get("HTC_MOBILITY_CITY_MAP_FILE"))
         .getOrElse("city_map.json"),
       nodeGraphIdExtractor,
       edgeGraphIdExtractor,
-      0.0 
+      0.0
     ) match {
       case Success(data) =>
         println("Mapa da cidade carregado com sucesso.")

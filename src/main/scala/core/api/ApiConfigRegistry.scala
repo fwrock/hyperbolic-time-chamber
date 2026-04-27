@@ -11,10 +11,9 @@ import java.util.concurrent.atomic.AtomicReference
   * `application.conf` in the source-resolution chain inside `SimulationUtil`.
   *
   * Config priority (highest → lowest):
-  *   1. Direct path argument to `loadSimulationConfig(path)`
-  *   2. [[ApiConfigRegistry]] (this object) — set via `PUT /api/v1/config`
-  *   3. `htc.simulation.config-file` in `application.conf`
-  *   4. `HTC_SIMULATION_CONFIG_FILE` environment variable
+  *   1. Direct path argument to `loadSimulationConfig(path)` 2. [[ApiConfigRegistry]] (this object)
+  *      — set via `PUT /api/v1/config` 3. `htc.simulation.config-file` in `application.conf` 4.
+  *      `HTC_SIMULATION_CONFIG_FILE` environment variable
   */
 object ApiConfigRegistry {
 

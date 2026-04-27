@@ -17,8 +17,8 @@ import scala.collection.mutable
   *   - Bus stops along the route
   *   - In MICRO mode: larger vehicle, slower acceleration, lane restrictions
   *
-  * Route, path, cost, status, and reachedDestination are managed via accessor methods
-  * delegating to parent MovableState fields (single source of truth).
+  * Route, path, cost, status, and reachedDestination are managed via accessor methods delegating to
+  * parent MovableState fields (single source of truth).
   *
   * @param startTick
   *   Simulation start tick
@@ -69,11 +69,8 @@ case class BusState(
   override val destination: String,
   override val actorType: ActorTypeEnum = Bus,
   override val size: Double,
-
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-
   var microState: Option[MicroBusState] = None,
-
   var storedBestRoute: Option[List[(String, String)]] = None
 ) extends MovableState(
       startTick = startTick,

@@ -12,19 +12,18 @@ import scala.concurrent.ExecutionContext
 
 /** REST routes for browsing and loading available simulation scenarios.
   *
-  * Scenarios are read from the directory configured via `HTC_SCENARIOS_DIR`
-  * (or `htc.api.scenarios-dir` / default `/app/simulations`).
+  * Scenarios are read from the directory configured via `HTC_SCENARIOS_DIR` (or
+  * `htc.api.scenarios-dir` / default `/app/simulations`).
   *
   * Each scenario is a sub-directory containing:
-  *   - `simulation.json`  — required, the [[core.entity.configuration.Simulation]] config
-  *   - `metadata.json`    — optional, human/tooling metadata (description, tags, author…)
+  *   - `simulation.json` — required, the [[core.entity.configuration.Simulation]] config
+  *   - `metadata.json` — optional, human/tooling metadata (description, tags, author…)
   *
-  * ── Endpoints ────────────────────────────────────────────────────────────
-  * GET  /api/v1/scenarios              — list all scenarios with summary + metadata
-  * GET  /api/v1/scenarios/{name}       — full detail: metadata + complete simulation config
-  * POST /api/v1/scenarios/{name}/load  — load scenario into [[ApiConfigRegistry]]
-  *                                       (equivalent to PUT /api/v1/simulation/config with
-  *                                        the scenario's simulation.json content)
+  * ── Endpoints ──────────────────────────────────────────────────────────── GET /api/v1/scenarios
+  * — list all scenarios with summary + metadata GET /api/v1/scenarios/{name} — full detail:
+  * metadata + complete simulation config POST /api/v1/scenarios/{name}/load — load scenario into
+  * [[ApiConfigRegistry]] (equivalent to PUT /api/v1/simulation/config with the scenario's
+  * simulation.json content)
   */
 object ScenarioRoutes {
 
@@ -33,13 +32,17 @@ object ScenarioRoutes {
   def routes(implicit mat: Materializer, ec: ExecutionContext): Route =
     pathPrefix("api" / "v1" / "scenarios") {
       concat(
-
         pathEndOrSingleSlash {
           get {
             val scenarios = ScenarioRegistry.listScenarios()
-            val items = scenarios.map { s =>
-              val metaJson = s.meta.map(m => safeToJson(m)).getOrElse("null")
-              s"""|{
+            val items = scenarios.map {
+              s =>
+                val metaJson = s.meta
+                  .map(
+                    m => safeToJson(m)
+                  )
+                  .getOrElse("null")
+                s"""|{
                   |  "name": ${jsonStr(s.name)},
                   |  "hasMetadata": ${s.hasMetadata},
                   |  "meta": $metaJson,
@@ -60,57 +63,59 @@ object ScenarioRoutes {
             complete(ok(body))
           }
         },
-
-        pathPrefix(Segment) { name =>
-          concat(
-
-            pathEndOrSingleSlash {
-              get {
-                ScenarioRegistry.getScenario(name) match {
-                  case Left(err) =>
-                    complete(notFound(s"""{"status":"error","message":${jsonStr(err)}}"""))
-                  case Right(detail) =>
-                    val metaJson = detail.meta.map(m => safeToJson(m)).getOrElse("null")
-                    val simJson  = safeToJson(detail.simulation)
-                    val body =
-                      s"""|{
+        pathPrefix(Segment) {
+          name =>
+            concat(
+              pathEndOrSingleSlash {
+                get {
+                  ScenarioRegistry.getScenario(name) match {
+                    case Left(err) =>
+                      complete(notFound(s"""{"status":"error","message":${jsonStr(err)}}"""))
+                    case Right(detail) =>
+                      val metaJson = detail.meta
+                        .map(
+                          m => safeToJson(m)
+                        )
+                        .getOrElse("null")
+                      val simJson = safeToJson(detail.simulation)
+                      val body =
+                        s"""|{
                           |  "name": ${jsonStr(detail.name)},
                           |  "hasMetadata": ${detail.hasMetadata},
                           |  "meta": $metaJson,
                           |  "simulation": $simJson
                           |}""".stripMargin
-                    complete(ok(body))
+                      complete(ok(body))
+                  }
                 }
-              }
-            },
+              },
 
-            // ── POST /api/v1/scenarios/{name}/load ─────────────────────────
-            path("load") {
-              post {
-                ScenarioRegistry.getScenario(name) match {
-                  case Left(err) =>
-                    complete(notFound(s"""{"status":"error","message":${jsonStr(err)}}"""))
-                  case Right(detail) =>
-                    ApiConfigRegistry.set(detail.simulation)
-                    logger.info(
-                      s"ScenarioRoutes: scenario '$name' (simulation '${detail.simulation.name}') loaded into ApiConfigRegistry"
-                    )
-                    val body =
-                      s"""|{
+              // ── POST /api/v1/scenarios/{name}/load ─────────────────────────
+              path("load") {
+                post {
+                  ScenarioRegistry.getScenario(name) match {
+                    case Left(err) =>
+                      complete(notFound(s"""{"status":"error","message":${jsonStr(err)}}"""))
+                    case Right(detail) =>
+                      ApiConfigRegistry.set(detail.simulation)
+                      logger.info(
+                        s"ScenarioRoutes: scenario '$name' (simulation '${detail.simulation.name}') loaded into ApiConfigRegistry"
+                      )
+                      val body =
+                        s"""|{
                           |  "status": "ok",
                           |  "message": "Scenario loaded — call POST /api/v1/simulation/start to begin",
                           |  "name": ${jsonStr(name)},
                           |  "simulationName": ${jsonStr(detail.simulation.name)}
                           |}""".stripMargin
-                    complete(ok(body))
+                      complete(ok(body))
+                  }
                 }
               }
-            }
-          )
+            )
         }
       )
     }
-
 
   private def ok(json: String) =
     HttpResponse(StatusCodes.OK, entity = HttpEntity(ContentTypes.`application/json`, json))

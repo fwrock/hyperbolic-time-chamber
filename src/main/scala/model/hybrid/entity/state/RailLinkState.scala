@@ -65,16 +65,13 @@ case class RailLinkState(
   speedLimit: Double,
   capacity: Double,
   freeSpeed: Double,
-
   railType: String = "SUBWAY",
   subwayLine: String = "",
   fromStation: String = "",
   toStation: String = "",
   gradient: Double = 0.0,
   curvature: Double = 0.0,
-
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-
   registered: mutable.Set[LinkRegister] = mutable.Set.empty,
   scheduleOnTimeManager: Boolean = false
 ) extends BaseState(
@@ -102,7 +99,7 @@ case class RailLinkState(
       speed = speed * (1.0 - (curvature * 0.05))
     }
 
-    math.max(speed, speedLimit * 0.5) 
+    math.max(speed, speedLimit * 0.5)
   }
 
   /** Check if a vehicle type can use this rail link.

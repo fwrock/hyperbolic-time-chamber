@@ -3,9 +3,9 @@ package core.actor.manager.loadbalance.migration
 
 /** Encapsulates all actor data that must survive shard migration.
   *
-  * This case class is serializable by Jackson (all primitive types and simple maps)
-  * without type-erasure ambiguity. The domain state is kept as a pre-serialized JSON
-  * string so that deserialization can use the correct concrete class via `stateClassName`.
+  * This case class is serializable by Jackson (all primitive types and simple maps) without
+  * type-erasure ambiguity. The domain state is kept as a pre-serialized JSON string so that
+  * deserialization can use the correct concrete class via `stateClassName`.
   *
   * Produced by [[core.actor.BaseActor.saveMigrationState]] and consumed by
   * [[core.actor.BaseActor.restoreMigrationState]].

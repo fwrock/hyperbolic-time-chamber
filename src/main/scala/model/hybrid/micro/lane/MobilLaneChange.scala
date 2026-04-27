@@ -80,7 +80,6 @@ case class MobilLaneChange(
       return LaneChangeDecision(false, None, "Unsafe for follower", 0.0)
     }
 
-
     val currentAccel = calculateAcceleration(
       vehicleState,
       leaderInCurrentLane
@@ -90,7 +89,7 @@ case class MobilLaneChange(
       vehicleState,
       leaderInTargetLane
     )
-    
+
     val followerCurrentAccel = followerInCurrentLane.map {
       case (_, gap, followerVel) =>
         calculateFollowerAcceleration(followerVel, vehicleState.velocity, gap)
@@ -177,7 +176,7 @@ case class MobilLaneChange(
     leaderVel: Double,
     gap: Double
   ): Double = {
-    val desiredGap = 2.0 + followerVel * 1.0 
+    val desiredGap = 2.0 + followerVel * 1.0
     val gapError = gap - desiredGap
 
     val accel = 0.5 * gapError + 0.3 * (leaderVel - followerVel)

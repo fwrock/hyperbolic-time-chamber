@@ -105,7 +105,7 @@ object KafkaTopicNaming {
           name = topicName,
           partitions = 12,
           replicationFactor = 1,
-          retentionMs = 300000L, 
+          retentionMs = 300000L,
           cleanupPolicy = "delete"
         )
 

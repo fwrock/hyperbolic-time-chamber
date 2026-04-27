@@ -12,73 +12,62 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.EntityEnvelopeEvent
-import core.util.{IdUtil, StringUtil}
+import core.util.{ IdUtil, StringUtil }
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.{DynamicLinkCost, LinkRegister, VehicleInLane}
+import org.interscity.htc.model.hybrid.entity.state.model.{ DynamicLinkCost, LinkRegister, VehicleInLane }
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
-import org.interscity.htc.model.hybrid.micro.strategy.{MicroSimulationStrategy, DefaultMicroSimulationStrategy, LaneChangeStrategy, NoLaneChangeStrategy}
+import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationStrategy, LaneChangeStrategy, MicroSimulationStrategy, NoLaneChangeStrategy }
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 
 import scala.collection.mutable
 
-/**
- * Hybrid link actor representing a road segment that can operate in MESO or MICRO simulation mode.
- *
- * <h2>Overview</h2>
- * The Link actor manages vehicle flow through a road segment, supporting both:
- * <ul>
- * <li><b>MESO mode</b>: Aggregate flow calculations using speed-density relationships</li>
- * <li><b>MICRO mode</b>: Individual vehicle dynamics with car-following and lane management</li>
- * </ul>
- *
- * <h2>Responsibilities</h2>
- * <ul>
- * <li>Vehicle entry/exit management</li>
- * <li>Mode-specific traffic simulation (delegated to strategies)</li>
- * <li>Dynamic cost calculation for routing</li>
- * <li>Performance metrics and reporting</li>
- * <li>Inter-actor communication (vehicles, nodes, signals)</li>
- * </ul>
- *
- * <h2>Micro Simulation</h2>
- * In MICRO mode, the link:
- * <ul>
- * <li>Maintains per-lane vehicle queues</li>
- * <li>Executes sub-tick simulations (typically 10 sub-ticks per global tick)</li>
- * <li>Delegates car-following logic to [[MicroSimulationStrategy]]</li>
- * <li>Delegates lane-change logic to [[LaneChangeStrategy]]</li>
- * <li>Publishes dynamic costs to Kafka for routing</li>
- * </ul>
- *
- * <h2>Configuration</h2>
- * Link behavior is configured via:
- * <ul>
- * <li>`htc.routing.link-cost.publish-interval`: Cost publish frequency (ticks)</li>
- * <li>`htc.routing.link-cost.cache-ttl`: Cost cache TTL (ticks)</li>
- * </ul>
- *
- * @param properties Actor properties including entity ID, shard configuration
- * @see LinkState for link state model
- * @see MicroSimulationStrategy for micro simulation algorithms
- * @see LaneChangeStrategy for lane change behavior
- */
+/** Hybrid link actor representing a road segment that can operate in MESO or MICRO simulation mode.
+  *
+  * <h2>Overview</h2> The Link actor manages vehicle flow through a road segment, supporting both:
+  * <ul> <li><b>MESO mode</b>: Aggregate flow calculations using speed-density relationships</li>
+  * <li><b>MICRO mode</b>: Individual vehicle dynamics with car-following and lane management</li>
+  * </ul>
+  *
+  * <h2>Responsibilities</h2> <ul> <li>Vehicle entry/exit management</li> <li>Mode-specific traffic
+  * simulation (delegated to strategies)</li> <li>Dynamic cost calculation for routing</li>
+  * <li>Performance metrics and reporting</li> <li>Inter-actor communication (vehicles, nodes,
+  * signals)</li> </ul>
+  *
+  * <h2>Micro Simulation</h2> In MICRO mode, the link: <ul> <li>Maintains per-lane vehicle
+  * queues</li> <li>Executes sub-tick simulations (typically 10 sub-ticks per global tick)</li>
+  * <li>Delegates car-following logic to [[MicroSimulationStrategy]]</li> <li>Delegates lane-change
+  * logic to [[LaneChangeStrategy]]</li> <li>Publishes dynamic costs to Kafka for routing</li> </ul>
+  *
+  * <h2>Configuration</h2> Link behavior is configured via: <ul>
+  * <li>`htc.routing.link-cost.publish-interval`: Cost publish frequency (ticks)</li>
+  * <li>`htc.routing.link-cost.cache-ttl`: Cost cache TTL (ticks)</li> </ul>
+  *
+  * @param properties
+  *   Actor properties including entity ID, shard configuration
+  * @see
+  *   LinkState for link state model
+  * @see
+  *   MicroSimulationStrategy for micro simulation algorithms
+  * @see
+  *   LaneChangeStrategy for lane change behavior
+  */
 class Link(
-            private val properties: Properties
-          ) extends SimulationBaseActor[LinkState](
-  properties = properties
-) {
+  private val properties: Properties
+) extends SimulationBaseActor[LinkState](
+      properties = properties
+    ) {
 
-  /**
-   * Calculates the current cost of traversing this link.
-   * Cost combines distance, congestion, and travel time factors.
-   *
-   * @return Current link cost (higher = less desirable for routing)
-   */
+  /** Calculates the current cost of traversing this link. Cost combines distance, congestion, and
+    * travel time factors.
+    *
+    * @return
+    *   Current link cost (higher = less desirable for routing)
+    */
   private def cost: Double = {
     val speedFactor =
       if (state.currentSpeed > 0) state.length / state.currentSpeed else Double.MaxValue
@@ -92,16 +81,22 @@ class Link(
 
   /** Current tick being summarized for metrics */
   private var summaryTick: Tick = Long.MinValue
+
   /** Vehicles loaded in current tick */
   private var tickLoaded: Int = 0
+
   /** Vehicles inserted in current tick */
   private var tickInserted: Int = 0
+
   /** Vehicles that arrived in current tick */
   private var tickArrived: Int = 0
+
   /** Sum of travel times in current tick (seconds) */
   private var tickTravelTimeSum: Double = 0.0
+
   /** Processing duration for current tick (milliseconds) */
   private var tickProcessingDurationMs: Long = 0L
+
   /** Total vehicles ever loaded into this link */
   private var cumulativeLoadedVehicles: Long = 0L
   private var cumulativeLoaded: Long = 0L
@@ -110,53 +105,49 @@ class Link(
 
   /** Tracks when each vehicle entered the link (for travel time calculation) */
   private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+
   /** Accumulated waiting time per vehicle (seconds) */
   private val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
 
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false
 
-  /**
-   * Grace-period counter for MICRO links.
-   *
-   * When vehiclesByLane becomes empty, the link stays alive for
-   * MICRO_GRACE_TICKS additional ticks before deregistering from the TM.
-   * This prevents a race condition where:
-   *   1. The last vehicle in batch-N sends LeaveLinkData and empties vehiclesByLane.
-   *   2. The link's next actSpontaneous sees vehicleCount=0 and calls
-   *      onFinishSpontaneous(None), stopping the link.
-   *   3. Vehicles from batch-(N+1) arrive (tens to hundreds of ticks later due
-   *      to queue buildup in earlier links) and call scheduleEvent(currentTick+1),
-   *      but currentTick is now stale and the TM may have advanced or terminated.
-   *
-   * With a grace period the link remains scheduled in the TM, so batch-(N+1)
-   * vehicles always find a live link that will process them on the next tick.
-   * The counter is reset to 0 whenever new vehicles are present.
-   */
+  /** Grace-period counter for MICRO links.
+    *
+    * When vehiclesByLane becomes empty, the link stays alive for MICRO_GRACE_TICKS additional ticks
+    * before deregistering from the TM. This prevents a race condition where:
+    *   1. The last vehicle in batch-N sends LeaveLinkData and empties vehiclesByLane. 2. The link's
+    *      next actSpontaneous sees vehicleCount=0 and calls onFinishSpontaneous(None), stopping the
+    *      link. 3. Vehicles from batch-(N+1) arrive (tens to hundreds of ticks later due to queue
+    *      buildup in earlier links) and call scheduleEvent(currentTick+1), but currentTick is now
+    *      stale and the TM may have advanced or terminated.
+    *
+    * With a grace period the link remains scheduled in the TM, so batch-(N+1) vehicles always find
+    * a live link that will process them on the next tick. The counter is reset to 0 whenever new
+    * vehicles are present.
+    */
   private var emptyGraceTick: Int = 0
   private val MICRO_GRACE_TICKS: Int = 5
 
   /** Configuration: interval between dynamic cost publications (ticks) */
-  private val costPublishInterval: Int = {
-    try { com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval") }
+  private val costPublishInterval: Int =
+    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval")
     catch { case _: Exception => 10 }
-  }
 
   /** Configuration: TTL for cached dynamic costs (ticks) */
-  private val cacheTtl: Int = {
-    try { com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl") }
+  private val cacheTtl: Int =
+    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl")
     catch { case _: Exception => 60 }
-  }
 
-  /**
-   * Initializes the link actor on first load.
-   *
-   * - Sets up MICRO mode if configured
-   * - Publishes initial dynamic cost
-   * - Logs initialization status
-   *
-   * @param event InitializeEvent from the system
-   */
+  /** Initializes the link actor on first load.
+    *
+    *   - Sets up MICRO mode if configured
+    *   - Publishes initial dynamic cost
+    *   - Logs initialization status
+    *
+    * @param event
+    *   InitializeEvent from the system
+    */
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
 
@@ -165,16 +156,17 @@ class Link(
     }
 
     publishDynamicCost()
-    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+    logDebug(
+      s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m"
+    )
   }
 
-  /**
-   * Initializes microscopic simulation mode.
-   *
-   * - Initializes lane structures
-   * - Configures simulation strategies
-   * - Sets up micro time management
-   */
+  /** Initializes microscopic simulation mode.
+    *
+    *   - Initializes lane structures
+    *   - Configures simulation strategies
+    *   - Sets up micro time management
+    */
   private def initializeMicroMode(): Unit = {
     logDebug(s"Initializing MICRO mode for link ${state.from} -> ${state.to}")
 
@@ -203,36 +195,35 @@ class Link(
     logDebug(s"  - ticksPerGlobalTick: ${state.microTicksPerGlobalTick}")
   }
 
-  /**
-   * Handles interaction events from other actors (vehicles, nodes).
-   *
-   * Processes:
-   * - EnterLinkData: Vehicle entering the link
-   * - LeaveLinkData: Vehicle leaving the link
-   *
-   * @param event Interaction event with data payload
-   */
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+  /** Handles interaction events from other actors (vehicles, nodes).
+    *
+    * Processes:
+    *   - EnterLinkData: Vehicle entering the link
+    *   - LeaveLinkData: Vehicle leaving the link
+    *
+    * @param event
+    *   Interaction event with data payload
+    */
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: EnterLinkData => handleEnterLink(event, d)
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
-  }
 
-  /**
-   * Handles spontaneous (time-triggered) events for MICRO mode simulation.
-   *
-   * In MICRO mode:
-   * - Executes sub-tick simulation for all vehicles
-   * - Schedules next tick if vehicles remain
-   * - Stops scheduling when link is empty
-   *
-   * In MESO mode: No-op (vehicles manage their own timing)
-   *
-   * @param event Spontaneous event from time manager
-   */
+  /** Handles spontaneous (time-triggered) events for MICRO mode simulation.
+    *
+    * In MICRO mode:
+    *   - Executes sub-tick simulation for all vehicles
+    *   - Schedules next tick if vehicles remain
+    *   - Stops scheduling when link is empty
+    *
+    * In MESO mode: No-op (vehicles manage their own timing)
+    *
+    * @param event
+    *   Spontaneous event from time manager
+    */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (!state.isMicroMode) {
       microTickScheduled = false
@@ -275,14 +266,15 @@ class Link(
     }
   }
 
-  /**
-   * Handles a vehicle entering the link.
-   *
-   * Dispatches to mode-specific handler (MESO or MICRO) and emits metrics.
-   *
-   * @param event Actor interaction event
-   * @param data Vehicle entry data (ID, size, type, etc.)
-   */
+  /** Handles a vehicle entering the link.
+    *
+    * Dispatches to mode-specific handler (MESO or MICRO) and emits metrics.
+    *
+    * @param event
+    *   Actor interaction event
+    * @param data
+    *   Vehicle entry data (ID, size, type, etc.)
+    */
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
@@ -307,16 +299,17 @@ class Link(
     }
   }
 
-  /**
-   * Handles vehicle entry in MESO mode.
-   *
-   * - Checks for duplicate registration
-   * - Adds vehicle to registered set
-   * - Sends link info back to vehicle
-   *
-   * @param event Actor interaction event
-   * @param data Vehicle entry data
-   */
+  /** Handles vehicle entry in MESO mode.
+    *
+    *   - Checks for duplicate registration
+    *   - Adds vehicle to registered set
+    *   - Sends link info back to vehicle
+    *
+    * @param event
+    *   Actor interaction event
+    * @param data
+    *   Vehicle entry data
+    */
   private def handleEnterLinkMeso(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     if (state.registered.exists(_.actorId == data.actorId)) {
       val duplicateInfo = LinkInfoData(
@@ -370,17 +363,18 @@ class Link(
     )
   }
 
-  /**
-   * Handles vehicle entry in MICRO mode.
-   *
-   * - Checks if vehicle already in a lane (duplicate entry)
-   * - Assigns vehicle to least occupied lane
-   * - Creates VehicleInLane instance with initial state
-   * - Schedules micro-tick simulation if not already running
-   *
-   * @param event Actor interaction event
-   * @param data Vehicle entry data
-   */
+  /** Handles vehicle entry in MICRO mode.
+    *
+    *   - Checks if vehicle already in a lane (duplicate entry)
+    *   - Assigns vehicle to least occupied lane
+    *   - Creates VehicleInLane instance with initial state
+    *   - Schedules micro-tick simulation if not already running
+    *
+    * @param event
+    *   Actor interaction event
+    * @param data
+    *   Vehicle entry data
+    */
   private def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     findVehicleLane(data.actorId) match {
       case Some(existingLane) =>
@@ -426,9 +420,10 @@ class Link(
       entryTick = entryTick
     )
 
-    state.vehiclesByLane.get(assignedLane).foreach { queue =>
-      val insertIdx = queue.indexWhere(_.position < vehicle.position)
-      if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
+    state.vehiclesByLane.get(assignedLane).foreach {
+      queue =>
+        val insertIdx = queue.indexWhere(_.position < vehicle.position)
+        if (insertIdx >= 0) queue.insert(insertIdx, vehicle) else queue.enqueue(vehicle)
     }
     onVehicleInserted()
 
@@ -440,14 +435,15 @@ class Link(
     }
   }
 
-  /**
-   * Sends MICRO mode entry acknowledgment to vehicle.
-   *
-   * Includes lane assignment and link parameters for micro simulation.
-   *
-   * @param event Actor interaction event
-   * @param lane Assigned lane ID
-   */
+  /** Sends MICRO mode entry acknowledgment to vehicle.
+    *
+    * Includes lane assignment and link parameters for micro simulation.
+    *
+    * @param event
+    *   Actor interaction event
+    * @param lane
+    *   Assigned lane ID
+    */
   private def sendMicroEnterAck(event: ActorInteractionEvent, lane: Int): Unit = {
     val microEnterData = MicroEnterLinkData(
       linkId = getEntityId,
@@ -469,29 +465,30 @@ class Link(
     )
   }
 
-  /**
-   * Finds which lane a vehicle is currently in.
-   *
-   * @param actorId Vehicle actor ID
-   * @return Optional lane ID if vehicle is found
-   */
-  private def findVehicleLane(actorId: String): Option[Int] = {
+  /** Finds which lane a vehicle is currently in.
+    *
+    * @param actorId
+    *   Vehicle actor ID
+    * @return
+    *   Optional lane ID if vehicle is found
+    */
+  private def findVehicleLane(actorId: String): Option[Int] =
     state.vehiclesByLane.collectFirst {
       case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
     }
-  }
 
-  /**
-   * Handles a vehicle leaving the link.
-   *
-   * - Removes vehicle from registered set
-   * - Cleans up tracking maps
-   * - Dispatches to mode-specific handler (MESO or MICRO)
-   * - Emits exit metrics
-   *
-   * @param event Actor interaction event
-   * @param data Vehicle exit data
-   */
+  /** Handles a vehicle leaving the link.
+    *
+    *   - Removes vehicle from registered set
+    *   - Cleans up tracking maps
+    *   - Dispatches to mode-specific handler (MESO or MICRO)
+    *   - Emits exit metrics
+    *
+    * @param event
+    *   Actor interaction event
+    * @param data
+    *   Vehicle exit data
+    */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${data.actorId} leaving link")
@@ -515,7 +512,7 @@ class Link(
     state.registered.filterInPlace(_.actorId != data.actorId)
     val entryTick = vehicleEntryTick.get(data.actorId) match {
       case Some(tick) => tick
-      case None => -1
+      case None       => -1
     }
     vehicleEntryTick.remove(data.actorId)
     vehicleWaitingSeconds.remove(data.actorId)
@@ -530,30 +527,41 @@ class Link(
     }
   }
 
-  /**
-   * Sends vehicle exit acknowledgment in MICRO mode.
-   *
-   * - Removes vehicle from lane queues
-   * - Calculates travel time and waiting time
-   * - Sends MicroLeaveLinkData with journey stats
-   *
-   * @param event Actor interaction event
-   * @param data Vehicle exit data
-   * @param entryTick Tick when vehicle entered (for travel time)
-   */
-  private def sendLeaveLinkMicro(event: ActorInteractionEvent, data: LeaveLinkData, entryTick: Long): Unit = {
-    val stillInLanes = state.vehiclesByLane.values.exists(q => q.exists(_.actorId == data.actorId))
+  /** Sends vehicle exit acknowledgment in MICRO mode.
+    *
+    *   - Removes vehicle from lane queues
+    *   - Calculates travel time and waiting time
+    *   - Sends MicroLeaveLinkData with journey stats
+    *
+    * @param event
+    *   Actor interaction event
+    * @param data
+    *   Vehicle exit data
+    * @param entryTick
+    *   Tick when vehicle entered (for travel time)
+    */
+  private def sendLeaveLinkMicro(
+    event: ActorInteractionEvent,
+    data: LeaveLinkData,
+    entryTick: Long
+  ): Unit = {
+    val stillInLanes = state.vehiclesByLane.values.exists(
+      q => q.exists(_.actorId == data.actorId)
+    )
 
     if (!stillInLanes) {
-      logDebug(s"${data.actorId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
+      logDebug(
+        s"${data.actorId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only."
+      )
       if (state.totalVehiclesInMicro == 0 && microTickScheduled) {
         microTickScheduled = false
       }
       return
     }
 
-    state.vehiclesByLane.foreach { case (_, queue) =>
-      queue.dequeueAll(_.actorId == data.actorId)
+    state.vehiclesByLane.foreach {
+      case (_, queue) =>
+        queue.dequeueAll(_.actorId == data.actorId)
     }
 
     val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(data.actorId, 0.0)
@@ -582,13 +590,13 @@ class Link(
     }
   }
 
-  /**
-   * Sends vehicle exit acknowledgment in MESO mode.
-   *
-   * Sends link info back to vehicle for next routing decision.
-   *
-   * @param event Actor interaction event
-   */
+  /** Sends vehicle exit acknowledgment in MESO mode.
+    *
+    * Sends link info back to vehicle for next routing decision.
+    *
+    * @param event
+    *   Actor interaction event
+    */
   private def sendLeaveLinkDataMeso(event: ActorInteractionEvent): Unit = {
     val linkInfo = LinkInfoData(
       linkLength = state.length,
@@ -607,29 +615,28 @@ class Link(
     )
   }
 
-  /**
-   * Finds the least occupied lane for vehicle entry.
-   *
-   * @return Lane ID with fewest vehicles, or 0 if no lanes
-   */
-  private def findLeastOccupiedLane(): Int = {
+  /** Finds the least occupied lane for vehicle entry.
+    *
+    * @return
+    *   Lane ID with fewest vehicles, or 0 if no lanes
+    */
+  private def findLeastOccupiedLane(): Int =
     microSimulationStrategy.selectEntryLane(
       vehiclesByLane = scala.collection.mutable.Map.from(state.vehiclesByLane),
       vehicleId = "", // Not used in default implementation
       vehicleLength = 4.5 // Default car length
     )
-  }
 
-  /**
-   * Handles a global tick in MICRO mode.
-   *
-   * - Publishes dynamic cost if interval elapsed
-   * - Delegates micro simulation to strategy
-   * - Sends updates to vehicle actors
-   * - Emits summary metrics
-   *
-   * @param tick Current global tick
-   */
+  /** Handles a global tick in MICRO mode.
+    *
+    *   - Publishes dynamic cost if interval elapsed
+    *   - Delegates micro simulation to strategy
+    *   - Sends updates to vehicle actors
+    *   - Emits summary metrics
+    *
+    * @param tick
+    *   Current global tick
+    */
   private def handleGlobalTick(tick: Tick): Unit = {
     val processingStartedAt = System.nanoTime()
     ensureSummaryTick(tick)
@@ -644,7 +651,7 @@ class Link(
       if (state.totalVehiclesInMicro == 0) return
 
       val mutableLanes = scala.collection.mutable.Map.from(state.vehiclesByLane)
-      
+
       val updates = microSimulationStrategy.executeSubTick(
         vehiclesByLane = mutableLanes,
         subTick = 0, // Strategy handles internal sub-tick iteration
@@ -656,9 +663,10 @@ class Link(
         vehicleWaitingSeconds = vehicleWaitingSeconds
       )
 
-      updates.foreach { update =>
-        if (update.reachedEnd) sendMicroLeaveLinkToVehicle(update)
-        else sendMicroUpdateToVehicle(update)
+      updates.foreach {
+        update =>
+          if (update.reachedEnd) sendMicroLeaveLinkToVehicle(update)
+          else sendMicroUpdateToVehicle(update)
       }
     }
 
@@ -666,19 +674,22 @@ class Link(
     emitSumoSummaryStep(tick)
   }
 
-  /**
-   * Sends a proactive MicroLeaveLinkData to a vehicle that has reached the end of the link.
-   * This is the correct trigger for the vehicle to request signal state — the Link is the
-   * authority on when a vehicle exits, not the vehicle itself.
-   *
-   * The vehicle is removed from vehiclesByLane here; when its LeaveLinkData arrives later
-   * (after signal is green), sendLeaveLinkMicro will skip sending MicroLeaveLinkData again.
-   *
-   * @param update Vehicle update with reachedEnd=true
-   */
-  private def sendMicroLeaveLinkToVehicle(update: model.hybrid.micro.strategy.MicroVehicleUpdate): Unit = {
-    state.vehiclesByLane.foreach { case (_, queue) =>
-      queue.dequeueAll(_.actorId == update.vehicleId)
+  /** Sends a proactive MicroLeaveLinkData to a vehicle that has reached the end of the link. This
+    * is the correct trigger for the vehicle to request signal state — the Link is the authority on
+    * when a vehicle exits, not the vehicle itself.
+    *
+    * The vehicle is removed from vehiclesByLane here; when its LeaveLinkData arrives later (after
+    * signal is green), sendLeaveLinkMicro will skip sending MicroLeaveLinkData again.
+    *
+    * @param update
+    *   Vehicle update with reachedEnd=true
+    */
+  private def sendMicroLeaveLinkToVehicle(
+    update: model.hybrid.micro.strategy.MicroVehicleUpdate
+  ): Unit = {
+    state.vehiclesByLane.foreach {
+      case (_, queue) =>
+        queue.dequeueAll(_.actorId == update.vehicleId)
     }
 
     val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(update.vehicleId, 0.0)
@@ -686,9 +697,10 @@ class Link(
 
     val entryTick = vehicleEntryTick.getOrElse(update.vehicleId, currentTick)
     val elapsedTicks = math.max(1L, currentTick - entryTick + 1)
-    val avgSpeed = if (elapsedTicks > 0 && state.microTimeStep > 0)
-      state.length / (elapsedTicks * state.microTimeStep)
-    else update.velocity
+    val avgSpeed =
+      if (elapsedTicks > 0 && state.microTimeStep > 0)
+        state.length / (elapsedTicks * state.microTimeStep)
+      else update.velocity
 
     val microLeaveData = MicroLeaveLinkData(
       linkId = getEntityId,
@@ -713,12 +725,14 @@ class Link(
     }
   }
 
-  /**
-   * Sends a micro-simulation update to a vehicle actor.
-   *
-   * @param update Vehicle update containing position, velocity, etc.
-   */
-  private def sendMicroUpdateToVehicle(update: model.hybrid.micro.strategy.MicroVehicleUpdate): Unit = {
+  /** Sends a micro-simulation update to a vehicle actor.
+    *
+    * @param update
+    *   Vehicle update containing position, velocity, etc.
+    */
+  private def sendMicroUpdateToVehicle(
+    update: model.hybrid.micro.strategy.MicroVehicleUpdate
+  ): Unit = {
     val microUpdateData = MicroUpdateData(
       subTick = update.subTick,
       position = update.position,
@@ -740,12 +754,12 @@ class Link(
     )
   }
 
-  /**
-   * Ensures metrics are reset for a new tick.
-   *
-   * @param tick Current tick
-   */
-  private def ensureSummaryTick(tick: Tick): Unit = {
+  /** Ensures metrics are reset for a new tick.
+    *
+    * @param tick
+    *   Current tick
+    */
+  private def ensureSummaryTick(tick: Tick): Unit =
     if (summaryTick != tick) {
       summaryTick = tick
       tickLoaded = 0
@@ -754,23 +768,19 @@ class Link(
       tickTravelTimeSum = 0.0
       tickProcessingDurationMs = 0L
     }
-  }
 
-  /**
-   * Records a vehicle insertion into the link.
-   * Updates per-tick and cumulative metrics.
-   */
+  /** Records a vehicle insertion into the link. Updates per-tick and cumulative metrics.
+    */
   private def onVehicleInserted(): Unit = {
     tickInserted += 1
     cumulativeLoaded += 1
   }
 
-  /**
-   * Records a vehicle arrival (exit from link).
-   * Updates per-tick and cumulative metrics.
-   *
-   * @param travelTime Travel time through the link (seconds)
-   */
+  /** Records a vehicle arrival (exit from link). Updates per-tick and cumulative metrics.
+    *
+    * @param travelTime
+    *   Travel time through the link (seconds)
+    */
   private def onVehicleArrived(travelTime: Double): Unit = {
     tickArrived += 1
     cumulativeArrived += 1
@@ -779,17 +789,17 @@ class Link(
     }
   }
 
-  /**
-   * Emits SUMO-style summary metrics for this tick.
-   *
-   * Includes:
-   * - Vehicle counts (loaded, inserted, running, arrived)
-   * - Speed metrics (mean speed, relative speed)
-   * - Travel and waiting times
-   * - Halting vehicles (MICRO mode only)
-   *
-   * @param tick Current tick
-   */
+  /** Emits SUMO-style summary metrics for this tick.
+    *
+    * Includes:
+    *   - Vehicle counts (loaded, inserted, running, arrived)
+    *   - Speed metrics (mean speed, relative speed)
+    *   - Travel and waiting times
+    *   - Halting vehicles (MICRO mode only)
+    *
+    * @param tick
+    *   Current tick
+    */
   private def emitSumoSummaryStep(tick: Tick): Unit = {
     val running = state.totalVehicles
     val halting = if (state.isMicroMode) {
@@ -807,11 +817,19 @@ class Link(
     val runningVehicleIds = state.registered.iterator.map(_.actorId).toVector
     val meanTravelTime =
       if (runningVehicleIds.nonEmpty)
-        runningVehicleIds.map(id => math.max(0L, tick - vehicleEntryTick.getOrElse(id, tick)).toDouble).sum / runningVehicleIds.size
+        runningVehicleIds
+          .map(
+            id => math.max(0L, tick - vehicleEntryTick.getOrElse(id, tick)).toDouble
+          )
+          .sum / runningVehicleIds.size
       else 0.0
     val meanWaitingTime =
       if (runningVehicleIds.nonEmpty)
-        runningVehicleIds.map(id => vehicleWaitingSeconds.getOrElse(id, 0.0)).sum / runningVehicleIds.size
+        runningVehicleIds
+          .map(
+            id => vehicleWaitingSeconds.getOrElse(id, 0.0)
+          )
+          .sum / runningVehicleIds.size
       else 0.0
     val waiting = math.max(0L, cumulativeLoadedVehicles - cumulativeLoaded).toInt
 
@@ -844,15 +862,14 @@ class Link(
     )
   }
 
-  /**
-   * Publishes current dynamic cost to Kafka for routing updates.
-   *
-   * Cost is based on:
-   * - Current speed vs. free-flow speed
-   * - Vehicle count vs. capacity
-   * - Congestion factor
-   * - Link length
-   */
+  /** Publishes current dynamic cost to Kafka for routing updates.
+    *
+    * Cost is based on:
+    *   - Current speed vs. free-flow speed
+    *   - Vehicle count vs. capacity
+    *   - Congestion factor
+    *   - Link length
+    */
   private def publishDynamicCost(): Unit = {
     val dynamicCost = DynamicLinkCost.fromLinkState(
       linkId = getEntityId,
@@ -872,28 +889,27 @@ class Link(
     }
   }
 
-  /**
-   * Handles link destruction on simulation termination.
-   *
-   * Forwards DestructEvent to all registered vehicles to ensure proper cleanup.
-   * This is critical for MICRO mode where vehicles may have stopped scheduling
-   * their own events and rely on the link for lifecycle management.
-   *
-   * @param event DestructEvent from the system
-   */
-  override def onDestruct(event: DestructEvent): Unit = {
-    state.registered.foreach { reg =>
-      val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
-      shardRef ! EntityEnvelopeEvent(
-        IdUtil.format(reg.actorId),
-        DestructEvent(actorRef = self.path.toString)
-      )
+  /** Handles link destruction on simulation termination.
+    *
+    * Forwards DestructEvent to all registered vehicles to ensure proper cleanup. This is critical
+    * for MICRO mode where vehicles may have stopped scheduling their own events and rely on the
+    * link for lifecycle management.
+    *
+    * @param event
+    *   DestructEvent from the system
+    */
+  override def onDestruct(event: DestructEvent): Unit =
+    state.registered.foreach {
+      reg =>
+        val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
+        shardRef ! EntityEnvelopeEvent(
+          IdUtil.format(reg.actorId),
+          DestructEvent(actorRef = self.path.toString)
+        )
     }
-  }
 }
 
 object Link {
-  def apply(properties: Properties): Link = {
+  def apply(properties: Properties): Link =
     new Link(properties)
-  }
 }

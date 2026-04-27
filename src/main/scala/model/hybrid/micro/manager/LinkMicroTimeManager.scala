@@ -209,10 +209,10 @@ class LinkMicroTimeManager(
       val newVelocity = if (gap > 0) {
         val targetVel =
           math.min(leader.map(_.velocity).getOrElse(vehicle.velocity + 2.0), 13.89)
-        val velChange = (targetVel - vehicle.velocity) * 0.5 
+        val velChange = (targetVel - vehicle.velocity) * 0.5
         math.max(0.0, vehicle.velocity + velChange)
       } else {
-        math.max(0.0, leaderVelocity - 1.0) 
+        math.max(0.0, leaderVelocity - 1.0)
       }
 
       val newPosition = vehicle.position + newVelocity * microTimeStep

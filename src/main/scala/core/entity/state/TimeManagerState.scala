@@ -29,7 +29,7 @@ case class TimeManagerState(
   var currentWindowStart: Tick = 0,
   var currentWindowEnd: Tick = 0,
   var windowExecutionEnabled: Boolean = false,
-  var simulationStartWallTime: Long = 0, 
+  var simulationStartWallTime: Long = 0,
   var lastMetricsTick: Tick = 0,
   var lastMetricsTime: Long = 0,
   var ticksProcessedSinceLastMetric: Long = 0,

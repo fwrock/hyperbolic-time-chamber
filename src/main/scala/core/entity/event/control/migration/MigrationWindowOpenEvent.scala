@@ -8,13 +8,13 @@ import org.apache.pekko.actor.ActorRef
 
 /** Broadcast by the LoadBalanceManager via DistributedPubSub to open the migration window.
   *
-  * Every [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]] on all
-  * cluster nodes receives this event and:
-  *   1. Sets MigrationStateStoreRegistry.isMigrationActive = true
-  *   2. Acknowledges via [[MigrationWindowAckEvent]] with phase "open"
+  * Every [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]] on all cluster
+  * nodes receives this event and:
+  *   1. Sets MigrationStateStoreRegistry.isMigrationActive = true 2. Acknowledges via
+  *      [[MigrationWindowAckEvent]] with phase "open"
   *
-  * The LBM waits for ACKs from all known cluster nodes before triggering the Pekko
-  * shard rebalance — ensuring the flag is set everywhere BEFORE any actor is recreated.
+  * The LBM waits for ACKs from all known cluster nodes before triggering the Pekko shard rebalance
+  * — ensuring the flag is set everywhere BEFORE any actor is recreated.
   *
   * @param batchId
   *   Unique ID for this migration batch (correlates all events in this migration cycle)

@@ -4,8 +4,8 @@ package core.entity.control.loadbalance
 /** Simple case class implementing [[SpatialEntity]] for batch registration.
   *
   * Used by [[core.actor.manager.load.CreatorLoadData]] when registering entities with
-  * [[core.actor.manager.loadbalance.LoadBalanceManager]] during creation. This is a lightweight
-  * DTO — the actual domain state (NodeState, LinkState, etc.) is created later during actor
+  * [[core.actor.manager.loadbalance.LoadBalanceManager]] during creation. This is a lightweight DTO
+  * — the actual domain state (NodeState, LinkState, etc.) is created later during actor
   * initialization.
   *
   * @param spatialEntityId
@@ -16,8 +16,8 @@ package core.entity.control.loadbalance
   *   Estimated cost per tick (default 1.0)
   */
 /** NOTE: position is split into `lon`/`lat` primitives to remain Jackson-serializable across
-  * cluster nodes. Scala Tuple2 is not supported by Jackson CBOR without the Scala module.
-  * The `position` getter reconstructs the tuple in-memory for use by strategies.
+  * cluster nodes. Scala Tuple2 is not supported by Jackson CBOR without the Scala module. The
+  * `position` getter reconstructs the tuple in-memory for use by strategies.
   */
 case class SpatialEntityData(
   spatialEntityId: String,

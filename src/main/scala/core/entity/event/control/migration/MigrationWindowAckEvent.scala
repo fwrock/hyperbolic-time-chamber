@@ -4,8 +4,8 @@ package core.entity.event.control.migration
 import core.entity.event.BaseEvent
 import core.entity.event.data.DefaultBaseEventData
 
-/** Sent by a MigrationWindowSubscriber to the LoadBalanceManager to acknowledge
-  * a migration window open or close broadcast.
+/** Sent by a MigrationWindowSubscriber to the LoadBalanceManager to acknowledge a migration window
+  * open or close broadcast.
   *
   * The LBM uses these to implement the two-phase distributed barrier:
   *   - "open" ACKs: wait for all nodes → then trigger Pekko rebalance

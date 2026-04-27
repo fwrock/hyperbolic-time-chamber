@@ -62,9 +62,7 @@ case class CarState(
   var distance: Double = 0,
   override val actorType: ActorTypeEnum,
   override val size: Double,
-
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-
   var microState: Option[MicroCarState] = None
 ) extends MovableState(
       startTick = startTick,

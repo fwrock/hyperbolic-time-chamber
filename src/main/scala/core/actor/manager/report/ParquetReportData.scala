@@ -21,25 +21,19 @@ import scala.collection.mutable
 
 /** Report writer that persists simulation events as Apache Parquet files.
   *
-  * Each actor instance owns a single Parquet file (identified by a UUID suffix)
-  * and keeps the writer open for the lifetime of the actor — identical to the
-  * JsonReportData pattern. The writer is closed (and the Parquet footer is
-  * written) in postStop(), ensuring readable files even on graceful shutdown.
+  * Each actor instance owns a single Parquet file (identified by a UUID suffix) and keeps the
+  * writer open for the lifetime of the actor — identical to the JsonReportData pattern. The writer
+  * is closed (and the Parquet footer is written) in postStop(), ensuring readable files even on
+  * graceful shutdown.
   *
-  * Compression codec is configurable via `htc.report-manager.parquet.compression`:
-  *   snappy (default) — fast, moderate ratio; good for GCS / HDFS
-  *   zstd             — better ratio, tunable level; good for long-term storage
-  *   gzip             — maximum ratio, slow; included for compatibility
-  *   uncompressed     — no compression, maximum write throughput
+  * Compression codec is configurable via `htc.report-manager.parquet.compression`: snappy (default)
+  * — fast, moderate ratio; good for GCS / HDFS zstd — better ratio, tunable level; good for
+  * long-term storage gzip — maximum ratio, slow; included for compatibility uncompressed — no
+  * compression, maximum write throughput
   *
-  * Schema (flat, queryable with Spark / DuckDB / AWS Athena):
-  *   entity_id     STRING
-  *   tick          INT64
-  *   real_time_ms  INT64
-  *   lamport_tick  INT64
-  *   event_type    STRING (nullable)
-  *   simulation_id STRING
-  *   data          STRING (nullable, JSON-encoded event payload)
+  * Schema (flat, queryable with Spark / DuckDB / AWS Athena): entity_id STRING tick INT64
+  * real_time_ms INT64 lamport_tick INT64 event_type STRING (nullable) simulation_id STRING data
+  * STRING (nullable, JSON-encoded event payload)
   */
 class ParquetReportData(
   override val reportManager: ActorRef,
@@ -49,7 +43,6 @@ class ParquetReportData(
       reportManager = reportManager,
       startRealTime = startRealTime
     ) {
-
 
   private val SCHEMA_JSON =
     """{
@@ -68,7 +61,7 @@ class ParquetReportData(
       |}""".stripMargin
 
   private val SCHEMA = new Schema.Parser().parse(SCHEMA_JSON)
-  
+
   private val prefix =
     try config.getString("htc.report-manager.parquet.prefix")
     catch { case _: Exception => "htc_simulation_" }
@@ -93,34 +86,32 @@ class ParquetReportData(
     try config.getInt("htc.report-manager.parquet.zstd-level")
     catch { case _: Exception => 6 }
 
-
   private val codec: CompressionCodecName = compressionCodecName match {
-    case "snappy"        => CompressionCodecName.SNAPPY
-    case "zstd"          => CompressionCodecName.ZSTD
-    case "gzip"          => CompressionCodecName.GZIP
-    case "uncompressed"  => CompressionCodecName.UNCOMPRESSED
+    case "snappy"       => CompressionCodecName.SNAPPY
+    case "zstd"         => CompressionCodecName.ZSTD
+    case "gzip"         => CompressionCodecName.GZIP
+    case "uncompressed" => CompressionCodecName.UNCOMPRESSED
     case other =>
       logWarn(s"Unknown Parquet compression codec '$other', falling back to SNAPPY")
       CompressionCodecName.SNAPPY
   }
-  
 
-  private val dateFormatter      = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
+  private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
-  private val timeBasedId        = effectiveStartTime.format(dateFormatter)
+  private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
   private val extension: String = compressionCodecName match {
-    case "snappy"        => ".snappy.parquet"
-    case "zstd"          => ".zstd.parquet"
-    case "gzip"          => ".gz.parquet"
-    case _               => ".parquet"
+    case "snappy" => ".snappy.parquet"
+    case "zstd"   => ".zstd.parquet"
+    case "gzip"   => ".gz.parquet"
+    case _        => ".parquet"
   }
 
   private lazy val simulationId: String = {
     val fromSimConfig =
       try Some(core.util.SimulationUtil.loadSimulationConfig()).flatMap(_.id)
       catch { case _: Exception => None }
-    val fromEnv  = sys.env.get("HTC_SIMULATION_ID")
+    val fromEnv = sys.env.get("HTC_SIMULATION_ID")
     val fromConf =
       try Some(config.getString("htc.simulation.id"))
       catch { case _: Exception => None }
@@ -142,11 +133,10 @@ class ParquetReportData(
     s"$directory/${prefix}${timeBasedId}_${freshId}_events${extension}"
   }
 
-
-  private val buffer                                = mutable.ArrayBuffer.empty[ReportEvent]
-  private var writer: ParquetWriter[GenericRecord]  = _
-  private var currentFilePath: String               = _
-  private var flushCount: Long                      = 0L
+  private val buffer = mutable.ArrayBuffer.empty[ReportEvent]
+  private var writer: ParquetWriter[GenericRecord] = _
+  private var currentFilePath: String = _
+  private var flushCount: Long = 0L
 
   private def getOrCreateWriter(): ParquetWriter[GenericRecord] = {
     if (writer == null) {
@@ -170,23 +160,24 @@ class ParquetReportData(
         .withDictionaryEncoding("data", false)
         .withPageWriteChecksumEnabled(true)
         .build()
-      logInfo(s"Opened Parquet writer: $currentFilePath (codec=$compressionCodecName, version=PARQUET_2_0)")
+      logInfo(
+        s"Opened Parquet writer: $currentFilePath (codec=$compressionCodecName, version=PARQUET_2_0)"
+      )
     }
     writer
   }
 
   private def closeWriter(): Unit =
     if (writer != null) {
-      try { writer.close() }
+      try writer.close()
       catch { case e: Exception => logError(s"Error closing Parquet writer: ${e.getMessage}", e) }
       writer = null
     }
-  
+
   override def onReport(event: ReportEvent): Unit = {
     buffer += event
     if (buffer.size >= batchSize) flushBuffer()
   }
-  
 
   private def flushBuffer(): Unit = {
     if (buffer.isEmpty) return
@@ -194,16 +185,17 @@ class ParquetReportData(
 
     try {
       val w = getOrCreateWriter()
-      buffer.foreach { event =>
-        val record = new GenericData.Record(SCHEMA)
-        record.put("entity_id",     Option(event.entityId).getOrElse(""))
-        record.put("tick",          event.tick)
-        record.put("real_time_ms",  System.currentTimeMillis())
-        record.put("lamport_tick",  event.lamportTick)
-        record.put("event_type",    event.label)
-        record.put("simulation_id", sid)
-        record.put("data",          JsonUtil.toJson(event.data))
-        w.write(record)
+      buffer.foreach {
+        event =>
+          val record = new GenericData.Record(SCHEMA)
+          record.put("entity_id", Option(event.entityId).getOrElse(""))
+          record.put("tick", event.tick)
+          record.put("real_time_ms", System.currentTimeMillis())
+          record.put("lamport_tick", event.lamportTick)
+          record.put("event_type", event.label)
+          record.put("simulation_id", sid)
+          record.put("data", JsonUtil.toJson(event.data))
+          w.write(record)
       }
       flushCount += 1
       if (flushCount % 50 == 0)
@@ -215,13 +207,11 @@ class ParquetReportData(
         closeWriter()
     }
   }
-  
 
   override def postStop(): Unit = {
     if (buffer.nonEmpty) flushBuffer()
     closeWriter()
   }
-
 
   private def mkdir(dir: String): Unit = {
     val dirPath: Path = Paths.get(dir)

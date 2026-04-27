@@ -25,15 +25,15 @@ import org.htc.protobuf.core.entity.actor.Identify
 trait PrivateVehicle[T <: MovableState] {
   self: Movable[T] =>
 
-  /** True once this vehicle has ever been activated by a Person actor.
-    * Once set, it is NEVER cleared — even between trips.
-    * A person-centric vehicle must NOT selfDestruct() after completing a trip;
-    * it returns to Parked and waits for the next StartTrip from its owner Person.
+  /** True once this vehicle has ever been activated by a Person actor. Once set, it is NEVER
+    * cleared — even between trips. A person-centric vehicle must NOT selfDestruct() after
+    * completing a trip; it returns to Parked and waits for the next StartTrip from its owner
+    * Person.
     */
   private var personCentric: Boolean = false
 
-  /** Whether this vehicle is managed by a Person actor.
-    * Determines lifecycle: person-centric → survive between trips; standalone → selfDestruct on finish.
+  /** Whether this vehicle is managed by a Person actor. Determines lifecycle: person-centric →
+    * survive between trips; standalone → selfDestruct on finish.
     */
   protected def isPersonCentric: Boolean = personCentric
 
@@ -85,9 +85,9 @@ trait PrivateVehicle[T <: MovableState] {
   protected def logVehicleWarn(message: String): Unit
   protected def logVehicleDebug(message: String): Unit
 
-  /** Register this vehicle with the TimeManager pool for the first time.
-    * Must use scheduleEvent (TM pool router) instead of onFinishSpontaneous
-    * because passive vehicles (scheduleOnTimeManager=false) have null currentTimeManager.
+  /** Register this vehicle with the TimeManager pool for the first time. Must use scheduleEvent (TM
+    * pool router) instead of onFinishSpontaneous because passive vehicles
+    * (scheduleOnTimeManager=false) have null currentTimeManager.
     */
   protected def registerOnTimeManager(tick: Tick): Unit
 
@@ -101,9 +101,9 @@ trait PrivateVehicle[T <: MovableState] {
     logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
 
-  /** Hook called at the beginning of each new trip (before activation).
-    * Subclasses must override to reset all per-trip variables (metrics, SUMO stats, link tracking).
-    * This is critical for person-centric vehicles that serve multiple trips without being destroyed.
+  /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
+    * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
+    * person-centric vehicles that serve multiple trips without being destroyed.
     */
   protected def resetTripState(): Unit = {}
 
@@ -132,7 +132,7 @@ trait PrivateVehicle[T <: MovableState] {
       ownerPersonRef = Some(
         Identify(
           id = data.personId,
-          classType = event.actorClassType 
+          classType = event.actorClassType
         )
       )
       tripOrigin = Some(data.origin)
@@ -208,7 +208,7 @@ trait PrivateVehicle[T <: MovableState] {
           actorType = LoadBalancedDistributed
         )
 
-            logVehicleDebug(
+        logVehicleDebug(
           s"${getActorEntityId} reported trip completion to ${personRef.id}: ${distanceTraveled}m in $travelTime ticks"
         )
     }
@@ -223,7 +223,7 @@ trait PrivateVehicle[T <: MovableState] {
     tripStartTick = None
     tripStartDistance = 0.0
 
-        logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
+    logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
 
     scheduleNextTick(None)
   }
@@ -257,10 +257,10 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def isParked: Boolean = getVehicleStatus == Parked
 
-  /** Private vehicles should only re-register on the TM after migration when they are
-    * NOT parked.  When parked they are waiting passively for a StartTrip message from
-    * Person; re-registering would fire a spurious spontaneous tick which is immediately
-    * discarded by the Parked guard in actSpontaneous — wasting a TM slot.
+  /** Private vehicles should only re-register on the TM after migration when they are NOT parked.
+    * When parked they are waiting passively for a StartTrip message from Person; re-registering
+    * would fire a spurious spontaneous tick which is immediately discarded by the Parked guard in
+    * actSpontaneous — wasting a TM slot.
     */
   override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean = !isParked
 
@@ -280,6 +280,6 @@ trait PrivateVehicle[T <: MovableState] {
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
       case _ =>
-        false 
+        false
     }
 }

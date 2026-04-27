@@ -27,12 +27,12 @@ object ActorCreatorUtil {
 
   /** Shard ID extractor that uses spatial assignments when available.
     *
-    * If the entity has been registered with LoadBalanceManager and its spatial shard ID
-    * is stored in [[SpatialShardIdRegistry]], that ID is used for routing. Otherwise,
-    * falls back to hash-based assignment (id.hashCode % 1000).
+    * If the entity has been registered with LoadBalanceManager and its spatial shard ID is stored
+    * in [[SpatialShardIdRegistry]], that ID is used for routing. Otherwise, falls back to
+    * hash-based assignment (id.hashCode % 1000).
     *
-    * This enables spatially-aware initial placement when load balancing is enabled,
-    * while remaining fully backward-compatible when it is not.
+    * This enables spatially-aware initial placement when load balancing is enabled, while remaining
+    * fully backward-compatible when it is not.
     */
   private val extractShardId: ShardRegion.ExtractShardId = {
     case EntityEnvelopeEvent(id, _) =>
@@ -170,7 +170,8 @@ object ActorCreatorUtil {
             extractEntityId = extractEntityId,
             extractShardId = extractShardId,
             allocationStrategy = allocator,
-            handOffStopMessage = org.htc.protobuf.core.entity.event.control.execution.DestructEvent(actorRef = "")
+            handOffStopMessage =
+              org.htc.protobuf.core.entity.event.control.execution.DestructEvent(actorRef = "")
           )
         case None =>
           sharding.start(

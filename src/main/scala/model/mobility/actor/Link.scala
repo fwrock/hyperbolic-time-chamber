@@ -8,11 +8,7 @@ import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.entity.state.model.LinkRegister
-import model.mobility.entity.event.data.{
-  EnterLinkData,
-  LeaveLinkData,
-  VehicleLinkFlowData
-}
+import model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData, VehicleLinkFlowData }
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.properties.Properties

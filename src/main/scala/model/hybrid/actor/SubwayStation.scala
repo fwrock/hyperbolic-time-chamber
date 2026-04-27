@@ -40,7 +40,9 @@ class SubwayStation(
 
   override def handlePostLoadRegistration(): Unit = {
     val nodeOpt = getDependencyOption(state.nodeId).orElse(
-      relationships.values.find(d => d.classType != null && d.classType.endsWith("Node"))
+      relationships.values.find(
+        d => d.classType != null && d.classType.endsWith("Node")
+      )
     )
     nodeOpt match {
       case Some(node) =>
@@ -56,7 +58,8 @@ class SubwayStation(
         logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None if state.nodeId != null && state.nodeId.nonEmpty =>
         logWarn(
-          s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys.mkString(", ")}]). " +
+          s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys
+              .mkString(", ")}]). " +
             s"Registering with node ${state.nodeId} via direct routing."
         )
         sendMessageTo(
@@ -97,7 +100,7 @@ class SubwayStation(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
-      case d: SubwayRequestPassengerData => handleSubwayRequestPassenger(event, d)
+      case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
       case _                              => logWarn("Event not handled")
     }
 
@@ -211,7 +214,7 @@ class SubwayStation(
       timeManagers = properties.timeManagers,
       creatorManager = properties.creatorManager,
       reporters = properties.reporters,
-      data = toJson({
+      data = toJson {
         val subwayState = SubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
@@ -225,7 +228,7 @@ class SubwayStation(
         )
         subwayState.bestRoute = Some(route)
         subwayState
-      }),
+      },
       relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType

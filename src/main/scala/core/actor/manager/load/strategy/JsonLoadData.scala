@@ -20,7 +20,8 @@ import scala.util.{ Failure, Success }
 class JsonLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
 
-  private implicit def ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+  private implicit def ec: ExecutionContext =
+    context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
 
   private var managerRef: ActorRef = _
   private var creatorRef: ActorRef = _
@@ -120,19 +121,21 @@ class JsonLoadData(private val properties: Properties)
 
     if (loadBalanced.nonEmpty) {
       creators.add(creatorRef)
-      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 
     if (poolDistributed.nonEmpty) {
       creators.add(creatorPoolRef)
-      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 

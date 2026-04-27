@@ -8,9 +8,8 @@ import org.apache.pekko.actor.ActorRef
 
 /** Sent by the SnapshotManager to register a migration batch.
   *
-  * The LoadBalanceManager sends this to SM before notifying entities, so SM knows
-  * which entities belong to the batch and can associate their snapshots with the
-  * correct batchId and lbmRef.
+  * The LoadBalanceManager sends this to SM before notifying entities, so SM knows which entities
+  * belong to the batch and can associate their snapshots with the correct batchId and lbmRef.
   *
   * @param batchId
   *   Unique ID for this migration batch

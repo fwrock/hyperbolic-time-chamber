@@ -6,11 +6,11 @@ import java.net.http.{ HttpClient, HttpRequest, HttpResponse }
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 
-/** Manages communication with ClickHouse via its HTTP API (port 8123).
-  * Uses Java 21's built-in HttpClient — no extra dependency required.
+/** Manages communication with ClickHouse via its HTTP API (port 8123). Uses Java 21's built-in
+  * HttpClient — no extra dependency required.
   *
-  * All operations are fail-safe: errors are logged and surfaced to the
-  * caller so the reporter can decide to drop rather than crash.
+  * All operations are fail-safe: errors are logged and surfaced to the caller so the reporter can
+  * decide to drop rather than crash.
   */
 class ClickHouseClientManager(
   val host: String,
@@ -26,7 +26,7 @@ class ClickHouseClientManager(
     .newBuilder()
     .connectTimeout(Duration.ofSeconds(5))
     .build()
-  
+
   private val createDatabase =
     s"CREATE DATABASE IF NOT EXISTS $database"
 
@@ -71,9 +71,8 @@ class ClickHouseClientManager(
        |FROM $database.vehicle_link_events
        |GROUP BY simulation_id, link_id, tick""".stripMargin
 
-
-  /** Creates database, tables and materialized view if they don't exist.
-    * Returns Right(()) on success, Left(error message) on failure.
+  /** Creates database, tables and materialized view if they don't exist. Returns Right(()) on
+    * success, Left(error message) on failure.
     */
   def createSchemaIfNeeded(): Either[String, Unit] =
     try {
@@ -87,16 +86,17 @@ class ClickHouseClientManager(
     }
 
   /** Inserts a batch of JSONL rows into vehicle_link_events.
-    * @param jsonLines Sequence of JSON strings (one object per line)
-    * Returns Right(()) on success, Left(error) on failure.
+    * @param jsonLines
+    *   Sequence of JSON strings (one object per line) Returns Right(()) on success, Left(error) on
+    *   failure.
     */
   def insertBatch(jsonLines: Seq[String]): Either[String, Unit] =
     if (jsonLines.isEmpty) Right(())
     else
       try {
-        val body   = jsonLines.mkString("\n")
-        val query  = s"INSERT INTO $database.vehicle_link_events FORMAT JSONEachRow"
-        val url    = s"$baseUrl?query=${java.net.URLEncoder.encode(query, StandardCharsets.UTF_8)}"
+        val body = jsonLines.mkString("\n")
+        val query = s"INSERT INTO $database.vehicle_link_events FORMAT JSONEachRow"
+        val url = s"$baseUrl?query=${java.net.URLEncoder.encode(query, StandardCharsets.UTF_8)}"
         val status = postRaw(url, body)
         if (status >= 200 && status < 300) Right(())
         else Left(s"ClickHouse returned HTTP $status")
@@ -118,7 +118,7 @@ class ClickHouseClientManager(
     } catch {
       case _: Exception => false
     }
-  
+
   private def execute(sql: String): Unit = {
     val status = postRaw(baseUrl, sql)
     if (status < 200 || status >= 300)

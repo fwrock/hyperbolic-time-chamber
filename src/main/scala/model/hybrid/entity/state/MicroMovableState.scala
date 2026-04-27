@@ -14,7 +14,7 @@ package model.hybrid.entity.state
   *   - Vehicle characteristics: length, lane position
   */
 trait MicroMovableState {
-  
+
   /** Position in the link (meters from link start) */
   def positionInLink: Double
 
@@ -26,7 +26,7 @@ trait MicroMovableState {
 
   /** Current lane (0-indexed, 0 = leftmost lane) */
   def currentLane: Int
-  
+
   /** ID of the vehicle ahead in the same lane */
   def leaderVehicle: Option[String]
 
@@ -35,7 +35,7 @@ trait MicroMovableState {
 
   /** Velocity of the leader vehicle (m/s) */
   def leaderVelocity: Double
-  
+
   /** Maximum acceleration capability (m/s²) */
   def maxAcceleration: Double
 
@@ -50,16 +50,16 @@ trait MicroMovableState {
 
   /** Driver reaction time (seconds) */
   def reactionTime: Double
-  
+
   /** Length of the vehicle (meters) */
   def vehicleLength: Double
-  
+
   /** Desired target lane for lane change (None if happy in current lane) */
   def desiredLane: Option[Int]
 
   /** Progress of lane change maneuver (0.0 = in original lane, 1.0 = in target lane) */
   def laneChangeProgress: Double
-  
+
   /** Calculate the rear position of the vehicle (front position - length) */
   def rearPosition: Double = positionInLink - vehicleLength
 

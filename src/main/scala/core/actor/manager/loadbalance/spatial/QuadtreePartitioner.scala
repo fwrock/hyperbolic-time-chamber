@@ -60,19 +60,18 @@ class QuadtreePartitioner(
   }
 
   /** Removes an entity from the quadtree. */
-  def removeEntity(entityId: String): Unit = {
+  def removeEntity(entityId: String): Unit =
     entityShardMap.remove(entityId).foreach {
       shardId =>
         shardEntities.get(shardId).foreach(_.remove(entityId))
     }
-  }
 
   /** Updates an entity's position. Returns new shard ID if changed, None if same. */
   def updateEntityPosition(entityId: String, newX: Double, newY: Double): Option[String] = {
     val newShardId = getShardId(newX, newY)
     entityShardMap.get(entityId) match {
       case Some(currentShardId) if currentShardId == newShardId =>
-        None 
+        None
       case Some(currentShardId) =>
         shardEntities.get(currentShardId).foreach(_.remove(entityId))
         entityShardMap.put(entityId, newShardId)
@@ -120,7 +119,9 @@ class QuadtreePartitioner(
     */
   def getAdjacentShardIds(shardId: String): Set[String] =
     findLeafByShardId(root, shardId)
-      .map(leaf => findNeighboringLeaves(root, leaf).map(_.shardId).toSet)
+      .map(
+        leaf => findNeighboringLeaves(root, leaf).map(_.shardId).toSet
+      )
       .getOrElse(Set.empty)
 
   /** Adaptively refines the quadtree based on entity density.
@@ -243,11 +244,10 @@ class QuadtreePartitioner(
 
     for (leaf <- leaves) {
       val neighbors = findNeighboringLeaves(node, leaf)
-      for (neighbor <- neighbors) {
+      for (neighbor <- neighbors)
         if (leaf.depth - neighbor.depth > 1) {
           needsAnotherPass = true
         }
-      }
     }
 
     if (needsAnotherPass) {

@@ -14,7 +14,7 @@ import scala.math.Numeric
 
 /** Estrutura para uma aresta no JSON, usando IDs de referência. */
 private case class JsonEdgeRefFormat[ID, W, L](
-  source_id: ID, 
+  source_id: ID,
   target_id: ID,
   weight: Option[W],
   label: L
@@ -137,7 +137,7 @@ case class Graph[V, W, L] private (
       }
     dfsRecursive(List(startNode), Set.empty, List.empty)
   }
-  
+
   /** A* que retorna o caminho como uma lista de tuplas (Aresta Completa, Nó Destino da Aresta no
     * Caminho).
     */
@@ -202,7 +202,7 @@ case class Graph[V, W, L] private (
 
     while (openSet.nonEmpty) {
       val (currentFScore, current) = openSet.dequeue() // Pega fScore real da fila
-      
+
       if (currentFScore > fScore(current)) {
         // Continue para a próxima iteração (em Scala, isso pode ser feito não fazendo nada aqui
         // e deixando o loop continuar, ou usando uma estrutura de loop que suporte `continue`)
@@ -424,20 +424,22 @@ case class Graph[V, W, L] private (
     loop(endNode, Nil)
   }
 
-   /** Builds a [[ContractionHierarchiesIndex]] for this graph.
+  /** Builds a [[ContractionHierarchiesIndex]] for this graph.
     *
-    * Preprocessing contracts nodes in order of their *edge-difference* importance
-    * (|shortcuts| − |incoming + outgoing edges|). Shortcuts are added to preserve
-    * shortest-path distances through the contracted node. The resulting index supports
-    * extremely fast bidirectional Dijkstra queries via
-    * [[ContractionHierarchiesIndex.query]].
+    * Preprocessing contracts nodes in order of their *edge-difference* importance (|shortcuts| −
+    * \|incoming + outgoing edges|). Shortcuts are added to preserve shortest-path distances through
+    * the contracted node. The resulting index supports extremely fast bidirectional Dijkstra
+    * queries via [[ContractionHierarchiesIndex.query]].
     *
-    * Complexity: O(n · k²) worst case, where k is the average degree. In practice
-    * road-network graphs have small k, so preprocessing is fast.
+    * Complexity: O(n · k²) worst case, where k is the average degree. In practice road-network
+    * graphs have small k, so preprocessing is fast.
     *
-    * @return A pre-computed [[ContractionHierarchiesIndex]] ready for queries.
+    * @return
+    *   A pre-computed [[ContractionHierarchiesIndex]] ready for queries.
     */
-  def buildContractionHierarchies(implicit num: Numeric[W]): graph.ContractionHierarchiesIndex[V, W, L] = {
+  def buildContractionHierarchies(implicit
+    num: Numeric[W]
+  ): graph.ContractionHierarchiesIndex[V, W, L] = {
     val weightToDouble: W => Double = num.toDouble(_)
 
     val fwd = mutable.Map[V, mutable.Map[V, Double]]()
@@ -457,9 +459,10 @@ case class Graph[V, W, L] private (
         }
     }
 
-    vertices.foreach { v =>
-      fwd.getOrElseUpdate(v, mutable.Map.empty)
-      bwd.getOrElseUpdate(v, mutable.Map.empty)
+    vertices.foreach {
+      v =>
+        fwd.getOrElseUpdate(v, mutable.Map.empty)
+        bwd.getOrElseUpdate(v, mutable.Map.empty)
     }
 
     val shortcuts = mutable.Map[(V, V), V]()
@@ -468,9 +471,9 @@ case class Graph[V, W, L] private (
 
     val remaining = mutable.Set[V]() ++= vertices
 
-    /** Witness search: find shortest path from `src` to `tgt` in the graph,
-      * but *skipping* node `skip`, up to distance `maxDist`.
-      * Uses a small Dijkstra limited to `maxSettled` settlements for speed.
+    /** Witness search: find shortest path from `src` to `tgt` in the graph, but *skipping* node
+      * `skip`, up to distance `maxDist`. Uses a small Dijkstra limited to `maxSettled` settlements
+      * for speed.
       */
     def witnessExists(src: V, tgt: V, skip: V, maxDist: Double, maxSettled: Int): Boolean = {
       val dist = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
@@ -519,7 +522,9 @@ case class Graph[V, W, L] private (
 
     val importancePQ =
       mutable.PriorityQueue[(Int, V)]()(Ordering.by[(Int, V), Int](_._1).reverse)
-    vertices.foreach { v => importancePQ.enqueue((edgeDifference(v), v)) }
+    vertices.foreach {
+      v => importancePQ.enqueue((edgeDifference(v), v))
+    }
 
     var orderIdx = 0
 
@@ -527,8 +532,7 @@ case class Graph[V, W, L] private (
       var contracted = false
       while (!contracted && importancePQ.nonEmpty) {
         val (_, v) = importancePQ.dequeue()
-        if (!remaining.contains(v)) {
-        } else {
+        if (!remaining.contains(v)) {} else {
           val currentImportance = edgeDifference(v)
           if (importancePQ.nonEmpty && currentImportance > importancePQ.head._1) {
             importancePQ.enqueue((currentImportance, v))
@@ -549,7 +553,11 @@ case class Graph[V, W, L] private (
                       val maxDist = duv + fwd(v)(w)
                       if (!witnessExists(u, w, v, maxDist, 200)) {
                         val scWeight = duv + fwd(v)(w)
-                        if (scWeight < fwd.getOrElse(u, mutable.Map.empty).getOrElse(w, Double.PositiveInfinity)) {
+                        if (
+                          scWeight < fwd
+                            .getOrElse(u, mutable.Map.empty)
+                            .getOrElse(w, Double.PositiveInfinity)
+                        ) {
                           fwd.getOrElseUpdate(u, mutable.Map.empty)(w) = scWeight
                           bwd.getOrElseUpdate(w, mutable.Map.empty)(u) = scWeight
                           shortcuts((u, w)) = v
@@ -565,15 +573,17 @@ case class Graph[V, W, L] private (
     }
 
     remaining.foreach {
-      v => rank(v) = orderIdx; orderIdx += 1
+      v =>
+        rank(v) = orderIdx; orderIdx += 1
     }
 
     val upward = mutable.Map[V, mutable.Map[V, (Double, Option[L])]]()
     val downward = mutable.Map[V, mutable.Map[V, (Double, Option[L])]]()
 
-    vertices.foreach { v =>
-      upward.getOrElseUpdate(v, mutable.Map.empty)
-      downward.getOrElseUpdate(v, mutable.Map.empty)
+    vertices.foreach {
+      v =>
+        upward.getOrElseUpdate(v, mutable.Map.empty)
+        downward.getOrElseUpdate(v, mutable.Map.empty)
     }
 
     fwd.foreach {
@@ -712,24 +722,24 @@ object Graph {
                 )
               } else {
 
-              val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
-              if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
-                edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
-                seenEdgeLabelIds.add(currentEdgeLabelId)
-              } else {
-                val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
-                if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
-                  System.err.println(
-                    s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado."
-                  )
+                val currentEdgeLabelId = edgeLabelIdExtractor(edgeLabelObject)
+                if (!seenEdgeLabelIds.contains(currentEdgeLabelId)) {
+                  edgeLabelMapBuilder += (currentEdgeLabelId -> edgeLabelObject)
+                  seenEdgeLabelIds.add(currentEdgeLabelId)
+                } else {
+                  val existingLabel = edgeLabelMapBuilder.result().get(currentEdgeLabelId)
+                  if (existingLabel.isDefined && existingLabel.get != edgeLabelObject) {
+                    System.err.println(
+                      s"AVISO: ID de label de aresta '$currentEdgeLabelId' duplicado com objetos diferentes no JSON. Usando o primeiro encontrado."
+                    )
+                  }
                 }
-              }
 
-              if (jsonGraph.directed) {
-                graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
-              } else {
-                graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
-              }
+                if (jsonGraph.directed) {
+                  graph = graph.addEdge(sourceNode, targetNode, weight, edgeLabelObject)
+                } else {
+                  graph = graph.addUndirectedEdge(sourceNode, targetNode, weight, edgeLabelObject)
+                }
               }
             case (None, _) =>
               throw new NoSuchElementException(
