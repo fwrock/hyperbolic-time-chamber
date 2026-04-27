@@ -3,16 +3,18 @@ package core.actor.manager.loadbalance.migration
 
 /** Abstraction for storing actor state during shard migration.
   *
-  * The migration state store holds serialized actor state between the time an actor
-  * is stopped on the source node and re-created on the target node. State entries
-  * are short-lived: written before hand-off, read on re-creation, deleted after restore.
+  * The migration state store holds serialized actor state between the time an actor is stopped on
+  * the source node and re-created on the target node. State entries are short-lived: written before
+  * hand-off, read on re-creation, deleted after restore.
   *
   * Implementations:
-  *   - [[RedisMigrationStateStore]]: Uses Redis (shared, survives crashes, recommended for multi-node)
-  *   - [[InMemoryMigrationStateStore]]: Uses ConcurrentHashMap (fast, singleton-hosted, for single-node/testing)
+  *   - [[RedisMigrationStateStore]]: Uses Redis (shared, survives crashes, recommended for
+  *     multi-node)
+  *   - [[InMemoryMigrationStateStore]]: Uses ConcurrentHashMap (fast, singleton-hosted, for
+  *     single-node/testing)
   *
-  * Thread safety: All implementations must be thread-safe since they are accessed from
-  * multiple actor contexts (the source actor saves, the target actor restores).
+  * Thread safety: All implementations must be thread-safe since they are accessed from multiple
+  * actor contexts (the source actor saves, the target actor restores).
   */
 trait MigrationStateStore {
 
@@ -27,7 +29,12 @@ trait MigrationStateStore {
     * @param ttlSeconds
     *   Time-to-live for the entry; auto-deleted if not consumed (guards against leaks)
     */
-  def saveState(entityId: String, stateBytes: Array[Byte], className: String, ttlSeconds: Int = 300): Unit
+  def saveState(
+    entityId: String,
+    stateBytes: Array[Byte],
+    className: String,
+    ttlSeconds: Int = 300
+  ): Unit
 
   /** Retrieves and removes the migration state for an entity.
     *

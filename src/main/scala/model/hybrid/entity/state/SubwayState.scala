@@ -1,15 +1,11 @@
 package org.interscity.htc
 package model.hybrid.entity.state
 
-import core.entity.state.BaseState
-
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.ActorTypeEnum.Subway
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Start
-import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, SubwayNodeState }
+import org.interscity.htc.model.hybrid.entity.state.model.SubwayNodeState
 
 import scala.collection.mutable
 
@@ -39,7 +35,6 @@ case class SubwayState(
       size = -1
     ) {
 
-  // ========== Convenience accessors delegating to parent MovableState ==========
   def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
 

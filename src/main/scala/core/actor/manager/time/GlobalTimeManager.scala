@@ -1,23 +1,24 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.{GlobalTimeManager, TimeManagerBase}
-import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
+import core.actor.manager.time.{ GlobalTimeManager, TimeManagerBase }
+import core.entity.control.{ LocalTimeManagerTickInfo, ScheduledActors }
 import core.entity.event.control.execution.TimeManagerRegisterEvent
-import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
-import core.entity.event.{FinishEvent, SpontaneousEvent}
+import core.entity.event.control.load.{ ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
+import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.entity.state.DefaultState
 import core.metrics.MetricsServer
 import core.types.Tick
-import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
+import core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
 
-import org.apache.pekko.actor.{ActorRef, CoordinatedShutdown, Props, Terminated}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.actor.{ ActorRef, CoordinatedShutdown, Props, Terminated }
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent}
-import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent }
+import core.entity.event.control.loadbalance.{ MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent }
+import core.api.SimulatorSettingsRegistry
 
 import scala.collection.mutable
 
@@ -44,12 +45,13 @@ class GlobalTimeManager(
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
   @volatile private var isTerminated = false
 
-  /** When true, the GlobalTimeManager will not advance to the next tick.
-    * Set by RequestMigrationPauseEvent from LoadBalanceManager, cleared by MigrationCompleteNotifyEvent.
+  /** When true, the GlobalTimeManager will not advance to the next tick. Set by
+    * RequestMigrationPauseEvent from LoadBalanceManager, cleared by MigrationCompleteNotifyEvent.
     */
   private var migrationPauseRequested: Boolean = false
 
-  /** Reference to the LoadBalanceManager that requested the pause, for sending MigrationSafeEvent. */
+  /** Reference to the LoadBalanceManager that requested the pause, for sending MigrationSafeEvent.
+    */
   private var migrationRequester: ActorRef = _
 
   // Progressive loading coordination
@@ -85,8 +87,11 @@ class GlobalTimeManager(
     // FinishEvent/ScheduleEvent sequentially, so N TMs per node = N parallel
     // mailbox processors for the pod's actors.
     val config = context.system.settings.config
-    val totalInstances = config.getInt("htc.time-manager.total-instances")
-    val maxInstancesPerNode = config.getInt("htc.time-manager.max-instances-per-node")
+    // SimulatorSettingsRegistry takes priority over application.conf, enabling API-driven overrides
+    val totalInstances =
+      SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
+    val maxInstancesPerNode =
+      SimulatorSettingsRegistry.getInt("htc.time-manager.max-instances-per-node", config)
     logInfo(
       s"Creating LocalTM pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
@@ -134,7 +139,9 @@ class GlobalTimeManager(
     case event => super.handleEvent(event)
   }
 
-  private def handleRegisterProgressiveLoadManager(event: RegisterProgressiveLoadManagerEvent): Unit = {
+  private def handleRegisterProgressiveLoadManager(
+    event: RegisterProgressiveLoadManagerEvent
+  ): Unit = {
     progressiveLoadManager = event.progressiveLoadManager
     progressiveLoadingEnabled = true
     progressiveLoadedUpToTick = -1L
@@ -164,7 +171,7 @@ class GlobalTimeManager(
       pendingStartEvent = Some(event)
       waitingForInitialWindow = true
       requestProgressiveLoad(initialTick)
-      return  // Do NOT notify local managers yet
+      return // Do NOT notify local managers yet
     }
 
     notifyLocalManagers(event)
@@ -218,11 +225,10 @@ class GlobalTimeManager(
     }
   }
 
-  /**
-   * Handle termination of a LocalTimeManager (e.g. node crash, shard rebalancing).
-   * Removes the dead TM from the map so the synchronization barrier doesn't wait forever.
-   */
-  private def handleTimeManagerTerminated(ref: ActorRef): Unit = {
+  /** Handle termination of a LocalTimeManager (e.g. node crash, shard rebalancing). Removes the
+    * dead TM from the map so the synchronization barrier doesn't wait forever.
+    */
+  private def handleTimeManagerTerminated(ref: ActorRef): Unit =
     if (localTimeManagers.contains(ref)) {
       localTimeManagers.remove(ref)
       logWarn(
@@ -235,7 +241,6 @@ class GlobalTimeManager(
         calculateAndBroadcastNextGlobalTick()
       }
     }
-  }
 
   private def handleLocalTimeReport(report: LocalTimeReportEvent): Unit = {
     val manager = sender()
@@ -275,7 +280,9 @@ class GlobalTimeManager(
     // If migration pause is active, do NOT advance to the next tick.
     // The TimeManager waits until LoadBalanceManager sends MigrationCompleteNotifyEvent.
     if (migrationPauseRequested) {
-      logInfo(s"Migration pause active — holding at tick $localTickOffset until migration completes")
+      logInfo(
+        s"Migration pause active — holding at tick $localTickOffset until migration completes"
+      )
       return
     }
 
@@ -340,7 +347,9 @@ class GlobalTimeManager(
     }
 
     // Check if progressive loading needs more actors before advancing
-    if (progressiveLoadingEnabled && !progressiveLoadingComplete && nextTick > progressiveLoadedUpToTick) {
+    if (
+      progressiveLoadingEnabled && !progressiveLoadingComplete && nextTick > progressiveLoadedUpToTick
+    ) {
       logInfo(
         s"Waiting for progressive load: nextTick=$nextTick > loadedUpTo=$progressiveLoadedUpToTick"
       )
@@ -356,7 +365,8 @@ class GlobalTimeManager(
     // ranges, so the prefetch triggers earlier (in ticks) to compensate.
     if (progressiveLoadingEnabled && !progressiveLoadingComplete && !waitingForProgressiveLoad) {
       val remainingBuffer = progressiveLoadedUpToTick - nextTick
-      val prefetchThreshold = Math.max(MIN_PREFETCH_BUFFER, (lastWindowTickRange * PREFETCH_RATIO).toLong)
+      val prefetchThreshold =
+        Math.max(MIN_PREFETCH_BUFFER, (lastWindowTickRange * PREFETCH_RATIO).toLong)
       if (remainingBuffer < prefetchThreshold) {
         logDebug(
           s"Proactive prefetch: remainingBuffer=$remainingBuffer < threshold=$prefetchThreshold " +
@@ -398,9 +408,9 @@ class GlobalTimeManager(
 
   /** Handles a migration pause request from LoadBalanceManager.
     *
-    * The GlobalTimeManager will finish processing all current tick's spontaneous events
-    * (via LocalTimeManagers) but will NOT advance to the next tick. Once all LocalTimeManagers
-    * have reported completion of the current tick, it sends MigrationSafeEvent back to the
+    * The GlobalTimeManager will finish processing all current tick's spontaneous events (via
+    * LocalTimeManagers) but will NOT advance to the next tick. Once all LocalTimeManagers have
+    * reported completion of the current tick, it sends MigrationSafeEvent back to the
     * LoadBalanceManager with the current tick, confirming it's safe to migrate.
     */
   private def handleMigrationPauseRequest(event: RequestMigrationPauseEvent): Unit = {
@@ -420,8 +430,8 @@ class GlobalTimeManager(
     // when all local managers report — it will hold there and then send MigrationSafeEvent
   }
 
-  /** Handles migration completion notification from LoadBalanceManager.
-    * Resumes normal tick advancement.
+  /** Handles migration completion notification from LoadBalanceManager. Resumes normal tick
+    * advancement.
     */
   private def handleMigrationComplete(): Unit = {
     logInfo(s"Migration complete. Resuming tick advancement from tick $localTickOffset")
@@ -431,12 +441,10 @@ class GlobalTimeManager(
     calculateAndBroadcastNextGlobalTick()
   }
 
-  /**
-   * Request progressive loading of actors starting from currentTick.
-   * Sends a large max horizon; the PLM decides the actual window size
-   * based on actor density (adaptive window sizing).
-   */
-  private def requestProgressiveLoad(currentTick: Tick): Unit = {
+  /** Request progressive loading of actors starting from currentTick. Sends a large max horizon;
+    * the PLM decides the actual window size based on actor density (adaptive window sizing).
+    */
+  private def requestProgressiveLoad(currentTick: Tick): Unit =
     if (progressiveLoadManager != null) {
       val horizonTick = currentTick + maxLookAheadTicks
       progressiveLoadManager ! TickWindowRequest(
@@ -444,11 +452,9 @@ class GlobalTimeManager(
         horizonTick = horizonTick
       )
     }
-  }
 
-  /**
-   * Handle response from ProgressiveLoadDataManager confirming actors are ready.
-   */
+  /** Handle response from ProgressiveLoadDataManager confirming actors are ready.
+    */
   private def handleTickWindowReady(event: TickWindowReady): Unit = {
     // Track the actual range this window covered for adaptive prefetch threshold
     val previousLoadedUpTo = progressiveLoadedUpToTick
@@ -465,9 +471,10 @@ class GlobalTimeManager(
         s"Initial progressive window loaded up to tick ${event.readyUpToTick} " +
           s"(${event.actorsCreated} actors, range=$lastWindowTickRange ticks). Starting simulation now."
       )
-      pendingStartEvent.foreach { startEvent =>
-        pendingStartEvent = None
-        notifyLocalManagers(startEvent)
+      pendingStartEvent.foreach {
+        startEvent =>
+          pendingStartEvent = None
+          notifyLocalManagers(startEvent)
       }
       return
     }
@@ -481,34 +488,35 @@ class GlobalTimeManager(
     if (waitingForProgressiveLoad) {
       waitingForProgressiveLoad = false
       MetricsServer.tmWaitingForProgressive.set(0)
-      pendingNextTick.foreach { tick =>
-        if (tick <= progressiveLoadedUpToTick) {
-          // If a migration pause is active, do NOT advance. The pending tick is preserved in
-          // pendingNextTick; handleMigrationComplete → calculateAndBroadcastNextGlobalTick will
-          // pick up from here once migration completes.
-          if (migrationPauseRequested) {
-            logInfo(
-              s"Progressive window ready at tick $tick but migration pause active — " +
-                s"holding until migration completes"
-            )
-          } else {
-            logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
-            localTimeManagers.keys.foreach { timeManager =>
-              localTimeManagers.update(
-                timeManager,
-                LocalTimeManagerTickInfo(tick = tick)
+      pendingNextTick.foreach {
+        tick =>
+          if (tick <= progressiveLoadedUpToTick) {
+            // If a migration pause is active, do NOT advance. The pending tick is preserved in
+            // pendingNextTick; handleMigrationComplete → calculateAndBroadcastNextGlobalTick will
+            // pick up from here once migration completes.
+            if (migrationPauseRequested) {
+              logInfo(
+                s"Progressive window ready at tick $tick but migration pause active — " +
+                  s"holding until migration completes"
               )
+            } else {
+              logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
+              localTimeManagers.keys.foreach {
+                timeManager =>
+                  localTimeManagers.update(
+                    timeManager,
+                    LocalTimeManagerTickInfo(tick = tick)
+                  )
+              }
+              notifyLocalManagers(UpdateGlobalTimeEvent(tick))
             }
-            notifyLocalManagers(UpdateGlobalTimeEvent(tick))
           }
-        }
       }
     }
   }
 
-  /**
-   * Called when the ProgressiveLoadDataManager signals all progressive sources are exhausted.
-   */
+  /** Called when the ProgressiveLoadDataManager signals all progressive sources are exhausted.
+    */
   def onProgressiveLoadingComplete(): Unit = {
     progressiveLoadingComplete = true
     progressiveLoadedUpToTick = Long.MaxValue

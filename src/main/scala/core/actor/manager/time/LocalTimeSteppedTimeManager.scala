@@ -5,7 +5,7 @@ import core.actor.manager.time.LocalTimeManagerBase
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
-import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.actor.{ ActorRef, Props }
 
 import scala.collection.mutable
 

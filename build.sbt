@@ -13,7 +13,7 @@ val scalaTestVersion = "3.2.20"
 val scalapbVersion = "0.11.11"
 
 // Apache Pekko
-val pekkoVersion = "1.4.0"
+val pekkoVersion = "1.5.0"
 val pekkoManagementVersion = "1.2.1"
 val jacksonVersion = "2.21.2"
 val pekkoHttpVersion = "1.3.0"
@@ -26,15 +26,22 @@ val logbackVersion = "1.5.32"
 val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
-val kryoVersion = "1.5.0"
+val kryoVersion = "1.5.1"
 val protobufVersion = "4.34.1"
 val pekkoProtobuf = "1.0.3"
 val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
+// Parquet
+val parquetVersion = "1.17.0"
+val avroVersion2 = "1.12.1"
+val snappyVersion = "1.1.10.8"
+val zstdVersion = "1.5.7-7"
+val hadoopVersion = "3.5.0"
+
 // Connectors
 val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "7.4.0"
+val jedisVersion = "7.4.1"
 val levelDBVersion = "1.8"
 
 // Prometheus Metrics
@@ -52,10 +59,12 @@ lazy val root = (project in file("."))
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
+      case PathList("META-INF", "services", _*) => MergeStrategy.filterDistinctLines
       case PathList("META-INF", _*) => MergeStrategy.discard
       case PathList("reference.conf", _*)         => MergeStrategy.concat
       case "application.conf"                     => MergeStrategy.concat
       case "logback.xml"                          => MergeStrategy.concat
+      case x if x.endsWith(".proto")              => MergeStrategy.discard
       case x => MergeStrategy.first
     },
     libraryDependencies ++= Seq(
@@ -100,11 +109,15 @@ lazy val root = (project in file("."))
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
 
-      // TODO: Re-enable Avro dependencies when snakeyaml conflicts are resolved
-      // "org.apache.avro" % "avro" % avroVersion,
+      // Parquet columnar format with Avro schema support
+      "org.apache.parquet" % "parquet-avro" % parquetVersion,
+      "org.apache.avro" % "avro" % avroVersion2 exclude("org.yaml", "snakeyaml"),
+      "org.xerial.snappy" % "snappy-java" % snappyVersion,
+      "com.github.luben" % "zstd-jni" % zstdVersion,
 
-      // Force specific SnakeYAML version - stable release
-      // "org.yaml" % "snakeyaml" % "1.33",
+      ("org.apache.hadoop" % "hadoop-client-runtime" % hadoopVersion)
+        .exclude("org.slf4j", "slf4j-reload4j")
+        .exclude("log4j", "log4j"),
 
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,

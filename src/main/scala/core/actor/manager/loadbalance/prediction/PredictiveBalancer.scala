@@ -71,7 +71,6 @@ class PredictiveBalancer(
         val current = history.last
         val currentLoad = current.loadScore(maxShardWeight)
 
-        // Already overloaded
         if (currentLoad >= loadThreshold) {
           results += PredictionResult(
             shardId = shardId,
@@ -81,11 +80,9 @@ class PredictiveBalancer(
             isAlreadyOverloaded = true
           )
         } else {
-          // Calculate load trend (dL/dt)
           val loadTrend = calculateLoadTrend(history, maxShardWeight)
 
           if (loadTrend > 0) {
-            // Time until threshold is reached
             val timeToThreshold = (loadThreshold - currentLoad) / loadTrend
             val predictedLoad = currentLoad + loadTrend * predictionWindowSeconds
 
@@ -101,7 +98,7 @@ class PredictiveBalancer(
           }
         }
 
-      case _ => () // Not enough history
+      case _ => ()
     }
 
     results.toList.sortBy(_.timeToSaturationSeconds)
@@ -114,18 +111,17 @@ class PredictiveBalancer(
     * @return
     *   The average flow vector, or Zero if no data
     */
-  def getAverageFlowVector(shardId: String): FlowVector = {
+  def getAverageFlowVector(shardId: String): FlowVector =
     flowHistory.get(shardId) match {
       case Some(flows) if flows.nonEmpty =>
         flows.foldLeft(FlowVector.Zero)(_.merge(_))
       case _ => FlowVector.Zero
     }
-  }
 
   /** Clears all history for a shard (e.g., after migration). */
   def clearHistory(shardId: String): Unit = {
     metricsHistory.remove(shardId)
-    flowHistory.remove(shardId)
+    flowHistory.remove(shardId) // Not enough history
   }
 
   /** Clears all history. */
@@ -133,8 +129,6 @@ class PredictiveBalancer(
     metricsHistory.clear()
     flowHistory.clear()
   }
-
-  // ── Internal Calculations ────────────────────────────────────────────────
 
   /** Calculate load trend (dL/dt) from historical metrics using simple linear regression.
     *
@@ -154,12 +148,15 @@ class PredictiveBalancer(
         (t, l)
     }
 
-    // Simple linear regression: find slope
     val n = points.size.toDouble
     val sumT = points.map(_._1).sum
     val sumL = points.map(_._2).sum
-    val sumTL = points.map { case (t, l) => t * l }.sum
-    val sumT2 = points.map { case (t, _) => t * t }.sum
+    val sumTL = points.map {
+      case (t, l) => t * l
+    }.sum
+    val sumT2 = points.map {
+      case (t, _) => t * t
+    }.sum
 
     val denominator = n * sumT2 - sumT * sumT
     if (math.abs(denominator) < 1e-15) 0.0

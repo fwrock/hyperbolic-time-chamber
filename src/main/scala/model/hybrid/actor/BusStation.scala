@@ -9,19 +9,16 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
 import org.interscity.htc.core.util.SimulationUtil
-import org.interscity.htc.model.hybrid.entity.event.data.{ ReceiveRouteData, RequestRouteData }
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
-import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.RequestRoute
-import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
 import org.interscity.htc.model.hybrid.util.GPSUtil
 
 import scala.collection.mutable
@@ -62,9 +59,7 @@ class BusStation(
       state.status match {
         case Start =>
           state.status = RouteWaiting
-          // Calculate routes directly from in-memory map
           calculateRoutesFromMap()
-        // NOTE: onFinishSpontaneous is called inside calculateRoutesFromMap()
         case Working =>
           if (state.buses.nonEmpty) {
             val bus = state.buses.dequeue()
@@ -79,11 +74,9 @@ class BusStation(
             } catch {
               case e: IllegalStateException =>
                 logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-                // Bus cannot be created (no valid route) — skip it permanently
                 onFinishSpontaneous(Some(currentTick + state.interval))
               case e: Exception =>
                 logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-                // Skip bus and continue scheduling
                 onFinishSpontaneous(Some(currentTick + state.interval))
             }
           } else {
@@ -107,7 +100,6 @@ class BusStation(
   private def calculateRoutesFromMap(): Unit = {
     logDebug(s"BusStation ${getEntityId} calculating routes from in-memory map")
 
-    // Calculate going route (use existing mutable map)
     val goingStops = orderedBusStopIds
     for (pair <- goingStops.sliding(2)) {
       val originBusStopId = pair.head
@@ -119,7 +111,6 @@ class BusStation(
             case Some(destinationNodeId) =>
               GPSUtil.calcRoute(originId = originNodeId, destinationId = destinationNodeId) match {
                 case Some((cost, pathQueue)) =>
-                  // Convert Queue[(String, String)] to Queue[(Identify, Identify)]
                   val identifyPath = pathQueue.map {
                     case (from, to) =>
                       (Identify(id = from), Identify(id = to))
@@ -147,7 +138,6 @@ class BusStation(
       }
     }
 
-    // Calculate returning route (reverse order, use existing mutable map)
     val returningStops = orderedBusStopIds.reverse
     for (pair <- returningStops.sliding(2)) {
       val originBusStopId = pair.head
@@ -186,7 +176,6 @@ class BusStation(
       }
     }
 
-    // Debug: log all calculated route keys
     state.goingRoute.foreach {
       routeMap =>
         logDebug(s"Going route keys: ${routeMap.keys.mkString(", ")}")
@@ -196,7 +185,6 @@ class BusStation(
         logDebug(s"Returning route keys: ${routeMap.keys.mkString(", ")}")
     }
 
-    // Check if route calculation is complete
     if (isCalculateRoutingComplete) {
       logDebug(s"BusStation ${getEntityId} route calculation complete")
       state.status = Ready
@@ -214,12 +202,10 @@ class BusStation(
         } catch {
           case e: IllegalStateException =>
             logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-            // Bus cannot be created (no valid route) — skip it permanently to avoid infinite retry
             state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
             onFinishSpontaneous(Some(currentTick + state.interval))
           case e: Exception =>
             logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-            // Skip bus and continue
             state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
             onFinishSpontaneous(Some(currentTick + state.interval))
         }
@@ -249,22 +235,22 @@ class BusStation(
       timeManagers = timeManagers,
       creatorManager = creatorManager,
       reporters = properties.reporters,
-      data = toJson({
+      data = toJson {
         val busState = BusState(
           startTick = busStartTick,
-          busStops = state.busStops.toMap, // Convert LinkedHashMap to Map
+          busStops = state.busStops.toMap,
           capacity = bus.capacity,
           size = bus.size,
           origin = state.origin,
           destination = state.destination,
           numberOfPorts = bus.numberOfPorts,
           label = bus.label,
-          storedBestRoute = Some(route.toList) // backup for JSON roundtrip safety
+          storedBestRoute = Some(route.toList)
         )
         busState.bestRoute = Some(route.clone())
         busState.status = MovableStatusEnum.Start
         busState
-      }),
+      },
       relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType
@@ -272,7 +258,6 @@ class BusStation(
 
     logDebug(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
 
-    // Report bus creation
     report(
       data = Map(
         "event_type" -> "bus_created",
@@ -299,7 +284,6 @@ class BusStation(
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
     val bestRoute = mutable.Queue[(String, String)]()
 
-    // Check if we have valid route data before building the route
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get, orderedBusStopIds)
       bestRoute ++= goingRouteData.map(
@@ -356,7 +340,6 @@ class BusStation(
     route match
       case Some(r) =>
         if (state.busStops.size <= 1) {
-          // Cannot build a route with 0 or 1 stops — no route possible
           false
         } else {
           val expectedSize = state.busStops.size - 1

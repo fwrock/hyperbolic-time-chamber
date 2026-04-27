@@ -32,8 +32,8 @@ case class MigrationPlan(
 
 /** Reasons why a migration is triggered. */
 enum MigrationReason:
-  case PredictiveOverload  // Predicted to exceed threshold
-  case ReactiveOverload    // Already exceeded threshold
-  case Rebalance           // Periodic rebalancing
-  case NodeJoin            // New node joined cluster
-  case NodeLeave           // Node leaving cluster
+  case PredictiveOverload
+  case ReactiveOverload
+  case Rebalance
+  case NodeJoin
+  case NodeLeave

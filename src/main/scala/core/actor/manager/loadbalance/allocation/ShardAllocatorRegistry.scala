@@ -1,8 +1,6 @@
 package org.interscity.htc
 package core.actor.manager.loadbalance.allocation
 
-import org.apache.pekko.actor.ActorSystem
-
 import java.util.concurrent.atomic.AtomicReference
 
 /** Global registry for the [[LoadBalanceShardAllocator]] instance.
@@ -11,8 +9,8 @@ import java.util.concurrent.atomic.AtomicReference
   * strategy at shard region creation time, we need a way for [[ActorCreatorUtil.createShardRegion]]
   * to access the allocator without passing it through every call.
   *
-  * The allocator is set once by [[LoadBalanceManager.onStart]] and cleared on shutdown.
-  * When no allocator is registered, shard creation falls back to Pekko's default strategy.
+  * The allocator is set once by [[LoadBalanceManager.onStart]] and cleared on shutdown. When no
+  * allocator is registered, shard creation falls back to Pekko's default strategy.
   *
   * Thread-safe via [[AtomicReference]].
   */

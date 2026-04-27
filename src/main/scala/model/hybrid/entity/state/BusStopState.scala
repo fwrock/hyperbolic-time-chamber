@@ -3,7 +3,6 @@ package model.hybrid.entity.state
 
 import core.entity.state.BaseState
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 
 import scala.collection.mutable

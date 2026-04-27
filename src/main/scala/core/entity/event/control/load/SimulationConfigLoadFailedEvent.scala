@@ -5,4 +5,4 @@ import core.entity.event.BaseEvent
 
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
-case class SimulationConfigLoadFailedEvent (cause: Throwable) extends BaseEvent[DefaultBaseEventData]
+case class SimulationConfigLoadFailedEvent(cause: Throwable) extends BaseEvent[DefaultBaseEventData]

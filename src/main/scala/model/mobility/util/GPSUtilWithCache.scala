@@ -4,22 +4,19 @@ package model.mobility.util
 import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
 
 import scala.collection.mutable
-import org.interscity.htc.system.database.redis.{ RedisClient, RedisClientManager } // Use o seu RedisClientManager
+import org.interscity.htc.system.database.redis.RedisClient
 
 object GPSUtilWithCache {
 
   private val redisClientManager = RedisClient.instance
 
-  // Use immutable List instead of mutable Queue to avoid expensive cloning
   private lazy val cache: mutable.Map[String, Option[(Double, List[(String, String)])]] =
     mutable.Map[String, Option[(Double, List[(String, String)])]]()
 
-  // Cache statistics
   @volatile private var cacheHits: Long = 0
   @volatile private var cacheMisses: Long = 0
   @volatile private var cacheStores: Long = 0
 
-  // Função heurística (exemplo, substitua pela sua)
   private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (current, goal) =>
     current.euclideanDistance(goal)
 
@@ -42,7 +39,6 @@ object GPSUtilWithCache {
     cache.get(cacheKey) match {
       case Some(cachedData) =>
         cacheHits += 1
-        // Convert immutable List to mutable Queue (still faster than cloning Queue)
         return cachedData.map {
           case (cost, list) => (cost, mutable.Queue(list: _*))
         }
@@ -67,7 +63,6 @@ object GPSUtilWithCache {
                 case (edgeObject, targetNodeOfEdgeInPath) =>
                   routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
               }
-              // Store as immutable List (no cloning needed on retrieval)
               val dataToCache = Some((cost, routeQueue.toList))
               cache.put(cacheKey, dataToCache)
               cacheStores += 1
@@ -133,8 +128,6 @@ object GPSUtilWithCache {
     cacheStores = 0
   }
 
-  // Método para fechar o pool do Redis quando a aplicação terminar.
-  // Chame isso no ponto apropriado do ciclo de vida da sua aplicação.
   def shutdown(): Unit =
     redisClientManager.closePool()
 }

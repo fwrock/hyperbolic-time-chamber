@@ -3,9 +3,9 @@ package core.util
 
 import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
+import core.api.ApiConfigRegistry
 
 import com.typesafe.config.ConfigFactory
-import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.configuration.{ Simulation, SimulationWrapper }
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion
@@ -17,23 +17,35 @@ import scala.language.postfixOps
 
 object SimulationUtil {
 
-  def loadSimulationConfig(configuration: String = null): Simulation =
-    if (configuration != null) {
-      val content = readJsonFile(configuration)
+  def loadSimulationConfig(configuration: String = null): Simulation = {
+    val path = if (configuration == null || configuration.isEmpty) null else configuration
+    if (path != null) {
+      val content = readJsonFile(path)
       try
         fromJson[SimulationWrapper](content).simulation
       catch {
         case _: Exception => fromJson[Simulation](content)
       }
     } else {
-      val applicationConfig = ConfigFactory.load().getString("htc.simulation.config-file")
-      if (applicationConfig != null && applicationConfig.nonEmpty) {
-        val content = readJsonFile(applicationConfig)
-        fromJson[Simulation](content)
-      } else {
-        loadFromEnvironmentVariable("HTC_SIMULATION_CONFIG_FILE")
+      ApiConfigRegistry.get match {
+        case Some(config) => config
+        case None         => loadSimulationConfigFromFileOrEnv()
       }
     }
+  }
+
+  /** Loads simulation config from application.conf / env var only, bypassing the API registry. Used
+    * by [[core.api.ConfigRoutes]] to report what would be loaded without the API override.
+    */
+  def loadSimulationConfigFromFileOrEnv(): Simulation = {
+    val applicationConfig = ConfigFactory.load().getString("htc.simulation.config-file")
+    if (applicationConfig != null && applicationConfig.nonEmpty) {
+      val content = readJsonFile(applicationConfig)
+      fromJson[Simulation](content)
+    } else {
+      loadFromEnvironmentVariable("HTC_SIMULATION_CONFIG_FILE")
+    }
+  }
 
   private def loadFromEnvironmentVariable(envVar: String): Simulation =
     sys.env.get(envVar) match {
@@ -55,7 +67,6 @@ object SimulationUtil {
       )
       .foreach {
         source =>
-          // 🎲 Usar UUID determinístico para shard initiator
           val initiatorId =
             try
               s"${core.actor.manager.RandomSeedManager.deterministicUUID()}-shard-initiator"

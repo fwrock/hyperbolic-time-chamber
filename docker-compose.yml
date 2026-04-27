@@ -84,6 +84,41 @@ services:
     volumes:
       - redis_data:/data
 
+  # ── ClickHouse: time-series database for vehicle flow metrics ─────────────
+  # Optional — the simulation runs normally if this service is not started.
+  # Activate ClickHouse reporting by setting:
+  #   HTC_CLICKHOUSE_ENABLED: "true"
+  #   and adding "clickhouse" to enabled-strategies in application.conf or via
+  #   HTC_REPORT_CLICKHOUSE_ENABLED env var.
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: htc-clickhouse
+    network_mode: host
+    environment:
+      CLICKHOUSE_DB: htc
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ── ch-ui: web interface for ClickHouse (queries, table browser, charts) ──
+  # Available at http://localhost:5521
+  ch-ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    container_name: htc-ch-ui
+    network_mode: host
+    environment:
+      VITE_CLICKHOUSE_URL: http://localhost:8123
+      VITE_CLICKHOUSE_USER: default
+      VITE_CLICKHOUSE_PASS: ""
+    depends_on:
+      - clickhouse
+
   node1:
     build: .
     container_name: node_1
@@ -106,11 +141,14 @@ services:
       
       # Management
       MANAGEMENT_HTTP_PORT: 8558 
+
+      HTC_API_ENABLED: "false"
+      HTC_API_PORT: 9804
       
       # Simulation Configuration
-      HTC_SCENARIO_NAME: toulouse_1_pct_meso
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_meso/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_1_pct_meso/data/city_map.json
+      HTC_SCENARIO_NAME: interscsimulator_1M
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/data/city_map.json
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -169,6 +207,14 @@ services:
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 16
       HTC_REPORT_JSON_PER_NODE: 8
+      # ClickHouse Configuration (network_mode: host → localhost reachable)
+      HTC_CLICKHOUSE_HOST: "localhost"
+      HTC_CLICKHOUSE_PORT: 8123
+      HTC_CLICKHOUSE_DATABASE: "htc"
+      HTC_CLICKHOUSE_USER: "default"
+      HTC_CLICKHOUSE_PASSWORD: ""
+      HTC_REPORT_CLICKHOUSE_INSTANCES: 4
+      HTC_REPORT_CLICKHOUSE_PER_NODE: 2
       
       # === KAFKA CONFIGURATION ===
       HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
@@ -229,3 +275,5 @@ volumes:
   kafka_data:
   zookeeper_data:
   zookeeper_logs:
+  clickhouse_data:
+  clickhouse_logs:

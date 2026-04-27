@@ -8,7 +8,6 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.data.BaseEventData
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
@@ -17,7 +16,7 @@ import org.interscity.htc.model.mobility.entity.event.data.{ ReceiveRouteData, R
 import org.interscity.htc.model.mobility.entity.state.{ BusState, BusStationState }
 import org.interscity.htc.model.mobility.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.RequestRoute
-import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, RoutePathItem, SubRoutePair }
+import org.interscity.htc.model.mobility.entity.state.model.{ BusInformation, SubRoutePair }
 
 import scala.collection.mutable
 
@@ -39,17 +38,16 @@ class BusStation(
           try {
             val actorRef = createBus(bus)
             val className = classOf[Bus].getName
-              relationships(bus.actorId) = ShardActorId(
-                entityId = bus.actorId,
+            relationships(bus.actorId) = ShardActorId(
+              entityId = bus.actorId,
               classType = className
             )
             onFinishSpontaneous(Some(currentTick + state.interval))
           } catch {
             case e: IllegalStateException =>
               logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-              // Put the bus back in the queue for later retry
               state.buses.enqueue(bus)
-              state.status = RouteWaiting // Go back to waiting for route
+              state.status = RouteWaiting
             case e: Exception =>
               logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
               state.buses.enqueue(bus)
@@ -72,7 +70,6 @@ class BusStation(
   private def handleRequestRoute(value: ActorInteractionEvent): Unit = {
     val route = value.data.asInstanceOf[ReceiveRouteData]
 
-    // We need to find the bus stop pair corresponding to the received origin/destination nodes
     val originBusStop = state.busStops.find(_._2 == route.origin).map(_._1)
     val destinationBusStop = state.busStops.find(_._2 == route.destination).map(_._1)
 
@@ -108,8 +105,8 @@ class BusStation(
                 logError(
                   s"Failed to create bus ${bus.actorId} after route completion: ${e.getMessage}"
                 )
-                state.buses.enqueue(bus) // Put back in queue
-                state.status = RouteWaiting // Wait for valid route data
+                state.buses.enqueue(bus)
+                state.status = RouteWaiting
               case e: Exception =>
                 logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
                 state.buses.enqueue(bus)
@@ -158,7 +155,6 @@ class BusStation(
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
     val bestRoute = mutable.Queue[(String, String)]()
 
-    // Check if we have valid route data before building the route
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get)
       bestRoute ++= goingRouteData.map(
@@ -259,7 +255,6 @@ class BusStation(
       path = mutable.Queue(),
       label = label
     )
-    // Create a temporary dependency for the origin node to request route
     val nodeActorRef =
       context.system.actorSelection(s"/user/sharded-actors/hybrid.actor.Node/$originNodeId")
     sendMessageTo(

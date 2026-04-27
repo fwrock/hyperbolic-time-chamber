@@ -62,7 +62,6 @@ import scala.collection.mutable
   *   Configuration for each lane
   */
 case class LinkState(
-  // ========== Meso fields (inherited from LinkState) ==========
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
   scheduleOnTimeManager: Boolean = false,
@@ -76,13 +75,9 @@ case class LinkState(
   currentSpeed: Double = 0.0,
   congestionFactor: Double = 1.0,
   registered: mutable.Set[LinkRegister] = mutable.Set(),
-
-  // ========== Hybrid control fields ==========
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-  microTimeStep: Double = 0.1, // Sub-tick duration (seconds)
-  microTicksPerGlobalTick: Int = 10, // Number of sub-ticks per global tick
-
-  // ========== Micro fields ==========
+  microTimeStep: Double = 0.1,
+  microTicksPerGlobalTick: Int = 10,
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
   laneConfigurations: List[LaneConfig] = List.empty
 ) extends BaseState(
@@ -124,10 +119,6 @@ case class LinkState(
   /** Initialize lane structure for MICRO mode */
   def initializeMicroLanes(): LinkState =
     if (isMicroMode && vehiclesByLane.isEmpty) {
-      // Ensure at least 1 lane even if lanes=0 in the input data.
-      // A link with lanes=0 would otherwise produce an empty vehiclesByLane map,
-      // causing totalVehiclesInMicro=0 and silently trapping all vehicles: they enter
-      // state.registered but are never added to a lane, so the micro loop skips them.
       val effectiveLanes = math.max(1, this.lanes)
       val lanes = (0 until effectiveLanes).map {
         laneId =>

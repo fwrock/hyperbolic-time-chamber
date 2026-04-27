@@ -29,7 +29,6 @@ class CreatorPoolLoadData(
       )
     ) {
 
-  // Fields needed for actor creation (not for simulation)
   private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
   private val creatorManager: ActorRef = creatorProperties.creatorManager
   private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] =
@@ -158,9 +157,6 @@ class CreatorPoolLoadData(
         batchId
       ) || startedAcknowledges(batchId).isEmpty)
     ) {
-//      logInfo(
-//        s"All pool actors created and acknowledged initialization from $batchId. Sending FinishCreationEvent."
-//      )
       batchesLoad(batchId) ! FinishCreationEvent(
         actorRef = self,
         batchId = batchId,

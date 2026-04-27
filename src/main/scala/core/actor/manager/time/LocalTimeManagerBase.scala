@@ -1,13 +1,12 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-
 import core.entity.event.control.execution.TimeManagerRegisterEvent
-import core.entity.event.{EntityEnvelopeEvent, FinishEvent, SpontaneousEvent}
+import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.enumeration.CreationTypeEnum
 import core.metrics.MetricsServer
 import core.types.Tick
-import core.util.{IdUtil, StringUtil}
+import core.util.{ IdUtil, StringUtil }
 
 import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
@@ -43,12 +42,11 @@ abstract class LocalTimeManagerBase(
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     if (parentManager.nonEmpty) {
       // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
-  }
 
   override def handleEvent: Receive = {
     case start: StartSimulationTimeEvent => startSimulation(start)
@@ -133,11 +131,12 @@ abstract class LocalTimeManagerBase(
       //
       // Fix: by adding the actor to scheduledActors[T] atomically here (in the same message
       // processing step as the FinishEvent), processTick(T) always finds the actor.
-      finish.scheduleTick.foreach { tickStr =>
-        val tick = tickStr.toLong
-        val effectiveTick = if (tick <= localTickOffset) localTickOffset + 1 else tick
-        val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
-        actorsSet.add(finish.identify)
+      finish.scheduleTick.foreach {
+        tickStr =>
+          val tick = tickStr.toLong
+          val effectiveTick = if (tick <= localTickOffset) localTickOffset + 1 else tick
+          val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
+          actorsSet.add(finish.identify)
       }
 
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
@@ -183,9 +182,10 @@ abstract class LocalTimeManagerBase(
       registeredActors.remove(finish.identify.id)
       val removedIdentity = registeredIdentities.remove(finish.identify.id)
       // Prometheus: decrement active actors gauge
-      removedIdentity.foreach { identity =>
-        val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
-        MetricsServer.activeActors.labels(actorType).dec()
+      removedIdentity.foreach {
+        identity =>
+          val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
+          MetricsServer.activeActors.labels(actorType).dec()
       }
       sendDestructEvent(finish)
     }
@@ -196,7 +196,7 @@ abstract class LocalTimeManagerBase(
     }
 
   private def syncWithGlobalTime(globalTick: Tick): Unit = {
-    if (globalTick % 10000 == 0) {
+    if (globalTick % 1000 == 0) {
       logInfo(
         s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
       )

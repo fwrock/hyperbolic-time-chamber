@@ -9,7 +9,6 @@ import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCr
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum.PoolDistributed
-import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.TickIndexUtil.LightTickIndex
 
 import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
@@ -18,25 +17,22 @@ import scala.collection.mutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success }
 
-/**
- * Progressive JSON data loader using lightweight tick indexing and chunked file streaming.
- *
- * Two-phase approach that keeps memory usage bounded:
- *
- * Phase 1 — Light index:
- *   Streams through JSON, extracts only startTick from each actor, builds a
- *   counts-only map (tick → count). No ActorSimulation objects are retained.
- *   Memory footprint: just a Map[Tick, Int].
- *
- * Phase 2 — Chunked streaming:
- *   When a tick range is requested, opens the JSON file and streams actors
- *   in small chunks (CHUNK_SIZE at a time). Each chunk is sent to creators
- *   with back-pressure — the next chunk is only read after creators confirm
- *   the current chunk. This keeps at most CHUNK_SIZE actors in memory per loader.
- *
- * The file handle stays open between chunks and is closed when all actors
- * in the range have been streamed (or the file is exhausted).
- */
+/** Progressive JSON data loader using lightweight tick indexing and chunked file streaming.
+  *
+  * Two-phase approach that keeps memory usage bounded:
+  *
+  * Phase 1 — Light index: Streams through JSON, extracts only startTick from each actor, builds a
+  * counts-only map (tick → count). No ActorSimulation objects are retained. Memory footprint: just
+  * a Map[Tick, Int].
+  *
+  * Phase 2 — Chunked streaming: When a tick range is requested, opens the JSON file and streams
+  * actors in small chunks (CHUNK_SIZE at a time). Each chunk is sent to creators with back-pressure
+  * — the next chunk is only read after creators confirm the current chunk. This keeps at most
+  * CHUNK_SIZE actors in memory per loader.
+  *
+  * The file handle stays open between chunks and is closed when all actors in the range have been
+  * streamed (or the file is exhausted).
+  */
 class ProgressiveJsonLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
 
@@ -51,25 +47,20 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   private var sourceClassType: String = _
   private var sourceId: String = _
 
-  // Lightweight index — only tick counts, no ActorSimulation objects
   private var lightIndex: LightTickIndex = _
 
-  // Track consumed tick ranges to avoid re-loading from file
   private var fullyConsumed = false
 
-  // Streaming state — file handle kept open between chunks
   private var activeInputStream: InputStream = _
   private var activeIterator: Iterator[ActorSimulation] = _
   private var streamExhausted: Boolean = false
 
   private val CHUNK_SIZE = 500
-  // Keep CreateActorsEvent messages small enough for Pekko Artery max frame size.
   private val CREATE_EVENT_MAX_ACTORS = 25
   private val activeBatches = mutable.Set[String]()
   private var totalLoadedActors = 0L
   private val creators = mutable.Set[ActorRef]()
 
-  // Current tick range being processed
   private var activeRequest: LoadActorsForTickRange = _
   private var pendingActorsSent = 0
 
@@ -99,11 +90,10 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     self ! BuildTickIndex()
   }
 
-  /**
-   * Asynchronously scan the entire JSON file and build a lightweight tick index.
-   * Only extracts startTick counts — does NOT retain ActorSimulation objects.
-   */
-  private def buildTickIndexAsync(): Unit = {
+  /** Asynchronously scan the entire JSON file and build a lightweight tick index. Only extracts
+    * startTick counts — does NOT retain ActorSimulation objects.
+    */
+  private def buildTickIndexAsync(): Unit =
     Future {
       TickIndexUtil.buildLightIndex(sourceFilePath)
     }.onComplete {
@@ -126,23 +116,17 @@ class ProgressiveJsonLoadData(private val properties: Properties)
         logError(s"Failed to build tick index for $sourceFilePath", e)
         self ! CloseAndFinish()
     }
-  }
 
-  private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit = {
+  private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit =
     managerRef ! event
-  }
 
-  // ---------------------------------------------------------------------------
-  // Phase 2: Chunked streaming — read file in small chunks with back-pressure
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Start streaming actors for a tick range. Opens the file and kicks off
-   * the first chunk read.
-   */
+  /** Start streaming actors for a tick range. Opens the file and kicks off the first chunk read.
+    */
   private def handleLoadForTickRange(request: LoadActorsForTickRange): Unit = {
     if (lightIndex == null) {
-      logWarn(s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]")
+      logWarn(
+        s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]"
+      )
       managerRef ! TickRangeLoadedEvent(
         sourceId = sourceId,
         fromTick = request.fromTick,
@@ -162,9 +146,10 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       return
     }
 
-    // Check lightweight counts first — skip file read entirely if no actors match
     val expectedCount = TickIndexUtil.countActorsInRange(
-      lightIndex.tickCounts, request.fromTick, request.toTick
+      lightIndex.tickCounts,
+      request.fromTick,
+      request.toTick
     )
 
     if (expectedCount == 0) {
@@ -182,7 +167,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
         s"[${request.fromTick}, ${request.toTick}] from $sourceId"
     )
 
-    // Open the file for chunked streaming
     activeInputStream = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
     val (_, iter) = JsonStreamingUtil.createParser(activeInputStream)
     activeIterator = iter
@@ -190,14 +174,12 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     pendingActorsSent = 0
     streamExhausted = false
 
-    // Start reading the first chunk
     startNextChunkRead()
   }
 
-  /**
-   * Launch an async read of the next chunk from the open file.
-   * Runs on the io-dispatcher to avoid blocking the actor thread.
-   */
+  /** Launch an async read of the next chunk from the open file. Runs on the io-dispatcher to avoid
+    * blocking the actor thread.
+    */
   private def startNextChunkRead(): Unit = {
     val iter = activeIterator
     val from = activeRequest.fromTick
@@ -215,35 +197,31 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Handle a chunk read from the file. Send matching actors to creators
-   * (with back-pressure) or finish if file is exhausted.
-   */
+  /** Handle a chunk read from the file. Send matching actors to creators (with back-pressure) or
+    * finish if file is exhausted.
+    */
   private def handleFileChunkReady(actors: List[ActorSimulation], isDone: Boolean): Unit = {
     streamExhausted = isDone
 
     if (actors.nonEmpty) {
       sendActorsToCreators(actors)
-      // After all FinishCreationEvents, handleFinishCreation will
-      // either read the next chunk or close the stream
     } else {
-      // No more matching actors — close file and report
       closeStreamAndReport()
     }
   }
 
-  /**
-   * Send a chunk of actors to creators. Tracks active batches for back-pressure.
-   */
+  /** Send a chunk of actors to creators. Tracks active batches for back-pressure.
+    */
   private def sendActorsToCreators(actors: List[ActorSimulation]): Unit = {
     totalLoadedActors += actors.size
     pendingActorsSent += actors.size
 
-    val actorsToCreate = actors.map(actor =>
-      ActorSimulationCreation(
-        resourceId = IdUtil.format(sourceId),
-        actor = actor.copy(id = IdUtil.format(actor.id))
-      )
+    val actorsToCreate = actors.map(
+      actor =>
+        ActorSimulationCreation(
+          resourceId = IdUtil.format(sourceId),
+          actor = actor.copy(id = IdUtil.format(actor.id))
+        )
     )
 
     val (poolDistributed, loadBalanced) =
@@ -251,33 +229,33 @@ class ProgressiveJsonLoadData(private val properties: Properties)
 
     if (loadBalanced.nonEmpty) {
       creators.add(creatorRef)
-      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 
     if (poolDistributed.nonEmpty) {
       creators.add(creatorPoolRef)
-      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 
     if (activeBatches.isEmpty) {
-      // No batches to wait for (shouldn't happen since actors.nonEmpty)
       if (!streamExhausted) startNextChunkRead()
       else closeStreamAndReport()
     }
   }
 
-  /**
-   * Handle back-pressure from creators. When all batches for the current chunk
-   * are complete, either read the next chunk or close the stream.
-   */
+  /** Handle back-pressure from creators. When all batches for the current chunk are complete,
+    * either read the next chunk or close the stream.
+    */
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     activeBatches.remove(event.batchId)
 
@@ -290,11 +268,9 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Close the active file stream and report completion to the manager.
-   */
+  /** Close the active file stream and report completion to the manager.
+    */
   private def closeStreamAndReport(): Unit = {
-    // Close the file handle
     if (activeInputStream != null) {
       try activeInputStream.close()
       catch { case _: Exception => }
@@ -302,12 +278,10 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       activeIterator = null
     }
 
-    // Track consumption
     if (lightIndex != null && activeRequest != null && activeRequest.toTick >= lightIndex.maxTick) {
       fullyConsumed = true
     }
 
-    // Report to manager
     if (activeRequest != null) {
       logInfo(
         s"Finished streaming $pendingActorsSent actors for tick range " +
@@ -328,7 +302,6 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       s"ProgressiveJsonLoadData: finished, total actors loaded: $totalLoadedActors"
     )
 
-    // Ensure stream is closed
     if (activeInputStream != null) {
       try activeInputStream.close()
       catch { case _: Exception => }
@@ -347,9 +320,8 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   }
 }
 
-/**
- * Internal message: a chunk of actors was read from the file.
- */
+/** Internal message: a chunk of actors was read from the file.
+  */
 private[strategy] case class FileChunkReady(
   actors: List[ActorSimulation],
   isDone: Boolean

@@ -1,12 +1,10 @@
 package org.interscity.htc
 package model.hybrid.entity.state
 
-import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.RouteWaiting
-import org.interscity.htc.model.hybrid.entity.state.model.RoutePathItem
 
 import scala.collection.mutable
 

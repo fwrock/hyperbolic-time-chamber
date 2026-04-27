@@ -1,21 +1,21 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator}
+import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator }
 import core.actor.manager.BaseManager
-import core.entity.actor.properties.{CreatorProperties, Properties}
+import core.entity.actor.properties.{ CreatorProperties, Properties }
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
-import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
+import core.enumeration.{ LoadingStrategyEnum, ReportTypeEnum }
 import core.util.ActorCreatorUtil.createActor
-import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME}
-import core.util.{ActorCreatorUtil, ManagerConstantsUtil}
+import core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
+import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
 
-import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -39,24 +39,17 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
-  // The coordinator is created once at the start of loadData() and lives through both phases.
-  // During loading, creators forward NeedsPostLoadRegistrationEvent to it directly.
-  // After all EAGER loading, LoadDataManager sends TriggerPostLoadRegistrationEvent to kick off
-  // the fan-out phase. The coordinator replies with PostLoadRegistrationDoneEvent when done.
   private var postLoadCoordinator: ActorRef = null
   private var postLoadRegistrationClassesConfig: Set[String] = Set.empty
-  // Guard: prevent double-triggering the coordinator and double-processing the done event.
   private var postLoadTriggerSent: Boolean = false
   private var postLoadDone: Boolean = false
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
-  // Tracks when each source type entered sourcesInCreation (epoch millis) for stuck-source detection.
   private var progressiveSources: List[ActorDataSource] = List.empty
 
-  override def onStart(): Unit = {
+  override def onStart(): Unit =
     reporters = poolReporters
-  }
 
   override def handleEvent: Receive = {
     case event: LoadDataEvent             => loadData(event)
@@ -67,7 +60,6 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    // Split data sources into EAGER (loaded before simulation) and PROGRESSIVE (loaded during simulation)
     val (eagerSources, progressive) = event.actorsDataSources.partition(
       _.loadingStrategy == LoadingStrategyEnum.EAGER
     )
@@ -85,8 +77,6 @@ class LoadDataManager(
       return
     }
 
-    // Create coordinator early so creators can forward NeedsPostLoadRegistrationEvent to it
-    // directly during the loading phase (accumulation phase).
     postLoadCoordinator = context.actorOf(
       PostLoadRegistrationCoordinator.props(getSelfProxy),
       "post-load-registration-coordinator"
@@ -113,7 +103,7 @@ class LoadDataManager(
     getSelfProxy ! LoadNextEvent()
   }
 
-  private def handleLoadNext(): Unit = {
+  private def handleLoadNext(): Unit =
     sourcesToCreate.foreach {
       (key, queue) =>
         if (queue.nonEmpty && !sourcesInCreation.contains(key)) {
@@ -122,7 +112,6 @@ class LoadDataManager(
           logInfo(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
-          // Create loader with io-dispatcher for I/O-bound file operations
           val props = Props(
             source.dataSource.sourceType.clazz,
             Properties(
@@ -143,7 +132,6 @@ class LoadDataManager(
           )
         }
     }
-  }
 
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = Math.max(1, amountDataSources)
@@ -218,7 +206,9 @@ class LoadDataManager(
       )
       postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
     } else if (postLoadTriggerSent) {
-      logWarn(s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)")
+      logWarn(
+        s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)"
+      )
     }
   }
 
@@ -228,11 +218,13 @@ class LoadDataManager(
       return
     }
     postLoadDone = true
-    logInfo("PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager.")
+    logInfo(
+      "PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager."
+    )
     sendFinishToSimulationManager()
   }
 
-  private def sendFinishToSimulationManager(): Unit = {
+  private def sendFinishToSimulationManager(): Unit =
     simulationManager ! FinishLoadDataEvent(
       actorRef = selfProxy,
       amount = loadDataTotalAmount,
@@ -242,7 +234,6 @@ class LoadDataManager(
       creatorRef = creatorRef,
       creatorPoolRef = creatorPoolRef
     )
-  }
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values

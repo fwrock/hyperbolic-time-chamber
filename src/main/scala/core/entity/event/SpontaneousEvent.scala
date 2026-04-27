@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.entity.event
 
-import core.types.{ EventId, SubTick, Tick }
+import core.types.Tick
 
 import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
@@ -19,7 +19,7 @@ import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 case class SpontaneousEvent(
   tick: Tick,
   actorRef: ActorRef,
-  safeHorizon: Tick = -1 // -1 means use tick (no lookahead)
+  safeHorizon: Tick = -1
 ) extends BaseEvent[DefaultBaseEventData](tick = tick, actorRef = actorRef) {
 
   /** Returns the effective safe horizon (tick if not set) */

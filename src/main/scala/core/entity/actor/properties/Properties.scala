@@ -43,11 +43,10 @@ case class Properties(
     */
   def getDefaultTimeManager: ActorRef =
     if (timeManagers != null) {
-      // Try to get the configured default type first
       timeManagers
         .get(defaultTimeManagerType)
-        .orElse(timeManagers.get(TimeManagerTypeEnum.DISCRETE_EVENT)) // Fallback to discrete-event
-        .orNull // Return null if none found
+        .orElse(timeManagers.get(TimeManagerTypeEnum.DISCRETE_EVENT))
+        .orNull
     } else {
       null
     }

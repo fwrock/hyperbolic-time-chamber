@@ -3,9 +3,8 @@ package org.interscity.htc.model.hybrid.util.cache
 import org.interscity.htc.core.util.JsonUtil
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.system.database.redis.RedisClient
-import redis.clients.jedis.JedisPool
 
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Try }
 import scala.jdk.CollectionConverters._
 
 /** Redis-based cache strategy (original implementation).
@@ -33,7 +32,7 @@ class RedisCacheStrategy extends WeightCacheStrategy {
       val jedis = RedisClient.instance.getPool.getResource
       try {
         jedis.setex(key, ttlSeconds, json)
-        () // Convert to Unit
+        ()
       } finally jedis.close()
     }.recoverWith {
       case e =>
@@ -79,7 +78,7 @@ class RedisCacheStrategy extends WeightCacheStrategy {
       val jedis = RedisClient.instance.getPool.getResource
       try {
         jedis.del(key)
-        () // Convert to Unit
+        ()
       } finally jedis.close()
     }.recoverWith {
       case e =>

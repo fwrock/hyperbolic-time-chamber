@@ -39,12 +39,10 @@ class SubwayStation(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    // 1) Prefer lookup by nodeId in relationships map (key = IdUtil.format(nodeId)).
-    // 2) Fall back to scanning relationships by classType (handles key format edge cases).
-    // 3) Last resort: use state.nodeId directly via hash-based shard routing
-    //    (handles actor restart that resets relationships before PostLoadRegistrationEvent).
     val nodeOpt = getDependencyOption(state.nodeId).orElse(
-      relationships.values.find(d => d.classType != null && d.classType.endsWith("Node"))
+      relationships.values.find(
+        d => d.classType != null && d.classType.endsWith("Node")
+      )
     )
     nodeOpt match {
       case Some(node) =>
@@ -60,7 +58,8 @@ class SubwayStation(
         logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
       case None if state.nodeId != null && state.nodeId.nonEmpty =>
         logWarn(
-          s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys.mkString(", ")}]). " +
+          s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys
+              .mkString(", ")}]). " +
             s"Registering with node ${state.nodeId} via direct routing."
         )
         sendMessageTo(
@@ -101,7 +100,7 @@ class SubwayStation(
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
-      case d: SubwayRequestPassengerData => handleSubwayRequestPassenger(event, d)
+      case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
       case _                              => logWarn("Event not handled")
     }
 
@@ -165,13 +164,11 @@ class SubwayStation(
                   logError(
                     s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}"
                   )
-                  // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
                 case e: Exception =>
                   logError(
                     s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}"
                   )
-                  // Put the subway back in the queue for later retry
                   subwayQueue.enqueue(subway)
               }
             }
@@ -217,7 +214,7 @@ class SubwayStation(
       timeManagers = properties.timeManagers,
       creatorManager = properties.creatorManager,
       reporters = properties.reporters,
-      data = toJson({
+      data = toJson {
         val subwayState = SubwayState(
           startTick = currentTick,
           capacity = subway.capacity,
@@ -231,13 +228,12 @@ class SubwayStation(
         )
         subwayState.bestRoute = Some(route)
         subwayState
-      }),
+      },
       relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType
     )
 
-    // Report subway creation
     report(
       data = Map(
         "event_type" -> "subway_created",
@@ -278,8 +274,6 @@ class SubwayStation(
 
     lineRoute match {
       case Some(routeQueue) =>
-        // linesRoute format: Queue[SubwayRouteEntry]
-        // Output format: Queue[(rail_link_id, node_id)]
         routeQueue.foreach {
           routeEntry =>
             route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))

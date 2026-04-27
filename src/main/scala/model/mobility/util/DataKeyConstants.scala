@@ -3,7 +3,6 @@ package model.mobility.util
 
 object DataKeyConstants {
 
-  // Route, Node & Link
   val TARGET_NODE_ID = "targetNodeId"
   val CURRENT_COST = "currentCost"
   val REQUESTER = "requester"
@@ -18,11 +17,9 @@ object DataKeyConstants {
   val LINK_FREE_SPEED = "freeSpeed"
   val LINK_LANES = "lanes"
 
-  // General
   val NODES = "nodes"
   val NEXT_TICK = "nextTick"
   val ACTOR_ID = "actorId"
 
-  // Signals
   val SIGNAL_STATE = "signalState"
 }
