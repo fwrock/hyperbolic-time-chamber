@@ -14,7 +14,8 @@ object IdentifyUtil {
     )
 
   /** Overload accepting [[ShardActorId]] for callers that pass the result of
-    * [[core.actor.SimulationBaseActor.getDependency]] after the Dependency → ShardActorId migration.
+    * [[core.actor.SimulationBaseActor.getDependency]] after the Dependency → ShardActorId
+    * migration.
     */
   def fromDependency(relationship: ShardActorId): Identify =
     Identify(

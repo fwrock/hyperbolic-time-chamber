@@ -77,8 +77,8 @@ trait LaneChangeModel {
     *   Target lane
     * @param laneRestrictions
     *   Lane restrictions
-    * @return/ Registrar no TimeManager para receber ticks
-    *   True if lane is available
+    * @return/
+    *   Registrar no TimeManager para receber ticks True if lane is available
     */
   def isLaneAvailable(
     vehicleState: MicroMovableState,
@@ -174,7 +174,7 @@ case class SimpleLaneChange(
 
     val rearGapSafe = followerInTargetLane match {
       case Some((_, gap, _)) => gap > minGapForChange
-      case None              => true 
+      case None              => true
     }
 
     if (!frontGapSafe || !rearGapSafe) {
@@ -204,7 +204,7 @@ case class SimpleLaneChange(
     laneRestrictions.get(targetLane) match {
       case Some("bus_lane")  => false
       case Some("bike_lane") => false
-      case Some("emergency") => false 
+      case Some("emergency") => false
       case _                 => true
     }
 

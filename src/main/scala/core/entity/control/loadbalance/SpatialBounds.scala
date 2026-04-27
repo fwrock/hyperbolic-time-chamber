@@ -53,7 +53,7 @@ case class SpatialBounds(
       SpatialBounds(minX, cy, cx, maxY), // NW
       SpatialBounds(cx, cy, maxX, maxY), // NE
       SpatialBounds(minX, minY, cx, cy), // SW
-      SpatialBounds(cx, minY, maxX, cy)  // SE
+      SpatialBounds(cx, minY, maxX, cy) // SE
     )
   }
 }

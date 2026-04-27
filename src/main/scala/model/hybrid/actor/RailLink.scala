@@ -36,9 +36,8 @@ class RailLink(
       properties = properties
     ) {
 
-  override def onInitialize(event: InitializeEvent): Unit = {
+  override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
-  }
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: EnterLinkData => handleEnterLink(event, d)

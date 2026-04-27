@@ -82,8 +82,8 @@ trait BalancingStrategy {
   /** Gets all known shard IDs. */
   def getAllShardIds: Set[String]
 
-  /** Gets the shard type classification for a given shard.
-    * The LoadBalanceManager uses this to determine migration eligibility.
+  /** Gets the shard type classification for a given shard. The LoadBalanceManager uses this to
+    * determine migration eligibility.
     */
   def getShardType(shardId: String): ShardTypeEnum = ShardTypeEnum.Dynamic
 
@@ -93,13 +93,13 @@ trait BalancingStrategy {
   /** Gets strategy-specific statistics for monitoring. */
   def getStats: Map[String, Any]
 
-  /** Records where a shard currently lives (populated from allocator's region index).
-    * Default no-op; strategies that maintain a kd-tree override this.
+  /** Records where a shard currently lives (populated from allocator's region index). Default
+    * no-op; strategies that maintain a kd-tree override this.
     */
   def recordShardLocation(shardId: String, address: Address): Unit = ()
 
-  /** Returns entity count per shard as tracked by the strategy at creation time.
-    * Default empty; strategies that track shard fill override this.
+  /** Returns entity count per shard as tracked by the strategy at creation time. Default empty;
+    * strategies that track shard fill override this.
     */
   def getShardEntityCounts: Map[String, Int] = Map.empty
 
@@ -119,8 +119,8 @@ case class StrategyConfig(
   enablePrediction: Boolean = true,
   enableTwoToOneBalance: Boolean = true,
   flowVectorSamples: Int = 100,
-  /** Weight for geographic affinity in GeoAffinityStrategy target scoring.
-    * 0.0 = pure load balancing; 1.0 = pure geographic affinity; 0.4 recommended.
+  /** Weight for geographic affinity in GeoAffinityStrategy target scoring. 0.0 = pure load
+    * balancing; 1.0 = pure geographic affinity; 0.4 recommended.
     */
   geographicAffinityWeight: Double = 0.4
 )

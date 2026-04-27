@@ -17,7 +17,7 @@ import org.interscity.htc.model.hybrid.util.BusUtil.loadPersonTime
 import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
-  import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.entity.event.data._
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
@@ -83,7 +83,9 @@ class Bus(
     */
   private var signalWaitUntilTick: Option[Tick] = None
 
-  /** Number of passengers asked to unload at current stop. Used to track when all responses arrived. */
+  /** Number of passengers asked to unload at current stop. Used to track when all responses
+    * arrived.
+    */
   private var expectedUnloadResponses: Int = 0
 
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
@@ -130,8 +132,12 @@ class Bus(
     state.status match {
       case Start =>
         if (state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
-          logDebug(s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)")
-          state.movableBestRoute = state.storedBestRoute.map(lst => scala.collection.mutable.Queue(lst: _*))
+          logDebug(
+            s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)"
+          )
+          state.movableBestRoute = state.storedBestRoute.map(
+            lst => scala.collection.mutable.Queue(lst: _*)
+          )
           state.storedBestRoute = None
         }
         report(
@@ -479,7 +485,7 @@ class Bus(
 
   /** Handle passenger loading.
     */
-  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit = {
+  private def handleBusLoadPeople(event: ActorInteractionEvent, data: BusLoadPassengerData): Unit =
     if (data.people.nonEmpty) {
       val nextTickTime = currentTick + loadPersonTime(
         numberOfPorts = state.numberOfPorts,
@@ -508,7 +514,6 @@ class Bus(
       state.status = WaitingLoadPassenger
       scheduleEvent(currentTick + 1)
     }
-  }
 
   /** Handle passenger unloading.
     */
@@ -631,14 +636,16 @@ class Bus(
     state.busStops.headOption.map(_._1)
 
   /** Find bus stop at a given node.
-    * @return Some(busStopId) if a bus stop is mapped to this node, None otherwise.
+    * @return
+    *   Some(busStopId) if a bus stop is mapped to this node, None otherwise.
     */
   private def findBusStopAtNode(nodeId: String): Option[String] =
-    state.busStops.find { case (_, stopNodeId) => stopNodeId == nodeId }.map(_._1)
+    state.busStops.find {
+      case (_, stopNodeId) => stopNodeId == nodeId
+    }.map(_._1)
 
-  /** Request passengers to unload at the current node.
-    * Sends BusRequestUnloadPassengerData to each passenger on board.
-    * If no passengers, proceeds directly to loading.
+  /** Request passengers to unload at the current node. Sends BusRequestUnloadPassengerData to each
+    * passenger on board. If no passengers, proceeds directly to loading.
     */
   private def requestUnloadPeopleData(): Unit = {
     if (state.people.isEmpty) {
@@ -652,23 +659,23 @@ class Bus(
     state.countUnloadPassenger = 0
 
     val nodeId = currentStopNode.getOrElse("unknown")
-    state.people.foreach { case (_, person) =>
-      sendMessageTo(
-        entityId = person.id,
-        shardId = person.classType,
-        data = BusRequestUnloadPassengerData(
-          nodeId = nodeId,
-          nodeRef = self
-        ),
-        eventType = "RequestUnloadPassenger"
-      )
+    state.people.foreach {
+      case (_, person) =>
+        sendMessageTo(
+          entityId = person.id,
+          shardId = person.classType,
+          data = BusRequestUnloadPassengerData(
+            nodeId = nodeId,
+            nodeRef = self
+          ),
+          eventType = "RequestUnloadPassenger"
+        )
     }
     onFinishSpontaneous(None)
   }
 
-  /** Request passengers from bus stop at current node.
-    * Sends BusRequestPassengerData to the BusStop actor.
-    * If no bus stop is found, proceeds to enter next link.
+  /** Request passengers from bus stop at current node. Sends BusRequestPassengerData to the BusStop
+    * actor. If no bus stop is found, proceeds to enter next link.
     */
   private def requestLoadPassenger(): Unit = {
     val nodeId = currentStopNode.getOrElse("unknown")

@@ -104,7 +104,7 @@ class Bicycle(
     }
     sumoIsHalting = isHaltingNow
   }
-  
+
   override protected def getVehicleStatus
     : org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum = state.status
   override protected def setVehicleStatus(
@@ -137,8 +137,8 @@ class Bicycle(
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
   override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
 
-  /** Reset all per-trip tracking variables so metrics start fresh for each new trip.
-    * Called by PrivateVehicle.handleStartTrip before each activation.
+  /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
+    * PrivateVehicle.handleStartTrip before each activation.
     */
   override protected def resetTripState(): Unit = {
     if (state == null) return
@@ -254,11 +254,17 @@ class Bicycle(
     if (state == null) {
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
-          logDebug(s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}")
+          logDebug(
+            s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}"
+          )
         case _: LinkInfoData =>
-          logDebug(s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}")
+          logDebug(
+            s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}"
+          )
         case _ =>
-          logWarn(s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}")
+          logWarn(
+            s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}"
+          )
       }
       return
     }
@@ -327,7 +333,7 @@ class Bicycle(
       )
       return
     }
-    signalStateRetryCounter = 0 
+    signalStateRetryCounter = 0
     if (data.phase == Red) {
       state.status = WaitingSignal
       signalWaitUntilTick = Some(data.nextTick)
@@ -421,7 +427,7 @@ class Bicycle(
       currentLane = findBikeLane(data).getOrElse(data.assignedLane),
       leaderVehicle = None,
       gapToLeader = data.linkLength,
-      leaderVelocity = 5.56, 
+      leaderVelocity = 5.56,
       maxAcceleration = 1.0,
       maxDeceleration = 3.0,
       minGap = 1.5, // Smaller gap
@@ -429,7 +435,7 @@ class Bicycle(
       reactionTime = 1.2,
       vehicleLength = 2.0,
       prefersBikeLane = true,
-      canUseSidewalk = false, 
+      canUseSidewalk = false,
       desiredLane = findBikeLane(data),
       laneChangeProgress = 0.0
     )
@@ -521,7 +527,7 @@ class Bicycle(
     state.deactivateMicroMode()
     currentLinkId = None
     linkEntryTick = None
-    
+
     requestSignalState()
   }
 
@@ -572,8 +578,10 @@ class Bicycle(
     data: LinkInfoData
   ): Unit = {
     if (state.status == Parked || state.status == Finished) {
-      logDebug(s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
-        s"(status=${state.status}, trip already finalized).")
+      logDebug(
+        s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
+          s"(status=${state.status}, trip already finalized)."
+      )
       return
     }
 
@@ -696,7 +704,7 @@ class Bicycle(
       linkId =>
         org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.get(linkId).map(_.length)
     }.getOrElse(500.0)
-  
+
   /** Apply driver attributes to bicycle physics.
     */
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {

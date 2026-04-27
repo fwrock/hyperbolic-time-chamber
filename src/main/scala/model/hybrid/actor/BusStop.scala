@@ -9,7 +9,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.IdUtil
-import org.interscity.htc.model.hybrid.entity.event.data.bus.{BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData}
+import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
 
 import scala.collection.mutable
@@ -28,9 +28,11 @@ class BusStop(
   override def handlePostLoadRegistration(): Unit = {
     val dependencyOpt =
       getDependencyOption(IdUtil.format(state.nodeId)).orElse(
-        relationships.get(IdUtil.format(state.nodeId)).orElse(
-          relationships.values.find(_.classType == "hybrid.actor.Node")
-        )
+        relationships
+          .get(IdUtil.format(state.nodeId))
+          .orElse(
+            relationships.values.find(_.classType == "hybrid.actor.Node")
+          )
       )
 
     dependencyOpt match {
@@ -45,7 +47,8 @@ class BusStop(
         logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
       case None if state.nodeId != null && state.nodeId.nonEmpty =>
         logWarn(
-          s"BusStop ${getEntityId}: relationships map empty (available keys: [${relationships.keys.mkString(", ")}]). " +
+          s"BusStop ${getEntityId}: relationships map empty (available keys: [${relationships.keys
+              .mkString(", ")}]). " +
             s"Registering with node ${state.nodeId} via direct routing."
         )
         sendMessageTo(

@@ -8,8 +8,8 @@ import org.apache.pekko.actor.ActorRef
 
 /** Sent by a simulation entity to the SnapshotManager to request its migration snapshot.
   *
-  * Emitted in preStart() when the migration window flag is active (isMigrationActive = true).
-  * The entity stashes all incoming messages and waits for either:
+  * Emitted in preStart() when the migration window flag is active (isMigrationActive = true). The
+  * entity stashes all incoming messages and waits for either:
   *   - [[MigrationContextEvent]] — snapshot found, entity restores and joins
   *   - [[NoPendingMigrationEvent]] — no snapshot found, entity does normal initialization
   *

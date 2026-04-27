@@ -75,11 +75,9 @@ case class LinkState(
   currentSpeed: Double = 0.0,
   congestionFactor: Double = 1.0,
   registered: mutable.Set[LinkRegister] = mutable.Set(),
-
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,
-
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
   laneConfigurations: List[LaneConfig] = List.empty
 ) extends BaseState(

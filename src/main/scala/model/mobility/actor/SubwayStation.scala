@@ -30,7 +30,11 @@ class SubwayStation(
     super.onInitialize(event)
     val dependencyOpt =
       getDependencyOption(state.nodeId)
-        .orElse(dependencies.values.find(d => d.classType != null && d.classType.endsWith("Node")))
+        .orElse(
+          dependencies.values.find(
+            d => d.classType != null && d.classType.endsWith("Node")
+          )
+        )
 
     dependencyOpt match {
       case Some(node) =>

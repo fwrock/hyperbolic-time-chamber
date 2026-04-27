@@ -51,17 +51,21 @@ object DynamicWeightCache {
 
     strategyType.toLowerCase match {
       case "kafka" =>
-        println("[DynamicWeightCache] Using Kafka cache strategy (distributed pub/sub + local memory)")
+        println(
+          "[DynamicWeightCache] Using Kafka cache strategy (distributed pub/sub + local memory)"
+        )
         new KafkaCacheStrategy()
 
       case other =>
-        println(s"[DynamicWeightCache] Dynamic weights DISABLED (requires Kafka, got: '$other'). Using static weights only.")
+        println(
+          s"[DynamicWeightCache] Dynamic weights DISABLED (requires Kafka, got: '$other'). Using static weights only."
+        )
         new DisabledCacheStrategy()
     }
   }
 
-  /** Factory method to create strategy with ActorSystem.
-    * Dynamic weights only work with Kafka; otherwise returns disabled (no-op).
+  /** Factory method to create strategy with ActorSystem. Dynamic weights only work with Kafka;
+    * otherwise returns disabled (no-op).
     */
   def createStrategy(strategyType: String)(implicit system: ActorSystem): WeightCacheStrategy = {
     implicit val ec: ExecutionContext = system.dispatcher
@@ -71,7 +75,7 @@ object DynamicWeightCache {
       case _       => new DisabledCacheStrategy()
     }
   }
-  
+
   def publishCost(cost: DynamicLinkCost, ttlSeconds: Int = 60): Try[Unit] =
     strategy.publishCost(cost, ttlSeconds)
 

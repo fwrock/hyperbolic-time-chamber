@@ -2,13 +2,12 @@ package org.interscity.htc.model.hybrid.util.cache
 
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 
-import scala.util.{Success, Try}
+import scala.util.{ Success, Try }
 
 /** No-op cache strategy that disables dynamic weights entirely.
   *
-  * Used when Kafka is not available. All publish operations are ignored,
-  * and getWeight always returns the static weight directly.
-  * Dynamic weights are a Kafka-only feature.
+  * Used when Kafka is not available. All publish operations are ignored, and getWeight always
+  * returns the static weight directly. Dynamic weights are a Kafka-only feature.
   */
 class DisabledCacheStrategy extends WeightCacheStrategy {
 

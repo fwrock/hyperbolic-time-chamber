@@ -34,8 +34,8 @@ object SimulationUtil {
     }
   }
 
-  /** Loads simulation config from application.conf / env var only, bypassing the API registry.
-    * Used by [[core.api.ConfigRoutes]] to report what would be loaded without the API override.
+  /** Loads simulation config from application.conf / env var only, bypassing the API registry. Used
+    * by [[core.api.ConfigRoutes]] to report what would be loaded without the API override.
     */
   def loadSimulationConfigFromFileOrEnv(): Simulation = {
     val applicationConfig = ConfigFactory.load().getString("htc.simulation.config-file")

@@ -39,13 +39,15 @@ class TrafficSignal(
     val simulationEnd = TrafficSignal.simulationEndTick
     var cycleTick = 0L
 
-    logDebug(s"Pre-scheduling phase transitions for signal ${getEntityId} until tick $simulationEnd")
+    logDebug(
+      s"Pre-scheduling phase transitions for signal ${getEntityId} until tick $simulationEnd"
+    )
 
     while (cycleTick < simulationEnd) {
       state.phases.foreach {
         phase =>
           val currentCycleTick = cycleTick % state.cycleDuration
-          
+
           val greenStartTick = cycleTick + phase.greenStart
           if (greenStartTick < simulationEnd) {
             val greenEndTick = greenStartTick + phase.greenDuration

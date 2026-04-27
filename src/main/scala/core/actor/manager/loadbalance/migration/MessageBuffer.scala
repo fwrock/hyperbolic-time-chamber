@@ -13,8 +13,8 @@ import scala.collection.mutable
   * separately by Pekko's shard persistence mechanism. With the proper coordination protocol
   * (TimeManager pauses at tick boundary → migration executes → TimeManager resumes), the buffer
   * should rarely contain messages. It serves as a safety net for edge cases where in-flight
-  * messages arrive during the brief migration window (e.g., async responses from other actors
-  * that were already dispatched before the pause took effect).
+  * messages arrive during the brief migration window (e.g., async responses from other actors that
+  * were already dispatched before the pause took effect).
   *
   * Thread-safe: synchronized access to internal structures.
   */

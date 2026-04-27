@@ -15,8 +15,8 @@ import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
-/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter.
-  * Also logs message type for diagnostics when dead letters are persistent.
+/** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter. Also logs
+  * message type for diagnostics when dead letters are persistent.
   */
 private class DeadLetterListener extends Actor {
   import org.slf4j.LoggerFactory
@@ -77,7 +77,7 @@ object HyperbolicTimeChamber {
     }
 
     SimulationUtil.startShards(system)
-    
+
     actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
     val simulation = system.actorOf(

@@ -107,7 +107,7 @@ object DynamicLinkCostAvroExample {
     )
 
     println(s"📊 Original cost: ${testCost.linkId} -> ${testCost.totalCost}")
-    
+
     DynamicLinkCostAvro.serialize(testCost) match {
       case Success(bytes) =>
         println(s"Serialized to ${bytes.length} bytes")

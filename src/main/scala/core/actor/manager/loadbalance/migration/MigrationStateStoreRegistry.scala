@@ -9,9 +9,10 @@ import java.util.concurrent.atomic.{ AtomicBoolean, AtomicReference }
   *
   * Provides JVM-local, thread-safe access to:
   *   - The active [[MigrationStateStore]] (legacy; kept for Redis option)
-  *   - The SnapshotManager cluster-singleton proxy (set by [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]])
-  *   - The migration window flag (`isMigrationActive`) — toggled by the subscriber
-  *     when it receives [[core.entity.event.control.migration.MigrationWindowOpenEvent]] /
+  *   - The SnapshotManager cluster-singleton proxy (set by
+  *     [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]])
+  *   - The migration window flag (`isMigrationActive`) — toggled by the subscriber when it receives
+  *     [[core.entity.event.control.migration.MigrationWindowOpenEvent]] /
   *     [[core.entity.event.control.migration.MigrationWindowCloseEvent]] from the LBM
   *
   * Thread-safe via [[AtomicReference]] and [[AtomicBoolean]].
@@ -21,19 +22,19 @@ object MigrationStateStoreRegistry {
   private val store: AtomicReference[MigrationStateStore] =
     new AtomicReference[MigrationStateStore](null)
 
-  /** SnapshotManager cluster-singleton proxy — set by MigrationWindowSubscriber.onStart()
-    * on every node. Used by entities to send QueryMigrationEvent / SaveMigrationSnapshotEvent. */
+  /** SnapshotManager cluster-singleton proxy — set by MigrationWindowSubscriber.onStart() on every
+    * node. Used by entities to send QueryMigrationEvent / SaveMigrationSnapshotEvent.
+    */
   private val snapshotManager: AtomicReference[ActorRef] =
     new AtomicReference[ActorRef](null)
 
   /** Migration window flag — true while a shard migration is in progress.
     *
-    * Set to true by [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]] when
-    * it receives MigrationWindowOpenEvent. Reset to false on MigrationWindowCloseEvent.
+    * Set to true by [[core.actor.manager.loadbalance.migration.MigrationWindowSubscriber]] when it
+    * receives MigrationWindowOpenEvent. Reset to false on MigrationWindowCloseEvent.
     *
-    * Entities check this in preStart() to decide whether to query the SnapshotManager
-    * for a pending migration snapshot. When false the check is a single volatile read
-    * with zero overhead.
+    * Entities check this in preStart() to decide whether to query the SnapshotManager for a pending
+    * migration snapshot. When false the check is a single volatile read with zero overhead.
     */
   val isMigrationActive: AtomicBoolean = new AtomicBoolean(false)
 

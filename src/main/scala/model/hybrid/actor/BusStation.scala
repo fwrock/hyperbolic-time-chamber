@@ -235,7 +235,7 @@ class BusStation(
       timeManagers = timeManagers,
       creatorManager = creatorManager,
       reporters = properties.reporters,
-      data = toJson({
+      data = toJson {
         val busState = BusState(
           startTick = busStartTick,
           busStops = state.busStops.toMap,
@@ -250,7 +250,7 @@ class BusStation(
         busState.bestRoute = Some(route.clone())
         busState.status = MovableStatusEnum.Start
         busState
-      }),
+      },
       relationships = mutable.Map[String, ShardActorId](),
       actorType = properties.actorType,
       defaultTimeManagerType = properties.defaultTimeManagerType

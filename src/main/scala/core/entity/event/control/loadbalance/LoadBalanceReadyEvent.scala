@@ -6,8 +6,8 @@ import core.entity.event.data.DefaultBaseEventData
 
 import org.apache.pekko.actor.ActorRef
 
-/** Event sent by LoadBalanceManager to SimulationManager and TimeManager
-  * when it has completed initialization and is ready to coordinate.
+/** Event sent by LoadBalanceManager to SimulationManager and TimeManager when it has completed
+  * initialization and is ready to coordinate.
   *
   * @param loadBalanceManagerRef
   *   Reference to the LoadBalanceManager singleton proxy

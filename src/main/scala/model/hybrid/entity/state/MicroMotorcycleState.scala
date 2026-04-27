@@ -57,17 +57,14 @@ case class MicroMotorcycleState(
   leaderVehicle: Option[String] = None,
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
-
   maxAcceleration: Double = 3.5,
-  maxDeceleration: Double = 5.0, 
+  maxDeceleration: Double = 5.0,
   minGap: Double = 1.5,
   desiredVelocity: Double = 16.67,
   reactionTime: Double = 0.9,
   vehicleLength: Double = 2.5,
-
   canFilterLanes: Boolean = true,
   aggressiveness: Double = 0.7,
-
   desiredLane: Option[Int] = None,
   laneChangeProgress: Double = 0.0,
   filteringBetweenLanes: Boolean = false

@@ -47,14 +47,12 @@ case class MicroCarState(
   leaderVehicle: Option[String] = None,
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
-
   maxAcceleration: Double = 2.6,
   maxDeceleration: Double = 4.5,
-  minGap: Double = 2.0, 
+  minGap: Double = 2.0,
   desiredVelocity: Double = 13.89,
   reactionTime: Double = 1.0,
   vehicleLength: Double = 4.5,
-
   desiredLane: Option[Int] = None,
   laneChangeProgress: Double = 0.0
 ) extends MicroMovableState {

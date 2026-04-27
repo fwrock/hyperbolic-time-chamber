@@ -163,8 +163,8 @@ object JsonUtil {
     val typeFactory = TypeFactory.defaultInstance()
 
     val javaListType: JavaType = typeFactory.constructCollectionType(
-      classOf[java.util.List[_]], 
-      elementManifest.runtimeClass 
+      classOf[java.util.List[_]],
+      elementManifest.runtimeClass
     )
 
     val javaList: java.util.List[A] = mapper.readValue(jsonStream, javaListType)

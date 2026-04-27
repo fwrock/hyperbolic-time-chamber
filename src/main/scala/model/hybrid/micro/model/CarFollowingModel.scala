@@ -127,6 +127,6 @@ object CarFollowingModel {
     */
   def byName(name: String): CarFollowingModel = name.toLowerCase match {
     case "krauss" => KraussModel()
-    case _ => KraussModel()
+    case _        => KraussModel()
   }
 }

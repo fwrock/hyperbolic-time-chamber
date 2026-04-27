@@ -14,28 +14,22 @@ import scala.concurrent.ExecutionContext
 
 /** REST routes for simulation scenario management and lifecycle control.
   *
-  * ── Scenario config ──────────────────────────────────────────────────────
-  * GET    /api/v1/simulation/config   — current scenario (JSON) and its source
-  * PUT    /api/v1/simulation/config   — load a Simulation JSON as API override
-  * DELETE /api/v1/simulation/config   — clear API override (falls back to env/file)
+  * ── Scenario config ────────────────────────────────────────────────────── GET
+  * /api/v1/simulation/config — current scenario (JSON) and its source PUT /api/v1/simulation/config
+  * — load a Simulation JSON as API override DELETE /api/v1/simulation/config — clear API override
+  * (falls back to env/file)
   *
-  * ── Lifecycle ────────────────────────────────────────────────────────────
-  * GET    /api/v1/simulation/status   — current status + tick metrics
-  * POST   /api/v1/simulation/start    — start simulation (optional body, see below)
-  * POST   /api/v1/simulation/pause    — pause ticking (simulation must be Running)
-  * POST   /api/v1/simulation/resume   — resume ticking (simulation must be Paused)
-  * POST   /api/v1/simulation/stop     — stop and clean up
+  * ── Lifecycle ──────────────────────────────────────────────────────────── GET
+  * /api/v1/simulation/status — current status + tick metrics POST /api/v1/simulation/start — start
+  * simulation (optional body, see below) POST /api/v1/simulation/pause — pause ticking (simulation
+  * must be Running) POST /api/v1/simulation/resume — resume ticking (simulation must be Paused)
+  * POST /api/v1/simulation/stop — stop and clean up
   *
-  * ── /start optional JSON body ─────────────────────────────────────────────
-  * {
-  *   "configFile": "/optional/path/to/simulation.json",
-  *   "settings": {
-  *     "htc.time-manager.total-instances": "64",
-  *     "htc.report-manager.json.batch-size": "200"
-  *   }
-  * }
-  * Both fields are optional. When "configFile" is absent the scenario is resolved
-  * from [[ApiConfigRegistry]] or the normal env-var / application.conf chain.
+  * ── /start optional JSON body ───────────────────────────────────────────── { "configFile":
+  * "/optional/path/to/simulation.json", "settings": { "htc.time-manager.total-instances": "64",
+  * "htc.report-manager.json.batch-size": "200" } } Both fields are optional. When "configFile" is
+  * absent the scenario is resolved from [[ApiConfigRegistry]] or the normal env-var /
+  * application.conf chain.
   */
 object SimulationRoutes {
 
@@ -46,15 +40,15 @@ object SimulationRoutes {
       concat(
         path("health") {
           get {
-            complete(ok(
-              s"""{"status":"ok","simulationStatus":"${SimulationController.status}","apiConfigLoaded":${ApiConfigRegistry.hasConfig}}"""
-            ))
+            complete(
+              ok(
+                s"""{"status":"ok","simulationStatus":"${SimulationController.status}","apiConfigLoaded":${ApiConfigRegistry.hasConfig}}"""
+              )
+            )
           }
         },
-
         pathPrefix("simulation") {
           concat(
-
             path("config") {
               concat(
                 get {
@@ -62,26 +56,33 @@ object SimulationRoutes {
                     case Some(config) =>
                       ("api_override", safeToJson(config))
                     case None =>
-                      try ("file_or_env", safeToJson(core.util.SimulationUtil.loadSimulationConfigFromFileOrEnv()))
-                      catch { case e: Exception => ("none", s"""{"error":${jsonString(e.getMessage)}}""") }
+                      try
+                        (
+                          "file_or_env",
+                          safeToJson(core.util.SimulationUtil.loadSimulationConfigFromFileOrEnv())
+                        )
+                      catch {
+                        case e: Exception => ("none", s"""{"error":${jsonString(e.getMessage)}}""")
+                      }
                   }
                   complete(ok(s"""{"source":"$source","config":$json}"""))
                 },
-
                 put {
-                  entity(as[String]) { body =>
-                    try {
-                      val sim = JsonUtil.fromJson[Simulation](body)
-                      ApiConfigRegistry.set(sim)
-                      logger.info(s"Simulation config API: scenario '${sim.name}' loaded via PUT")
-                      complete(ok(s"""{"status":"ok","name":${jsonString(sim.name)}}"""))
-                    } catch {
-                      case e: Exception =>
-                        complete(badRequest(s"""{"status":"error","message":${jsonString(e.getMessage)}}"""))
-                    }
+                  entity(as[String]) {
+                    body =>
+                      try {
+                        val sim = JsonUtil.fromJson[Simulation](body)
+                        ApiConfigRegistry.set(sim)
+                        logger.info(s"Simulation config API: scenario '${sim.name}' loaded via PUT")
+                        complete(ok(s"""{"status":"ok","name":${jsonString(sim.name)}}"""))
+                      } catch {
+                        case e: Exception =>
+                          complete(badRequest(s"""{"status":"error","message":${jsonString(
+                              e.getMessage
+                            )}}"""))
+                      }
                   }
                 },
-
                 delete {
                   ApiConfigRegistry.clear()
                   logger.info("Simulation config API: API override cleared")
@@ -89,61 +90,64 @@ object SimulationRoutes {
                 }
               )
             },
-
             path("status") {
               get {
-                val s            = SimulationController.status
-                val currentTick  = MetricsServer.currentTick.get().toLong
-                val progress     = MetricsServer.simulationProgress.get()
-                complete(ok(
-                  s"""|{
+                val s = SimulationController.status
+                val currentTick = MetricsServer.currentTick.get().toLong
+                val progress = MetricsServer.simulationProgress.get()
+                complete(
+                  ok(
+                    s"""|{
                       |  "status": "$s",
                       |  "currentTick": $currentTick,
                       |  "progressRatio": $progress,
                       |  "apiConfigLoaded": ${ApiConfigRegistry.hasConfig},
                       |  "settingOverrides": ${SimulatorSettingsRegistry.getAll.size}
                       |}""".stripMargin
-                ))
+                  )
+                )
               }
             },
-
             path("start") {
               post {
-                entity(as[String]) { body =>
-                  val (configFile, settings) = parseStartBody(body)
-                  SimulationController.start(configFile, settings) match {
-                    case Right(_) =>
-                      complete(ok("""{"status":"ok","message":"Simulation start triggered"}"""))
-                    case Left(err) =>
-                      complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
-                  }
+                entity(as[String]) {
+                  body =>
+                    val (configFile, settings) = parseStartBody(body)
+                    SimulationController.start(configFile, settings) match {
+                      case Right(_) =>
+                        complete(ok("""{"status":"ok","message":"Simulation start triggered"}"""))
+                      case Left(err) =>
+                        complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
+                    }
                 }
               }
             },
-
             path("pause") {
               post {
                 SimulationController.pause() match {
-                  case Right(_)  => complete(ok("""{"status":"ok","message":"Simulation paused"}"""))
-                  case Left(err) => complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
+                  case Right(_) => complete(ok("""{"status":"ok","message":"Simulation paused"}"""))
+                  case Left(err) =>
+                    complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
                 }
               }
             },
-
             path("resume") {
               post {
                 SimulationController.resume() match {
-                  case Right(_)  => complete(ok("""{"status":"ok","message":"Simulation resumed"}"""))
-                  case Left(err) => complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
+                  case Right(_) =>
+                    complete(ok("""{"status":"ok","message":"Simulation resumed"}"""))
+                  case Left(err) =>
+                    complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
                 }
               }
             },
-
             path("stop") {
               post {
                 SimulationController.stop() match {
-                  case Right(_)  => complete(ok("""{"status":"ok","message":"Simulation stopped"}"""))
-                  case Left(err) => complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
+                  case Right(_) =>
+                    complete(ok("""{"status":"ok","message":"Simulation stopped"}"""))
+                  case Left(err) =>
+                    complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
                 }
               }
             }
@@ -151,7 +155,6 @@ object SimulationRoutes {
         }
       )
     }
-
 
   private def ok(json: String) =
     HttpResponse(StatusCodes.OK, entity = HttpEntity(ContentTypes.`application/json`, json))
@@ -167,16 +170,17 @@ object SimulationRoutes {
     catch { case e: Exception => s"""{"error":${jsonString(e.getMessage)}}""" }
 
   private def jsonString(s: String): String =
-    "\"" + (if (s == null) "" else s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")) + "\""
+    "\"" + (if (s == null) ""
+            else s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")) + "\""
 
-  /** Parses the optional /start body.
-    * Accepts: {} | {"configFile":"..."} | {"settings":{...}} | {"configFile":"...","settings":{...}}
+  /** Parses the optional /start body. Accepts: {} | {"configFile":"..."} | {"settings":{...}} |
+    * {"configFile":"...","settings":{...}}
     */
   private def parseStartBody(body: String): (Option[String], Map[String, String]) = {
     if (body.isBlank) return (None, Map.empty)
     try {
       val configFile = extractJsonString(body, "configFile")
-      val settings   = extractJsonObject(body, "settings")
+      val settings = extractJsonObject(body, "settings")
       (configFile.filter(_.nonEmpty), settings)
     } catch {
       case _: Exception => (None, Map.empty)
@@ -194,22 +198,30 @@ object SimulationRoutes {
     val braceOpen = rawJson.indexOf('{', start + field.length + 2)
     if (braceOpen < 0) return Map.empty
     var depth = 0
-    var i     = braceOpen
+    var i = braceOpen
     while (i < rawJson.length) {
       if (rawJson.charAt(i) == '{') depth += 1
-      else if (rawJson.charAt(i) == '}') { depth -= 1; if (depth == 0) {
-        val inner = rawJson.substring(braceOpen + 1, i)
-        return inner.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")
-          .map(_.trim)
-          .filter(_.nonEmpty)
-          .flatMap { pair =>
-            val parts = pair.split(":", 2)
-            if (parts.length == 2)
-              Some(parts(0).trim.stripPrefix("\"").stripSuffix("\"") ->
-                   parts(1).trim.stripPrefix("\"").stripSuffix("\""))
-            else None
-          }.toMap
-      }}
+      else if (rawJson.charAt(i) == '}') {
+        depth -= 1;
+        if (depth == 0) {
+          val inner = rawJson.substring(braceOpen + 1, i)
+          return inner
+            .split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)")
+            .map(_.trim)
+            .filter(_.nonEmpty)
+            .flatMap {
+              pair =>
+                val parts = pair.split(":", 2)
+                if (parts.length == 2)
+                  Some(
+                    parts(0).trim.stripPrefix("\"").stripSuffix("\"") ->
+                      parts(1).trim.stripPrefix("\"").stripSuffix("\"")
+                  )
+                else None
+            }
+            .toMap
+        }
+      }
       i += 1
     }
     Map.empty

@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.actor.manager.BaseManager
-import core.entity.event.{FinishEvent, SpontaneousEvent}
+import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.entity.state.DefaultState
 import core.types.Tick
 

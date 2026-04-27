@@ -90,7 +90,9 @@ abstract class Movable[T <: MovableState](
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     if (state == null) {
-      logWarn(s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}")
+      logWarn(
+        s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}"
+      )
       return
     }
     event.data match {

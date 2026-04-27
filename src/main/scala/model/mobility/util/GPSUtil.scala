@@ -30,7 +30,7 @@ object GPSUtil {
           destinationNode,
           heuristicFunc
         ) match {
-          case Some((cost, path)) => 
+          case Some((cost, path)) =>
             val routeQueue = mutable.Queue[(String, String)]()
             path.foreach {
               case (edgeObject, targetNodeOfEdgeInPath) =>
@@ -41,7 +41,7 @@ object GPSUtil {
             System.err.println(
               s"GPSUtil: Nenhuma rota encontrada de $originId para $destinationId."
             )
-            None 
+            None
         }
       case (None, _) =>
         System.err.println(s"GPSUtil: Nó de origem $originId não encontrado no mapa.")

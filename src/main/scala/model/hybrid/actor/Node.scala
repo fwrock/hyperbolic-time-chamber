@@ -28,7 +28,8 @@ class Node(
       properties = properties
     ) {
 
-  private val pendingSignals: mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
+  private val pendingSignals
+    : mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
     mutable.Map.empty
 
   override def onInitialize(event: InitializeEvent): Unit = {
@@ -36,8 +37,9 @@ class Node(
 
     if (state != null) {
       if (pendingSignals.nonEmpty) {
-        pendingSignals.foreach { case (phaseOrigin, signalState) =>
-          state.signals.put(phaseOrigin, signalState)
+        pendingSignals.foreach {
+          case (phaseOrigin, signalState) =>
+            state.signals.put(phaseOrigin, signalState)
         }
         pendingSignals.clear()
       }
@@ -79,7 +81,8 @@ class Node(
       }
     } else {
       logWarn(
-        s"Node ${getEntityId}: RegisterSubwayStationData arrived before initialization for lines: ${data.lines.mkString(", ")}. " +
+        s"Node ${getEntityId}: RegisterSubwayStationData arrived before initialization for lines: ${data.lines
+            .mkString(", ")}. " +
           s"This should not happen — PostLoadRegistrationCoordinator guarantees Node is initialized first."
       )
     }

@@ -5,8 +5,8 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.BaseEvent
 import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
 
-/** Sent by a simulation actor to the PostLoadRegistrationCoordinator (via coordinatorRef
-  * stored in PostLoadRegistrationEvent) once its registration step is complete.
+/** Sent by a simulation actor to the PostLoadRegistrationCoordinator (via coordinatorRef stored in
+  * PostLoadRegistrationEvent) once its registration step is complete.
   *
   * The coordinator uses these ACKs to track completion and, when all expected ACKs are received,
   * notifies LoadDataManager via PostLoadRegistrationDoneEvent.

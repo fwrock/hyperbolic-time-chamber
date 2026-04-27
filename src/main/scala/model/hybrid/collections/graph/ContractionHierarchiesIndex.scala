@@ -5,40 +5,45 @@ import scala.collection.mutable
 
 /** Contraction Hierarchies (CH) index.
   *
-  * Precomputed during startup via [[org.interscity.htc.model.hybrid.collections.Graph.buildContractionHierarchies]].
-  * Once built, point-to-point queries run orders of magnitude faster than plain Dijkstra on
-  * large road networks.
+  * Precomputed during startup via
+  * [[org.interscity.htc.model.hybrid.collections.Graph.buildContractionHierarchies]]. Once built,
+  * point-to-point queries run orders of magnitude faster than plain Dijkstra on large road
+  * networks.
   *
   * Algorithm summary
   * -----------------
-  * 1. **Preprocessing** – nodes are assigned a numeric *order* (rank). Nodes are contracted
-  *    one by one in order of estimated importance (edge-difference heuristic). When a node v
-  *    is contracted, *shortcut* edges are inserted between every pair of neighbours
-  *    (u → v → w) that would otherwise lose their shortest path through v.
+  *   1. **Preprocessing** – nodes are assigned a numeric *order* (rank). Nodes are contracted one
+  *      by one in order of estimated importance (edge-difference heuristic). When a node v is
+  *      contracted, *shortcut* edges are inserted between every pair of neighbours (u → v → w) that
+  *      would otherwise lose their shortest path through v.
   *
-  * 2. **Query** – bidirectional Dijkstra that only relaxes edges pointing *upward* in the
-  *    hierarchy (i.e. towards higher-ranked nodes). The optimal meeting point gives the
-  *    shortest distance.
+  * 2. **Query** – bidirectional Dijkstra that only relaxes edges pointing *upward* in the hierarchy
+  * (i.e. towards higher-ranked nodes). The optimal meeting point gives the shortest distance.
   *
-  * 3. **Path unpacking** – shortcuts record the *via* node they replaced, allowing full
-  *    path reconstruction by recursive unpacking.
+  * 3. **Path unpacking** – shortcuts record the *via* node they replaced, allowing full path
+  * reconstruction by recursive unpacking.
   *
   * Limitations / trade-offs in this implementation
   * ------------------------------------------------
-  * - Node ordering uses a simple **edge-difference** heuristic (|shortcuts added| − |edges
-  *   removed|). More sophisticated orderings (e.g. combined with "independence" or
-  *   "cover quotient") would yield better query performance on very large graphs.
-  * - The graph type parameter `V` must have a stable `hashCode`/`equals` (satisfied by
-  *   `NodeGraph` which is a `case class`).
-  * - The index is *immutable* after construction; dynamic weight updates require rebuilding.
-  *   For live traffic use the Dijkstra-based `GPSUtil.calcRoute` with `useDynamicWeights = true`.
+  *   - Node ordering uses a simple **edge-difference** heuristic (|shortcuts added| − |edges
+  *     removed|). More sophisticated orderings (e.g. combined with "independence" or "cover
+  *     quotient") would yield better query performance on very large graphs.
+  *   - The graph type parameter `V` must have a stable `hashCode`/`equals` (satisfied by
+  *     `NodeGraph` which is a `case class`).
+  *   - The index is *immutable* after construction; dynamic weight updates require rebuilding. For
+  *     live traffic use the Dijkstra-based `GPSUtil.calcRoute` with `useDynamicWeights = true`.
   *
-  * @param upwardEdges   For every node: neighbour → (weight, label) pairs that go UP in rank.
-  * @param downwardEdges For every node: neighbour → (weight, label) pairs that go DOWN in rank
-  *                      (used in the backward search which traverses edges in reverse).
-  * @param shortcuts     Shortcut metadata: (u, w) → via-node v (used for path unpacking).
-  * @param rank          Node → its contraction order (lower = contracted earlier = less important).
-  * @param edgesById     Original edge labels indexed by (source, target) for path unpacking.
+  * @param upwardEdges
+  *   For every node: neighbour → (weight, label) pairs that go UP in rank.
+  * @param downwardEdges
+  *   For every node: neighbour → (weight, label) pairs that go DOWN in rank (used in the backward
+  *   search which traverses edges in reverse).
+  * @param shortcuts
+  *   Shortcut metadata: (u, w) → via-node v (used for path unpacking).
+  * @param rank
+  *   Node → its contraction order (lower = contracted earlier = less important).
+  * @param edgesById
+  *   Original edge labels indexed by (source, target) for path unpacking.
   */
 case class ContractionHierarchiesIndex[V, W, L](
   upwardEdges: Map[V, Map[V, (Double, Option[L])]],
@@ -50,30 +55,37 @@ case class ContractionHierarchiesIndex[V, W, L](
 
   /** Query: find shortest distance + path between two nodes using bidirectional CH-Dijkstra.
     *
-    * @return Some((cost, List of (edge-label-id, target-node))) or None if unreachable.
-    *         The path uses the *original* edge labels (shortcuts are unpacked transparently).
+    * @return
+    *   Some((cost, List of (edge-label-id, target-node))) or None if unreachable. The path uses the
+    *   *original* edge labels (shortcuts are unpacked transparently).
     */
   def query(source: V, target: V): Option[(Double, List[(L, V)])] =
     queryAStar(source, target, (_, _) => 0.0)
 
   /** Query: find shortest distance + path using bidirectional CH-A*.
     *
-    * Guides the bidirectional search with a potential function, reducing the number of
-    * nodes settled compared to plain CH-Dijkstra. For road networks, passing the
-    * Euclidean (great-circle) distance as `heuristic` yields the best speedup.
+    * Guides the bidirectional search with a potential function, reducing the number of nodes
+    * settled compared to plain CH-Dijkstra. For road networks, passing the Euclidean (great-circle)
+    * distance as `heuristic` yields the best speedup.
     *
     * Requirements for correctness:
-    *  - `heuristic` must be *admissible* (never overestimates) and *consistent* (monotone).
-    *  - For the forward search  : priority(u) = g(u) + h(u, target)
-    *  - For the backward search : priority(u) = g(u) + h(source, u)
-    * Because CH restricts relaxation to upward edges only, the usual consistency of the
-    * Euclidean heuristic on road networks is preserved.
+    *   - `heuristic` must be *admissible* (never overestimates) and *consistent* (monotone).
+    *   - For the forward search : priority(u) = g(u) + h(u, target)
+    *   - For the backward search : priority(u) = g(u) + h(source, u) Because CH restricts
+    *     relaxation to upward edges only, the usual consistency of the Euclidean heuristic on road
+    *     networks is preserved.
     *
-    * @param heuristic A lower-bound function on the remaining distance. Passing `(_, _) => 0.0`
-    *                  degenerates to plain [[query]] (CH-Dijkstra).
-    * @return Some((cost, path)) or None if unreachable.
+    * @param heuristic
+    *   A lower-bound function on the remaining distance. Passing `(_, _) => 0.0` degenerates to
+    *   plain [[query]] (CH-Dijkstra).
+    * @return
+    *   Some((cost, path)) or None if unreachable.
     */
-  def queryAStar(source: V, target: V, heuristic: (V, V) => Double): Option[(Double, List[(L, V)])] = {
+  def queryAStar(
+    source: V,
+    target: V,
+    heuristic: (V, V) => Double
+  ): Option[(Double, List[(L, V)])] = {
     if (source == target) return Some((0.0, List.empty))
 
     val distF = mutable.Map[V, Double]().withDefaultValue(Double.PositiveInfinity)
@@ -92,7 +104,7 @@ case class ContractionHierarchiesIndex[V, W, L](
     val settledF = mutable.Set[V]()
     val settledB = mutable.Set[V]()
 
-    var bestDist    = Double.PositiveInfinity
+    var bestDist = Double.PositiveInfinity
     var meetingNode: Option[V] = None
 
     def relaxF(): Unit = {
@@ -142,16 +154,27 @@ case class ContractionHierarchiesIndex[V, W, L](
       else relaxB()
     }
 
-    meetingNode.filter(_ => bestDist < Double.PositiveInfinity).map {
-      mid =>
-        val pathF = unpackForward(prevF, source, mid)
-        val pathB = unpackBackward(prevB, mid, target)
-        val fullPath = pathF ++ pathB
-        val edgeList = fullPath.sliding(2).collect {
-          case Seq(a, b) => edgesById.get((a, b)).map { case (_, lbl) => (lbl, b) }
-        }.flatten.toList
-        (bestDist, edgeList)
-    }
+    meetingNode
+      .filter(
+        _ => bestDist < Double.PositiveInfinity
+      )
+      .map {
+        mid =>
+          val pathF = unpackForward(prevF, source, mid)
+          val pathB = unpackBackward(prevB, mid, target)
+          val fullPath = pathF ++ pathB
+          val edgeList = fullPath
+            .sliding(2)
+            .collect {
+              case Seq(a, b) =>
+                edgesById.get((a, b)).map {
+                  case (_, lbl) => (lbl, b)
+                }
+            }
+            .flatten
+            .toList
+          (bestDist, edgeList)
+      }
   }
 
   // Reconstruct forward path (source → mid) using prevF map, then unpack shortcuts
@@ -182,7 +205,7 @@ case class ContractionHierarchiesIndex[V, W, L](
     @annotation.tailrec
     def expand(remaining: List[V], acc: mutable.ListBuffer[V]): List[V] =
       remaining match {
-        case Nil => acc.toList
+        case Nil      => acc.toList
         case u :: Nil => acc.addOne(u); acc.toList
         case u :: v :: rest =>
           shortcuts.get((u, v)) match {

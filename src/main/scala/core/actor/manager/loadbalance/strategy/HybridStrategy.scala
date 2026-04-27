@@ -151,7 +151,12 @@ class HybridStrategy extends BalancingStrategy {
     }
 
     // Filter out static (non-migratable) shards before returning
-    migrations.filter(plan => isMigratable(plan.shardId)).toList.sortBy(-_.priority)
+    migrations
+      .filter(
+        plan => isMigratable(plan.shardId)
+      )
+      .toList
+      .sortBy(-_.priority)
   }
 
   override def getAssignments: Map[String, Address] =
@@ -178,20 +183,23 @@ class HybridStrategy extends BalancingStrategy {
     "entityCount" -> quadtree.entityCount,
     "clusterNodes" -> kdTree.nodeCount,
     "imbalanceRatio" -> kdTree.getImbalanceRatio,
-    "nodeLoads" -> kdTree.getNodeLoads.map { case (addr, load) => addr.toString -> load }
+    "nodeLoads" -> kdTree.getNodeLoads.map {
+      case (addr, load) => addr.toString -> load
+    }
   )
 
-  override def shutdown(): Unit = {
+  override def shutdown(): Unit =
     predictor.clearAll()
-  }
 
-  /** Classifies a spatial entity as Static or Dynamic based on its ID convention.
-    * Entity IDs follow `htcaid:type;id` where type indicates the actor class.
+  /** Classifies a spatial entity as Static or Dynamic based on its ID convention. Entity IDs follow
+    * `htcaid:type;id` where type indicates the actor class.
     */
   private def classifyEntity(entity: SpatialEntity): ShardTypeEnum = {
     val id = entity.spatialEntityId.toLowerCase
-    if (id.contains(":node;") || id.contains(":link;") ||
-        id.contains(":traffic_signal;") || id.contains(":signal;")) {
+    if (
+      id.contains(":node;") || id.contains(":link;") ||
+      id.contains(":traffic_signal;") || id.contains(":signal;")
+    ) {
       ShardTypeEnum.Static
     } else {
       ShardTypeEnum.Dynamic

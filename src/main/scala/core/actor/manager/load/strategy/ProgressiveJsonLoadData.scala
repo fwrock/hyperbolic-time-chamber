@@ -17,25 +17,22 @@ import scala.collection.mutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success }
 
-/**
- * Progressive JSON data loader using lightweight tick indexing and chunked file streaming.
- *
- * Two-phase approach that keeps memory usage bounded:
- *
- * Phase 1 — Light index:
- *   Streams through JSON, extracts only startTick from each actor, builds a
- *   counts-only map (tick → count). No ActorSimulation objects are retained.
- *   Memory footprint: just a Map[Tick, Int].
- *
- * Phase 2 — Chunked streaming:
- *   When a tick range is requested, opens the JSON file and streams actors
- *   in small chunks (CHUNK_SIZE at a time). Each chunk is sent to creators
- *   with back-pressure — the next chunk is only read after creators confirm
- *   the current chunk. This keeps at most CHUNK_SIZE actors in memory per loader.
- *
- * The file handle stays open between chunks and is closed when all actors
- * in the range have been streamed (or the file is exhausted).
- */
+/** Progressive JSON data loader using lightweight tick indexing and chunked file streaming.
+  *
+  * Two-phase approach that keeps memory usage bounded:
+  *
+  * Phase 1 — Light index: Streams through JSON, extracts only startTick from each actor, builds a
+  * counts-only map (tick → count). No ActorSimulation objects are retained. Memory footprint: just
+  * a Map[Tick, Int].
+  *
+  * Phase 2 — Chunked streaming: When a tick range is requested, opens the JSON file and streams
+  * actors in small chunks (CHUNK_SIZE at a time). Each chunk is sent to creators with back-pressure
+  * — the next chunk is only read after creators confirm the current chunk. This keeps at most
+  * CHUNK_SIZE actors in memory per loader.
+  *
+  * The file handle stays open between chunks and is closed when all actors in the range have been
+  * streamed (or the file is exhausted).
+  */
 class ProgressiveJsonLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
 
@@ -93,11 +90,10 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     self ! BuildTickIndex()
   }
 
-  /**
-   * Asynchronously scan the entire JSON file and build a lightweight tick index.
-   * Only extracts startTick counts — does NOT retain ActorSimulation objects.
-   */
-  private def buildTickIndexAsync(): Unit = {
+  /** Asynchronously scan the entire JSON file and build a lightweight tick index. Only extracts
+    * startTick counts — does NOT retain ActorSimulation objects.
+    */
+  private def buildTickIndexAsync(): Unit =
     Future {
       TickIndexUtil.buildLightIndex(sourceFilePath)
     }.onComplete {
@@ -120,19 +116,17 @@ class ProgressiveJsonLoadData(private val properties: Properties)
         logError(s"Failed to build tick index for $sourceFilePath", e)
         self ! CloseAndFinish()
     }
-  }
 
-  private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit = {
+  private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit =
     managerRef ! event
-  }
-  
-  /**
-   * Start streaming actors for a tick range. Opens the file and kicks off
-   * the first chunk read.
-   */
+
+  /** Start streaming actors for a tick range. Opens the file and kicks off the first chunk read.
+    */
   private def handleLoadForTickRange(request: LoadActorsForTickRange): Unit = {
     if (lightIndex == null) {
-      logWarn(s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]")
+      logWarn(
+        s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]"
+      )
       managerRef ! TickRangeLoadedEvent(
         sourceId = sourceId,
         fromTick = request.fromTick,
@@ -151,9 +145,11 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       )
       return
     }
-    
+
     val expectedCount = TickIndexUtil.countActorsInRange(
-      lightIndex.tickCounts, request.fromTick, request.toTick
+      lightIndex.tickCounts,
+      request.fromTick,
+      request.toTick
     )
 
     if (expectedCount == 0) {
@@ -181,10 +177,9 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     startNextChunkRead()
   }
 
-  /**
-   * Launch an async read of the next chunk from the open file.
-   * Runs on the io-dispatcher to avoid blocking the actor thread.
-   */
+  /** Launch an async read of the next chunk from the open file. Runs on the io-dispatcher to avoid
+    * blocking the actor thread.
+    */
   private def startNextChunkRead(): Unit = {
     val iter = activeIterator
     val from = activeRequest.fromTick
@@ -202,10 +197,9 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Handle a chunk read from the file. Send matching actors to creators
-   * (with back-pressure) or finish if file is exhausted.
-   */
+  /** Handle a chunk read from the file. Send matching actors to creators (with back-pressure) or
+    * finish if file is exhausted.
+    */
   private def handleFileChunkReady(actors: List[ActorSimulation], isDone: Boolean): Unit = {
     streamExhausted = isDone
 
@@ -216,18 +210,18 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Send a chunk of actors to creators. Tracks active batches for back-pressure.
-   */
+  /** Send a chunk of actors to creators. Tracks active batches for back-pressure.
+    */
   private def sendActorsToCreators(actors: List[ActorSimulation]): Unit = {
     totalLoadedActors += actors.size
     pendingActorsSent += actors.size
 
-    val actorsToCreate = actors.map(actor =>
-      ActorSimulationCreation(
-        resourceId = IdUtil.format(sourceId),
-        actor = actor.copy(id = IdUtil.format(actor.id))
-      )
+    val actorsToCreate = actors.map(
+      actor =>
+        ActorSimulationCreation(
+          resourceId = IdUtil.format(sourceId),
+          actor = actor.copy(id = IdUtil.format(actor.id))
+        )
     )
 
     val (poolDistributed, loadBalanced) =
@@ -235,19 +229,21 @@ class ProgressiveJsonLoadData(private val properties: Properties)
 
     if (loadBalanced.nonEmpty) {
       creators.add(creatorRef)
-      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      loadBalanced.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 
     if (poolDistributed.nonEmpty) {
       creators.add(creatorPoolRef)
-      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach { group =>
-        val batchId = UUID.randomUUID().toString
-        activeBatches.add(batchId)
-        creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
+      poolDistributed.grouped(CREATE_EVENT_MAX_ACTORS).foreach {
+        group =>
+          val batchId = UUID.randomUUID().toString
+          activeBatches.add(batchId)
+          creatorPoolRef ! CreateActorsEvent(id = batchId, actors = group, actorRef = self)
       }
     }
 
@@ -257,10 +253,9 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Handle back-pressure from creators. When all batches for the current chunk
-   * are complete, either read the next chunk or close the stream.
-   */
+  /** Handle back-pressure from creators. When all batches for the current chunk are complete,
+    * either read the next chunk or close the stream.
+    */
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
     activeBatches.remove(event.batchId)
 
@@ -273,9 +268,8 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
   }
 
-  /**
-   * Close the active file stream and report completion to the manager.
-   */
+  /** Close the active file stream and report completion to the manager.
+    */
   private def closeStreamAndReport(): Unit = {
     if (activeInputStream != null) {
       try activeInputStream.close()
@@ -326,9 +320,8 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   }
 }
 
-/**
- * Internal message: a chunk of actors was read from the file.
- */
+/** Internal message: a chunk of actors was read from the file.
+  */
 private[strategy] case class FileChunkReady(
   actors: List[ActorSimulation],
   isDone: Boolean

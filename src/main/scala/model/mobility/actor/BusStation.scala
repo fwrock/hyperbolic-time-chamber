@@ -38,8 +38,8 @@ class BusStation(
           try {
             val actorRef = createBus(bus)
             val className = classOf[Bus].getName
-              relationships(bus.actorId) = ShardActorId(
-                entityId = bus.actorId,
+            relationships(bus.actorId) = ShardActorId(
+              entityId = bus.actorId,
               classType = className
             )
             onFinishSpontaneous(Some(currentTick + state.interval))

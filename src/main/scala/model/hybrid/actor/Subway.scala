@@ -110,15 +110,16 @@ class Subway(
     state.countUnloadPassenger = 0
 
     val nodeId = getCurrentNode
-    state.passengers.foreach { case (_, person) =>
-      sendMessageTo(
-        entityId = person.id,
-        shardId = person.classType,
-        data = SubwayRequestUnloadPassengerData(
-          nodeId = nodeId,
-          nodeRef = self
+    state.passengers.foreach {
+      case (_, person) =>
+        sendMessageTo(
+          entityId = person.id,
+          shardId = person.classType,
+          data = SubwayRequestUnloadPassengerData(
+            nodeId = nodeId,
+            nodeRef = self
+          )
         )
-      )
     }
   }
 

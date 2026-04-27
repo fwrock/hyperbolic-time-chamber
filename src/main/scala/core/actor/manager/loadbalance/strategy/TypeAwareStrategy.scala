@@ -12,8 +12,8 @@ import scala.collection.mutable
 /** Type-aware load balancing strategy.
   *
   * '''Philosophy''': actors of the same type stay together. Each actor type gets its own family of
-  * shards (`car-shard-0`, `car-shard-1`, …, `node-shard-0`, …). No geographic partitioning is
-  * used — entities are grouped purely by their actor class.
+  * shards (`car-shard-0`, `car-shard-1`, …, `node-shard-0`, …). No geographic partitioning is used
+  * — entities are grouped purely by their actor class.
   *
   * '''Shard assignment (creation time)''':
   *   - The type is extracted from the entity ID convention `htcaid:{type};{id}`.
@@ -42,10 +42,10 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   override val name: String = "type-aware"
 
-  private var config: StrategyConfig        = _
-  private var kdTree: KdTreeLoadBalancer    = _
+  private var config: StrategyConfig = _
+  private var kdTree: KdTreeLoadBalancer = _
   private var predictor: core.actor.manager.loadbalance.prediction.PredictiveBalancer = _
-  private var maxShardWeight: Double        = 50000.0
+  private var maxShardWeight: Double = 50000.0
 
   /** Current open bucket index per entity type. */
   private val typeBucket: mutable.Map[String, Int] = mutable.Map.empty
@@ -62,9 +62,9 @@ class TypeAwareStrategy extends BalancingStrategy {
     config = cfg
     kdTree = new KdTreeLoadBalancer()
     predictor = new core.actor.manager.loadbalance.prediction.PredictiveBalancer(
-      loadThreshold           = cfg.loadThreshold,
+      loadThreshold = cfg.loadThreshold,
       predictionWindowSeconds = cfg.predictionWindowSeconds,
-      maxSamples              = cfg.flowVectorSamples
+      maxSamples = cfg.flowVectorSamples
     )
     maxShardWeight = cfg.maxEntitiesPerShard.toDouble
   }
@@ -79,13 +79,13 @@ class TypeAwareStrategy extends BalancingStrategy {
     */
   override def assignShard(entity: SpatialEntity): String = {
     val entityType = extractType(entity.spatialEntityId)
-    val bucket     = typeBucket.getOrElse(entityType, 0)
-    val shardId    = s"$entityType-shard-$bucket"
+    val bucket = typeBucket.getOrElse(entityType, 0)
+    val shardId = s"$entityType-shard-$bucket"
 
     val count = shardCount.getOrElse(shardId, 0)
     if (count >= config.maxEntitiesPerShard) {
       // Current bucket full — open the next one
-      val nextBucket  = bucket + 1
+      val nextBucket = bucket + 1
       typeBucket.put(entityType, nextBucket)
       val nextShardId = s"$entityType-shard-$nextBucket"
       shardCount.put(nextShardId, 1)
@@ -98,9 +98,9 @@ class TypeAwareStrategy extends BalancingStrategy {
     }
   }
 
-  /** Returns a type-aware shard for the given position.
-    * Since this strategy has no geographic partitioning, falls back to an entity-less type bucket.
-    * Callers that know the entity type should use [[assignShard]] directly.
+  /** Returns a type-aware shard for the given position. Since this strategy has no geographic
+    * partitioning, falls back to an entity-less type bucket. Callers that know the entity type
+    * should use [[assignShard]] directly.
     */
   override def getShardForPosition(x: Double, y: Double): String = {
     // Without an entity ID we cannot determine the type; return a generic bucket.
@@ -109,7 +109,7 @@ class TypeAwareStrategy extends BalancingStrategy {
   }
 
   override def registerNode(address: Address): Unit = kdTree.registerNode(address)
-  override def removeNode(address: Address): Unit   = kdTree.removeNode(address)
+  override def removeNode(address: Address): Unit = kdTree.removeNode(address)
 
   override def updateMetrics(metrics: ShardMetrics): Unit = {
     kdTree.updateMetrics(metrics)
@@ -118,8 +118,8 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   /** Evaluates migration need purely by CPU load imbalance across pods.
     *
-    *   1. Predictive: shards trending toward overload are moved pre-emptively.
-    *   2. Reactive: kd-tree rebalance fires when max/min pod load ratio > 1.5.
+    *   1. Predictive: shards trending toward overload are moved pre-emptively. 2. Reactive: kd-tree
+    *      rebalance fires when max/min pod load ratio > 1.5.
     *
     * Target pod selection is purely load-based (lowest available load). There is no geographic
     * component in this strategy.
@@ -129,23 +129,26 @@ class TypeAwareStrategy extends BalancingStrategy {
 
     // 1. Predictive overload detection
     if (config.enablePrediction) {
-      predictor.predictOverloadedShards(maxShardWeight).foreach { result =>
-        val currentNode = kdTree.getAssignment(result.shardId)
-        currentNode.foreach { source =>
-          val reason =
-            if (result.isAlreadyOverloaded) MigrationReason.ReactiveOverload
-            else MigrationReason.PredictiveOverload
-          selectLeastLoaded(source).foreach { target =>
-            migrations += MigrationPlan(
-              shardId               = result.shardId,
-              sourceNode            = source,
-              targetNode            = target,
-              reason                = reason,
-              predictedLoadAtTarget = result.predictedLoad,
-              priority              = if (result.isAlreadyOverloaded) 10 else 5
-            )
+      predictor.predictOverloadedShards(maxShardWeight).foreach {
+        result =>
+          val currentNode = kdTree.getAssignment(result.shardId)
+          currentNode.foreach {
+            source =>
+              val reason =
+                if (result.isAlreadyOverloaded) MigrationReason.ReactiveOverload
+                else MigrationReason.PredictiveOverload
+              selectLeastLoaded(source).foreach {
+                target =>
+                  migrations += MigrationPlan(
+                    shardId = result.shardId,
+                    sourceNode = source,
+                    targetNode = target,
+                    reason = reason,
+                    predictedLoadAtTarget = result.predictedLoad,
+                    priority = if (result.isAlreadyOverloaded) 10 else 5
+                  )
+              }
           }
-        }
       }
     }
 
@@ -154,11 +157,11 @@ class TypeAwareStrategy extends BalancingStrategy {
       kdTree.rebalance().foreach {
         case (shardId, oldNode, newNode) if !migrations.exists(_.shardId == shardId) =>
           migrations += MigrationPlan(
-            shardId    = shardId,
+            shardId = shardId,
             sourceNode = oldNode.getOrElse(newNode),
             targetNode = newNode,
-            reason     = MigrationReason.Rebalance,
-            priority   = 1
+            reason = MigrationReason.Rebalance,
+            priority = 1
           )
         case _ => ()
       }
@@ -183,21 +186,30 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   override def getStats: Map[String, Any] = {
     val perType = shardCount.keys
-      .flatMap(s => extractTypeFromShardId(s).map(_ -> s))
+      .flatMap(
+        s => extractTypeFromShardId(s).map(_ -> s)
+      )
       .groupBy(_._1)
-      .map { case (t, pairs) =>
-        t -> Map(
-          "shards"    -> pairs.size,
-          "entities"  -> pairs.map(p => shardCount.getOrElse(p._2, 0)).sum
-        )
+      .map {
+        case (t, pairs) =>
+          t -> Map(
+            "shards" -> pairs.size,
+            "entities" -> pairs
+              .map(
+                p => shardCount.getOrElse(p._2, 0)
+              )
+              .sum
+          )
       }
     Map(
-      "strategy"       -> name,
-      "totalShards"    -> knownShards.size,
-      "clusterNodes"   -> kdTree.nodeCount,
+      "strategy" -> name,
+      "totalShards" -> knownShards.size,
+      "clusterNodes" -> kdTree.nodeCount,
       "imbalanceRatio" -> kdTree.getImbalanceRatio,
-      "byType"         -> perType,
-      "nodeLoads"      -> kdTree.getNodeLoads.map { case (a, l) => a.toString -> l }
+      "byType" -> perType,
+      "nodeLoads" -> kdTree.getNodeLoads.map {
+        case (a, l) => a.toString -> l
+      }
     )
   }
 
@@ -205,8 +217,8 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   // ── Internal helpers ───────────────────────────────────────────────────────
 
-  /** Extracts the entity type from an ID of the form `htcaid:{type};{id}`.
-    * Falls back to `"unknown"` if the convention is not matched.
+  /** Extracts the entity type from an ID of the form `htcaid:{type};{id}`. Falls back to
+    * `"unknown"` if the convention is not matched.
     */
   private def extractType(entityId: String): String = {
     val lower = entityId.toLowerCase

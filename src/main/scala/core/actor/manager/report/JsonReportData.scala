@@ -88,9 +88,9 @@ class JsonReportData(
     }
   }
 
-  /** Returns a persistent writer, reusing the same file handle across flushes.
-    * Opening/closing FileWriter per flush is expensive on network filesystems (GCS Fuse).
-    * The writer is only closed in postStop().
+  /** Returns a persistent writer, reusing the same file handle across flushes. Opening/closing
+    * FileWriter per flush is expensive on network filesystems (GCS Fuse). The writer is only closed
+    * in postStop().
     */
   private def getOrCreateWriter(): BufferedWriter = {
     if (persistentWriter == null) {
@@ -130,12 +130,12 @@ class JsonReportData(
     }
   }
 
-  private def closeWriter(): Unit = {
+  private def closeWriter(): Unit =
     if (persistentWriter != null) {
-      try { persistentWriter.close() } catch { case _: Exception => }
+      try persistentWriter.close()
+      catch { case _: Exception => }
       persistentWriter = null
     }
-  }
 
   private def mkdir(directory: String): Unit = {
     val dirPath: Path = Paths.get(directory)
