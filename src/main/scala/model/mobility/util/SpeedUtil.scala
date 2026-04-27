@@ -3,7 +3,6 @@ package model.mobility.util
 
 object SpeedUtil {
 
-  // Performance counters
   @volatile private var speedCalculationCount: Long = 0L
   @volatile private var capacityExceededCount: Long = 0L
 
@@ -20,8 +19,6 @@ object SpeedUtil {
       capacityExceededCount += 1
       1.0
     } else {
-      // Optimized: alpha=1.0 → pow(x, 1.0) = x (eliminates outer pow)
-      // Only need: freeSpeed * (1 - pow(density, beta))
       val density = numberOfCars.toDouble / capacity
       val beta = 0.05
       freeSpeed * (1.0 - math.pow(density, beta))
