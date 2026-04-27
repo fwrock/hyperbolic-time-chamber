@@ -26,9 +26,7 @@ class ClickHouseClientManager(
     .newBuilder()
     .connectTimeout(Duration.ofSeconds(5))
     .build()
-
-  // ── Schema DDL ────────────────────────────────────────────────────────────
-
+  
   private val createDatabase =
     s"CREATE DATABASE IF NOT EXISTS $database"
 
@@ -73,7 +71,6 @@ class ClickHouseClientManager(
        |FROM $database.vehicle_link_events
        |GROUP BY simulation_id, link_id, tick""".stripMargin
 
-  // ── Public API ────────────────────────────────────────────────────────────
 
   /** Creates database, tables and materialized view if they don't exist.
     * Returns Right(()) on success, Left(error message) on failure.
@@ -121,9 +118,7 @@ class ClickHouseClientManager(
     } catch {
       case _: Exception => false
     }
-
-  // ── Private helpers ────────────────────────────────────────────────────────
-
+  
   private def execute(sql: String): Unit = {
     val status = postRaw(baseUrl, sql)
     if (status < 200 || status >= 300)
