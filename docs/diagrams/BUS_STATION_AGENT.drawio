@@ -1,0 +1,153 @@
+<mxfile host="Electron" modified="2026-04-25T00:00:00.000Z" agent="GitHub Copilot" version="21.0.0" type="device">
+  <diagram id="fsm-busstation" name="FSM — BusStation">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="BusStation — Máquina de Estados (FSM)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Initial -->
+        <mxCell id="init" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="437" y="80" width="24" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- States -->
+        <mxCell id="s_start" value="Start&#xa;(ordena paradas, inicia cálculo de rotas)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="130" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_routewait" value="RouteWaiting&#xa;(aguarda GPSUtil calcRoute)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="230" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_ready" value="Ready&#xa;(rotas calculadas, aguarda startTick)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="330" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_working" value="Working&#xa;(cria Bus a cada interval ticks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="130" y="430" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_workingno" value="WorkingWithoutBus&#xa;(buses queue vazia)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="530" y="430" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_fin" value="Finish&#xa;(onDestruct)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="540" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Final -->
+        <mxCell id="final" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#000000;strokeColor=#ffffff;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="437" y="620" width="36" height="36" as="geometry" />
+        </mxCell>
+
+        <!-- Transitions -->
+        <mxCell id="t01" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="init" target="s_start" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t12" value="calcRoute(stop_0→stop_1), ..." style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_start" target="s_routewait" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t23" value="todas rotas calculadas" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_routewait" target="s_ready" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t3_work" value="startTick → buses.nonEmpty&#xa;cria 1º Bus" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;" edge="1" source="s_ready" target="s_working" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="270" y="355" />
+              <mxPoint x="270" y="455" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t3_nowork" value="startTick → buses.isEmpty" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;" edge="1" source="s_ready" target="s_workingno" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="640" y="355" />
+              <mxPoint x="640" y="455" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t_work_self" value="onFinish(+interval)&#xa;→ buses.nonEmpty → cria Bus" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=0;entryX=0.5;entryY=0;" edge="1" source="s_working" target="s_working" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="410" />
+              <mxPoint x="250" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_work_nowork" value="buses.isEmpty" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_working" target="s_workingno" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t_nowork_work" value="(não há re-enqueue:&#xa;Bus criado é descartado se falhar)" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_workingno" target="s_working" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="650" y="505" />
+              <mxPoint x="650" y="520" />
+              <mxPoint x="250" y="520" />
+              <mxPoint x="250" y="505" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t_fin" value="simulação termina" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_working" target="s_fin" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="565" />
+              <mxPoint x="450" y="565" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_fin2" value="" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_workingno" target="s_fin" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="650" y="565" />
+              <mxPoint x="570" y="565" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tfinal" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_fin" target="final" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="seq-busstation" name="Seq — Inicialização e Despacho">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="BusStation — Diagrama de Sequência: Inicialização e Despacho" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="20" width="760" height="36" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="lh_tm" value="TM" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="60" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_bs" value="BusStation" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="240" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_gps" value="GPSUtil" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="460" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_bus" value="Bus" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="660" y="70" width="80" height="30" as="geometry" /></mxCell>
+
+        <!-- Lifeline lines -->
+        <mxCell id="ll1" style="endArrow=none;dashed=1;strokeColor=#6c8ebf;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="100" as="sourcePoint" /><mxPoint x="100" y="680" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll2" style="endArrow=none;dashed=1;strokeColor=#666666;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="100" as="sourcePoint" /><mxPoint x="280" y="680" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll3" style="endArrow=none;dashed=1;strokeColor=#d6b656;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="500" y="100" as="sourcePoint" /><mxPoint x="500" y="680" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll4" style="endArrow=none;dashed=1;strokeColor=#82b366;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="700" y="100" as="sourcePoint" /><mxPoint x="700" y="680" as="targetPoint" /></mxGeometry></mxCell>
+
+        <!-- Messages -->
+        <mxCell id="sep1" value="Inicialização — cálculo de rotas" style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="60" y="130" width="680" height="20" as="geometry" /></mxCell>
+        <mxCell id="m1" value="actSpontaneous(startTick)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="155" as="sourcePoint" /><mxPoint x="280" y="155" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m2" value="calcRoute(stop_0→stop_1)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="185" as="sourcePoint" /><mxPoint x="500" y="185" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m3" value="Route(goingSubRoute_01)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="500" y="210" as="sourcePoint" /><mxPoint x="280" y="210" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m4" value="calcRoute(stop_1→stop_2)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="240" as="sourcePoint" /><mxPoint x="500" y="240" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m5" value="Route(goingSubRoute_12)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="500" y="265" as="sourcePoint" /><mxPoint x="280" y="265" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m5b" value="(... going + returning sub-routes ...)" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="285" y="275" width="260" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="sep2" value="Despacho — criação de ônibus" style="text;html=1;strokeColor=none;fillColor=#d5e8d4;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="60" y="305" width="680" height="20" as="geometry" /></mxCell>
+        <mxCell id="m6" value="createShardedActor(bus_001, route)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="330" as="sourcePoint" /><mxPoint x="700" y="330" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m7" value="onFinish(currentTick + interval)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="360" as="sourcePoint" /><mxPoint x="100" y="360" as="targetPoint" /></mxGeometry></mxCell>
+
+        <mxCell id="sep3" value="Tick seguinte (+ interval)" style="text;html=1;strokeColor=none;fillColor=#fff2cc;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="60" y="395" width="680" height="20" as="geometry" /></mxCell>
+        <mxCell id="m8" value="actSpontaneous(tick+interval)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="420" as="sourcePoint" /><mxPoint x="280" y="420" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m9" value="createShardedActor(bus_002, route)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="450" as="sourcePoint" /><mxPoint x="700" y="450" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m10" value="onFinish(currentTick + interval)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="280" y="480" as="sourcePoint" /><mxPoint x="100" y="480" as="targetPoint" /></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
