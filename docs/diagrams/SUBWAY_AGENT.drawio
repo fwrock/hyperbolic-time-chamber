@@ -1,0 +1,140 @@
+<mxfile host="Electron" modified="2026-04-25T00:00:00.000Z" agent="GitHub Copilot" version="21.0.0" type="device">
+  <diagram id="fsm-subway" name="FSM — Subway">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Subway — Máquina de Estados (FSM)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Initial -->
+        <mxCell id="init" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="437" y="80" width="24" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- States -->
+        <mxCell id="s_start" value="Start&#xa;(rota pré-fixada, status=Ready)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="130" width="210" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_ready" value="Ready&#xa;(enterLink() no próximo RailLink)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="230" width="210" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_moving" value="Moving&#xa;(viajando no RailLink)&#xa;t = ceil((d/v) × 3600) ticks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="230" width="210" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_stopped" value="Stopped&#xa;(estação — carga e descarga paralelas)&#xa;isLoaded &amp;&amp; isUnloaded → scheduleEvent(+stopTime)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="380" width="310" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_leaving" value="LeavingLink&#xa;(leavingLink() → status=Ready)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="400" width="210" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s_fin" value="Finished&#xa;(circular: position resets, selfDestruct se atingir limite)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="530" width="310" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Final -->
+        <mxCell id="final" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#000000;strokeColor=#ffffff;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="489" y="610" width="36" height="36" as="geometry" />
+        </mxCell>
+
+        <!-- Transitions -->
+        <mxCell id="t01" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="init" target="s_start" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t12" value="enterLink()" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_start" target="s_ready" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="t_r_move" value="enterLink() / TM cedido" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_ready" target="s_moving" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="t_move_stop" value="chegou em nó com estação&#xa;requestUnload + requestLoad (paralelo)&#xa;onFinish(None) — cede TM" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_moving" target="s_stopped" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="705" y="340" />
+              <mxPoint x="455" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t_move_leave" value="chegou em nó sem estação" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_moving" target="s_leaving" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="t_stop_leave" value="isLoaded &amp;&amp; isUnloaded&#xa;→ dorme stopTime → leavingLink()" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_stopped" target="s_leaving" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="t_leave_ready" value="leavingLink() → status=Ready" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_leaving" target="s_ready" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="705" y="490" />
+              <mxPoint x="705" y="520" />
+              <mxPoint x="455" y="520" />
+              <mxPoint x="455" y="280" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t_r_fin" value="rota circular completa (opcional)" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_ready" target="s_fin" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="350" y="255" />
+              <mxPoint x="280" y="255" />
+              <mxPoint x="280" y="555" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tfinal" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="s_fin" target="final" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="seq-subway" name="Seq — Trecho Completo">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Subway — Diagrama de Sequência: Estação A → Trecho → Estação B" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="20" width="860" height="36" as="geometry" />
+        </mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="lh_tm" value="TM" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="40" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_sw" value="Subway" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="200" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_rl" value="RailLink" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="380" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_p" value="Person1" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="560" y="70" width="80" height="30" as="geometry" /></mxCell>
+        <mxCell id="lh_stn" value="SubwayStation(B)" style="shape=mxgraph.uml.lifeline;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="730" y="70" width="120" height="30" as="geometry" /></mxCell>
+
+        <!-- Lifeline lines -->
+        <mxCell id="ll1" style="endArrow=none;dashed=1;strokeColor=#6c8ebf;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="80" y="100" as="sourcePoint" /><mxPoint x="80" y="720" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll2" style="endArrow=none;dashed=1;strokeColor=#d6b656;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="100" as="sourcePoint" /><mxPoint x="240" y="720" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll3" style="endArrow=none;dashed=1;strokeColor=#666666;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="420" y="100" as="sourcePoint" /><mxPoint x="420" y="720" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll4" style="endArrow=none;dashed=1;strokeColor=#82b366;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="600" y="100" as="sourcePoint" /><mxPoint x="600" y="720" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ll5" style="endArrow=none;dashed=1;strokeColor=#9673a6;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="790" y="100" as="sourcePoint" /><mxPoint x="790" y="720" as="targetPoint" /></mxGeometry></mxCell>
+
+        <!-- Messages -->
+        <mxCell id="sep1" value="Partida (Ready)" style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="130" width="860" height="20" as="geometry" /></mxCell>
+        <mxCell id="m1" value="actSpontaneous(Ready)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="80" y="155" as="sourcePoint" /><mxPoint x="240" y="155" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m2" value="EnterLink" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="185" as="sourcePoint" /><mxPoint x="420" y="185" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m3" value="LinkInfoData(length, enter)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="420" y="210" as="sourcePoint" /><mxPoint x="240" y="210" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m3b" value="t = ceil((d/v) × 3600)  →  dorme t ticks" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="245" y="220" width="280" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="sep2" value="Chegada em estação B (Moving → Stopped)" style="text;html=1;strokeColor=none;fillColor=#e1d5e7;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="255" width="860" height="20" as="geometry" /></mxCell>
+        <mxCell id="m4" value="actSpontaneous(Moving)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="80" y="280" as="sourcePoint" /><mxPoint x="240" y="280" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m5" value="SubwayRequestUnloadPassengerData (paralelo)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="310" as="sourcePoint" /><mxPoint x="600" y="310" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m6" value="SubwayRequestPassengerData(space) (paralelo)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="335" as="sourcePoint" /><mxPoint x="790" y="335" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m7" value="onFinishSpontaneous(None)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="360" as="sourcePoint" /><mxPoint x="80" y="360" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m8" value="SubwayUnloadPassengerData(isArrival=true)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="600" y="400" as="sourcePoint" /><mxPoint x="240" y="400" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m8b" value="isUnloaded = true" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="245" y="412" width="180" height="16" as="geometry" /></mxCell>
+        <mxCell id="m9" value="SubwayLoadPassengerData(people)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="790" y="440" as="sourcePoint" /><mxPoint x="240" y="440" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m9b" value="isLoaded = true → isLoaded &amp;&amp; isUnloaded → scheduleEvent(+stopTime)" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="245" y="452" width="420" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="sep3" value="Saída da estação (Stopped → Ready)" style="text;html=1;strokeColor=none;fillColor=#fff2cc;align=left;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="485" width="860" height="20" as="geometry" /></mxCell>
+        <mxCell id="m10" value="actSpontaneous(Stopped)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="80" y="510" as="sourcePoint" /><mxPoint x="240" y="510" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m11" value="LeaveLink" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="540" as="sourcePoint" /><mxPoint x="420" y="540" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m12" value="LinkInfoData(leave)" style="edgeStyle=orthogonalEdgeStyle;endArrow=open;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="420" y="565" as="sourcePoint" /><mxPoint x="240" y="565" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m12b" value="distance += length  →  status = Ready" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="245" y="578" width="280" height="16" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
