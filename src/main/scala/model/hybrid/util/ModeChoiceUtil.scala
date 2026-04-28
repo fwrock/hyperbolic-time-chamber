@@ -72,7 +72,6 @@ object ModeChoiceUtil {
 
         val straightLineM = TransitMapUtil.haversineM(oLat, oLon, dLat, dLon)
 
-        // ── Walk candidate ──────────────────────────────────────────────────────
         val walkCandidate: Option[(ArrivalLogistics, Double)] =
           if (straightLineM <= weights.maxWalkDistanceM) {
             val score =
@@ -89,7 +88,6 @@ object ModeChoiceUtil {
             Some((logistics, score))
           } else None
 
-        // ── Transit candidates (bus + subway) ──────────────────────────────────
         val transitCandidates: List[(ArrivalLogistics, Double)] =
           List("bus", "subway").flatMap { mode =>
             val modePref = if (mode == "subway") weights.modePrefSubway else weights.modePrefBus
@@ -98,7 +96,6 @@ object ModeChoiceUtil {
               .nearestStops(oLat, oLon, mode, weights.maxAccessDistanceM)
               .flatMap { case (boardingStop, accessDistM) =>
                 boardingStop.lines.flatMap { line =>
-                  // Alighting stop = stop on same line closest to destination
                   bestAlightingStop(boardingStop, line, dLat, dLon).map {
                     case (alightingStop, egressDistM) =>
                       val score =
@@ -121,7 +118,6 @@ object ModeChoiceUtil {
               }
           }
 
-        // ── Pick the highest-scoring option ────────────────────────────────────
         val allCandidates = transitCandidates ++ walkCandidate.toList
 
         allCandidates.maxByOption(_._2) match {
