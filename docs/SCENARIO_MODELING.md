@@ -29,6 +29,7 @@ This guide explains how to define and structure a simulation scenario for the **
 10. [Minimal Working Example](#10-minimal-working-example)
 11. [Scaling Data Files](#11-scaling-data-files)
 12. [Generating Scenarios from Real Data](#12-generating-scenarios-from-real-data)
+13. [Dynamic Mode Choice](#13-dynamic-mode-choice)
 
 ---
 
@@ -63,6 +64,7 @@ The entity types available in the hybrid model are:
 ├── GENERATION_REPORT.md       ← human-readable generation report (optional)
 └── data/
     ├── city_map.json          ← in-memory graph (required)
+    ├── transit_map.json       ← transit stop index for dynamic mode choice (optional)
     ├── nodes_0.json           ← Node actors (may be split into multiple files)
     ├── nodes_1.json
     ├── links_0.json           ← Link actors (may be split)
@@ -728,9 +730,25 @@ An agent with a **daily activity schedule**. Manages mode choice and activates v
 
 **`ownedVehicles`:** Map from mode string to the vehicle's `Identify`. Required when `mode` is `"car"`, `"bicycle"`, or `"motorcycle"`.
 
+**Dynamic mode choice fields** (optional — only relevant when `enableDynamicModeChoice: true`):
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enableDynamicModeChoice` | `Boolean` | `false` | Enable utility-based mode re-evaluation at each departure |
+| `modeChoiceWeights.betaMode` | `Double` | `1.0` | Scale applied to mode preference score |
+| `modeChoiceWeights.betaAccess` | `Double` | `0.001` | Per-metre penalty for walking to a boarding stop |
+| `modeChoiceWeights.betaEgress` | `Double` | `0.001` | Per-metre penalty for walking from an alighting stop |
+| `modeChoiceWeights.modePrefSubway` | `Double` | `2.0` | Intrinsic preference score for subway |
+| `modeChoiceWeights.modePrefBus` | `Double` | `1.0` | Intrinsic preference score for bus |
+| `modeChoiceWeights.modePrefWalk` | `Double` | `0.0` | Intrinsic preference score for walking (reference) |
+| `modeChoiceWeights.maxAccessDistanceM` | `Double` | `1500.0` | Max haversine radius (m) to search for stops |
+| `modeChoiceWeights.maxWalkDistanceM` | `Double` | `2000.0` | Max O→D distance (m) for walking to be a candidate |
+
+**`arrivalLogistics.fixedMode`:** when `true`, the leg is never re-evaluated even if `enableDynamicModeChoice` is active on the Person. Useful for car trips that must always remain as car regardless of transit availability.
+
 ---
 
-## 5. city_map.json
+## 5. city_map.json and transit_map.json
 
 `city_map.json` is the **in-memory routing graph** loaded at simulator startup. Every router query (`GPSUtil.calcRoute`) uses this graph. It must contain all nodes and directed edges (links) present in the scenario.
 
@@ -755,6 +773,57 @@ Minimal structure (exact schema depends on the routing implementation):
 ```
 
 > The `weight` field is used by the shortest-path algorithm; it can be the physical `length` or a generalised cost.
+
+### transit_map.json
+
+`transit_map.json` is an **optional** flat JSON array of transit access points (bus stops and subway stations) used exclusively by the [dynamic mode choice](#13-dynamic-mode-choice) system. It is **not** required for static-schedule simulations.
+
+The file is configured via:
+- Environment variable: `HTC_MOBILITY_TRANSIT_MAP_FILE`
+- Config key: `htc.mobility.transit-map-file`
+
+If neither is set, `TransitMapUtil.isAvailable` returns `false` and the system falls back to static logistics silently.
+
+**Schema (flat array — no wrapper object):**
+
+```json
+[
+  {
+    "id": "htcaid:stop;bus_stop_123",
+    "actorId": "htcaid:busstop;stop_001",
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": "htcaid:node;300",
+    "latitude": -23.5505,
+    "longitude": -46.6333,
+    "stopType": "bus",
+    "lines": ["42", "68"]
+  },
+  {
+    "id": "htcaid:stop;metro_central",
+    "actorId": "htcaid:subwaystation;station_A",
+    "actorClassType": "hybrid.actor.SubwayStation",
+    "nodeId": "htcaid:node;100",
+    "latitude": -23.5461,
+    "longitude": -46.6388,
+    "stopType": "subway",
+    "lines": ["blue_line"]
+  }
+]
+```
+
+**Field reference:**
+
+| Field | Description |
+|---|---|
+| `id` | Unique stop identifier (used internally by `TransitMapUtil`) |
+| `actorId` | Entity ID of the BusStop or SubwayStation actor — used for `RegisterPassenger` messages |
+| `actorClassType` | Shard class type for actor routing (`hybrid.actor.BusStop` / `hybrid.actor.SubwayStation`) |
+| `nodeId` | Road-network node ID where the stop is located |
+| `latitude` / `longitude` | WGS-84 coordinates — used for haversine distance calculations |
+| `stopType` | `"bus"` or `"subway"` |
+| `lines` | List of line labels served — must match `BusStop.label` / `SubwayStation.lines` keys |
+
+> **Note:** Distances between stops and origin/destination points are computed using the **haversine formula** (great-circle distance) rather than network Dijkstra, which makes the transit index an order of magnitude cheaper to query than full routing.
 
 ---
 
@@ -1122,3 +1191,141 @@ Increase the sample rate for higher fidelity; decrease it for faster prototype r
 *For bus system details, see [BUS_AGENT.md](BUS_AGENT.md), [BUS_STATION_AGENT.md](BUS_STATION_AGENT.md), [BUS_STOP_AGENT.md](BUS_STOP_AGENT.md).*  
 *For subway details, see [SUBWAY_AGENT.md](SUBWAY_AGENT.md), [SUBWAY_STATION_AGENT.md](SUBWAY_STATION_AGENT.md).*  
 *For person modelling, see [PERSON_AGENT.md](PERSON_AGENT.md).*
+
+---
+
+## 13. Dynamic Mode Choice
+
+The dynamic mode choice system allows Person agents to **select their transport mode at runtime** instead of following a pre-defined schedule. When enabled, the agent evaluates all accessible transit options and walking at each trip departure and picks the one with the highest utility score.
+
+### When to use
+
+| Scenario | Recommended setting |
+|---|---|
+| Replaying a fixed observed demand matrix | `enableDynamicModeChoice: false` (default) — exact schedule, fastest simulation |
+| Studying how persons react to new transit lines or service changes | `enableDynamicModeChoice: true` — persons adapt to the current network |
+| Mixed: some persons are flexible, others have fixed trips | Set per-person; use `fixedMode: true` on individual legs to protect specific trips |
+
+### Utility model
+
+For each candidate `(mode, boardingStop, alightingStop)` the system computes:
+
+$$U = \beta_{\text{mode}} \times \text{pref}(m) - \beta_{\text{access}} \times d_{\text{access}} - \beta_{\text{egress}} \times d_{\text{egress}}$$
+
+where $d_{\text{access}}$ and $d_{\text{egress}}$ are haversine distances in metres. The option with the highest $U$ wins.
+
+**Default preferences:** subway (2.0) > bus (1.0) > walk (0.0). With the default betas (`0.001`), a 1 km access walk incurs a penalty of 1.0 — equal to the preference gap between bus and walking. This means a bus is preferred over walking only if the boarding stop is within ~1 km.
+
+### Compatibility rules
+
+The following table summarises when dynamic re-evaluation is skipped and the original logistics are used as-is:
+
+| Condition | Dynamic evaluation? |
+|---|---|
+| `enableDynamicModeChoice: false` | No — static schedule |
+| `arrivalLogistics.vehicle` is set | No — private vehicle trip |
+| `arrivalLogistics.fixedMode: true` | No — leg explicitly locked |
+| `transit_map.json` not configured | No — `TransitMapUtil` unavailable |
+| Origin or destination node not in `city_map.json` | No — cannot compute haversine |
+
+### JSON example — Person with dynamic mode choice
+
+```json
+{
+  "id": "htcaid:person;42",
+  "typeActor": "hybrid.actor.Person",
+  "data": {
+    "dataType": "model.hybrid.entity.state.PersonState",
+    "content": {
+      "startTick": 0,
+      "scheduleOnTimeManager": true,
+      "enableDynamicModeChoice": true,
+      "modeChoiceWeights": {
+        "betaMode": 1.0,
+        "betaAccess": 0.001,
+        "betaEgress": 0.001,
+        "modePrefSubway": 2.0,
+        "modePrefBus": 1.0,
+        "modePrefWalk": 0.0,
+        "maxAccessDistanceM": 1500.0,
+        "maxWalkDistanceM": 2000.0
+      },
+      "ownedVehicles": {
+        "car": { "id": "htcaid:car;p42_v_car", "classType": "hybrid.actor.Car" }
+      },
+      "dailySchedule": [
+        {
+          "sequence": 0,
+          "activityType": "home",
+          "nodeId": "htcaid:node;500",
+          "endTime": "28800",
+          "arrivalLogistics": null
+        },
+        {
+          "sequence": 1,
+          "activityType": "work",
+          "nodeId": "htcaid:node;600",
+          "endTime": "64800",
+          "arrivalLogistics": {
+            "mode": "bus",
+            "fixedMode": false
+          }
+        },
+        {
+          "sequence": 2,
+          "activityType": "home",
+          "nodeId": "htcaid:node;500",
+          "endTime": "86400",
+          "arrivalLogistics": {
+            "mode": "car",
+            "vehicle": { "id": "htcaid:car;p42_v_car", "classType": "hybrid.actor.Car" },
+            "fixedMode": true
+          }
+        }
+      ],
+      "currentActivityIndex": 0,
+      "totalDistanceTraveled": 0.0,
+      "completedTrips": 0
+    }
+  },
+  "dependencies": {}
+}
+```
+
+In the example above:
+- The **work trip** (sequence 1) has `fixedMode: false` — it will be re-evaluated at tick 28800. If a subway station is within 1500 m of node 500 and a closer alighting stop exists near node 600, the person will switch to subway.
+- The **return trip** (sequence 2) has `fixedMode: true` — always uses the car regardless of transit availability.
+
+### Generating `transit_map.json` from GTFS
+
+When generating a scenario from GTFS data, extract stop positions and line memberships and write them as a flat array. Each stop that serves multiple lines should appear **once** with all its lines in the `lines` array. The `actorId` and `actorClassType` must match exactly the corresponding BusStop/SubwayStation actor IDs in the scenario.
+
+```python
+# Pseudocode — GTFS → transit_map.json
+stops = []
+for stop in gtfs.stops:
+    lines = [trip.route_id for trip in gtfs.trips_at(stop.stop_id)]
+    stops.append({
+        "id": f"htcaid:stop;{stop.stop_id}",
+        "actorId": f"htcaid:busstop;{stop.stop_id}",
+        "actorClassType": "hybrid.actor.BusStop",
+        "nodeId": nearest_node(stop.lat, stop.lon),
+        "latitude": stop.lat,
+        "longitude": stop.lon,
+        "stopType": "bus",
+        "lines": list(set(lines))
+    })
+json.dump(stops, open("transit_map.json", "w"))  # flat array, no wrapper
+```
+
+### Runtime behaviour
+
+At each trip departure (`startNextTrip`):
+
+1. `ModeChoiceUtil.chooseBestLogistics` is called with the origin and destination node IDs.
+2. `TransitMapUtil.nearestStops` finds up to 5 stops of each type within `maxAccessDistanceM`.
+3. For each reachable boarding stop × line, the closest alighting stop (on the same line, nearest to destination) is found.
+4. All candidates (bus options, subway options, walking if distance ≤ `maxWalkDistanceM`) are scored.
+5. The highest-scoring `ArrivalLogistics` is returned and used to initiate the trip. If no better option exists, the original logistics are used unchanged.
+
+> **Performance note:** `TransitMapUtil` performs a linear scan over stops filtered by type. For large stop sets (> 10,000), consider implementing a spatial index (k-d tree). For typical city scenarios with 2,000–5,000 stops this is negligible compared to actor message processing.

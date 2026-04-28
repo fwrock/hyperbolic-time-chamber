@@ -5,6 +5,39 @@ import core.entity.state.BaseState
 import core.types.Tick
 import org.htc.protobuf.core.entity.actor.Identify
 
+/** Weights for the utility function used in dynamic mode choice.
+  *
+  * The utility of a mode option is:
+  * {{{U = betaMode × modePref(mode) − betaAccess × accessDistM − betaEgress × egressDistM}}}
+  *
+  * @param betaMode
+  *   Scale applied to the mode-preference score.
+  * @param betaAccess
+  *   Per-metre penalty for the access leg (walking to boarding stop).
+  * @param betaEgress
+  *   Per-metre penalty for the egress leg (walking from alighting stop to destination).
+  * @param modePrefSubway
+  *   Mode-preference utility for subway.
+  * @param modePrefBus
+  *   Mode-preference utility for bus.
+  * @param modePrefWalk
+  *   Mode-preference utility for walking (base reference, typically 0).
+  * @param maxAccessDistanceM
+  *   Maximum acceptable access-leg distance in metres (stops further away are ignored).
+  * @param maxWalkDistanceM
+  *   Maximum trip distance in metres for which walking is offered as a candidate.
+  */
+case class ModeChoiceWeights(
+  betaMode: Double = 1.0,
+  betaAccess: Double = 0.001,
+  betaEgress: Double = 0.001,
+  modePrefSubway: Double = 2.0,
+  modePrefBus: Double = 1.0,
+  modePrefWalk: Double = 0.0,
+  maxAccessDistanceM: Double = 1500.0,
+  maxWalkDistanceM: Double = 2000.0
+)
+
 /** Person state representing a person agent in the simulation.
   *
   * Person-centric model where the Person actor persists throughout the day and manages their daily
@@ -30,6 +63,12 @@ import org.htc.protobuf.core.entity.actor.Identify
   *   cleared on alighting.
   * @param ptLine
   *   Current PT line being used (e.g. "Bus Line 1"). Set when boarding, cleared on alighting.
+  * @param enableDynamicModeChoice
+  *   When `true`, the person re-evaluates the transport mode at each trip departure using a
+  *   utility-based model instead of following the static logistics in the activity schedule.
+  *   Defaults to `false` to preserve the existing static-schedule behaviour.
+  * @param modeChoiceWeights
+  *   Weights and thresholds for the utility function used when dynamic mode choice is active.
   */
 case class PersonState(
   startTick: Tick = 0L,
@@ -42,7 +81,9 @@ case class PersonState(
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0,
   ptAlightingNodeId: Option[String] = None,
-  ptLine: Option[String] = None
+  ptLine: Option[String] = None,
+  enableDynamicModeChoice: Boolean = false,
+  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights()
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager
@@ -151,7 +192,8 @@ case class ArrivalLogistics(
   line: Option[String] = None,
   boardingStopId: Option[String] = None,
   boardingStopClassType: Option[String] = None,
-  alightingNodeId: Option[String] = None
+  alightingNodeId: Option[String] = None,
+  fixedMode: Boolean = false   // when true, skips dynamic mode choice even if the person flag is on
 )
 
 /** Driver attributes affecting vehicle behavior.
