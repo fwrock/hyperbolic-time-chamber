@@ -9,7 +9,7 @@ import model.hybrid.entity.state.{ Activity, ArrivalLogistics, PersonState }
 import model.hybrid.entity.event.data.person.{ StartTripData, TripCompletedData }
 import model.hybrid.entity.event.data.bus.{ BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData }
 import model.hybrid.entity.event.data.subway.{ RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
-import model.hybrid.util.{ CityMapUtil, GPSUtil }
+import model.hybrid.util.{ CityMapUtil, GPSUtil, ModeChoiceUtil }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 import scala.collection.mutable
@@ -133,14 +133,16 @@ class Person(
       case Some(nextActivity) =>
         nextActivity.arrivalLogistics match {
           case Some(logistics) =>
-            val chosenMode = executeModeChoice(logistics)
-            if (logistics.instant) {
+            val originNodeId = state.currentActivity.map(_.nodeId).getOrElse("")
+            val effectiveLogistics =
+              executeModeChoice(originNodeId, nextActivity.nodeId, logistics)
+            if (effectiveLogistics.instant) {
               logDebug(
                 s"${getEntityId} instant transition to ${nextActivity.nodeId} (instant=true)"
               )
               advanceToNextActivity()
             } else {
-              initiateTrip(nextActivity, logistics)
+              initiateTrip(nextActivity, effectiveLogistics)
             }
 
           case None =>
@@ -155,13 +157,35 @@ class Person(
 
   /** Execute mode choice logic.
     *
-    * For now, uses the specified mode from logistics. Production implementation could have
-    * utility-based mode choice model.
+    * When `state.enableDynamicModeChoice` is `true` and the logistics leg is not fixed (no vehicle
+    * reference, `fixedMode = false`), delegates to [[ModeChoiceUtil.chooseBestLogistics]] which
+    * scores all reachable transit options and walking. Otherwise returns the original logistics
+    * unchanged — full backward compatibility with static schedules.
     */
-  private def executeModeChoice(logistics: ArrivalLogistics): String = {
-    logDebug(s"${getEntityId} chose mode: ${logistics.mode}")
-    logistics.mode
-  }
+  private def executeModeChoice(
+    originNodeId: String,
+    destinationNodeId: String,
+    logistics: ArrivalLogistics
+  ): ArrivalLogistics =
+    if (!state.enableDynamicModeChoice) {
+      logDebug(s"${getEntityId} chose mode: ${logistics.mode} (static)")
+      logistics
+    } else {
+      val effective = ModeChoiceUtil.chooseBestLogistics(
+        originNodeId,
+        destinationNodeId,
+        logistics,
+        state.modeChoiceWeights
+      )
+      if (effective.mode != logistics.mode)
+        logDebug(
+          s"${getEntityId} dynamic mode: ${logistics.mode} → ${effective.mode} " +
+            s"($originNodeId → $destinationNodeId)"
+        )
+      else
+        logDebug(s"${getEntityId} chose mode: ${effective.mode}")
+      effective
+    }
 
   /** Initiate trip to next activity.
     */
