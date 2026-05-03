@@ -402,6 +402,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
+    MetricsServer.messagesSent.labels(getClass.getSimpleName, eventType).inc()
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -681,15 +682,6 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (reporters.isEmpty) return
     if (event.label != null) {
       MetricsServer.eventsProcessed.labels(event.label).inc()
-      event.label match {
-        case "journey_started" =>
-          val vehicleType = getClass.getSimpleName
-          MetricsServer.journeysStarted.labels(vehicleType).inc()
-        case "journey_completed" =>
-          val vehicleType = getClass.getSimpleName
-          MetricsServer.journeysCompleted.labels(vehicleType).inc()
-        case _ =>
-      }
     }
     val defaultReportType = ReportTypeEnum.valueOf(
       Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")

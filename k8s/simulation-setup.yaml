@@ -94,13 +94,13 @@ spec:
       initContainers:
         - name: wait-for-data
           image: busybox
-          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
+          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
           volumeMounts:
             - name: gcs-fuse-vol
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.6.2-k8s
+          image: uxhabam/hyperbolic-time-chamber:2.4.1-beluga
           resources:
             requests:
               cpu: "4"
@@ -155,6 +155,10 @@ spec:
               value: "120s"
             - name: HTC_HEARTBEAT_PAUSE
               value: "180 s"
+            # ── Simulation identity ─────────────────────────────────
+            # Unique ID for this run — used in reports and metrics labels.
+            - name: HTC_SIMULATION_ID
+              value: "toulouse_hybrid_100pct_gke"
             # ── Time Manager Pool ───────────────────────────────────
             # Multiple LocalTMs per pod prevent mailbox bottleneck.
             # With 5M actors / 16 pods = 312K actors/pod.
@@ -168,6 +172,8 @@ spec:
             # Reporters run on io-dispatcher (virtual threads) to avoid
             # blocking simulation threads. Fewer instances = fewer open
             # file handles on GCS Fuse.
+            - name: HTC_REPORT_ENABLED
+              value: "true"
             - name: HTC_REPORT_JSON_INSTANCES
               value: "64"
             - name: HTC_REPORT_JSON_PER_NODE
@@ -189,20 +195,22 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: HTC_SIMULATION_CONFIG_FILE
-              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json"
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/simulation.json"
             - name: HTC_MOBILITY_CITY_MAP_FILE
-              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json"
-            # ── Cache Strategy ──────────────────────────────────────
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/data/city_map.json"
+            # ── Routing / Cache Strategy ────────────────────────────
             # Use "inmemory" when Kafka is not available, "kafka" when Managed Kafka is provisioned
             - name: HTC_CACHE_STRATEGY
               value: "inmemory"
+            - name: HTC_USE_DYNAMIC_WEIGHTS
+              value: "false"
             # ── Load Balance Manager ────────────────────────────────
             # Enable for multi-node cluster; disable for testing.
             - name: HTC_LOAD_BALANCE_ENABLED
               value: "false"
             # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
             - name: HTC_LOAD_BALANCE_STRATEGY
-              value: "hybrid"
+              value: "default"
             # Geographic affinity weight (0.0 = pure load, 1.0 = pure geo, 0.4 recommended)
             - name: HTC_LB_GEO_AFFINITY_WEIGHT
               value: "0.4"
@@ -233,6 +241,11 @@ spec:
             # Snapshot state store: "redis" for multi-node HA; "inmemory" for single-node
             - name: HTC_LB_MIGRATION_STATE_STORE
               value: "inmemory"
+            # ── Shard buffer ────────────────────────────────────────
+            # Mailbox buffer for shard region during rebalancing.
+            # Increase if actors are dropped during LB migration.
+            - name: HTC_SHARD_BUFFER_SIZE
+              value: "100000"
             # ── Managed Apache Kafka (Google Cloud) ─────────────────
             - name: HTC_KAFKA_BOOTSTRAP_SERVERS
               valueFrom:

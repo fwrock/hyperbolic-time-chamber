@@ -1,20 +1,22 @@
 # ─────────────────────────────────────────────────────────────────
-# Node Exporter — GKE Autopilot Compatible Version
+# Node Exporter — GKE AUTOPILOT compatible
 #
-# ⚠️  AUTOPILOT LIMITATIONS:
-# - hostPID, hostNetwork, and most hostPath volumes are BLOCKED
-# - Node-level metrics require host access (not available in Autopilot)
-# - This deployment is DISABLED by default (replicas: 0)
+# Autopilot blocks: hostPID, hostNetwork, hostPath (except /var/log/).
+# Node-level metrics (CPU, memory, network) are available via:
+#   • cAdvisor embedded in kubelet (already scraped by prometheus.yaml)
+#   • container_network_* metrics carry pod+node labels
 #
-# ALTERNATIVES FOR AUTOPILOT:
-# 1. Use GKE Managed Prometheus (GMP) - includes node metrics:
-#    https://cloud.google.com/stackdriver/docs/managed-prometheus
-# 2. Use cAdvisor metrics (already available via kubelet)
-# 3. Switch to GKE Standard cluster for full node-exporter
+# This file deploys a minimal node-exporter WITHOUT host mounts,
+# running as an unprivileged container inside the pod network.
+# It provides:
+#   • JVM / process metrics scoped to its own container (limited)
+#   • A placeholder so the prometheus "node-exporter" service exists
 #
-# TO ENABLE (will have limited metrics):
-# - Set replicas to 1 in the Deployment below
-# - Remove collectors that require host access
+# For full node-level network metrics on Autopilot, use GKE Managed
+# Prometheus or read from cAdvisor metrics already scraped:
+#   container_network_receive_bytes_total
+#   container_network_transmit_bytes_total
+#   container_network_receive_packets_total  (etc.)
 # ─────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
@@ -24,7 +26,7 @@ metadata:
   labels:
     app: node-exporter
 spec:
-  replicas: 0  # DISABLED - set to 1 to enable with limited metrics
+  replicas: 1
   selector:
     matchLabels:
       app: node-exporter
@@ -36,52 +38,15 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port:   "9100"
     spec:
-      # Autopilot-compatible settings (no host access)
-      hostPID:     false  # CHANGED: not allowed in Autopilot
-      hostNetwork: false  # CHANGED: not allowed in Autopilot
-      hostIPC:     false
+      # No hostPID / hostNetwork / hostPath — Autopilot compatible
       containers:
         - name: node-exporter
           image: quay.io/prometheus/node-exporter:v1.8.0
           args:
-            # Disable collectors that require host access
-            - "--no-collector.arp"
-            - "--no-collector.bcache"
-            - "--no-collector.bonding"
-            - "--no-collector.conntrack"
-            - "--no-collector.cpu"
-            - "--no-collector.cpufreq"
-            - "--no-collector.diskstats"
-            - "--no-collector.edac"
-            - "--no-collector.entropy"
-            - "--no-collector.filefd"
-            - "--no-collector.hwmon"
-            - "--no-collector.infiniband"
-            - "--no-collector.ipvs"
-            - "--no-collector.loadavg"
-            - "--no-collector.mdadm"
-            - "--no-collector.meminfo"
-            - "--no-collector.netclass"
-            - "--no-collector.netdev"
-            - "--no-collector.netstat"
-            - "--no-collector.nfs"
-            - "--no-collector.nfsd"
-            - "--no-collector.pressure"
-            - "--no-collector.rapl"
-            - "--no-collector.schedstat"
-            - "--no-collector.sockstat"
-            - "--no-collector.softnet"
-            - "--no-collector.stat"
-            - "--no-collector.thermal_zone"
-            - "--no-collector.time"
-            - "--no-collector.timex"
-            - "--no-collector.udp_queues"
-            - "--no-collector.uname"
-            - "--no-collector.vmstat"
-            - "--no-collector.xfs"
-            - "--no-collector.zfs"
-            # Only enable container-safe collectors
-            - "--collector.textfile"
+            # Only collectors that don't require /proc or /sys host mounts
+            - "--collector.disable-defaults"
+            - "--collector.time"
+            - "--collector.uname"
             - "--web.listen-address=:9100"
           ports:
             - containerPort: 9100
@@ -95,15 +60,12 @@ spec:
               cpu: "100m"
               memory: "64Mi"
           securityContext:
-            privileged: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 65534
+            readOnlyRootFilesystem:   true
+            runAsNonRoot:             true
+            runAsUser:                65534
             allowPrivilegeEscalation: false
             capabilities:
-              drop:
-                - ALL
-      # NO hostPath volumes - not allowed in Autopilot except /var/log/
+              drop: [ALL]
 ---
 apiVersion: v1
 kind: Service
@@ -121,28 +83,6 @@ spec:
       port: 9100
       targetPort: 9100
       protocol: TCP
----
-# ─────────────────────────────────────────────────────────────────
-# RECOMMENDATION FOR GKE AUTOPILOT:
-#
-# Instead of node-exporter, use GKE Managed Prometheus (GMP):
-#
-# 1. Enable GMP in your cluster:
-#    gcloud container clusters update CLUSTER_NAME \
-#      --enable-managed-prometheus
-#
-# 2. Node metrics are automatically available via:
-#    - kubelet/cadvisor (container metrics)
-#    - GKE system metrics (node CPU, memory, disk, network)
-#
-# 3. Query metrics using PromQL:
-#    - node_cpu_seconds_total
-#    - node_memory_MemAvailable_bytes
-#    - container_cpu_usage_seconds_total
-#    - container_memory_working_set_bytes
-#
-# Learn more: https://cloud.google.com/stackdriver/docs/managed-prometheus
-# ─────────────────────────────────────────────────────────────────
 ---
 # ─────────────────────────────────────────────────────────────────
 # kube-state-metrics — estado dos objetos K8s

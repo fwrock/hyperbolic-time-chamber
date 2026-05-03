@@ -16,6 +16,7 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{ CarState, DriverAttributes, MicroCarState }
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.metrics.MetricsServer
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 import scala.collection.mutable
@@ -367,6 +368,7 @@ class Car(
     source: String,
     cost: Double = 0.0
   ): Unit = {
+    MetricsServer.journeysStarted.labels(getClass.getSimpleName).inc()
     report(
       data = Map(
         "event_type" -> "journey_started",
@@ -787,6 +789,13 @@ class Car(
     journeyFinishedReported = true
 
     val destination = getTripDestination.getOrElse(state.destination)
+    val vehicleType = getClass.getSimpleName
+    MetricsServer.journeysCompleted.labels(vehicleType).inc()
+    if (destination == finalNode) {
+      MetricsServer.journeySuccesses.labels(vehicleType).inc()
+    } else {
+      MetricsServer.journeyFailures.labels(vehicleType, reason).inc()
+    }
     val origin = getTripOrigin.getOrElse(state.origin)
 
     report(

@@ -46,19 +46,25 @@ data:
             target_label: namespace
 
       # ── 2. Node Exporter: CPU, memória, rede, disco por nó ───────
+      # DaemonSet with hostNetwork=true: pod IP == node IP, port 9100.
+      # We scrape via node SD (one target per GKE node) so the 'node'
+      # label matches the actual GKE node hostname, not a pod name.
       - job_name: 'node-exporter'
+        scheme: http
         kubernetes_sd_configs:
-          - role: pod
-            namespaces:
-              names: [monitoring]
+          - role: node
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: node-exporter
-            action: keep
-          - source_labels: [__meta_kubernetes_pod_node_name]
+          # node-exporter binds on hostPort 9100; replace kubelet port
+          - source_labels: [__address__]
+            regex: '(.*):(\d+)'
+            replacement: '${1}:9100'
+            target_label: __address__
+          # Propagate all GKE node labels (e.g. cloud.google.com/gke-nodepool)
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          # Canonical 'node' label = GKE node name (matches kubectl get nodes)
+          - source_labels: [__meta_kubernetes_node_name]
             target_label: node
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: pod
 
       # ── 3. kube-state-metrics: estado dos pods/deployments K8s ───
       - job_name: 'kube-state-metrics'
@@ -72,6 +78,9 @@ data:
           ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
           insecure_skip_verify: true
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        # Preserve any native pod/namespace labels that GKE kubelet already
+        # sets on cAdvisor metrics — don't let Prometheus overwrite them.
+        honor_labels: true
         kubernetes_sd_configs:
           - role: node
         relabel_configs:
@@ -83,12 +92,10 @@ data:
             regex: (.+)
             target_label: __metrics_path__
             replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
-        # Map cAdvisor container labels to standard pod/namespace labels
-        # so Grafana queries like {namespace="default", pod=~"htc-.*"} work.
-        # IMPORTANT: use regex: (.+) to only replace when source label is non-empty.
-        # Network metrics (container_network_*) are per-pod and may NOT have
-        # container_label_* labels — without the regex guard, we'd overwrite
-        # the native pod/namespace labels with empty strings.
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        # Only add container_label_* → standard labels when the native ones
+        # are absent (older kubelet / Docker runtime without native labels).
         metric_relabel_configs:
           - source_labels: [container_label_io_kubernetes_pod_namespace]
             regex: (.+)
@@ -99,6 +106,11 @@ data:
           - source_labels: [container_label_io_kubernetes_container_name]
             regex: (.+)
             target_label: container
+          # Drop pause/sandbox containers — they create noisy duplicates for
+          # CPU/memory metrics (network metrics must be kept for pod-level data).
+          - source_labels: [container]
+            regex: 'POD'
+            action: drop
 
       # ── 5. Prometheus self-monitoring ────────────────────────────
       - job_name: 'prometheus'

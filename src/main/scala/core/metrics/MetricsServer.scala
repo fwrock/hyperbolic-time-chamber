@@ -161,6 +161,94 @@ object MetricsServer {
     .labelNames("topic")
     .register()
 
+  // ── Phase Timing ──────────────────────────────────────────────────────────
+
+  /** Unix timestamp (seconds) when each simulation phase started.
+    *
+    * Phases: config_load, loading, progressive_loading, simulation
+    */
+  val phaseStartTimestamp: Gauge = Gauge
+    .build()
+    .name("htc_phase_start_timestamp_seconds")
+    .help("Unix timestamp (seconds) when each simulation phase started")
+    .labelNames("phase")
+    .register()
+
+  /** Duration (seconds) of each completed simulation phase.
+    *
+    * Set when a phase ends; 0 if not yet completed.
+    */
+  val phaseDurationSeconds: Gauge = Gauge
+    .build()
+    .name("htc_phase_duration_seconds")
+    .help("Wall-clock duration in seconds for each completed simulation phase")
+    .labelNames("phase")
+    .register()
+
+  // ── Journey Outcome by Reason ─────────────────────────────────────────────
+
+  /** Journeys that failed to reach destination, labelled by vehicle type and failure reason.
+    *
+    * Failure reasons (completion_reason field): route_calculation_failed,
+    * exception_during_route_request, null_origin_or_destination, simulation_time_exceeded,
+    * actor_destructed_before_completion
+    */
+  val journeyFailures: Counter = Counter
+    .build()
+    .name("htc_journey_failures_total")
+    .help("Vehicle journeys that did NOT reach destination, by vehicle type and reason")
+    .labelNames("vehicle_type", "reason")
+    .register()
+
+  /** Journeys that successfully reached their destination, by vehicle type. */
+  val journeySuccesses: Counter = Counter
+    .build()
+    .name("htc_journey_successes_total")
+    .help("Vehicle journeys that successfully reached destination, by vehicle type")
+    .labelNames("vehicle_type")
+    .register()
+
+  // ── Message Exchange ──────────────────────────────────────────────────────
+
+  /** Total inter-actor messages sent, labelled by sender actor type and event type.
+    *
+    * Use `rate(htc_messages_sent_total[1m])` in Prometheus to get message throughput.
+    */
+  val messagesSent: Counter = Counter
+    .build()
+    .name("htc_messages_sent_total")
+    .help("Total inter-actor messages sent, by sender type and event type")
+    .labelNames("from_type", "event_type")
+    .register()
+
+  // ── Phase Timing Helpers ──────────────────────────────────────────────────
+
+  /** Records the start of a simulation phase.
+    *
+    * @param phase
+    *   Phase name: "config_load", "loading", "progressive_loading", or "simulation"
+    */
+  def recordPhaseStart(phase: String): Unit = {
+    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
+    phaseStartTimestamp.labels(phase).set(nowSeconds)
+    logger.info(s"[Phase] '$phase' started")
+  }
+
+  /** Records the end of a simulation phase and sets its duration gauge.
+    *
+    * @param phase
+    *   Phase name matching a prior [[recordPhaseStart]] call
+    */
+  def recordPhaseEnd(phase: String): Unit = {
+    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
+    val startSeconds = phaseStartTimestamp.labels(phase).get()
+    if (startSeconds > 0) {
+      val duration = nowSeconds - startSeconds
+      phaseDurationSeconds.labels(phase).set(duration)
+      logger.info(f"[Phase] '$phase' completed in $duration%.2f seconds")
+    }
+  }
+
   /** Start the Prometheus HTTP metrics server.
     *
     * @param port
