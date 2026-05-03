@@ -1,23 +1,23 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.{ GlobalTimeManager, TimeManagerBase }
-import core.entity.control.{ LocalTimeManagerTickInfo, ScheduledActors }
+import core.actor.manager.time.{GlobalTimeManager, TimeManagerBase}
+import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
-import core.entity.event.control.load.{ ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
-import core.entity.event.{ FinishEvent, SpontaneousEvent }
+import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
+import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
 import core.metrics.MetricsServer
 import core.types.Tick
-import core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME }
+import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
-import org.apache.pekko.actor.{ ActorRef, CoordinatedShutdown, Props, Terminated }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.actor.{ActorRef, CoordinatedShutdown, Props, Terminated}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, UpdateGlobalTimeEvent }
-import core.entity.event.control.loadbalance.{ MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
+import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
 import core.api.SimulatorSettingsRegistry
 
 import scala.collection.mutable
@@ -529,13 +529,13 @@ class GlobalTimeManager(
       printSimulationDuration()
       logInfo("Global simulation terminated")
       notifyLocalManagers(
-        org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+        StopSimulationEvent()
       )
       // Notify SimulationManager so it can flush reporters and stop gracefully
-      simulationManager ! org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+//      simulationManager ! org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
       // Explicitly shut down the actor system so the JVM (container) exits.
       // Without this, non-daemon threads keep the JVM alive indefinitely.
-      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
+//      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
     }
   }
 

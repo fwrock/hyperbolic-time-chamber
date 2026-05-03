@@ -18,6 +18,7 @@ data:
     datasources:
       - name: Prometheus
         type: prometheus
+        uid: "prometheus"
         url: http://prometheus.monitoring.svc.cluster.local:9090
         access: proxy
         isDefault: true
@@ -59,10 +60,13 @@ data:
           "id": 1, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
           "title": "Memória JVM Heap (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "jvm_memory_bytes_used{area=\"heap\", job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} used"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "jvm_memory_bytes_max{area=\"heap\", job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} max"
           }],
@@ -72,7 +76,9 @@ data:
           "id": 2, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
           "title": "CPU Usage (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(process_cpu_seconds_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}}"
           }],
@@ -80,14 +86,17 @@ data:
         },
         {
           "id": 3, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-          "title": "Memória RSS por Nó GKE",
+          "title": "Memória por Container (cAdvisor)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
-            "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\"}",
-            "legendFormat": "{{node}} used"
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"default\", pod=~\"htc-simulator.*\", container!=\"\"})",
+            "legendFormat": "{{pod}} working set"
           }, {
-            "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\"}",
-            "legendFormat": "{{node}} total"
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "expr": "sum by (pod) (container_memory_rss{namespace=\"default\", pod=~\"htc-simulator.*\", container!=\"\"})",
+            "legendFormat": "{{pod}} rss"
           }],
           "fieldConfig": {"defaults": {"unit": "bytes"}}
         },
@@ -95,10 +104,13 @@ data:
           "id": 4, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
           "title": "Rede — Bytes/s por Pod (RX + TX)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} rx"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} tx"
           }],
@@ -108,10 +120,13 @@ data:
           "id": 13, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48},
           "title": "Rede — Pacotes/s por Pod",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_receive_packets_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} rx pkts"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_transmit_packets_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} tx pkts"
           }],
@@ -121,16 +136,21 @@ data:
           "id": 14, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48},
           "title": "Rede — Erros e Drops por Pod",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_receive_errors_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} rx errors"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_transmit_errors_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} tx errors"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_receive_packets_dropped_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} rx drops"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum by (pod) (rate(container_network_transmit_packets_dropped_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "{{pod}} tx drops"
           }]
@@ -139,10 +159,13 @@ data:
           "id": 15, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 56},
           "title": "Rede — Throughput Total do Cluster (todos os pods HTC)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "cluster rx total"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"default\", pod=~\"htc-simulator.*\"}[1m]))",
             "legendFormat": "cluster tx total"
           }],
@@ -152,7 +175,9 @@ data:
           "id": 5, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
           "title": "JVM GC Pause Time (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(jvm_gc_collection_seconds_sum{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} {{gc}}"
           }],
@@ -162,7 +187,9 @@ data:
           "id": 6, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
           "title": "Pekko — Dead Letters (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_dead_letters_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }]
@@ -171,7 +198,9 @@ data:
           "id": 7, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
           "title": "Kafka Producer — Taxa de Mensagens",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(htc_kafka_messages_sent_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} {{topic}}"
           }],
@@ -179,22 +208,27 @@ data:
         },
         {
           "id": 8, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-          "title": "CPU por Nó GKE",
+          "title": "CPU por Container (cAdvisor)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
-            "expr": "1 - avg by (node) (rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"}[1m]))",
-            "legendFormat": "{{node}}"
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
+            "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\", pod=~\"htc-simulator.*\", container!=\"\"}[1m]))",
+            "legendFormat": "{{pod}}"
           }],
-          "fieldConfig": {"defaults": {"unit": "percentunit"}}
+          "fieldConfig": {"defaults": {"unit": "short", "custom": {"axisLabel": "cores"}}}
         },
         {
           "id": 9, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
           "title": "Threads JVM Ativas (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "jvm_threads_current{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} total"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "jvm_threads_daemon{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} daemon"
           }]
@@ -203,7 +237,9 @@ data:
           "id": 10, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
           "title": "Simulation Ticks (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(htc_simulation_ticks_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} ticks/s"
           }],
@@ -213,7 +249,9 @@ data:
           "id": 11, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
           "title": "Atores Ativos (por tipo)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_actors_active{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} {{actor_type}}"
           }]
@@ -222,21 +260,25 @@ data:
           "id": 12, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
           "title": "Tick Duration (por pod)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(htc_tick_duration_seconds_sum{job=\"htc-simulation\"}[1m]) / rate(htc_tick_duration_seconds_count{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} avg"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "histogram_quantile(0.99, rate(htc_tick_duration_seconds_bucket{job=\"htc-simulation\"}[1m]))",
             "legendFormat": "{{pod}} p99"
           }],
           "fieldConfig": {"defaults": {"unit": "s"}}
-        }
-        ,
+        },
         {
           "id": 16, "gridPos": {"h": 6, "w": 6, "x": 0, "y": 64},
           "title": "Tick Atual da Simulação",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_simulation_current_tick{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -246,7 +288,9 @@ data:
           "id": 17, "gridPos": {"h": 6, "w": 6, "x": 6, "y": 64},
           "title": "Progresso da Simulação",
           "type": "gauge",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_simulation_progress_ratio{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -256,7 +300,9 @@ data:
           "id": 18, "gridPos": {"h": 6, "w": 12, "x": 12, "y": 64},
           "title": "Atores Registrados (total por tipo)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_actors_registered_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} {{actor_type}}"
           }]
@@ -265,7 +311,9 @@ data:
           "id": 19, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 70},
           "title": "Eventos Processados/s (por tipo)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} {{event_type}}"
           }],
@@ -275,10 +323,13 @@ data:
           "id": 20, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 70},
           "title": "Time Manager — Estado Interno",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_tm_scheduled_actors{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} scheduled"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_tm_running_events{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} running"
           }]
@@ -287,7 +338,9 @@ data:
           "id": 21, "gridPos": {"h": 6, "w": 6, "x": 0, "y": 78},
           "title": "TM Aguardando Progressive",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_tm_waiting_for_progressive{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -297,7 +350,9 @@ data:
           "id": 22, "gridPos": {"h": 6, "w": 6, "x": 6, "y": 78},
           "title": "Progressive — Loaded Up To Tick",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_progressive_loaded_up_to_tick{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -307,7 +362,9 @@ data:
           "id": 23, "gridPos": {"h": 6, "w": 6, "x": 12, "y": 78},
           "title": "Progressive — Atores Criados",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_progressive_actors_created_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -317,7 +374,9 @@ data:
           "id": 24, "gridPos": {"h": 6, "w": 6, "x": 18, "y": 78},
           "title": "Progressive — Janelas Carregadas",
           "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_progressive_windows_loaded_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}}"
           }],
@@ -327,7 +386,9 @@ data:
           "id": 25, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 84},
           "title": "Viagens Completadas (por tipo de veículo)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "htc_journeys_completed_total{job=\"htc-simulation\"}",
             "legendFormat": "{{pod}} {{vehicle_type}}"
           }]
@@ -336,10 +397,13 @@ data:
           "id": 26, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 84},
           "title": "Viagens Iniciadas vs Completadas (taxa/s)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum(rate(htc_journeys_started_total{job=\"htc-simulation\"}[1m]))",
             "legendFormat": "started/s"
           }, {
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "sum(rate(htc_journeys_completed_total{job=\"htc-simulation\"}[1m]))",
             "legendFormat": "completed/s"
           }],
@@ -349,7 +413,9 @@ data:
           "id": 27, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 92},
           "title": "Eventos por Tipo (taxa/s)",
           "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
+            "datasource": {"type": "prometheus", "uid": "prometheus"},
             "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
             "legendFormat": "{{pod}} {{event_type}}"
           }],
@@ -357,7 +423,7 @@ data:
         }
       ],
       "schemaVersion": 39,
-      "version": 3
+      "version": 4
     }
 ---
 # ── Deployment Grafana ─────────────────────────────────────────────
@@ -405,6 +471,15 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-config
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards-data
+              mountPath: /var/lib/grafana/dashboards
+            - name: storage
+              mountPath: /var/lib/grafana
         # ── Grafana Image Renderer sidecar ─────────────────────────
         - name: renderer
           image: grafana/grafana-image-renderer:3.10.5
@@ -423,15 +498,6 @@ spec:
             limits:
               cpu: "1"
               memory: "1Gi"
-          volumeMounts:
-            - name: datasources
-              mountPath: /etc/grafana/provisioning/datasources
-            - name: dashboards-config
-              mountPath: /etc/grafana/provisioning/dashboards
-            - name: dashboards-data
-              mountPath: /var/lib/grafana/dashboards
-            - name: storage
-              mountPath: /var/lib/grafana
       volumes:
         - name: datasources
           configMap:

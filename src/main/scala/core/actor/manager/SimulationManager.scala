@@ -26,6 +26,7 @@ import org.interscity.htc.core.entity.control.loadbalance.SpatialBounds
 import org.interscity.htc.core.enumeration.LoadBalanceStrategyEnum
 import org.interscity.htc.core.util.ManagerConstantsUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_BALANCE_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME, SNAPSHOT_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.metrics.MetricsServer
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -86,11 +87,13 @@ class SimulationManager(
   }
 
   private def startSimulation(event: FinishLoadDataEvent): Unit = {
+    MetricsServer.recordPhaseEnd("loading")
     loadManager ! DestructEvent(actorRef = getPath)
 
     val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
 
     if (event.progressiveSources.nonEmpty) {
+      MetricsServer.recordPhaseStart("progressive_loading")
       logInfo(
         s"Setting up progressive loading for ${event.progressiveSources.size} sources"
       )
@@ -116,6 +119,7 @@ class SimulationManager(
       )
     }
 
+    MetricsServer.recordPhaseStart("simulation")
     logInfo("Start simulation")
     globalTimeManagerProxy ! StartSimulationTimeEvent(
       startTick = configuration.startTick,
@@ -144,6 +148,7 @@ class SimulationManager(
 
   private def startLoadData(): Unit =
     if (poolTimeManager != null && reporters != null) {
+      MetricsServer.recordPhaseStart("loading")
       loadManager = createSingletonLoadManager()
       createSingletonProxy(SNAPSHOT_MANAGER_ACTOR_NAME) ! SnapshotManager
         .RegisterSnapshotContextEvent(
@@ -163,6 +168,7 @@ class SimulationManager(
     }
 
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
+    MetricsServer.recordPhaseStart("config_load")
     if (configuration == null && !configLoadInProgress) {
       configLoadInProgress = true
       val ioDispatcher = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
@@ -184,6 +190,7 @@ class SimulationManager(
   }
 
   private def onSimulationConfigLoaded(event: SimulationConfigLoadedEvent): Unit = {
+    MetricsServer.recordPhaseEnd("config_load")
     configuration = event.config
     configLoadInProgress = false
     prepareSimulation()
@@ -378,6 +385,7 @@ class SimulationManager(
     )
 
   private def handleProgressiveLoadingComplete(event: ProgressiveLoadingCompleteEvent): Unit = {
+    MetricsServer.recordPhaseEnd("progressive_loading")
     logInfo(
       s"Progressive loading complete: ${event.totalActorsCreated} actors created during simulation"
     )
@@ -389,6 +397,7 @@ class SimulationManager(
   }
 
   private def handleStopSimulation(): Unit = {
+    MetricsServer.recordPhaseEnd("simulation")
     logInfo("Received StopSimulationEvent. Stopping simulation managers gracefully")
     try {
       if (loadBalanceManager != null) {
