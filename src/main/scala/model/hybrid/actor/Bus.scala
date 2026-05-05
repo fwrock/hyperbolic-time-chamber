@@ -18,7 +18,7 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
 import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.core.metrics.MetricsServer
+import org.interscity.htc.core.metrics.model.hybrid.MovableMetrics
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
@@ -141,7 +141,7 @@ class Bus(
           )
           state.storedBestRoute = None
         }
-        MetricsServer.journeysStarted.labels(getClass.getSimpleName).inc()
+        MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
         report(
           data = Map(
             "event_type" -> "journey_started",
@@ -711,11 +711,12 @@ class Bus(
 
   private def finishJourney(reason: String, finalNode: String): Unit = {
     val vehicleType = getClass.getSimpleName
-    MetricsServer.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)
     if (state.destination == finalNode) {
-      MetricsServer.journeySuccesses.labels(vehicleType).inc()
+      MovableMetrics.journeySuccesses.labels(vehicleType).inc()
     } else {
-      MetricsServer.journeyFailures.labels(vehicleType, reason).inc()
+      MovableMetrics.journeyFailures.labels(vehicleType, reason).inc()
     }
     report(
       data = Map(

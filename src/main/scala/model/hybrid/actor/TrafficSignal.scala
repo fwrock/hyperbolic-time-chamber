@@ -16,6 +16,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.Tr
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.hybrid.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.core.metrics.model.hybrid.TrafficSignalMetrics
 
 import scala.collection.mutable
 
@@ -64,6 +65,7 @@ class TrafficSignal(
           signalState =>
             signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
             if (signalState.state != newState) {
+              TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
               notifyNodes(
                 SignalState(
                   state = newState,

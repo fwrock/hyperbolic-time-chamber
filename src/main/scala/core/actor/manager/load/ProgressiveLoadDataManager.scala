@@ -9,7 +9,6 @@ import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum
-import core.metrics.MetricsServer
 import core.types.Tick
 import core.util.ManagerConstantsUtil
 import core.util.ManagerConstantsUtil.{ POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME }
@@ -20,6 +19,7 @@ import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.remote.RemoteScope
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
+import org.interscity.htc.core.metrics.core.ProgressiveLoadingMetrics
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable
@@ -340,7 +340,7 @@ class ProgressiveLoadDataManager(
     pendingRangeActorsCount += event.actorsLoaded
     totalActorsCreated += event.actorsLoaded
 
-    MetricsServer.progressiveActorsCreated.inc(event.actorsLoaded.toDouble)
+    ProgressiveLoadingMetrics.progressiveActorsCreated.inc(event.actorsLoaded.toDouble)
 
     val completed = pendingRangeResponses.count(_._2)
     val total = pendingRangeResponses.size
@@ -456,8 +456,8 @@ class ProgressiveLoadDataManager(
   /** Notify the GlobalTimeManager that actors up to the given tick are ready.
     */
   private def notifyTimeManagerReady(readyUpToTick: Tick, actorsCreated: Long): Unit = {
-    MetricsServer.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
-    MetricsServer.progressiveWindowsLoaded.inc()
+    ProgressiveLoadingMetrics.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
+    ProgressiveLoadingMetrics.progressiveWindowsLoaded.inc()
     globalTimeManagerRef ! TickWindowReady(
       readyUpToTick = readyUpToTick,
       actorsCreated = actorsCreated

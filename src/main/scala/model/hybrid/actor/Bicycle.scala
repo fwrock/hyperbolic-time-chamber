@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.hybrid.actor
 
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -11,11 +11,11 @@ import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.hybrid.util.{ CityMapUtil, GPSUtil }
-import org.interscity.htc.model.hybrid.entity.state.{ BicycleState, DriverAttributes, MicroBicycleState }
-import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil}
+import org.interscity.htc.model.hybrid.entity.state.{BicycleState, DriverAttributes, MicroBicycleState}
+import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.metrics.MetricsServer
+import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bicycle actor - NEW vehicle type for hybrid simulator.
@@ -284,7 +284,8 @@ class Bicycle(
   private def requestSignalState(): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
-    if (state.destination == currentPathNode || routeDepleted) {
+    val tripDest = getTripDestination.getOrElse(state.destination)
+    if (tripDest == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
         finishJourney("reached_destination", currentNodeId)
@@ -311,15 +312,12 @@ class Bicycle(
                   )
                   onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
-                  logWarn("No next link available")
                   leavingLink()
               }
             case None =>
-              logWarn(s"Node $nodeId not found")
               leavingLink()
           }
         case null =>
-          logWarn("No current node")
           leavingLink()
       }
     }
@@ -376,14 +374,14 @@ class Bicycle(
       sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteALT(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
           state.status = Ready
           state.updateCurrentPath(None)
 
-          MetricsServer.journeysStarted.labels(getClass.getSimpleName).inc()
+          MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
           report(
             data = Map(
               "event_type" -> "journey_started",
@@ -401,16 +399,26 @@ class Bicycle(
             enterLink()
           } else {
             finishJourney("already_at_destination", origin)
+            onFinishPrivateVehicle(origin)
+            onFinishSpontaneous(None)
+            if (!isPersonCentric) selfDestruct()
           }
 
         case None =>
+          GPSMetrics.gpsCannotFindRoute.labels("bicycle").inc()
           logError(s"Failed to calculate route for bicycle ${getEntityId}")
           finishJourney("route_calculation_failed", origin)
+          onFinishPrivateVehicle(origin)
+          onFinishSpontaneous(None)
+          if (!isPersonCentric) selfDestruct()
       }
     catch {
       case e: Exception =>
         logError(s"Exception during bicycle route request: ${e.getMessage}", e)
         finishJourney("exception", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
     }
   }
 
@@ -608,8 +616,9 @@ class Bicycle(
 
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
-      finishJourney("reached_destination", state.destination)
-      onFinishPrivateVehicle(state.destination)
+      val tripDest = getTripDestination.getOrElse(state.destination)
+      finishJourney("reached_destination", tripDest)
+      onFinishPrivateVehicle(tripDest)
       onFinishSpontaneous(None)
       if (!isPersonCentric) selfDestruct()
     } else {
@@ -622,16 +631,16 @@ class Bicycle(
   private def finishJourney(reason: String, finalNode: String): Unit = {
     val destination = getTripDestination.getOrElse(state.destination)
     val vehicleType = getClass.getSimpleName
-    MetricsServer.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)
     if (destination == finalNode) {
-      MetricsServer.journeySuccesses.labels(vehicleType).inc()
+      MovableMetrics.journeySuccesses.labels(vehicleType).inc()
     } else {
-      MetricsServer.journeyFailures.labels(vehicleType, reason).inc()
+      MovableMetrics.journeyFailures.labels(vehicleType, reason).inc()
     }
     val origin = getTripOrigin.getOrElse(state.origin)
     report(
       data = Map(
-        "event_type" -> "journey_completed",
         "vehicle_id" -> getEntityId,
         "bicycle_id" -> getEntityId,
         "origin" -> origin,
@@ -644,6 +653,8 @@ class Bicycle(
       ),
       label = "journey_completed"
     )
+
+    MovableMetrics.journeyCompletedReason.labels("bicycle", reason, s"${destination == finalNode}").inc()
 
     reportSumoTripInfo(reason = reason, finalNode = finalNode)
 
@@ -735,8 +746,8 @@ class Bicycle(
   /** Override onFinish to use PrivateVehicle completion.
     */
   override protected def onFinish(nodeId: String): Unit = {
-    onFinishPrivateVehicle(nodeId)
     finishJourney("onFinish_called", nodeId)
+    onFinishPrivateVehicle(nodeId)
   }
 
   override def onDestruct(event: DestructEvent): Unit =

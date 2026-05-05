@@ -2,7 +2,7 @@ package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.model.hybrid.collections.{ Graph, LoadedGraphData }
-import org.interscity.htc.model.hybrid.collections.graph.ContractionHierarchiesIndex
+import org.interscity.htc.model.hybrid.collections.graph.{ ContractionHierarchiesIndex, LandmarkIndex }
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
 import scala.util.{ Failure, Success }
 
@@ -40,6 +40,22 @@ object CityMapUtil {
     */
   lazy val chIndex: ContractionHierarchiesIndex[NodeGraph, Double, EdgeGraph] =
     cityMap.buildContractionHierarchies
+
+  /** Number of landmarks for the ALT index (configurable via htc.mobility.landmark-count). */
+  private lazy val landmarkCount: Int =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.landmark-count")
+      .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_COUNT"))
+      .flatMap(s => scala.util.Try(s.toInt).toOption)
+      .getOrElse(16)
+
+  /** Pre-computed ALT (A* + Landmarks + Triangle inequality) index.
+    *
+    * Built once at first access using farthest-first landmark selection. Number of landmarks
+    * is configurable via `htc.mobility.landmark-count` (default: 16).
+    */
+  lazy val altIndex: LandmarkIndex[NodeGraph, Double, EdgeGraph] =
+    LandmarkIndex.build(cityMap, landmarkCount)
 
   /** Static weights indexed by link ID — used for blocked-link threshold checks. */
   lazy val staticWeightsByLinkId: Map[String, Double] =

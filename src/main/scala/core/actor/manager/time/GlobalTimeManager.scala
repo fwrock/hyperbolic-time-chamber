@@ -7,7 +7,6 @@ import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
-import core.metrics.MetricsServer
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 
@@ -19,6 +18,7 @@ import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
 import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
 import core.api.SimulatorSettingsRegistry
+import org.interscity.htc.core.metrics.core.{ProgressiveLoadingMetrics, SimulationMetrics, TimeManagerMetrics}
 
 import scala.collection.mutable
 
@@ -65,6 +65,10 @@ class GlobalTimeManager(
 
   // Tick duration measurement — tracks wall-clock time between global tick broadcasts
   private var lastTickBroadcastNanos: Long = 0L
+
+  // Progressive load timing — tracks wall-clock time per window and blocked wait
+  private var progressiveLoadRequestedNanos: Long = 0L
+  private var progressiveLoadBlockedNanos: Long = 0L
 
   // Adaptive pre-fetch: tracks the actual tick range of the last loaded window.
   // Used to compute a dynamic pre-fetch threshold instead of a static value.
@@ -159,6 +163,7 @@ class GlobalTimeManager(
     localTickOffset = initialTick
     isPaused = false
     isStopped = false
+    SimulationMetrics.configuredDuration.set(simulationDuration.toDouble)
 
     // If progressive loading is enabled, we MUST wait for the initial window
     // to be loaded before starting the simulation. Otherwise actors scheduled
@@ -303,8 +308,9 @@ class GlobalTimeManager(
           s"No scheduled events but progressive loading not complete " +
             s"(loadedUpTo=$progressiveLoadedUpToTick). Requesting next window from tick $nextLoadTick."
         )
-        MetricsServer.tmWaitingForProgressive.set(1)
+        TimeManagerMetrics.tmWaitingForProgressive.set(1)
         waitingForProgressiveLoad = true
+        progressiveLoadBlockedNanos = System.nanoTime()
         pendingNextTick = Some(nextLoadTick)
         requestProgressiveLoad(nextLoadTick)
         return
@@ -317,10 +323,10 @@ class GlobalTimeManager(
     val nextTick = scheduled.map(_.tick).min
 
     // ── Prometheus: tick metrics ──
-    MetricsServer.simulationTicks.inc()
-    MetricsServer.currentTick.set(nextTick.toDouble)
+    SimulationMetrics.simulationTicks.inc()
+    SimulationMetrics.currentTick.set(nextTick.toDouble)
     if (simulationDuration > 0) {
-      MetricsServer.simulationProgress.set(
+      SimulationMetrics.simulationProgress.set(
         Math.min(1.0, (nextTick - initialTick).toDouble / simulationDuration.toDouble)
       )
     }
@@ -328,7 +334,7 @@ class GlobalTimeManager(
     val nowNanos = System.nanoTime()
     if (lastTickBroadcastNanos > 0) {
       val durationSec = (nowNanos - lastTickBroadcastNanos) / 1e9
-      MetricsServer.tickDuration.observe(durationSec)
+      SimulationMetrics.tickDuration.observe(durationSec)
     }
     lastTickBroadcastNanos = nowNanos
 
@@ -353,8 +359,9 @@ class GlobalTimeManager(
       logInfo(
         s"Waiting for progressive load: nextTick=$nextTick > loadedUpTo=$progressiveLoadedUpToTick"
       )
-      MetricsServer.tmWaitingForProgressive.set(1)
+      TimeManagerMetrics.tmWaitingForProgressive.set(1)
       waitingForProgressiveLoad = true
+      progressiveLoadBlockedNanos = System.nanoTime()
       pendingNextTick = Some(nextTick)
       requestProgressiveLoad(nextTick)
       return
@@ -376,19 +383,40 @@ class GlobalTimeManager(
       }
     }
 
-    localTimeManagers.keys.foreach {
-      timeManager =>
-        localTimeManagers.update(
-          timeManager,
-          LocalTimeManagerTickInfo(tick = nextTick)
-        )
+    // ── Selective barrier: only wake LTMs that have work at nextTick ────────────
+    // LTMs whose next scheduled tick is beyond nextTick have nothing to process
+    // here — mark them as processed immediately (no round-trip message needed).
+    // This eliminates the dominant overhead: 128 empty report round-trips per tick.
+    //
+    // Safety: if a "sleeping" LTM receives a late FinishEvent (async actor response)
+    // it will call advanceToNextTick() and send a new LocalTimeReportEvent to GTM.
+    // GTM updates its entry; the new tick is folded into the next calculateAndBroadcast
+    // call. No scheduled event can be missed: each actor sends ScheduleEvent/FinishEvent
+    // to its own LTM before that LTM reports, so the LTM's reported tick is always the
+    // true minimum of its current schedule at the time of reporting.
+    var activeCount = 0
+    localTimeManagers.foreach { case (tm, info) =>
+      if (info.hasSchedule && info.tick <= nextTick) {
+        // LTM has work at this tick — wake it up, reset processed flag
+        localTimeManagers.update(tm, LocalTimeManagerTickInfo(tick = nextTick, isProcessed = false))
+        tm ! UpdateGlobalTimeEvent(localTickOffset)
+        activeCount += 1
+      } else {
+        // LTM is dormant until a future tick — count it as done for this barrier
+        localTimeManagers.update(tm, info.copy(isProcessed = true))
+      }
     }
-
-    notifyLocalManagers(UpdateGlobalTimeEvent(localTickOffset))
+    logDebug(
+      s"[SelectiveBarrier] Tick $nextTick: notified $activeCount/${localTimeManagers.size} LTMs"
+    )
+    // If all LTMs are idle (no active work), re-enter to re-evaluate (e.g. progressive load)
+    if (activeCount == 0) {
+      calculateAndBroadcastNextGlobalTick()
+    }
   }
 
   private def notifyLocalManagers(event: Any): Unit =
-    // Broadcast to all routees in the pool
+    // Broadcast to all routees in the pool (used for Start/Stop/Migration, not per-tick updates)
     timeManagersPool ! org.apache.pekko.routing.Broadcast(event)
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
@@ -446,6 +474,7 @@ class GlobalTimeManager(
     */
   private def requestProgressiveLoad(currentTick: Tick): Unit =
     if (progressiveLoadManager != null) {
+      progressiveLoadRequestedNanos = System.nanoTime()
       val horizonTick = currentTick + maxLookAheadTicks
       progressiveLoadManager ! TickWindowRequest(
         currentTick = currentTick,
@@ -461,6 +490,13 @@ class GlobalTimeManager(
     progressiveLoadedUpToTick = event.readyUpToTick
     if (previousLoadedUpTo >= 0 && event.readyUpToTick > previousLoadedUpTo) {
       lastWindowTickRange = event.readyUpToTick - previousLoadedUpTo
+    }
+
+    // Record window load duration (covers all calls including proactive prefetch)
+    if (progressiveLoadRequestedNanos > 0) {
+      val windowSec = (System.nanoTime() - progressiveLoadRequestedNanos) / 1e9
+      ProgressiveLoadingMetrics.windowLoadDurationSeconds.observe(windowSec)
+      progressiveLoadRequestedNanos = 0L
     }
 
     // CASE 1: We were waiting for the initial window before starting simulation
@@ -487,7 +523,12 @@ class GlobalTimeManager(
     // CASE 2: We were waiting mid-simulation for the next window
     if (waitingForProgressiveLoad) {
       waitingForProgressiveLoad = false
-      MetricsServer.tmWaitingForProgressive.set(0)
+      TimeManagerMetrics.tmWaitingForProgressive.set(0)
+      if (progressiveLoadBlockedNanos > 0) {
+        val blockedSec = (System.nanoTime() - progressiveLoadBlockedNanos) / 1e9
+        ProgressiveLoadingMetrics.blockedWaitDurationSeconds.observe(blockedSec)
+        progressiveLoadBlockedNanos = 0L
+      }
       pendingNextTick.foreach {
         tick =>
           if (tick <= progressiveLoadedUpToTick) {

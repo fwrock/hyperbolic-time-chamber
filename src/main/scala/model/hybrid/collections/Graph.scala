@@ -183,7 +183,12 @@ case class Graph[V, W, L] private (
     }
   }
 
-  def aStarEdgeTargetsOptimized(startNode: V, goalNode: V, heuristic: (V, V) => Double)(implicit
+  def aStarEdgeTargetsOptimized(
+    startNode: V,
+    goalNode: V,
+    heuristic: (V, V) => Double,
+    maxExpansions: Int = Int.MaxValue
+  )(implicit
     num: Numeric[W]
   ): Option[(Double, List[(Edge[V, W, L], V)])] = {
     if (!contains(startNode) || !contains(goalNode)) return None
@@ -200,6 +205,7 @@ case class Graph[V, W, L] private (
     fScore(startNode) = heuristic(startNode, goalNode)
     openSet.enqueue((fScore(startNode), startNode))
 
+    var expansions = 0
     while (openSet.nonEmpty) {
       val (currentFScore, current) = openSet.dequeue() // Pega fScore real da fila
 
@@ -215,6 +221,8 @@ case class Graph[V, W, L] private (
       } else {
         if (!closedSet.contains(current)) {
           closedSet.add(current)
+          expansions += 1
+          if (expansions >= maxExpansions) return None
 
           neighbors(current).foreach {
             case (neighbor, edgeInfoObj) =>
@@ -399,6 +407,24 @@ case class Graph[V, W, L] private (
     }
 
     distances.toMap
+  }
+
+  /** Returns a new graph with all edge directions reversed.
+    *
+    * Used by [[graph.LandmarkIndex]] to compute backward distances (distances ''to'' a landmark)
+    * via a forward Dijkstra on the reversed graph.
+    */
+  def reversed: Graph[V, W, L] = {
+    val newAdj = mutable.Map[V, mutable.Map[V, EdgeInfo[W, L]]]()
+    adjacencyList.keys.foreach { v => newAdj.getOrElseUpdate(v, mutable.Map.empty) }
+    adjacencyList.foreach {
+      case (source, nbrs) =>
+        nbrs.foreach {
+          case (target, info) =>
+            newAdj.getOrElseUpdate(target, mutable.Map.empty)(source) = info
+        }
+    }
+    Graph(newAdj.view.mapValues(_.toMap).toMap)
   }
 
   private def reconstructEdgeTargetTuplePath(

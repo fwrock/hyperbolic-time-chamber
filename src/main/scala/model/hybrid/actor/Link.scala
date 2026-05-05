@@ -23,6 +23,7 @@ import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationStrategy, LaneChangeStrategy, MicroSimulationStrategy, NoLaneChangeStrategy }
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
+import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 
 import scala.collection.mutable
 
@@ -517,7 +518,8 @@ class Link(
     vehicleEntryTick.remove(data.actorId)
     vehicleWaitingSeconds.remove(data.actorId)
     if (wasRegistered) {
-      onVehicleArrived(travelTime = 0.0)
+      val travelTicks = if (entryTick >= 0) (currentTick - entryTick).toDouble else 0.0
+      onVehicleArrived(travelTime = travelTicks)
     }
 
     if (state.isMicroMode) {
@@ -769,23 +771,30 @@ class Link(
       tickProcessingDurationMs = 0L
     }
 
-  /** Records a vehicle insertion into the link. Updates per-tick and cumulative metrics.
+  /** Records a vehicle insertion into the link. Updates per-tick, cumulative and Prometheus metrics.
     */
   private def onVehicleInserted(): Unit = {
     tickInserted += 1
     cumulativeLoaded += 1
+    val mode = if (state.isMicroMode) "MICRO" else "MESO"
+    LinkMetrics.vehiclesEntered.labels(mode).inc()
+    if (state.isMicroMode) LinkMetrics.vehiclesActive.inc()
   }
 
-  /** Records a vehicle arrival (exit from link). Updates per-tick and cumulative metrics.
+  /** Records a vehicle arrival (exit from link). Updates per-tick, cumulative and Prometheus metrics.
     *
     * @param travelTime
-    *   Travel time through the link (seconds)
+    *   Travel time through the link in ticks
     */
   private def onVehicleArrived(travelTime: Double): Unit = {
     tickArrived += 1
     cumulativeArrived += 1
+    val mode = if (state.isMicroMode) "MICRO" else "MESO"
+    LinkMetrics.vehiclesExited.labels(mode).inc()
+    if (state.isMicroMode) LinkMetrics.vehiclesActive.dec()
     if (travelTime > 0) {
       tickTravelTimeSum += travelTime
+      LinkMetrics.travelTimeTicks.labels(mode).observe(travelTime)
     }
   }
 

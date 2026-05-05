@@ -2,15 +2,18 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
-import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.actor.properties.Properties
-import model.hybrid.entity.state.{ Activity, ArrivalLogistics, PersonState }
-import model.hybrid.entity.event.data.person.{ StartTripData, TripCompletedData }
-import model.hybrid.entity.event.data.bus.{ BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData }
-import model.hybrid.entity.event.data.subway.{ RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
-import model.hybrid.util.{ CityMapUtil, GPSUtil, ModeChoiceUtil }
+import model.hybrid.entity.state.{Activity, ArrivalLogistics, PersonState}
+import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData}
+import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData}
+import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
+import model.hybrid.util.{CityMapUtil, GPSUtil, ModeChoiceUtil}
+
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.metrics.core.ActorMetrics
+import org.interscity.htc.core.metrics.model.hybrid.{GPSMetrics, PersonMetrics}
 
 import scala.collection.mutable
 
@@ -60,7 +63,11 @@ class Person(
       logDebug(
         s"${getEntityId} completed daily schedule (${state.completedTrips} trips, ${state.totalDistanceTraveled}m)"
       )
-      onFinishSpontaneous(None) // Unregister from TimeManager
+      PersonMetrics.completeSchedule.inc()
+      ActorMetrics.spontaneousEventAfterCompletion.labels(
+        getClass.getSimpleName, "spontaneous"
+      ).inc()
+      onFinishSpontaneous(None)
       return
     }
 
@@ -106,11 +113,10 @@ class Person(
   /** Check if current activity's end time has been reached.
     */
   private def isActivityEndTime(activity: Activity): Boolean =
-    try {
-      val endTick = activity.endTime.toLong
-      currentTick >= endTick
-    } catch {
-      case _: NumberFormatException =>
+    effectiveEndTick(activity) match {
+      case Some(endTick) =>
+        currentTick >= endTick
+      case None =>
         logWarn(s"Cannot parse endTime: ${activity.endTime}, assuming time reached")
         true
     }
@@ -118,12 +124,58 @@ class Person(
   /** Calculate ticks until activity end time.
     */
   private def getTickUntilActivityEnd(activity: Activity): Long =
-    try {
-      val endTick = activity.endTime.toLong
-      Math.max(1L, endTick - currentTick)
-    } catch {
-      case _: NumberFormatException =>
-        1L
+    effectiveEndTick(activity)
+      .map(endTick => Math.max(1L, endTick - currentTick))
+      .getOrElse(1L)
+
+  private def parseTick(value: String): Option[Long] =
+    try Some(value.toLong)
+    catch {
+      case _: NumberFormatException => None
+    }
+
+  private def effectiveEndTick(activity: Activity): Option[Long] =
+    parseTick(activity.endTime).map(_ + state.scheduleDelayOffsetTicks)
+
+  private def plannedStartTickForActivity(index: Int): Option[Long] = {
+    val previousIndex = index - 1
+    if (previousIndex >= 0 && previousIndex < state.dailySchedule.length)
+      parseTick(state.dailySchedule(previousIndex).endTime)
+    else
+      None
+  }
+
+  private def updateScheduleDelayOnArrival(arrivedActivityIndex: Int): Unit =
+    plannedStartTickForActivity(arrivedActivityIndex).foreach { plannedStartTick =>
+      val observedDelay = Math.max(0L, currentTick - plannedStartTick)
+      val activityType = state.dailySchedule
+        .lift(arrivedActivityIndex)
+        .map(_.activityType)
+        .getOrElse("unknown")
+
+      PersonMetrics.personArrivalDelayTicks
+        .labels(activityType)
+        .observe(observedDelay.toDouble)
+
+      if (observedDelay > 0L)
+        PersonMetrics.personDelayedArrival.labels(activityType).inc()
+
+      val firstTripDelay =
+        if (arrivedActivityIndex == 1) Some(observedDelay)
+        else state.firstTripDelayTicks
+
+      if (observedDelay > state.scheduleDelayOffsetTicks) {
+        state = state.copy(
+          scheduleDelayOffsetTicks = observedDelay,
+          firstTripDelayTicks = firstTripDelay
+        )
+        logDebug(
+          s"${getEntityId} updated schedule delay offset to ${state.scheduleDelayOffsetTicks}s " +
+            s"after arriving at activity $arrivedActivityIndex"
+        )
+      } else if (arrivedActivityIndex == 1 && state.firstTripDelayTicks.isEmpty) {
+        state = state.copy(firstTripDelayTicks = firstTripDelay)
+      }
     }
 
   /** Start trip to next activity.
@@ -142,6 +194,7 @@ class Person(
               )
               advanceToNextActivity()
             } else {
+              PersonMetrics.personTripStart.labels(nextActivity.activityType, effectiveLogistics.mode).inc()
               initiateTrip(nextActivity, effectiveLogistics)
             }
 
@@ -200,7 +253,12 @@ class Person(
             initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId)
 
           case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-            initiatePTTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
+            // TODO: implement PT when bus/subway routes are active in the scenario.
+            // Currently behaves like car_passenger: teleports to destination using scheduled time.
+            logDebug(
+              s"${getEntityId} PT mode '${logistics.mode}' not yet active, advancing to next activity using scheduled time"
+            )
+            advanceToNextActivity()
 
           case _ =>
             // TODO: model unsupported modes properly when needed.
@@ -221,7 +279,7 @@ class Person(
     * (1.4 m/s typical), and schedules arrival.
     */
   private def initiateWalkingTrip(origin: String, destination: String): Unit =
-    GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
+    GPSUtil.calcRouteALT(originId = origin, destinationId = destination) match {
       case Some((routeCost, routeQueue)) =>
         val totalDistance = calculateRouteDistance(routeQueue)
 
@@ -234,7 +292,8 @@ class Person(
 
         state = state.copy(
           currentTripVehicleId = Some("walking"),
-          currentTripStartTick = Some(currentTick)
+          currentTripStartTick = Some(currentTick),
+          currentTripMode = Some("walk")
         )
 
         logDebug(
@@ -261,6 +320,7 @@ class Person(
 
       case None =>
         logError(s"${getEntityId} cannot find walking route from $origin to $destination")
+        GPSMetrics.gpsCannotFindRoute.labels("person_walking").inc()
         advanceToNextActivity()
     }
 
@@ -306,6 +366,7 @@ class Person(
         state = state.copy(
           currentTripVehicleId = Some(s"pt:${logistics.mode}:$line"),
           currentTripStartTick = Some(currentTick),
+          currentTripMode = Some(logistics.mode),
           ptAlightingNodeId = Some(alightingNode),
           ptLine = Some(line)
         )
@@ -454,7 +515,8 @@ class Person(
             // Update state
             state = state.copy(
               currentTripVehicleId = Some(vehicleRef.id),
-              currentTripStartTick = Some(currentTick)
+              currentTripStartTick = Some(currentTick),
+              currentTripMode = Some(logistics.mode)
             )
 
             logDebug(s"${getEntityId} started trip with ${vehicleRef.id}: $origin -> $destination")
@@ -481,7 +543,12 @@ class Person(
         s"${data.distanceTraveled}m in ${data.travelTime} ticks, reason: ${data.completionReason}"
     )
 
-    val newState = state.completeTrip(data.distanceTraveled)
+    val currentActivityType = state.currentActivity.map(_.activityType).getOrElse("unknown")
+    val currentMode = state.currentTripMode.getOrElse("unknown")
+
+    PersonMetrics.personTripEnd.labels(currentActivityType, currentMode).inc()
+    PersonMetrics.personCompleteTripReason.labels(currentActivityType, currentMode, data.completionReason).inc()
+    state = state.completeTrip(data.distanceTraveled)
 
     report(
       data = Map(
@@ -491,8 +558,8 @@ class Person(
         "distance_traveled" -> data.distanceTraveled,
         "travel_time" -> data.travelTime,
         "completion_reason" -> data.completionReason,
-        "total_distance" -> newState.totalDistanceTraveled,
-        "completed_trips" -> newState.completedTrips,
+        "total_distance" -> state.totalDistanceTraveled,
+        "completed_trips" -> state.completedTrips,
         "tick" -> currentTick
       ),
       label = "person_trip_completed"
@@ -505,10 +572,15 @@ class Person(
     */
   private def advanceToNextActivity(): Unit = {
     if (state.currentTripVehicleId.contains("walking")) {
-      val walkingDistance = 0.0
       state.currentTripStartTick match {
         case Some(startTick) =>
           val travelTime = currentTick - startTick
+
+          val currentActivityType = state.currentActivity.map(_.activityType).getOrElse("unknown")
+          val currentMode = state.currentTripVehicleId.getOrElse("unknown")
+
+          PersonMetrics.personTripEnd.labels(currentActivityType, currentMode).inc()
+          PersonMetrics.personCompleteTripReason.labels(currentActivityType, currentMode, "completed").inc()
 
           report(
             data = Map(
@@ -530,6 +602,9 @@ class Person(
 
     state = state.advanceActivity()
 
+    // Replan activity timing using observed arrival in the simulator timeline.
+    updateScheduleDelayOnArrival(state.currentActivityIndex)
+
     state.currentActivity match {
       case Some(activity) =>
         logDebug(s"${getEntityId} arrived at ${activity.activityType} (${activity.nodeId})")
@@ -548,15 +623,14 @@ class Person(
         )
 
         val endTick =
-          try
-            Math.max(currentTick + 1, activity.endTime.toLong)
-          catch {
-            case _: NumberFormatException => currentTick + 1
-          }
+          effectiveEndTick(activity)
+            .map(effectiveTick => Math.max(currentTick + 1, effectiveTick))
+            .getOrElse(currentTick + 1)
         onFinishSpontaneous(Some(endTick))
 
       case None =>
         logDebug(s"${getEntityId} completed all activities")
+        PersonMetrics.completeSchedule.inc()
 
         report(
           data = Map(

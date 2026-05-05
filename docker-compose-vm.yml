@@ -1,0 +1,303 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# HTC Single-VM Docker Compose
+# ─────────────────────────────────────────────────────────────────────────────
+# Uso:
+#   docker compose -f docker-compose-vm.yml up -d
+#
+# Layout de diretórios na VM (/htc):
+#   /htc/input/<scenario>/      ← upload via rsync/scp dos arquivos de entrada
+#                                  montado em /app/hyperbolic-time-chamber/simulations/input/ no container
+#   /htc/output/                ← relatórios Parquet, JSONL, CSV gerados
+#   /htc/metrics/               ← snapshots de métricas Prometheus
+#   /htc/logs/                  ← logs do simulador
+#
+# Variáveis de ambiente configuráveis (sobrescreva via .env ou export):
+#   HTC_SCENARIO         nome do cenário (ex: toulouse_hybrid_100pct)
+#   HTC_IMAGE            imagem Docker (ex: uxhabam/hyperbolic-time-chamber:2.4.0-beluga)
+#   HTC_JAVA_XMX         heap máxima JVM (ex: 24g)
+#   HTC_TIME_MANAGERS    número de instâncias do TimeManager (ex: 32)
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "100m"
+    max-file: "5"
+
+services:
+
+  # ── Zookeeper ─────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: htc-zookeeper
+    hostname: zookeeper
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: htc-kafka
+    hostname: kafka
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 48
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # ── Schema Registry ────────────────────────────────────────────────────────
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    container_name: htc-schema-registry
+    hostname: schema-registry
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: localhost:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: WARN
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: htc-redis
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    command: redis-server --maxmemory 8gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+
+  # ── HTC Simulator ──────────────────────────────────────────────────────────
+  simulator:
+    image: ${HTC_IMAGE:-uxhabam/hyperbolic-time-chamber:2.6.11-vm}
+    container_name: htc-simulator
+    hostname: node1
+    network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "2g"    # simulação pode durar horas; preserva o histórico completo
+        max-file: "5"     # 5 × 2 GB = até 10 GB de logs rotacionados
+    restart: "no"
+    depends_on:
+      - redis
+      - kafka
+      - schema-registry
+    command: ["java", "-XX:+ZGenerational", "-jar", "app.jar"]
+    cap_add:
+      - SYS_NICE
+    environment:
+      # ── Cluster ───────────────────────────────────────────────────────────
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: 127.0.0.1
+      CLUSTER_NAME: node1
+      SEED_PORT_1600_TCP_ADDR: 127.0.0.1
+
+      # ── Infra ─────────────────────────────────────────────────────────────
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      MANAGEMENT_HTTP_PORT: 8558
+      HTC_METRICS_PORT: 9101
+
+      # ── Cenário ───────────────────────────────────────────────────────────
+      HTC_SCENARIO_NAME: ${HTC_SCENARIO:-toulouse_hybrid_100pct}
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO:-toulouse_hybrid_100pct}/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO:-toulouse_hybrid_100pct}/data/city_map.json
+
+      # ── Output ────────────────────────────────────────────────────────────
+      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_OUTPUT_DIR: /htc/output/reports
+      HTC_REPORT_JSON_INSTANCES: 64    # mesmo do GKE (HTC_REPORT_JSON_INSTANCES=64)
+      HTC_REPORT_JSON_PER_NODE: 64     # 1 nó → todos os writers aqui
+      HTC_REPORT_JSON_BATCH_SIZE: 500  # mesmo do GKE
+
+      # ── Sharding ──────────────────────────────────────────────────────────
+      HTC_SHARD_BUFFER_SIZE: 100000
+      HTC_SIMULATION_ID: ${HTC_SCENARIO:-toulouse_hybrid_100pct}_vm_n2d96
+
+      # ── Load Balance ──────────────────────────────────────────────────────
+      HTC_LOAD_BALANCE_ENABLED: "false"
+      HTC_LOAD_BALANCE_STRATEGY: "default"
+      HTC_LB_MIGRATION_STATE_STORE: "inmemory"
+      HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
+      HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"
+      HTC_LB_KDTREE_LOAD_THRESHOLD: "0.85"
+      HTC_LB_MIGRATION_MAX_CONCURRENT: "5"
+      HTC_LB_MIGRATION_WINDOW_OPEN_DELAY_MS: "500"
+      HTC_LB_MIGRATION_WINDOW_ACK_TIMEOUT_MS: "10000"
+      HTC_LB_MIGRATION_RESTORE_ACK_TIMEOUT_MS: "60000"
+      HTC_LB_MIGRATION_WINDOW_CLOSE_ACK_TIMEOUT_MS: "10000"
+
+      # ── Time Manager ──────────────────────────────────────────────────────
+      # GKE baseline: 16 pods × HTC_TIME_MANAGER_PER_NODE=8 = 128 total
+      HTC_TIME_MANAGER_INSTANCES: ${HTC_TIME_MANAGERS:-128}
+      HTC_TIME_MANAGER_PER_NODE: ${HTC_TIME_MANAGERS:-128}  # 1 nó → todos aqui
+      HTC_TIME_MANAGER_LOOKAHEAD: 10
+      HTC_TIME_MANAGER_WINDOW_SIZE: 20
+      HTC_TIME_MANAGER_METRICS_INTERVAL: 500
+      HTC_TIME_MANAGER_SNAPSHOT_INTERVAL: 10000
+      HTC_TIME_MANAGER_ACTOR_TIMEOUT_MS: 300000
+      HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
+      HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
+      HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+
+      # ── JVM ───────────────────────────────────────────────────────────────
+      # GKE baseline: 16 pods × -Xmx12g = 192g total; usamos 200g com margem
+      JAVA_TOOL_OPTIONS: >-
+        -Xms${HTC_JAVA_XMX:-300g}
+        -Xmx${HTC_JAVA_XMX:-356g}
+        --add-opens=java.base/java.lang=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -XX:+UseZGC -XX:+ZGenerational
+        
+      # ── Kafka ─────────────────────────────────────────────────────────────
+      HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+      HTC_KAFKA_GROUP_ID_SUFFIX: "htc-group"
+      HTC_KAFKA_AUTO_OFFSET_RESET: "earliest"
+      HTC_KAFKA_EVENTS_TOPIC: "htc.events"
+      HTC_KAFKA_REPORTS_TOPIC: "htc.reports"
+      HTC_KAFKA_COMMANDS_TOPIC: "htc.commands"
+      HTC_KAFKA_STATE_SYNC_TOPIC: "htc.state-sync"
+      HTC_KAFKA_ROUTE_REQUESTS_TOPIC: "htc.route-requests"
+      HTC_KAFKA_ROUTE_RESPONSES_TOPIC: "htc.route-responses"
+      HTC_KAFKA_STATUS_TOPIC: "htc.status"
+      HTC_KAFKA_CUSTOM_REPORTS_TOPIC: "htc.custom-reports"
+      HTC_KAFKA_PRODUCER_ACKS: "all"
+      HTC_KAFKA_PRODUCER_RETRIES: "3"
+      HTC_KAFKA_PRODUCER_BATCH_SIZE: "32768"
+      HTC_KAFKA_PRODUCER_LINGER_MS: "10"
+      HTC_KAFKA_PRODUCER_COMPRESSION_TYPE: "snappy"
+      HTC_KAFKA_MAX_POLL_RECORDS: "1000"
+      HTC_KAFKA_ENABLE_AUTO_COMMIT: "true"
+      HTC_KAFKA_EVENT_STREAMING_ENABLED: "false"
+      HTC_KAFKA_REPORTING_ENABLED: "true"
+      HTC_KAFKA_REPORTING_BATCH_SIZE: "100"
+      HTC_KAFKA_REPORTING_USE_AVRO: "true"
+      HTC_KAFKA_STATE_SYNC_ENABLED: "false"
+      HTC_KAFKA_COMMAND_CONTROL_ENABLED: "false"
+      HTC_KAFKA_EXTERNAL_INTEGRATION_ENABLED: "false"
+      HTC_KAFKA_VEHICLE_STREAMING_ENABLED: "true"
+      HTC_KAFKA_VEHICLE_STREAMING_BATCH_SIZE: "2000"
+      HTC_KAFKA_MICRO_SIMULATION_ENABLED: "false"
+
+    volumes:
+      # Entrada: cenário de simulação — montado no caminho esperado pelo container (igual ao GKE)
+      - /htc/input:/app/hyperbolic-time-chamber/simulations/input:ro
+      # Saída: relatórios Parquet, JSONL, CSV
+      - /htc/output:/htc/output
+      # Logs do simulador
+      - /htc/logs:/htc/logs
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  # Coleta métricas JVM + custom do simulador (porta 9101) e do cAdvisor
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: htc-prometheus
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+      - "--web.listen-address=127.0.0.1:9090"
+    volumes:
+      - ./vm/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  # ── cAdvisor: métricas de containers ─────────────────────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: htc-cadvisor
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    privileged: true
+    command:
+      - "--port=9888"
+      - "--store_container_labels=false"
+      - "--whitelisted_container_labels=container_name"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  # ── Node Exporter: métricas da VM (CPU, memória, disco, rede) ─────────────
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: htc-node-exporter
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+      - "--web.listen-address=127.0.0.1:9100"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+
+  # ── Grafana: dashboard de acompanhamento ──────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: htc-grafana
+    network_mode: host
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      GF_SERVER_HTTP_PORT: 3000
+      GF_SERVER_HTTP_ADDR: "0.0.0.0"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: "htcadmin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./vm/grafana-provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+  prometheus_data:
+  grafana_data:
