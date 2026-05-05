@@ -4,7 +4,6 @@ package core.actor.manager.time
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.enumeration.CreationTypeEnum
-import core.metrics.MetricsServer
 import core.types.Tick
 import core.util.{ IdUtil, StringUtil }
 
@@ -12,6 +11,7 @@ import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.*
+import org.interscity.htc.core.metrics.core.{ActorMetrics, TimeManagerMetrics}
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -81,8 +81,8 @@ abstract class LocalTimeManagerBase(
         registeredIdentities.put(event.actorId, identity)
         // Prometheus: track actor registration by type
         val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
-        MetricsServer.actorsRegistered.labels(actorType).inc()
-        MetricsServer.activeActors.labels(actorType).inc()
+        ActorMetrics.actorsRegistered.labels(actorType).inc()
+        ActorMetrics.activeActors.labels(actorType).inc()
     }
     scheduleEvent(
       ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
@@ -102,7 +102,7 @@ abstract class LocalTimeManagerBase(
     // Fix: bump past-tick/same-tick requests to localTickOffset + 1, guaranteeing future processing.
     val effectiveTick = if (event.tick <= localTickOffset) {
       logDebug(
-        s"[TM] ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}"
+        s"ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}"
       )
       localTickOffset + 1
     } else {
@@ -114,7 +114,7 @@ abstract class LocalTimeManagerBase(
 
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-      MetricsServer.eventsProcessed.labels("finish").inc()
+      ActorMetrics.eventsProcessed.labels("finish").inc()
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
 
       // CRITICAL FIX: When scheduleTick is set, add the actor to scheduledActors immediately
@@ -142,7 +142,7 @@ abstract class LocalTimeManagerBase(
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
       // Prometheus: update running events gauge
-      MetricsServer.tmRunningEvents.set(runningEvents.size.toDouble)
+      TimeManagerMetrics.tmRunningEvents.set(runningEvents.size.toDouble)
 
       // If no scheduleTick provided (None), remove actor from ALL future scheduled ticks
       if (finish.scheduleTick.isEmpty) {
@@ -178,14 +178,14 @@ abstract class LocalTimeManagerBase(
 
   private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
-      MetricsServer.eventsProcessed.labels("destruct").inc()
+      ActorMetrics.eventsProcessed.labels("destruct").inc()
       registeredActors.remove(finish.identify.id)
       val removedIdentity = registeredIdentities.remove(finish.identify.id)
       // Prometheus: decrement active actors gauge
       removedIdentity.foreach {
         identity =>
           val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
-          MetricsServer.activeActors.labels(actorType).dec()
+          ActorMetrics.activeActors.labels(actorType).dec()
       }
       sendDestructEvent(finish)
     }
@@ -260,8 +260,8 @@ abstract class LocalTimeManagerBase(
 
   protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
     // Prometheus: track scheduled and dispatched events
-    MetricsServer.tmScheduledActors.set(actorsRef.size.toDouble)
-    MetricsServer.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
+    TimeManagerMetrics.tmScheduledActors.set(actorsRef.size.toDouble)
+    ActorMetrics.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
     actorsRef.foreach {
       identity =>
         runningEvents.add(identity)
@@ -271,7 +271,8 @@ abstract class LocalTimeManagerBase(
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
     if (identity.actorType.isEmpty) {
-      logWarn(s"Actor identity has empty actorType: $identity")
+      logWarn(s"Actor identity has empty actorType, removing from runningEvents to prevent stall: $identity")
+      runningEvents.filterInPlace(_.id != identity.id)
       return
     }
 
@@ -281,7 +282,8 @@ abstract class LocalTimeManagerBase(
       case CreationTypeEnum.PoolDistributed =>
         sendSpontaneousEventPool(tick, identity)
       case _ =>
-        logWarn(s"Unknown creation type: ${identity.actorType} for actor ${identity.id}")
+        logWarn(s"Unknown creation type '${identity.actorType}' for actor ${identity.id}, removing from runningEvents to prevent stall")
+        runningEvents.filterInPlace(_.id != identity.id)
     }
   }
 

@@ -87,7 +87,7 @@ resource "google_storage_bucket_iam_member" "output_bucket_admin" {
 resource "google_service_account_iam_member" "workload_identity_user" {
   service_account_id = google_service_account.htc_sa.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "serviceAccount:you-project-id.svc.id.goog[default/htc-service-account]"
+  member             = "serviceAccount:simedape-362519.svc.id.goog[default/htc-service-account]"
 }
 
 # ─────────────────────────────────────────────

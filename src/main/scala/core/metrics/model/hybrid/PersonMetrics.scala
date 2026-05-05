@@ -1,0 +1,58 @@
+package org.interscity.htc
+package core.metrics.model.hybrid
+
+import io.prometheus.client.{Counter, Gauge, Histogram}
+
+/** Person activity schedule and trip metrics.
+ *
+ *   - htc_person_complete_schedule_total — persons that completed their full daily schedule
+ *   - htc_person_trip_start_total — trip starts by activity type and mode
+ *   - htc_person_trip_end_total — trip ends by activity type and mode
+ *   - htc_person_complete_trip_reason_total — trip completion outcomes by activity type, mode and reason
+ *   - htc_person_arrival_delay_ticks — histogram of arrival delay in ticks by activity type
+ *   - htc_person_delayed_arrival_total — trips where person arrived later than scheduled
+ */
+object PersonMetrics {
+
+  val completeSchedule: Counter = Counter
+    .build()
+    .name("htc_person_complete_schedule_total")
+    .help("Total complete schedules generated for people")
+    .register()
+
+  val personTripStart: Counter = Counter
+    .build()
+    .name("htc_person_activity_start_total")
+    .help("Total person activity start events processed, by activity type")
+    .labelNames("activity_type", "mode")
+    .register()
+
+  val personTripEnd: Counter = Counter
+    .build()
+    .name("htc_person_activity_end_total")
+    .help("Total person activity start events processed, by activity type")
+    .labelNames("activity_type", "mode")
+    .register()
+
+   val personCompleteTripReason: Counter = Counter
+    .build()
+    .name("htc_person_complete_trip_reason_total")
+    .help("Total person activity end events processed, by activity type and reason for completion")
+    .labelNames("activity_type", "mode", "reason")
+    .register()
+
+  val personArrivalDelayTicks: Histogram = Histogram
+    .build()
+    .name("htc_person_arrival_delay_ticks")
+    .help("Observed arrival delay when a person starts an activity (ticks, >= 0)")
+    .labelNames("activity_type")
+    .buckets(0, 1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600)
+    .register()
+
+  val personDelayedArrival: Counter = Counter
+    .build()
+    .name("htc_person_delayed_arrival_total")
+    .help("Total delayed person arrivals (observed delay > 0), by activity type")
+    .labelNames("activity_type")
+    .register()
+}

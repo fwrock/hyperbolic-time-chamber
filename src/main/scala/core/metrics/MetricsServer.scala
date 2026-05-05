@@ -1,253 +1,38 @@
 package org.interscity.htc
 package core.metrics
 
-import io.prometheus.client.Counter
-import io.prometheus.client.Gauge
-import io.prometheus.client.Histogram
 import io.prometheus.client.exporter.HTTPServer
 import io.prometheus.client.hotspot.DefaultExports
 import org.slf4j.LoggerFactory
 
-/** Prometheus metrics server for the HTC simulation.
+/** Prometheus HTTP metrics server.
   *
-  * Exposes JVM metrics (heap, GC, threads, CPU) and custom simulation metrics on the configured
-  * port (default 9001) at /metrics endpoint.
+  * Exposes all registered metrics on the configured port (default 9001) at /metrics.
   *
-  * Automatically registered collectors:
+  * Automatically registered JVM collectors (via [[DefaultExports]]):
   *   - JVM memory (heap, non-heap, pools)
   *   - JVM GC (pause time, count per collector)
   *   - JVM threads (count, states, daemon)
   *   - JVM classloading
   *   - Process CPU, open file descriptors, start time
   *
-  * Custom simulation metrics — grouped by concern:
-  *
-  * ── Simulation Progress ──
-  *   - htc_simulation_ticks_total — global tick counter
-  *   - htc_simulation_current_tick — current global tick gauge
-  *   - htc_simulation_progress_ratio — progress toward configured duration [0,1]
-  *   - htc_tick_duration_seconds — histogram of global tick processing time
-  *
-  * ── Actors ──
-  *   - htc_actors_registered_total — cumulative actors registered on TMs
-  *   - htc_actors_active — gauge of active actors by type
-  *   - htc_events_processed_total — spontaneous events processed (by TM)
-  *
-  * ── Time Manager ──
-  *   - htc_tm_scheduled_actors — actors scheduled on this TM at current tick
-  *   - htc_tm_running_events — spontaneous events currently in-flight
-  *   - htc_tm_waiting_for_progressive — 1 if GTM is blocked waiting for progressive load
-  *
-  * ── Progressive Loading ──
-  *   - htc_progressive_actors_created_total — actors created by progressive loading
-  *   - htc_progressive_loaded_up_to_tick — highest tick fully loaded
-  *   - htc_progressive_windows_loaded_total — number of tick windows completed
-  *
-  * ── Infrastructure ──
-  *   - htc_dead_letters_total — dead letter counter
-  *   - htc_kafka_messages_sent_total — Kafka messages sent counter
+  * Metrics are defined in separate objects by concern:
+  *   - [[SimulationMetrics]] — tick progress
+  *   - [[ActorMetrics]] — actor lifecycle and message exchange
+  *   - [[TimeManagerMetrics]] — time manager state
+  *   - [[ProgressiveLoadingMetrics]] — progressive loading
+  *   - [[PhaseMetrics]] — simulation phase timing
+  *   - [[InfrastructureMetrics]] — dead letters, Kafka
+  *   - [[core.metrics.model.hybrid.MovableMetrics]] — vehicle journey outcomes
+  *   - [[core.metrics.model.hybrid.GPSMetrics]] — GPS routing failures
+  *   - [[core.metrics.model.hybrid.PersonMetrics]] — person activity and trip metrics
+  *   - [[core.metrics.model.hybrid.LinkMetrics]] — road link flow and travel time
+  *   - [[core.metrics.model.hybrid.TrafficSignalMetrics]] — traffic signal phase changes
   */
 object MetricsServer {
 
   private val logger = LoggerFactory.getLogger(getClass)
   private var server: Option[HTTPServer] = None
-
-  val simulationTicks: Counter = Counter
-    .build()
-    .name("htc_simulation_ticks_total")
-    .help("Total number of global simulation ticks processed")
-    .register()
-
-  val currentTick: Gauge = Gauge
-    .build()
-    .name("htc_simulation_current_tick")
-    .help("Current global simulation tick")
-    .register()
-
-  val simulationProgress: Gauge = Gauge
-    .build()
-    .name("htc_simulation_progress_ratio")
-    .help("Simulation progress as ratio of current tick to configured duration [0..1]")
-    .register()
-
-  val tickDuration: Histogram = Histogram
-    .build()
-    .name("htc_tick_duration_seconds")
-    .help("Duration of each global tick cycle in seconds (from all-TMs-reported to next broadcast)")
-    .buckets(0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
-    .register()
-
-  val actorsRegistered: Counter = Counter
-    .build()
-    .name("htc_actors_registered_total")
-    .help("Total actors registered on local time managers")
-    .labelNames("actor_type")
-    .register()
-
-  val activeActors: Gauge = Gauge
-    .build()
-    .name("htc_actors_active")
-    .help("Number of active actors by type")
-    .labelNames("actor_type")
-    .register()
-
-  val eventsProcessed: Counter = Counter
-    .build()
-    .name("htc_events_processed_total")
-    .help("Total spontaneous events dispatched by local time managers")
-    .labelNames("event_type")
-    .register()
-
-  val tmScheduledActors: Gauge = Gauge
-    .build()
-    .name("htc_tm_scheduled_actors")
-    .help("Number of actors scheduled for current tick on this local TM")
-    .register()
-
-  val tmRunningEvents: Gauge = Gauge
-    .build()
-    .name("htc_tm_running_events")
-    .help("Number of spontaneous events currently in-flight on this local TM")
-    .register()
-
-  val tmWaitingForProgressive: Gauge = Gauge
-    .build()
-    .name("htc_tm_waiting_for_progressive")
-    .help("1 if GlobalTimeManager is blocked waiting for progressive load, 0 otherwise")
-    .register()
-
-  val progressiveActorsCreated: Counter = Counter
-    .build()
-    .name("htc_progressive_actors_created_total")
-    .help("Total actors created via progressive loading")
-    .register()
-
-  val progressiveLoadedUpToTick: Gauge = Gauge
-    .build()
-    .name("htc_progressive_loaded_up_to_tick")
-    .help("Highest tick for which all progressive actors are created and initialized")
-    .register()
-
-  val progressiveWindowsLoaded: Counter = Counter
-    .build()
-    .name("htc_progressive_windows_loaded_total")
-    .help("Number of progressive tick windows fully loaded")
-    .register()
-
-  val journeysCompleted: Counter = Counter
-    .build()
-    .name("htc_journeys_completed_total")
-    .help("Total vehicle journeys completed (arrived at destination)")
-    .labelNames("vehicle_type")
-    .register()
-
-  val journeysStarted: Counter = Counter
-    .build()
-    .name("htc_journeys_started_total")
-    .help("Total vehicle journeys started")
-    .labelNames("vehicle_type")
-    .register()
-
-  val deadLetters: Counter = Counter
-    .build()
-    .name("htc_dead_letters_total")
-    .help("Total dead letters in the actor system")
-    .register()
-
-  val kafkaMessagesSent: Counter = Counter
-    .build()
-    .name("htc_kafka_messages_sent_total")
-    .help("Total Kafka messages sent")
-    .labelNames("topic")
-    .register()
-
-  // ── Phase Timing ──────────────────────────────────────────────────────────
-
-  /** Unix timestamp (seconds) when each simulation phase started.
-    *
-    * Phases: config_load, loading, progressive_loading, simulation
-    */
-  val phaseStartTimestamp: Gauge = Gauge
-    .build()
-    .name("htc_phase_start_timestamp_seconds")
-    .help("Unix timestamp (seconds) when each simulation phase started")
-    .labelNames("phase")
-    .register()
-
-  /** Duration (seconds) of each completed simulation phase.
-    *
-    * Set when a phase ends; 0 if not yet completed.
-    */
-  val phaseDurationSeconds: Gauge = Gauge
-    .build()
-    .name("htc_phase_duration_seconds")
-    .help("Wall-clock duration in seconds for each completed simulation phase")
-    .labelNames("phase")
-    .register()
-
-  // ── Journey Outcome by Reason ─────────────────────────────────────────────
-
-  /** Journeys that failed to reach destination, labelled by vehicle type and failure reason.
-    *
-    * Failure reasons (completion_reason field): route_calculation_failed,
-    * exception_during_route_request, null_origin_or_destination, simulation_time_exceeded,
-    * actor_destructed_before_completion
-    */
-  val journeyFailures: Counter = Counter
-    .build()
-    .name("htc_journey_failures_total")
-    .help("Vehicle journeys that did NOT reach destination, by vehicle type and reason")
-    .labelNames("vehicle_type", "reason")
-    .register()
-
-  /** Journeys that successfully reached their destination, by vehicle type. */
-  val journeySuccesses: Counter = Counter
-    .build()
-    .name("htc_journey_successes_total")
-    .help("Vehicle journeys that successfully reached destination, by vehicle type")
-    .labelNames("vehicle_type")
-    .register()
-
-  // ── Message Exchange ──────────────────────────────────────────────────────
-
-  /** Total inter-actor messages sent, labelled by sender actor type and event type.
-    *
-    * Use `rate(htc_messages_sent_total[1m])` in Prometheus to get message throughput.
-    */
-  val messagesSent: Counter = Counter
-    .build()
-    .name("htc_messages_sent_total")
-    .help("Total inter-actor messages sent, by sender type and event type")
-    .labelNames("from_type", "event_type")
-    .register()
-
-  // ── Phase Timing Helpers ──────────────────────────────────────────────────
-
-  /** Records the start of a simulation phase.
-    *
-    * @param phase
-    *   Phase name: "config_load", "loading", "progressive_loading", or "simulation"
-    */
-  def recordPhaseStart(phase: String): Unit = {
-    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
-    phaseStartTimestamp.labels(phase).set(nowSeconds)
-    logger.info(s"[Phase] '$phase' started")
-  }
-
-  /** Records the end of a simulation phase and sets its duration gauge.
-    *
-    * @param phase
-    *   Phase name matching a prior [[recordPhaseStart]] call
-    */
-  def recordPhaseEnd(phase: String): Unit = {
-    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
-    val startSeconds = phaseStartTimestamp.labels(phase).get()
-    if (startSeconds > 0) {
-      val duration = nowSeconds - startSeconds
-      phaseDurationSeconds.labels(phase).set(duration)
-      logger.info(f"[Phase] '$phase' completed in $duration%.2f seconds")
-    }
-  }
 
   /** Start the Prometheus HTTP metrics server.
     *
@@ -275,13 +60,11 @@ object MetricsServer {
     }
   }
 
-  /** Stop the metrics server gracefully.
-    */
+  /** Stop the metrics server gracefully. */
   def stop(): Unit = synchronized {
-    server.foreach {
-      s =>
-        s.close()
-        logger.info("Prometheus metrics server stopped")
+    server.foreach { s =>
+      s.close()
+      logger.info("Prometheus metrics server stopped")
     }
     server = None
   }

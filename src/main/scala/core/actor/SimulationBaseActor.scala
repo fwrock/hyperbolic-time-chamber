@@ -21,9 +21,9 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
-import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.metrics.core.ActorMetrics
 
 import scala.Long.MinValue
 import scala.collection.mutable
@@ -348,6 +348,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           e
         )
     }
+    onFinishInitialize()
   }
 
   /** Return true to opt in to the post-load registration phase. The actor will receive
@@ -402,7 +403,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
-    MetricsServer.messagesSent.labels(getClass.getSimpleName, eventType).inc()
+    ActorMetrics.messagesSent.labels(getClass.getSimpleName, eventType).inc()
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -477,6 +478,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     if (state == null) {
+      ActorMetrics.eventsWhenStateIsNull.labels(
+        getClass.getSimpleName,
+        "spontaneous"
+      ).inc()
       if (!getEntityId.endsWith("-shard-initiator")) {
         logDebug(
           s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
@@ -487,7 +492,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     try actSpontaneous(event)
     catch
-      case e: Exception =>
+      case e: Throwable =>
         logError(
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
@@ -508,7 +513,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The interaction event
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
-    MetricsServer.eventsProcessed.labels("interaction").inc()
+    ActorMetrics.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
     if (event.tick > currentTick) {
       currentTick = event.tick
@@ -681,7 +686,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected def report(event: ReportEvent): Unit = {
     if (reporters.isEmpty) return
     if (event.label != null) {
-      MetricsServer.eventsProcessed.labels(event.label).inc()
+      ActorMetrics.eventsProcessed.labels(event.label).inc()
     }
     val defaultReportType = ReportTypeEnum.valueOf(
       Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")

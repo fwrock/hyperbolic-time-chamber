@@ -17,6 +17,7 @@ import org.interscity.htc.core.entity.event.control.load.PostLoadRegistrationEve
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.PrepareForMigrationEvent
 import core.entity.event.control.migration.SaveMigrationSnapshotEvent
+import org.interscity.htc.core.metrics.core.ActorMetrics
 
 import java.util.UUID
 import scala.compiletime.uninitialized
@@ -68,6 +69,7 @@ abstract class BaseActor[T <: BaseState](
   protected def onFinishInitialize(): Unit =
     if (!isInitialized) {
       isInitialized = true
+      ActorMetrics.actorsInitialized.labels(getClass.getSimpleName).inc()
     }
 
   /** Starts the actor. This method is called when the actor starts before processing messages.
@@ -180,6 +182,7 @@ abstract class BaseActor[T <: BaseState](
     *   The destruction event
     */
   private def destruct(event: DestructEvent): Unit = {
+    ActorMetrics.actorsDestroyed.labels(getClass.getSimpleName).inc()
     onDestruct(event)
     context.stop(self)
   }
