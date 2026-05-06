@@ -83,6 +83,8 @@ class Car(
   override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
     nextTick
   )
+  override protected def selfDestructVehicle(): Unit                     = selfDestruct()
+  override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = if (state == null) 0.0 else state.distance
   override protected def sendVehicleMessage(
     entityId: String,
@@ -334,7 +336,7 @@ class Car(
     }
 
     try
-      GPSUtil.calcRouteALT(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           state.bestCost = cost

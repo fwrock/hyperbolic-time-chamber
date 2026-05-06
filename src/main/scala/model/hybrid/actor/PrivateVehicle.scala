@@ -81,6 +81,8 @@ trait PrivateVehicle[T <: MovableState] {
   protected def getActorShardId: String
   protected def getActorEntityId: String
   protected def scheduleNextTick(nextTick: Option[Tick]): Unit
+  protected def selfDestructVehicle(): Unit
+  protected def isVehicleStateNull: Boolean
   protected def sendVehicleMessage(
     entityId: String,
     shardId: String,
@@ -232,7 +234,7 @@ trait PrivateVehicle[T <: MovableState] {
 
     if (destroyAfterNextPark) {
       logVehicleDebug(s"${getActorEntityId} destructing after final trip (owner schedule complete)")
-      selfDestruct()
+      selfDestructVehicle()
     } else {
       logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
       scheduleNextTick(None)
@@ -306,15 +308,15 @@ trait PrivateVehicle[T <: MovableState] {
   private def handlePersonScheduleComplete(data: PersonScheduleCompleteData): Unit = {
     // Ghost restart: vehicle was rehydrated with null state after prior passivation.
     // Passivate immediately to avoid a stale entity lingering in the shard.
-    if (state == null) {
+    if (isVehicleStateNull) {
       logVehicleDebug(s"${getActorEntityId} ghost restart on PersonScheduleComplete — re-passivating")
-      selfDestruct()
+      selfDestructVehicle()
       return
     }
     if (destroyAfterNextPark) return // already scheduled
     if (isParked) {
       logVehicleDebug(s"${getActorEntityId} owner schedule complete — destructing (Parked)")
-      selfDestruct()
+      selfDestructVehicle()
     } else {
       logVehicleDebug(s"${getActorEntityId} owner schedule complete — will destruct after current trip")
       destroyAfterNextPark = true

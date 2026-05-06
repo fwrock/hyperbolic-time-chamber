@@ -403,4 +403,65 @@ object GPSUtil {
         None
     }
   }
+
+  /** Calcula a rota usando o [[org.interscity.htc.model.hybrid.collections.CompactGraph]] (CSR).
+    *
+    * Alternativa de alto desempenho ao A* baseado em HashMap:
+    *   - Grafo armazenado em arrays primitivos contíguos (cache-friendly)
+    *   - Buffers de busca reutilizados via ThreadLocal — zero alocação por chamada após warmup
+    *   - BitSet para `visited` (61 KB para 488K nós vs ~800 KB de HashSet)
+    *   - Heap binário sem boxing sobre pares (Double, Int)
+    *
+    * O custo final é sempre recomputado com pesos dinâmicos do [[DynamicWeightCache]] (quando
+    * `useDynamicWeights = true`), garantindo que o roteamento reflita congestionamentos em tempo
+    * real.
+    *
+    * O resultado tem o mesmo formato de [[calcRouteALT]] — pode substituí-lo diretamente.
+    *
+    * @param originId         ID do nó de origem.
+    * @param destinationId    ID do nó de destino.
+    * @param useDynamicWeights Se true, aplica pesos dinâmicos do cache durante a busca.
+    * @param maxExpansions    Limite de expansões (default: 150 000 — mesmo que o ALT).
+    * @return Option contendo (custo, Queue[(linkId, nodeId)]) ou None se não houver rota.
+    */
+  def calcRouteCompact(
+    originId: String,
+    destinationId: String,
+    useDynamicWeights: Boolean = true,
+    maxExpansions: Int = 150_000
+  ): Option[(Double, mutable.Queue[(String, String)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val t0 = System.nanoTime()
+    val cg  = CityMapUtil.compactGraph
+    val cli = CityMapUtil.compactAltIndex
+    // Pure array arithmetic heuristic — no HashMap, no object allocation per call.
+    val result = cg.aStarALT(
+      originId,
+      destinationId,
+      (u, t) => cli.heuristic(u, t),
+      useDynamicWeights,
+      maxExpansions
+    )
+    val elapsed = (System.nanoTime() - t0) / 1e9
+
+    result match {
+      case Some((cost, path)) =>
+        GPSMetrics.routeCalcDuration.labels("compact_alt").observe(elapsed)
+        GPSMetrics.routeHops.labels("compact_alt").observe(path.size.toDouble)
+        GPSMetrics.routeSource.labels("gps_calculated").inc()
+        if (elapsed > 1.0)
+          System.err.println(
+            s"[GPSUtil][SLOW] compact A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
+          )
+        Some((cost, path))
+      case None =>
+        System.err.println(
+          s"[GPSUtil] compact A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
+        )
+        GPSMetrics.gpsNodeNotFound.labels("compact_no_route").inc()
+        None
+    }
+  }
 }

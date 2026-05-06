@@ -126,6 +126,8 @@ class Motorcycle(
   override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
     nextTick
   )
+  override protected def selfDestructVehicle(): Unit                     = selfDestruct()
+  override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = state.distance
   override protected def sendVehicleMessage(
     entityId: String,
@@ -381,7 +383,7 @@ class Motorcycle(
       sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRouteALT(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
