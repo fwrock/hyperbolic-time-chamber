@@ -101,7 +101,7 @@ services:
 
   # ── HTC Simulator ──────────────────────────────────────────────────────────
   simulator:
-    image: ${HTC_IMAGE:-uxhabam/hyperbolic-time-chamber:2.6.11-vm}
+    image: ${HTC_IMAGE:-uxhabam/hyperbolic-time-chamber:2.6.13-vm}
     container_name: htc-simulator
     hostname: node1
     network_mode: host
@@ -162,8 +162,8 @@ services:
 
       # ── Time Manager ──────────────────────────────────────────────────────
       # GKE baseline: 16 pods × HTC_TIME_MANAGER_PER_NODE=8 = 128 total
-      HTC_TIME_MANAGER_INSTANCES: ${HTC_TIME_MANAGERS:-128}
-      HTC_TIME_MANAGER_PER_NODE: ${HTC_TIME_MANAGERS:-128}  # 1 nó → todos aqui
+      HTC_TIME_MANAGER_INSTANCES: ${HTC_TIME_MANAGERS:-64}
+      HTC_TIME_MANAGER_PER_NODE: ${HTC_TIME_MANAGERS:-64}  # 1 nó → todos aqui
       HTC_TIME_MANAGER_LOOKAHEAD: 10
       HTC_TIME_MANAGER_WINDOW_SIZE: 20
       HTC_TIME_MANAGER_METRICS_INTERVAL: 500
@@ -174,10 +174,15 @@ services:
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
 
       # ── JVM ───────────────────────────────────────────────────────────────
-      # GKE baseline: 16 pods × -Xmx12g = 192g total; usamos 200g com margem
+      # n2d-highmem-96: 768GB RAM, AMD EPYC 2×NUMA (2×24 cores físicos)
+      # Xmx=600g deixa ~168g para OS + Redis + Kafka + off-heap
+      # SoftMaxHeapSize=480g: ZGC coleta antes de atingir 600g (120g de folga concorrente)
+      # UseNUMA: aloca heap preferencialmente na RAM local de cada NUMA node
       JAVA_TOOL_OPTIONS: >-
-        -Xms${HTC_JAVA_XMX:-300g}
-        -Xmx${HTC_JAVA_XMX:-356g}
+        -Xms576g
+        -Xmx576g
+        -XX:+AlwaysPreTouch
+        -XX:+UseNUMA
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -XX:+UseZGC -XX:+ZGenerational

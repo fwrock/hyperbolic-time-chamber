@@ -37,8 +37,8 @@ import scala.collection.mutable
   * @tparam L Edge label type.
   */
 class LandmarkIndex[V, W, L] private (
-  private val distFrom: IndexedSeq[Map[V, Double]],
-  private val distTo:   IndexedSeq[Map[V, Double]]
+  private[hybrid] val distFrom: IndexedSeq[Map[V, Double]],
+  private[hybrid] val distTo:   IndexedSeq[Map[V, Double]]
 ) {
 
   /** ALT heuristic: admissible lower bound on d(v, target). */

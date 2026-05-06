@@ -279,7 +279,7 @@ class Person(
     * (1.4 m/s typical), and schedules arrival.
     */
   private def initiateWalkingTrip(origin: String, destination: String): Unit =
-    GPSUtil.calcRouteALT(originId = origin, destinationId = destination) match {
+    GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
       case Some((routeCost, routeQueue)) =>
         val totalDistance = calculateRouteDistance(routeQueue)
 
