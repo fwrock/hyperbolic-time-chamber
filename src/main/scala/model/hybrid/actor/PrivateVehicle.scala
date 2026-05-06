@@ -6,7 +6,7 @@ import core.types.Tick
 import model.hybrid.entity.state.{ DriverAttributes, MovableState }
 import model.hybrid.entity.state.enumeration.MovableStatusEnum
 import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Parked, Start }
-import model.hybrid.entity.event.data.person.{ ParkVehicleData, StartTripData, TripCompletedData }
+import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData, TripCompletedData }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.htc.protobuf.core.entity.actor.Identify
@@ -31,6 +31,13 @@ trait PrivateVehicle[T <: MovableState] {
     * Person.
     */
   private var personCentric: Boolean = false
+
+  /** When true, the vehicle will selfDestruct() on the next call to deactivateVehicle().
+    * Set by handlePersonScheduleComplete() when the owning Person completes its daily schedule.
+    * Vehicles that are already Parked self-destruct immediately; active vehicles set this flag
+    * so they clean up after their current trip finishes naturally.
+    */
+  private var destroyAfterNextPark: Boolean = false
 
   /** Whether this vehicle is managed by a Person actor. Determines lifecycle: person-centric →
     * survive between trips; standalone → selfDestruct on finish.
@@ -223,9 +230,13 @@ trait PrivateVehicle[T <: MovableState] {
     tripStartTick = None
     tripStartDistance = 0.0
 
-    logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
-
-    scheduleNextTick(None)
+    if (destroyAfterNextPark) {
+      logVehicleDebug(s"${getActorEntityId} destructing after final trip (owner schedule complete)")
+      selfDestruct()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
+      scheduleNextTick(None)
+    }
   }
 
   /** Apply driver attributes to vehicle physics parameters.
@@ -279,7 +290,34 @@ trait PrivateVehicle[T <: MovableState] {
       case d: TripCompletedData =>
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
+      case d: PersonScheduleCompleteData =>
+        handlePersonScheduleComplete(d)
+        true
       case _ =>
         false
     }
+
+  /** Handle the owner Person completing its daily schedule.
+    *
+    * Parked vehicles self-destruct immediately to free memory.
+    * Active vehicles (mid-trip) set a flag and self-destruct on the next deactivation.
+    * Guards against duplicate signals and ghost-restart edge cases.
+    */
+  private def handlePersonScheduleComplete(data: PersonScheduleCompleteData): Unit = {
+    // Ghost restart: vehicle was rehydrated with null state after prior passivation.
+    // Passivate immediately to avoid a stale entity lingering in the shard.
+    if (state == null) {
+      logVehicleDebug(s"${getActorEntityId} ghost restart on PersonScheduleComplete — re-passivating")
+      selfDestruct()
+      return
+    }
+    if (destroyAfterNextPark) return // already scheduled
+    if (isParked) {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — destructing (Parked)")
+      selfDestruct()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — will destruct after current trip")
+      destroyAfterNextPark = true
+    }
+  }
 }

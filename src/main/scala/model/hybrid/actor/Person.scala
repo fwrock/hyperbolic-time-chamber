@@ -6,7 +6,7 @@ import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.actor.properties.Properties
 import model.hybrid.entity.state.{Activity, ArrivalLogistics, PersonState}
-import model.hybrid.entity.event.data.person.{StartTripData, TripCompletedData}
+import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, StartTripData, TripCompletedData}
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData}
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{CityMapUtil, GPSUtil, ModeChoiceUtil}
@@ -67,7 +67,7 @@ class Person(
       ActorMetrics.spontaneousEventAfterCompletion.labels(
         getClass.getSimpleName, "spontaneous"
       ).inc()
-      onFinishSpontaneous(None)
+      onFinishSpontaneous(None, destruct = true)
       return
     }
 
@@ -643,9 +643,28 @@ class Person(
           label = "person_schedule_complete"
         )
 
-        onFinishSpontaneous(None)
+        // Notify all owned private vehicles so they can self-destruct and free memory.
+        // Parked vehicles destruct immediately; active ones (mid-trip) flag themselves to
+        // destruct after the current trip ends naturally.
+        notifyVehiclesScheduleComplete()
+
+        onFinishSpontaneous(None, destruct = true)
     }
   }
+
+  /** Send PersonScheduleCompleteData to all owned private vehicles.
+    */
+  private def notifyVehiclesScheduleComplete(): Unit =
+    state.ownedVehicles.foreach {
+      case (_, vehicleRef) =>
+        sendMessageTo(
+          entityId = vehicleRef.id,
+          shardId = vehicleRef.classType,
+          data = PersonScheduleCompleteData(personId = getEntityId),
+          eventType = "PersonScheduleComplete",
+          actorType = LoadBalancedDistributed
+        )
+    }
 }
 
 /** Person companion object.
