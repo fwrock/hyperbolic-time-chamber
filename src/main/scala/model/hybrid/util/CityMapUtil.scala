@@ -49,6 +49,21 @@ object CityMapUtil {
     cg
   }
 
+  /** Undirected CompactGraph for pedestrian routing.
+    *
+    * Pedestrians ignore one-way street restrictions (they walk on sidewalks in both directions).
+    * Built by adding a reverse edge for every directed edge — same weight, same link ID.
+    * Uses [[CompactGraph.aStarEuclidean]] (not ALT) because the directed landmark index is
+    * not admissible for an undirected graph.
+    */
+  lazy val compactGraphPedestrian: CompactGraph = {
+    println(s"[CityMapUtil] Building pedestrian CompactGraph (undirected CSR)...")
+    val t0 = System.currentTimeMillis()
+    val cg = CompactGraph.fromLoadedBidirectional(loadedCityData)
+    println(s"[CityMapUtil] Pedestrian CompactGraph ready in ${System.currentTimeMillis() - t0}ms")
+    cg
+  }
+
   /** Pre-computed Contraction Hierarchies index (static). Built once at first access. Use
     * [[getOrRebuildCHIndex]] for traffic-aware rebuilds.
     */
@@ -82,6 +97,32 @@ object CityMapUtil {
     */
   lazy val compactAltIndex: CompactLandmarkIndex =
     CompactLandmarkIndex.fromLandmarkIndex(altIndex, compactGraph.nodeIndex, nodeGraphIdExtractor, compactGraph.n)
+
+  /** Undirected Graph for pedestrian routing — same as [[cityMap]] but with every edge
+    * duplicated in the reverse direction so ALT landmarks are computed on the correct graph.
+    */
+  lazy val pedestrianCityMap: Graph[NodeGraph, Double, EdgeGraph] =
+    cityMap.edges.foldLeft(cityMap) { (g, e) =>
+      g.addEdge(e.target, e.source, e.weight, e.label)
+    }
+
+  /** ALT landmark index built on the undirected [[pedestrianCityMap]].
+    * Admissible on the pedestrian graph (unlike the directed [[altIndex]]).
+    */
+  lazy val altIndexPedestrian: LandmarkIndex[NodeGraph, Double, EdgeGraph] =
+    LandmarkIndex.build(pedestrianCityMap, landmarkCount)
+
+  /** Compact array-based ALT index for zero-allocation pedestrian heuristic evaluation.
+    * Uses [[compactGraphPedestrian]] node indices so that [[CompactGraph.aStarALT]] can be
+    * called directly on the pedestrian graph.
+    */
+  lazy val compactAltIndexPedestrian: CompactLandmarkIndex =
+    CompactLandmarkIndex.fromLandmarkIndex(
+      altIndexPedestrian,
+      compactGraphPedestrian.nodeIndex,
+      nodeGraphIdExtractor,
+      compactGraphPedestrian.n
+    )
 
   /** Static weights indexed by link ID — used for blocked-link threshold checks. */
   lazy val staticWeightsByLinkId: Map[String, Double] =

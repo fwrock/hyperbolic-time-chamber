@@ -413,4 +413,117 @@ object CompactGraph {
       nodeGraphs  = nodeGraphArr
     )
   }
+
+  /** Build an undirected [[CompactGraph]] for pedestrian routing.
+    *
+    * Pedestrians do not obey one-way street restrictions: they walk on sidewalks in both
+    * directions regardless of the vehicle traffic direction. This builder adds a reverse edge
+    * for every directed edge in the original graph with the same weight, making every road
+    * traversable in both directions.
+    *
+    * ==Correctness note==
+    * The ALT [[CompactLandmarkIndex]] is precomputed on the directed vehicle graph and is
+    * therefore NOT admissible for this undirected graph (reverse edges can create shorter paths,
+    * making the directed heuristic overestimate). Callers must use [[aStarEuclidean]] (always
+    * admissible) rather than [[aStarALT]] for pedestrian searches.
+    */
+  def fromLoadedBidirectional(
+    data: LoadedGraphData[NodeGraph, String, Double, EdgeGraph]
+  ): CompactGraph = {
+
+    val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
+    val n                         = nodeList.length
+
+    val nodeIdxMap = new java.util.HashMap[String, Int](n * 2)
+    val nodeIdArr  = new Array[String](n)
+    val latArr     = new Array[Float](n)
+    val lonArr     = new Array[Float](n)
+
+    var i = 0
+    while (i < n) {
+      val node = nodeList(i)
+      nodeIdxMap.put(node.id, i)
+      nodeIdArr(i) = node.id
+      latArr(i)    = node.latitude.toFloat
+      lonArr(i)    = node.longitude.toFloat
+      i += 1
+    }
+
+    // Edge label index (same as directed builder)
+    val m               = data.graph.edges.size
+    val edgeLabelIdxMap = new java.util.HashMap[String, Int](m * 2)
+    val edgeLabelIdList = mutable.ArrayBuffer[String]()
+    data.edgeLabelsById.foreachEntry { (id, _) =>
+      if (!edgeLabelIdxMap.containsKey(id)) {
+        edgeLabelIdxMap.put(id, edgeLabelIdList.size)
+        edgeLabelIdList += id
+      }
+    }
+    val edgeLabelIds = edgeLabelIdList.toArray
+
+    // Count degree: each directed edge contributes +1 to src and +1 to dst (reverse)
+    val degree = new Array[Int](n)
+    data.graph.edges.foreach { e =>
+      val src = nodeIdxMap.get(e.source.id)
+      val dst = nodeIdxMap.get(e.target.id)
+      degree(src) += 1
+      if (src != dst) degree(dst) += 1 // avoid self-loop duplication
+    }
+
+    val rowPtr = new Array[Int](n + 1)
+    i = 0
+    while (i < n) {
+      rowPtr(i + 1) = rowPtr(i) + degree(i)
+      i += 1
+    }
+
+    val totalEdges = rowPtr(n)
+    val colIdx     = new Array[Int](totalEdges)
+    val edgeWt     = new Array[Double](totalEdges)
+    val edgeIdxArr = new Array[Int](totalEdges)
+    val cursor     = rowPtr.clone()
+
+    data.graph.edges.foreach { e =>
+      val src  = nodeIdxMap.get(e.source.id)
+      val dst  = nodeIdxMap.get(e.target.id)
+      val eIdx = edgeLabelIdxMap.get(e.label.id)
+
+      // Forward edge
+      val fpos = cursor(src)
+      colIdx(fpos)     = dst
+      edgeWt(fpos)     = e.weight
+      edgeIdxArr(fpos) = eIdx
+      cursor(src)     += 1
+
+      // Reverse edge (pedestrians can walk against traffic direction)
+      if (src != dst) {
+        val rpos = cursor(dst)
+        colIdx(rpos)     = src
+        edgeWt(rpos)     = e.weight
+        edgeIdxArr(rpos) = eIdx
+        cursor(dst)     += 1
+      }
+    }
+
+    val nodeGraphArr = new Array[NodeGraph](n)
+    var j = 0
+    while (j < n) {
+      nodeGraphArr(j) = nodeList(j)
+      j += 1
+    }
+
+    new CompactGraph(
+      n           = n,
+      rowPtr      = rowPtr,
+      colIdx      = colIdx,
+      edgeWeight  = edgeWt,
+      edgeIdx     = edgeIdxArr,
+      nodeLat     = latArr,
+      nodeLon     = lonArr,
+      nodeIds     = nodeIdArr,
+      edgeIds     = edgeLabelIds,
+      nodeIndex   = nodeIdxMap,
+      nodeGraphs  = nodeGraphArr
+    )
+  }
 }

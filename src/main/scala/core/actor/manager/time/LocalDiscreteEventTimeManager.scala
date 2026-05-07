@@ -54,7 +54,36 @@ class LocalDiscreteEventTimeManager(
     *   The tick to process
     */
   protected def processTick(tick: Tick): Unit = {
-    scheduledActors.get(tick).foreach {
+    // Process ALL events scheduled at ticks <= tick, not just exactly at tick.
+    // This prevents "orphaned" actors: when the GTM's selective barrier sends
+    // UpdateGlobalTimeEvent(T_big) to an LTM that has a car scheduled at T_small < T_big
+    // (because a Car's ScheduleEvent arrived in the LTM mailbox just before the UGT),
+    // the car would be filtered out by nextTick (which requires tick >= localTickOffset).
+    // By identifying and processing skipped ticks, we ensure those in-flight registrations
+    // are executed rather than orphaned and force-destroyed.
+    //
+    // IMPORTANT: We process exactly one tick's actors at a time (the earliest available
+    // tick <= globalTick). When those actors finish, advanceToNextTick → processTick is
+    // called again and will find the next skipped tick. This preserves the discrete-event
+    // ordering invariant: no actors at tick T+1 fire before all actors at tick T finish.
+    //
+    // We also update localTickOffset to effectiveTick so that subsequent ScheduleEvents
+    // sent by the actor (e.g. car schedules at effectiveTick+linkTime) are NOT bumped to
+    // localTickOffset+1 (which would be T_big+1 if we left localTickOffset as T_big).
+    val effectiveTick = scheduledActors.keys.filter(_ <= tick).minOption.getOrElse(tick)
+
+    // Reset localTickOffset to effectiveTick so that ScheduleEvents from this actor's
+    // actSpontaneous (e.g. Car entering a link at effectiveTick+linkTraversalTime) are
+    // scheduled at the correct future tick rather than being bumped to T_big+1.
+    if (effectiveTick < localTickOffset) {
+      logInfo(
+        s"[LocalDiscreteEvent] Rewinding localTickOffset from $localTickOffset to $effectiveTick to process skipped tick"
+      )
+      localTickOffset = effectiveTick
+      tickOffset = effectiveTick - initialTick
+    }
+
+    scheduledActors.get(effectiveTick).foreach {
       actorsSet =>
         val actorTypes = actorsSet.groupBy(_.classType).view.mapValues(_.size).toMap
         val actorSummary = actorTypes.map {
@@ -62,24 +91,28 @@ class LocalDiscreteEventTimeManager(
             s"${classType.split('.').lastOption.getOrElse(classType)}=$count"
         }.mkString(", ")
 
-        if (tick % 1000 == 0 || actorsSet.size > TICK_BATCH_SIZE) {
+        if (effectiveTick != tick) {
           logInfo(
-            s"[LocalDiscreteEvent] Processing tick $tick with ${actorsSet.size} scheduled actors ($actorSummary)"
+            s"[LocalDiscreteEvent] Processing skipped tick $effectiveTick (globalTick=$tick) with ${actorsSet.size} actors ($actorSummary)"
+          )
+        } else if (effectiveTick % 1000 == 0 || actorsSet.size > TICK_BATCH_SIZE) {
+          logInfo(
+            s"[LocalDiscreteEvent] Processing tick $effectiveTick with ${actorsSet.size} scheduled actors ($actorSummary)"
           )
         }
 
         if (actorsSet.size <= TICK_BATCH_SIZE) {
           // Small set — fire all at once (original fast path)
-          sendSpontaneousEvent(tick, actorsSet)
+          sendSpontaneousEvent(effectiveTick, actorsSet)
         } else {
           // Large set — queue and fire in batches to prevent system overload
-          currentBatchTick = tick
+          currentBatchTick = effectiveTick
           pendingTickActors.enqueueAll(actorsSet)
           fireNextBatch()
         }
     }
-    scheduledActors.remove(tick)
-    scheduledTicksOnFinish.remove(tick)
+    scheduledActors.remove(effectiveTick)
+    scheduledTicksOnFinish.remove(effectiveTick)
 
     // Only advance if nothing running and nothing pending
     if (runningEvents.isEmpty && pendingTickActors.isEmpty) {

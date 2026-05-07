@@ -235,25 +235,25 @@ data:
         },
         {
           "id": 10, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
-          "title": "Simulation Ticks (por pod)",
+          "title": "Simulation Ticks (cluster total)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "rate(htc_simulation_ticks_total{job=\"htc-simulation\"}[1m])",
-            "legendFormat": "{{pod}} ticks/s"
+            "expr": "sum(rate(htc_simulation_ticks_total{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "ticks/s"
           }],
           "fieldConfig": {"defaults": {"unit": "reqps"}}
         },
         {
           "id": 11, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
-          "title": "Atores Ativos (por tipo)",
+          "title": "Atores Ativos (por tipo, cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_actors_active{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} {{actor_type}}"
+            "expr": "sum by (actor_type) (htc_actors_active{job=\"htc-simulation\"})",
+            "legendFormat": "{{actor_type}}"
           }]
         },
         {
@@ -279,8 +279,8 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_simulation_current_tick{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "max(htc_simulation_current_tick{job=\"htc-simulation\"})",
+            "legendFormat": "tick"
           }],
           "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "blue", "value": null}]}}}
         },
@@ -291,47 +291,47 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_simulation_progress_ratio{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "max(htc_simulation_progress_ratio{job=\"htc-simulation\"})",
+            "legendFormat": "progresso"
           }],
           "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.25}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 0.75}]}}}
         },
         {
           "id": 18, "gridPos": {"h": 6, "w": 12, "x": 12, "y": 64},
-          "title": "Atores Registrados (total por tipo)",
+          "title": "Atores Registrados (total por tipo, cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_actors_registered_total{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} {{actor_type}}"
+            "expr": "sum by (actor_type) (htc_actors_registered_total{job=\"htc-simulation\"})",
+            "legendFormat": "{{actor_type}}"
           }]
         },
         {
           "id": 19, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 70},
-          "title": "Eventos Processados/s (por tipo)",
+          "title": "Eventos Processados/s (por tipo, cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
-            "legendFormat": "{{pod}} {{event_type}}"
+            "expr": "sum by (event_type) (rate(htc_events_processed_total{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "{{event_type}}"
           }],
           "fieldConfig": {"defaults": {"unit": "reqps"}}
         },
         {
           "id": 20, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 70},
-          "title": "Time Manager — Estado Interno",
+          "title": "Time Manager — Estado Interno (cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_tm_scheduled_actors{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} scheduled"
+            "expr": "sum(htc_tm_scheduled_actors{job=\"htc-simulation\"})",
+            "legendFormat": "scheduled (total)"
           }, {
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_tm_running_events{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} running"
+            "expr": "sum(htc_tm_running_events{job=\"htc-simulation\"})",
+            "legendFormat": "running (total)"
           }]
         },
         {
@@ -341,8 +341,8 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_tm_waiting_for_progressive{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "max(htc_tm_waiting_for_progressive{job=\"htc-simulation\"})",
+            "legendFormat": ""
           }],
           "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Running", "color": "green"}, "1": {"text": "Waiting", "color": "orange"}}}]}}
         },
@@ -353,8 +353,8 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_progressive_loaded_up_to_tick{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "max(htc_progressive_loaded_up_to_tick{job=\"htc-simulation\"})",
+            "legendFormat": ""
           }],
           "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "blue", "value": null}]}}}
         },
@@ -365,8 +365,8 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_progressive_actors_created_total{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "sum(htc_progressive_actors_created_total{job=\"htc-simulation\"})",
+            "legendFormat": ""
           }],
           "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "purple", "value": null}]}}}
         },
@@ -377,20 +377,20 @@ data:
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_progressive_windows_loaded_total{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}}"
+            "expr": "sum(htc_progressive_windows_loaded_total{job=\"htc-simulation\"})",
+            "legendFormat": ""
           }],
           "fieldConfig": {"defaults": {"unit": "none", "thresholds": {"steps": [{"color": "purple", "value": null}]}}}
         },
         {
           "id": 25, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 84},
-          "title": "Viagens Completadas (por tipo de veículo)",
+          "title": "Viagens Completadas (por tipo de veículo, cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "htc_journeys_completed_total{job=\"htc-simulation\"}",
-            "legendFormat": "{{pod}} {{vehicle_type}}"
+            "expr": "sum by (vehicle_type) (htc_journeys_completed_total{job=\"htc-simulation\"})",
+            "legendFormat": "{{vehicle_type}}"
           }]
         },
         {
@@ -411,13 +411,13 @@ data:
         },
         {
           "id": 27, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 92},
-          "title": "Eventos por Tipo (taxa/s)",
+          "title": "Eventos por Tipo (taxa/s, cluster)",
           "type": "timeseries",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "targets": [{
             "datasource": {"type": "prometheus", "uid": "prometheus"},
-            "expr": "rate(htc_events_processed_total{job=\"htc-simulation\"}[1m])",
-            "legendFormat": "{{pod}} {{event_type}}"
+            "expr": "sum by (event_type) (rate(htc_events_processed_total{job=\"htc-simulation\"}[1m]))",
+            "legendFormat": "{{event_type}}"
           }],
           "fieldConfig": {"defaults": {"unit": "reqps"}}
         }
@@ -478,6 +478,9 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards
             - name: dashboards-data
               mountPath: /var/lib/grafana/dashboards
+            - name: dashboards-simulation
+              mountPath: /var/lib/grafana/dashboards/htc-simulation.json
+              subPath: htc-simulation.json
             - name: storage
               mountPath: /var/lib/grafana
         # ── Grafana Image Renderer sidecar ─────────────────────────
@@ -508,6 +511,9 @@ spec:
         - name: dashboards-data
           configMap:
             name: grafana-dashboard-htc
+        - name: dashboards-simulation
+          configMap:
+            name: grafana-dashboard-htc-simulation
         - name: storage
           emptyDir: {}
 ---

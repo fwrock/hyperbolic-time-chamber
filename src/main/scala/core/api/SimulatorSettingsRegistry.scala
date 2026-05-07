@@ -132,6 +132,13 @@ object SimulatorSettingsRegistry {
       "HTC_MOBILITY_CITY_MAP_FILE",
       "Path to the city map JSON (Node/Link graph). Required for mobility simulations.",
       "city_map.json"
+    ),
+    SettingDef(
+      "htc.person.truncate-schedule-beyond-duration",
+      "HTC_PERSON_TRUNCATE_SCHEDULE",
+      "When true, removes Person activities whose endTime > simulation duration at actor startup. " +
+        "Use when the input data contains multi-day schedules but the simulation runs only 1 day.",
+      "false"
     )
   )
 

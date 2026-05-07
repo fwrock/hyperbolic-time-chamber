@@ -23,20 +23,30 @@ data:
     scrape_configs:
 
       # ── 1. Pods HTC: métricas da simulação (porta 9001) ──────────
+      # Usa pod IP diretamente em vez de filtrar por container_port_number.
+      # O filtro por port_number falha quando o pod tem múltiplas portas
+      # declaradas, gerando targets duplicados ou zero para alguns pods.
+      # Resultado: TODOS os 16 pods são coletados, incluindo os não-seed.
       - job_name: 'htc-simulation'
         kubernetes_sd_configs:
           - role: pod
             namespaces:
               names: [default]
         relabel_configs:
-          # Filtrar apenas pods HTC
+          # Manter apenas pods HTC
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: htc-node
             action: keep
-          # Usar a porta de métricas
-          - source_labels: [__meta_kubernetes_pod_container_port_number]
-            regex: "9001"
+          # Manter apenas pods em execução (Running), ignorar Pending/Terminating
+          - source_labels: [__meta_kubernetes_pod_phase]
+            regex: Running
             action: keep
+          # Definir o endereço de scrape como pod_ip:9001 (explícito)
+          # Evita dependência do __meta_kubernetes_pod_container_port_number
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            replacement: '${1}:9001'
+            target_label: __address__
           # Labels úteis para identificar pod/nó
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod

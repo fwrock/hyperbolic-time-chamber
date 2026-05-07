@@ -193,6 +193,12 @@ class SimulationManager(
     PhaseMetrics.recordPhaseEnd("config_load")
     configuration = event.config
     configLoadInProgress = false
+    // Publish duration so actors (e.g. Person) can read it without needing a reference to
+    // the configuration object.
+    org.interscity.htc.core.api.SimulatorSettingsRegistry.set(
+      "htc.simulation.duration",
+      configuration.duration.toString
+    )
     prepareSimulation()
   }
 

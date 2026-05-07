@@ -464,4 +464,53 @@ object GPSUtil {
         None
     }
   }
+
+  /** A* on the undirected pedestrian graph (Euclidean heuristic, no dynamic weights).
+    *
+    * Pedestrians ignore one-way restrictions — every directed road edge is traversable in both
+    * directions. The directed ALT [[CompactLandmarkIndex]] is NOT used here: landmark distances
+    * computed on a directed graph can overestimate shortest paths on the undirected graph,
+    * making the heuristic inadmissible. The flat-Earth Euclidean heuristic is always admissible
+    * (distance in metres ≤ true path length) regardless of graph direction.
+    *
+    * Dynamic weights are not applied for walking (link congestion affects vehicle speed, not
+    * pedestrian walking speed).
+    */
+  def calcRouteCompactWalking(
+    originId:      String,
+    destinationId: String,
+    maxExpansions: Int = 200_000
+  ): Option[(Double, mutable.Queue[(String, String)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val t0 = System.nanoTime()
+    val cg = CityMapUtil.compactGraphPedestrian
+    val result = cg.aStarALT(
+      originId,
+      destinationId,
+      altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
+      useDynamicWeights = false,
+      maxExpansions     = maxExpansions
+    )
+    val elapsed = (System.nanoTime() - t0) / 1e9
+
+    result match {
+      case Some((cost, path)) =>
+        GPSMetrics.routeCalcDuration.labels("compact_walking").observe(elapsed)
+        GPSMetrics.routeHops.labels("compact_walking").observe(path.size.toDouble)
+        GPSMetrics.routeSource.labels("gps_calculated").inc()
+        if (elapsed > 1.0)
+          System.err.println(
+            s"[GPSUtil][SLOW] walking A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
+          )
+        Some((cost, path))
+      case None =>
+        System.err.println(
+          s"[GPSUtil] walking A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
+        )
+        GPSMetrics.gpsNodeNotFound.labels("walking_no_route").inc()
+        None
+    }
+  }
 }
