@@ -4,6 +4,7 @@ package core.actor.manager.time
 import core.actor.manager.time.{GlobalTimeManager, TimeManagerBase}
 import core.entity.control.{LocalTimeManagerTickInfo, ScheduledActors}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
+import core.entity.event.control.execution.QueryNextTickEvent
 import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.state.DefaultState
@@ -65,6 +66,11 @@ class GlobalTimeManager(
 
   // Tick duration measurement — tracks wall-clock time between global tick broadcasts
   private var lastTickBroadcastNanos: Long = 0L
+
+  // Grace period for "no scheduled events" detection: when all LTMs report idle, GTM sends
+  // one round of QueryNextTickEvent to all LTMs before terminating. This catches in-flight
+  // ScheduleEvents (e.g. Car.handleStartTrip arriving just after Person's LTM reported idle).
+  private var gracePeriodUsed = false
 
   // Progressive load timing — tracks wall-clock time per window and blocked wait
   private var progressiveLoadRequestedNanos: Long = 0L
@@ -282,6 +288,15 @@ class GlobalTimeManager(
   }
 
   private def calculateAndBroadcastNextGlobalTick(): Unit = {
+    // Once terminated, ignore any stale re-notifications from LTMs (e.g. wasIdle re-reports
+    // that arrive after the StopSimulationEvent has already been broadcast). Without this
+    // guard, a late LocalTimeReportEvent could trigger a "phantom" UpdateGlobalTimeEvent
+    // broadcast to LTMs that have already received StopSimulationEvent, causing a race
+    // between processing the phantom tick and force-destroying actors.
+    if (isTerminated) {
+      return
+    }
+
     // If migration pause is active, do NOT advance to the next tick.
     // The TimeManager waits until LoadBalanceManager sends MigrationCompleteNotifyEvent.
     if (migrationPauseRequested) {
@@ -315,11 +330,26 @@ class GlobalTimeManager(
         requestProgressiveLoad(nextLoadTick)
         return
       }
+      // GRACE PERIOD FIX: After all LTMs report idle the first time, broadcast QueryNextTickEvent
+      // to all LTMs. This flushes any in-flight ScheduleEvents (e.g. from Car.handleStartTrip that
+      // arrived at the LTM after the LTM reported hasScheduled=false to us). LTMs will re-report
+      // via LocalTimeReportEvent. The second round of reports either reveals new scheduled work or
+      // confirms genuine idleness, at which point we terminate.
+      if (!gracePeriodUsed) {
+        gracePeriodUsed = true
+        logInfo("No scheduled events: broadcasting QueryNextTickEvent grace-period probe to all LTMs")
+        localTimeManagers.keys.foreach { tm =>
+          localTimeManagers.update(tm, localTimeManagers(tm).copy(isProcessed = false))
+          tm ! QueryNextTickEvent
+        }
+        return
+      }
       logInfo("No more scheduled events across local time managers. Terminating simulation")
       terminateSimulation()
       return
     }
 
+    gracePeriodUsed = false  // Reset whenever we have scheduled work
     val nextTick = scheduled.map(_.tick).min
 
     // ── Prometheus: tick metrics ──

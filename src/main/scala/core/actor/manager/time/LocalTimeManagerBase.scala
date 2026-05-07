@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.entity.event.control.execution.TimeManagerRegisterEvent
+import core.entity.event.control.execution.QueryNextTickEvent
 import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.enumeration.CreationTypeEnum
 import core.types.Tick
@@ -15,6 +16,9 @@ import org.interscity.htc.core.metrics.core.{ActorMetrics, TimeManagerMetrics}
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
+import java.nio.file.{ Files, Paths, StandardOpenOption }
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /** Base abstract class for local time managers. Local time managers handle the actual execution of
   * simulation events and report progress back to the global time manager.
@@ -55,6 +59,7 @@ abstract class LocalTimeManagerBase(
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
     case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
+    case QueryNextTickEvent              => reportGlobalTimeManager(hasScheduled = nextTick.isDefined)
     case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>
       stopSimulation()
       forceDestructActiveActors()
@@ -108,8 +113,22 @@ abstract class LocalTimeManagerBase(
     } else {
       event.tick
     }
+    // RACE CONDITION FIX: Track whether this TM was previously idle (no scheduled actors
+    // and no running events) before adding the new actor. When Person sends StartTrip to
+    // Car and calls onFinishSpontaneous(None), the TM reports hasScheduled=false to GlobalTM.
+    // Car then asynchronously calls scheduleEvent. Without re-notification, GlobalTM may decide
+    // "no more events" and terminate before Car's spontaneous event is ever dispatched.
+    val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
     val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
+    // If TM was idle before this ScheduleEvent, wake up GlobalTM so it knows there is
+    // new work and won't terminate the simulation prematurely.
+    if (wasIdle && runningEvents.isEmpty) {
+      logDebug(
+        s"scheduleEvent: TM was idle, re-notifying GlobalTM (tick=$effectiveTick, actor=${event.identify.map(_.id).getOrElse("?")})"
+      )
+      reportGlobalTimeManager(hasScheduled = true)
+    }
   }
 
   protected def finishEvent(finish: FinishEvent): Unit =
@@ -312,8 +331,8 @@ abstract class LocalTimeManagerBase(
   private def forceDestructActiveActors(): Unit = {
     val identitiesToDestruct = mutable.Map[String, Identify]()
 
-    scheduledActors.values.foreach {
-      identities =>
+    scheduledActors.foreach {
+      case (tick, identities) =>
         identities.foreach {
           identity =>
             identitiesToDestruct.put(identity.id, identity)
@@ -326,9 +345,29 @@ abstract class LocalTimeManagerBase(
     }
 
     if (identitiesToDestruct.nonEmpty) {
+      val typeSummary = identitiesToDestruct.values
+        .groupBy(id => id.classType.split('.').lastOption.getOrElse(id.classType))
+        .view.mapValues(_.size).toMap
+        .map { case (t, n) => s"$t=$n" }.mkString(", ")
+
       logInfo(
-        s"Force-destructing ${identitiesToDestruct.size} active/scheduled actors on simulation stop"
+        s"Force-destructing ${identitiesToDestruct.size} active/scheduled actors on simulation stop" +
+        s" (localTickOffset=$localTickOffset). Types: [$typeSummary]"
       )
+
+      try {
+        val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+        val fileName = s"/tmp/htc-force-destruct-$timestamp.log"
+        val tickDetail = scheduledActors.toSeq.sortBy(_._1).map { case (tick, ids) =>
+          val byType = ids.groupBy(id => id.classType.split('.').lastOption.getOrElse(id.classType)).view.mapValues(_.size).toMap
+          s"tick=$tick(${byType.map { case (t, n) => s"$t=$n" }.mkString(",")})"
+        }.mkString("\n")
+        val content = s"localTickOffset=$localTickOffset\ntypes=[$typeSummary]\n\nScheduled ticks:\n$tickDetail\n"
+        Files.writeString(Paths.get(fileName), content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+        logInfo(s"Force-destruct details written to $fileName")
+      } catch {
+        case e: Exception => logWarn(s"Could not write force-destruct details to file: ${e.getMessage}")
+      }
     }
 
     identitiesToDestruct.values.foreach(sendDestructEvent)

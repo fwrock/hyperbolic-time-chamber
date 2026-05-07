@@ -11,6 +11,8 @@ import io.prometheus.client.{Counter, Gauge, Histogram}
  *   - htc_person_complete_trip_reason_total — trip completion outcomes by activity type, mode and reason
  *   - htc_person_arrival_delay_ticks — histogram of arrival delay in ticks by activity type
  *   - htc_person_delayed_arrival_total — trips where person arrived later than scheduled
+ *   - htc_person_truncated_activity_total — activities removed due to endTime > simulation duration
+ *   - htc_person_truncated_activity_excess_ticks — histogram of how far beyond sim duration each removed activity was
  */
 object PersonMetrics {
 
@@ -54,5 +56,21 @@ object PersonMetrics {
     .name("htc_person_delayed_arrival_total")
     .help("Total delayed person arrivals (observed delay > 0), by activity type")
     .labelNames("activity_type")
+    .register()
+
+  val personTruncatedActivity: Counter = Counter
+    .build()
+    .name("htc_person_truncated_activity_total")
+    .help("Total activities removed because endTime exceeded simulation duration, by activity type")
+    .labelNames("activity_type")
+    .register()
+
+  // Buckets in ticks (seconds): 1min, 5min, 15min, 30min, 1h, 2h, 4h, 8h, 12h, 24h, 48h, +Inf
+  val personTruncatedActivityExcessTicks: Histogram = Histogram
+    .build()
+    .name("htc_person_truncated_activity_excess_ticks")
+    .help("Distribution of how many ticks beyond simulation duration each removed activity falls (endTime - duration), by activity type")
+    .labelNames("activity_type")
+    .buckets(60, 300, 900, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800)
     .register()
 }

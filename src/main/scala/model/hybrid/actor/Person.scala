@@ -11,6 +11,7 @@ import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnl
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{CityMapUtil, GPSUtil, ModeChoiceUtil}
 
+import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.metrics.core.ActorMetrics
 import org.interscity.htc.core.metrics.model.hybrid.{GPSMetrics, PersonMetrics}
@@ -41,6 +42,10 @@ class Person(
       properties = properties
     ) {
 
+  // Truncation is deferred to the first actSpontaneous so that SimulationManager has already
+  // published htc.simulation.duration to SimulatorSettingsRegistry before we run.
+  private var scheduleAlreadyTruncated: Boolean = false
+
   /** Person should only re-register on the TM after migration if it was actually registered at
     * migration time. During vehicle trips (and PT trips), Person calls onFinishSpontaneous(None)
     * and yields TM ownership to the vehicle. Walking trips keep Person on TM (scheduled to wake at
@@ -51,7 +56,74 @@ class Person(
       state.isSetScheduleOnTimeManager &&
       state.currentTripVehicleId.forall(_ == "walking")
 
+  /** Truncate activities whose endTime exceeds the simulation duration.
+    *
+    * Called lazily on the first actSpontaneous (not onStart) so that SimulationManager has
+    * already published htc.simulation.duration to SimulatorSettingsRegistry.
+    */
+  private def applyScheduleTruncationIfNeeded(): Unit =
+    if (!scheduleAlreadyTruncated) {
+      scheduleAlreadyTruncated = true
+
+      val truncate = SimulatorSettingsRegistry
+        .get("htc.person.truncate-schedule-beyond-duration")
+        .orElse(sys.env.get("HTC_PERSON_TRUNCATE_SCHEDULE"))
+        .orElse(
+          scala.util.Try(
+            context.system.settings.config.getString("htc.person.truncate-schedule-beyond-duration")
+          ).toOption
+        )
+        .exists(_.equalsIgnoreCase("true"))
+
+      if (truncate && state != null && state.dailySchedule.nonEmpty) {
+        SimulatorSettingsRegistry
+          .get("htc.simulation.duration")
+          .flatMap(s => scala.util.Try(s.toLong).toOption) match {
+          case None =>
+            logWarn(s"${getEntityId} htc.simulation.duration not set in registry — schedule truncation skipped")
+          case Some(duration) =>
+            val (filtered, removedActivities) = state.dailySchedule.partition { activity =>
+              scala.util.Try(activity.endTime.toLong).toOption.forall(_ <= duration)
+            }
+            val removed = removedActivities.size
+            if (removed > 0) {
+              val byType = removedActivities.groupBy(_.activityType).view.mapValues(_.size).toMap
+              byType.foreach { case (actType, count) =>
+                PersonMetrics.personTruncatedActivity.labels(actType).inc(count.toDouble)
+              }
+              // Histogram: how many ticks beyond sim duration each removed activity falls
+              removedActivities.foreach { activity =>
+                scala.util.Try(activity.endTime.toLong).toOption.foreach { endTick =>
+                  val excess = (endTick - duration).toDouble
+                  PersonMetrics.personTruncatedActivityExcessTicks
+                    .labels(activity.activityType)
+                    .observe(excess)
+                }
+              }
+              report(
+                data = Map(
+                  "event_type"          -> "schedule_truncated",
+                  "person_id"           -> getEntityId,
+                  "removed_count"       -> removed,
+                  "remaining_count"     -> filtered.size,
+                  "simulation_duration" -> duration,
+                  "removed_by_type"     -> byType.map { case (t, c) => s"$t=$c" }.mkString(",")
+                ),
+                label = "person_schedule_truncated"
+              )
+              logDebug(
+                s"${getEntityId} truncated $removed activities with endTime > $duration" +
+                  s" (${filtered.size} remaining): ${byType.map { case (t, c) => s"$t=$c" }.mkString(", ")}"
+              )
+              state = state.copy(dailySchedule = filtered)
+            }
+        }
+      }
+    }
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    applyScheduleTruncationIfNeeded()
+
     if (state == null) {
       logWarn(
         s"${getEntityId} actSpontaneous called with null state at tick=$currentTick — unscheduling"
@@ -67,6 +139,7 @@ class Person(
       ActorMetrics.spontaneousEventAfterCompletion.labels(
         getClass.getSimpleName, "spontaneous"
       ).inc()
+      notifyVehiclesScheduleComplete()
       onFinishSpontaneous(None, destruct = true)
       return
     }
@@ -204,8 +277,9 @@ class Person(
         }
 
       case None =>
-        logDebug(s"${getEntityId} has no more activities")
-        onFinishSpontaneous(None)
+        logDebug(s"${getEntityId} has no more activities, finishing")
+        notifyVehiclesScheduleComplete()
+        onFinishSpontaneous(None, destruct = true)
     }
 
   /** Execute mode choice logic.
@@ -279,7 +353,7 @@ class Person(
     * (1.4 m/s typical), and schedules arrival.
     */
   private def initiateWalkingTrip(origin: String, destination: String): Unit =
-    GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
+    GPSUtil.calcRouteCompactWalking(originId = origin, destinationId = destination) match {
       case Some((routeCost, routeQueue)) =>
         val totalDistance = calculateRouteDistance(routeQueue)
 

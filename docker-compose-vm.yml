@@ -135,10 +135,13 @@ services:
       HTC_SCENARIO_NAME: ${HTC_SCENARIO:-toulouse_hybrid_100pct}
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO:-toulouse_hybrid_100pct}/simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/${HTC_SCENARIO:-toulouse_hybrid_100pct}/data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
 
       # ── Output ────────────────────────────────────────────────────────────
+      # ATENÇÃO: a env var que o app lê é HTC_REPORT_PARQUET_DIRECTORY (application.conf).
+      # HTC_REPORT_OUTPUT_DIR não existe no código — era um fantasma.
       HTC_REPORT_ENABLED: "true"
-      HTC_REPORT_OUTPUT_DIR: /htc/output/reports
+      HTC_REPORT_PARQUET_DIRECTORY: /htc/output/reports/parquet   # montado em /htc/output
       HTC_REPORT_JSON_INSTANCES: 64    # mesmo do GKE (HTC_REPORT_JSON_INSTANCES=64)
       HTC_REPORT_JSON_PER_NODE: 64     # 1 nó → todos os writers aqui
       HTC_REPORT_JSON_BATCH_SIZE: 500  # mesmo do GKE
@@ -179,6 +182,7 @@ services:
       # SoftMaxHeapSize=480g: ZGC coleta antes de atingir 600g (120g de folga concorrente)
       # UseNUMA: aloca heap preferencialmente na RAM local de cada NUMA node
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=vm.conf
         -Xms576g
         -Xmx576g
         -XX:+AlwaysPreTouch

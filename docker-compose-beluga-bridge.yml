@@ -116,6 +116,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -258,6 +259,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -393,6 +395,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -528,6 +531,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -663,6 +667,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -798,6 +803,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -933,6 +939,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -1068,6 +1075,7 @@ services:
       HTC_SCENARIO_NAME: toulouse_hybrid_100pct/
       HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//simulation.json
       HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct//data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
