@@ -9,7 +9,7 @@ import core.util.SimulationUtil.loadSimulationConfig
 
 import scala.concurrent.duration.*
 import scala.concurrent.Future
-import scala.util.{ Failure, Success }
+import scala.util.{ Failure, Success, Try }
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, PrepareSimulationEvent, StartSimulationTimeEvent, StopSimulationEvent }
 import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulationTimeData
 import org.interscity.htc.core.actor.manager.load.{ LoadDataManager, ProgressiveLoadDataManager }
@@ -26,7 +26,9 @@ import org.interscity.htc.core.entity.control.loadbalance.SpatialBounds
 import org.interscity.htc.core.enumeration.LoadBalanceStrategyEnum
 import org.interscity.htc.core.metrics.core.PhaseMetrics
 import org.interscity.htc.core.util.ManagerConstantsUtil
-import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_BALANCE_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME, SNAPSHOT_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, LOAD_BALANCE_MANAGER_ACTOR_NAME, LOAD_MANAGER_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME, SNAPSHOT_MANAGER_ACTOR_NAME, WARM_UP_MANAGER_ACTOR_NAME }
+import org.interscity.htc.core.actor.manager.warmup.WarmUpManager
+import org.interscity.htc.core.entity.event.control.warmup.{ StartWarmUpWorkersEvent, WarmUpAllDoneEvent }
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -42,6 +44,7 @@ class SimulationManager(
   private var poolTimeManager: ActorRef = uninitialized
   private var loadManager: ActorRef = uninitialized
   private var reportManager: ActorRef = uninitialized
+  private var warmUpManager: ActorRef = _
   private var loadBalanceManager: ActorRef = _
   private var snapshotManager: ActorRef = _
   private var progressiveLoadManager: ActorRef = _
@@ -50,12 +53,14 @@ class SimulationManager(
   private var simulationPrepared: Boolean = false
   private var clusterRetryScheduled: Boolean = false
   private var configLoadInProgress: Boolean = false
+  private var pendingStartEvent: Option[FinishLoadDataEvent] = None
 
   private case object RetryPrepareSimulation
 
   override def handleEvent: Receive = {
     case event: PrepareSimulationEvent          => prepareSimulation(event)
     case event: FinishLoadDataEvent             => startSimulation(event)
+    case _: WarmUpAllDoneEvent                  => pendingStartEvent.foreach(doStartSimulation)
     case event: TimeManagerRegisterEvent        => registerPoolTimeManager(event)
     case event: RegisterReportersEvent          => registerReporters(event)
     case event: ProgressiveLoadingCompleteEvent => handleProgressiveLoadingComplete(event)
@@ -90,6 +95,32 @@ class SimulationManager(
     PhaseMetrics.recordPhaseEnd("loading")
     loadManager ! DestructEvent(actorRef = getPath)
 
+    val targets = warmUpTargets()
+    if (targets.nonEmpty) {
+      PhaseMetrics.recordPhaseStart("warmup")
+      val minMembers = context.system.settings.config.getInt("pekko.cluster.min-nr-of-members")
+      logInfo(s"[WarmUp] Creating WarmUpManager for $minMembers node(s), targets=$targets")
+      pendingStartEvent = Some(event)
+      warmUpManager = createSingletonManager(
+        manager    = WarmUpManager.props(getSelfProxy, minMembers),
+        name       = WARM_UP_MANAGER_ACTOR_NAME,
+        terminateMessage = org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+      )
+      createSingletonProxy(WARM_UP_MANAGER_ACTOR_NAME) ! StartWarmUpWorkersEvent(targets)
+    } else {
+      doStartSimulation(event)
+    }
+  }
+
+  /** Returns the list of warm-up targets from config or HTC_WARMUP_TARGETS env var.
+    * Format: comma-separated "pkg.Object#method" strings.
+    */
+  private def warmUpTargets(): List[String] = {
+    val raw = scala.util.Try(config.getString("htc.warmup.targets")).getOrElse("")
+    raw.split(",").map(_.trim).filter(_.nonEmpty).toList
+  }
+
+  private def doStartSimulation(event: FinishLoadDataEvent): Unit = {
     val globalTimeManagerProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
 
     if (event.progressiveSources.nonEmpty) {

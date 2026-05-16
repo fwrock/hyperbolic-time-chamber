@@ -42,7 +42,10 @@ class CreatorLoadData(
 
   private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
   private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
-  private val pendingInitAck = mutable.Map[String, Initialization]()
+  // Memory-optimisation: only the classType is needed after the InitializeEvent has been dispatched
+  // (used to gate post-load registration and for log diagnostics), so store the string instead of
+  // the full Initialization payload — avoids retaining the raw JSON `data.content` per pending entity.
+  private val pendingInitAck = mutable.Map[String, String]()
   private var amountActors = 0
 
   private val actorsToCreate: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
@@ -102,6 +105,11 @@ class CreatorLoadData(
       .map(_.distinctBy(_.actor.id))
       .getOrElse(Seq.empty)
       .toList
+
+    // Memory-optimisation: the original Seq from CreateActorsEvent is no longer needed once we
+    // copied it into actorsToCreate. Releasing it here lets the GC reclaim the parsed JSON payload
+    // instead of keeping a duplicate reference until checkAndSendFinish.
+    batchesToCreate.remove(event.batchId)
 
     amountActors += actorsToCreate(event.batchId).size
 
@@ -411,8 +419,7 @@ class CreatorLoadData(
       val bId = actorsBatches.getOrElse(event.entityId, "")
       if (bId.nonEmpty)
         initializeData.get(bId).flatMap(_.get(event.entityId)).map(_.classType).getOrElse("unknown")
-      else if (pendingInitAck.contains(event.entityId)) pendingInitAck(event.entityId).classType
-      else "not-found"
+      else pendingInitAck.getOrElse(event.entityId, "not-found")
     }
     actorsBatches.get(event.entityId) match {
       case Some(batchId) =>
@@ -439,7 +446,7 @@ class CreatorLoadData(
                 event = initializeEvent
               )
 
-              pendingInitAck.put(event.entityId, data)
+              pendingInitAck.put(event.entityId, data.classType)
             } catch {
               case e: Exception =>
                 logError(
@@ -463,15 +470,15 @@ class CreatorLoadData(
   }
 
   private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
-    val init = pendingInitAck.remove(event.entityId)
+    val classTypeOpt = pendingInitAck.remove(event.entityId)
     if (
-      init.isDefined &&
+      classTypeOpt.isDefined &&
       creatorProperties.postLoadCoordinator != null &&
-      creatorProperties.postLoadRegistrationClasses.contains(init.get.classType)
+      creatorProperties.postLoadRegistrationClasses.contains(classTypeOpt.get)
     ) {
       creatorProperties.postLoadCoordinator ! NeedsPostLoadRegistrationEvent(
         entityId = event.entityId,
-        classType = init.get.classType
+        classType = classTypeOpt.get
       )
     }
     val batchId = actorsBatches.getOrElse(event.entityId, "")

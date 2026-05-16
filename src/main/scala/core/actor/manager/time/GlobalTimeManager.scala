@@ -522,6 +522,13 @@ class GlobalTimeManager(
       lastWindowTickRange = event.readyUpToTick - previousLoadedUpTo
     }
 
+    // SimulationManager sends TickWindowReady(Long.MaxValue) as a sentinel when all progressive
+    // sources are exhausted. Treat this as the completion signal so the GTM stops requesting
+    // further windows (progressiveLoadingComplete guards the "No scheduled events" loop).
+    if (event.readyUpToTick == Long.MaxValue) {
+      onProgressiveLoadingComplete()
+    }
+
     // Record window load duration (covers all calls including proactive prefetch)
     if (progressiveLoadRequestedNanos > 0) {
       val windowSec = (System.nanoTime() - progressiveLoadRequestedNanos) / 1e9
@@ -572,6 +579,7 @@ class GlobalTimeManager(
               )
             } else {
               logDebug(s"Resuming simulation after progressive load, advancing to tick $tick")
+              pendingNextTick = None
               localTimeManagers.keys.foreach {
                 timeManager =>
                   localTimeManagers.update(
@@ -581,6 +589,14 @@ class GlobalTimeManager(
               }
               notifyLocalManagers(UpdateGlobalTimeEvent(tick))
             }
+          } else {
+            // The adaptive window did not cover pendingNextTick — request the next window.
+            logInfo(
+              s"Progressive window loaded up to $progressiveLoadedUpToTick but pendingNextTick=$tick " +
+                s"is still beyond loaded range. Requesting next progressive window."
+            )
+            waitingForProgressiveLoad = true
+            requestProgressiveLoad(tick)
           }
       }
     }

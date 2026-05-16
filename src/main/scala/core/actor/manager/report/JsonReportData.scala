@@ -63,7 +63,7 @@ class JsonReportData(
           core.actor.manager.RandomSeedManager.deterministicSimulationId(simulationName)
         catch {
           case _: Exception =>
-            s"${simulationName}_${timeBasedId}"
+            s"${simulationName}_$timeBasedId"
         }
       }
   }
@@ -72,11 +72,13 @@ class JsonReportData(
 
   private val batchSize = Some(config.getInt("htc.report-manager.json.batch-size")).getOrElse(100)
 
-  private val buffer = mutable.ListBuffer[ReportEvent]()
+  // Pre-sized ArrayBuffer (instead of unbounded ListBuffer) to avoid the resize cycle and the
+  // per-element cons allocations of a linked list.
+  private val buffer = new mutable.ArrayBuffer[ReportEvent](batchSize)
   private var fileWriter: Option[BufferedWriter] = None
 
   private val actorUniqueId = java.util.UUID.randomUUID().toString.take(8)
-  private val fileName = s"${prefix}${timeBasedId}_${actorUniqueId}_events.jsonl"
+  private val fileName = s"$prefix${timeBasedId}_${actorUniqueId}_events.jsonl"
   private val filePath = s"$directory/$fileName"
   private var persistentWriter: BufferedWriter = _
   private var flushCount: Long = 0

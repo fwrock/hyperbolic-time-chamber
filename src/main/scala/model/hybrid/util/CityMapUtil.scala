@@ -35,6 +35,51 @@ object CityMapUtil {
   lazy val nodesById: Map[String, NodeGraph] = loadedCityData.nodesById
   lazy val edgeLabelsById: Map[String, EdgeGraph] = loadedCityData.edgeLabelsById
 
+  // -------------------------------------------------------------------------
+  // Feature flags (read once, with sensible defaults)
+  //
+  // Settings priority: SimulatorSettingsRegistry > env var > default.
+  //
+  //   - htc.mobility.enable-pedestrian-routing  (default: true)
+  //       If false, pedestrian indexes are NEVER built — saves ~one full
+  //       CompactGraph (bidirectional ≈ 2× directed) + ALT landmarks +
+  //       compact ALT. For purely vehicular scenarios with no Person actors
+  //       walking, set to false to drop several GBs of baseline RAM.
+  //
+  //   - htc.mobility.enable-ch                  (default: false)
+  //       If false, contraction-hierarchies index is never built (calls to
+  //       calcRouteCH* will throw / log). Default is false because production
+  //       routing uses calcRouteCompact (CompactGraph + ALT) — CH is opt-in.
+  //
+  //   - htc.mobility.landmark-count             (default: 16)
+  // -------------------------------------------------------------------------
+  private lazy val enablePedestrianRouting: Boolean =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.enable-pedestrian-routing")
+      .orElse(sys.env.get("HTC_MOBILITY_ENABLE_PEDESTRIAN_ROUTING"))
+      .flatMap(s => scala.util.Try(s.toBoolean).toOption)
+      .getOrElse(true)
+
+  private lazy val enableCH: Boolean =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.enable-ch")
+      .orElse(sys.env.get("HTC_MOBILITY_ENABLE_CH"))
+      .flatMap(s => scala.util.Try(s.toBoolean).toOption)
+      .getOrElse(false)
+
+  /** Number of landmarks for the ALT index (configurable via htc.mobility.landmark-count). */
+  private lazy val landmarkCount: Int =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.landmark-count")
+      .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_COUNT"))
+      .flatMap(s => scala.util.Try(s.toInt).toOption)
+      .getOrElse(16)
+
+  // -------------------------------------------------------------------------
+  // Indexes that stay resident for the whole simulation lifetime.
+  // Kept as lazy vals — no need to release them.
+  // -------------------------------------------------------------------------
+
   /** Compact CSR representation of the city graph.
     *
     * Built once from [[loadedCityData]] without changing the JSON-loading pipeline.
@@ -49,80 +94,173 @@ object CityMapUtil {
     cg
   }
 
-  /** Undirected CompactGraph for pedestrian routing.
-    *
-    * Pedestrians ignore one-way street restrictions (they walk on sidewalks in both directions).
-    * Built by adding a reverse edge for every directed edge — same weight, same link ID.
-    * Uses [[CompactGraph.aStarEuclidean]] (not ALT) because the directed landmark index is
-    * not admissible for an undirected graph.
-    */
-  lazy val compactGraphPedestrian: CompactGraph = {
-    println(s"[CityMapUtil] Building pedestrian CompactGraph (undirected CSR)...")
-    val t0 = System.currentTimeMillis()
-    val cg = CompactGraph.fromLoadedBidirectional(loadedCityData)
-    println(s"[CityMapUtil] Pedestrian CompactGraph ready in ${System.currentTimeMillis() - t0}ms")
-    cg
-  }
-
   /** Pre-computed Contraction Hierarchies index (static). Built once at first access. Use
     * [[getOrRebuildCHIndex]] for traffic-aware rebuilds.
     */
   lazy val chIndex: ContractionHierarchiesIndex[NodeGraph, Double, EdgeGraph] =
     cityMap.buildContractionHierarchies
 
-  /** Number of landmarks for the ALT index (configurable via htc.mobility.landmark-count). */
-  private lazy val landmarkCount: Int =
-    SimulatorSettingsRegistry
-      .get("htc.mobility.landmark-count")
-      .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_COUNT"))
-      .flatMap(s => scala.util.Try(s.toInt).toOption)
-      .getOrElse(16)
+  // -------------------------------------------------------------------------
+  // Transient indexes — heavy Map-based structures used only to BUILD the
+  // compact array-based versions. After warmUp() they are released by
+  // releaseTransientIndexes() to free hundreds of MBs / several GBs of heap.
+  //
+  // Access patterns:
+  //   - compactAltIndex / compactAltIndexPedestrian are kept resident and
+  //     used in production routing (calcRouteCompact, calcRouteCompactWalking).
+  //   - altIndex / altIndexPedestrian are only needed to construct the
+  //     compact versions and for the rarely-used calcRouteALT (which falls
+  //     back to a rebuild if released).
+  //   - pedestrianCityMap is only needed to construct altIndexPedestrian.
+  // -------------------------------------------------------------------------
+
+  @volatile private var _altIndex: LandmarkIndex[NodeGraph, Double, EdgeGraph] = null
+  @volatile private var _altIndexPedestrian: LandmarkIndex[NodeGraph, Double, EdgeGraph] = null
+  @volatile private var _pedestrianCityMap: Graph[NodeGraph, Double, EdgeGraph] = null
+  @volatile private var _compactGraphPedestrian: CompactGraph = null
+  @volatile private var _compactAltIndex: CompactLandmarkIndex = null
+  @volatile private var _compactAltIndexPedestrian: CompactLandmarkIndex = null
 
   /** Pre-computed ALT (A* + Landmarks + Triangle inequality) index.
     *
-    * Built once at first access using farthest-first landmark selection. Number of landmarks
-    * is configurable via `htc.mobility.landmark-count` (default: 16).
+    * Built on first access. Released by [[releaseTransientIndexes]] once the
+    * compact version is built — calling this after release will rebuild it.
     */
-  lazy val altIndex: LandmarkIndex[NodeGraph, Double, EdgeGraph] =
-    LandmarkIndex.build(cityMap, landmarkCount)
+  def altIndex: LandmarkIndex[NodeGraph, Double, EdgeGraph] = {
+    val current = _altIndex
+    if (current != null) current
+    else
+      synchronized {
+        if (_altIndex == null) {
+          println(s"[CityMapUtil] Building ALT landmark index ($landmarkCount landmarks)...")
+          val t0 = System.currentTimeMillis()
+          _altIndex = LandmarkIndex.build(cityMap, landmarkCount)
+          println(s"[CityMapUtil] ALT index ready in ${System.currentTimeMillis() - t0}ms")
+        }
+        _altIndex
+      }
+  }
 
   /** Compact array-based ALT index for zero-allocation heuristic evaluation.
     *
     * Translates the `Map[NodeGraph, Double]` landmark distances from [[altIndex]] into flat
     * `Array[Array[Double]]` indexed by [[CompactGraph]] Int node index.
-    * Heuristic evaluation drops from ~3.2M HashMap lookups (for a 10K-expansion search) to
-    * pure arithmetic over 4 × k array reads — typically 50–100× faster per call.
-    *
-    * Built after [[altIndex]] and [[compactGraph]] are both ready.
     */
-  lazy val compactAltIndex: CompactLandmarkIndex =
-    CompactLandmarkIndex.fromLandmarkIndex(altIndex, compactGraph.nodeIndex, nodeGraphIdExtractor, compactGraph.n)
+  def compactAltIndex: CompactLandmarkIndex = {
+    val current = _compactAltIndex
+    if (current != null) current
+    else
+      synchronized {
+        if (_compactAltIndex == null) {
+          _compactAltIndex = CompactLandmarkIndex.fromLandmarkIndex(
+            altIndex,
+            compactGraph.nodeIndex,
+            nodeGraphIdExtractor,
+            compactGraph.n
+          )
+        }
+        _compactAltIndex
+      }
+  }
+
+  /** Undirected CompactGraph for pedestrian routing.
+    *
+    * Built only when pedestrian routing is enabled (default: true). Set
+    * `htc.mobility.enable-pedestrian-routing=false` for vehicular-only scenarios.
+    */
+  def compactGraphPedestrian: CompactGraph = {
+    val current = _compactGraphPedestrian
+    if (current != null) current
+    else
+      synchronized {
+        if (_compactGraphPedestrian == null) {
+          println(s"[CityMapUtil] Building pedestrian CompactGraph (undirected CSR)...")
+          val t0 = System.currentTimeMillis()
+          _compactGraphPedestrian = CompactGraph.fromLoadedBidirectional(loadedCityData)
+          println(s"[CityMapUtil] Pedestrian CompactGraph ready in ${System.currentTimeMillis() - t0}ms")
+        }
+        _compactGraphPedestrian
+      }
+  }
 
   /** Undirected Graph for pedestrian routing — same as [[cityMap]] but with every edge
     * duplicated in the reverse direction so ALT landmarks are computed on the correct graph.
+    *
+    * Released by [[releaseTransientIndexes]] after [[altIndexPedestrian]] is built.
     */
-  lazy val pedestrianCityMap: Graph[NodeGraph, Double, EdgeGraph] =
-    cityMap.edges.foldLeft(cityMap) { (g, e) =>
-      g.addEdge(e.target, e.source, e.weight, e.label)
-    }
+  def pedestrianCityMap: Graph[NodeGraph, Double, EdgeGraph] = {
+    val current = _pedestrianCityMap
+    if (current != null) current
+    else
+      synchronized {
+        if (_pedestrianCityMap == null) {
+          println(s"[CityMapUtil] Building pedestrian Graph (objects)...")
+          val t0 = System.currentTimeMillis()
+          _pedestrianCityMap = cityMap.edges.foldLeft(cityMap) { (g, e) =>
+            g.addEdge(e.target, e.source, e.weight, e.label)
+          }
+          println(s"[CityMapUtil] Pedestrian Graph ready in ${System.currentTimeMillis() - t0}ms")
+        }
+        _pedestrianCityMap
+      }
+  }
 
   /** ALT landmark index built on the undirected [[pedestrianCityMap]].
-    * Admissible on the pedestrian graph (unlike the directed [[altIndex]]).
+    * Released by [[releaseTransientIndexes]] after [[compactAltIndexPedestrian]] is built.
     */
-  lazy val altIndexPedestrian: LandmarkIndex[NodeGraph, Double, EdgeGraph] =
-    LandmarkIndex.build(pedestrianCityMap, landmarkCount)
+  def altIndexPedestrian: LandmarkIndex[NodeGraph, Double, EdgeGraph] = {
+    val current = _altIndexPedestrian
+    if (current != null) current
+    else
+      synchronized {
+        if (_altIndexPedestrian == null) {
+          println(s"[CityMapUtil] Building pedestrian ALT landmark index ($landmarkCount landmarks)...")
+          val t0 = System.currentTimeMillis()
+          _altIndexPedestrian = LandmarkIndex.build(pedestrianCityMap, landmarkCount)
+          println(s"[CityMapUtil] Pedestrian ALT index ready in ${System.currentTimeMillis() - t0}ms")
+        }
+        _altIndexPedestrian
+      }
+  }
 
-  /** Compact array-based ALT index for zero-allocation pedestrian heuristic evaluation.
-    * Uses [[compactGraphPedestrian]] node indices so that [[CompactGraph.aStarALT]] can be
-    * called directly on the pedestrian graph.
+  /** Compact array-based ALT index for zero-allocation pedestrian heuristic evaluation. */
+  def compactAltIndexPedestrian: CompactLandmarkIndex = {
+    val current = _compactAltIndexPedestrian
+    if (current != null) current
+    else
+      synchronized {
+        if (_compactAltIndexPedestrian == null) {
+          _compactAltIndexPedestrian = CompactLandmarkIndex.fromLandmarkIndex(
+            altIndexPedestrian,
+            compactGraphPedestrian.nodeIndex,
+            nodeGraphIdExtractor,
+            compactGraphPedestrian.n
+          )
+        }
+        _compactAltIndexPedestrian
+      }
+  }
+
+  /** Releases transient (Map-based) indexes that are no longer needed once their compact
+    * array-based counterparts have been built.
+    *
+    *   - `altIndex`            (kept by `compactAltIndex`)
+    *   - `altIndexPedestrian`  (kept by `compactAltIndexPedestrian`)
+    *   - `pedestrianCityMap`   (only needed to build `altIndexPedestrian`)
+    *
+    * Safe to call multiple times. After release, re-accessing any of these will rebuild
+    * them on demand. Called automatically at the end of [[warmUp]].
     */
-  lazy val compactAltIndexPedestrian: CompactLandmarkIndex =
-    CompactLandmarkIndex.fromLandmarkIndex(
-      altIndexPedestrian,
-      compactGraphPedestrian.nodeIndex,
-      nodeGraphIdExtractor,
-      compactGraphPedestrian.n
-    )
+  def releaseTransientIndexes(): Unit = synchronized {
+    val freed = scala.collection.mutable.ListBuffer[String]()
+    if (_altIndex != null) { _altIndex = null; freed += "altIndex" }
+    if (_altIndexPedestrian != null) { _altIndexPedestrian = null; freed += "altIndexPedestrian" }
+    if (_pedestrianCityMap != null) { _pedestrianCityMap = null; freed += "pedestrianCityMap" }
+    if (freed.nonEmpty) {
+      println(s"[CityMapUtil] Released transient indexes: ${freed.mkString(", ")} — suggesting GC")
+      System.gc()
+    }
+  }
 
   /** Static weights indexed by link ID — used for blocked-link threshold checks. */
   lazy val staticWeightsByLinkId: Map[String, Double] =
@@ -201,16 +339,48 @@ object CityMapUtil {
         DynamicWeightCache.getWeight(linkId, staticWeight) > staticWeight * thresholdFactor
     }
 
-  /** Pre-builds the adaptive CH index so the first actor request doesn't pay the cost. Call this
-    * from SimulationManager (or equivalent) before the simulation ticks start.
+  /** Pre-builds compact graph and ALT landmark indexes (vehicle, plus pedestrian when enabled)
+    * so the first routing call on this JVM doesn't pay the ~150s initialization cost.
+    *
+    * Called by [[WarmUpWorker]] on every cluster node before simulation ticks start.
+    * Does NOT build the CH index — that is handled lazily by [[getOrRebuildCHIndex]].
+    *
+    * After warmup, releases the transient (Map-based) indexes whose data has been folded
+    * into the compact array-based versions. This frees a substantial amount of heap
+    * (often several GBs on city-scale graphs).
     */
   def warmUp(): Unit = {
-    println(s"[CityMapUtil] Warming up CH index (${nodesById.size} nodes)...")
-    getOrRebuildCHIndex(
-      currentTick = -1,
-      policy = CHRebuildPolicy.fromConfig.copy(scheduledTicks = Set(-1))
+    println(
+      s"[CityMapUtil] Warming up routing indexes (${nodesById.size} nodes, " +
+        s"pedestrian=$enablePedestrianRouting, ch=$enableCH)..."
     )
-    println(s"[CityMapUtil] CH warm-up complete.")
+    val t0 = System.currentTimeMillis()
+
+    // Vehicle graph (directed) — always required by calcRouteCompact.
+    val _cg  = compactGraph
+    val _cai = compactAltIndex
+
+    // Pedestrian graph (undirected) — only if Person actors will walk.
+    if (enablePedestrianRouting) {
+      val _cgp  = compactGraphPedestrian
+      val _caip = compactAltIndexPedestrian
+    } else {
+      println(
+        "[CityMapUtil] Pedestrian routing disabled (htc.mobility.enable-pedestrian-routing=false)" +
+          " — skipping pedestrian indexes."
+      )
+    }
+
+    // Optional: CH for calcRouteCH* (off by default since production routing uses calcRouteCompact).
+    if (enableCH) {
+      val _ch = chIndex
+      println(s"[CityMapUtil] CH index pre-built (${_ch.shortcuts.size} shortcuts).")
+    }
+
+    println(s"[CityMapUtil] Warm-up complete in ${System.currentTimeMillis() - t0}ms")
+
+    // Free Map-based intermediate structures whose data is now in the compact arrays.
+    releaseTransientIndexes()
   }
 
   def printMapStats(): Unit = {
