@@ -42,6 +42,14 @@ data:
         editable: true
         options:
           path: /var/lib/grafana/dashboards
+      - name: HTC-Simulation
+        orgId: 1
+        folder: "HTC Simulation"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards-sim
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -479,8 +487,7 @@ spec:
             - name: dashboards-data
               mountPath: /var/lib/grafana/dashboards
             - name: dashboards-simulation
-              mountPath: /var/lib/grafana/dashboards/htc-simulation.json
-              subPath: htc-simulation.json
+              mountPath: /var/lib/grafana/dashboards-sim
             - name: storage
               mountPath: /var/lib/grafana
         # ── Grafana Image Renderer sidecar ─────────────────────────

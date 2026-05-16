@@ -449,6 +449,11 @@ class ProgressiveLoadDataManager(
         s"All progressive sources fully loaded! " +
           s"Total actors created: $totalActorsCreated"
       )
+      // Memory-optimisation: no more entities will be created after this point, so the
+      // entity→position cache used by CreatorLoadData.extractSpatialPosition can be released.
+      // Shard assignments and class names remain in the registry (still required for routing).
+      org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
+        .clearPositions()
       simulationManager ! ProgressiveLoadingCompleteEvent(totalActorsCreated)
     }
   }

@@ -135,6 +135,11 @@ class Car(
     signalStateRetryCounter = 0
     // Clear previous trip's route; new route will be calculated from tripOrigin/tripDestination
     state.bestRoute = None
+    // Drop any precomputed route from the JSON spec — it has been consumed by the
+    // trip just finished. In person-centric mode this Car is reused for further trips
+    // (which compute their own routes via GPSUtil), so keeping the old List would
+    // pin a sizeable amount of heap for the rest of the simulation.
+    state.precomputedRoute = None
     state.deactivateMicroMode()
   }
 
@@ -149,7 +154,7 @@ class Car(
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logWarn(
-        s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
+        s"Car $getEntityId exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       // Do NOT call leavingLink() here — it triggers a round-trip (LeaveLinkData → ReceiveLeaveLinkInfo)
@@ -195,7 +200,7 @@ class Car(
         signalStateRetryCounter += 1
         if (signalStateRetryCounter > MaxSignalStateRetries) {
           logWarn(
-            s"${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
+            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
           )
           signalStateRetryCounter = 0
           leavingLink()
@@ -231,18 +236,18 @@ class Car(
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
           logDebug(
-            s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}"
+            s"$getEntityId received stale MICRO event with null state, discarding: ${event.eventType}"
           )
         case _: LinkInfoData =>
           // ReceiveLeaveLinkInfo / ReceiveEnterLinkInfo arriving after shard passivation —
           // expected artifact of the MESO leave-link round-trip when the car was already
           // destroyed or evicted by the shard cluster. Safe to discard silently.
           logDebug(
-            s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}"
+            s"$getEntityId received stale MESO link event with null state, discarding: ${event.eventType}"
           )
         case _ =>
           logWarn(
-            s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}"
+            s"$getEntityId received interaction event with null state, discarding: ${event.eventType}"
           )
       }
       return
@@ -284,6 +289,13 @@ class Car(
       state.bestCost = fixedRoute.size.toDouble
       state.status = Ready
       state.updateCurrentPath(None)
+
+      // Memory-optimisation: the JSON-parsed precomputedRoute (List[PrecomputedRouteItem]) has
+      // been materialised into bestRoute (a Queue[(linkId, nodeId)]). The original list is no
+      // longer needed for the rest of this trip and would otherwise stay alive until
+      // resetTripState/selfDestruct. Releasing it now lets the GC reclaim the per-trip
+      // precomputed payload across the whole car fleet.
+      state.precomputedRoute = None
 
       GPSMetrics.routeSource.labels("precomputed").inc()
       reportRouteEvents(fixedRoute, "precomputed")
@@ -413,7 +425,7 @@ class Car(
 
     if (currentPathNode == null && !routeDepleted) {
       logWarn(
-        s"${getEntityId} requestSignalState with null currentPathNode but non-empty route at tick=$currentTick; recovering to Ready"
+        s"$getEntityId requestSignalState with null currentPathNode but non-empty route at tick=$currentTick; recovering to Ready"
       )
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
@@ -462,7 +474,7 @@ class Car(
     // response would call leavingLink() on an already-left link, corrupting the route queue.
     if (state.status != WaitingSignalState) {
       logDebug(
-        s"${getEntityId}: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
+        s"$getEntityId: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
       )
       return
     }
@@ -583,7 +595,7 @@ class Car(
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logDebug(
-        s"Car ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing."
+        s"Car $getEntityId exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       // Do NOT call leavingLink() — same reason as in actSpontaneous forced-exit path.
@@ -623,7 +635,7 @@ class Car(
     //     isDefined && !contains ensures we also discard the None case.
     if (!currentLinkId.contains(data.linkId)) {
       logWarn(
-        s"${getEntityId}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
+        s"$getEntityId: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
           s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded."
       )
       return
@@ -739,7 +751,7 @@ class Car(
     // double distance accumulation, double finishJourney(), and spurious onFinishSpontaneous().
     if (state.status == Parked || state.status == Finished) {
       logDebug(
-        s"${getEntityId}: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
+        s"$getEntityId: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
           s"(status=${state.status}, trip already finalized)."
       )
       return

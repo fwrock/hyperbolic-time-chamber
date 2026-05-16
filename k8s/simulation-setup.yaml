@@ -94,20 +94,20 @@ spec:
       initContainers:
         - name: wait-for-data
           image: busybox
-          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
+          command: ["sh", "-c", "until [ -f /app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct_/simulation.json ]; do echo 'Aguardando JSON...'; sleep 10; done"]
           volumeMounts:
             - name: gcs-fuse-vol
               mountPath: /app/hyperbolic-time-chamber/simulations/input
       containers:
         - name: simulator
-          image: uxhabam/hyperbolic-time-chamber:2.4.1-beluga
+          image: uxhabam/hyperbolic-time-chamber:2.9.0-gke
           resources:
             requests:
               cpu: "4"
               memory: "16Gi"
             limits:
               cpu: "6"
-              memory: "16Gi"
+              memory: "20Gi"
           ports:
             - name: pekko-remote
               containerPort: 25520
@@ -140,9 +140,10 @@ spec:
             - name: JAVA_TOOL_OPTIONS
               value: >-
                 -Dconfig.resource=kubernetes.conf
-                -Xms6g -Xmx12g
+                -Xms14g -Xmx14g
+                -XX:+AlwaysPreTouch
+                -XX:SoftMaxHeapSize=12g
                 -XX:+UseZGC -XX:+ZGenerational
-                -XX:ConcGCThreads=2
                 --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
                 --add-opens=java.base/java.lang=ALL-UNNAMED
             # Cluster quorum: wait for this many members before starting simulation.
@@ -177,9 +178,24 @@ spec:
             - name: HTC_REPORT_JSON_INSTANCES
               value: "64"
             - name: HTC_REPORT_JSON_PER_NODE
-              value: "16"
+              value: "4"
             - name: HTC_REPORT_JSON_BATCH_SIZE
               value: "500"
+            # ── Parquet Report Writers ──────────────────────────────
+            - name: HTC_REPORT_PARQUET_DIRECTORY
+              value: "/app/hyperbolic-time-chamber/output/reports/parquet"
+            - name: HTC_REPORT_PARQUET_COMPRESSION
+              value: "zstd"
+            - name: HTC_REPORT_PARQUET_INSTANCES
+              value: "128"
+            - name: HTC_REPORT_PARQUET_PER_NODE
+              value: "8"
+            - name: HTC_REPORT_PARQUET_BATCH_SIZE
+              value: "1000"
+            - name: HTC_REPORT_PARQUET_ROW_GROUP_SIZE_MB
+              value: "16"
+            - name: HTC_REPORT_PARQUET_ZSTD_LEVEL
+              value: "6"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -195,9 +211,13 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: HTC_SIMULATION_CONFIG_FILE
-              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/simulation.json"
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct_/simulation.json"
             - name: HTC_MOBILITY_CITY_MAP_FILE
-              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct/data/city_map.json"
+              value: "/app/hyperbolic-time-chamber/simulations/input/toulouse_hybrid_100pct_/data/city_map.json"
+            - name: HTC_WARMUP_TARGETS
+              value: "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
+            - name: HTC_PERSON_TRUNCATE_SCHEDULE
+              value: "true"
             # ── Routing / Cache Strategy ────────────────────────────
             # Use "inmemory" when Kafka is not available, "kafka" when Managed Kafka is provisioned
             - name: HTC_CACHE_STRATEGY

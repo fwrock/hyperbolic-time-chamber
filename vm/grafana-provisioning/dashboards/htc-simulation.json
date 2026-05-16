@@ -1511,12 +1511,86 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "palette-classic" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 114
+      },
+      "id": 360,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "title": "Truncated Activities by Type (total)",
+      "targets": [
+        {
+          "expr": "sum by (activity_type) (htc_person_truncated_activity_total)",
+          "legendFormat": "{{activity_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 114
+      },
+      "id": 361,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "title": "Truncated Activities — Excess Ticks Distribution (p50/p95/p99)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (activity_type, le) (htc_person_truncated_activity_excess_ticks_bucket))",
+          "legendFormat": "p50 {{activity_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (activity_type, le) (htc_person_truncated_activity_excess_ticks_bucket))",
+          "legendFormat": "p95 {{activity_type}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (activity_type, le) (htc_person_truncated_activity_excess_ticks_bucket))",
+          "legendFormat": "p99 {{activity_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 122
       },
       "id": 37,
       "title": "GPS / Routing",

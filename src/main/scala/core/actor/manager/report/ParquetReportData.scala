@@ -133,7 +133,10 @@ class ParquetReportData(
     s"$directory/${prefix}${timeBasedId}_${freshId}_events${extension}"
   }
 
-  private val buffer = mutable.ArrayBuffer.empty[ReportEvent]
+  // Pre-sized to batchSize to avoid the doubling-resize cycle (16 → 32 → … → batchSize),
+  // which would otherwise allocate ~log2(batchSize) intermediate arrays per flush window and
+  // leave the buffer with up-to-2× the required capacity headroom.
+  private val buffer = new mutable.ArrayBuffer[ReportEvent](batchSize)
   private var writer: ParquetWriter[GenericRecord] = _
   private var currentFilePath: String = _
   private var flushCount: Long = 0L

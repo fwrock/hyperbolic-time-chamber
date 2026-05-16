@@ -204,6 +204,13 @@ class LoadDataManager(
         s"All EAGER data loaded! ${progressiveSources.size} PROGRESSIVE sources pending. " +
           s"Triggering post-load registration phase."
       )
+      // Memory-optimisation: when there are no progressive sources, no more entity creation
+      // will happen, so the entity\u2192position cache (only used by CreatorLoadData.extractSpatialPosition)
+      // can be released. With progressive sources, ProgressiveLoadDataManager handles this
+      // when the last window is consumed. Shard assignments and class names stay in the registry.
+      if (progressiveSources.isEmpty) {
+        core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry.clearPositions()
+      }
       postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
     } else if (postLoadTriggerSent) {
       logWarn(

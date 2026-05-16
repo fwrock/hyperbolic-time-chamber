@@ -679,6 +679,14 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
     )
 
+  /** Default report strategy resolved once per actor and cached. Avoids a [[config.getString]] +
+    * [[ReportTypeEnum.valueOf]] allocation on every call to [[report]] (which can be invoked
+    * thousands of times per simulation tick across the whole actor population).
+    */
+  private lazy val cachedDefaultReportType: ReportTypeEnum =
+    try ReportTypeEnum.valueOf(config.getString("htc.report-manager.default-strategy"))
+    catch { case _: Exception => ReportTypeEnum.valueOf("csv") }
+
   /** Reports an event to the reporting system.
     * @param event
     *   The report event
@@ -688,18 +696,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (event.label != null) {
       ActorMetrics.eventsProcessed.labels(event.label).inc()
     }
-    val defaultReportType = ReportTypeEnum.valueOf(
-      Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")
-    )
-    val reportType = if (state.getReporterType != null) {
-      state.getReporterType
-    } else {
-      defaultReportType
-    }
+    val stateReporter = state.getReporterType
+    val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType
     if (reporters.contains(reportType)) {
       reporters(reportType) ! event
     } else {
-      reporters(defaultReportType) ! event
+      reporters(cachedDefaultReportType) ! event
     }
   }
 
