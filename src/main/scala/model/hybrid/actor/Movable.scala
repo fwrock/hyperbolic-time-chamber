@@ -132,6 +132,9 @@ abstract class Movable[T <: MovableState](
     selfDestruct()
   }
 
+  protected def microMaxAcceleration: Double = 2.6
+  protected def microMaxDeceleration: Double = 4.5
+
   protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
@@ -147,7 +150,9 @@ abstract class Movable[T <: MovableState](
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed
+                actorCreationType = LoadBalancedDistributed,
+                maxAcceleration = microMaxAcceleration,
+                maxDeceleration = microMaxDeceleration
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed

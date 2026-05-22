@@ -11,4 +11,4 @@ case class BusStopState(
   nodeId: String,
   label: String,
   people: mutable.Map[String, mutable.Seq[Identify]] = mutable.Map.empty
-) extends BaseState
+) extends BaseState(scheduleOnTimeManager = false)

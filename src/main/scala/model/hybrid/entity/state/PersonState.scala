@@ -10,32 +10,89 @@ import org.htc.protobuf.core.entity.actor.Identify
   * The utility of a mode option is:
   * {{{U = betaMode × modePref(mode) − betaAccess × accessDistM − betaEgress × egressDistM}}}
   *
+  * For private vehicles (car, bicycle, motorcycle) there are no access/egress legs; the penalty is
+  * applied to the direct origin→destination distance:
+  * {{{U(private) = betaMode × modePref(mode) − betaPrivateVehicle × haversine(origin, destination)}}}
+  *
+  * @param includedModes
+  *   Set of modes that the strategy is allowed to evaluate. Only modes listed here become
+  *   candidates. Private-vehicle modes (`"car"`, `"bicycle"`, `"motorcycle"`) are additionally
+  *   filtered by whether the person actually owns that vehicle at runtime.
+  *   Defaults to `Set("bus", "subway", "walk")` (no private vehicles).
   * @param betaMode
   *   Scale applied to the mode-preference score.
   * @param betaAccess
   *   Per-metre penalty for the access leg (walking to boarding stop).
   * @param betaEgress
   *   Per-metre penalty for the egress leg (walking from alighting stop to destination).
+  * @param betaPrivateVehicle
+  *   Per-metre penalty applied to the direct O→D haversine distance for private vehicle modes.
+  *   Typically lower than `betaAccess` since vehicles cover distance much faster than walking.
   * @param modePrefSubway
   *   Mode-preference utility for subway.
   * @param modePrefBus
   *   Mode-preference utility for bus.
   * @param modePrefWalk
   *   Mode-preference utility for walking (base reference, typically 0).
+  * @param modePrefCar
+  *   Mode-preference utility for car.
+  * @param modePrefBicycle
+  *   Mode-preference utility for bicycle.
+  * @param modePrefMotorcycle
+  *   Mode-preference utility for motorcycle.
   * @param maxAccessDistanceM
   *   Maximum acceptable access-leg distance in metres (stops further away are ignored).
   * @param maxWalkDistanceM
   *   Maximum trip distance in metres for which walking is offered as a candidate.
+  *
+  * ==== Travel-time strategy (`"travel-time"`) ====
+  *
+  * The [[model.hybrid.util.strategy.TravelTimeModeChoiceStrategy]] uses the following additional
+  * fields to convert route cost into seconds of travel time. All other utility weights above still
+  * apply (modePref, betaMode).
+  *
+  * @param betaTravelTime
+  *   Per-second penalty applied to estimated travel time. Replaces `betaAccess`/`betaEgress` for
+  *   PT and `betaPrivateVehicle` for car/bicycle/motorcycle when the travel-time strategy is used.
+  *   Defaults to `0.01` (1 util point lost per 100 seconds of travel).
+  * @param walkingSpeedMs
+  *   Walking speed in m/s used to convert access/egress distances to seconds. Default 1.4 m/s.
+  * @param avgBusSpeedMs
+  *   Average in-vehicle bus speed in m/s used to estimate PT in-vehicle travel time when no
+  *   real PT network routing is available. Default 8.33 m/s (≈ 30 km/h).
+  * @param avgSubwaySpeedMs
+  *   Average in-vehicle subway speed in m/s. Default 12.5 m/s (≈ 45 km/h).
+  * @param avgBicycleSpeedMs
+  *   Expected bicycle cruising speed in m/s used to normalise the A* dynamic cost into seconds.
+  *   Default 5.56 m/s (≈ 20 km/h).
+  * @param avgMotorcycleSpeedMs
+  *   Expected motorcycle cruising speed in m/s. Default 11.11 m/s (≈ 40 km/h).
+  * @param avgCarSpeedMs
+  *   Expected car cruising speed in m/s used when the A* dynamic cost must be converted to
+  *   seconds (fallback if dynamic weights are unavailable). Default 13.89 m/s (≈ 50 km/h).
   */
 case class ModeChoiceWeights(
+  includedModes: Set[String] = Set("bus", "subway", "walk"),
   betaMode: Double = 1.0,
   betaAccess: Double = 0.001,
   betaEgress: Double = 0.001,
+  betaPrivateVehicle: Double = 0.00005,
   modePrefSubway: Double = 2.0,
   modePrefBus: Double = 1.0,
   modePrefWalk: Double = 0.0,
+  modePrefCar: Double = 3.0,
+  modePrefBicycle: Double = 1.5,
+  modePrefMotorcycle: Double = 2.0,
   maxAccessDistanceM: Double = 1500.0,
-  maxWalkDistanceM: Double = 2000.0
+  maxWalkDistanceM: Double = 2000.0,
+  // travel-time strategy fields
+  betaTravelTime: Double = 0.01,
+  walkingSpeedMs: Double = 1.4,
+  avgBusSpeedMs: Double = 8.33,
+  avgSubwaySpeedMs: Double = 12.5,
+  avgBicycleSpeedMs: Double = 5.56,
+  avgMotorcycleSpeedMs: Double = 11.11,
+  avgCarSpeedMs: Double = 13.89
 )
 
 /** Person state representing a person agent in the simulation.
@@ -69,6 +126,11 @@ case class ModeChoiceWeights(
   *   Defaults to `false` to preserve the existing static-schedule behaviour.
   * @param modeChoiceWeights
   *   Weights and thresholds for the utility function used when dynamic mode choice is active.
+  * @param modeChoiceStrategyType
+  *   Name of the [[model.hybrid.util.strategy.ModeChoiceStrategy]] to use when an activity's
+  *   `arrivalLogistics.mode` is `"auto"`. Must match a key registered in
+  *   [[model.hybrid.util.strategy.ModeChoiceStrategyRegistry]]. Defaults to `"utility"`
+  *   (additive utility function over bus / subway / walk).
   */
 case class PersonState(
   startTick: Tick = 0L,
@@ -86,7 +148,8 @@ case class PersonState(
   ptAlightingNodeId: Option[String] = None,
   ptLine: Option[String] = None,
   enableDynamicModeChoice: Boolean = false,
-  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights()
+  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
+  modeChoiceStrategyType: String = "utility"
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager
@@ -189,7 +252,7 @@ case class Activity(
   *   The Person responds isArrival=true to unload requests at this node.
   */
 case class ArrivalLogistics(
-  mode: String, // "car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway"
+  mode: String, // "car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway", "auto"
   vehicle: Option[Identify] = None,
   instant: Boolean = false,
   driverAttributes: DriverAttributes = DriverAttributes(),
@@ -197,7 +260,8 @@ case class ArrivalLogistics(
   boardingStopId: Option[String] = None,
   boardingStopClassType: Option[String] = None,
   alightingNodeId: Option[String] = None,
-  fixedMode: Boolean = false   // when true, skips dynamic mode choice even if the person flag is on
+  fixedMode: Boolean = false,  // when true, skips dynamic mode choice even if the person flag is on
+  precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
 )
 
 /** Driver attributes affecting vehicle behavior.

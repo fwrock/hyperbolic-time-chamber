@@ -47,8 +47,16 @@ class PostLoadRegistrationCoordinator(
   private var retryTask: Cancellable = _
   private var retryCount: Int = 0
 
-  private val RETRY_INTERVAL: FiniteDuration = 10.seconds
-  private val MAX_RETRIES: Int = 12 // 120 s total before giving up
+  private val RETRY_INTERVAL: FiniteDuration = {
+    val secs = scala.util.Try(
+      context.system.settings.config.getInt("htc.post-load-registration.retry-interval-seconds")
+    ).getOrElse(10)
+    secs.seconds
+  }
+  private val MAX_RETRIES: Int =
+    scala.util.Try(
+      context.system.settings.config.getInt("htc.post-load-registration.max-retries")
+    ).getOrElse(120) // 1200 s (20 min) default — enough for large scenarios with many BusStations
 
   private case object RetryPostLoadRegistration
 
@@ -131,18 +139,29 @@ class PostLoadRegistrationCoordinator(
 
   private def handleRetry(): Unit = {
     retryCount += 1
+    val elapsedSec = retryCount * RETRY_INTERVAL.toSeconds
+
+    // Group pending actors by short class name for fast diagnosis
+    val byClass = pendingAcks
+      .groupBy(id => pendingRegistrations.getOrElse(id, "unknown"))
+      .map { case (cls, ids) => s"${StringUtil.getModelClassName(cls)}=${ids.size}" }
+      .mkString(", ")
+    val sample = pendingAcks.take(5).mkString(", ")
+    val more   = if (pendingAcks.size > 5) s" (+${pendingAcks.size - 5} more)" else ""
+
     if (retryCount >= MAX_RETRIES) {
       logWarn(
-        s"PostLoadRegistrationCoordinator: reached $MAX_RETRIES retries. " +
-          s"${pendingAcks.size} entities did not ACK: " +
-          s"${pendingAcks.take(20).mkString(", ")}${if (pendingAcks.size > 20) "..." else ""}. " +
+        s"PostLoadRegistrationCoordinator: max retries ($MAX_RETRIES) reached after ${elapsedSec}s. " +
+          s"${pendingAcks.size} actors did not ACK. By class: [$byClass]. " +
+          s"Sample: [${pendingAcks.take(20).mkString(", ")}${if (pendingAcks.size > 20) "..." else ""}]. " +
           s"Proceeding to avoid simulation deadlock."
       )
       finish()
     } else {
       logWarn(
-        s"PostLoadRegistrationCoordinator: retry $retryCount/$MAX_RETRIES. " +
-          s"${pendingAcks.size} entities still pending: ${pendingAcks.take(10).mkString(", ")}"
+        s"PostLoadRegistrationCoordinator: retry $retryCount/$MAX_RETRIES (${elapsedSec}s elapsed). " +
+          s"${pendingAcks.size} actors still pending. By class: [$byClass]. " +
+          s"Sample: [$sample$more]"
       )
       sendRegistrationEvents()
     }

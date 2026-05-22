@@ -22,6 +22,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum,
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SubwayStationStateEnum.{ Start, Working }
 import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.metrics.model.hybrid.SubwayStationMetrics
 
 import scala.collection.mutable
 
@@ -115,6 +116,19 @@ class SubwayStation(
       case None =>
         state.people.put(data.line, mutable.Seq(person))
     }
+    SubwayStationMetrics.passengersArrived.labels(data.line).inc()
+    SubwayStationMetrics.passengersWaiting.labels(data.line).inc()
+    report(
+      data = Map(
+        "event_type" -> "passenger_arrived_at_station",
+        "station_id" -> getEntityId,
+        "person_id" -> event.actorRefId,
+        "line" -> data.line,
+        "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
+        "tick" -> currentTick
+      ),
+      label = "subway_station_passenger_arrived"
+    )
   }
 
   private def handleSubwayRequestPassenger(
@@ -134,7 +148,23 @@ class SubwayStation(
     peopleToLoad: mutable.Seq[Identify],
     event: ActorInteractionEvent,
     data: SubwayRequestPassengerData
-  ): Unit =
+  ): Unit = {
+    if (peopleToLoad.nonEmpty) {
+      SubwayStationMetrics.passengersBoarded.labels(data.line).inc(peopleToLoad.size)
+      SubwayStationMetrics.passengersWaiting.labels(data.line).dec(peopleToLoad.size)
+      report(
+        data = Map(
+          "event_type" -> "passengers_loaded_to_subway",
+          "station_id" -> getEntityId,
+          "subway_id" -> event.actorRefId,
+          "line" -> data.line,
+          "passengers_loaded" -> peopleToLoad.size,
+          "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
+          "tick" -> currentTick
+        ),
+        label = "subway_station_passengers_loaded"
+      )
+    }
     sendMessageTo(
       event.actorRefId,
       event.actorClassType,
@@ -142,6 +172,7 @@ class SubwayStation(
         people = peopleToLoad
       )
     )
+  }
 
   private def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
     state.lines.filter {
@@ -224,7 +255,8 @@ class SubwayStation(
           line = subway.line,
           subwayStations = subwayStations,
           origin = state.nodeId,
-          destination = subwayStations.values.last
+          destination = subwayStations.values.last,
+          speedFactor = subway.speedFactor
         )
         subwayState.bestRoute = Some(route)
         subwayState
@@ -249,6 +281,8 @@ class SubwayStation(
       ),
       label = "subway_created"
     )
+
+    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
 
     createShardedActorSeveralArgs(
       system = context.system,

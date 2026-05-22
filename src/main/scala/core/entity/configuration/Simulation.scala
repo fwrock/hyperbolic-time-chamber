@@ -25,5 +25,12 @@ case class Simulation(
     * their individual data files. Useful when the scenario was generated before the flag was
     * introduced and regenerating would take too long.
     */
-  postLoadRegistrationClasses: List[String] = List.empty
+  postLoadRegistrationClasses: List[String] = List.empty,
+  /** Optional list of warm-up targets to invoke before simulation ticks start.
+    * Format: "fully.qualified.ObjectName#methodName" (methodName defaults to "warmUp").
+    * Each target runs on the io-dispatcher before [[StartSimulationTimeEvent]] is sent.
+    * Merged with targets from application.conf [[htc.warmup.targets]].
+    * Example: "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
+    */
+  warmupTargets: List[String] = List.empty
 )

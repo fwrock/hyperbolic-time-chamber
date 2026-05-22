@@ -137,16 +137,20 @@ class DefaultMicroSimulationStrategy(
       }
       val gap = math.max(0.1, rawGap)
 
-      val targetVel = leader match {
-        case Some(l) if gap < 50.0 =>
-          math.min(l.velocity, math.sqrt(2.0 * 4.5 * gap))
-        case _ =>
-          speedLimit / 3.6
-      }
-
-      val safeTargetVel = if (targetVel.isNaN || targetVel.isInfinite) 0.0 else targetVel
-      val maxAcceleration = 2.6
-      val maxDeceleration = 4.5
+      val maxAcceleration = vehicle.maxAcceleration
+      val maxDeceleration = vehicle.maxDeceleration
+      val rawSafe = carFollowingModel.calculateSafeVelocity(
+        currentVelocity = vehicle.velocity,
+        desiredVelocity = speedLimit / 3.6,
+        gap = gap,
+        leaderVelocity = leaderVel,
+        maxAcceleration = maxAcceleration,
+        maxDeceleration = maxDeceleration,
+        minGap = 2.0,
+        reactionTime = 1.0,
+        deltaT = microTimeStep
+      )
+      val safeTargetVel = if (rawSafe.isNaN || rawSafe.isInfinite) 0.0 else rawSafe
       val velDiff = safeTargetVel - vehicle.velocity
       val velChange =
         if (velDiff >= 0)

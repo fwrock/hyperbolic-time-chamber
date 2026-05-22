@@ -11,6 +11,7 @@ import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.IdUtil
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
+import org.interscity.htc.core.metrics.model.hybrid.BusStopMetrics
 
 import scala.collection.mutable
 
@@ -82,6 +83,9 @@ class BusStop(
         val peopleToLoad = people.take(data.availableSpace)
         state.people.put(data.label, people.drop(data.availableSpace))
 
+        BusStopMetrics.passengersLoaded.labels(data.label).inc(peopleToLoad.size)
+        BusStopMetrics.passengersWaiting.dec(peopleToLoad.size)
+
         report(
           data = Map(
             "event_type" -> "passengers_loaded",
@@ -122,6 +126,9 @@ class BusStop(
       case Some(people) =>
         state.people.put(data.label, people :+ person)
 
+        BusStopMetrics.passengersArrived.labels(data.label).inc()
+        BusStopMetrics.passengersWaiting.inc()
+
         report(
           data = Map(
             "event_type" -> "passenger_arrived_at_stop",
@@ -135,6 +142,8 @@ class BusStop(
         )
       case None =>
         state.people.put(data.label, mutable.Seq(person))
+        BusStopMetrics.passengersArrived.labels(data.label).inc()
+        BusStopMetrics.passengersWaiting.inc()
     }
   }
 }

@@ -25,7 +25,8 @@ case class StartTripData(
   origin: String,
   destination: String,
   driverAttributes: DriverAttributes,
-  startTick: Tick
+  startTick: Tick,
+  precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
 ) extends BaseEventData
 
 /** Message from Vehicle to Person when trip is completed.

@@ -10,6 +10,7 @@ import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, StartT
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData}
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{CityMapUtil, GPSUtil, ModeChoiceUtil}
+import model.hybrid.util.strategy.ModeChoiceStrategyRegistry
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
@@ -267,7 +268,10 @@ class Person(
               )
               advanceToNextActivity()
             } else {
-              PersonMetrics.personTripStart.labels(nextActivity.activityType, effectiveLogistics.mode).inc()
+              // For "auto" mode the resolved-mode metric is fired inside initiateTrip once the
+              // strategy has determined the concrete mode; skip the pre-resolution label here.
+              if (!effectiveLogistics.mode.equalsIgnoreCase("auto"))
+                PersonMetrics.personTripStart.labels(nextActivity.activityType, effectiveLogistics.mode).inc()
               initiateTrip(nextActivity, effectiveLogistics)
             }
 
@@ -293,7 +297,10 @@ class Person(
     originNodeId: String,
     destinationNodeId: String,
     logistics: ArrivalLogistics
-  ): ArrivalLogistics =
+  ): ArrivalLogistics = {
+    // "auto" mode is resolved by the configured ModeChoiceStrategy inside initiateTrip.
+    // Skip re-evaluation here to avoid double-application.
+    if (logistics.mode.equalsIgnoreCase("auto")) return logistics
     if (!state.enableDynamicModeChoice) {
       logDebug(s"${getEntityId} chose mode: ${logistics.mode} (static)")
       logistics
@@ -313,6 +320,7 @@ class Person(
         logDebug(s"${getEntityId} chose mode: ${effective.mode}")
       effective
     }
+  }
 
   /** Initiate trip to next activity.
     */
@@ -324,15 +332,47 @@ class Person(
             initiatePrivateVehicleTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
 
           case "walk" =>
-            initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId)
+            initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId, logistics.precomputedRoute)
 
           case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-            // TODO: implement PT when bus/subway routes are active in the scenario.
-            // Currently behaves like car_passenger: teleports to destination using scheduled time.
-            logDebug(
-              s"${getEntityId} PT mode '${logistics.mode}' not yet active, advancing to next activity using scheduled time"
+            initiatePTTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
+
+          case "auto" =>
+            val strategy = ModeChoiceStrategyRegistry.get(state.modeChoiceStrategyType)
+            val resolved = strategy.choose(
+              originNodeId      = currentActivity.nodeId,
+              destinationNodeId = nextActivity.nodeId,
+              weights           = state.modeChoiceWeights,
+              ownedVehicles     = state.ownedVehicles
             )
-            advanceToNextActivity()
+            logDebug(
+              s"${getEntityId} auto mode → resolved to '${resolved.mode}' " +
+                s"(strategy=${state.modeChoiceStrategyType})"
+            )
+            report(
+              data = Map(
+                "event_type"       -> "auto_mode_resolved",
+                "person_id"        -> getEntityId,
+                "strategy"         -> state.modeChoiceStrategyType,
+                "resolved_mode"    -> resolved.mode,
+                "origin"           -> currentActivity.nodeId,
+                "destination"      -> nextActivity.nodeId,
+                "tick"             -> currentTick
+              ),
+              label = "person_auto_mode_resolved"
+            )
+            if (resolved.instant) {
+              logDebug(
+                s"${getEntityId} auto mode: no viable transport found " +
+                  s"(${currentActivity.nodeId} → ${nextActivity.nodeId}), " +
+                  s"advancing using scheduled time (strategy=${state.modeChoiceStrategyType})"
+              )
+              PersonMetrics.personTripStart.labels(nextActivity.activityType, "no_viable_mode").inc()
+              advanceToNextActivity()
+            } else {
+              PersonMetrics.personTripStart.labels(nextActivity.activityType, resolved.mode).inc()
+              initiateTrip(nextActivity, resolved)
+            }
 
           case _ =>
             // TODO: model unsupported modes properly when needed.
@@ -352,8 +392,17 @@ class Person(
     * Calculates route using road network, computes walking time based on distance and walking speed
     * (1.4 m/s typical), and schedules arrival.
     */
-  private def initiateWalkingTrip(origin: String, destination: String): Unit =
-    GPSUtil.calcRouteCompactWalking(originId = origin, destinationId = destination) match {
+  private def initiateWalkingTrip(
+    origin: String,
+    destination: String,
+    precomputedRoute: Option[List[(String, String)]] = None
+  ): Unit = {
+    val routeResult: Option[(Double, mutable.Queue[(String, String)])] =
+      precomputedRoute match {
+        case Some(route) => Some((0.0, mutable.Queue(route: _*)))
+        case None        => GPSUtil.calcRouteCompactWalking(originId = origin, destinationId = destination)
+      }
+    routeResult match {
       case Some((routeCost, routeQueue)) =>
         val totalDistance = calculateRouteDistance(routeQueue)
 
@@ -397,6 +446,7 @@ class Person(
         GPSMetrics.gpsCannotFindRoute.labels("person_walking").inc()
         advanceToNextActivity()
     }
+  }
 
   /** Initiate public transport trip (Bus or Subway).
     *
@@ -571,11 +621,12 @@ class Person(
         state.ownedVehicles.get(logistics.mode.toLowerCase) match {
           case Some(ownedVehicleRef) if ownedVehicleRef.id == vehicleRef.id =>
             val startTripData = StartTripData(
-              personId = getEntityId,
-              origin = origin,
-              destination = destination,
+              personId         = getEntityId,
+              origin           = origin,
+              destination      = destination,
               driverAttributes = logistics.driverAttributes,
-              startTick = currentTick
+              startTick        = currentTick,
+              precomputedRoute = logistics.precomputedRoute
             )
 
             sendMessageTo(

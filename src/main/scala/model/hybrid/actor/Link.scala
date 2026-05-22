@@ -418,7 +418,9 @@ class Link(
       velocity = 0.0,
       acceleration = 0.0,
       vehicleLength = data.actorSize,
-      entryTick = entryTick
+      entryTick = entryTick,
+      maxAcceleration = data.maxAcceleration,
+      maxDeceleration = data.maxDeceleration
     )
 
     state.vehiclesByLane.get(assignedLane).foreach {
@@ -561,6 +563,13 @@ class Link(
       return
     }
 
+    // Get vehicle's actual velocity from lane queue before removing it
+    val vehicleVelocity = state.vehiclesByLane.values
+      .flatMap(_.find(_.actorId == data.actorId))
+      .headOption
+      .map(_.velocity)
+      .getOrElse(0.0)
+
     state.vehiclesByLane.foreach {
       case (_, queue) =>
         queue.dequeueAll(_.actorId == data.actorId)
@@ -569,13 +578,18 @@ class Link(
     val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(data.actorId, 0.0)
     vehicleWaitingSeconds.remove(data.actorId)
 
+    val elapsedTicks = math.max(1L, currentTick - entryTick + 1)
+    val avgSpeed =
+      if (state.microTimeStep > 0) state.length / (elapsedTicks * state.microTimeStep)
+      else vehicleVelocity
+
     val microLeaveData = MicroLeaveLinkData(
       linkId = getEntityId,
       finalPosition = state.length,
-      finalVelocity = state.currentSpeed,
-      travelTime = math.max(1L, currentTick - entryTick + 1),
+      finalVelocity = vehicleVelocity,
+      travelTime = elapsedTicks,
       distanceTraveled = state.length,
-      averageSpeed = state.currentSpeed,
+      averageSpeed = avgSpeed,
       waitingTimeSeconds = accumulatedWaitingTime
     )
 

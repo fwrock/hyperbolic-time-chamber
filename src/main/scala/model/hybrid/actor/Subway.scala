@@ -9,6 +9,7 @@ import org.interscity.htc.model.hybrid.entity.state.SubwayState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped }
 import org.interscity.htc.model.hybrid.util.SubwayUtil
 import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
+import org.interscity.htc.core.metrics.model.hybrid.{ MovableMetrics, SubwayMetrics }
 
 /** Subway actor - Metro train following predefined rail routes.
   *
@@ -37,10 +38,26 @@ class Subway(
       properties = properties
     ) {
 
+  private var expectedUnloadResponses: Int = 0
+
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.status match
       case Start =>
         state.status = Ready
+        SubwayMetrics.journeysStarted.labels(state.line).inc()
+        MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+        report(
+          data = Map(
+            "event_type" -> "journey_started",
+            "subway_id" -> getEntityId,
+            "line" -> state.line,
+            "origin" -> state.origin,
+            "destination" -> state.destination,
+            "capacity" -> state.capacity,
+            "tick" -> currentTick
+          ),
+          label = "journey_started"
+        )
         enterLink()
       case Ready =>
         enterLink()
@@ -108,6 +125,7 @@ class Subway(
 
     state.countUnloadReceived = 0
     state.countUnloadPassenger = 0
+    expectedUnloadResponses = state.passengers.size
 
     val nodeId = getCurrentNode
     state.passengers.foreach {
@@ -135,6 +153,22 @@ class Subway(
     state.nodeState.isLoaded = true
     for (person <- data.people)
       state.passengers.put(person.id, person)
+    if (data.people.nonEmpty) {
+      SubwayMetrics.passengersBoarded.labels(state.line).inc(data.people.size)
+      SubwayMetrics.activePassengers.inc(data.people.size)
+      report(
+        data = Map(
+          "event_type" -> "subway_load_passengers",
+          "subway_id" -> getEntityId,
+          "line" -> state.line,
+          "passengers_loaded" -> data.people.size,
+          "total_passengers" -> state.passengers.size,
+          "capacity" -> state.capacity,
+          "tick" -> currentTick
+        ),
+        label = "subway_load_passengers"
+      )
+    }
     onFinishNodeState()
   }
 
@@ -147,9 +181,26 @@ class Subway(
       state.passengers.remove(event.actorRefId)
       state.countUnloadPassenger += 1
     }
-    if (state.countUnloadReceived >= state.countUnloadPassenger + state.passengers.size) {
+    if (state.countUnloadReceived >= expectedUnloadResponses) {
+      val unloadedCount = state.countUnloadPassenger
       state.countUnloadReceived = 0
       state.countUnloadPassenger = 0
+      expectedUnloadResponses = 0
+      if (unloadedCount > 0) {
+        SubwayMetrics.passengersAlighted.labels(state.line).inc(unloadedCount)
+        SubwayMetrics.activePassengers.dec(unloadedCount)
+        report(
+          data = Map(
+            "event_type" -> "subway_unload_passengers",
+            "subway_id" -> getEntityId,
+            "line" -> state.line,
+            "passengers_unloaded" -> unloadedCount,
+            "remaining_passengers" -> state.passengers.size,
+            "tick" -> currentTick
+          ),
+          label = "subway_unload_passengers"
+        )
+      }
       state.nodeState.isUnloaded = true
       onFinishNodeState()
     }
@@ -161,6 +212,18 @@ class Subway(
   ): Unit = {
     state.distance += data.linkLength
     logDebug(s"Subway ${getEntityId} left rail link (total distance: ${state.distance}m)")
+    report(
+      data = Map(
+        "event_type" -> "leave_link",
+        "subway_id" -> getEntityId,
+        "link_id" -> event.actorRefId,
+        "line" -> state.line,
+        "passengers" -> state.passengers.size,
+        "total_distance" -> state.distance,
+        "tick" -> currentTick
+      ),
+      label = "leave_link"
+    )
     state.status = Ready
     onFinishSpontaneous(Some(currentTick + 1))
   }
@@ -169,16 +232,30 @@ class Subway(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
+    val effectiveVelocity = state.velocity * math.max(0.5, math.min(1.5, state.speedFactor))
     val time = timeToNextStation(
       distance = data.linkLength,
-      velocity = state.velocity
+      velocity = effectiveVelocity
     )
     logDebug(s"Subway ${getEntityId} entering rail link")
     logDebug(s"  Line: ${state.line}")
     logDebug(s"  Length: ${data.linkLength}m")
-    logDebug(s"  Speed: ${state.velocity} km/h")
+    logDebug(s"  Speed: ${effectiveVelocity} km/h (factor=${state.speedFactor})")
     logDebug(s"  Travel time: ${time} ticks")
     state.status = Moving
+    report(
+      data = Map(
+        "event_type" -> "enter_link",
+        "subway_id" -> getEntityId,
+        "link_id" -> event.actorRefId,
+        "line" -> state.line,
+        "passengers" -> state.passengers.size,
+        "capacity" -> state.capacity,
+        "travel_time" -> time,
+        "tick" -> currentTick
+      ),
+      label = "enter_link"
+    )
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 

@@ -195,6 +195,8 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       # JVM Configuration — same pattern as k8s/simulation-setup.yaml
       JAVA_TOOL_OPTIONS: >-

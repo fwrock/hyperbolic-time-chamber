@@ -200,7 +200,7 @@ class LinkMicroTimeManager(
 
       val (gap, leaderVelocity) = leader match {
         case Some(l) =>
-          val g = l.position - vehicle.position - vehicle.vehicleLength
+          val g = math.max(0.0, l.position - vehicle.position - vehicle.vehicleLength)
           (g, l.velocity)
         case None =>
           (linkLength - vehicle.position, vehicle.velocity)

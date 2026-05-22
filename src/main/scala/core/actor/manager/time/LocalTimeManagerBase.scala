@@ -69,13 +69,12 @@ abstract class LocalTimeManagerBase(
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
     logInfo(s"Local TimeManager started at tick ${event.startTick}")
-    event.data.foreach(
-      data => startTime = data.startTime
-    )
+    startTime = System.currentTimeMillis()
     initialTick = event.startTick
     localTickOffset = initialTick
     isPaused = false
     isStopped = false
+    isTerminated = false
     self ! UpdateGlobalTimeEvent(localTickOffset)
   }
 
@@ -119,13 +118,22 @@ abstract class LocalTimeManagerBase(
     // Car then asynchronously calls scheduleEvent. Without re-notification, GlobalTM may decide
     // "no more events" and terminate before Car's spontaneous event is ever dispatched.
     val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
+    // Capture the LTM's current minimum scheduled tick before we add the new actor.
+    // We need this to detect whether the new actor has an EARLIER tick than whatever
+    // GTM already knows about for this LTM.
+    val prevNextTick = nextTick
     val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
-    // If TM was idle before this ScheduleEvent, wake up GlobalTM so it knows there is
-    // new work and won't terminate the simulation prematurely.
-    if (wasIdle && runningEvents.isEmpty) {
+    // Re-notify GTM if:
+    //   1. TM was idle before this actor arrived (existing wasIdle logic), OR
+    //   2. The new actor's tick is EARLIER than the previously reported next-tick.
+    //      Without this, if Car(tick=56) registers first (wasIdle → GTM entry tick=56)
+    //      and SubwayStation(tick=1) registers next (LTM not idle → no report), GTM
+    //      keeps tick=56 for this LTM and never wakes it at tick 1, causing a rewind.
+    val isEarlierTick = !wasIdle && prevNextTick.exists(effectiveTick < _)
+    if ((wasIdle || isEarlierTick) && runningEvents.isEmpty) {
       logDebug(
-        s"scheduleEvent: TM was idle, re-notifying GlobalTM (tick=$effectiveTick, actor=${event.identify.map(_.id).getOrElse("?")})"
+        s"scheduleEvent: re-notifying GTM (wasIdle=$wasIdle, isEarlierTick=$isEarlierTick, tick=$effectiveTick, actor=${event.identify.map(_.id).getOrElse("?")})"
       )
       reportGlobalTimeManager(hasScheduled = true)
     }
@@ -219,6 +227,15 @@ abstract class LocalTimeManagerBase(
       logInfo(
         s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
       )
+    }
+    // If startSimulation was never called (e.g. LTM joined the pool after the
+    // StartSimulationTimeEvent broadcast), initialise startTime and initialTick lazily
+    // so printSimulationDuration() reports a meaningful wall-clock value instead of
+    // ~Unix-epoch-ms (currentTime - 0).
+    if (startTime == 0L) {
+      startTime = System.currentTimeMillis()
+      initialTick = globalTick
+      logDebug(s"[LocalTM] startTime lazily initialised at globalTick=$globalTick (StartSimulationTimeEvent may have been missed)")
     }
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
