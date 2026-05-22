@@ -25,8 +25,6 @@ private class DeadLetterListener extends Actor {
 
   override def receive: Receive = {
     case dl: DeadLetter =>
-      // Extract actor type from path: /system/sharding/<ShardRegion>/... → ShardRegion
-      // For non-sharded actors, fall back to the last meaningful path element.
       val path = dl.recipient.path
       val recipientType = path.elements.toList match {
         case _ :: "sharding" :: shardRegion :: _ => shardRegion

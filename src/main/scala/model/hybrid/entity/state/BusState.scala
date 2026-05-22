@@ -71,7 +71,11 @@ case class BusState(
   override val size: Double,
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   var microState: Option[MicroBusState] = None,
-  var storedBestRoute: Option[List[(String, String)]] = None
+  var storedBestRoute: Option[List[(String, String)]] = None,
+  /** Speed factor applied in MICRO mode. Values < 1.0 = conservative; > 1.0 = aggressive.
+    * Clamped to [0.5, 1.5] on use. Default: 1.0.
+    */
+  val speedFactor: Double = 1.0
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

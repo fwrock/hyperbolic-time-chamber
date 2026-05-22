@@ -110,6 +110,12 @@ trait PrivateVehicle[T <: MovableState] {
     logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
 
+  /** Pre-load a route pre-computed by ModeChoiceStrategy so requestRoute() can skip a second A*.
+    *
+    * Subclasses must set the appropriate route field on their state object.
+    */
+  protected def applyPrecomputedRoute(route: List[(String, String)]): Unit
+
   /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
     * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
     * person-centric vehicles that serve multiple trips without being destroyed.
@@ -151,6 +157,9 @@ trait PrivateVehicle[T <: MovableState] {
       tripStartDistance = getCurrentDistance
 
       applyDriverAttributes(driverAttributes)
+
+      // Pre-load route if TravelTimeModeChoiceStrategy already computed it (avoids double A*)
+      data.precomputedRoute.foreach(applyPrecomputedRoute)
 
       setVehicleStatus(Start)
 

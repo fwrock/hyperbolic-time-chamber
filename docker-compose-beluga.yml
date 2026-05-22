@@ -131,6 +131,8 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       # JVM Configuration
       # -Xmx: cap at 72GB (leaves 8GB headroom for ZGC off-heap + Netty + OS)
@@ -138,6 +140,7 @@ services:
       # Note: -XX:+ZGenerational is already in the command line; no -Xms so ZGC
       # grows the heap lazily (avoids pre-allocating 48GB × 8 nodes = 384GB at startup).
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xmx72g
@@ -211,7 +214,7 @@ services:
           memory: 64G
 
   node2:
-    image: uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+    image: uxhabam/hyperbolic-time-chamber:3.0.0-beluga
     command: ["java", "-XX:+ZGenerational", "-jar", "app.jar" ]#command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
@@ -265,13 +268,13 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
-        -Xms48g
-        -Xmx72g
-        -XX:SoftMaxHeapSize=64g
         -XX:+ZGenerational
 
       # Report Manager Configuration
@@ -396,8 +399,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g
@@ -527,8 +533,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g
@@ -658,8 +667,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g
@@ -789,8 +801,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g
@@ -920,8 +935,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g
@@ -1051,8 +1069,11 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga-multi.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
         -Xms48g

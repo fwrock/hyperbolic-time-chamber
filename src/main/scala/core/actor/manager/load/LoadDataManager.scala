@@ -1,25 +1,23 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator }
+import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator}
 import core.actor.manager.BaseManager
-import core.entity.actor.properties.{ CreatorProperties, Properties }
+import core.entity.actor.properties.{CreatorProperties, Properties}
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
-import core.enumeration.{ LoadingStrategyEnum, ReportTypeEnum }
-import core.util.ActorCreatorUtil.createActor
-import core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
-import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
+import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
+import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME}
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
+import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import scala.concurrent.duration.*
 
 class LoadDataManager(
   val timeSingletonManager: ActorRef,
@@ -59,7 +57,8 @@ class LoadDataManager(
     case _: PostLoadRegistrationDoneEvent => handlePostLoadRegistrationDone()
   }
 
-  private def loadData(event: LoadDataEvent): Unit = {
+  private def 
+  loadData(event: LoadDataEvent): Unit = {
     val (eagerSources, progressive) = event.actorsDataSources.partition(
       _.loadingStrategy == LoadingStrategyEnum.EAGER
     )
@@ -209,7 +208,7 @@ class LoadDataManager(
       // can be released. With progressive sources, ProgressiveLoadDataManager handles this
       // when the last window is consumed. Shard assignments and class names stay in the registry.
       if (progressiveSources.isEmpty) {
-        core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry.clearPositions()
+        SpatialShardIdRegistry.clearPositions()
       }
       postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
     } else if (postLoadTriggerSent) {

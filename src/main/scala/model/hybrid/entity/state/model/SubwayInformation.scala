@@ -9,5 +9,9 @@ case class SubwayInformation(
   capacity: Int,
   numberOfPorts: Int,
   velocity: Double,
-  stopTime: Tick
+  stopTime: Tick,
+  /** Speed factor applied to the desired velocity. Values < 1.0 make the train
+    * more conservative; values > 1.0 make it more aggressive. Default: 1.0 (nominal).
+    */
+  speedFactor: Double = 1.0
 )

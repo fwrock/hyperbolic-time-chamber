@@ -7,13 +7,13 @@ variable "project_id" {
 variable "region" {
   description = "GCP Region"
   type        = string
-  default     = "us-central1"
+  default     = "us-east1"
 }
 
 variable "zone" {
   description = "GCP Zone"
   type        = string
-  default     = "us-central1-a"
+  default     = "us-east1-b"
 }
 
 variable "vm_name" {
@@ -23,9 +23,9 @@ variable "vm_name" {
 }
 
 variable "machine_type" {
-  description = "VM machine type. High-memory options: n2-highmem-32 (256GB), n2-highmem-64 (512GB), n2-highmem-96 (768GB), n2-highmem-128 (864GB), m3-ultramem-64 (976GB)"
+  description = "VM machine type. High-memory options: n2d-highmem-80 (640GB), n2d-highmem-96 (768GB), n2-highmem-64 (512GB), n2-highmem-96 (768GB), m3-ultramem-64 (976GB)"
   type        = string
-  default     = "n2-highmem-96"
+  default     = "n2d-highmem-80"
 }
 
 variable "disk_size_gb" {

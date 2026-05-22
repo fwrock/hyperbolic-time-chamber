@@ -26,7 +26,12 @@ case class SubwayState(
   passengers: mutable.Map[String, Identify] = mutable.Map.empty,
   var currentPathPosition: Int = 0,
   line: String,
-  override val actorType: ActorTypeEnum = Subway
+  override val actorType: ActorTypeEnum = Subway,
+  /** Speed factor applied to the velocity when calculating travel time.
+    * Values < 1.0 = conservative (slower); > 1.0 = aggressive (faster).
+    * Clamped to [0.5, 1.5] on use. Default: 1.0.
+    */
+  val speedFactor: Double = 1.0
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

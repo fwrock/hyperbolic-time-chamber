@@ -120,9 +120,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The current time manager type name
     */
   protected def getCurrentTimeManagerType: String = currentTimeManagerType
-
-  // ── Migration State Preservation ──────────────────────────────────────────
-
+  
   /** Builds a migration snapshot that includes simulation-specific metadata in addition to the base
     * actor state.
     *

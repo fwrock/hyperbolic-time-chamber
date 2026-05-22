@@ -112,12 +112,15 @@ class SimulationManager(
     }
   }
 
-  /** Returns the list of warm-up targets from config or HTC_WARMUP_TARGETS env var.
+  /** Returns the list of warm-up targets from application.conf / HTC_WARMUP_TARGETS env var,
+    * merged with targets declared in simulation.json (configuration.warmupTargets).
     * Format: comma-separated "pkg.Object#method" strings.
     */
   private def warmUpTargets(): List[String] = {
-    val raw = scala.util.Try(config.getString("htc.warmup.targets")).getOrElse("")
-    raw.split(",").map(_.trim).filter(_.nonEmpty).toList
+    val fromConf = scala.util.Try(config.getString("htc.warmup.targets")).getOrElse("")
+    val confTargets = fromConf.split(",").map(_.trim).filter(_.nonEmpty).toList
+    val simTargets = configuration.warmupTargets
+    (confTargets ++ simTargets).distinct
   }
 
   private def doStartSimulation(event: FinishLoadDataEvent): Unit = {

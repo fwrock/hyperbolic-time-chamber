@@ -28,6 +28,8 @@ case class VehicleInLane(
   acceleration: Double,
   vehicleLength: Double,
   entryTick: Tick = 0,
+  maxAcceleration: Double = 2.6,
+  maxDeceleration: Double = 4.5,
   microStateRef: Option[Any] = None // Can hold MicroCarState, MicroBusState, etc.
 ) {
 

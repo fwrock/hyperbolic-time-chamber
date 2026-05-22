@@ -18,7 +18,7 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
 import org.interscity.htc.model.hybrid.entity.event.data._
-import org.interscity.htc.core.metrics.model.hybrid.MovableMetrics
+import org.interscity.htc.core.metrics.model.hybrid.{ BusMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
@@ -78,11 +78,19 @@ class Bus(
   private var sumoIsHalting: Boolean = false
   private var sumoRerouteNo: Int = 0
   private var sumoTripInfoReported: Boolean = false
+  private var journeyFinishedReported: Boolean = false
 
   /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
     * triggering premature leavingLink.
     */
   private var signalWaitUntilTick: Option[Tick] = None
+
+  /** Counts successive spontaneous ticks spent in WaitingSignalState without a node response.
+    * Mirrors Car's recovery mechanism: if the node never replies, the bus force-leaves the link
+    * instead of deadlocking indefinitely.
+    */
+  private var signalStateRetryCounter: Int = 0
+  private val MaxSignalStateRetries: Int = 100
 
   /** Number of passengers asked to unload at current stop. Used to track when all responses
     * arrived.
@@ -203,6 +211,18 @@ class Bus(
             leavingLink()
         }
 
+      case WaitingSignalState =>
+        signalStateRetryCounter += 1
+        if (signalStateRetryCounter > MaxSignalStateRetries) {
+          logWarn(
+            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
+          )
+          signalStateRetryCounter = 0
+          leavingLink()
+        } else {
+          requestSignalState()
+        }
+
       case WaitingLoadPassenger =>
         currentStopNode = None
         enterLink()
@@ -290,7 +310,7 @@ class Bus(
       maxAcceleration = 1.2,
       maxDeceleration = 3.5,
       minGap = 3.0,
-      desiredVelocity = math.min(data.speedLimit, 11.11),
+      desiredVelocity = math.min(data.speedLimit, 11.11) * math.max(0.5, math.min(1.5, state.speedFactor)),
       reactionTime = 1.5,
       vehicleLength = 12.0,
       capacity = state.capacity,
@@ -395,7 +415,12 @@ class Bus(
       label = "leave_micro_link"
     )
 
+    // Mirror what leavingLink() does in MESO: capture the destination node before
+    // deactivating micro state so that actSpontaneous(Ready) can check for a bus stop.
+    currentStopNode = state.currentPath.map(_._2)
+
     state.deactivateMicroMode()
+    state.status = Ready
     currentLinkId = None
     linkEntryTick = None
 
@@ -498,6 +523,9 @@ class Bus(
       for (person <- data.people)
         state.people.put(person.id, person)
 
+      BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
+      BusMetrics.activePassengers.inc(data.people.size)
+
       report(
         data = Map(
           "event_type" -> "bus_load_passengers",
@@ -543,6 +571,9 @@ class Bus(
         )
         sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
 
+        BusMetrics.passengersAlighted.labels(state.label).inc(unloadedCount)
+        BusMetrics.activePassengers.dec(unloadedCount)
+
         report(
           data = Map(
             "event_type" -> "bus_unload_passengers",
@@ -572,6 +603,7 @@ class Bus(
       )
       return
     }
+    signalStateRetryCounter = 0
     if (data.phase == Red) {
       state.status = WaitingSignal
       signalWaitUntilTick = Some(data.nextTick)
@@ -598,9 +630,13 @@ class Bus(
     }
   }
 
+  override protected def microMaxAcceleration: Double = 1.2
+  override protected def microMaxDeceleration: Double = 3.5
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalStateRetryCounter = 0
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
@@ -710,6 +746,8 @@ class Bus(
     }.getOrElse(1000.0)
 
   private def finishJourney(reason: String, finalNode: String): Unit = {
+    if (journeyFinishedReported) return
+    journeyFinishedReported = true
     val vehicleType = getClass.getSimpleName
     MovableMetrics.journeysCompleted.labels(vehicleType).inc()
     MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)

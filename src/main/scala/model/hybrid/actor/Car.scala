@@ -105,6 +105,11 @@ class Car(
   override protected def logVehicleDebug(message: String): Unit = logDebug(message)
   override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
 
+  /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
+    */
+  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+    state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
+
   /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
     * PrivateVehicle.handleStartTrip before each activation. Critical for person-centric vehicles
     * that serve multiple trips without being destroyed.

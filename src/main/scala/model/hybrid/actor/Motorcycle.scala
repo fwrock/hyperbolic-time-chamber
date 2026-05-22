@@ -151,6 +151,11 @@ class Motorcycle(
   /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
     * PrivateVehicle.handleStartTrip before each activation.
     */
+  /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
+    */
+  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+    state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
+
   override protected def resetTripState(): Unit = {
     if (state == null) return
     currentLinkId = None
@@ -366,6 +371,9 @@ class Motorcycle(
     }
   }
 
+  override protected def microMaxAcceleration: Double = 3.5
+  override protected def microMaxDeceleration: Double = 5.0
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
@@ -375,6 +383,37 @@ class Motorcycle(
 
   override def requestRoute(): Unit = {
     if (state.status == Finished) {
+      return
+    }
+    // Skip GPS if route was pre-loaded by TravelTimeModeChoiceStrategy (avoids double A*)
+    if (state.bestRoute.exists(_.nonEmpty)) {
+      val preRoute    = state.bestRoute.get
+      val origin      = getTripOrigin.getOrElse(state.origin)
+      val destination = getTripDestination.getOrElse(state.destination)
+      state.bestCost = preRoute.size.toDouble
+      state.status = Ready
+      state.updateCurrentPath(None)
+      MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+      report(
+        data = Map(
+          "event_type"    -> "journey_started",
+          "vehicle_id"    -> getEntityId,
+          "motorcycle_id" -> getEntityId,
+          "origin"        -> origin,
+          "destination"   -> destination,
+          "route_length"  -> preRoute.size,
+          "aggressiveness" -> aggressiveness,
+          "tick"          -> currentTick
+        ),
+        label = "journey_started"
+      )
+      if (preRoute.nonEmpty) enterLink()
+      else {
+        finishJourney("already_at_destination", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
+      }
       return
     }
     val origin = getTripOrigin.getOrElse(state.origin)
