@@ -61,6 +61,22 @@ class Car(
   private var signalStateRetryCounter: Int = 0
   private val MaxSignalStateRetries: Int = 100
 
+  private lazy val staleEventLogEvery: Int =
+    sys.env
+      .get("HTC_CAR_STALE_EVENT_LOG_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.car.stale-event-log-every")).toOption)
+      .filter(_ > 0)
+      .getOrElse(100)
+
+  private var staleEventLogCount: Long = 0L
+
+  private def logStaleEventDebug(message: String): Unit = {
+    staleEventLogCount += 1
+    if (staleEventLogCount % staleEventLogEvery == 0L)
+      logDebug(s"$message [sample=$staleEventLogCount]")
+  }
+
   private def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {
@@ -138,12 +154,7 @@ class Car(
     sumoTripInfoReported = false
     signalWaitUntilTick = None
     signalStateRetryCounter = 0
-    // Clear previous trip's route; new route will be calculated from tripOrigin/tripDestination
     state.bestRoute = None
-    // Drop any precomputed route from the JSON spec — it has been consumed by the
-    // trip just finished. In person-centric mode this Car is reused for further trips
-    // (which compute their own routes via GPSUtil), so keeping the old List would
-    // pin a sizeable amount of heap for the rest of the simulation.
     state.precomputedRoute = None
     state.deactivateMicroMode()
   }
@@ -162,10 +173,6 @@ class Car(
         s"Car $getEntityId exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
-      // Do NOT call leavingLink() here — it triggers a round-trip (LeaveLinkData → ReceiveLeaveLinkInfo)
-      // but we selfDestruct immediately after, creating an orphaned reply that restarts the shard entity.
-      // Bicycle/Motorcycle correctly omit leavingLink() in their forced-exit paths.
-      // The Link's stale entry is acceptable since the simulation is ending.
       finishJourney("simulation_time_exceeded", finalNode)
       onFinishPrivateVehicle(finalNode)
       onFinishSpontaneous(None)
@@ -184,11 +191,6 @@ class Car(
               requestSignalState()
           }
         } else {
-          // Car is in MICRO mode: driven entirely by MicroUpdate messages from the link.
-          // Spontaneous events should not occur in normal MICRO operation (they are stopped
-          // by onFinishSpontaneous(None) in handleMicroEnterLink). If one arrives here due to
-          // stale Waiting-state ticks or other edge cases, quietly deregister to keep things clean
-          // (Bug 1 fix ensures this does NOT cause a spurious hasScheduled=false report).
           onFinishSpontaneous(None)
         }
 
@@ -226,28 +228,14 @@ class Car(
       return
     }
 
-    // Guard: ignore link/signal events when state is null.
-    // This happens due to a Pekko cluster sharding ghost restart: selfDestruct() sends
-    // Passivate(PoisonPill) to the shard, but in-flight messages (already queued in the
-    // shard mailbox) cause the shard to recreate a new entity instance with state == null
-    // before the passivation is finalized. We discard the stale message and immediately
-    // re-passivate the ghost entity so it does not linger in memory.
     if (state == null) {
-      // With the corrected flow (Link sends MicroLeaveLinkData proactively), this should
-      // not occur in normal operation. If it does, simply discard — do NOT selfDestruct():
-      // this Car is a PrivateVehicle that may serve multiple trips, and without state
-      // persistence there is nothing to recover from. Destroying it here would break
-      // subsequent StartTrip activations from the owning Person actor.
       event.data match {
         case _: MicroLeaveLinkData | _: MicroUpdateData =>
-          logDebug(
+          logStaleEventDebug(
             s"$getEntityId received stale MICRO event with null state, discarding: ${event.eventType}"
           )
         case _: LinkInfoData =>
-          // ReceiveLeaveLinkInfo / ReceiveEnterLinkInfo arriving after shard passivation —
-          // expected artifact of the MESO leave-link round-trip when the car was already
-          // destroyed or evicted by the shard cluster. Safe to discard silently.
-          logDebug(
+          logStaleEventDebug(
             s"$getEntityId received stale MESO link event with null state, discarding: ${event.eventType}"
           )
         case _ =>
@@ -295,11 +283,6 @@ class Car(
       state.status = Ready
       state.updateCurrentPath(None)
 
-      // Memory-optimisation: the JSON-parsed precomputedRoute (List[PrecomputedRouteItem]) has
-      // been materialised into bestRoute (a Queue[(linkId, nodeId)]). The original list is no
-      // longer needed for the rest of this trip and would otherwise stay alive until
-      // resetTripState/selfDestruct. Releasing it now lets the GC reclaim the per-trip
-      // precomputed payload across the whole car fleet.
       state.precomputedRoute = None
 
       GPSMetrics.routeSource.labels("precomputed").inc()
@@ -353,7 +336,7 @@ class Car(
     }
 
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           state.bestCost = cost
@@ -478,7 +461,7 @@ class Car(
     // generating a second request. Both responses eventually arrive. Without this guard, the second
     // response would call leavingLink() on an already-left link, corrupting the route queue.
     if (state.status != WaitingSignalState) {
-      logDebug(
+      logStaleEventDebug(
         s"$getEntityId: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
       )
       return
@@ -755,7 +738,7 @@ class Car(
     // for intermediate links) before this response arrived from the Link. Discard to prevent
     // double distance accumulation, double finishJourney(), and spurious onFinishSpontaneous().
     if (state.status == Parked || state.status == Finished) {
-      logDebug(
+      logStaleEventDebug(
         s"$getEntityId: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
           s"(status=${state.status}, trip already finalized)."
       )

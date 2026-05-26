@@ -86,6 +86,44 @@ class ProgressiveLoadDataManager(
   private var pendingIndexSources: List[String] = List.empty
   private var currentIndexBatchSize: Int = 0
 
+  private lazy val indexProgressLogStepPct: Int =
+    scala.util.Try(
+      context.system.settings.config.getInt("htc.progressive-load.index-progress-log-step-pct")
+    ).toOption.filter(v => v > 0 && v <= 100).getOrElse(10)
+
+  private lazy val windowProgressLogStepPct: Int =
+    scala.util.Try(
+      context.system.settings.config.getInt("htc.progressive-load.window-progress-log-step-pct")
+    ).toOption.filter(v => v > 0 && v <= 100).getOrElse(20)
+
+  private var lastIndexedProgressBucket: Int = -1
+  private var lastWindowProgressBucket: Int = -1
+
+  private def progressPct(done: Int, total: Int): Int =
+    if (total <= 0) 100 else Math.min(100, (done * 100) / total)
+
+  private def shouldLogIndexedProgress(done: Int, total: Int): Boolean = {
+    val pct = progressPct(done, total)
+    val bucket = (pct / indexProgressLogStepPct) * indexProgressLogStepPct
+    if (pct >= 100 || bucket > lastIndexedProgressBucket) {
+      lastIndexedProgressBucket = bucket
+      true
+    } else {
+      false
+    }
+  }
+
+  private def shouldLogWindowProgress(done: Int, total: Int): Boolean = {
+    val pct = progressPct(done, total)
+    val bucket = (pct / windowProgressLogStepPct) * windowProgressLogStepPct
+    if (pct >= 100 || bucket > lastWindowProgressBucket) {
+      lastWindowProgressBucket = bucket
+      true
+    } else {
+      false
+    }
+  }
+
   override def onStart(): Unit =
     reporters = poolReporters
 
@@ -220,11 +258,14 @@ class ProgressiveLoadDataManager(
     }
     aggregatedTickCounts = TreeMap.from(mutableCounts)
 
-    logInfo(
-      s"Source ${event.sourceId} indexed: ${event.totalActors} actors, maxTick=${event.maxTick}. " +
-        s"Progress: ${indexedSources.size}/${loaders.size}. " +
-        s"Aggregated density: ${aggregatedTickCounts.size} unique ticks"
-    )
+    if (shouldLogIndexedProgress(indexedSources.size, loaders.size)) {
+      val pct = progressPct(indexedSources.size, loaders.size)
+      logInfo(
+        s"Progressive index build progress: ${indexedSources.size}/${loaders.size} ($pct%). " +
+          s"Latest source=${event.sourceId}, maxTick=${event.maxTick}, " +
+          s"aggregatedDensityTicks=${aggregatedTickCounts.size}"
+      )
+    }
 
     if (indexedSources.size == loaders.size) {
       fullyIndexed = true
@@ -263,9 +304,9 @@ class ProgressiveLoadDataManager(
 
     if (!fullyIndexed || loadInFlight) {
       if (!fullyIndexed)
-        logInfo(s"Tick window request received but indexing not complete. Queueing...")
+        logDebug(s"Tick window request received but indexing not complete. Queueing...")
       else
-        logInfo(
+        logDebug(
           s"Tick window request (horizon=${request.horizonTick}) arrived while load in-flight. " +
             s"Queuing (replaces any earlier pending horizon)."
         )
@@ -289,7 +330,7 @@ class ProgressiveLoadDataManager(
 
     val toTick = calculateAdaptiveHorizon(fromTick, maxHorizon)
 
-    logInfo(
+    logDebug(
       s"Processing tick window: currentTick=${request.currentTick}, " +
         s"adaptive range [$fromTick, $toTick] (requested max=$maxHorizon)"
     )
@@ -320,10 +361,12 @@ class ProgressiveLoadDataManager(
     currentLoadFromTick = fromTick
     currentLoadToTick = toTick
 
-    logInfo(
+    logDebug(
       s"Starting load with ${firstBatch.size} concurrent loaders " +
         s"(${rest.size} queued, LOAD_BATCH_SIZE=$LOAD_BATCH_SIZE)"
     )
+
+    lastWindowProgressBucket = -1
 
     loadInFlight = true
     firstBatch.foreach {
@@ -345,11 +388,19 @@ class ProgressiveLoadDataManager(
     val completed = pendingRangeResponses.count(_._2)
     val total = pendingRangeResponses.size
 
-    logInfo(
+    logDebug(
       s"Source ${event.sourceId} loaded ${event.actorsLoaded} actors " +
-        s"for ticks [${event.fromTick}, ${event.toTick}]. " +
-        s"Progress: $completed/$total (${pendingLoadQueue.size} queued)"
+        s"for ticks [${event.fromTick}, ${event.toTick}]"
     )
+
+    if (shouldLogWindowProgress(completed, total)) {
+      val pct = progressPct(completed, total)
+      logInfo(
+        s"Progressive window load progress: $completed/$total ($pct%) " +
+          s"for ticks [${event.fromTick}, ${event.toTick}], " +
+          s"actorsInWindow=$pendingRangeActorsCount, queuedLoaders=${pendingLoadQueue.size}"
+      )
+    }
 
     if (pendingLoadQueue.nonEmpty) {
       val nextId = pendingLoadQueue.head
@@ -399,7 +450,7 @@ class ProgressiveLoadDataManager(
     */
   private def calculateAdaptiveHorizon(fromTick: Tick, maxHorizon: Tick): Tick =
     if (aggregatedTickCounts.isEmpty) {
-      logInfo(s"No density data available, using max horizon $maxHorizon")
+      logDebug(s"No density data available, using max horizon $maxHorizon")
       maxHorizon
     } else {
       var actorCount = 0
@@ -414,7 +465,7 @@ class ProgressiveLoadDataManager(
       while (iter.hasNext && !exceeded) {
         val (tick, count) = iter.next()
         if (actorCount + count > TARGET_ACTORS_PER_WINDOW && tick > minHorizon) {
-          logInfo(
+          logDebug(
             s"Adaptive horizon: $lastTickWithActors " +
               s"(accumulated $actorCount actors, next tick $tick would add $count, exceeding target $TARGET_ACTORS_PER_WINDOW)"
           )
@@ -428,7 +479,7 @@ class ProgressiveLoadDataManager(
       if (exceeded) {
         lastTickWithActors
       } else {
-        logInfo(
+        logDebug(
           s"Adaptive horizon: $cappedMaxHorizon " +
             s"(all $actorCount actors in range fit within target $TARGET_ACTORS_PER_WINDOW)"
         )

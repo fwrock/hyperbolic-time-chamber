@@ -734,7 +734,8 @@ An agent with a **daily activity schedule**. Manages mode choice and activates v
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `enableDynamicModeChoice` | `Boolean` | `false` | Enable utility-based mode re-evaluation at each departure |
+| `enableDynamicModeChoice` | `Boolean` | `false` | Global master switch in `simulation.json` for runtime mode choice |
+| `PersonState.enableDynamicModeChoice` | `Boolean` | `false` | Per-person opt-in for utility-based mode re-evaluation |
 | `modeChoiceWeights.betaMode` | `Double` | `1.0` | Scale applied to mode preference score |
 | `modeChoiceWeights.betaAccess` | `Double` | `0.001` | Per-metre penalty for walking to a boarding stop |
 | `modeChoiceWeights.betaEgress` | `Double` | `0.001` | Per-metre penalty for walking from an alighting stop |
@@ -744,7 +745,9 @@ An agent with a **daily activity schedule**. Manages mode choice and activates v
 | `modeChoiceWeights.maxAccessDistanceM` | `Double` | `1500.0` | Max haversine radius (m) to search for stops |
 | `modeChoiceWeights.maxWalkDistanceM` | `Double` | `2000.0` | Max O→D distance (m) for walking to be a candidate |
 
-**`arrivalLogistics.fixedMode`:** when `true`, the leg is never re-evaluated even if `enableDynamicModeChoice` is active on the Person. Useful for car trips that must always remain as car regardless of transit availability.
+**`arrivalLogistics.fixedMode`:** when `true`, the leg is never re-evaluated even if dynamic mode choice is globally enabled. Useful for car trips that must always remain as car regardless of transit availability.
+
+**Global override:** when `simulation.json` sets `enableDynamicModeChoice: false`, no Person will perform runtime mode choice, even if a person-level `enableDynamicModeChoice` is `true`.
 
 ---
 
@@ -1196,7 +1199,7 @@ Increase the sample rate for higher fidelity; decrease it for faster prototype r
 
 ## 13. Dynamic Mode Choice
 
-The dynamic mode choice system allows Person agents to **select their transport mode at runtime** instead of following a pre-defined schedule. When enabled, the agent evaluates all accessible transit options and walking at each trip departure and picks the one with the highest utility score.
+The dynamic mode choice system allows Person agents to **select their transport mode at runtime** instead of following a pre-defined schedule. When enabled, each non-fixed trip leg is resolved by the configured mode-choice strategy (`modeChoiceStrategyType`). Depending on the strategy and `modeChoiceWeights.includedModes`, the agent can evaluate walking, transit, and owned private vehicles at each trip departure.
 
 ### When to use
 
@@ -1223,7 +1226,6 @@ The following table summarises when dynamic re-evaluation is skipped and the ori
 | Condition | Dynamic evaluation? |
 |---|---|
 | `enableDynamicModeChoice: false` | No — static schedule |
-| `arrivalLogistics.vehicle` is set | No — private vehicle trip |
 | `arrivalLogistics.fixedMode: true` | No — leg explicitly locked |
 | `transit_map.json` not configured | No — `TransitMapUtil` unavailable |
 | Origin or destination node not in `city_map.json` | No — cannot compute haversine |

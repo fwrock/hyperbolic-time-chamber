@@ -30,15 +30,9 @@ class TrafficSignal(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    val firstTick = state.startTick + state.offset
     logDebug(
-      s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}"
+      s"TrafficSignal ${getEntityId} initialized. First tick: ${state.startTick + state.offset}, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}"
     )
-    if (firstTick < simulationEnd) {
-      scheduleEvent(firstTick)
-    } else {
-      onFinishSpontaneous()
-    }
   }
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =

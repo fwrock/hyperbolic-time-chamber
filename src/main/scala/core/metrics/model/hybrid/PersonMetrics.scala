@@ -11,6 +11,8 @@ import io.prometheus.client.{Counter, Gauge, Histogram}
  *   - htc_person_complete_trip_reason_total — trip completion outcomes by activity type, mode and reason
  *   - htc_person_arrival_delay_ticks — histogram of arrival delay in ticks by activity type
  *   - htc_person_delayed_arrival_total — trips where person arrived later than scheduled
+ *   - htc_person_mode_choice_resolved_total — mode-choice decisions by requested and resolved mode
+ *   - htc_person_mode_choice_changed_total — decisions where resolved mode differs from requested mode
  *   - htc_person_truncated_activity_total — activities removed due to endTime > simulation duration
  *   - htc_person_truncated_activity_excess_ticks — histogram of how far beyond sim duration each removed activity was
  */
@@ -56,6 +58,20 @@ object PersonMetrics {
     .name("htc_person_delayed_arrival_total")
     .help("Total delayed person arrivals (observed delay > 0), by activity type")
     .labelNames("activity_type")
+    .register()
+
+  val personModeChoiceResolved: Counter = Counter
+    .build()
+    .name("htc_person_mode_choice_resolved_total")
+    .help("Total mode-choice decisions by requested mode, resolved mode, and decision source")
+    .labelNames("requested_mode", "resolved_mode", "source")
+    .register()
+
+  val personModeChoiceChanged: Counter = Counter
+    .build()
+    .name("htc_person_mode_choice_changed_total")
+    .help("Total mode-choice decisions where resolved mode differs from requested mode")
+    .labelNames("requested_mode", "resolved_mode", "source")
     .register()
 
   val personTruncatedActivity: Counter = Counter

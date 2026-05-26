@@ -436,7 +436,7 @@ object GPSUtil {
     val t0 = System.nanoTime()
     val cg  = CityMapUtil.compactGraph
     val cli = CityMapUtil.compactAltIndex
-    // Pure array arithmetic heuristic — no HashMap, no object allocation per call.
+
     val result = cg.aStarALT(
       originId,
       destinationId,

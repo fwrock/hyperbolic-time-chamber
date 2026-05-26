@@ -4,7 +4,7 @@ package core.actor.manager.time
 import core.entity.control.LocalTimeManagerTickInfo
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.execution.QueryNextTickEvent
-import core.entity.event.control.load.{ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
+import core.entity.event.control.load.{ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
@@ -18,6 +18,7 @@ import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEven
 import core.entity.event.control.loadbalance.{MigrationCompleteNotifyEvent, MigrationSafeEvent, RequestMigrationPauseEvent}
 import core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.metrics.core.{ProgressiveLoadingMetrics, SimulationMetrics, TimeManagerMetrics}
+import org.interscity.htc.core.metrics.core.PhaseMetrics
 
 import scala.collection.mutable
 
@@ -86,8 +87,17 @@ class GlobalTimeManager(
   private var pendingStartEvent: Option[StartSimulationTimeEvent] = None
   private var waitingForInitialWindow = false
 
+  // Guard: prevents GTM from advancing ticks before StartSimulationTimeEvent is received.
+  // During loading/warmup/post-load-registration, all LTMs register actors and report
+  // hasScheduled=true. Without this flag, calculateAndBroadcastNextGlobalTick would fire
+  // SpontaneousEvents before progressive loading is set up — causing the simulation to
+  // run with loadedUpTo=MaxValue and no Person/Car actors ever spawned.
+  private var simulationStarted: Boolean = false
+
   // Periodic progress log: log at INFO every N ticks so the simulation isn't completely silent
   private var metricsLogInterval: Long = 500L
+  private var selectiveBarrierLogInterval: Long = 2000L
+  private var localReportWaitLogInterval: Long = 2000L
 
   override def onStart(): Unit =
     createTimeManagersPool()
@@ -100,6 +110,14 @@ class GlobalTimeManager(
       SimulatorSettingsRegistry.getInt("htc.time-manager.max-instances-per-node", config)
     metricsLogInterval =
       SimulatorSettingsRegistry.getInt("htc.time-manager.metrics-log-interval", config).toLong
+    selectiveBarrierLogInterval =
+      SimulatorSettingsRegistry
+        .getInt("htc.time-manager.selective-barrier-log-interval", config)
+        .toLong
+    localReportWaitLogInterval =
+      SimulatorSettingsRegistry
+        .getInt("htc.time-manager.local-report-wait-log-interval", config)
+        .toLong
     logInfo(
       s"Creating LocalTM pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
@@ -154,17 +172,28 @@ class GlobalTimeManager(
     progressiveLoadedUpToTick = -1L
     progressiveLoadingComplete = false
     maxLookAheadTicks = event.lookAheadTicks
-    lastWindowTickRange = event.lookAheadTicks // Initial estimate until first real window
+    lastWindowTickRange = event.lookAheadTicks
     logInfo(s"Progressive load manager registered with maxLookAhead=${event.lookAheadTicks}")
+    event.ackTo.foreach(_ ! ProgressiveLoadManagerRegisteredEvent(event.lookAheadTicks))
   }
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
+    simulationStarted = true
     logInfo(s"Global TimeManager started at tick ${event.startTick}")
     initialTick = event.startTick
     localTickOffset = initialTick
     isPaused = false
     isStopped = false
     SimulationMetrics.configuredDuration.set(simulationDuration.toDouble)
+
+    // Reset stale isProcessed/hasSchedule flags accumulated from loading-time LTM reports.
+    // Without this reset, a single post-start LTM report could satisfy the "all processed"
+    // barrier while other LTMs still hold stale loading-phase state, causing GTM to advance
+    // to the wrong next tick before all LTMs have reported their true post-start schedule.
+    localTimeManagers.foreach {
+      case (ref, info) =>
+        localTimeManagers.update(ref, info.copy(isProcessed = false, hasSchedule = false))
+    }
 
     // If progressive loading is enabled, we MUST wait for the initial window
     // to be loaded before starting the simulation. Otherwise actors scheduled
@@ -176,10 +205,13 @@ class GlobalTimeManager(
       )
       pendingStartEvent = Some(event)
       waitingForInitialWindow = true
+      logInfo(s"[StartupPhase] progressive_first_window_request: fromTick=$initialTick")
       requestProgressiveLoad(initialTick)
       return // Do NOT notify local managers yet
     }
 
+    PhaseMetrics.recordPhaseStart("simulation")
+    logInfo("[StartupPhase] simulation_clock_released_no_progressive")
     notifyLocalManagers(event)
     startTime = System.currentTimeMillis()
   }
@@ -269,7 +301,8 @@ class GlobalTimeManager(
     val totalCount = localTimeManagers.size
 
     if (localTimeManagers.values.forall(_.isProcessed)) {
-      logDebug(s"All $totalCount managers reported, calculating next tick")
+      if (metricsLogInterval > 0 && tickOffset % metricsLogInterval == 0L)
+        logDebug(s"All $totalCount managers reported, calculating next tick")
       // If migration pause is pending, signal the requester that it's now safe
       if (migrationPauseRequested && migrationRequester != null) {
         logInfo(s"All local managers reported. Signaling migration safe at tick $localTickOffset")
@@ -278,7 +311,8 @@ class GlobalTimeManager(
       }
       calculateAndBroadcastNextGlobalTick()
     } else {
-      logDebug(s"Waiting for more reports: $processedCount/$totalCount processed")
+      if (localReportWaitLogInterval > 0 && tickOffset % localReportWaitLogInterval == 0L)
+        logDebug(s"Waiting for more reports: $processedCount/$totalCount processed")
     }
   }
 
@@ -289,6 +323,18 @@ class GlobalTimeManager(
     // broadcast to LTMs that have already received StopSimulationEvent, causing a race
     // between processing the phantom tick and force-destroying actors.
     if (isTerminated) {
+      return
+    }
+
+    // Guard: do not advance ticks before StartSimulationTimeEvent has been received.
+    // During loading/warmup/post-load-registration, LTMs register actors and report
+    // hasScheduled=true, which triggers this method. Without this guard, GTM would
+    // fire SpontaneousEvents before progressive loading is configured, causing the
+    // simulation to start with loadedUpTo=MaxValue and no Person actors.
+    if (!simulationStarted) {
+      logDebug(
+        "GTM: suppressing premature tick advancement — StartSimulationTimeEvent not yet received"
+      )
       return
     }
 
@@ -453,9 +499,10 @@ class GlobalTimeManager(
         localTimeManagers.update(tm, info.copy(isProcessed = true))
       }
     }
-    logDebug(
-      s"[SelectiveBarrier] Tick $nextTick: notified $activeCount/${localTimeManagers.size} LTMs"
-    )
+    if (selectiveBarrierLogInterval > 0 && tickOffset % selectiveBarrierLogInterval == 0L)
+      logDebug(
+        s"[SelectiveBarrier] Tick $nextTick: notified $activeCount/${localTimeManagers.size} LTMs"
+      )
     // If all LTMs are idle (no active work), re-enter to re-evaluate (e.g. progressive load)
     if (activeCount == 0) {
       calculateAndBroadcastNextGlobalTick()
@@ -564,6 +611,10 @@ class GlobalTimeManager(
       pendingStartEvent.foreach {
         startEvent =>
           pendingStartEvent = None
+          PhaseMetrics.recordPhaseStart("simulation")
+          logInfo(
+            s"[StartupPhase] simulation_clock_released_after_first_window: readyUpTo=${event.readyUpToTick}, actorsCreated=${event.actorsCreated}"
+          )
           startTime = System.currentTimeMillis()
           notifyLocalManagers(startEvent)
       }
@@ -662,10 +713,10 @@ class GlobalTimeManager(
         StopSimulationEvent()
       )
       // Notify SimulationManager so it can flush reporters and stop gracefully
-//      simulationManager ! org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
+      simulationManager ! org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent()
       // Explicitly shut down the actor system so the JVM (container) exits.
       // Without this, non-daemon threads keep the JVM alive indefinitely.
-//      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
+      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
     }
   }
 

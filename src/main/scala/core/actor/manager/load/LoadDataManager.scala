@@ -1,14 +1,14 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator}
+import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData}
 import core.actor.manager.BaseManager
 import core.entity.actor.properties.{CreatorProperties, Properties}
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
 import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
-import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME}
+import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME}
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
@@ -37,10 +37,8 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
-  private var postLoadCoordinator: ActorRef = null
   private var postLoadRegistrationClassesConfig: Set[String] = Set.empty
-  private var postLoadTriggerSent: Boolean = false
-  private var postLoadDone: Boolean = false
+  private var eagerLoadReadySent: Boolean = false
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
@@ -50,11 +48,10 @@ class LoadDataManager(
     reporters = poolReporters
 
   override def handleEvent: Receive = {
-    case event: LoadDataEvent             => loadData(event)
-    case event: FinishLoadDataEvent       => handleFinishLoadData(event)
-    case _: LoadNextEvent                 => handleLoadNext()
-    case _: StopSimulationEvent           => handleStopSimulation()
-    case _: PostLoadRegistrationDoneEvent => handlePostLoadRegistrationDone()
+    case event: LoadDataEvent       => loadData(event)
+    case event: FinishLoadDataEvent => handleFinishLoadData(event)
+    case _: LoadNextEvent           => handleLoadNext()
+    case _: StopSimulationEvent     => handleStopSimulation()
   }
 
   private def 
@@ -76,18 +73,13 @@ class LoadDataManager(
       return
     }
 
-    postLoadCoordinator = context.actorOf(
-      PostLoadRegistrationCoordinator.props(getSelfProxy),
-      "post-load-registration-coordinator"
-    )
-
     val totalSources = event.actorsDataSources.size
     creatorRef = createCreatorLoadData(totalSources)
     creatorPoolRef = createCreatorPoolLoadData(totalSources)
 
     if (eagerSources.isEmpty) {
-      logInfo("No EAGER sources. Triggering post-load registration phase.")
-      postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
+      logInfo("No EAGER sources. Emitting eager-load-ready barrier and waiting for post-load trigger.")
+      notifyEagerLoadReady()
       return
     }
 
@@ -150,7 +142,7 @@ class LoadDataManager(
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters,
-            postLoadCoordinator = postLoadCoordinator,
+            postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
           )
         )
@@ -177,7 +169,7 @@ class LoadDataManager(
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters,
-            postLoadCoordinator = postLoadCoordinator,
+            postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
           )
         )
@@ -197,49 +189,29 @@ class LoadDataManager(
 
     getSelfProxy ! LoadNextEvent()
 
-    if (isAllDataLoaded && !postLoadTriggerSent) {
-      postLoadTriggerSent = true
+    if (isAllDataLoaded && !eagerLoadReadySent) {
       logInfo(
         s"All EAGER data loaded! ${progressiveSources.size} PROGRESSIVE sources pending. " +
-          s"Triggering post-load registration phase."
+          s"Emitting eager-load-ready barrier."
       )
-      // Memory-optimisation: when there are no progressive sources, no more entity creation
-      // will happen, so the entity\u2192position cache (only used by CreatorLoadData.extractSpatialPosition)
-      // can be released. With progressive sources, ProgressiveLoadDataManager handles this
-      // when the last window is consumed. Shard assignments and class names stay in the registry.
       if (progressiveSources.isEmpty) {
         SpatialShardIdRegistry.clearPositions()
       }
-      postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
-    } else if (postLoadTriggerSent) {
-      logWarn(
-        s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)"
+      notifyEagerLoadReady()
+    }
+  }
+
+  private def notifyEagerLoadReady(): Unit =
+    if (!eagerLoadReadySent) {
+      eagerLoadReadySent = true
+      simulationManager ! EagerLoadDataReadyEvent(
+        eagerSourcesLoaded = dataSourceAmount,
+        progressiveSources = progressiveSources
       )
     }
-  }
 
-  private def handlePostLoadRegistrationDone(): Unit = {
-    if (postLoadDone) {
-      logWarn("PostLoadRegistrationDone received more than once — ignoring duplicate.")
-      return
-    }
-    postLoadDone = true
-    logInfo(
-      "PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager."
-    )
-    sendFinishToSimulationManager()
-  }
-
-  private def sendFinishToSimulationManager(): Unit =
-    simulationManager ! FinishLoadDataEvent(
-      actorRef = selfProxy,
-      amount = loadDataTotalAmount,
-      actorClassType = null,
-      creators = mutable.Set(),
-      progressiveSources = progressiveSources,
-      creatorRef = creatorRef,
-      creatorPoolRef = creatorPoolRef
-    )
+  private def postLoadRegistrationManagerProxy: ActorRef =
+    createSingletonProxy(POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME)
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values
