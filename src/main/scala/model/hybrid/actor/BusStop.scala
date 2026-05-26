@@ -9,7 +9,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.IdUtil
-import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
+import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData, LineNotOperationalData, PTLineNotOperationalData }
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
 import org.interscity.htc.core.metrics.model.hybrid.BusStopMetrics
 
@@ -70,6 +70,7 @@ class BusStop(
     event.data match {
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
+      case d: LineNotOperationalData  => handleLineNotOperational(d)
       case _ =>
         logWarn("Event not handled")
     }
@@ -117,10 +118,37 @@ class BusStop(
       )
     )
 
+  private def handleLineNotOperational(data: LineNotOperationalData): Unit = {
+    state.deadLines.add(data.label)
+    state.people.get(data.label).foreach { waiting =>
+      waiting.foreach { person =>
+        sendMessageTo(
+          entityId  = person.id,
+          shardId   = "hybrid.actor.Person",
+          data      = PTLineNotOperationalData(line = data.label),
+          eventType = "PTLineNotOperational"
+        )
+      }
+      BusStopMetrics.passengersWaiting.dec(waiting.size)
+      state.people.remove(data.label)
+    }
+    logWarn(s"BusStop ${getEntityId}: line ${data.label} not operational — notified waiting passengers")
+  }
+
   private def handleRegisterPassenger(
     event: ActorInteractionEvent,
     data: RegisterPassengerData
   ): Unit = {
+    if (state.deadLines.contains(data.label)) {
+      sendMessageTo(
+        entityId  = event.actorRefId,
+        shardId   = event.actorClassType,
+        data      = PTLineNotOperationalData(line = data.label),
+        eventType = "PTLineNotOperational"
+      )
+      return
+    }
+
     val person = event.toIdentity
     state.people.get(data.label) match {
       case Some(people) =>

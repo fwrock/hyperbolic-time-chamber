@@ -25,7 +25,6 @@ import org.interscity.htc.model.hybrid.entity.state.model.TransitStop
   * === Guaranteed backward compatibility ===
   *
   * The method always returns the original `currentLogistics` unchanged when:
-  *   - `logistics.vehicle` is defined (private vehicle trip — not subject to re-evaluation)
   *   - `logistics.fixedMode` is `true` (designer-forced leg)
   *   - The [[TransitMapUtil]] is unavailable (no transit map configured)
   *   - Neither origin nor destination is found in the road-network map
@@ -52,83 +51,153 @@ object ModeChoiceUtil {
     currentLogistics: ArrivalLogistics,
     weights: ModeChoiceWeights
   ): ArrivalLogistics = {
-    // Private vehicle trips and explicitly fixed legs are never re-evaluated.
-    if (currentLogistics.vehicle.isDefined || currentLogistics.fixedMode)
-      return currentLogistics
-
-    if (!TransitMapUtil.isAvailable) return currentLogistics
-
-    if (originNodeId.isEmpty || destinationNodeId.isEmpty) return currentLogistics
-
-    val originNodeOpt      = CityMapUtil.nodesById.get(originNodeId)
-    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationNodeId)
-
-    (originNodeOpt, destinationNodeOpt) match {
-      case (Some(originNode), Some(destinationNode)) =>
-        val oLat = originNode.latitude
-        val oLon = originNode.longitude
-        val dLat = destinationNode.latitude
-        val dLon = destinationNode.longitude
-
-        val straightLineM = TransitMapUtil.haversineM(oLat, oLon, dLat, dLon)
-
-        val walkCandidate: Option[(ArrivalLogistics, Double)] =
-          if (straightLineM <= weights.maxWalkDistanceM) {
-            val score =
-              weights.betaMode * weights.modePrefWalk - weights.betaAccess * straightLineM
-            val logistics = currentLogistics.copy(
-              mode    = "walk",
-              vehicle = None,
-              line    = None,
-              boardingStopId        = None,
-              boardingStopClassType = None,
-              alightingNodeId       = None,
-              fixedMode             = false
-            )
-            Some((logistics, score))
-          } else None
-
-        val transitCandidates: List[(ArrivalLogistics, Double)] =
-          List("bus", "subway").flatMap { mode =>
-            val modePref = if (mode == "subway") weights.modePrefSubway else weights.modePrefBus
-
-            TransitMapUtil
-              .nearestStops(oLat, oLon, mode, weights.maxAccessDistanceM)
-              .flatMap { case (boardingStop, accessDistM) =>
-                boardingStop.lines.flatMap { line =>
-                  bestAlightingStop(boardingStop, line, dLat, dLon).map {
-                    case (alightingStop, egressDistM) =>
-                      val score =
-                        weights.betaMode * modePref -
-                          weights.betaAccess * accessDistM -
-                          weights.betaEgress * egressDistM
-
-                      val logistics = currentLogistics.copy(
-                        mode                  = mode,
-                        vehicle               = None,
-                        line                  = Some(line),
-                        boardingStopId        = Some(boardingStop.actorId),
-                        boardingStopClassType = Some(boardingStop.actorClassType),
-                        alightingNodeId       = Some(alightingStop.nodeId),
-                        fixedMode             = false
-                      )
-                      (logistics, score)
-                  }
-                }
-              }
-          }
-
-        val allCandidates = transitCandidates ++ walkCandidate.toList
-
-        allCandidates.maxByOption(_._2) match {
-          case Some((bestLogistics, _)) => bestLogistics
-          case None                     => currentLogistics
-        }
-
-      case _ =>
-        currentLogistics
+    if (shouldSkipModeChoice(originNodeId, destinationNodeId, currentLogistics)) {
+      currentLogistics
+    } else {
+      evaluateBestCandidate(originNodeId, destinationNodeId, currentLogistics, weights)
+        .getOrElse(currentLogistics)
     }
   }
+
+  private def shouldSkipModeChoice(
+    originNodeId: String,
+    destinationNodeId: String,
+    currentLogistics: ArrivalLogistics
+  ): Boolean =
+    if (currentLogistics.fixedMode) true
+    else if (!TransitMapUtil.isAvailable) true
+    else if (originNodeId.isEmpty || destinationNodeId.isEmpty) true
+    else false
+
+  private def evaluateBestCandidate(
+    originNodeId: String,
+    destinationNodeId: String,
+    currentLogistics: ArrivalLogistics,
+    weights: ModeChoiceWeights
+  ): Option[ArrivalLogistics] =
+    for {
+      originNode <- CityMapUtil.nodesById.get(originNodeId)
+      destinationNode <- CityMapUtil.nodesById.get(destinationNodeId)
+      bestCandidate <- buildCandidates(
+        originNode.latitude,
+        originNode.longitude,
+        destinationNode.latitude,
+        destinationNode.longitude,
+        currentLogistics,
+        weights
+      ).maxByOption(_._2)
+    } yield bestCandidate._1
+
+  private def buildCandidates(
+    originLat: Double,
+    originLon: Double,
+    destinationLat: Double,
+    destinationLon: Double,
+    currentLogistics: ArrivalLogistics,
+    weights: ModeChoiceWeights
+  ): List[(ArrivalLogistics, Double)] = {
+    val walkCandidate =
+      buildWalkCandidate(
+        originLat,
+        originLon,
+        destinationLat,
+        destinationLon,
+        currentLogistics,
+        weights
+      ).toList
+
+    val transitCandidates =
+      buildTransitCandidates(
+        originLat,
+        originLon,
+        destinationLat,
+        destinationLon,
+        currentLogistics,
+        weights
+      )
+
+    transitCandidates ++ walkCandidate
+  }
+
+  private def buildWalkCandidate(
+    originLat: Double,
+    originLon: Double,
+    destinationLat: Double,
+    destinationLon: Double,
+    currentLogistics: ArrivalLogistics,
+    weights: ModeChoiceWeights
+  ): Option[(ArrivalLogistics, Double)] = {
+    val straightLineM = TransitMapUtil.haversineM(originLat, originLon, destinationLat, destinationLon)
+
+    if (straightLineM <= weights.maxWalkDistanceM) {
+      val score = weights.betaMode * weights.modePrefWalk - weights.betaAccess * straightLineM
+      Some((toWalkLogistics(currentLogistics), score))
+    } else {
+      None
+    }
+  }
+
+  private def buildTransitCandidates(
+    originLat: Double,
+    originLon: Double,
+    destinationLat: Double,
+    destinationLon: Double,
+    currentLogistics: ArrivalLogistics,
+    weights: ModeChoiceWeights
+  ): List[(ArrivalLogistics, Double)] =
+    List("bus", "subway").flatMap { mode =>
+      val modePref = modePreference(mode, weights)
+
+      TransitMapUtil
+        .nearestStops(originLat, originLon, mode, weights.maxAccessDistanceM)
+        .flatMap { case (boardingStop, accessDistM) =>
+          boardingStop.lines.flatMap { line =>
+            bestAlightingStop(boardingStop, line, destinationLat, destinationLon).map {
+              case (alightingStop, egressDistM) =>
+                val score =
+                  weights.betaMode * modePref -
+                    weights.betaAccess * accessDistM -
+                    weights.betaEgress * egressDistM
+
+                val logistics =
+                  toTransitLogistics(currentLogistics, mode, line, boardingStop, alightingStop)
+
+                (logistics, score)
+            }
+          }
+        }
+    }
+
+  private def modePreference(mode: String, weights: ModeChoiceWeights): Double =
+    if (mode == "subway") weights.modePrefSubway else weights.modePrefBus
+
+  private def toWalkLogistics(currentLogistics: ArrivalLogistics): ArrivalLogistics =
+    currentLogistics.copy(
+      mode                  = "walk",
+      vehicle               = None,
+      line                  = None,
+      boardingStopId        = None,
+      boardingStopClassType = None,
+      alightingNodeId       = None,
+      fixedMode             = false
+    )
+
+  private def toTransitLogistics(
+    currentLogistics: ArrivalLogistics,
+    mode: String,
+    line: String,
+    boardingStop: TransitStop,
+    alightingStop: TransitStop
+  ): ArrivalLogistics =
+    currentLogistics.copy(
+      mode                  = mode,
+      vehicle               = None,
+      line                  = Some(line),
+      boardingStopId        = Some(boardingStop.actorId),
+      boardingStopClassType = Some(boardingStop.actorClassType),
+      alightingNodeId       = Some(alightingStop.nodeId),
+      fixedMode             = false
+    )
 
   /** Finds the stop on `line` (other than `boardingStop`) that minimises haversine distance to
     * `(destLat, destLon)`. Returns `None` when the line has no other stops.

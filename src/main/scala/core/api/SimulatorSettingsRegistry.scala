@@ -134,6 +134,12 @@ object SimulatorSettingsRegistry {
       "city_map.json"
     ),
     SettingDef(
+      "htc.mobility.transit-map-file",
+      "HTC_MOBILITY_TRANSIT_MAP_FILE",
+      "Path to the transit map JSON (bus/subway stops). Enables dynamic PT mode choice.",
+      ""
+    ),
+    SettingDef(
       "htc.person.truncate-schedule-beyond-duration",
       "HTC_PERSON_TRUNCATE_SCHEDULE",
       "When true, removes Person activities whose endTime > simulation duration at actor startup. " +

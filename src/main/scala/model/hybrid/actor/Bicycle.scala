@@ -414,7 +414,7 @@ class Bicycle(
       sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost

@@ -13,9 +13,10 @@ import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, Spontaneous
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
+import org.interscity.htc.core.util.{ ActorCreatorUtil, IdUtil, JsonUtil }
 import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
+import org.interscity.htc.model.hybrid.entity.event.data.bus.LineNotOperationalData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
@@ -33,12 +34,6 @@ class BusStation(
     ) {
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
-
-  /** Set to true once calculateRoutes() has been attempted (even if some segments are unreachable).
-    * Prevents a redundant blocking recalculation at tick 0 for stations where PLR already
-    * confirmed that certain bus-stop pairs are unreachable in the road network.
-    */
-  private var routeCalculationAttempted = false
 
   /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic). Ensures
     * deterministic route building and lookup.
@@ -58,17 +53,6 @@ class BusStation(
     }
   }
 
-  override def requiresPostLoadRegistration: Boolean = true
-
-  override def handlePostLoadRegistration(): Unit = {
-    if (isCalculateRoutingComplete) {
-      logDebug(s"BusStation ${getEntityId} routes already calculated, skipping PLR retry")
-    } else {
-      logInfo(s"BusStation ${getEntityId} pre-calculating routes during post-load registration")
-      calculateRoutes()
-    }
-  }
-
   /** Shared helper: builds a list of Futures that each calculate one sub-route segment.
     * Runs on the supplied (blocking) ExecutionContext. Pure reads — no actor state written.
     */
@@ -81,12 +65,13 @@ class BusStation(
       (state.busStops.get(originStop), state.busStops.get(destStop)) match {
         case (Some(originNode), Some(destNode)) =>
           Future {
-            GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode) match {
+            // Large expansion budget: SP inter-stop routes can span many city blocks.
+            GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode, maxExpansions = Int.MaxValue) match {
               case Some((_, pathQueue)) =>
                 val identifyPath = pathQueue.map { case (f, t) => (Identify(id = f), Identify(id = t)) }
                 Some(SubRoutePair(originStop, destStop) -> identifyPath)
               case None =>
-                logWarn(s"No route found: $originStop -> $destStop (going=$going)")
+                logWarn(s"No route found: $originStop -> $destStop (going=$going) — segment will be skipped")
                 None
             }
           }
@@ -106,13 +91,7 @@ class BusStation(
     } else
       state.status match {
         case Start =>
-          // Routes should already be pre-calculated via handlePostLoadRegistration().
-          // If not (e.g. running without PLR phase), calculate now.
-          // Guard: skip recalculation if it was already attempted during PLR — unreachable
-          // stop pairs won't become reachable at tick 0 (road network is static), and
-          // blocking again would stall the dispatcher for up to 30 minutes per station.
-          if (!isCalculateRoutingComplete && !routeCalculationAttempted) {
-            logInfo(s"BusStation ${getEntityId} routes not pre-calculated, calculating now (may block)")
+          if (!isCalculateRoutingComplete) {
             calculateRoutes()
           }
           dispatchFirstBus()
@@ -186,9 +165,9 @@ class BusStation(
         state.status = WorkingWithOutBus
         onFinishSpontaneous(None)
       }
-    } else {
-      // Report segments that are either absent from the map OR present but empty
-      // (SP returned no path — unreachable bus-stop pair in the road network).
+    } else if (hasAnyRouteSegment) {
+      // At least some segments are available — create buses with a partial route.
+      // getTotalRoute already handles missing segments gracefully (skips with a warning).
       def badSegments(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
         stops: List[String]
@@ -200,10 +179,82 @@ class BusStation(
       val missingGoing     = badSegments(state.goingRoute,     orderedBusStopIds)
       val missingReturning = badSegments(state.returningRoute, orderedBusStopIds.reverse)
       logWarn(
-        s"BusStation ${getEntityId} route calculation incomplete — no buses will be created. " +
+        s"BusStation ${getEntityId} route calculation partial — creating buses with available segments. " +
           s"Missing/unreachable going: [$missingGoing]. Missing/unreachable returning: [$missingReturning]."
       )
+
+      // A stop S_j is permanently unserviceable when segment(S_j-1, S_j) is absent in BOTH
+      // directions — meaning the bus never arrives at S_j's node as a link destination.
+      // Persons registered at such stops must be notified immediately so they don't wait forever.
+      def skippedDestinations(
+        route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
+        stops: List[String]
+      ): Set[String] =
+        stops.sliding(2).filterNot { pair =>
+          route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
+        }.map(_.last).toSet
+
+      val skippedGoing     = skippedDestinations(state.goingRoute,     orderedBusStopIds)
+      val skippedReturning = skippedDestinations(state.returningRoute, orderedBusStopIds.reverse)
+      val fullySkipped     = skippedGoing & skippedReturning
+
+      if (fullySkipped.nonEmpty) {
+        val lineLabel = state.buses.headOption.flatMap(b => Option(b.label)).getOrElse(state.name)
+        logWarn(
+          s"BusStation ${getEntityId} partial route — ${fullySkipped.size} stop(s) unreachable in " +
+            s"both directions; sending LineNotOperational: ${fullySkipped.mkString(", ")}"
+        )
+        fullySkipped.foreach { stopId =>
+          sendMessageTo(
+            entityId  = stopId,
+            shardId   = classOf[BusStop].getName,
+            data      = LineNotOperationalData(label = lineLabel),
+            eventType = "LineNotOperational"
+          )
+        }
+      }
+
+      if (state.buses.nonEmpty) {
+        val bus = state.buses.dequeue()
+        try {
+          val actorRef = createBus(bus)
+          val className = classOf[Bus].getName
+          dependencies(bus.actorId) = ShardActorId(
+            entityId = bus.actorId,
+            classType = className
+          )
+          state.status = Working
+          onFinishSpontaneous(Some(currentTick + state.interval))
+        } catch {
+          case e: IllegalStateException =>
+            logWarn(s"Skipping bus ${bus.actorId} — route unavailable even with partial: ${e.getMessage}")
+            BusStationMetrics.busesSkippedNoRoute.labels(state.name).inc()
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
+          case e: Exception =>
+            logError(s"Unexpected error creating bus ${bus.actorId} with partial route: ${e.getMessage}")
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
+        }
+      } else {
+        state.status = WorkingWithOutBus
+        onFinishSpontaneous(None)
+      }
+    } else {
+      // No route at all — notify passengers and stop.
+      logWarn(
+        s"BusStation ${getEntityId} route calculation produced no usable segments — no buses will be created."
+      )
       state.status = WorkingWithOutBus
+      val lineLabel = state.buses.headOption.flatMap(b => Option(b.label)).getOrElse(state.name)
+      state.busStops.keys.foreach { stopId =>
+        sendMessageTo(
+          entityId  = stopId,
+          shardId   = classOf[BusStop].getName,
+          data      = LineNotOperationalData(label = lineLabel),
+          eventType = "LineNotOperational"
+        )
+      }
       onFinishSpontaneous(None)
     }
   }
@@ -234,8 +285,6 @@ class BusStation(
 
     goingResults.foreach  { case (pair, path) => state.goingRoute.foreach(_.put(pair, path))     }
     returnResults.foreach { case (pair, path) => state.returningRoute.foreach(_.put(pair, path)) }
-
-    routeCalculationAttempted = true
 
     if (isCalculateRoutingComplete)
       logInfo(
@@ -304,7 +353,7 @@ class BusStation(
     createShardedActorSeveralArgs(
       system = context.system,
       actorClass = classOf[Bus],
-      entityId = bus.actorId,
+      entityId = IdUtil.format(bus.actorId),
       busProperties
     )
   }
@@ -361,6 +410,16 @@ class BusStation(
   private def isCalculateRoutingComplete: Boolean =
     isCalculateRoutingComplete(state.goingRoute) &&
       isCalculateRoutingComplete(state.returningRoute)
+
+  /** Returns true when at least one segment is present (non-empty) in BOTH the going
+    * and returning maps. Used to create buses with partial routes rather than
+    * discarding the line entirely when a few stop-pairs are unreachable.
+    */
+  private def hasAnyRouteSegment: Boolean = {
+    val goingOk    = state.goingRoute.exists(_.values.exists(_.nonEmpty))
+    val returningOk = state.returningRoute.exists(_.values.exists(_.nonEmpty))
+    goingOk && returningOk
+  }
 
   private def isCalculateRoutingComplete(
     route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]]

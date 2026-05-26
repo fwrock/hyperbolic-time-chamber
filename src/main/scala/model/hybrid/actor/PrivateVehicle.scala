@@ -163,6 +163,8 @@ trait PrivateVehicle[T <: MovableState] {
 
       setVehicleStatus(Start)
 
+      // logVehicleWarn(s"[DIAG] ${getActorEntityId} StartTrip registered on TM at tick=${getActorCurrentTick+1}: ${data.origin} -> ${data.destination}")
+
       registerOnTimeManager(getActorCurrentTick + 1)
     } catch {
       case _: NullPointerException =>

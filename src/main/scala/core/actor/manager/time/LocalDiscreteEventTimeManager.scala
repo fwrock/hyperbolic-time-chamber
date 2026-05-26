@@ -43,6 +43,17 @@ class LocalDiscreteEventTimeManager(
   private val TICK_BATCH_SIZE = 500
   private val pendingTickActors = mutable.Queue[Identify]()
   private var currentBatchTick: Tick = -1
+  private var currentBatchSequence: Long = 0L
+
+  private lazy val tickProgressLogInterval: Long =
+    scala.util.Try(
+      context.system.settings.config.getLong("htc.time-manager.local-tick-progress-log-interval")
+    ).toOption.filter(_ > 0).getOrElse(5000L)
+
+  private lazy val batchDebugLogEvery: Long =
+    scala.util.Try(
+      context.system.settings.config.getLong("htc.time-manager.local-batch-debug-log-every")
+    ).toOption.filter(_ > 0).getOrElse(10L)
 
   /** Processes a tick in discrete event manner. Events are processed one at a time in chronological
     * order. Time only advances when all events at the current time have been processed.
@@ -95,7 +106,7 @@ class LocalDiscreteEventTimeManager(
           logInfo(
             s"[LocalDiscreteEvent] Processing skipped tick $effectiveTick (globalTick=$tick) with ${actorsSet.size} actors ($actorSummary)"
           )
-        } else if (effectiveTick % 1000 == 0 || actorsSet.size > TICK_BATCH_SIZE) {
+        } else if (effectiveTick % tickProgressLogInterval == 0 || actorsSet.size > TICK_BATCH_SIZE) {
           logInfo(
             s"[LocalDiscreteEvent] Processing tick $effectiveTick with ${actorsSet.size} scheduled actors ($actorSummary)"
           )
@@ -107,6 +118,7 @@ class LocalDiscreteEventTimeManager(
         } else {
           // Large set — queue and fire in batches to prevent system overload
           currentBatchTick = effectiveTick
+          currentBatchSequence = 0L
           pendingTickActors.enqueueAll(actorsSet)
           fireNextBatch()
         }
@@ -125,15 +137,19 @@ class LocalDiscreteEventTimeManager(
     */
   private def fireNextBatch(): Unit = {
     var count = 0
+    currentBatchSequence += 1
     while (pendingTickActors.nonEmpty && count < TICK_BATCH_SIZE) {
       val identity = pendingTickActors.dequeue()
       runningEvents.add(identity)
       sendSpontaneousEvent(currentBatchTick, identity)
       count += 1
     }
-    if (count > 0 && pendingTickActors.nonEmpty) {
+    if (
+      count > 0 &&
+      (pendingTickActors.isEmpty || currentBatchSequence % batchDebugLogEvery == 0)
+    ) {
       logDebug(
-        s"[LocalTM] Fired batch of $count actors at tick $currentBatchTick, " +
+        s"[LocalTM] Fired batch #$currentBatchSequence of $count actors at tick $currentBatchTick, " +
           s"${pendingTickActors.size} remaining, ${runningEvents.size} running"
       )
     }

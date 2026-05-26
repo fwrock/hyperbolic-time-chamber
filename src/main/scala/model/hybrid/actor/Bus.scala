@@ -80,6 +80,25 @@ class Bus(
   private var sumoTripInfoReported: Boolean = false
   private var journeyFinishedReported: Boolean = false
 
+  private lazy val microUpdateLogEvery: Int =
+    sys.env
+      .get("HTC_BUS_MICRO_UPDATE_LOG_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.bus.micro-update-log-every")).toOption)
+      .filter(_ > 0)
+      .getOrElse(200)
+
+  private lazy val busStopProbeLogEvery: Int =
+    sys.env
+      .get("HTC_BUS_STOP_PROBE_LOG_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.bus.stop-probe-log-every")).toOption)
+      .filter(_ > 0)
+      .getOrElse(500)
+
+  private var microUpdateLogCount: Long = 0L
+  private var busStopProbeLogCount: Long = 0L
+
   /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
     * triggering premature leavingLink.
     */
@@ -374,9 +393,11 @@ class Bus(
         sumoArrivalSpeed = data.velocity
         updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
 
-        log.debug(
-          s"Bus micro update: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}"
-        )
+        microUpdateLogCount += 1
+        if (microUpdateLogCount % microUpdateLogEvery == 0L)
+          log.debug(
+            s"Bus micro update[$microUpdateLogCount]: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}"
+          )
 
         checkBusStopAtPosition(data.position)
     }
@@ -650,8 +671,8 @@ class Bus(
           state.currentPathPosition += 1
           Some(nextPath)
         } else {
-          state.currentPathPosition = 0
-          Some(path(state.currentPathPosition))
+          state.currentPathPosition = 1
+          Some(path(0))
         }
       case None =>
         None
@@ -664,7 +685,11 @@ class Bus(
       micro =>
         micro.nextBusStop.foreach {
           stopId =>
-            log.debug(s"Bus at position $position, next stop: $stopId")
+            busStopProbeLogCount += 1
+            if (busStopProbeLogCount % busStopProbeLogEvery == 0L)
+              logDebug(
+                s"Bus stop probe[$busStopProbeLogCount]: position=$position, nextStop=$stopId"
+              )
         }
     }
 

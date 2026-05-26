@@ -72,7 +72,7 @@ import org.htc.protobuf.core.entity.actor.Identify
   *   seconds (fallback if dynamic weights are unavailable). Default 13.89 m/s (≈ 50 km/h).
   */
 case class ModeChoiceWeights(
-  includedModes: Set[String] = Set("bus", "subway", "walk"),
+  includedModes: Set[String] = Set("car", "bicycle", "motorcycle", "bus", "subway", "walk"),
   betaMode: Double = 1.0,
   betaAccess: Double = 0.001,
   betaEgress: Double = 0.001,
@@ -120,6 +120,16 @@ case class ModeChoiceWeights(
   *   cleared on alighting.
   * @param ptLine
   *   Current PT line being used (e.g. "Bus Line 1"). Set when boarding, cleared on alighting.
+  * @param ptWaitingSince
+  *   Tick when the person registered at a PT stop and started waiting for the vehicle. `None` when
+  *   not in a PT wait state. Used together with [[ptWaitTimeoutTicks]] to implement a safety
+  *   timeout so persons never wait indefinitely for a bus/subway that never arrives.
+  * @param ptWaitTimeoutTicks
+  *   Maximum number of ticks to wait at a PT stop before giving up and advancing to the next
+  *   activity. Defaults to 86400 (one full simulated day). Dead lines are ejected immediately via
+  *   [[org.interscity.htc.model.hybrid.entity.event.data.bus.PTLineNotOperationalData]], so this
+  *   timeout only fires for lines that are operational but whose bus never reaches the stop within
+  *   the simulation window.
   * @param enableDynamicModeChoice
   *   When `true`, the person re-evaluates the transport mode at each trip departure using a
   *   utility-based model instead of following the static logistics in the activity schedule.
@@ -141,12 +151,18 @@ case class PersonState(
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   currentTripMode: Option[String] = None,
+  currentTripId: Option[String] = None,
+  currentTripDepartureTick: Option[Tick] = None,
+  currentTripExpectedDistance: Option[Double] = None,
+  currentTripWaitTime: Option[Long] = None,
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0,
   scheduleDelayOffsetTicks: Long = 0L,
   firstTripDelayTicks: Option[Long] = None,
   ptAlightingNodeId: Option[String] = None,
   ptLine: Option[String] = None,
+  ptWaitingSince: Option[Long] = None,
+  ptWaitTimeoutTicks: Long = 86400L,
   enableDynamicModeChoice: Boolean = false,
   modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
   modeChoiceStrategyType: String = "utility"
@@ -190,7 +206,8 @@ case class PersonState(
   def startTrip(vehicleId: String, tick: Tick): PersonState =
     copy(
       currentTripVehicleId = Some(vehicleId),
-      currentTripStartTick = Some(tick)
+      currentTripStartTick = Some(tick),
+      currentTripDepartureTick = Some(tick)
     )
 
   /** Complete a trip.
@@ -200,6 +217,10 @@ case class PersonState(
       currentTripVehicleId = None,
       currentTripStartTick = None,
       currentTripMode = None,
+      currentTripId = None,
+      currentTripDepartureTick = None,
+      currentTripExpectedDistance = None,
+      currentTripWaitTime = None,
       totalDistanceTraveled = totalDistanceTraveled + distanceTraveled,
       completedTrips = completedTrips + 1,
       ptAlightingNodeId = None,

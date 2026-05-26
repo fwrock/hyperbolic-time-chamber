@@ -343,6 +343,9 @@ estaticamente de `ArrivalLogistics.mode` e passa a ser calculada em runtime por 
 que avalia todas as paradas de TP acessíveis e a caminhada direta, retornando a opção com maior
 utilidade.
 
+Quando `simulation.json.enableDynamicModeChoice = false`, esse comportamento é desligado para
+todos os Persons, mesmo que o flag individual esteja `true`.
+
 #### Função de Utilidade
 
 $$U(m, b, a) = \beta_{\text{mode}} \cdot \text{pref}(m)
