@@ -242,6 +242,9 @@ trait PrivateVehicle[T <: MovableState] {
     ownerPersonRef = None
     tripStartTick = None
     tripStartDistance = 0.0
+    // Release the route queue between trips — it will be recalculated on the next StartTrip.
+    // This is the single largest per-vehicle allocation and parking is the right moment to free it.
+    clearRouteOnPark()
 
     if (destroyAfterNextPark) {
       logVehicleDebug(s"${getActorEntityId} destructing after final trip (owner schedule complete)")

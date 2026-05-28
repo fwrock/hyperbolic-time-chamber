@@ -169,8 +169,7 @@ class Bus(
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       finishJourney("simulation_time_exceeded", finalNode)
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
       return
     }
 
@@ -297,8 +296,7 @@ class Bus(
         reason = "reached_destination",
         finalNode = Option(currentNodeId).getOrElse("unknown")
       )
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
     } else {
       state.status = WaitingSignalState
       getCurrentNode match {
@@ -545,8 +543,7 @@ class Bus(
     logInfo(s"[BUS-LEAVE-ACK] ${getEntityId} LeaveLinkInfo from ${event.actorRefId} tick=$currentTick status=${state.status} routeDepleted=$routeDepleted currentPath=${state.currentPath} bestRoute=${state.bestRoute.map(_.size)}")
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }
@@ -902,13 +899,22 @@ class Bus(
     sumoTripInfoReported = true
   }
 
-  override def onDestruct(event: DestructEvent): Unit =
+  override def onDestruct(event: DestructEvent): Unit = {
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
         .getOrElse("unknown")
       finishJourney("actor_destructed_before_completion", fallbackNode)
     }
+    // Release heavy state before context.stop(self) so GC can reclaim
+    // route queues and passenger maps without waiting for the actor cell to be evicted.
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.microState = None
+      state.people.clear()
+    }
+  }
 }
 
 /** Bus companion object.
