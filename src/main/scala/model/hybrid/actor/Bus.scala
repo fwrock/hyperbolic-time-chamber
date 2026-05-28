@@ -133,6 +133,9 @@ class Bus(
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
   private var currentStopNode: Option[String] = None
 
+  /** Counts every bus stop arrival (for cycle diagnostics). */
+  private var stopArrivalCount: Int = 0
+
   /** Maximum simulation end tick - vehicles must finish by this tick. */
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
@@ -195,6 +198,12 @@ class Bus(
       case Ready =>
         val nodeId = currentStopNode.orNull
         if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
+          stopArrivalCount += 1
+          ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
+            s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
+          if (stopArrivalCount % 100 == 0 || stopArrivalCount <= 5) {
+            logInfo(s"[BUS-CYCLE] ${getEntityId} stop #$stopArrivalCount at $nodeId tick=$currentTick")
+          }
           requestUnloadPeopleData()
         } else {
           currentStopNode = None
@@ -222,8 +231,10 @@ class Bus(
         } else {
           mesoExitTick match {
             case Some(exitTick) if currentTick < exitTick =>
+              logInfo(s"[BUS-MOVING] ${getEntityId} waiting in MESO link, exitTick=$exitTick currentTick=$currentTick")
               onFinishSpontaneous(Some(exitTick))
             case _ =>
+              logInfo(s"[BUS-MOVING] ${getEntityId} MESO link traversed, calling requestSignalState at tick=$currentTick mesoExitTick=$mesoExitTick")
               mesoExitTick = None
               requestSignalState()
           }
@@ -251,6 +262,7 @@ class Bus(
         }
 
       case WaitingLoadPassenger =>
+        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
         currentStopNode = None
         enterLink()
 
@@ -277,9 +289,8 @@ class Bus(
     */
   private def requestSignalState(): Unit = {
     restoreRouteIfMissing("requestSignalState")
-    val currentPathNode = state.currentPath.map(_._2).orNull
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
-    if (state.destination == currentPathNode || routeDepleted) {
+    if (routeDepleted) {
       val currentNodeId = getCurrentNode
       logDebug(s"Bus ${getEntityId} reached destination: $currentNodeId")
       finishJourney(
@@ -462,7 +473,7 @@ class Bus(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    logDebug(s"Bus entering MESO link ${event.actorRefId}")
+    logInfo(s"[BUS-MESO-ENTER] ${getEntityId} entering MESO link ${event.actorRefId} tick=$currentTick status=${state.status}")
 
     val speed = linkDensitySpeed(
       length = data.linkLength,
@@ -531,6 +542,7 @@ class Bus(
 
     restoreRouteIfMissing("ReceiveLeaveLinkInfo")
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
+    logInfo(s"[BUS-LEAVE-ACK] ${getEntityId} LeaveLinkInfo from ${event.actorRefId} tick=$currentTick status=${state.status} routeDepleted=$routeDepleted currentPath=${state.currentPath} bestRoute=${state.bestRoute.map(_.size)}")
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
       onFinishSpontaneous(None)
@@ -678,6 +690,16 @@ class Bus(
 
   override protected def enterLink(): Unit = {
     restoreRouteIfMissing("enterLink")
+    val nextLink = state.movableCurrentPath.orElse(
+      state.bestRoute.flatMap { path =>
+        if (state.currentPathPosition < path.size) Some(path(state.currentPathPosition))
+        else Some(path(0))
+      }
+    )
+    val edgeFound = nextLink.exists { case (linkId, _) =>
+      org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.contains(linkId)
+    }
+    logInfo(s"[BUS-ENTER] ${getEntityId} enterLink: currentPath=${state.movableCurrentPath} nextLink=$nextLink edgeFound=$edgeFound pos=${state.currentPathPosition} movableRoute=${state.movableBestRoute.map(_.size)} bestRoute=${state.bestRoute.map(_.size)} tick=$currentTick")
     super.enterLink()
   }
 
@@ -704,10 +726,13 @@ class Bus(
         micro.nextBusStop.foreach {
           stopId =>
             busStopProbeLogCount += 1
-            if (busStopProbeLogCount % busStopProbeLogEvery == 0L)
+            if (busStopProbeLogCount % busStopProbeLogEvery == 0L) {
               logDebug(
                 s"Bus stop probe[$busStopProbeLogCount]: position=$position, nextStop=$stopId"
               )
+              ActorTrace.trace(getEntityId, currentTick, "bus_stop_probe", // #actor-trace)
+                s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
+            }
         }
     }
 
@@ -752,7 +777,10 @@ class Bus(
           eventType = "RequestUnloadPassenger"
         )
     }
-    onFinishSpontaneous(None)
+    // Same race-condition fix as requestLoadPassenger: use Some(T+1) instead of None
+    // to prevent a late FinishEvent from clearing all schedules on arrival after the next
+    // processTick has placed the bus in runningEvents.
+    onFinishSpontaneous(Some(currentTick + 1))
   }
 
   /** Request passengers from bus stop at current node. Sends BusRequestPassengerData to the BusStop
@@ -772,7 +800,13 @@ class Bus(
           ),
           eventType = "RequestPassenger"
         )
-        onFinishSpontaneous(None)
+        // Use Some(T+1) instead of None to avoid a race condition where this FinishEvent
+        // arrives at the TM after the NEXT tick's processTick has already added the bus to
+        // runningEvents. FinishEvent(None) would clear ALL future scheduled ticks and report
+        // hasScheduled=false to GTM, prematurely terminating the simulation. FinishEvent(Some(T))
+        // only adds to scheduledActors, so it is safe even when it arrives late.
+        // handleBusLoadPeople will call scheduleEvent(earlier tick) which overrides this safety tick.
+        onFinishSpontaneous(Some(currentTick + 1))
       case None =>
         currentStopNode = None
         state.status = Ready
