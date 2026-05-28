@@ -240,7 +240,25 @@ class Person(
 
     if (state.currentTripVehicleId.isDefined) {
       if (state.currentTripVehicleId.contains("walking")) {
-        advanceToNextActivity()
+        if (state.pendingTransferLegs.nonEmpty) {
+          // Journey-internal walk (access or transfer leg) — start next pending leg without
+          // advancing the activity index.
+          val walkDest = state.currentTripDestinationNodeId
+          state = state.completeTrip(0.0)
+          state = state.copy(currentPhysicalNodeId = walkDest)
+          val nextLeg  = state.pendingTransferLegs.head
+          val restLegs = state.pendingTransferLegs.tail
+          state = state.copy(pendingTransferLegs = restLegs)
+          val destNodeId = nextLeg.alightingNodeId.getOrElse(
+            state.nextActivity.map(_.nodeId).getOrElse("")
+          )
+          state.currentActivity.foreach { act =>
+            initiateTrip(act.copy(nodeId = destNodeId), nextLeg)
+          }
+        } else {
+          // Activity-level walk (or final egress walk) — advance to next activity.
+          advanceToNextActivity()
+        }
         return
       }
 
@@ -547,18 +565,30 @@ class Person(
     }
   }
 
+  /** Returns the person's actual physical position for routing.
+    *
+    * During multi-leg journeys (between access walk, PT legs, transfer walks, and egress walk)
+    * `currentPhysicalNodeId` tracks where the person really is. Outside journeys it falls back
+    * to the current activity's node.
+    */
+  private def currentTripOriginNodeId: String =
+    state.currentPhysicalNodeId
+      .orElse(state.currentActivity.map(_.nodeId))
+      .getOrElse("")
+
   /** Initiate trip to next activity.
     */
-  private def initiateTrip(nextActivity: Activity, logistics: ArrivalLogistics): Unit =
+  private def initiateTrip(nextActivity: Activity, logistics: ArrivalLogistics): Unit = {
+    val origin = currentTripOriginNodeId
     state.currentActivity match {
-      case Some(currentActivity) =>
+      case Some(_) =>
         logistics.mode.toLowerCase match {
           case "car" | "bicycle" | "motorcycle" =>
-            initiatePrivateVehicleTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
+            initiatePrivateVehicleTrip(origin, nextActivity.nodeId, logistics)
           case "walk" =>
-            initiateWalkingTrip(currentActivity.nodeId, nextActivity.nodeId, logistics.precomputedRoute)
+            initiateWalkingTrip(origin, nextActivity.nodeId, logistics.precomputedRoute)
           case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-            initiatePTTrip(currentActivity.nodeId, nextActivity.nodeId, logistics)
+            initiatePTTrip(origin, nextActivity.nodeId, logistics)
 
           case "auto" if isDynamicModeChoiceEnabled =>
             logWarn(
@@ -572,7 +602,7 @@ class Person(
               s"${getEntityId} auto mode requested but dynamic mode choice is disabled globally or for this person; skipping trip"
             )
             maybeLogModeChoiceDecision(
-              originNodeId = currentActivity.nodeId,
+              originNodeId = origin,
               destinationNodeId = nextActivity.nodeId,
               requestedMode = "auto",
               resolvedMode = "skipped",
@@ -592,6 +622,7 @@ class Person(
         logWarn(s"${getEntityId} has no current activity")
         advanceToNextActivity()
     }
+  }
 
   /** Initiate walking trip (mesoscopic).
     *
@@ -646,6 +677,7 @@ class Person(
           label = "person_walking_start"
         )
 
+        state = state.copy(currentTripDestinationNodeId = Some(destination))
         onFinishSpontaneous(Some(arrivalTick))
 
       case None =>
@@ -826,6 +858,8 @@ class Person(
       )
 
       state = state.completeTrip(0.0)
+      // Track physical position at the alighting stop for correct routing of any subsequent leg.
+      state = state.copy(currentPhysicalNodeId = Some(nodeId))
       // If RAPTOR produced a multi-leg route, execute the next leg directly instead of
       // advancing to the next scheduled activity.
       if (state.pendingTransferLegs.nonEmpty) {
@@ -833,10 +867,13 @@ class Person(
         val restLegs = state.pendingTransferLegs.tail
         state = state.copy(pendingTransferLegs = restLegs)
         logDebug(
-          s"${getEntityId} PT transfer: starting next leg via ${nextLeg.line.getOrElse("?")} (${restLegs.size} legs remaining)"
+          s"${getEntityId} transfer: mode=${nextLeg.mode} dest=${nextLeg.alightingNodeId.getOrElse("?")} (${restLegs.size} legs remaining)"
+        )
+        val destNodeId = nextLeg.alightingNodeId.getOrElse(
+          state.nextActivity.map(_.nodeId).getOrElse("")
         )
         state.currentActivity.foreach { currentAct =>
-          initiateTrip(currentAct.copy(nodeId = nextLeg.alightingNodeId.getOrElse(currentAct.nodeId)), nextLeg)
+          initiateTrip(currentAct.copy(nodeId = destNodeId), nextLeg)
         }
       } else {
         advanceToNextActivity()
