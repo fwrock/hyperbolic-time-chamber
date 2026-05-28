@@ -10,13 +10,14 @@ import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, StartT
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData, PTLineNotOperationalData}
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{CityMapUtil, GPSUtil}
-import model.hybrid.util.strategy.ModeChoiceStrategyRegistry
+import model.hybrid.util.strategy.{ModeChoiceResult, ModeChoiceStrategyRegistry}
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.metrics.core.ActorMetrics
 import org.interscity.htc.core.metrics.model.hybrid.{GPSMetrics, PersonMetrics}
 import org.interscity.htc.core.util.SimulationUtil
+import core.actor.trace.ActorTrace
 
 import scala.collection.mutable
 
@@ -445,6 +446,8 @@ class Person(
               nextActivity.nodeId,
               logistics
             )
+            ActorTrace.trace(getEntityId, currentTick, "person_trip_start", // #actor-trace
+              s"from=$originNodeId to=${nextActivity.nodeId} mode=${effectiveLogistics.mode} activity=${nextActivity.activityType} instant=${effectiveLogistics.instant}") // #actor-trace
             if (effectiveLogistics.instant) {
               logDebug(
                 s"${getEntityId} instant transition to ${nextActivity.nodeId} (instant=true)"
@@ -473,6 +476,9 @@ class Person(
     * so all trips (`auto` and explicit modes like `car`/`bus`) follow the same decision pipeline.
     *
     * Fixed legs (`fixedMode = true`) always keep their original logistics.
+    *
+    * When RAPTOR returns a multi-leg transit route, the pending legs are stored in
+    * `state.pendingTransferLegs` and will be executed sequentially after each alighting.
     */
   private def executeModeChoice(
     originNodeId: String,
@@ -496,18 +502,37 @@ class Person(
       val effectiveWeights = globalModeChoiceIncludedModes
         .map(modes => state.modeChoiceWeights.copy(includedModes = modes))
         .getOrElse(state.modeChoiceWeights)
-      val resolved = strategy.choose(
+      // Only offer private vehicles that are currently parked at the origin.
+      // If vehicleCurrentNode has no entry for a mode the vehicle hasn't moved yet
+      // (start of day) — treat it as available at the current location.
+      val availableVehicles = state.ownedVehicles.filter { case (mode, _) =>
+        state.vehicleCurrentNode.get(mode).forall(_ == originNodeId)
+      }
+      val choiceResult = strategy.choose(
         originNodeId      = originNodeId,
         destinationNodeId = destinationNodeId,
         weights           = effectiveWeights,
-        ownedVehicles     = state.ownedVehicles
+        ownedVehicles     = availableVehicles
       )
+
+      // Store pending transfer legs from RAPTOR multi-leg results.
+      if (choiceResult.pendingLegs.nonEmpty) {
+        state = state.copy(pendingTransferLegs = choiceResult.pendingLegs)
+        logDebug(
+          s"${getEntityId} RAPTOR multi-leg route: ${choiceResult.pendingLegs.size + 1} legs total"
+        )
+      } else {
+        state = state.copy(pendingTransferLegs = Nil)
+      }
+
+      val resolved = choiceResult.logistics
 
       val effective =
         if (resolved.mode.equalsIgnoreCase("auto")) {
           logWarn(
             s"${getEntityId} strategy=${state.modeChoiceStrategyType} returned unresolved mode='auto'; keeping requested mode='${logistics.mode}'"
           )
+          state = state.copy(pendingTransferLegs = Nil)
           logistics
         } else resolved
 
@@ -668,6 +693,8 @@ class Person(
           eventType = "RegisterPassenger",
           actorType = LoadBalancedDistributed
         )
+        ActorTrace.trace(getEntityId, currentTick, "person_pt_registered", // #actor-trace
+          s"stop=$stopId line=$line alighting=$alightingNode mode=${logistics.mode}") // #actor-trace
 
         markTripStarted(
           vehicleId = s"pt:${logistics.mode}:$line",
@@ -799,7 +826,21 @@ class Person(
       )
 
       state = state.completeTrip(0.0)
-      advanceToNextActivity()
+      // If RAPTOR produced a multi-leg route, execute the next leg directly instead of
+      // advancing to the next scheduled activity.
+      if (state.pendingTransferLegs.nonEmpty) {
+        val nextLeg  = state.pendingTransferLegs.head
+        val restLegs = state.pendingTransferLegs.tail
+        state = state.copy(pendingTransferLegs = restLegs)
+        logDebug(
+          s"${getEntityId} PT transfer: starting next leg via ${nextLeg.line.getOrElse("?")} (${restLegs.size} legs remaining)"
+        )
+        state.currentActivity.foreach { currentAct =>
+          initiateTrip(currentAct.copy(nodeId = nextLeg.alightingNodeId.getOrElse(currentAct.nodeId)), nextLeg)
+        }
+      } else {
+        advanceToNextActivity()
+      }
     } else {
       logDebug(
         s"${getEntityId} staying on $ptType at node $nodeId (alighting at ${state.ptAlightingNodeId.getOrElse("?")})"
@@ -913,7 +954,16 @@ class Person(
       waitTime = state.currentTripWaitTime
     )
 
+    // Capture destination BEFORE advancing activity index, then update vehicle location.
+    // A private vehicle travels with the person, so it ends up at the destination node.
+    // This enables mode choice to exclude a car that was left at home when the person is at work.
+    val privateVehicleModes = Set("car", "bicycle", "motorcycle")
+    val destinationNodeId    = state.nextActivity.map(_.nodeId).getOrElse("")
     state = state.completeTrip(data.distanceTraveled)
+    if (privateVehicleModes.contains(currentMode) && destinationNodeId.nonEmpty)
+      state = state.copy(
+        vehicleCurrentNode = state.vehicleCurrentNode + (currentMode -> destinationNodeId)
+      )
 
     report(
       data = Map(
@@ -936,6 +986,8 @@ class Person(
   /** Advance to next activity in schedule.
     */
   private def advanceToNextActivity(): Unit = {
+    ActorTrace.trace(getEntityId, currentTick, "person_activity_advance", // #actor-trace
+      s"from=${state.currentActivity.map(_.activityType).getOrElse("none")} idx=${state.currentActivityIndex} next=${state.nextActivity.map(_.activityType).getOrElse("none")}") // #actor-trace
     if (state.currentTripVehicleId.contains("walking")) {
       state.currentTripStartTick match {
         case Some(startTick) =>

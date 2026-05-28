@@ -10,6 +10,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnu
 import org.interscity.htc.model.hybrid.util.SubwayUtil
 import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
 import org.interscity.htc.core.metrics.model.hybrid.{ MovableMetrics, SubwayMetrics }
+import core.actor.trace.ActorTrace
 
 /** Subway actor - Metro train following predefined rail routes.
   *
@@ -58,6 +59,8 @@ class Subway(
           ),
           label = "journey_started"
         )
+        ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
+          s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
         enterLink()
       case Ready =>
         enterLink()
@@ -67,6 +70,8 @@ class Subway(
         stationOpt match {
           case Some(_) =>
             state.status = Stopped
+            ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
+              s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
             requestUnloadPeopleData()
             requestLoadPassenger()
             onFinishSpontaneous(None)
@@ -76,17 +81,14 @@ class Subway(
       case Stopped =>
         leavingLink()
       case _ =>
-        logWarn(s"Event current status not handled ${state.status}")
+        super.actSpontaneous(event)
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit = {
-    super.actInteractWith(event)
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
       case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
-      case _ =>
-        logWarn("Event not handled")
+      case _                            => super.actInteractWith(event)
     }
-  }
 
   private def requestLoadPassenger(): Unit = {
     val nodeId = getCurrentNode
@@ -267,8 +269,8 @@ class Subway(
           state.currentPathPosition += 1
           Some(nextPath)
         else
-          state.currentPathPosition = 0
-          Some(routePath(state.currentPathPosition))
+          state.currentPathPosition = 1
+          Some(routePath(0))
       case None =>
         None
 

@@ -50,6 +50,10 @@
     <!-- Silence noisy Pekko ClusterSingletonProxy INFO spam -->
     <logger name="org.apache.pekko.cluster.singleton.ClusterSingletonProxy" level="WARN" />
 
+    <!-- Actor lifecycle trace logs. Gated by htc.actor-trace.enabled (default: off). -->
+    <!-- To mute entirely at logback level regardless of config: change level to "OFF" -->
+    <logger name="org.interscity.htc.actor.trace" level="INFO" />
+
     <root level="INFO">
 <!--        <appender-ref ref="FILE" />-->
         <!-- Usar ASYNC em vez de STDOUT direto -->

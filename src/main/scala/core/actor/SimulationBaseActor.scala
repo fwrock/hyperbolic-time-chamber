@@ -29,6 +29,10 @@ import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
 
+import core.entity.event.EntityEnvelopeEvent
+import core.util.ActorCreatorUtil.createShardRegion
+import core.entity.event.data.InitializeData
+
 /** Base actor for simulation entities that require time management, spontaneous events, Lamport
   * clocks, and reporting capabilities. Extends the generic BaseActor with simulation-specific
   * functionality.
@@ -39,7 +43,7 @@ import scala.compiletime.uninitialized
   *   The state type of the actor
   */
 abstract class SimulationBaseActor[T <: BaseState](
-  private val properties: Properties
+  private var properties: Properties
 )(implicit m: Manifest[T])
     extends BaseActor[T](properties) {
 
@@ -74,6 +78,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var creatorManager: ActorRef =
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
+
+  // Tracks entities spawned via spawnDynamicActor, awaiting ShardRegion.StartEntityAck
+  // Key: entityId, Value: (shardRegion, initEvent)
+  private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
+  // Remembers classType per spawned entity until InitializeEntityAckEvent is received
+  private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
 
   /** Gets a specific time manager by type.
     * @param managerType
@@ -547,10 +557,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     case _ if awaitingMigration =>
       stash()
 
-    case event: MigrationContextEvent => handleMigrationContext(event)
-    case event: SpontaneousEvent      => handleSpontaneous(event)
-    case event: ActorInteractionEvent => handleInteractWith(event)
-    case event                        => super.receive(event)
+    case event: MigrationContextEvent      => handleMigrationContext(event)
+    case event: SpontaneousEvent           => handleSpontaneous(event)
+    case event: ActorInteractionEvent      => handleInteractWith(event)
+    case event: ShardRegion.StartEntityAck => handleSpawnedEntityStartAck(event)
+    case event: InitializeEntityAckEvent   => handleSpawnedEntityInitAck(event)
+    case event                             => super.receive(event)
   }
 
   /** Returns true if this entity should re-register on the TimeManager after migration restore.
@@ -561,6 +573,64 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
     state != null && state.isSetScheduleOnTimeManager
+
+  /** Spawns a dynamic sharded actor using the 2-phase creation protocol that mirrors
+    * CreatorLoadData: (1) ShardRegion.StartEntity → (2) StartEntityAck → (3) send
+    * EntityEnvelopeEvent(InitializeEvent) → (4) receive InitializeEntityAckEvent.
+    *
+    * The shard region for `classType` must be pre-registered on all nodes (via dynamicActorTypes
+    * in the scenario config). Override [[onDynamicActorInitialized]] to react when the new entity
+    * finishes initialization.
+    */
+  protected def spawnDynamicActor(
+    classType: String,
+    entityId: String,
+    stateData: Any,
+    relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
+  ): Unit = {
+    val initEvent = InitializeEvent(
+      id = entityId,
+      actorRef = self,
+      data = InitializeData(
+        data = stateData,
+        resourceId = properties.resourceId,
+        timeManagers = timeManagers,
+        creatorManager = self,
+        reporters = reporters,
+        relationships = relationships
+      )
+    )
+    val shardRegion = createShardRegion(
+      system = context.system,
+      actorClassName = classType,
+      entityId = entityId,
+      resourceId = properties.resourceId,
+      timeManagers = timeManagers,
+      creatorManager = creatorManager,
+      reporters = reporters
+    )
+    pendingDynamicInits.put(entityId, (shardRegion, initEvent))
+    dynamicActorClassTypes.put(entityId, classType)
+    shardRegion ! ShardRegion.StartEntity(entityId)
+  }
+
+  /** Called when a dynamically spawned actor has finished initialization (received
+    * InitializeEntityAckEvent). Default is a no-op; override to perform post-creation logic.
+    */
+  protected def onDynamicActorInitialized(entityId: String, classType: String): Unit = {}
+
+  private def handleSpawnedEntityStartAck(event: ShardRegion.StartEntityAck): Unit =
+    pendingDynamicInits.remove(event.entityId) match {
+      case Some((shardRegion, initEvent)) =>
+        shardRegion ! EntityEnvelopeEvent(event.entityId, initEvent)
+      case None =>
+        logWarn(s"StartEntityAck for untracked entityId ${event.entityId} — ignoring")
+    }
+
+  private def handleSpawnedEntityInitAck(event: InitializeEntityAckEvent): Unit = {
+    val classType = dynamicActorClassTypes.remove(event.entityId).getOrElse("")
+    onDynamicActorInitialized(event.entityId, classType)
+  }
 
   /** For cluster-sharded (LoadBalancedDistributed) entities, use Pekko passivation instead of
     * context.stop(self). Passivation signals the ShardRegion to stop buffering messages for this

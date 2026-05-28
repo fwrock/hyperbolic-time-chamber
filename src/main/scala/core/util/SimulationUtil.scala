@@ -56,8 +56,11 @@ object SimulationUtil {
   def loadFronApplicationConfig(configFile: String): Simulation =
     fromJson[Simulation](readJsonFile(configFile))
 
-  def startShards(system: ActorSystem, configuration: String = null): Unit =
-    loadSimulationConfig(configuration).actorsDataSources
+  def startShards(system: ActorSystem, configuration: String = null): Unit = {
+    val simulationConfig = loadSimulationConfig(configuration)
+
+    // Register shard regions for all actor types declared in actorsDataSources.
+    simulationConfig.actorsDataSources
       .distinctBy(_.id)
       .filter(
         s => s.creationType == null || s.creationType == CreationTypeEnum.LoadBalancedDistributed
@@ -83,4 +86,24 @@ object SimulationUtil {
           )
           shardRegion ! ShardRegion.StartEntity(initiatorId)
       }
+
+    // Also register shard regions for actor types that are created dynamically at runtime
+    // (e.g. Bus spawned by BusStation, Subway by SubwayStation). These types have no initial
+    // entries in actorsDataSources but their shard region must exist on EVERY cluster node
+    // before any routing can happen.
+    simulationConfig.dynamicActorTypes
+      .distinct
+      .foreach { actorType =>
+        val dummyId = s"${UUID.randomUUID().toString}-dynamic-shard-init"
+        createShardRegion(
+          system,
+          actorType,
+          dummyId,
+          dummyId,
+          null,
+          null
+        )
+        system.log.info(s"startShards: registered dynamic shard region for $actorType")
+      }
+  }
 }

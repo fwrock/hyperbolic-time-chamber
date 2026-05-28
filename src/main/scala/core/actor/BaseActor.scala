@@ -35,7 +35,7 @@ import scala.concurrent.{ Await, ExecutionContext, Future }
   *   The state type of the actor
   */
 abstract class BaseActor[T <: BaseState](
-  private val properties: Properties
+  private var properties: Properties
 )(implicit m: Manifest[T])
     extends ActorSerializable
     with ActorLogging

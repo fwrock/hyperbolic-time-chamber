@@ -54,29 +54,44 @@ import org.htc.protobuf.core.entity.actor.Identify
   * @param betaTravelTime
   *   Per-second penalty applied to estimated travel time. Replaces `betaAccess`/`betaEgress` for
   *   PT and `betaPrivateVehicle` for car/bicycle/motorcycle when the travel-time strategy is used.
-  *   Defaults to `0.01` (1 util point lost per 100 seconds of travel).
+  *   Defaults to `0.0025` (1 util point lost per 400 seconds of travel).
   * @param walkingSpeedMs
   *   Walking speed in m/s used to convert access/egress distances to seconds. Default 1.4 m/s.
   * @param avgBusSpeedMs
   *   Average in-vehicle bus speed in m/s used to estimate PT in-vehicle travel time when no
-  *   real PT network routing is available. Default 8.33 m/s (≈ 30 km/h).
+  *   real PT network routing is available. Default 6.94 m/s (≈ 25 km/h).
   * @param avgSubwaySpeedMs
-  *   Average in-vehicle subway speed in m/s. Default 12.5 m/s (≈ 45 km/h).
+  *   Average in-vehicle subway speed in m/s. Default 11.11 m/s (≈ 40 km/h).
   * @param avgBicycleSpeedMs
   *   Expected bicycle cruising speed in m/s used to normalise the A* dynamic cost into seconds.
-  *   Default 5.56 m/s (≈ 20 km/h).
+  *   Default 5.0 m/s (≈ 18 km/h).
   * @param avgMotorcycleSpeedMs
-  *   Expected motorcycle cruising speed in m/s. Default 11.11 m/s (≈ 40 km/h).
+  *   Expected motorcycle cruising speed in m/s. Default 12.5 m/s (≈ 45 km/h).
   * @param avgCarSpeedMs
   *   Expected car cruising speed in m/s used when the A* dynamic cost must be converted to
   *   seconds (fallback if dynamic weights are unavailable). Default 13.89 m/s (≈ 50 km/h).
+  *
+  * ==== Default calibration provenance ====
+  *
+  * These defaults are literature-informed priors (not city-calibrated coefficients):
+  *
+  *   - `walkingSpeedMs = 1.4`: pedestrian free-flow speed from pedestrian-flow literature
+  *     (Weidmann, 1993; Bohannon & Andrews, 2011; TRB HCM 2010).
+  *   - `betaTravelTime = 0.0025`: initial per-second utility penalty used as a conservative prior
+  *     for travel-time-sensitive mode choice (to be calibrated from observed modal split).
+  *   - `betaAccess` / `betaEgress`: derived from `betaTravelTime` with a 2.0x walk-time penalty
+  *     using `betaWalkDist = betaTravelTime * walkPenalty / walkingSpeedMs`.
+  *   - `betaPrivateVehicle`: derived from `betaTravelTime / avgCarSpeedMs` for dimensional
+  *     consistency in the utility strategy.
+  *
+  * For details and references, see `docs/PERSON_AGENT.md` (section 6.6).
   */
 case class ModeChoiceWeights(
   includedModes: Set[String] = Set("car", "bicycle", "motorcycle", "bus", "subway", "walk"),
   betaMode: Double = 1.0,
-  betaAccess: Double = 0.001,
-  betaEgress: Double = 0.001,
-  betaPrivateVehicle: Double = 0.00005,
+  betaAccess: Double = 0.0036,
+  betaEgress: Double = 0.0036,
+  betaPrivateVehicle: Double = 0.00018,
   modePrefSubway: Double = 2.0,
   modePrefBus: Double = 1.0,
   modePrefWalk: Double = 0.0,
@@ -86,12 +101,12 @@ case class ModeChoiceWeights(
   maxAccessDistanceM: Double = 1500.0,
   maxWalkDistanceM: Double = 2000.0,
   // travel-time strategy fields
-  betaTravelTime: Double = 0.01,
+  betaTravelTime: Double = 0.0025,
   walkingSpeedMs: Double = 1.4,
-  avgBusSpeedMs: Double = 8.33,
-  avgSubwaySpeedMs: Double = 12.5,
-  avgBicycleSpeedMs: Double = 5.56,
-  avgMotorcycleSpeedMs: Double = 11.11,
+  avgBusSpeedMs: Double = 6.94,
+  avgSubwaySpeedMs: Double = 11.11,
+  avgBicycleSpeedMs: Double = 5.0,
+  avgMotorcycleSpeedMs: Double = 12.5,
   avgCarSpeedMs: Double = 13.89
 )
 
@@ -141,6 +156,16 @@ case class ModeChoiceWeights(
   *   `arrivalLogistics.mode` is `"auto"`. Must match a key registered in
   *   [[model.hybrid.util.strategy.ModeChoiceStrategyRegistry]]. Defaults to `"utility"`
   *   (additive utility function over bus / subway / walk).
+  * @param vehicleCurrentNode
+  *   Tracks the current road-network node where each owned private vehicle is parked
+  *   (mode -> nodeId). When absent for a given mode the vehicle is assumed to be at the person's
+  *   current activity location (i.e. the start of the first day). Updated after each private
+  *   vehicle trip so that a car left at home is unavailable from work.
+  * @param pendingTransferLegs
+  *   Remaining transit legs for an ongoing multi-leg trip produced by the RAPTOR algorithm.
+  *   Non-empty only between consecutive PT legs within the same trip (e.g. a bus+subway transfer).
+  *   The [[model.hybrid.actor.Person]] actor pops legs from this list after each alighting instead
+  *   of advancing to the next scheduled activity.
   */
 case class PersonState(
   startTick: Tick = 0L,
@@ -148,6 +173,7 @@ case class PersonState(
   dailySchedule: List[Activity] = List.empty,
   currentActivityIndex: Int = 0,
   ownedVehicles: Map[String, Identify] = Map.empty,
+  vehicleCurrentNode: Map[String, String] = Map.empty,
   currentTripVehicleId: Option[String] = None,
   currentTripStartTick: Option[Tick] = None,
   currentTripMode: Option[String] = None,
@@ -165,7 +191,8 @@ case class PersonState(
   ptWaitTimeoutTicks: Long = 86400L,
   enableDynamicModeChoice: Boolean = false,
   modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
-  modeChoiceStrategyType: String = "utility"
+  modeChoiceStrategyType: String = "utility",
+  pendingTransferLegs: List[ArrivalLogistics] = Nil
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager

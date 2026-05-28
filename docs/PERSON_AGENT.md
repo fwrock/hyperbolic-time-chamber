@@ -368,16 +368,53 @@ $$U(\text{walk}) = \beta_{\text{mode}} \cdot \text{pref}(\text{walk}) - \beta_{\
 
 ```scala
 case class ModeChoiceWeights(
-  betaMode: Double           = 1.0,    // escala da preferência modal
-  betaAccess: Double         = 0.001,  // penalidade por metro no acesso
-  betaEgress: Double         = 0.001,  // penalidade por metro no egresso
-  modePrefSubway: Double     = 2.0,    // preferência de metrô
-  modePrefBus: Double        = 1.0,    // preferência de ônibus
-  modePrefWalk: Double       = 0.0,    // referência base
-  maxAccessDistanceM: Double = 1500.0, // raio máximo de busca de paradas (m)
-  maxWalkDistanceM: Double   = 2000.0  // distância máxima para oferecer caminhada (m)
+  betaMode: Double             = 1.0,
+  betaAccess: Double           = 0.0036,
+  betaEgress: Double           = 0.0036,
+  betaPrivateVehicle: Double   = 0.00018,
+  modePrefSubway: Double       = 2.0,
+  modePrefBus: Double          = 1.0,
+  modePrefWalk: Double         = 0.0,
+  modePrefCar: Double          = 3.0,
+  modePrefBicycle: Double      = 1.5,
+  modePrefMotorcycle: Double   = 2.0,
+  maxAccessDistanceM: Double   = 1500.0,
+  maxWalkDistanceM: Double     = 2000.0,
+  betaTravelTime: Double       = 0.0025,
+  walkingSpeedMs: Double       = 1.4,
+  avgBusSpeedMs: Double        = 6.94,
+  avgSubwaySpeedMs: Double     = 11.11,
+  avgBicycleSpeedMs: Double    = 5.0,
+  avgMotorcycleSpeedMs: Double = 12.5,
+  avgCarSpeedMs: Double        = 13.89
 )
 ```
+
+#### Base cientifica e rastreabilidade dos defaults
+
+Os valores padrao acima sao **priors informados por literatura** (nao calibracao final para uma
+cidade especifica). A origem de cada grupo de parametros e:
+
+| Parametro(s) | Valor padrao | Base / fonte | Onde foi aplicado |
+|---|---:|---|---|
+| `walkingSpeedMs` | `1.4 m/s` | Bohannon & Andrews (2011), Weidmann (1993), TRB HCM (2010) | `PersonState.scala` + secao 6.2 |
+| `betaTravelTime` | `0.0025 util/s` | prior para MNL com penalidade temporal, para calibracao posterior (Train, 2009; Ben-Akiva & Lerman, 1985) | `PersonState.scala` |
+| `betaAccess`, `betaEgress` | `0.0036 util/m` | derivado: `betaTravelTime * walkPenalty / walkingSpeedMs`, com `walkPenalty = 2.0` (walking/waiting mais oneroso que in-vehicle, Wardman) | `PersonState.scala` |
+| `betaPrivateVehicle` | `0.00018 util/m` | derivado: `betaTravelTime / avgCarSpeedMs` (consistencia dimensional) | `PersonState.scala` |
+| `avgBusSpeedMs` | `6.94 m/s` (25 km/h) | faixa tipica de velocidade comercial de onibus urbano (BRT/urbano, usar dado local para ajuste) | `TravelTimeModeChoiceStrategy` |
+| `avgSubwaySpeedMs` | `11.11 m/s` (40 km/h) | valor medio operacional urbano (inclui efeito de paradas; ajustar por rede real) | `TravelTimeModeChoiceStrategy` |
+| `avgBicycleSpeedMs` | `5.0 m/s` (18 km/h) | faixa observada de ciclismo utilitario urbano | `TravelTimeModeChoiceStrategy` |
+| `avgMotorcycleSpeedMs` | `12.5 m/s` (45 km/h) | prior operacional urbano para moto | `TravelTimeModeChoiceStrategy` |
+| `avgCarSpeedMs` | `13.89 m/s` (50 km/h) | velocidade de referencia urbana para conversao custo->tempo | `TravelTimeModeChoiceStrategy` |
+
+Formulas usadas para derivacao dos coeficientes por distancia:
+
+- `betaAccess = betaEgress = betaTravelTime * walkPenalty / walkingSpeedMs`
+- `betaPrivateVehicle = betaTravelTime / avgCarSpeedMs`
+
+Essas escolhas mantem consistencia de unidades entre estrategia `"utility"` (penalidade por metro)
+e estrategia `"travel-time"` (penalidade por segundo), reduzindo salto de comportamento entre as
+duas.
 
 #### Garantias de compatibilidade
 
@@ -701,3 +738,10 @@ novos `case` na correspondência de padrão.
 - [src/main/scala/model/hybrid/util/TransitMapUtil.scala](../src/main/scala/model/hybrid/util/TransitMapUtil.scala) — Índice de paradas de TP
 - [src/main/scala/model/hybrid/util/ModeChoiceUtil.scala](../src/main/scala/model/hybrid/util/ModeChoiceUtil.scala) — Escolha modal por utilidade
 - [src/main/scala/model/hybrid/entity/state/model/TransitStop.scala](../src/main/scala/model/hybrid/entity/state/model/TransitStop.scala) — Modelo de parada de TP
+- Ben-Akiva, M., & Lerman, S. R. (1985). *Discrete Choice Analysis: Theory and Application to Travel Demand*. MIT Press.
+- Train, K. (2009). *Discrete Choice Methods with Simulation* (2nd ed.). Cambridge University Press.
+- Wardman, M. (2004). Public transport values of time. *Transport Policy*, 11(4), 363-377.
+- Wardman, M. (2012). Review and meta-analysis of U.K. time elasticities of travel demand. *Transportation*, 39, 465-490.
+- Weidmann, U. (1993). *Transporttechnik der Fussgänger*. ETH Zurich.
+- Bohannon, R. W., & Andrews, A. W. (2011). Normal walking speed: a descriptive meta-analysis. *Physiotherapy*, 97(3), 182-189.
+- Transportation Research Board. (2010). *Highway Capacity Manual* (HCM 2010).

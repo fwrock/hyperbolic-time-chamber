@@ -145,6 +145,13 @@ object SimulatorSettingsRegistry {
       "When true, removes Person activities whose endTime > simulation duration at actor startup. " +
         "Use when the input data contains multi-day schedules but the simulation runs only 1 day.",
       "false"
+    ),
+    SettingDef(
+      "htc.actor-trace.enabled",
+      "HTC_ACTOR_TRACE_ENABLED",
+      "Enable [ACTOR-TRACE] INFO logs for major actor lifecycle events (Person, Bus, Car, Subway, etc.). " +
+        "Toggle at runtime via REST API. Remove from source by searching '// #actor-trace'.",
+      "false"
     )
   )
 
