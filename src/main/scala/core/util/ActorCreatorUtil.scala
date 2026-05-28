@@ -82,11 +82,13 @@ object ActorCreatorUtil {
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
-      case cmd: Command => (entityId, cmd)
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case cmd: Command                     => (entityId, cmd)
     }
 
     val extractShardId: ShardRegion.ExtractShardId = {
-      case cmd: Command => (entityId.hashCode % 10).toString
+      case EntityEnvelopeEvent(id, _) => (id.hashCode % 10).toString
+      case cmd: Command               => (entityId.hashCode % 10).toString
     }
 
     sharding.start(
@@ -196,11 +198,13 @@ object ActorCreatorUtil {
     val sharding = ClusterSharding(system)
 
     val extractEntityId: ShardRegion.ExtractEntityId = {
-      case cmd: Command => (entityId, cmd)
+      case EntityEnvelopeEvent(id, payload) => (id, payload)
+      case cmd: Command                     => (entityId, cmd)
     }
 
     val extractShardId: ShardRegion.ExtractShardId = {
-      case cmd: Command => (entityId.hashCode % 10).toString
+      case EntityEnvelopeEvent(id, _) => (id.hashCode % 10).toString
+      case cmd: Command               => (entityId.hashCode % 10).toString
     }
 
     sharding.start(

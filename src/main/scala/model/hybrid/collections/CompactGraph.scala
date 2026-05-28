@@ -215,14 +215,22 @@ object CompactGraph {
     /** Binary min-heap over (fScore: Double, nodeIdx: Int). */
     val heap: DoubleIntHeap = new DoubleIntHeap(8192)
 
-    /** Tracks which node indices were modified so we can reset only those. */
+    /** Tracks which node indices were modified so we can reset only those.
+      * A node may be relaxed (gScore improved) multiple times in one search, but we only
+      * need one dirty entry per node.  The companion [[inDirty]] bitset ensures we never
+      * add the same index twice, preventing an [[ArrayIndexOutOfBoundsException]] when
+      * dirtySize would otherwise reach n (= array length).
+      */
     private val dirty: Array[Int] = new Array[Int](n)
     private var dirtySize: Int    = 0
+    private val inDirty: BitSet   = new BitSet(n)
 
-    @inline def markDirty(i: Int): Unit = {
-      dirty(dirtySize) = i
-      dirtySize += 1
-    }
+    @inline def markDirty(i: Int): Unit =
+      if (!inDirty.get(i)) {
+        dirty(dirtySize) = i
+        dirtySize += 1
+        inDirty.set(i)
+      }
 
     /** Reset only the touched entries — O(expansions), not O(n). */
     def reset(): Unit = {
@@ -235,6 +243,7 @@ object CompactGraph {
         i += 1
       }
       dirtySize = 0
+      inDirty.clear()
       visited.clear()
       heap.clear()
     }

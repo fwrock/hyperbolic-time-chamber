@@ -20,6 +20,7 @@ import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.core.metrics.model.hybrid.{ BusMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.actor.trace.ActorTrace
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
   *
@@ -99,6 +100,19 @@ class Bus(
   private var microUpdateLogCount: Long = 0L
   private var busStopProbeLogCount: Long = 0L
 
+  private def restoreRouteIfMissing(context: String): Unit = {
+    if (state != null && state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
+      val restored = scala.collection.mutable.Queue(state.storedBestRoute.get: _*)
+      state.movableBestRoute = Some(restored)
+      if (state.currentPathPosition >= restored.size) {
+        state.currentPathPosition = 0
+      }
+      logWarn(
+        s"Bus ${getEntityId} restored route from storedBestRoute during $context (${restored.size} segments)"
+      )
+    }
+  }
+
   /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
     * triggering premature leavingLink.
     */
@@ -159,15 +173,7 @@ class Bus(
 
     state.status match {
       case Start =>
-        if (state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
-          logDebug(
-            s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)"
-          )
-          state.movableBestRoute = state.storedBestRoute.map(
-            lst => scala.collection.mutable.Queue(lst: _*)
-          )
-          state.storedBestRoute = None
-        }
+        restoreRouteIfMissing("Start")
         MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
         report(
           data = Map(
@@ -182,6 +188,8 @@ class Bus(
           label = "journey_started"
         )
         state.status = Ready
+        ActorTrace.trace(getEntityId, currentTick, "bus_journey_started", // #actor-trace
+          s"origin=${state.origin} destination=${state.destination} route=${state.bestRoute.map(_.size).getOrElse(0)} label=${state.label}") // #actor-trace
         enterLink()
 
       case Ready =>
@@ -250,8 +258,7 @@ class Bus(
         requestLoadPassenger()
 
       case _ =>
-        logWarn(s"Event current status not handled ${state.status}")
-        onFinishSpontaneous(Some(currentTick + 1))
+        super.actSpontaneous(event)
     }
   }
 
@@ -269,6 +276,7 @@ class Bus(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
+    restoreRouteIfMissing("requestSignalState")
     val currentPathNode = state.currentPath.map(_._2).orNull
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
     if (state.destination == currentPathNode || routeDepleted) {
@@ -521,6 +529,7 @@ class Bus(
       label = "leave_link"
     )
 
+    restoreRouteIfMissing("ReceiveLeaveLinkInfo")
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
@@ -546,6 +555,8 @@ class Bus(
 
       BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
       BusMetrics.activePassengers.inc(data.people.size)
+      ActorTrace.trace(getEntityId, currentTick, "bus_passengers_loaded", // #actor-trace
+        s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
 
       report(
         data = Map(
@@ -594,6 +605,8 @@ class Bus(
 
         BusMetrics.passengersAlighted.labels(state.label).inc(unloadedCount)
         BusMetrics.activePassengers.dec(unloadedCount)
+        ActorTrace.trace(getEntityId, currentTick, "bus_passengers_unloaded", // #actor-trace
+          s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
 
         report(
           data = Map(
@@ -661,6 +674,11 @@ class Bus(
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
+  }
+
+  override protected def enterLink(): Unit = {
+    restoreRouteIfMissing("enterLink")
+    super.enterLink()
   }
 
   override def getNextPath: Option[(String, String)] =

@@ -29,7 +29,7 @@ abstract class Movable[T <: MovableState](
   protected def requestRoute(): Unit = {
     logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
     try
-      GPSUtil.calcRouteCompact(originId = state.origin, destinationId = state.destination, maxExpansions = Int.MaxValue) match {
+      GPSUtil.calcRouteCompact(originId = state.origin, destinationId = state.destination, maxExpansions = 500_000) match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")

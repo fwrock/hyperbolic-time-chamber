@@ -307,6 +307,12 @@ class SimulationManager(
         path
       )
     }
+    configuration.transitRoutesFile.foreach { path =>
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.set(
+        "htc.mobility.transit-routes-file",
+        path
+      )
+    }
     prepareSimulation()
   }
 

@@ -17,6 +17,7 @@ import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes,
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
+import core.actor.trace.ActorTrace
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -379,6 +380,8 @@ class Car(
     cost: Double = 0.0
   ): Unit = {
     MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+    ActorTrace.trace(getEntityId, currentTick, "car_journey_started", // #actor-trace
+      s"origin=${state.origin} destination=${state.destination} route=${route.size} cost=$cost source=$source") // #actor-trace
     report(
       data = Map(
         "event_type" -> "journey_started",
