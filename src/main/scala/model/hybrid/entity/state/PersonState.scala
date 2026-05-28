@@ -192,7 +192,17 @@ case class PersonState(
   enableDynamicModeChoice: Boolean = false,
   modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
   modeChoiceStrategyType: String = "utility",
-  pendingTransferLegs: List[ArrivalLogistics] = Nil
+  pendingTransferLegs: List[ArrivalLogistics] = Nil,
+  /** Road-network node where the person physically is during a multi-leg journey
+    * (between access walk, PT legs, transfer walks, and egress walk).
+    * `None` between journeys — position is implied by the current activity node.
+    */
+  currentPhysicalNodeId: Option[String] = None,
+  /** Destination node of the walking leg currently in progress.
+    * Set when a walking leg starts; cleared by [[completeTrip]].
+    * Used to update [[currentPhysicalNodeId]] when the walk completes.
+    */
+  currentTripDestinationNodeId: Option[String] = None
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager
@@ -221,7 +231,11 @@ case class PersonState(
   /** Advance to next activity.
     */
   def advanceActivity(): PersonState =
-    copy(currentActivityIndex = currentActivityIndex + 1)
+    copy(
+      currentActivityIndex = currentActivityIndex + 1,
+      currentPhysicalNodeId = None,
+      currentTripDestinationNodeId = None
+    )
 
   /** Check if person has completed all activities.
     */
@@ -251,7 +265,8 @@ case class PersonState(
       totalDistanceTraveled = totalDistanceTraveled + distanceTraveled,
       completedTrips = completedTrips + 1,
       ptAlightingNodeId = None,
-      ptLine = None
+      ptLine = None,
+      currentTripDestinationNodeId = None
     )
 }
 

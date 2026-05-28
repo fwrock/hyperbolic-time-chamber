@@ -77,23 +77,14 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
 
         val raptorCandidates: List[(ModeChoiceResult, Double)] = raptorResult match {
           case Some(r) if r.legs.nonEmpty =>
-            val firstLeg = r.legs.head
-            val firstMode = firstLeg.mode  // "bus" or "subway"
+            val firstMode = r.legs.head.mode  // "bus" or "subway"
             val modePref = if (firstMode == "subway") weights.modePrefSubway else weights.modePrefBus
             val score = weights.betaMode * modePref - weights.betaTravelTime * r.totalTimeSecs
 
-            // Build ArrivalLogistics for each leg.
-            val legsLogistics = r.legs.map { leg =>
-              ArrivalLogistics(
-                mode                  = leg.mode,
-                line                  = Some(leg.line),
-                boardingStopId        = Some(leg.boardingStop.nodeId),
-                boardingStopClassType = Some(leg.boardingStop.actorClassType),
-                alightingNodeId       = Some(leg.alightingStop.nodeId)
-              )
-            }
-            val firstLogistics  = legsLogistics.head
-            val pendingLogistics = legsLogistics.tail
+            // Build full leg chain: access walk + PT legs + transfer walks + egress walk.
+            val allLegs         = buildFullLegChain(originNodeId, destinationNodeId, r.legs)
+            val firstLogistics  = allLegs.head
+            val pendingLogistics = allLegs.tail
 
             List((ModeChoiceResult(firstLogistics, pendingLogistics), score))
 
@@ -159,6 +150,50 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────────
+
+  /** Builds the complete leg chain for a RAPTOR result, inserting walking legs before the first
+    * boarding stop (access walk), between consecutive PT legs at different nodes (transfer walk),
+    * and after the last alighting stop (egress walk).
+    *
+    * Walk legs use `alightingNodeId` to carry the walk destination so that [[model.hybrid.actor.Person]]
+    * can route to the correct node without an activity-index advance.
+    */
+  private def buildFullLegChain(
+    originNodeId: String,
+    destinationNodeId: String,
+    legs: List[RaptorRouter.RaptorLeg]
+  ): List[ArrivalLogistics] = {
+    var result = List.empty[ArrivalLogistics]
+
+    // Access walk: origin → first boarding stop (only when they are different nodes)
+    val firstBoardingNodeId = legs.head.boardingStop.nodeId
+    if (firstBoardingNodeId != originNodeId)
+      result = result :+ ArrivalLogistics(mode = "walk", alightingNodeId = Some(firstBoardingNodeId))
+
+    // PT legs with optional transfer walks between consecutive legs
+    legs.zipWithIndex.foreach { case (leg, idx) =>
+      result = result :+ ArrivalLogistics(
+        mode                  = leg.mode,
+        line                  = Some(leg.line),
+        boardingStopId        = Some(leg.boardingStop.actorId),   // actor ID, not nodeId
+        boardingStopClassType = Some(leg.boardingStop.actorClassType),
+        alightingNodeId       = Some(leg.alightingStop.nodeId)
+      )
+      // Transfer walk to the next boarding stop (only when nodes differ)
+      if (idx < legs.size - 1) {
+        val nextBoardingNodeId = legs(idx + 1).boardingStop.nodeId
+        if (leg.alightingStop.nodeId != nextBoardingNodeId)
+          result = result :+ ArrivalLogistics(mode = "walk", alightingNodeId = Some(nextBoardingNodeId))
+      }
+    }
+
+    // Egress walk: last alighting stop → destination (only when nodes differ)
+    val lastAlightingNodeId = legs.last.alightingStop.nodeId
+    if (lastAlightingNodeId != destinationNodeId)
+      result = result :+ ArrivalLogistics(mode = "walk", alightingNodeId = Some(destinationNodeId))
+
+    result
+  }
 
   private def directDistanceM(originNodeId: String, destinationNodeId: String): Double =
     (for {
