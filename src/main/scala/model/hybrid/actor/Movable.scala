@@ -128,12 +128,23 @@ abstract class Movable[T <: MovableState](
     } else {
       state.movableStatus = Finished
     }
-    onFinishSpontaneous(None)
-    selfDestruct()
+    // destruct=true: TM removes actor from registeredActors and sends DestructEvent through the
+    // mailbox, so any in-flight messages are processed before context.stop(self). The onDestruct()
+    // hook fires first, allowing subclasses to release heavy state before the actor stops.
+    onFinishSpontaneous(None, destruct = true)
   }
 
   protected def microMaxAcceleration: Double = 2.6
   protected def microMaxDeceleration: Double = 4.5
+
+  /** Release the route queue and current path. Called by [[PrivateVehicle]] when parking between
+    * trips so the queue is GCed immediately — the route is recalculated on the next StartTrip.
+    */
+  protected def clearRouteOnPark(): Unit =
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+    }
 
   protected def enterLink(): Unit =
     state.movableCurrentPath match {

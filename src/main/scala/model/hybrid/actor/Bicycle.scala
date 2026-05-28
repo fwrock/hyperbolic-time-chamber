@@ -790,7 +790,7 @@ class Bicycle(
     onFinishPrivateVehicle(nodeId)
   }
 
-  override def onDestruct(event: DestructEvent): Unit =
+  override def onDestruct(event: DestructEvent): Unit = {
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
@@ -798,6 +798,13 @@ class Bicycle(
       finishJourney("actor_destructed_before_completion", fallbackNode)
       onFinishPrivateVehicle(fallbackNode)
     }
+    // Release heavy state before context.stop(self)
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.microState = None
+    }
+  }
 }
 
 /** Bicycle companion object.

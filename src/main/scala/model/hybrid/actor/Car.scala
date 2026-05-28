@@ -517,8 +517,7 @@ class Car(
     if (!isPersonCentric) {
       if (state.destination == nodeId) state.movableReachedDestination = true
       state.movableStatus = Finished
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
     }
   }
 
@@ -926,11 +925,16 @@ class Car(
   override def onDestruct(event: DestructEvent): Unit = {
     if (state == null) return
 
-    val fallbackNode = Option(getCurrentNode)
-      .orElse(state.movableCurrentPath.map(_._2))
-      .getOrElse(state.origin)
-
-    finishJourney("actor_destructed_before_completion", fallbackNode)
+    if (!sumoTripInfoReported && state.status != Finished) {
+      val fallbackNode = Option(getCurrentNode)
+        .orElse(state.movableCurrentPath.map(_._2))
+        .getOrElse(state.origin)
+      finishJourney("actor_destructed_before_completion", fallbackNode)
+    }
+    // Release heavy state before context.stop(self)
+    state.movableBestRoute = None
+    state.movableCurrentPath = None
+    state.microState = None
   }
 }
 
