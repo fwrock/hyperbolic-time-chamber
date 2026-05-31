@@ -76,4 +76,18 @@ object GPSMetrics {
     .name("htc_gps_alt_landmark_count")
     .help("Number of landmarks used in the ALT routing index")
     .register()
+
+  val teleportCount: Counter = Counter
+    .build()
+    .name("htc_teleport_total")
+    .help("Total agent teleportations due to route calculation failure, by vehicle mode")
+    .labelNames("mode")
+    .register()
+
+  val sccUnreachable: Counter = Counter
+    .build()
+    .name("htc_scc_unreachable_total")
+    .help("Route requests rejected by SCC condensation reachability check (no path exists), by mode")
+    .labelNames("mode")
+    .register()
 }

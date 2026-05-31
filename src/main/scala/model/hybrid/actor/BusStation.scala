@@ -24,6 +24,7 @@ import scala.collection.mutable
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.*
 import core.actor.trace.ActorTrace
+import core.util.StringPool
 
 class BusStation(
   protected val properties: Properties
@@ -31,8 +32,14 @@ class BusStation(
       properties = properties
     ) {
 
+  override protected def internStateStrings(s: BusStationState): BusStationState =
+    s.copy(
+      name        = StringPool.intern(s.name),
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
-  // Stores the next scheduled tick until the spawned bus ACKs its initialization.
   private var pendingSpawnTick: Option[Tick] = None
 
   /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic). Ensures
@@ -89,7 +96,7 @@ class BusStation(
     onFinishSpontaneous(tick)
   }
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit =
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (currentTick >= simulationEnd) {
       logInfo(
         s"BusStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
@@ -126,12 +133,12 @@ class BusStation(
             onFinishSpontaneous(Some(currentTick + state.interval))
           }
         case WorkingWithOutBus =>
-          // All buses have been created (or route was incomplete). Nothing more to schedule.
           onFinishSpontaneous(None)
         case _ =>
           logWarn(s"Event current status not handled ${state.status}")
           onFinishSpontaneous(None)
       }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -171,8 +178,6 @@ class BusStation(
         onFinishSpontaneous(None)
       }
     } else if (hasAnyRouteSegment) {
-      // At least some segments are available — create buses with a partial route.
-      // getTotalRoute already handles missing segments gracefully (skips with a warning).
       def badSegments(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
         stops: List[String]
@@ -188,9 +193,6 @@ class BusStation(
           s"Missing/unreachable going: [$missingGoing]. Missing/unreachable returning: [$missingReturning]."
       )
 
-      // A stop S_j is permanently unserviceable when segment(S_j-1, S_j) is absent in BOTH
-      // directions — meaning the bus never arrives at S_j's node as a link destination.
-      // Persons registered at such stops must be notified immediately so they don't wait forever.
       def skippedDestinations(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
         stops: List[String]
@@ -245,7 +247,6 @@ class BusStation(
         onFinishSpontaneous(None)
       }
     } else {
-      // No route at all — notify passengers and stop.
       logWarn(
         s"BusStation ${getEntityId} route calculation produced no usable segments — no buses will be created."
       )
@@ -428,9 +429,6 @@ class BusStation(
         } else {
           val expectedSize = state.busStops.size - 1
           val actualSize   = r.keys.size
-          // A segment present in the map but with an empty path means SP found no route
-          // between those bus stops. Treat that as incomplete so we don't attempt to spawn
-          // a bus with an empty route and hit an IllegalStateException.
           val allNonEmpty  = r.values.forall(_.nonEmpty)
           logDebug(s"Route completion check: actual=$actualSize, expected=$expectedSize, allNonEmpty=$allNonEmpty")
           actualSize == expectedSize && allNonEmpty

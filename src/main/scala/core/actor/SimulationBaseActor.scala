@@ -10,7 +10,7 @@ import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRes
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{ IdUtil, JsonUtil, StringUtil }
+import core.util.{ IdUtil, JsonUtil, StringPool, StringUtil }
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
@@ -84,6 +84,29 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
   // Remembers classType per spawned entity until InitializeEntityAckEvent is received
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
+
+  /** Interns all String fields in the [[relationships]] map to reduce heap duplication.
+    * Called once per actor in [[onFinishInitialize]], and again after migration restore.
+    * Idempotent — safe to call repeatedly.
+    */
+  private def internRelationshipsStrings(): Unit =
+    if (relationships.nonEmpty) {
+      val interned = relationships.iterator.map {
+        case (k, v) =>
+          StringPool.intern(k) -> ShardActorId(
+            entityId    = StringPool.intern(v.entityId),
+            classType   = StringPool.intern(v.classType),
+            shardBucket = StringPool.intern(v.shardBucket)
+          )
+      }.toMap
+      relationships.clear()
+      relationships ++= interned
+    }
+
+  override protected def onFinishInitialize(): Unit = {
+    internRelationshipsStrings()
+    super.onFinishInitialize()
+  }
 
   /** Gets a specific time manager by type.
     * @param managerType

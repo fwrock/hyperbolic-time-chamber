@@ -12,7 +12,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.EntityEnvelopeEvent
-import core.util.{ IdUtil, StringUtil }
+import core.util.{ IdUtil, StringPool, StringUtil }
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
@@ -62,6 +62,12 @@ class Link(
 ) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
+
+  override protected def internStateStrings(s: LinkState): LinkState =
+    s.copy(
+      from = StringPool.intern(s.from),
+      to   = StringPool.intern(s.to)
+    )
 
   /** Calculates the current cost of traversing this link. Cost combines distance, congestion, and
     * travel time factors.
@@ -226,6 +232,7 @@ class Link(
     *   Spontaneous event from time manager
     */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId isMicro=${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
     if (!state.isMicroMode) {
       microTickScheduled = false
       onFinishSpontaneous(None)

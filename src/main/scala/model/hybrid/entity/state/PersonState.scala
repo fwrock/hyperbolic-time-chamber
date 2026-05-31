@@ -3,6 +3,7 @@ package model.hybrid.entity.state
 
 import core.entity.state.BaseState
 import core.types.Tick
+import core.util.StringPool
 import org.htc.protobuf.core.entity.actor.Identify
 
 /** Weights for the utility function used in dynamic mode choice.
@@ -237,6 +238,17 @@ case class PersonState(
       currentTripDestinationNodeId = None
     )
 
+  /** Returns a copy with all high-duplication string fields in the daily schedule replaced by
+    * shared StringPool instances. Call once per actor at initialization time to deduplicate
+    * activity-type strings ("home", "work"), transport mode strings ("car", "walk"), node IDs, and
+    * PT stop IDs that are identical across many Person actors at city scale.
+    */
+  def withInternedStrings: PersonState =
+    copy(
+      dailySchedule         = dailySchedule.map(_.interned),
+      modeChoiceStrategyType = StringPool.intern(modeChoiceStrategyType)
+    )
+
   /** Check if person has completed all activities.
     */
   def isScheduleComplete: Boolean =
@@ -289,7 +301,16 @@ case class Activity(
   nodeId: String,
   endTime: String, // Could be "08:00" or tick number as string
   arrivalLogistics: Option[ArrivalLogistics] = None
-)
+) {
+  /** Returns a copy with high-duplication string fields replaced by shared pool instances.
+    * Calling this once per actor at startup can recover several hundred MB at city scale.
+    */
+  def interned: Activity = copy(
+    activityType = StringPool.intern(activityType),
+    nodeId       = StringPool.intern(nodeId),
+    arrivalLogistics = arrivalLogistics.map(_.interned)
+  )
+}
 
 /** Logistics for arriving at an activity location.
   *
@@ -325,7 +346,16 @@ case class ArrivalLogistics(
   alightingNodeId: Option[String] = None,
   fixedMode: Boolean = false,  // when true, skips dynamic mode choice even if the person flag is on
   precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
-)
+) {
+  /** Returns a copy with high-duplication string fields replaced by shared pool instances. */
+  def interned: ArrivalLogistics = copy(
+    mode                  = StringPool.intern(mode),
+    line                  = StringPool.internOpt(line),
+    boardingStopId        = StringPool.internOpt(boardingStopId),
+    boardingStopClassType = StringPool.internOpt(boardingStopClassType),
+    alightingNodeId       = StringPool.internOpt(alightingNodeId)
+  )
+}
 
 /** Driver attributes affecting vehicle behavior.
   *

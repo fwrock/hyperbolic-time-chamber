@@ -29,7 +29,6 @@ abstract class TimeManagerBase(
       actorId = actorId
     ) {
 
-  // Common time manager state
   protected var startTime: Long = 0
   protected var localTickOffset: Tick = 0
   protected var tickOffset: Tick = 0
@@ -53,7 +52,6 @@ abstract class TimeManagerBase(
     case _: ResumeSimulationEvent        => resumeSimulation()
     case _: StopSimulationEvent          => stopSimulation()
     case msg                             =>
-      // Ignore Pekko persistence internal messages and other unhandled messages
       logDebug(s"Ignoring unhandled message: ${msg.getClass.getSimpleName}")
   }
 

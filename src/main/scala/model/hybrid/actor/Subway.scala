@@ -41,7 +41,15 @@ class Subway(
 
   private var expectedUnloadResponses: Int = 0
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit =
+  /** Subway trains operate on the rail network, not the road network.
+   *  Rail link IDs are resolved directly to their actor reference, bypassing
+   *  the city-map lookup used by road-based movables.
+   */
+  override protected def resolveLink(linkId: String): Option[(String, String)] =
+    Some((linkId, "hybrid.actor.RailLink"))
+
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    val routeSize = state.bestRoute.map(_.size).getOrElse(0)
     state.status match
       case Start =>
         state.status = Ready
@@ -61,27 +69,38 @@ class Subway(
         )
         ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
           s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
+        logInfo(s"[SUBWAY] Start→Ready, calling enterLink. id=$getEntityId line=${state.line}")
         enterLink()
       case Ready =>
+        logInfo(s"[SUBWAY] Ready, calling enterLink. id=$getEntityId path=${state.movableCurrentPath}")
         enterLink()
       case Moving =>
         val nodeId = getCurrentNode
         val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
+        logInfo(
+          s"[SUBWAY] Moving: nodeId=$nodeId stationFound=${stationOpt.isDefined} " +
+          s"id=$getEntityId path=${state.movableCurrentPath}"
+        )
         stationOpt match {
-          case Some(_) =>
+          case Some(stationId) =>
             state.status = Stopped
+            logInfo(s"[SUBWAY] Stopping at station $stationId node=$nodeId id=$getEntityId")
             ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
               s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
             requestUnloadPeopleData()
             requestLoadPassenger()
             onFinishSpontaneous(None)
           case None =>
+            logInfo(s"[SUBWAY] No station at nodeId=$nodeId, calling leavingLink id=$getEntityId")
             leavingLink()
         }
       case Stopped =>
+        logInfo(s"[SUBWAY] Stopped, calling leavingLink id=$getEntityId path=${state.movableCurrentPath}")
         leavingLink()
-      case _ =>
+      case other =>
+        logInfo(s"[SUBWAY] Unhandled status=$other, delegating to super id=$getEntityId")
         super.actSpontaneous(event)
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -120,6 +139,7 @@ class Subway(
 
   private def requestUnloadPeopleData(): Unit = {
     if (state.passengers.isEmpty) {
+      logInfo(s"[SUBWAY] No passengers to unload, setting isUnloaded=true id=$getEntityId")
       state.nodeState.isUnloaded = true
       onFinishNodeState()
       return
@@ -128,6 +148,10 @@ class Subway(
     state.countUnloadReceived = 0
     state.countUnloadPassenger = 0
     expectedUnloadResponses = state.passengers.size
+    logInfo(
+      s"[SUBWAY] Requesting unload of ${state.passengers.size} passengers | " +
+      s"id=$getEntityId tick=$currentTick"
+    )
 
     val nodeId = getCurrentNode
     state.passengers.foreach {
@@ -213,7 +237,11 @@ class Subway(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
-    logDebug(s"Subway ${getEntityId} left rail link (total distance: ${state.distance}m)")
+    logInfo(
+      s"[SUBWAY] ReceiveLeaveLinkInfo from ${event.actorRefId} | " +
+      s"id=$getEntityId status=${state.status} tick=$currentTick " +
+      s"linkLen=${data.linkLength} totalDist=${state.distance}"
+    )
     report(
       data = Map(
         "event_type" -> "leave_link",
@@ -226,24 +254,55 @@ class Subway(
       ),
       label = "leave_link"
     )
-    state.status = Ready
-    onFinishSpontaneous(Some(currentTick + 1))
+    // Only update status if the subway has not already moved on to the next
+    // link (Waiting) or stopped at a station.  A late-arriving ReceiveLeaveLinkInfo
+    // for a link we already departed must not override the Waiting status set
+    // by enterLink() for the NEXT segment.
+    import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
+    if (state.status == Moving) {
+      logInfo(s"[SUBWAY] ReceiveLeaveLinkInfo: status was Moving → setting Ready and scheduling tick+1 | id=$getEntityId")
+      state.status = Ready
+      onFinishSpontaneous(Some(currentTick + 1))
+    } else {
+      logInfo(s"[SUBWAY] ReceiveLeaveLinkInfo: status=${state.status} (not Moving) → suppressing duplicate FinishEvent | id=$getEntityId")
+    }
+    // If status is already Waiting/Ready/Stopped the subway is managing its
+    // own scheduling; suppress the duplicate FinishEvent to avoid a spurious
+    // extra tick.
   }
 
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
+    logInfo(
+      s"[SUBWAY] ReceiveEnterLinkInfo from ${event.actorRefId} | " +
+      s"id=$getEntityId status=${state.status} tick=$currentTick " +
+      s"linkLen=${data.linkLength} speed=${data.linkFreeSpeed}"
+    )
+    // Guard: zero-length / zero-speed response means the RailLink rejected us.
+    // Schedule a retry at the next tick rather than computing time=0 (which
+    // would reschedule at currentTick, potentially looping forever at the
+    // same tick).
+    if (data.linkLength <= 0 || data.linkFreeSpeed <= 0) {
+      logWarn(
+        s"[SUBWAY] REJECTED by RailLink ${event.actorRefId}: zero linkLength=${data.linkLength} or speed=${data.linkFreeSpeed} " +
+          s"id=$getEntityId tick=$currentTick — retrying tick+1"
+      )
+      state.status = Ready
+      state.movableCurrentPath = None
+      onFinishSpontaneous(Some(currentTick + 1))
+      return
+    }
     val effectiveVelocity = state.velocity * math.max(0.5, math.min(1.5, state.speedFactor))
     val time = timeToNextStation(
       distance = data.linkLength,
       velocity = effectiveVelocity
     )
-    logDebug(s"Subway ${getEntityId} entering rail link")
-    logDebug(s"  Line: ${state.line}")
-    logDebug(s"  Length: ${data.linkLength}m")
-    logDebug(s"  Speed: ${effectiveVelocity} km/h (factor=${state.speedFactor})")
-    logDebug(s"  Travel time: ${time} ticks")
+    logInfo(
+      s"[SUBWAY] Entering rail link ${event.actorRefId} | id=$getEntityId line=${state.line} " +
+      s"len=${data.linkLength}m speed=${effectiveVelocity}km/h travelTime=$time ticks"
+    )
     state.status = Moving
     report(
       data = Map(
@@ -274,11 +333,17 @@ class Subway(
       case None =>
         None
 
-  private def onFinishNodeState(): Unit =
+  private def onFinishNodeState(): Unit = {
+    logInfo(
+      s"[SUBWAY] onFinishNodeState: isLoaded=${state.nodeState.isLoaded} isUnloaded=${state.nodeState.isUnloaded} " +
+      s"isEnd=${isEndNodeState} id=$getEntityId tick=$currentTick"
+    )
     if isEndNodeState then
       state.nodeState.isLoaded = false
       state.nodeState.isUnloaded = false
+      logInfo(s"[SUBWAY] Scheduling depart in ${state.stopTime} ticks | id=$getEntityId tick=$currentTick")
       scheduleEvent(currentTick + state.stopTime)
+  }
 
   private def isEndNodeState: Boolean =
     state.nodeState.isLoaded && state.nodeState.isUnloaded

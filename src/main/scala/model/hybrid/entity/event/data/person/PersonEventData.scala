@@ -55,7 +55,8 @@ case class TripCompletedData(
   travelTime: Long,
   finalNode: String,
   completionTick: Tick,
-  completionReason: String
+  completionReason: String,
+  wasTeleported: Boolean = false
 ) extends BaseEventData
 
 /** Message from Person to Vehicle to park (deactivate).

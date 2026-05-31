@@ -18,6 +18,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import core.actor.trace.ActorTrace
+import core.util.StringPool
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -30,7 +31,20 @@ class Car(
     )
     with PrivateVehicle[CarState] {
 
-  // A trava absoluta para garantir log único de finalização
+  override protected def internStateStrings(s: CarState): CarState = {
+    val copied = s.copy(
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+    copied.movableStatus             = s.movableStatus
+    copied.movableBestRoute          = s.movableBestRoute
+    copied.movableCurrentPath        = s.movableCurrentPath
+    copied.movableCurrentNode        = s.movableCurrentNode
+    copied.movableBestCost           = s.movableBestCost
+    copied.movableReachedDestination = s.movableReachedDestination
+    copied
+  }
+
   private var journeyFinishedReported: Boolean = false
 
   private var currentLinkId: Option[String] = None
@@ -89,7 +103,6 @@ class Car(
     sumoIsHalting = isHaltingNow
   }
 
-  // ===== PrivateVehicle Accessor Methods =====
   override protected def getVehicleStatus: MovableStatusEnum =
     if (state == null) Parked else state.status
   override protected def setVehicleStatus(status: MovableStatusEnum): Unit =
@@ -359,8 +372,8 @@ class Car(
         case None =>
           GPSMetrics.gpsCannotFindRoute.labels("car").inc()
           logError(s"Failed to calculate route from $origin to $destination")
-          finishJourney("route_calculation_failed", origin)
-          onFinishPrivateVehicle(origin)
+          finishJourney("teleported", destination)
+          onFinishPrivateVehicle(destination, wasTeleported = true)
           onFinishSpontaneous(None)
           if (!isPersonCentric) selfDestruct()
       }
@@ -475,8 +488,6 @@ class Car(
       signalWaitUntilTick = Some(data.nextTick)
       val waitTicks = math.max(0L, data.nextTick - currentTick)
       if (waitTicks > 0) {
-        // BUGFIX: Assuming 1 tick = 1 second (default HTC time unit)
-        // Convert ticks to seconds for proper waiting time accumulation
         val waitSeconds = waitTicks.toDouble
         updateHaltingState(speed = 0.0, deltaSeconds = waitSeconds)
       }
@@ -509,11 +520,6 @@ class Car(
   override protected def onFinish(nodeId: String): Unit = {
     finishJourney("onFinish_called", nodeId)
     onFinishPrivateVehicle(nodeId)
-    // Person-centric cars serve multiple trips: deactivateVehicle() (called inside
-    // onFinishPrivateVehicle) has already set status to Parked and called onFinishSpontaneous(None).
-    // Do NOT call super.onFinish() — Movable.onFinish() unconditionally calls selfDestruct(),
-    // which would passivate the actor and break subsequent trips from the same Person.
-    // Standalone cars should still be destroyed.
     if (!isPersonCentric) {
       if (state.destination == nodeId) state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -576,10 +582,6 @@ class Car(
   }
 
   private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit = {
-    // MICRO-mode cars don't receive spontaneous events, so they can't rely on actSpontaneous
-    // to detect simulation end.  This guard mirrors the same check in actSpontaneous so that
-    // a car that is still traversing a MICRO link when the simulation clock expires will
-    // cleanly finish its journey instead of silently vanishing.
     if (
       !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
@@ -588,7 +590,6 @@ class Car(
         s"Car $getEntityId exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing."
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
-      // Do NOT call leavingLink() — same reason as in actSpontaneous forced-exit path.
       finishJourney("simulation_time_exceeded", finalNode)
       onFinishPrivateVehicle(finalNode)
       onFinishSpontaneous(None)
@@ -610,19 +611,10 @@ class Car(
 
         state.updateMicroState(updatedMicro)
         sumoArrivalSpeed = data.velocity
-        // NOTE: Don't track halting state per update - Link accumulates waiting time
-        // across all sub-ticks and sends the total in MicroLeaveLinkData
     }
   }
 
   private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit = {
-    // Only process if this car is actively on this exact link. This covers two cases:
-    //  1. Race condition: MicroLeaveLinkData from a previous link arrives after the car has
-    //     already moved to the next link (currentLinkId is Some(otherLink)).
-    //  2. Stale delivery to a shard-recreated car: when forceDestructActiveActors destructs
-    //     a MICRO-mode car, an in-flight MicroLeaveLinkData queued in the shard is delivered
-    //     to the new instance which has currentLinkId == None. Using !contains instead of
-    //     isDefined && !contains ensures we also discard the None case.
     if (!currentLinkId.contains(data.linkId)) {
       logWarn(
         s"$getEntityId: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
@@ -642,8 +634,6 @@ class Car(
     sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
     sumoArrivalPos = data.finalPosition
 
-    // BUGFIX: Use Link's accumulated waiting time directly instead of recalculating
-    // The Link has already tracked all sub-ticks where velocity < 0.1 m/s
     sumoWaitingTimeSeconds += data.waitingTimeSeconds
     if (data.waitingTimeSeconds > 0.0) {
       sumoWaitingCount += 1
@@ -673,8 +663,6 @@ class Car(
     currentLinkLength = 0.0
     linkEntryTick = None
 
-    // MicroLeaveLinkData is the Link's signal that the vehicle has physically exited.
-    // Request signal state now: green → leavingLink() → next link; red → wait then leavingLink().
     requestSignalState()
   }
 
@@ -697,9 +685,6 @@ class Car(
     val time = data.linkLength / speed
     state.status = Moving
     sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
-
-    // BUGFIX: Don't call updateHaltingState here - wait until we leave the link
-    // to properly calculate the actual travel time and halting duration
 
     if (sumoDepartTick.isEmpty) {
       sumoDepartTick = Some(currentTick)
@@ -752,22 +737,17 @@ class Car(
     sumoArrivalLane = Some(s"${event.actorRefId}_0")
     sumoArrivalPos = data.linkLength
 
-    // BUGFIX: Calculate actual travel time through the MESO link
-    // and accumulate waiting time if vehicle was moving slowly
     linkEntryTick.foreach {
       entryTick =>
         val travelTimeTicks = currentTick - entryTick
         val travelTimeSeconds = travelTimeTicks.toDouble // 1 tick = 1 second
 
-        // Recalculate actual speed during link traversal
         val actualSpeed = if (travelTimeSeconds > 0) {
           data.linkLength / travelTimeSeconds // m/s
         } else {
           0.0
         }
-
-        // If vehicle was halting (speed < 0.1 m/s), count entire travel time as waiting
-        // If vehicle was moving slowly, proportionally count the extra time spent
+        
         updateHaltingState(actualSpeed, travelTimeSeconds)
     }
 
@@ -858,12 +838,10 @@ class Car(
     val plannedDepart = getTripStartTick.getOrElse(state.startTick)
     val depart = sumoDepartTick.getOrElse(plannedDepart)
     val arrival = currentTick
-    // BUGFIX: Convert ticks to seconds explicitly (assuming 1 tick = 1 second)
     val durationTicks = math.max(0L, arrival - depart)
     val durationSeconds = durationTicks.toDouble
     val routeLength = state.distance
     val expectedTravelTime = math.max(0.0, sumoIdealTravelTimeSeconds)
-    // Now both are in seconds: durationSeconds and expectedTravelTime
     val timeLoss = math.max(0.0, durationSeconds - expectedTravelTime)
     val vaporized = reason == "actor_destructed_before_completion"
     val departDelay = math.max(0L, depart - plannedDepart)
@@ -931,7 +909,6 @@ class Car(
         .getOrElse(state.origin)
       finishJourney("actor_destructed_before_completion", fallbackNode)
     }
-    // Release heavy state before context.stop(self)
     state.movableBestRoute = None
     state.movableCurrentPath = None
     state.microState = None

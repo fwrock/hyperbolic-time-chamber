@@ -9,6 +9,7 @@ import org.apache.pekko.actor.{ ActorRef, Props }
 import org.htc.protobuf.core.entity.actor.Identify
 
 import scala.collection.mutable
+import scala.concurrent.duration._
 
 /** Local Time Manager for Discrete Event Simulation. This manager processes events in chronological
   * order, advancing time only when all events at the current time have been processed. This is the
@@ -44,6 +45,57 @@ class LocalDiscreteEventTimeManager(
   private val pendingTickActors = mutable.Queue[Identify]()
   private var currentBatchTick: Tick = -1
   private var currentBatchSequence: Long = 0L
+
+  // Stall detector: wall-clock time of the last tick advance. Used only for logging.
+  private var lastTickAdvanceWall: Long = System.currentTimeMillis()
+  private var lastAdvancedAtTick: Tick = -1L
+
+  /** Periodic stall-check message. Sent by the scheduler every 30s. */
+  private case object StallCheck
+
+  override def preStart(): Unit = {
+    super.preStart()
+    context.system.scheduler.scheduleWithFixedDelay(
+      30.seconds, 30.seconds, self, StallCheck
+    )(context.dispatcher)
+  }
+
+  /** Extend the parent handler with our StallCheck case. */
+  override def handleEvent: Receive = {
+    val stallHandler: PartialFunction[Any, Unit] = { case StallCheck => logStallIfNeeded() }
+    stallHandler.orElse(super.handleEvent)
+  }
+
+  /** Log a stall report if we have been stuck in the same tick for > 25 s.
+    * Skipped during the loading/warmup phase (before StartSimulationTimeEvent). */
+  private def logStallIfNeeded(): Unit = {
+    if (startTime == 0L) return // simulation not started yet — loading phase, not a stall
+    val elapsed = System.currentTimeMillis() - lastTickAdvanceWall
+    if (elapsed > 25_000) {
+      if (runningEvents.nonEmpty) {
+        val sample = runningEvents.take(30)
+          .map(e => s"${e.classType.split('.').last}/${e.id}")
+          .mkString(", ")
+        val more = if (runningEvents.size > 30) s" ... +${runningEvents.size - 30} more" else ""
+        logWarn(
+          s"[STALL] tick=$localTickOffset | elapsed=${elapsed / 1000}s | " +
+          s"runningEvents=${runningEvents.size} | pendingBatch=${pendingTickActors.size}\n" +
+          s"  stuck actors: $sample$more"
+        )
+      } else if (pendingTickActors.nonEmpty) {
+        logWarn(
+          s"[STALL] tick=$localTickOffset | elapsed=${elapsed / 1000}s | " +
+          s"runningEvents=0 | pendingBatch=${pendingTickActors.size} (batch not firing?)"
+        )
+      } else {
+        val nextScheduled = scheduledActors.keys.toSeq.sorted.headOption
+        logWarn(
+          s"[STALL?] tick=$localTickOffset | elapsed=${elapsed / 1000}s | " +
+          s"runningEvents=0 | pendingBatch=0 | nextScheduledTick=$nextScheduled (GTM not advancing?)"
+        )
+      }
+    }
+  }
 
   private lazy val tickProgressLogInterval: Long =
     scala.util.Try(
@@ -125,6 +177,12 @@ class LocalDiscreteEventTimeManager(
     }
     scheduledActors.remove(effectiveTick)
     scheduledTicksOnFinish.remove(effectiveTick)
+
+    // Reset stall timer each time we actually fire actors for a new tick.
+    if (effectiveTick != lastAdvancedAtTick) {
+      lastAdvancedAtTick = effectiveTick
+      lastTickAdvanceWall = System.currentTimeMillis()
+    }
 
     // Only advance if nothing running and nothing pending
     if (runningEvents.isEmpty && pendingTickActors.isEmpty) {

@@ -202,7 +202,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Report trip completion back to Person.
     */
-  protected def reportTripCompletion(reason: String, finalNode: String): Unit =
+  protected def reportTripCompletion(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit =
     ownerPersonRef.foreach {
       personRef =>
         val travelTime = tripStartTick
@@ -222,7 +222,8 @@ trait PrivateVehicle[T <: MovableState] {
             travelTime = travelTime,
             finalNode = finalNode,
             completionTick = getActorCurrentTick,
-            completionReason = reason
+            completionReason = reason,
+            wasTeleported = wasTeleported
           ),
           eventType = "TripCompleted",
           actorType = LoadBalancedDistributed
@@ -268,11 +269,13 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Override onFinish to report trip completion.
     */
-  protected def onFinishPrivateVehicle(nodeId: String): Unit = {
-    val reachedDestination = tripDestination.contains(nodeId)
-    val reason = if (reachedDestination) "reached_destination" else "trip_ended"
+  protected def onFinishPrivateVehicle(nodeId: String, wasTeleported: Boolean = false): Unit = {
+    val reason =
+      if (wasTeleported) "teleported"
+      else if (tripDestination.contains(nodeId)) "reached_destination"
+      else "trip_ended"
 
-    reportTripCompletion(reason, nodeId)
+    reportTripCompletion(reason, nodeId, wasTeleported)
     deactivateVehicle()
   }
 

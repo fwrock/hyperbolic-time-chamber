@@ -143,21 +143,7 @@ abstract class LocalTimeManagerBase(
     if (finish.timeManager == self) {
       ActorMetrics.eventsProcessed.labels("finish").inc()
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
-
-      // CRITICAL FIX: When scheduleTick is set, add the actor to scheduledActors immediately
-      // (in addition to scheduledTicksOnFinish).
-      //
-      // Race condition without this fix:
-      //   1. Actor sends FinishEvent(Some(T)) then ScheduleEvent(T) to TM (same sender → FIFO order)
-      //   2. TM processes FinishEvent → advanceToNextTick() → reportGlobalTimeManager(hasScheduled=true, T)
-      //   3. Global TM immediately sends UpdateGlobalTimeEvent(T) back to TM
-      //   4. UpdateGlobalTimeEvent(T) arrives at TM BEFORE ScheduleEvent(T) from the actor
-      //      (different senders: global TM vs actor → no ordering guarantee)
-      //   5. processTick(T) fires with empty scheduledActors[T] → no SpontaneousEvent sent
-      //   6. ScheduleEvent(T) arrives → bumped to T+1, but global TM may already be terminating
-      //
-      // Fix: by adding the actor to scheduledActors[T] atomically here (in the same message
-      // processing step as the FinishEvent), processTick(T) always finds the actor.
+      
       finish.scheduleTick.foreach {
         tickStr =>
           val tick = tickStr.toLong
@@ -168,10 +154,8 @@ abstract class LocalTimeManagerBase(
 
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
-      // Prometheus: update running events gauge
       TimeManagerMetrics.tmRunningEvents.set(runningEvents.size.toDouble)
 
-      // If no scheduleTick provided (None), remove actor from ALL future scheduled ticks
       if (finish.scheduleTick.isEmpty) {
         val actorId = finish.identify.id
         val actorClass = finish.identify.classType
@@ -182,7 +166,6 @@ abstract class LocalTimeManagerBase(
             actors.filterInPlace(_.id != actorId)
             if (actors.size < sizeBefore) removedFromTicks += 1
         }
-        // Clean up empty tick entries
         scheduledActors.filterInPlace {
           case (_, actors) => actors.nonEmpty
         }
@@ -192,10 +175,6 @@ abstract class LocalTimeManagerBase(
       }
 
       finishDestruct(finish)
-      // Only advance to the next tick if this actor was actually running a spontaneous event.
-      // When onFinishSpontaneous is called from actInteractWith (not actSpontaneous), the actor
-      // is NOT in runningEvents; advancing here would trigger a spurious hasScheduled=false
-      // report to the global TM, causing premature simulation termination.
       if (wasProcessingSpontaneousEvent) {
         advanceToNextTick()
       }
@@ -257,10 +236,8 @@ abstract class LocalTimeManagerBase(
     if (runningEvents.isEmpty) {
       nextTick match {
         case Some(tick) =>
-          // Report to global and wait for sync instead of advancing locally
           reportGlobalTimeManager(hasScheduled = true)
         case None =>
-          // No more events scheduled locally, report and wait
           reportGlobalTimeManager(hasScheduled = false)
       }
     }
@@ -295,7 +272,6 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    // Prometheus: track scheduled and dispatched events
     TimeManagerMetrics.tmScheduledActors.set(actorsRef.size.toDouble)
     ActorMetrics.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
     actorsRef.foreach {

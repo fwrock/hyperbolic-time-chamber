@@ -4,6 +4,7 @@ import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
+import scala.concurrent.blocking
 
 /** GPS Utility for route calculation with dynamic weight support.
   *
@@ -433,17 +434,44 @@ object GPSUtil {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
-    val t0 = System.nanoTime()
+    val cacheKey = s"$originId|$destinationId"
+
+    // Negative cache: avoid repeating searches that previously found no route.
+    if (isNoRouteKnown(originId, destinationId)) {
+      GPSMetrics.routeSource.labels("negative_cached").inc()
+      return None
+    }
+
+    // Positive cache: return a fresh Queue copy so callers can drain it independently.
+    val cached = routeCache.get(cacheKey)
+    if (cached != null) {
+      GPSMetrics.routeSource.labels("cached").inc()
+      return cached.map { case (cost, pathList) => (cost, mutable.Queue(pathList: _*)) }
+    }
+
+    val t0  = System.nanoTime()
     val cg  = CityMapUtil.compactGraph
     val cli = CityMapUtil.compactAltIndex
 
-    val result = cg.aStarALT(
-      originId,
-      destinationId,
-      (u, t) => cli.heuristic(u, t),
-      useDynamicWeights,
-      maxExpansions
-    )
+    // O(1) reachability pre-check: skip A* entirely for provably unreachable pairs.
+    val srcIdx = cg.nodeIndex.getOrDefault(originId, -1)
+    val dstIdx = cg.nodeIndex.getOrDefault(destinationId, -1)
+    if (srcIdx != -1 && dstIdx != -1 && !CityMapUtil.sccIndex.canReach(srcIdx, dstIdx)) {
+      GPSMetrics.sccUnreachable.labels("vehicle").inc()
+      markNoRoute(originId, destinationId)
+      return None
+    }
+
+    val result = blocking {
+      cg.aStarALT(
+        originId,
+        destinationId,
+        (u, t) => cli.heuristic(u, t),
+        useDynamicWeights,
+        maxExpansions,
+        maxNanos = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+      )
+    }
     val elapsed = (System.nanoTime() - t0) / 1e9
 
     result match {
@@ -455,12 +483,15 @@ object GPSUtil {
           System.err.println(
             s"[GPSUtil][SLOW] compact A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
           )
+        // Store path as immutable List; first writer wins (putIfAbsent is atomic).
+        routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
         Some((cost, path))
       case None =>
         System.err.println(
           s"[GPSUtil] compact A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
         )
         GPSMetrics.gpsNodeNotFound.labels("compact_no_route").inc()
+        markNoRoute(originId, destinationId)
         None
     }
   }
@@ -484,15 +515,43 @@ object GPSUtil {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
+    val cacheKey = s"w:$originId|$destinationId"
+
+    // Negative cache
+    if (noRouteCache.contains(cacheKey)) {
+      GPSMetrics.routeSource.labels("negative_cached").inc()
+      return None
+    }
+
+    // Positive cache (walking routes are static: no dynamic weights)
+    val cached = routeCache.get(cacheKey)
+    if (cached != null) {
+      GPSMetrics.routeSource.labels("cached").inc()
+      return cached.map { case (cost, pathList) => (cost, mutable.Queue(pathList: _*)) }
+    }
+
     val t0 = System.nanoTime()
     val cg = CityMapUtil.compactGraphPedestrian
-    val result = cg.aStarALT(
-      originId,
-      destinationId,
-      altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
-      useDynamicWeights = false,
-      maxExpansions     = maxExpansions
-    )
+
+    // O(1) reachability pre-check on the undirected pedestrian graph.
+    val srcIdx = cg.nodeIndex.getOrDefault(originId, -1)
+    val dstIdx = cg.nodeIndex.getOrDefault(destinationId, -1)
+    if (srcIdx != -1 && dstIdx != -1 && !CityMapUtil.sccIndexPedestrian.canReach(srcIdx, dstIdx)) {
+      GPSMetrics.sccUnreachable.labels("walking").inc()
+      if (noRouteCache.size() < NO_ROUTE_CACHE_MAX) noRouteCache.add(cacheKey)
+      return None
+    }
+
+    val result = blocking {
+      cg.aStarALT(
+        originId,
+        destinationId,
+        altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
+        useDynamicWeights = false,
+        maxExpansions     = maxExpansions,
+        maxNanos          = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+      )
+    }
     val elapsed = (System.nanoTime() - t0) / 1e9
 
     result match {
@@ -504,12 +563,14 @@ object GPSUtil {
           System.err.println(
             s"[GPSUtil][SLOW] walking A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
           )
+        routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
         Some((cost, path))
       case None =>
         System.err.println(
           s"[GPSUtil] walking A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
         )
         GPSMetrics.gpsNodeNotFound.labels("walking_no_route").inc()
+        if (noRouteCache.size() < NO_ROUTE_CACHE_MAX) noRouteCache.add(cacheKey)
         None
     }
   }

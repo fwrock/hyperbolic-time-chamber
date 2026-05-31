@@ -35,8 +35,9 @@ class TrafficSignal(
     )
   }
 
-  override protected def actSpontaneous(event: SpontaneousEvent): Unit =
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     handlePhaseTransition(event.tick)
+  }
 
   private def handlePhaseTransition(currentTick: Tick): Unit = {
     val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration

@@ -115,7 +115,7 @@ case class RailLinkState(
     railType match {
       case "SUBWAY"     => vehicleType == "Subway"
       case "LIGHT_RAIL" => vehicleType == "Subway" || vehicleType == "LightRail"
-      case "HEAVY_RAIL" => vehicleType == "Train"
+      case "HEAVY_RAIL" => vehicleType == "Subway" || vehicleType == "Train"
       case _            => false
     }
 }
