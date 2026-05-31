@@ -94,9 +94,6 @@ class RailLink(
 
     val effectiveSpeed = state.effectiveSpeed
 
-    logDebug(s"Subway ${data.actorId} entering rail link")
-    logDebug(s"  Effective speed: $effectiveSpeed km/h")
-
     val linkInfo = LinkInfoData(
       linkLength = state.length,
       linkCapacity = state.capacity,
@@ -120,7 +117,6 @@ class RailLink(
     state.registered.find(_.actorId == event.actorRefId).foreach {
       reg =>
         state.registered.remove(reg)
-        logDebug(s"Subway ${event.actorRefId} left rail link")
     }
 
     val linkInfo = LinkInfoData(

@@ -68,9 +68,24 @@ abstract class BaseActor[T <: BaseState](
 
   protected def onFinishInitialize(): Unit =
     if (!isInitialized) {
+      if (state != null) state = internStateStrings(state)
       isInitialized = true
       ActorMetrics.actorsInitialized.labels(getClass.getSimpleName).inc()
     }
+
+  /** Override to intern/deduplicate repeated String fields in the initial actor state.
+    *
+    * Called once per actor immediately after JSON deserialization, only when state is non-null.
+    * Use [[core.util.StringPool]] to replace repeated string values (mode names, activity types,
+    * node IDs, line names, etc.) with shared canonical instances.
+    *
+    * Default: identity — no interning. Override in concrete actor classes that hold
+    * high-duplication string fields.
+    *
+    * Example:
+    * {{{override protected def internStateStrings(s: MyState): MyState = s.withInternedStrings}}}
+    */
+  protected def internStateStrings(s: T): T = s
 
   /** Starts the actor. This method is called when the actor starts before processing messages.
     * Override this method to perform any initialization.

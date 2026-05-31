@@ -5,6 +5,7 @@ import core.actor.SimulationBaseActor
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.actor.properties.Properties
+import core.util.StringPool
 import model.hybrid.entity.state.{Activity, ArrivalLogistics, PersonState}
 import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, StartTripData, TripCompletedData}
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, RegisterPassengerData, PTLineNotOperationalData}
@@ -135,6 +136,13 @@ class Person(
       state.isSetScheduleOnTimeManager &&
       state.currentTripVehicleId.forall(_ == "walking")
 
+  /** Interns repeated string fields (activity types, transport modes, node IDs, stop IDs, line
+    * names) so that all Person actors at city scale share canonical String instances instead of
+    * holding independent copies from JSON deserialization.
+    */
+  override protected def internStateStrings(s: PersonState): PersonState =
+    s.withInternedStrings
+
   /** Truncate activities whose endTime exceeds the simulation duration.
     *
     * Called lazily on the first actSpontaneous (not onStart) so that SimulationManager has
@@ -210,10 +218,6 @@ class Person(
       onFinishSpontaneous(None)
       return
     }
-
-    // PT timeout: person registered at a transit stop but the vehicle never came.
-    // actSpontaneous fires here because initiatePTTrip schedules a wakeup at
-    // currentTick + state.ptWaitTimeoutTicks instead of calling onFinishSpontaneous(None).
     if (state.ptWaitingSince.isDefined) {
       val waited = currentTick - state.ptWaitingSince.get
       logWarn(
@@ -385,7 +389,7 @@ class Person(
     state = state.copy(
       currentTripVehicleId = Some(vehicleId),
       currentTripStartTick = Some(currentTick),
-      currentTripMode = Some(mode),
+      currentTripMode = Some(StringPool.intern(mode)),
       currentTripId = Some(tripId),
       currentTripDepartureTick = Some(currentTick),
       currentTripExpectedDistance = expectedDistance,
@@ -735,8 +739,8 @@ class Person(
           waitTime = Some(0L)
         )
         state = state.copy(
-          ptAlightingNodeId = Some(alightingNode),
-          ptLine = Some(line)
+          ptAlightingNodeId = Some(StringPool.intern(alightingNode)),
+          ptLine = Some(StringPool.intern(line))
         )
 
         logDebug(s"${getEntityId} registered at $stopId for $line, alighting at $alightingNode")
@@ -982,6 +986,9 @@ class Person(
 
     PersonMetrics.personTripEnd.labels(currentActivityType, currentMode).inc()
     PersonMetrics.personCompleteTripReason.labels(currentActivityType, currentMode, data.completionReason).inc()
+
+    if (data.wasTeleported)
+      GPSMetrics.teleportCount.labels(currentMode).inc()
 
     reportTripAndLegMetrics(
       mode = currentMode,

@@ -8,7 +8,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import model.hybrid.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
-import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start, Waiting }
+import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start, Waiting }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import model.hybrid.entity.event.data.link.LinkInfoData
 import model.hybrid.entity.event.data.{ EnterLinkData, LeaveLinkData }
@@ -60,7 +60,9 @@ abstract class Movable[T <: MovableState](
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
-      case Start =>
+      // RouteWaiting is the default movableStatus when state is deserialized without an explicit
+      // status value. Treat it like Start for standalone Movables that request their own routes.
+      case Start | RouteWaiting =>
         logDebug(s"Starting route request from ${state.origin} to ${state.destination}")
         requestRoute()
 
@@ -71,7 +73,8 @@ abstract class Movable[T <: MovableState](
         waitingTicksCounter += 1
         if (waitingTicksCounter > MaxWaitingTicks) {
           logWarn(
-            s"${getEntityId} stuck in Waiting for $waitingTicksCounter ticks at tick $currentTick (Link not responding). Recovering by skipping to next route segment."
+            s"[MOVABLE] STUCK in Waiting for $waitingTicksCounter ticks at tick $currentTick | " +
+            s"id=$getEntityId path=${state.movableCurrentPath} route=${state.movableBestRoute.map(_.size)} — RECOVERING by skipping to next segment"
           )
           waitingTicksCounter = 0
           state.movableCurrentPath = None
@@ -146,16 +149,27 @@ abstract class Movable[T <: MovableState](
       state.movableCurrentPath = None
     }
 
+  /** Resolves a link ID to `(entityId, shardId)` for message routing.
+   *
+   * The default implementation looks up the road network via
+   * [[CityMapUtil.edgeLabelsById]]. Subclasses that operate on a different
+   * infrastructure (e.g. [[Subway]] on rail links) override this to bypass
+   * the city-map lookup and return the actor reference directly.
+   */
+  protected def resolveLink(linkId: String): Option[(String, String)] =
+    CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
+
   protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
-        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-          case Some(edgeLabel) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
             state.movableStatus = Waiting
             waitingTicksCounter = 0
+
             sendMessageTo(
-              entityId = edgeLabel.id,
-              shardId = edgeLabel.classType,
+              entityId = entityId,
+              shardId = shardId,
               data = EnterLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,
@@ -197,11 +211,11 @@ abstract class Movable[T <: MovableState](
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
-        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-          case Some(edgeLabel) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
             sendMessageTo(
-              entityId = edgeLabel.id,
-              shardId = edgeLabel.classType,
+              entityId = entityId,
+              shardId = shardId,
               data = LeaveLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,

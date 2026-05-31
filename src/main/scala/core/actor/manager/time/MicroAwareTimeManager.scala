@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.TimeManagerBase
 import core.types.Tick
 import model.hybrid.entity.event.data.GlobalTickEvent
 
@@ -61,7 +60,6 @@ trait MicroAwareTimeManager extends TimeManagerBase {
 
       microLinks.foreach {
         linkRef =>
-          // Send global tick event to link
           linkRef ! GlobalTickEvent(tick = tick)
       }
     }

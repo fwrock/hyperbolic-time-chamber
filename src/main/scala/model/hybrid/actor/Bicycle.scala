@@ -17,6 +17,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.util.StringPool
 
 /** Bicycle actor - NEW vehicle type for hybrid simulator.
   *
@@ -50,6 +51,22 @@ class Bicycle(
       properties = properties
     )
     with PrivateVehicle[BicycleState] {
+
+  override protected def internStateStrings(s: BicycleState): BicycleState = {
+    val copied = s.copy(
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+    // copy() only replicates BicycleState constructor params; restore MovableState vars
+    // that are not in the constructor (otherwise they reset to their defaults).
+    copied.movableStatus             = s.movableStatus
+    copied.movableBestRoute          = s.movableBestRoute
+    copied.movableCurrentPath        = s.movableCurrentPath
+    copied.movableCurrentNode        = s.movableCurrentNode
+    copied.movableBestCost           = s.movableBestCost
+    copied.movableReachedDestination = s.movableReachedDestination
+    copied
+  }
 
   /** Current link being traversed.
     */
@@ -205,6 +222,7 @@ class Bicycle(
       return
     }
 
+    logInfo(s"[BICYCLE] actSpontaneous tick=$currentTick id=$getEntityId status=${state.status} isMicro=${state.isMicroMode}")
     state.status match {
       case Start =>
         requestRoute()
@@ -447,8 +465,8 @@ class Bicycle(
         case None =>
           GPSMetrics.gpsCannotFindRoute.labels("bicycle").inc()
           logError(s"Failed to calculate route for bicycle ${getEntityId}")
-          finishJourney("route_calculation_failed", origin)
-          onFinishPrivateVehicle(origin)
+          finishJourney("teleported", destination)
+          onFinishPrivateVehicle(destination, wasTeleported = true)
           onFinishSpontaneous(None)
           if (!isPersonCentric) selfDestruct()
       }

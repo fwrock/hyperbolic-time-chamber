@@ -1,7 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
-import org.interscity.htc.model.hybrid.collections.{ CompactGraph, CompactLandmarkIndex, Graph, LoadedGraphData }
+import org.interscity.htc.model.hybrid.collections.{ CompactGraph, CompactLandmarkIndex, Graph, LoadedGraphData, SCCIndex }
 import org.interscity.htc.model.hybrid.collections.graph.{ ContractionHierarchiesIndex, LandmarkIndex }
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
 import scala.util.{ Failure, Success }
@@ -94,6 +94,45 @@ object CityMapUtil {
     cg
   }
 
+  /** SCC condensation reachability index for the vehicle graph.
+    *
+    * Built lazily on first access (or eagerly during [[warmUp]]).
+    * O(1) canReach queries after construction.
+    */
+  lazy val sccIndex: SCCIndex = {
+    println(s"[CityMapUtil] Building SCC condensation index...")
+    val t0  = System.currentTimeMillis()
+    val idx = SCCIndex.fromCompactGraph(compactGraph)
+    println(
+      s"[CityMapUtil] SCC index ready in ${System.currentTimeMillis() - t0}ms " +
+        s"(${idx.numSCCs} SCCs for ${compactGraph.n} nodes)"
+    )
+    idx
+  }
+
+  /** SCC condensation reachability index for the pedestrian (undirected) graph.
+    *
+    * For an undirected graph every SCC is a connected component, so this check
+    * eliminates disconnected islands before walking A*.
+    */
+  def sccIndexPedestrian: SCCIndex = {
+    val current = _sccIndexPedestrian
+    if (current != null) current
+    else
+      synchronized {
+        if (_sccIndexPedestrian == null) {
+          println(s"[CityMapUtil] Building pedestrian SCC condensation index...")
+          val t0 = System.currentTimeMillis()
+          _sccIndexPedestrian = SCCIndex.fromCompactGraph(compactGraphPedestrian)
+          println(
+            s"[CityMapUtil] Pedestrian SCC index ready in ${System.currentTimeMillis() - t0}ms " +
+              s"(${_sccIndexPedestrian.numSCCs} SCCs)"
+          )
+        }
+        _sccIndexPedestrian
+      }
+  }
+
   /** Pre-computed Contraction Hierarchies index (static). Built once at first access. Use
     * [[getOrRebuildCHIndex]] for traffic-aware rebuilds.
     */
@@ -120,6 +159,7 @@ object CityMapUtil {
   @volatile private var _compactGraphPedestrian: CompactGraph = null
   @volatile private var _compactAltIndex: CompactLandmarkIndex = null
   @volatile private var _compactAltIndexPedestrian: CompactLandmarkIndex = null
+  @volatile private var _sccIndexPedestrian: SCCIndex = null
 
   /** Pre-computed ALT (A* + Landmarks + Triangle inequality) index.
     *
@@ -359,11 +399,13 @@ object CityMapUtil {
     // Vehicle graph (directed) — always required by calcRouteCompact.
     val _cg  = compactGraph
     val _cai = compactAltIndex
+    val _sci = sccIndex   // O(1) reachability check; built once here
 
     // Pedestrian graph (undirected) — only if Person actors will walk.
     if (enablePedestrianRouting) {
       val _cgp  = compactGraphPedestrian
       val _caip = compactAltIndexPedestrian
+      val _scip = sccIndexPedestrian
     } else {
       println(
         "[CityMapUtil] Pedestrian routing disabled (htc.mobility.enable-pedestrian-routing=false)" +

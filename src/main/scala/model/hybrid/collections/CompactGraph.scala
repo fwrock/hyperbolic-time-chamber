@@ -73,6 +73,12 @@ final class CompactGraph private (
     math.sqrt(latM * latM + lonM * lonM)
   }
 
+  // ── Package-private accessors for SCCIndex ───────────────────────────────
+
+  private[collections] def rowPtrAt(i: Int): Int  = rowPtr(i)
+  private[collections] def colIdxAt(i: Int): Int  = colIdx(i)
+  private[collections] def edgeCount: Int          = colIdx.length
+
   // ── ALT heuristic (optional landmark index) ───────────────────────────────
 
   /** A* with an external landmark heuristic (ALT).
@@ -85,7 +91,8 @@ final class CompactGraph private (
     target: Int,
     altH: (Int, Int) => Double,
     maxExpansions: Int,
-    useDynamicWeights: Boolean
+    useDynamicWeights: Boolean,
+    deadlineNanos: Long = Long.MaxValue
   ): Option[(Double, List[(String, String)])] = {
 
     if (source == target) return Some((0.0, List.empty))
@@ -125,6 +132,9 @@ final class CompactGraph private (
         visited.set(u)
         expansions += 1
         if (expansions >= maxExpansions) return None
+        // Time-cap: check every 5 000 expansions to limit overhead.
+        // Avoids blocking dispatcher threads for >deadlineNanos on disconnected graphs.
+        if ((expansions & 0x1FFF) == 0 && System.nanoTime() > deadlineNanos) return None
 
         var e = rowPtr(u)
         val end = rowPtr(u + 1)
@@ -156,12 +166,14 @@ final class CompactGraph private (
     originId: String,
     destinationId: String,
     useDynamicWeights: Boolean = true,
-    maxExpansions: Int = 150_000
+    maxExpansions: Int = 150_000,
+    maxNanos: Long = Long.MaxValue
   ): Option[(Double, mutable.Queue[(String, String)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    runAStar(src, dst, null, maxExpansions, useDynamicWeights)
+    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
+    runAStar(src, dst, null, maxExpansions, useDynamicWeights, deadline)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 
@@ -175,12 +187,14 @@ final class CompactGraph private (
     destinationId: String,
     altH: (Int, Int) => Double,
     useDynamicWeights: Boolean = true,
-    maxExpansions: Int = 150_000
+    maxExpansions: Int = 150_000,
+    maxNanos: Long = Long.MaxValue
   ): Option[(Double, mutable.Queue[(String, String)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    runAStar(src, dst, altH, maxExpansions, useDynamicWeights)
+    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
+    runAStar(src, dst, altH, maxExpansions, useDynamicWeights, deadline)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 

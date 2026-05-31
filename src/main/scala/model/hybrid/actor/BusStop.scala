@@ -12,6 +12,7 @@ import org.interscity.htc.core.util.IdUtil
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData, LineNotOperationalData, PTLineNotOperationalData }
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
 import org.interscity.htc.core.metrics.model.hybrid.BusStopMetrics
+import core.util.StringPool
 
 import scala.collection.mutable
 
@@ -20,6 +21,12 @@ class BusStop(
 ) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
+
+  override protected def internStateStrings(s: BusStopState): BusStopState =
+    s.copy(
+      nodeId = StringPool.intern(s.nodeId),
+      label  = StringPool.intern(s.label)
+    )
 
   override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
