@@ -4,24 +4,27 @@ package model.hybrid.actor
 import core.actor.SimulationBaseActor
 import org.interscity.htc.model.hybrid.entity.state.*
 
-import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.types.Tick
-import org.interscity.htc.core.util.ActorCreatorUtil.createShardedActorSeveralArgs
 import org.interscity.htc.core.util.JsonUtil.toJson
-import org.interscity.htc.core.util.{ ActorCreatorUtil, JsonUtil }
+import org.interscity.htc.core.util.{ IdUtil, JsonUtil }
 import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, BusStationState }
-import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Ready, RouteWaiting, Start, Working, WorkingWithOutBus }
+import org.interscity.htc.model.hybrid.entity.event.data.bus.LineNotOperationalData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateEnum.{ Finish, Start, Working, WorkingWithOutBus }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
 import org.interscity.htc.model.hybrid.util.GPSUtil
-
+import org.interscity.htc.core.metrics.model.hybrid.BusStationMetrics
 import scala.collection.mutable
+import scala.concurrent.{ Await, Future }
+import scala.concurrent.duration.*
+import core.actor.trace.ActorTrace
+import core.util.StringPool
 
 class BusStation(
   protected val properties: Properties
@@ -29,7 +32,15 @@ class BusStation(
       properties = properties
     ) {
 
+  override protected def internStateStrings(s: BusStationState): BusStationState =
+    s.copy(
+      name        = StringPool.intern(s.name),
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
+  private var pendingSpawnTick: Option[Tick] = None
 
   /** Ordered bus stop IDs derived from their numeric suffix (fallback to lexicographic). Ensures
     * deterministic route building and lookup.
@@ -49,7 +60,43 @@ class BusStation(
     }
   }
 
-  override def actSpontaneous(event: SpontaneousEvent): Unit =
+  /** Shared helper: builds a list of Futures that each calculate one sub-route segment.
+    * Runs on the supplied (blocking) ExecutionContext. Pure reads — no actor state written.
+    */
+  private def mkRouteFutures(stops: List[String], going: Boolean)(implicit
+    ec: scala.concurrent.ExecutionContext
+  ): List[Future[Option[(SubRoutePair, mutable.Queue[(Identify, Identify)])]]] =
+    stops.sliding(2).toList.map { pair =>
+      val originStop = pair.head
+      val destStop   = pair.last
+      (state.busStops.get(originStop), state.busStops.get(destStop)) match {
+        case (Some(originNode), Some(destNode)) =>
+          Future {
+            // Bounded expansion budget: enough for city-block inter-stop routes without
+            // risking dirty-array overflow on fully disconnected subgraphs.
+            GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode, maxExpansions = 500_000) match {
+              case Some((_, pathQueue)) =>
+                val identifyPath = pathQueue.map { case (f, t) => (Identify(id = f), Identify(id = t)) }
+                Some(SubRoutePair(originStop, destStop) -> identifyPath)
+              case None =>
+                logWarn(s"No route found: $originStop -> $destStop (going=$going) — segment will be skipped")
+                None
+            }
+          }
+        case (originOpt, destOpt) =>
+          if (originOpt.isEmpty) logWarn(s"Origin bus stop $originStop has no node mapping")
+          if (destOpt.isEmpty)   logWarn(s"Destination bus stop $destStop has no node mapping")
+          Future.successful(None)
+      }
+    }
+
+  override protected def onDynamicActorInitialized(entityId: String, classType: String): Unit = {
+    val tick = pendingSpawnTick
+    pendingSpawnTick = None
+    onFinishSpontaneous(tick)
+  }
+
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (currentTick >= simulationEnd) {
       logInfo(
         s"BusStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
@@ -58,22 +105,24 @@ class BusStation(
     } else
       state.status match {
         case Start =>
-          state.status = RouteWaiting
-          calculateRoutesFromMap()
+          if (!isCalculateRoutingComplete) {
+            calculateRoutes()
+          }
+          dispatchFirstBus()
         case Working =>
           if (state.buses.nonEmpty) {
             val bus = state.buses.dequeue()
             try {
-              val actorRef = createBus(bus)
-              val className = classOf[Bus].getName
+              createBus(bus)
               dependencies(bus.actorId) = ShardActorId(
                 entityId = bus.actorId,
-                classType = className
+                classType = classOf[Bus].getName
               )
-              onFinishSpontaneous(Some(currentTick + state.interval))
+              pendingSpawnTick = Some(currentTick + state.interval)
             } catch {
               case e: IllegalStateException =>
-                logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
+                logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
+                BusStationMetrics.busesSkippedNoRoute.labels(state.name).inc()
                 onFinishSpontaneous(Some(currentTick + state.interval))
               case e: Exception =>
                 logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
@@ -83,10 +132,13 @@ class BusStation(
             state.status = WorkingWithOutBus
             onFinishSpontaneous(Some(currentTick + state.interval))
           }
+        case WorkingWithOutBus =>
+          onFinishSpontaneous(None)
         case _ =>
           logWarn(s"Event current status not handled ${state.status}")
           onFinishSpontaneous(None)
       }
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -94,114 +146,25 @@ class BusStation(
         logWarn("Event not handled")
     }
 
-  /** Calculate all bus routes directly from the in-memory static map. This is synchronous and
-    * doesn't require actor messages.
+  /** Dispatch the first bus after routes have been calculated. Transitions state to Working or
+    * WorkingWithOutBus and calls onFinishSpontaneous accordingly.
     */
-  private def calculateRoutesFromMap(): Unit = {
-    logDebug(s"BusStation ${getEntityId} calculating routes from in-memory map")
-
-    val goingStops = orderedBusStopIds
-    for (pair <- goingStops.sliding(2)) {
-      val originBusStopId = pair.head
-      val destinationBusStopId = pair.last
-
-      state.busStops.get(originBusStopId) match {
-        case Some(originNodeId) =>
-          state.busStops.get(destinationBusStopId) match {
-            case Some(destinationNodeId) =>
-              GPSUtil.calcRoute(originId = originNodeId, destinationId = destinationNodeId) match {
-                case Some((cost, pathQueue)) =>
-                  val identifyPath = pathQueue.map {
-                    case (from, to) =>
-                      (Identify(id = from), Identify(id = to))
-                  }
-                  state.goingRoute.foreach {
-                    routeMap =>
-                      routeMap.put(
-                        SubRoutePair(originBusStopId, destinationBusStopId),
-                        identifyPath
-                      )
-                  }
-                  logDebug(
-                    s"Going route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)"
-                  )
-                case None =>
-                  logWarn(
-                    s"Could not calculate going route: $originBusStopId -> $destinationBusStopId"
-                  )
-              }
-            case None =>
-              logWarn(s"Destination bus stop $destinationBusStopId has no node mapping")
-          }
-        case None =>
-          logWarn(s"Origin bus stop $originBusStopId has no node mapping")
-      }
-    }
-
-    val returningStops = orderedBusStopIds.reverse
-    for (pair <- returningStops.sliding(2)) {
-      val originBusStopId = pair.head
-      val destinationBusStopId = pair.last
-
-      state.busStops.get(originBusStopId) match {
-        case Some(originNodeId) =>
-          state.busStops.get(destinationBusStopId) match {
-            case Some(destinationNodeId) =>
-              GPSUtil.calcRoute(originId = originNodeId, destinationId = destinationNodeId) match {
-                case Some((cost, pathQueue)) =>
-                  val identifyPath = pathQueue.map {
-                    case (from, to) =>
-                      (Identify(id = from), Identify(id = to))
-                  }
-                  state.returningRoute.foreach {
-                    routeMap =>
-                      routeMap.put(
-                        SubRoutePair(originBusStopId, destinationBusStopId),
-                        identifyPath
-                      )
-                  }
-                  logDebug(
-                    s"Returning route calculated: $originBusStopId -> $destinationBusStopId (${pathQueue.size} segments)"
-                  )
-                case None =>
-                  logWarn(
-                    s"Could not calculate returning route: $originBusStopId -> $destinationBusStopId"
-                  )
-              }
-            case None =>
-              logWarn(s"Destination bus stop $destinationBusStopId has no node mapping")
-          }
-        case None =>
-          logWarn(s"Origin bus stop $originBusStopId has no node mapping")
-      }
-    }
-
-    state.goingRoute.foreach {
-      routeMap =>
-        logDebug(s"Going route keys: ${routeMap.keys.mkString(", ")}")
-    }
-    state.returningRoute.foreach {
-      routeMap =>
-        logDebug(s"Returning route keys: ${routeMap.keys.mkString(", ")}")
-    }
-
+  private def dispatchFirstBus(): Unit = {
     if (isCalculateRoutingComplete) {
-      logDebug(s"BusStation ${getEntityId} route calculation complete")
-      state.status = Ready
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
         try {
-          val actorRef = createBus(bus)
-          val className = classOf[Bus].getName
+          createBus(bus)
           dependencies(bus.actorId) = ShardActorId(
             entityId = bus.actorId,
-            classType = className
+            classType = classOf[Bus].getName
           )
           state.status = Working
-          onFinishSpontaneous(Some(currentTick + state.interval))
+          pendingSpawnTick = Some(currentTick + state.interval)
         } catch {
           case e: IllegalStateException =>
-            logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
+            logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
+            BusStationMetrics.busesSkippedNoRoute.labels(state.name).inc()
             state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
             onFinishSpontaneous(Some(currentTick + state.interval))
           case e: Exception =>
@@ -214,49 +177,163 @@ class BusStation(
         state.status = WorkingWithOutBus
         onFinishSpontaneous(None)
       }
+    } else if (hasAnyRouteSegment) {
+      def badSegments(
+        route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
+        stops: List[String]
+      ): String =
+        stops.sliding(2).filterNot { pair =>
+          route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
+        }.map(p => s"${p.head}\u2192${p.last}").mkString(", ")
+
+      val missingGoing     = badSegments(state.goingRoute,     orderedBusStopIds)
+      val missingReturning = badSegments(state.returningRoute, orderedBusStopIds.reverse)
+      logWarn(
+        s"BusStation ${getEntityId} route calculation partial — creating buses with available segments. " +
+          s"Missing/unreachable going: [$missingGoing]. Missing/unreachable returning: [$missingReturning]."
+      )
+
+      def skippedDestinations(
+        route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
+        stops: List[String]
+      ): Set[String] =
+        stops.sliding(2).filterNot { pair =>
+          route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
+        }.map(_.last).toSet
+
+      val skippedGoing     = skippedDestinations(state.goingRoute,     orderedBusStopIds)
+      val skippedReturning = skippedDestinations(state.returningRoute, orderedBusStopIds.reverse)
+      val fullySkipped     = skippedGoing & skippedReturning
+
+      if (fullySkipped.nonEmpty) {
+        val lineLabel = state.buses.headOption.flatMap(b => Option(b.label)).getOrElse(state.name)
+        logWarn(
+          s"BusStation ${getEntityId} partial route — ${fullySkipped.size} stop(s) unreachable in " +
+            s"both directions; sending LineNotOperational: ${fullySkipped.mkString(", ")}"
+        )
+        fullySkipped.foreach { stopId =>
+          sendMessageTo(
+            entityId  = stopId,
+            shardId   = classOf[BusStop].getName,
+            data      = LineNotOperationalData(label = lineLabel),
+            eventType = "LineNotOperational"
+          )
+        }
+      }
+
+      if (state.buses.nonEmpty) {
+        val bus = state.buses.dequeue()
+        try {
+          createBus(bus)
+          dependencies(bus.actorId) = ShardActorId(
+            entityId = bus.actorId,
+            classType = classOf[Bus].getName
+          )
+          state.status = Working
+          pendingSpawnTick = Some(currentTick + state.interval)
+        } catch {
+          case e: IllegalStateException =>
+            logWarn(s"Skipping bus ${bus.actorId} — route unavailable even with partial: ${e.getMessage}")
+            BusStationMetrics.busesSkippedNoRoute.labels(state.name).inc()
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
+          case e: Exception =>
+            logError(s"Unexpected error creating bus ${bus.actorId} with partial route: ${e.getMessage}")
+            state.status = if (state.buses.nonEmpty) Working else WorkingWithOutBus
+            onFinishSpontaneous(Some(currentTick + state.interval))
+        }
+      } else {
+        state.status = WorkingWithOutBus
+        onFinishSpontaneous(None)
+      }
     } else {
-      logWarn(s"BusStation ${getEntityId} route calculation incomplete, cannot create buses")
+      logWarn(
+        s"BusStation ${getEntityId} route calculation produced no usable segments — no buses will be created."
+      )
       state.status = WorkingWithOutBus
+      val lineLabel = state.buses.headOption.flatMap(b => Option(b.label)).getOrElse(state.name)
+      state.busStops.keys.foreach { stopId =>
+        sendMessageTo(
+          entityId  = stopId,
+          shardId   = classOf[BusStop].getName,
+          data      = LineNotOperationalData(label = lineLabel),
+          eventType = "LineNotOperational"
+        )
+      }
       onFinishSpontaneous(None)
     }
   }
 
-  private def createBus(bus: BusInformation): ActorRef = {
+  /** Calculate all bus route segments in parallel.
+    *
+    * Going and returning segments are all independent — fired as concurrent Futures on the blocking
+    * IO dispatcher. Wrapped in scala.concurrent.blocking so the ForkJoinPool spawns compensation
+    * threads instead of starving when many BusStations calculate simultaneously. With a warm
+    * CompactGraph + ALT index each segment completes in ~50ms, so the total wall-clock time is
+    * O(max_segment_time) rather than O(N × avg_segment_time).
+    */
+  private def calculateRoutes(): Unit = {
+    logDebug(s"BusStation ${getEntityId} calculating routes in parallel")
+
+    implicit val blockingEc: scala.concurrent.ExecutionContext =
+      context.system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
+
+    val goingFutures  = mkRouteFutures(orderedBusStopIds, going = true)
+    val returnFutures = mkRouteFutures(orderedBusStopIds.reverse, going = false)
+
+    val (goingResults, returnResults) = scala.concurrent.blocking {
+      (
+        Await.result(Future.sequence(goingFutures), 30.minutes).flatten,
+        Await.result(Future.sequence(returnFutures), 30.minutes).flatten
+      )
+    }
+
+    goingResults.foreach  { case (pair, path) => state.goingRoute.foreach(_.put(pair, path))     }
+    returnResults.foreach { case (pair, path) => state.returningRoute.foreach(_.put(pair, path)) }
+
+    if (isCalculateRoutingComplete) {
+      logInfo(
+        s"BusStation ${getEntityId} route calculation complete " +
+          s"(${orderedBusStopIds.size - 1} going + ${orderedBusStopIds.size - 1} returning segments)"
+      )
+      ActorTrace.trace(getEntityId, currentTick, "bus_station_route_ok", // #actor-trace
+        s"stops=${orderedBusStopIds.size} going=${state.goingRoute.map(_.size).getOrElse(0)} returning=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
+    } else {
+      logWarn(s"BusStation ${getEntityId} route calculation incomplete after calculateRoutes()")
+      ActorTrace.trace(getEntityId, currentTick, "bus_station_route_incomplete", // #actor-trace
+        s"goingRoute=${state.goingRoute.map(_.size).getOrElse(0)} returningRoute=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
+    }
+  }
+
+  private def createBus(bus: BusInformation): Unit = {
     val route = calcBusBestRoute()
     if (route.isEmpty) {
       logWarn(s"Cannot create bus ${bus.actorId} - no valid route available")
       throw new IllegalStateException(s"No route available for bus ${bus.actorId}")
     }
 
-    val busStartTick = currentTick + 1
-    val busProperties = Properties(
-      entityId = bus.actorId,
-      resourceId = properties.resourceId,
-      timeManagers = timeManagers,
-      creatorManager = creatorManager,
-      reporters = properties.reporters,
-      data = toJson {
-        val busState = BusState(
-          startTick = busStartTick,
-          busStops = state.busStops.toMap,
-          capacity = bus.capacity,
-          size = bus.size,
-          origin = state.origin,
-          destination = state.destination,
-          numberOfPorts = bus.numberOfPorts,
-          label = bus.label,
-          storedBestRoute = Some(route.toList)
-        )
-        busState.bestRoute = Some(route.clone())
-        busState.status = MovableStatusEnum.Start
-        busState
-      },
-      relationships = mutable.Map[String, ShardActorId](),
-      actorType = properties.actorType,
-      defaultTimeManagerType = properties.defaultTimeManagerType
-    )
+    val busStartTick = currentTick + state.interval
+    val busState = {
+      val s = BusState(
+        startTick = busStartTick,
+        busStops = state.busStops.toMap,
+        capacity = bus.capacity,
+        size = bus.size,
+        origin = state.origin,
+        destination = state.destination,
+        numberOfPorts = bus.numberOfPorts,
+        label = bus.label,
+        storedBestRoute = Some(route.toList),
+        speedFactor = bus.speedFactor
+      )
+      s.bestRoute = Some(route.clone())
+      s.status = MovableStatusEnum.Start
+      s
+    }
 
     logDebug(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
+    ActorTrace.trace(getEntityId, currentTick, "bus_station_create_bus", // #actor-trace
+      s"busId=${bus.actorId} label=${bus.label} capacity=${bus.capacity} route=${route.size} startTick=$busStartTick") // #actor-trace
 
     report(
       data = Map(
@@ -273,12 +350,10 @@ class BusStation(
       label = "bus_created"
     )
 
-    createShardedActorSeveralArgs(
-      system = context.system,
-      actorClass = classOf[Bus],
-      entityId = bus.actorId,
-      busProperties
-    )
+    BusStationMetrics.busesCreated.labels(bus.label).inc()
+
+    val busId = IdUtil.format(bus.actorId)
+    spawnDynamicActor(classType = "hybrid.actor.Bus", entityId = busId, stateData = toJson(busState))
   }
 
   private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
@@ -334,6 +409,16 @@ class BusStation(
     isCalculateRoutingComplete(state.goingRoute) &&
       isCalculateRoutingComplete(state.returningRoute)
 
+  /** Returns true when at least one segment is present (non-empty) in BOTH the going
+    * and returning maps. Used to create buses with partial routes rather than
+    * discarding the line entirely when a few stop-pairs are unreachable.
+    */
+  private def hasAnyRouteSegment: Boolean = {
+    val goingOk    = state.goingRoute.exists(_.values.exists(_.nonEmpty))
+    val returningOk = state.returningRoute.exists(_.values.exists(_.nonEmpty))
+    goingOk && returningOk
+  }
+
   private def isCalculateRoutingComplete(
     route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]]
   ): Boolean =
@@ -343,9 +428,10 @@ class BusStation(
           false
         } else {
           val expectedSize = state.busStops.size - 1
-          val actualSize = r.keys.size
-          logDebug(s"Route completion check: actual=$actualSize, expected=$expectedSize")
-          actualSize == expectedSize
+          val actualSize   = r.keys.size
+          val allNonEmpty  = r.values.forall(_.nonEmpty)
+          logDebug(s"Route completion check: actual=$actualSize, expected=$expectedSize, allNonEmpty=$allNonEmpty")
+          actualSize == expectedSize && allNonEmpty
         }
       case None => false
 

@@ -16,6 +16,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.Tr
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.hybrid.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.core.metrics.model.hybrid.TrafficSignalMetrics
 
 import scala.collection.mutable
 
@@ -29,19 +30,14 @@ class TrafficSignal(
 
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
-    val firstTick = state.startTick + state.offset
     logDebug(
-      s"TrafficSignal ${getEntityId} initialized. First tick: $firstTick, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}"
+      s"TrafficSignal ${getEntityId} initialized. First tick: ${state.startTick + state.offset}, cycleDuration: ${state.cycleDuration}, offset: ${state.offset}"
     )
-    if (firstTick < simulationEnd) {
-      scheduleEvent(firstTick)
-    } else {
-      onFinishSpontaneous()
-    }
   }
 
-  override protected def actSpontaneous(event: SpontaneousEvent): Unit =
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     handlePhaseTransition(event.tick)
+  }
 
   private def handlePhaseTransition(currentTick: Tick): Unit = {
     val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
@@ -64,6 +60,7 @@ class TrafficSignal(
           signalState =>
             signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
             if (signalState.state != newState) {
+              TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
               notifyNodes(
                 SignalState(
                   state = newState,

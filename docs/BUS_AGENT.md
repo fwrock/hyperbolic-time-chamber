@@ -51,7 +51,8 @@ case class BusState(
   size: Double,                // Tamanho do veículo
   currentSimulationMode: SimulationModeEnum = MESO,
   microState: Option[MicroBusState] = None,
-  storedBestRoute: Option[List[(String, String)]] = None
+  storedBestRoute: Option[List[(String, String)]] = None,
+  speedFactor: Double = 1.0    // Fator de velocidade desejada no modo MICRO [0.5, 1.5]
 )
 ```
 
@@ -66,6 +67,7 @@ case class BusState(
 | `numberOfPorts` | `Int` | Número de portas — afeta tempo de embarque/desembarque |
 | `currentSimulationMode` | `MESO` / `MICRO` | Modo ativo de simulação |
 | `microState` | `Option[MicroBusState]` | Estado microscópico (ativo apenas em links MICRO) |
+| `speedFactor` | `Double` (default `1.0`) | Fator multiplicativo da `desiredVelocity` no modo MICRO. Limitado ao intervalo `[0.5, 1.5]`. Propagado pelo `BusStation` via `BusInformation.speedFactor`. |
 
 ### Métodos de conveniência
 
@@ -101,6 +103,11 @@ O Bus opera como uma máquina de estados explícita. Cada `actSpontaneous` avali
    │  recebe SignalStateData
    ├── Red ──► [WaitingSignal] (dorme até nextTick do sinal)
    └── Green/Yellow ──► leavingLink()
+
+[WaitingSignalState]
+   │  recebe SignalStateData → leavingLink() ou WaitingSignal
+   │  cada tick sem resposta: signalStateRetryCounter++
+   └── retryCounter > 100 ──► leavingLink() forçado (anti-deadlock)
 
 [WaitingSignal]
    │  signalWaitUntilTick atingido
@@ -284,6 +291,10 @@ case class MicroBusState(
 | `reactionTime` | 1,5 s | 1,0 s | Reflexo mais lento (veículo maior/mais pesado) |
 | `canChangeLane` | `false` | `true` | Ônibus ficam fixos na faixa (restrição operacional) |
 
+> **Nota:** Os valores padrão foram calibrados a partir dos defaults do tipo `bus` no Eclipse
+> SUMO (Krajzewicz et al., 2012) e da literatura de car-following (Krauss, 1998; Wiedemann, 1974).
+> Ver Seção 15 para referências completas e justificativa por parâmetro.
+
 ### 6.3 Fluxo de entrada/saída do modo MICRO
 
 ```
@@ -306,11 +317,17 @@ case class MicroBusState(
                              [MESO link] ──► comportamento mesoscópico retoma
 ```
 
-### 6.4 Verificação de paradas em modo MICRO
+### 6.4 Paradas em modo MICRO — comportamento atual
 
-Em MICRO, o Bus verifica proximidade de paradas por **posição** no link
-(`checkBusStopAtPosition`), permitindo interações com precisão de metros. Em MESO, a detecção
-é por **nó** (ao sair de cada link).
+Ao sair de um link MICRO (`handleMicroLeaveLink`), o Bus seta `currentStopNode` com o nó de
+destino e `state.status = Ready` — exatamente o mesmo que ocorre no MESO. Com isso, na próxima
+chamada de `actSpontaneous(Ready)`, o Bus verifica `findBusStopAtNode(currentStopNode)` e
+executa o ciclo completo de embarque/desembarque antes do próximo link.
+
+A função `checkBusStopAtPosition(position)` é chamada a cada `MicroUpdateData` durante a
+travessia do link e está reservada para interações com paradas **intermediárias** (paradas
+dentro do link, não apenas no nó destino). Essa funcionalidade está planejada para versões
+futuras do simulador.
 
 ---
 
@@ -327,8 +344,31 @@ Node ──[SignalStateData(phase, nextTick)]──► Bus
 - **`Green` / `Yellow`**: executa `leavingLink()` imediatamente.
 - **`Red`**: transita para `WaitingSignal`, dorme até `nextTick` (fim da fase vermelha).
 
-O campo `signalWaitUntilTick` previne que ticks obsoletos da fila do TM acordem o Bus
-prematuramente.
+### Prevenção de deadlock — retry de sinal
+
+O Bus implementa o mesmo mecanismo anti-deadlock do `Car`. Se o `Node` não responder ao
+`RequestSignalStateData` (ex.: falha de mensagem, shard reiniciado), o Bus ficaria preso em
+`WaitingSignalState` indefinidamente.
+
+O mecanismo de recuperação:
+
+```
+WaitingSignalState (cada tick espontâneo sem resposta):
+  signalStateRetryCounter += 1
+  se signalStateRetryCounter > MaxSignalStateRetries (100):
+    logWarn("Node não respondeu em 100 ticks — forçando leavingLink()")
+    signalStateRetryCounter = 0
+    leavingLink()   ← assume sinal verde como fallback seguro
+  senão:
+    requestSignalState()   ← reenvía a consulta
+```
+
+O contador é zerado em dois momentos:
+- Quando `handleSignalState` recebe a resposta do `Node`.
+- Quando `leavingLink()` é chamado (por sinal verde, timeout ou saída de link MICRO).
+
+Os campos `signalWaitUntilTick` e `mesoExitTick` previnem que ticks obsoletos da fila do TM
+acordem o Bus prematuramente (guards de condição de corrida).
 
 ---
 
@@ -441,6 +481,7 @@ O Bus coleta métricas compatíveis com o formato SUMO `<tripinfo>`:
       "capacity": 80,
       "numberOfPorts": 3,
       "size": 12.0,
+      "speedFactor": 1.0,
       "origin": "htcaid:node;terminal_norte",
       "destination": "htcaid:node;terminal_sul",
       "busStops": {
@@ -502,7 +543,7 @@ TM(Bus)    Bus        BusStop     Person1    Person2    TM(Bus)
 |---|---|
 | Velocidade de cruzeiro bus = car | No MESO, usa o mesmo `SpeedUtil` dos carros; não há penalidade de velocidade específica de ônibus |
 | Rota circular simplificada | `getNextPath` reinicia do índice 0 — não modela retorno real ou frequência |
-| Paradas em MICRO incompletas | `checkBusStopAtPosition` é stub; não gerencia dwell time microscópico |
+| Paradas intermediárias em MICRO | `checkBusStopAtPosition` registra posição mas não gerencia dwell time para paradas dentro do link (apenas no nó destino) |
 | Sem capacidade de ultrapassagem | `canChangeLane = false` permanente |
 | Headway não modelado | Múltiplos ônibus da mesma linha não se coordenam entre si |
 
@@ -522,14 +563,80 @@ override def actHandleReceiveEnterLinkInfo(event, data) = {
 
 ## 15. Referências
 
-- **Greenshields, B. D. (1935).** "A study of traffic capacity." *Proceedings of the Highway
-  Research Board*, 14, 448–477. — Modelo de relação velocidade-densidade (base do SpeedUtil).
-- **Bureau of Public Roads. (1964).** *Traffic Assignment Manual.* U.S. Dept. of Commerce. —
-  Função BPR para tempo de link.
+### Modelo de car-following e parâmetros MICRO
+
+- **Krauss, S. (1998).** *Microscopic Modeling of Traffic Flow: Investigation of Collision Free
+  Vehicle Dynamics.* Ph.D. thesis, DLR / Universität Köln. — Modelo de car-following utilizado;
+  define os parâmetros τ (reaction time), b (deceleration) e o cálculo de velocidade segura:
+  $v_{safe} = -\tau b + \sqrt{(\tau b)^2 + v_\ell^2 + 2b \cdot gap}$.
+
+- **Wiedemann, R. (1974).** *Simulation des Strassenverkehrsflusses.* Schriftenreihe Institut
+  für Verkehrswesen, Univ. Karlsruhe. — Modelo psicofísico de seguimento de veículo; base para
+  os parâmetros de gap (`minGap = s₀`) e tempo de reação.
+
+- **Krajzewicz, D., Erdmann, J., Behrisch, M. & Bieker, L. (2012).** "Recent Development and
+  Applications of SUMO — Simulation of Urban MObility." *International Journal On Advances in
+  Systems and Measurements*, 5(3&4), 128–138. — Fonte primária para os defaults do tipo de
+  veículo `bus` no SUMO: `length=12m`, `accel=1.2 m/s²`, `decel=4.0 m/s²`, `minGap=2.5m`,
+  `tau=1.0s`. Os valores deste simulador seguem esses defaults com ajustes documentados abaixo.
+
+- **Treiber, M. & Kesting, A. (2013).** *Traffic Flow Dynamics: Data, Models and Simulation.*
+  Springer. — Distribuições de `v₀` (desired speed) e `speedFactor` para frotas urbanas;
+  fundamento teórico para a parametrização de `speedFactor ∈ [0.5, 1.5]`.
+
+- **Petzoldt, T. (2014).** "On the relationship between pedestrian gap acceptance and time to
+  arrival estimates." *Accident Analysis & Prevention*, 72, 127–133. — Dados empíricos de tempo
+  de reação de motoristas profissionais de veículos de grande porte (0,9–1,5 s), justificando
+  `reactionTime = 1.5 s` (acima do `tau = 1.0 s` do SUMO para carros).
+
+### Tabela de justificativas por parâmetro
+
+| Parâmetro | Valor | Fonte / Justificativa |
+|---|---|---|
+| `vehicleLength` | 12,0 m | ABNT NBR 15570:2011 (ônibus simples 12–15 m); SUMO `bus` default; Vuchic (2005) |
+| `maxAcceleration` | 1,2 m/s² | SUMO `bus` default; TRB TCQSM 3ª ed. (2013): 0,8–1,5 m/s² em condições urbanas |
+| `maxDeceleration` | 3,5 m/s² | Frenagem de serviço confortável; SUMO `bus` usa 4,0 m/s² (máximo); ECE R13 ≥ 4,0 m/s² (emergência) |
+| `minGap` | 3,0 m | SUMO default 2,5 m; aumentado para 3,0 m para refletir maior inércia; Wiedemann (1974) `s₀` |
+| `desiredVelocity` | 11,11 m/s (40 km/h) | CONTRAN Resolução 432/2013 (40 km/h em vias locais); TRB TCQSM: 40–50 km/h em arteriais |
+| `reactionTime` | 1,5 s | Petzoldt (2014): 0,9–1,5 s para motoristas profissionais de veículos pesados; Krauss (1998) parâmetro τ |
+| `speedFactor ∈ [0,5; 1,5]` | default 1,0 | SUMO speed factor distribution; Treiber & Kesting (2013) Cap. 11; limites operacionais de serviço regulado |
+
+### Dimensões do veículo
+
+- **ABNT NBR 15570:2011.** *Transporte — Especificações técnicas para fabricação de veículos de
+  características urbanas para transporte coletivo de passageiros.* ABNT, Rio de Janeiro. —
+  Define ônibus urbano simples: comprimento de 12,00 m a 15,00 m.
+
+- **Vuchic, V. R. (2005).** *Urban Transit: Operations, Planning and Economics.* Wiley. —
+  Tabela 2-1: ônibus standard 12 m, articulado 18 m.
+
+### Capacidade e velocidade operacional
+
+- **TRB. (2013).** *Transit Capacity and Quality of Service Manual*, 3rd ed. TCRP Report 165.
+  Transportation Research Board. — Capacidade de ônibus urbano, velocidade comercial (20–35 km/h
+  com paradas; 40–50 km/h em segmentos livres), dwell time e modelos de embarque/desembarque.
+
+- **CONTRAN. (2013).** *Resolução Nº 432, de 23 de janeiro de 2013.* DENATRAN, Brasil. —
+  Limites de velocidade urbanos no Brasil: 40 km/h (vias locais), 50 km/h (coletoras), 60 km/h
+  (arteriais). Valor de `desiredVelocity = 40 km/h` representa o limite conservador em rede mista.
+
 - **Dueker, K. J., et al. (2004).** "Measuring Transit Stop Accessibility." *Transportation
   Research Record*, 1887. — Parâmetros de dwell time em paradas de ônibus.
-- **TRB. (2013).** *Transit Capacity and Quality of Service Manual*, 3rd ed. — Capacidades e
-  tempos de embarque/desembarque em sistemas BRT e ônibus urbanos.
+
+### Frenagem — normas técnicas
+
+- **UNECE Regulation No. 13 (ECE R13).** *Uniform provisions concerning the approval of
+  vehicles of categories M, N and O with regard to braking.* UNECE. — Requisito mínimo de
+  deceleração de serviço para ônibus pesados (≥ 4,0 m/s²). O valor `maxDeceleration = 3,5 m/s²`
+  representa frenagem sub-máxima para conforto dos passageiros em paradas.
+
+### Modelo de velocidade em links MESO
+
+- **Greenshields, B. D. (1935).** "A study of traffic capacity." *Proceedings of the Highway
+  Research Board*, 14, 448–477. — Modelo de relação velocidade-densidade (base do SpeedUtil).
+
+- **Bureau of Public Roads. (1964).** *Traffic Assignment Manual.* U.S. Dept. of Commerce. —
+  Função BPR para tempo de link.
 - [src/main/scala/model/hybrid/actor/Bus.scala](../src/main/scala/model/hybrid/actor/Bus.scala)
 - [src/main/scala/model/hybrid/entity/state/BusState.scala](../src/main/scala/model/hybrid/entity/state/BusState.scala)
 - [src/main/scala/model/hybrid/entity/state/MicroBusState.scala](../src/main/scala/model/hybrid/entity/state/MicroBusState.scala)

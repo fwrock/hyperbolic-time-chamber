@@ -15,14 +15,20 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.util.IdentifyUtil
+import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkConnectionsData, LinkInfoData }
+
+import scala.collection.mutable
 
 class Link(
   private val properties: Properties
 ) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
+
+  private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
 
   private def cost: Double = {
     val speedFactor =
@@ -82,6 +88,8 @@ class Link(
           actorCreationType = data.actorCreationType
         )
       )
+      LinkMetrics.vehiclesEntered.labels("MESO").inc()
+      vehicleEntryTick(data.actorId) = event.tick
       reportToSpecificReporter(
         ReportTypeEnum.clickhouse,
         VehicleLinkFlowData(
@@ -108,6 +116,11 @@ class Link(
     model.mobility.util.LinkMessageStats.incrementLeaveLink()
 
     state.registered.filterInPlace(_.actorId != data.actorId)
+    LinkMetrics.vehiclesExited.labels("MESO").inc()
+    vehicleEntryTick.remove(data.actorId).foreach { entryTick =>
+      val travelTime = event.tick - entryTick
+      if (travelTime > 0) LinkMetrics.travelTimeTicks.labels("MESO").observe(travelTime.toDouble)
+    }
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(

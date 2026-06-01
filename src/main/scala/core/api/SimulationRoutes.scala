@@ -6,7 +6,7 @@ import org.apache.pekko.http.scaladsl.server.Directives._
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.stream.Materializer
 import org.interscity.htc.core.entity.configuration.Simulation
-import org.interscity.htc.core.metrics.MetricsServer
+import org.interscity.htc.core.metrics.core.SimulationMetrics
 import org.interscity.htc.core.util.JsonUtil
 import org.slf4j.LoggerFactory
 
@@ -93,8 +93,8 @@ object SimulationRoutes {
             path("status") {
               get {
                 val s = SimulationController.status
-                val currentTick = MetricsServer.currentTick.get().toLong
-                val progress = MetricsServer.simulationProgress.get()
+                val currentTick = SimulationMetrics.currentTick.get().toLong
+                val progress = SimulationMetrics.simulationProgress.get()
                 complete(
                   ok(
                     s"""|{

@@ -18,7 +18,10 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 
 import org.interscity.htc.model.hybrid.entity.state.{ BusState, MicroBusState }
 import org.interscity.htc.model.hybrid.entity.event.data._
+import org.interscity.htc.core.metrics.model.hybrid.{ BusMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.actor.trace.ActorTrace
+import core.util.StringPool
 
 /** Bus actor supporting both MESO and MICRO simulation modes.
   *
@@ -49,6 +52,24 @@ class Bus(
       properties = properties
     ) {
 
+  override protected def internStateStrings(s: BusState): BusState = {
+    s.busStops = s.busStops.map { case (k, v) => StringPool.intern(k) -> StringPool.intern(v) }
+    val copied = s.copy(
+      label       = StringPool.intern(s.label),
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+    // copy() only replicates BusState constructor params; restore MovableState vars
+    // that are not in the constructor (otherwise they reset to their defaults).
+    copied.movableStatus             = s.movableStatus
+    copied.movableBestRoute          = s.movableBestRoute
+    copied.movableCurrentPath        = s.movableCurrentPath
+    copied.movableCurrentNode        = s.movableCurrentNode
+    copied.movableBestCost           = s.movableBestCost
+    copied.movableReachedDestination = s.movableReachedDestination
+    copied
+  }
+
   /** Current link being traversed.
     */
   private var currentLinkId: Option[String] = None
@@ -77,11 +98,51 @@ class Bus(
   private var sumoIsHalting: Boolean = false
   private var sumoRerouteNo: Int = 0
   private var sumoTripInfoReported: Boolean = false
+  private var journeyFinishedReported: Boolean = false
+
+  private lazy val microUpdateLogEvery: Int =
+    sys.env
+      .get("HTC_BUS_MICRO_UPDATE_LOG_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.bus.micro-update-log-every")).toOption)
+      .filter(_ > 0)
+      .getOrElse(200)
+
+  private lazy val busStopProbeLogEvery: Int =
+    sys.env
+      .get("HTC_BUS_STOP_PROBE_LOG_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.bus.stop-probe-log-every")).toOption)
+      .filter(_ > 0)
+      .getOrElse(500)
+
+  private var microUpdateLogCount: Long = 0L
+  private var busStopProbeLogCount: Long = 0L
+
+  private def restoreRouteIfMissing(context: String): Unit = {
+    if (state != null && state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
+      val restored = scala.collection.mutable.Queue(state.storedBestRoute.get: _*)
+      state.movableBestRoute = Some(restored)
+      if (state.currentPathPosition >= restored.size) {
+        state.currentPathPosition = 0
+      }
+      logWarn(
+        s"Bus ${getEntityId} restored route from storedBestRoute during $context (${restored.size} segments)"
+      )
+    }
+  }
 
   /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
     * triggering premature leavingLink.
     */
   private var signalWaitUntilTick: Option[Tick] = None
+
+  /** Counts successive spontaneous ticks spent in WaitingSignalState without a node response.
+    * Mirrors Car's recovery mechanism: if the node never replies, the bus force-leaves the link
+    * instead of deadlocking indefinitely.
+    */
+  private var signalStateRetryCounter: Int = 0
+  private val MaxSignalStateRetries: Int = 100
 
   /** Number of passengers asked to unload at current stop. Used to track when all responses
     * arrived.
@@ -90,6 +151,9 @@ class Bus(
 
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
   private var currentStopNode: Option[String] = None
+
+  /** Counts every bus stop arrival (for cycle diagnostics). */
+  private var stopArrivalCount: Int = 0
 
   /** Maximum simulation end tick - vehicles must finish by this tick. */
   private lazy val simulationEndTick: Tick =
@@ -124,22 +188,17 @@ class Bus(
       )
       val finalNode = Option(getCurrentNode).getOrElse(state.destination)
       finishJourney("simulation_time_exceeded", finalNode)
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
       return
     }
 
     state.status match {
-      case Start =>
-        if (state.movableBestRoute.forall(_.isEmpty) && state.storedBestRoute.nonEmpty) {
-          logDebug(
-            s"Restoring route from storedBestRoute (${state.storedBestRoute.get.size} segments)"
-          )
-          state.movableBestRoute = state.storedBestRoute.map(
-            lst => scala.collection.mutable.Queue(lst: _*)
-          )
-          state.storedBestRoute = None
-        }
+      // RouteWaiting is the default movableStatus when Jackson deserializes BusState without
+      // restoring the Start value (movableStatus is not a BusState constructor parameter).
+      // Treat it identically to Start: restore the stored route and begin the journey.
+      case Start | RouteWaiting =>
+        restoreRouteIfMissing("Start")
+        MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
         report(
           data = Map(
             "event_type" -> "journey_started",
@@ -153,11 +212,19 @@ class Bus(
           label = "journey_started"
         )
         state.status = Ready
+        ActorTrace.trace(getEntityId, currentTick, "bus_journey_started", // #actor-trace
+          s"origin=${state.origin} destination=${state.destination} route=${state.bestRoute.map(_.size).getOrElse(0)} label=${state.label}") // #actor-trace
         enterLink()
 
       case Ready =>
         val nodeId = currentStopNode.orNull
         if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
+          stopArrivalCount += 1
+          ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
+            s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
+          if (stopArrivalCount % 100 == 0 || stopArrivalCount <= 5) {
+//            logInfo(s"[BUS-CYCLE] ${getEntityId} stop #$stopArrivalCount at $nodeId tick=$currentTick")
+          }
           requestUnloadPeopleData()
         } else {
           currentStopNode = None
@@ -185,8 +252,10 @@ class Bus(
         } else {
           mesoExitTick match {
             case Some(exitTick) if currentTick < exitTick =>
+//              logInfo(s"[BUS-MOVING] ${getEntityId} waiting in MESO link, exitTick=$exitTick currentTick=$currentTick")
               onFinishSpontaneous(Some(exitTick))
             case _ =>
+//              logInfo(s"[BUS-MOVING] ${getEntityId} MESO link traversed, calling requestSignalState at tick=$currentTick mesoExitTick=$mesoExitTick")
               mesoExitTick = None
               requestSignalState()
           }
@@ -201,7 +270,20 @@ class Bus(
             leavingLink()
         }
 
+      case WaitingSignalState =>
+        signalStateRetryCounter += 1
+        if (signalStateRetryCounter > MaxSignalStateRetries) {
+          logWarn(
+            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
+          )
+          signalStateRetryCounter = 0
+          leavingLink()
+        } else {
+          requestSignalState()
+        }
+
       case WaitingLoadPassenger =>
+//        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
         currentStopNode = None
         enterLink()
 
@@ -209,8 +291,7 @@ class Bus(
         requestLoadPassenger()
 
       case _ =>
-        logWarn(s"Event current status not handled ${state.status}")
-        onFinishSpontaneous(Some(currentTick + 1))
+        super.actSpontaneous(event)
     }
   }
 
@@ -228,17 +309,16 @@ class Bus(
   /** Request signal state from node before leaving link.
     */
   private def requestSignalState(): Unit = {
-    val currentPathNode = state.currentPath.map(_._2).orNull
+    restoreRouteIfMissing("requestSignalState")
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
-    if (state.destination == currentPathNode || routeDepleted) {
+    if (routeDepleted) {
       val currentNodeId = getCurrentNode
       logDebug(s"Bus ${getEntityId} reached destination: $currentNodeId")
       finishJourney(
         reason = "reached_destination",
         finalNode = Option(currentNodeId).getOrElse("unknown")
       )
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
     } else {
       state.status = WaitingSignalState
       getCurrentNode match {
@@ -288,7 +368,7 @@ class Bus(
       maxAcceleration = 1.2,
       maxDeceleration = 3.5,
       minGap = 3.0,
-      desiredVelocity = math.min(data.speedLimit, 11.11),
+      desiredVelocity = math.min(data.speedLimit, 11.11) * math.max(0.5, math.min(1.5, state.speedFactor)),
       reactionTime = 1.5,
       vehicleLength = 12.0,
       capacity = state.capacity,
@@ -352,9 +432,11 @@ class Bus(
         sumoArrivalSpeed = data.velocity
         updateHaltingState(data.velocity, sumoCurrentMicroTimeStepSeconds)
 
-        log.debug(
-          s"Bus micro update: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}"
-        )
+        microUpdateLogCount += 1
+        if (microUpdateLogCount % microUpdateLogEvery == 0L)
+          log.debug(
+            s"Bus micro update[$microUpdateLogCount]: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}"
+          )
 
         checkBusStopAtPosition(data.position)
     }
@@ -393,7 +475,12 @@ class Bus(
       label = "leave_micro_link"
     )
 
+    // Mirror what leavingLink() does in MESO: capture the destination node before
+    // deactivating micro state so that actSpontaneous(Ready) can check for a bus stop.
+    currentStopNode = state.currentPath.map(_._2)
+
     state.deactivateMicroMode()
+    state.status = Ready
     currentLinkId = None
     linkEntryTick = None
 
@@ -406,7 +493,7 @@ class Bus(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    logDebug(s"Bus entering MESO link ${event.actorRefId}")
+//    logInfo(s"[BUS-MESO-ENTER] ${getEntityId} entering MESO link ${event.actorRefId} tick=$currentTick status=${state.status}")
 
     val speed = linkDensitySpeed(
       length = data.linkLength,
@@ -473,11 +560,12 @@ class Bus(
       label = "leave_link"
     )
 
+    restoreRouteIfMissing("ReceiveLeaveLinkInfo")
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
+//    logInfo(s"[BUS-LEAVE-ACK] ${getEntityId} LeaveLinkInfo from ${event.actorRefId} tick=$currentTick status=${state.status} routeDepleted=$routeDepleted currentPath=${state.currentPath} bestRoute=${state.bestRoute.map(_.size)}")
     if (routeDepleted && state.status != Finished) {
       finishJourney("reached_destination", state.destination)
-      onFinishSpontaneous(None)
-      selfDestruct()
+      onFinishSpontaneous(None, destruct = true)
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }
@@ -495,6 +583,11 @@ class Bus(
 
       for (person <- data.people)
         state.people.put(person.id, person)
+
+      BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
+      BusMetrics.activePassengers.inc(data.people.size)
+      ActorTrace.trace(getEntityId, currentTick, "bus_passengers_loaded", // #actor-trace
+        s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
 
       report(
         data = Map(
@@ -541,6 +634,11 @@ class Bus(
         )
         sumoStopTimeSeconds += math.max(0L, nextTickTime - currentTick).toDouble
 
+        BusMetrics.passengersAlighted.labels(state.label).inc(unloadedCount)
+        BusMetrics.activePassengers.dec(unloadedCount)
+        ActorTrace.trace(getEntityId, currentTick, "bus_passengers_unloaded", // #actor-trace
+          s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
+
         report(
           data = Map(
             "event_type" -> "bus_unload_passengers",
@@ -570,6 +668,7 @@ class Bus(
       )
       return
     }
+    signalStateRetryCounter = 0
     if (data.phase == Red) {
       state.status = WaitingSignal
       signalWaitUntilTick = Some(data.nextTick)
@@ -596,12 +695,31 @@ class Bus(
     }
   }
 
+  override protected def microMaxAcceleration: Double = 1.2
+  override protected def microMaxDeceleration: Double = 3.5
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalStateRetryCounter = 0
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
+  }
+
+  override protected def enterLink(): Unit = {
+    restoreRouteIfMissing("enterLink")
+    val nextLink = state.movableCurrentPath.orElse(
+      state.bestRoute.flatMap { path =>
+        if (state.currentPathPosition < path.size) Some(path(state.currentPathPosition))
+        else Some(path(0))
+      }
+    )
+    val edgeFound = nextLink.exists { case (linkId, _) =>
+      org.interscity.htc.model.hybrid.util.CityMapUtil.edgeLabelsById.contains(linkId)
+    }
+//    logInfo(s"[BUS-ENTER] ${getEntityId} enterLink: currentPath=${state.movableCurrentPath} nextLink=$nextLink edgeFound=$edgeFound pos=${state.currentPathPosition} movableRoute=${state.movableBestRoute.map(_.size)} bestRoute=${state.bestRoute.map(_.size)} tick=$currentTick")
+    super.enterLink()
   }
 
   override def getNextPath: Option[(String, String)] =
@@ -612,8 +730,8 @@ class Bus(
           state.currentPathPosition += 1
           Some(nextPath)
         } else {
-          state.currentPathPosition = 0
-          Some(path(state.currentPathPosition))
+          state.currentPathPosition = 1
+          Some(path(0))
         }
       case None =>
         None
@@ -626,7 +744,14 @@ class Bus(
       micro =>
         micro.nextBusStop.foreach {
           stopId =>
-            log.debug(s"Bus at position $position, next stop: $stopId")
+            busStopProbeLogCount += 1
+            if (busStopProbeLogCount % busStopProbeLogEvery == 0L) {
+              logDebug(
+                s"Bus stop probe[$busStopProbeLogCount]: position=$position, nextStop=$stopId"
+              )
+              ActorTrace.trace(getEntityId, currentTick, "bus_stop_probe", // #actor-trace)
+                s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
+            }
         }
     }
 
@@ -671,7 +796,10 @@ class Bus(
           eventType = "RequestUnloadPassenger"
         )
     }
-    onFinishSpontaneous(None)
+    // Same race-condition fix as requestLoadPassenger: use Some(T+1) instead of None
+    // to prevent a late FinishEvent from clearing all schedules on arrival after the next
+    // processTick has placed the bus in runningEvents.
+    onFinishSpontaneous(Some(currentTick + 1))
   }
 
   /** Request passengers from bus stop at current node. Sends BusRequestPassengerData to the BusStop
@@ -691,7 +819,7 @@ class Bus(
           ),
           eventType = "RequestPassenger"
         )
-        onFinishSpontaneous(None)
+        onFinishSpontaneous(Some(currentTick + 1))
       case None =>
         currentStopNode = None
         state.status = Ready
@@ -708,6 +836,16 @@ class Bus(
     }.getOrElse(1000.0)
 
   private def finishJourney(reason: String, finalNode: String): Unit = {
+    if (journeyFinishedReported) return
+    journeyFinishedReported = true
+    val vehicleType = getClass.getSimpleName
+    MovableMetrics.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)
+    if (state.destination == finalNode) {
+      MovableMetrics.journeySuccesses.labels(vehicleType).inc()
+    } else {
+      MovableMetrics.journeyFailures.labels(vehicleType, reason).inc()
+    }
     report(
       data = Map(
         "event_type" -> "journey_completed",
@@ -777,13 +915,20 @@ class Bus(
     sumoTripInfoReported = true
   }
 
-  override def onDestruct(event: DestructEvent): Unit =
+  override def onDestruct(event: DestructEvent): Unit = {
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
         .getOrElse("unknown")
       finishJourney("actor_destructed_before_completion", fallbackNode)
     }
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.microState = None
+      state.people.clear()
+    }
+  }
 }
 
 /** Bus companion object.

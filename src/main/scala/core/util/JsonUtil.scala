@@ -10,7 +10,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.databind.{ DeserializationContext, JsonDeserializer, KeyDeserializer }
-import com.fasterxml.jackson.core.{ JsonParser, JsonToken }
+import com.fasterxml.jackson.core.JsonParser
 import com.google.protobuf.ByteString
 
 import java.io.InputStream
@@ -35,48 +35,6 @@ object JsonUtil {
     }
   }
 
-  class SubwayStationNodeTupleDeserializer
-      extends JsonDeserializer[
-        (org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)
-      ] {
-    override def deserialize(
-      p: JsonParser,
-      ctxt: DeserializationContext
-    ): (org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String) =
-      if (p.getCurrentToken == JsonToken.START_OBJECT) {
-        val node = p.readValuesAs(classOf[java.util.Map[String, Object]])
-        if (node.hasNext) {
-          val obj = node.next()
-          val stationId = obj.get("stationId").asInstanceOf[String]
-          val nodeId = obj.get("nodeId").asInstanceOf[String]
-          val railLinkId = obj.getOrDefault("railLinkId", obj.get("linkId")).asInstanceOf[String]
-
-          val subwayStationNode =
-            org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode(stationId, nodeId)
-          (subwayStationNode, railLinkId)
-        } else {
-          throw new RuntimeException("Invalid SubwayStationNode tuple format")
-        }
-      } else {
-        val codec = p.getCodec
-        val array = codec.readValue(p, classOf[Array[Object]])
-        if (array.length == 2) {
-          val nodeMap = array(0).asInstanceOf[java.util.Map[String, String]]
-          val stationId = nodeMap.get("stationId")
-          val nodeId = nodeMap.get("nodeId")
-          val railLinkId = array(1).asInstanceOf[String]
-
-          val subwayStationNode =
-            org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode(stationId, nodeId)
-          (subwayStationNode, railLinkId)
-        } else {
-          throw new RuntimeException(
-            s"Invalid SubwayStationNode tuple array format: expected 2 elements, got ${array.length}"
-          )
-        }
-      }
-  }
-
   private val mapper = new ObjectMapper()
   mapper.registerModule(DefaultScalaModule)
   mapper.registerModule(new JavaTimeModule())
@@ -93,11 +51,6 @@ object JsonUtil {
     new SubRoutePairKeyDeserializer
   )
 
-  subRoutePairModule.addDeserializer(
-    classOf[(org.interscity.htc.model.hybrid.entity.state.model.SubwayStationNode, String)],
-    new SubwayStationNodeTupleDeserializer
-  )
-
   mapper.registerModule(subRoutePairModule)
 
   def readJsonFile(filePath: String): String = {
@@ -107,7 +60,13 @@ object JsonUtil {
   }
 
   def convertValue[T: Manifest](content: Any): T = {
-    val json = mapper.writeValueAsString(content)
+    // If the value was transmitted through Pekko's serialization layer it arrives as a
+    // pre-serialized JSON string.  Using writeValueAsString on a String double-encodes it,
+    // so pass it straight to readValue in that case.
+    val json = content match {
+      case s: String => s
+      case _         => mapper.writeValueAsString(content)
+    }
     val javaType = TypeFactory.defaultInstance().constructType(implicitly[Manifest[T]].runtimeClass)
     mapper.readValue(json, javaType).asInstanceOf[T]
   }

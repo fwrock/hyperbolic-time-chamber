@@ -3,7 +3,7 @@ package core.api
 
 import org.apache.pekko.actor.ActorSystem
 import org.htc.protobuf.core.entity.event.control.execution.{ PauseSimulationEvent, PrepareSimulationEvent, ResumeSimulationEvent, StopSimulationEvent }
-import org.interscity.htc.core.metrics.MetricsServer
+import org.interscity.htc.core.metrics.core.SimulationMetrics
 import org.interscity.htc.core.util.DistributedUtil
 import org.interscity.htc.core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, SIMULATION_MANAGER_ACTOR_NAME }
 import org.slf4j.LoggerFactory
@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
   *
   * Lifecycle events are forwarded to the appropriate Pekko singletons via cluster singleton
   * proxies. The controller tracks the high-level simulation status and uses
-  * [[MetricsServer.currentTick]] to infer when loading transitions to running.
+  * [[SimulationMetrics.currentTick]] to infer when loading transitions to running.
   *
   * Status transitions: Idle ──(start)──▶ Loading ──(tick > 0)──▶ Running │ ▲ (pause)(resume) ▼
   * Paused Any ──(stop)──▶ Stopped
@@ -47,7 +47,7 @@ object SimulationController {
     */
   def status: SimulationStatus = {
     val s = _status.get()
-    if (s == SimulationStatus.Loading && MetricsServer.currentTick.get() > 0)
+    if (s == SimulationStatus.Loading && SimulationMetrics.currentTick.get() > 0)
       SimulationStatus.Running
     else s
   }

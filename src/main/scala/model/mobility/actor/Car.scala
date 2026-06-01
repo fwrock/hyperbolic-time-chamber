@@ -13,6 +13,8 @@ import org.interscity.htc.model.mobility.entity.event.data.vehicle.RequestSignal
 import org.interscity.htc.model.mobility.entity.event.node.SignalStateData
 import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Moving, Ready, RouteWaiting, Stopped, WaitingSignal, WaitingSignalState }
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+import org.interscity.htc.core.metrics.model.hybrid.MovableMetrics
+import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
 class Car(
   private val properties: Properties
@@ -42,17 +44,7 @@ class Car(
       return
     }
 
-    // Report journey started
-//    report(
-//      data = Map(
-//        "event_type" -> "journey_started",
-//        "car_id" -> getEntityId,
-//        "origin" -> state.origin,
-//        "destination" -> state.destination,
-//        "tick" -> currentTick
-//      ),
-//      label = "journey_started"
-//    )
+    MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
     state.eventCount += 1
 
     try {
@@ -85,21 +77,12 @@ class Car(
             enterLink()
           } else {
             // Car already at destination
-//            report(
-//              data = Map(
-//                "event_type" -> "journey_completed",
-//                "car_id" -> getEntityId,
-//                "origin" -> state.origin,
-//                "destination" -> state.destination,
-//                "final_node" -> state.origin,
-//                "reached_destination" -> (state.destination == state.origin),
-//                "completion_reason" -> "already_at_destination",
-//                "total_distance" -> state.distance,
-//                "best_cost" -> cost,
-//                "tick" -> currentTick
-//              ),
-//              label = "journey_completed"
-//            )
+            val duration = currentTick - state.startTick
+            MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+            MovableMetrics.journeySuccesses.labels(getClass.getSimpleName).inc()
+            MovableMetrics.journeyCompletedReason.labels("car", "already_at_destination", "true").inc()
+            if (duration > 0) MovableMetrics.journeyDurationTicks.labels(getClass.getSimpleName).observe(duration.toDouble)
+            MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
             state.eventCount += 1
 
 //            report(
@@ -119,22 +102,11 @@ class Car(
           logError(
             s"Failed to calculate route from ${state.origin} to ${state.destination} for car ${getEntityId}."
           )
-
-//          report(
-//            data = Map(
-//              "event_type" -> "journey_completed",
-//              "car_id" -> getEntityId,
-//              "origin" -> state.origin,
-//              "destination" -> state.destination,
-//              "final_node" -> state.origin,
-//              "reached_destination" -> false,
-//              "completion_reason" -> "route_calculation_failed",
-//              "total_distance" -> state.distance,
-//              "best_cost" -> state.bestCost,
-//              "tick" -> currentTick
-//            ),
-//            label = "journey_completed"
-//          )
+          GPSMetrics.gpsCannotFindRoute.labels("car").inc()
+          MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+          MovableMetrics.journeyFailures.labels(getClass.getSimpleName, "route_calculation_failed").inc()
+          MovableMetrics.journeyCompletedReason.labels("car", "route_calculation_failed", "false").inc()
+          MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
           state.eventCount += 1
 
 //          report(
@@ -153,23 +125,10 @@ class Car(
     } catch {
       case e: Exception =>
         logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
-
-//        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> state.origin,
-//            "reached_destination" -> false,
-//            "completion_reason" -> "exception_during_route_request",
-//            "error_message" -> e.getMessage,
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
+        MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+        MovableMetrics.journeyFailures.labels(getClass.getSimpleName, "exception_during_route_request").inc()
+        MovableMetrics.journeyCompletedReason.labels("car", "exception_during_route_request", "false").inc()
+        MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
         state.eventCount += 1
 
 //        report(
@@ -198,23 +157,15 @@ class Car(
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
 //        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> currentNodeId,
-//            "reached_destination" -> (state.destination == currentNodeId),
-//            "completion_reason" -> "reached_destination_or_end_of_route",
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
-        state.eventCount += 1
-
-//        report(
+          val duration = currentTick - state.startTick
+          val reached = state.destination == currentNodeId
+          MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+          if (reached) MovableMetrics.journeySuccesses.labels(getClass.getSimpleName).inc()
+          else MovableMetrics.journeyFailures.labels(getClass.getSimpleName, "end_of_route").inc()
+          MovableMetrics.journeyCompletedReason.labels("car", "reached_destination_or_end_of_route", s"$reached").inc()
+          if (duration > 0) MovableMetrics.journeyDurationTicks.labels(getClass.getSimpleName).observe(duration.toDouble)
+          MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
+          state.eventCount += 1
 //          data = Map(
 //            "event_type" -> "vehicle_event_count",
 //            "car_id" -> getEntityId,
@@ -228,22 +179,10 @@ class Car(
         onFinishSpontaneous()
       } else {
         state.movableStatus = Finished
-//
-//        report(
-//          data = Map(
-//            "event_type" -> "journey_completed",
-//            "car_id" -> getEntityId,
-//            "origin" -> state.origin,
-//            "destination" -> state.destination,
-//            "final_node" -> "unknown",
-//            "reached_destination" -> false,
-//            "completion_reason" -> "no_current_node",
-//            "total_distance" -> state.distance,
-//            "best_cost" -> state.bestCost,
-//            "tick" -> currentTick
-//          ),
-//          label = "journey_completed"
-//        )
+        MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+        MovableMetrics.journeyFailures.labels(getClass.getSimpleName, "no_current_node").inc()
+        MovableMetrics.journeyCompletedReason.labels("car", "no_current_node", "false").inc()
+        MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
         state.eventCount += 1
 
 //        report(
@@ -300,19 +239,14 @@ class Car(
 
   override protected def onFinish(nodeId: String): Unit = {
 //    report(
-//      data = Map(
-//        "event_type" -> "journey_completed",
-//        "car_id" -> getEntityId,
-//        "origin" -> state.origin,
-//        "destination" -> state.destination,
-//        "final_node" -> nodeId,
-//        "reached_destination" -> (state.destination == nodeId),
-//        "total_distance" -> state.distance,
-//        "best_cost" -> state.bestCost,
-//        "tick" -> currentTick
-//      ),
-//      label = "journey_completed"
-//    )
+    val duration = currentTick - state.startTick
+    val reached = state.destination == nodeId
+    MovableMetrics.journeysCompleted.labels(getClass.getSimpleName).inc()
+    if (reached) MovableMetrics.journeySuccesses.labels(getClass.getSimpleName).inc()
+    else MovableMetrics.journeyFailures.labels(getClass.getSimpleName, "destination_not_reached").inc()
+    MovableMetrics.journeyCompletedReason.labels("car", "on_finish", s"$reached").inc()
+    if (duration > 0) MovableMetrics.journeyDurationTicks.labels(getClass.getSimpleName).observe(duration.toDouble)
+    MovableMetrics.journeyDistanceMeters.labels(getClass.getSimpleName).observe(state.distance)
     state.eventCount += 1
 
 //    report(

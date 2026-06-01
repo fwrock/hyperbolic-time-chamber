@@ -10,7 +10,7 @@ import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRes
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{ IdUtil, JsonUtil, StringUtil }
+import core.util.{ IdUtil, JsonUtil, StringPool, StringUtil }
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
@@ -21,13 +21,17 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
 import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
-import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.metrics.core.ActorMetrics
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
+
+import core.entity.event.EntityEnvelopeEvent
+import core.util.ActorCreatorUtil.createShardRegion
+import core.entity.event.data.InitializeData
 
 /** Base actor for simulation entities that require time management, spontaneous events, Lamport
   * clocks, and reporting capabilities. Extends the generic BaseActor with simulation-specific
@@ -39,7 +43,7 @@ import scala.compiletime.uninitialized
   *   The state type of the actor
   */
 abstract class SimulationBaseActor[T <: BaseState](
-  private val properties: Properties
+  private var properties: Properties
 )(implicit m: Manifest[T])
     extends BaseActor[T](properties) {
 
@@ -74,6 +78,35 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var creatorManager: ActorRef =
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
+
+  // Tracks entities spawned via spawnDynamicActor, awaiting ShardRegion.StartEntityAck
+  // Key: entityId, Value: (shardRegion, initEvent)
+  private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
+  // Remembers classType per spawned entity until InitializeEntityAckEvent is received
+  private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
+
+  /** Interns all String fields in the [[relationships]] map to reduce heap duplication.
+    * Called once per actor in [[onFinishInitialize]], and again after migration restore.
+    * Idempotent — safe to call repeatedly.
+    */
+  private def internRelationshipsStrings(): Unit =
+    if (relationships.nonEmpty) {
+      val interned = relationships.iterator.map {
+        case (k, v) =>
+          StringPool.intern(k) -> ShardActorId(
+            entityId    = StringPool.intern(v.entityId),
+            classType   = StringPool.intern(v.classType),
+            shardBucket = StringPool.intern(v.shardBucket)
+          )
+      }.toMap
+      relationships.clear()
+      relationships ++= interned
+    }
+
+  override protected def onFinishInitialize(): Unit = {
+    internRelationshipsStrings()
+    super.onFinishInitialize()
+  }
 
   /** Gets a specific time manager by type.
     * @param managerType
@@ -120,9 +153,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The current time manager type name
     */
   protected def getCurrentTimeManagerType: String = currentTimeManagerType
-
-  // ── Migration State Preservation ──────────────────────────────────────────
-
+  
   /** Builds a migration snapshot that includes simulation-specific metadata in addition to the base
     * actor state.
     *
@@ -348,6 +379,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           e
         )
     }
+    onFinishInitialize()
   }
 
   /** Return true to opt in to the post-load registration phase. The actor will receive
@@ -402,6 +434,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
     lamportClock.increment()
+    ActorMetrics.messagesSent.labels(getClass.getSimpleName, eventType).inc()
     if (actorType == PoolDistributed) {
       sendMessageToPool(entityId, data, eventType)
     } else {
@@ -476,6 +509,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     if (state == null) {
+      ActorMetrics.eventsWhenStateIsNull.labels(
+        getClass.getSimpleName,
+        "spontaneous"
+      ).inc()
       if (!getEntityId.endsWith("-shard-initiator")) {
         logDebug(
           s"handleSpontaneous called with null state at tick=$currentTick for ${getEntityId} — unscheduling"
@@ -486,7 +523,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     try actSpontaneous(event)
     catch
-      case e: Exception =>
+      case e: Throwable =>
         logError(
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
@@ -507,7 +544,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The interaction event
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
-    MetricsServer.eventsProcessed.labels("interaction").inc()
+    ActorMetrics.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
     if (event.tick > currentTick) {
       currentTick = event.tick
@@ -543,10 +580,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     case _ if awaitingMigration =>
       stash()
 
-    case event: MigrationContextEvent => handleMigrationContext(event)
-    case event: SpontaneousEvent      => handleSpontaneous(event)
-    case event: ActorInteractionEvent => handleInteractWith(event)
-    case event                        => super.receive(event)
+    case event: MigrationContextEvent      => handleMigrationContext(event)
+    case event: SpontaneousEvent           => handleSpontaneous(event)
+    case event: ActorInteractionEvent      => handleInteractWith(event)
+    case event: ShardRegion.StartEntityAck => handleSpawnedEntityStartAck(event)
+    case event: InitializeEntityAckEvent   => handleSpawnedEntityInitAck(event)
+    case event                             => super.receive(event)
   }
 
   /** Returns true if this entity should re-register on the TimeManager after migration restore.
@@ -557,6 +596,64 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
     state != null && state.isSetScheduleOnTimeManager
+
+  /** Spawns a dynamic sharded actor using the 2-phase creation protocol that mirrors
+    * CreatorLoadData: (1) ShardRegion.StartEntity → (2) StartEntityAck → (3) send
+    * EntityEnvelopeEvent(InitializeEvent) → (4) receive InitializeEntityAckEvent.
+    *
+    * The shard region for `classType` must be pre-registered on all nodes (via dynamicActorTypes
+    * in the scenario config). Override [[onDynamicActorInitialized]] to react when the new entity
+    * finishes initialization.
+    */
+  protected def spawnDynamicActor(
+    classType: String,
+    entityId: String,
+    stateData: Any,
+    relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
+  ): Unit = {
+    val initEvent = InitializeEvent(
+      id = entityId,
+      actorRef = self,
+      data = InitializeData(
+        data = stateData,
+        resourceId = properties.resourceId,
+        timeManagers = timeManagers,
+        creatorManager = self,
+        reporters = reporters,
+        relationships = relationships
+      )
+    )
+    val shardRegion = createShardRegion(
+      system = context.system,
+      actorClassName = classType,
+      entityId = entityId,
+      resourceId = properties.resourceId,
+      timeManagers = timeManagers,
+      creatorManager = creatorManager,
+      reporters = reporters
+    )
+    pendingDynamicInits.put(entityId, (shardRegion, initEvent))
+    dynamicActorClassTypes.put(entityId, classType)
+    shardRegion ! ShardRegion.StartEntity(entityId)
+  }
+
+  /** Called when a dynamically spawned actor has finished initialization (received
+    * InitializeEntityAckEvent). Default is a no-op; override to perform post-creation logic.
+    */
+  protected def onDynamicActorInitialized(entityId: String, classType: String): Unit = {}
+
+  private def handleSpawnedEntityStartAck(event: ShardRegion.StartEntityAck): Unit =
+    pendingDynamicInits.remove(event.entityId) match {
+      case Some((shardRegion, initEvent)) =>
+        shardRegion ! EntityEnvelopeEvent(event.entityId, initEvent)
+      case None =>
+        logWarn(s"StartEntityAck for untracked entityId ${event.entityId} — ignoring")
+    }
+
+  private def handleSpawnedEntityInitAck(event: InitializeEntityAckEvent): Unit = {
+    val classType = dynamicActorClassTypes.remove(event.entityId).getOrElse("")
+    onDynamicActorInitialized(event.entityId, classType)
+  }
 
   /** For cluster-sharded (LoadBalancedDistributed) entities, use Pekko passivation instead of
     * context.stop(self). Passivation signals the ShardRegion to stop buffering messages for this
@@ -673,6 +770,14 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
     )
 
+  /** Default report strategy resolved once per actor and cached. Avoids a [[config.getString]] +
+    * [[ReportTypeEnum.valueOf]] allocation on every call to [[report]] (which can be invoked
+    * thousands of times per simulation tick across the whole actor population).
+    */
+  private lazy val cachedDefaultReportType: ReportTypeEnum =
+    try ReportTypeEnum.valueOf(config.getString("htc.report-manager.default-strategy"))
+    catch { case _: Exception => ReportTypeEnum.valueOf("csv") }
+
   /** Reports an event to the reporting system.
     * @param event
     *   The report event
@@ -680,29 +785,14 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected def report(event: ReportEvent): Unit = {
     if (reporters.isEmpty) return
     if (event.label != null) {
-      MetricsServer.eventsProcessed.labels(event.label).inc()
-      event.label match {
-        case "journey_started" =>
-          val vehicleType = getClass.getSimpleName
-          MetricsServer.journeysStarted.labels(vehicleType).inc()
-        case "journey_completed" =>
-          val vehicleType = getClass.getSimpleName
-          MetricsServer.journeysCompleted.labels(vehicleType).inc()
-        case _ =>
-      }
+      ActorMetrics.eventsProcessed.labels(event.label).inc()
     }
-    val defaultReportType = ReportTypeEnum.valueOf(
-      Some(config.getString("htc.report-manager.default-strategy")).getOrElse("csv")
-    )
-    val reportType = if (state.getReporterType != null) {
-      state.getReporterType
-    } else {
-      defaultReportType
-    }
+    val stateReporter = state.getReporterType
+    val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType
     if (reporters.contains(reportType)) {
       reporters(reportType) ! event
     } else {
-      reporters(defaultReportType) ! event
+      reporters(cachedDefaultReportType) ! event
     }
   }
 

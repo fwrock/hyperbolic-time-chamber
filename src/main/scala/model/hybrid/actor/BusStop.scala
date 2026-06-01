@@ -9,8 +9,10 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.util.IdUtil
-import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData }
+import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData, LineNotOperationalData, PTLineNotOperationalData }
 import org.interscity.htc.model.hybrid.entity.state.BusStopState
+import org.interscity.htc.core.metrics.model.hybrid.BusStopMetrics
+import core.util.StringPool
 
 import scala.collection.mutable
 
@@ -19,6 +21,12 @@ class BusStop(
 ) extends SimulationBaseActor[BusStopState](
       properties = properties
     ) {
+
+  override protected def internStateStrings(s: BusStopState): BusStopState =
+    s.copy(
+      nodeId = StringPool.intern(s.nodeId),
+      label  = StringPool.intern(s.label)
+    )
 
   override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
@@ -69,6 +77,7 @@ class BusStop(
     event.data match {
       case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
       case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
+      case d: LineNotOperationalData  => handleLineNotOperational(d)
       case _ =>
         logWarn("Event not handled")
     }
@@ -81,6 +90,9 @@ class BusStop(
       case Some(people) =>
         val peopleToLoad = people.take(data.availableSpace)
         state.people.put(data.label, people.drop(data.availableSpace))
+
+        BusStopMetrics.passengersLoaded.labels(data.label).inc(peopleToLoad.size)
+        BusStopMetrics.passengersWaiting.dec(peopleToLoad.size)
 
         report(
           data = Map(
@@ -113,14 +125,44 @@ class BusStop(
       )
     )
 
+  private def handleLineNotOperational(data: LineNotOperationalData): Unit = {
+    state.deadLines.add(data.label)
+    state.people.get(data.label).foreach { waiting =>
+      waiting.foreach { person =>
+        sendMessageTo(
+          entityId  = person.id,
+          shardId   = "hybrid.actor.Person",
+          data      = PTLineNotOperationalData(line = data.label),
+          eventType = "PTLineNotOperational"
+        )
+      }
+      BusStopMetrics.passengersWaiting.dec(waiting.size)
+      state.people.remove(data.label)
+    }
+    logWarn(s"BusStop ${getEntityId}: line ${data.label} not operational — notified waiting passengers")
+  }
+
   private def handleRegisterPassenger(
     event: ActorInteractionEvent,
     data: RegisterPassengerData
   ): Unit = {
+    if (state.deadLines.contains(data.label)) {
+      sendMessageTo(
+        entityId  = event.actorRefId,
+        shardId   = event.actorClassType,
+        data      = PTLineNotOperationalData(line = data.label),
+        eventType = "PTLineNotOperational"
+      )
+      return
+    }
+
     val person = event.toIdentity
     state.people.get(data.label) match {
       case Some(people) =>
         state.people.put(data.label, people :+ person)
+
+        BusStopMetrics.passengersArrived.labels(data.label).inc()
+        BusStopMetrics.passengersWaiting.inc()
 
         report(
           data = Map(
@@ -135,6 +177,8 @@ class BusStop(
         )
       case None =>
         state.people.put(data.label, mutable.Seq(person))
+        BusStopMetrics.passengersArrived.labels(data.label).inc()
+        BusStopMetrics.passengersWaiting.inc()
     }
   }
 }

@@ -85,7 +85,8 @@ class ClickHouseReportData(
     }
   }
 
-  private val buffer = mutable.ArrayBuffer.empty[String]
+  // Pre-sized to batchSize to avoid the doubling-resize cycle when filling the buffer.
+  private val buffer = new mutable.ArrayBuffer[String](batchSize)
 
   override def onReport(event: ReportEvent): Unit =
     event.data match {

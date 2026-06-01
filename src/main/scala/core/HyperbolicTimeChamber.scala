@@ -12,6 +12,7 @@ import org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap
 import org.interscity.htc.core.actor.manager.SimulationManager
 import org.interscity.htc.core.api.ConfigApiServer
 import org.interscity.htc.core.metrics.MetricsServer
+import org.interscity.htc.core.metrics.system.InfrastructureMetrics
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
@@ -24,12 +25,18 @@ private class DeadLetterListener extends Actor {
 
   override def receive: Receive = {
     case dl: DeadLetter =>
-      MetricsServer.deadLetters.inc()
+      val path = dl.recipient.path
+      val recipientType = path.elements.toList match {
+        case _ :: "sharding" :: shardRegion :: _ => shardRegion
+        case elems                               => elems.lastOption.getOrElse("unknown")
+      }
+      val messageType = dl.message.getClass.getSimpleName
+      InfrastructureMetrics.deadLetters.labels(recipientType, messageType).inc()
       log.debug(
         "Dead letter: msg={} from={} to={}",
-        dl.message.getClass.getSimpleName,
+        messageType,
         dl.sender.path,
-        dl.recipient.path
+        path
       )
   }
 }

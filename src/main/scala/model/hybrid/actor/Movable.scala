@@ -8,12 +8,13 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import model.hybrid.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
-import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, Start, Waiting }
+import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start, Waiting }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import model.hybrid.entity.event.data.link.LinkInfoData
 import model.hybrid.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import model.hybrid.entity.state.enumeration.EventTypeEnum
 import model.hybrid.util.{ CityMapUtil, GPSUtil }
+import core.metrics.model.hybrid.GPSMetrics
 
 abstract class Movable[T <: MovableState](
   private val properties: Properties
@@ -28,8 +29,9 @@ abstract class Movable[T <: MovableState](
   protected def requestRoute(): Unit = {
     logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
     try
-      GPSUtil.calcRoute(originId = state.origin, destinationId = state.destination) match {
+      GPSUtil.calcRouteCompact(originId = state.origin, destinationId = state.destination, maxExpansions = 500_000) match {
         case Some((cost, pathQueue)) =>
+          GPSMetrics.routeSource.labels("gps_calculated").inc()
           logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
           state.movableBestRoute = Some(pathQueue)
           state.movableStatus = Ready
@@ -58,7 +60,9 @@ abstract class Movable[T <: MovableState](
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
     state.movableStatus match {
-      case Start =>
+      // RouteWaiting is the default movableStatus when state is deserialized without an explicit
+      // status value. Treat it like Start for standalone Movables that request their own routes.
+      case Start | RouteWaiting =>
         logDebug(s"Starting route request from ${state.origin} to ${state.destination}")
         requestRoute()
 
@@ -69,7 +73,8 @@ abstract class Movable[T <: MovableState](
         waitingTicksCounter += 1
         if (waitingTicksCounter > MaxWaitingTicks) {
           logWarn(
-            s"${getEntityId} stuck in Waiting for $waitingTicksCounter ticks at tick $currentTick (Link not responding). Recovering by skipping to next route segment."
+            s"[MOVABLE] STUCK in Waiting for $waitingTicksCounter ticks at tick $currentTick | " +
+            s"id=$getEntityId path=${state.movableCurrentPath} route=${state.movableBestRoute.map(_.size)} — RECOVERING by skipping to next segment"
           )
           waitingTicksCounter = 0
           state.movableCurrentPath = None
@@ -126,26 +131,53 @@ abstract class Movable[T <: MovableState](
     } else {
       state.movableStatus = Finished
     }
-    onFinishSpontaneous(None)
-    selfDestruct()
+    // destruct=true: TM removes actor from registeredActors and sends DestructEvent through the
+    // mailbox, so any in-flight messages are processed before context.stop(self). The onDestruct()
+    // hook fires first, allowing subclasses to release heavy state before the actor stops.
+    onFinishSpontaneous(None, destruct = true)
   }
+
+  protected def microMaxAcceleration: Double = 2.6
+  protected def microMaxDeceleration: Double = 4.5
+
+  /** Release the route queue and current path. Called by [[PrivateVehicle]] when parking between
+    * trips so the queue is GCed immediately — the route is recalculated on the next StartTrip.
+    */
+  protected def clearRouteOnPark(): Unit =
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+    }
+
+  /** Resolves a link ID to `(entityId, shardId)` for message routing.
+   *
+   * The default implementation looks up the road network via
+   * [[CityMapUtil.edgeLabelsById]]. Subclasses that operate on a different
+   * infrastructure (e.g. [[Subway]] on rail links) override this to bypass
+   * the city-map lookup and return the actor reference directly.
+   */
+  protected def resolveLink(linkId: String): Option[(String, String)] =
+    CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
 
   protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
-        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-          case Some(edgeLabel) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
             state.movableStatus = Waiting
             waitingTicksCounter = 0
+
             sendMessageTo(
-              entityId = edgeLabel.id,
-              shardId = edgeLabel.classType,
+              entityId = entityId,
+              shardId = shardId,
               data = EnterLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed
+                actorCreationType = LoadBalancedDistributed,
+                maxAcceleration = microMaxAcceleration,
+                maxDeceleration = microMaxDeceleration
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
@@ -157,11 +189,13 @@ abstract class Movable[T <: MovableState](
             logWarn("No edge label found for link, finishing.")
             val currentNode = Option(getCurrentNode).getOrElse(state.origin)
             onFinish(currentNode)
+            onFinishSpontaneous(None)
         }
       case None if state.movableBestRoute.forall(_.isEmpty) =>
         state.movableStatus = Finished
         logWarn("No current path and no best route available, finishing.")
         onFinish(state.destination)
+        onFinishSpontaneous(None)
       case None =>
         getNextPath match {
           case Some(nextPath) =>
@@ -170,17 +204,18 @@ abstract class Movable[T <: MovableState](
           case None =>
             state.movableStatus = Finished
             onFinish(state.destination)
+            onFinishSpontaneous(None)
         }
     }
 
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
-        CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-          case Some(edgeLabel) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
             sendMessageTo(
-              entityId = edgeLabel.id,
-              shardId = edgeLabel.classType,
+              entityId = entityId,
+              shardId = shardId,
               data = LeaveLinkData(
                 actorId = getEntityId,
                 shardId = getShardId,
@@ -194,18 +229,20 @@ abstract class Movable[T <: MovableState](
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)
+              onFinishSpontaneous(None)
               return
             }
             state.movableCurrentPath = None
             onFinishSpontaneous(Some(currentTick + 1))
           case _ =>
-            logWarn("Path item not handled")
+            logWarn(s"${getEntityId} no edge label found for link $linkEdgeGraphId, scheduling tick+1")
             onFinishSpontaneous(Some(currentTick + 1))
         }
       case None =>
         if (state.movableBestRoute.forall(_.isEmpty)) {
           state.movableStatus = Finished
           onFinish(state.destination)
+          onFinishSpontaneous(None)
         } else {
           getNextPath match {
             case Some(nextPath) =>
@@ -215,6 +252,7 @@ abstract class Movable[T <: MovableState](
             case None =>
               state.movableStatus = Finished
               onFinish(state.destination)
+              onFinishSpontaneous(None)
           }
         }
     }

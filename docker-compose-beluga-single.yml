@@ -1,64 +1,5 @@
 ---
 services:
-  
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    container_name: htc-zookeeper
-    hostname: zookeeper
-    network_mode: host
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_logs:/var/lib/zookeeper/log
-
-  # Kafka broker
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    container_name: htc-kafka
-    hostname: kafka
-    network_mode: host
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: localhost:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
-      # Performance optimizations for HTC
-      KAFKA_NUM_PARTITIONS: 12
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 24
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
-      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
-      KAFKA_MESSAGE_MAX_BYTES: 10485760
-      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-
-  # Schema Registry for Avro schemas
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.4.0
-    container_name: htc-schema-registry
-    hostname: schema-registry
-    network_mode: host
-    depends_on:
-      - kafka
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: localhost:9092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: WARNhybrid_scenario_2
-
-
   redis:
     image: redis:latest
     container_name: htc-redis
@@ -73,8 +14,8 @@ services:
         reservations:
           memory: 4G
   node1:
-    image: uxhabam/hyperbolic-time-chamber:2.7.9-beluga
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    image: uxhabam/hyperbolic-time-chamber:3.0.11-beluga
+    command: ["java", "-XX:+ZGenerational", "-jar", "app.jar"]
     cap_add:
       - SYS_NICE
     container_name: node_1
@@ -91,13 +32,12 @@ services:
       REDIS_PORT: 6379
       MANAGEMENT_HTTP_PORT: 8558
       HTC_METRICS_PORT: 9101
-      HTC_SCENARIO_NAME: toulouse_100_pct_meso
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/toulouse_100_pct_meso/data/city_map.json
-
-
-      HTC_API_ENABLED: "false"
-      HTC_API_PORT: 9804
+      HTC_SCENARIO_NAME: sp_100pct
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_100pct/simulation_v2.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_100pct/data/city_map.json
+      # Optional: enable PT mode choice (bus/subway) — set only if transit_map.json was generated (--transit or --rail flags)
+      HTC_MOBILITY_TRANSIT_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_100pct/data/transit_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
 
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -107,7 +47,7 @@ services:
       # ── Load Balance Manager ─────────────────────────────────────────────
       # Single-node: disabled. Enable for multi-node beluga runs.
       HTC_LOAD_BALANCE_ENABLED: "false"
-      HTC_LOAD_BALANCE_STRATEGY: "type-aware"
+      HTC_LOAD_BALANCE_STRATEGY: "default"
       HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"
       HTC_LB_KDTREE_REBALANCE_INTERVAL: "30.0"
       HTC_LB_KDTREE_LOAD_THRESHOLD: "0.85"
@@ -124,8 +64,8 @@ services:
       # 256 TMs total / 32 per node for SP 100% scale (30M+ actors).
       # At peak ~10M active actors: 10M/256 = ~39K actors/TM — well within
       # TICK_BATCH_SIZE=5000 range (8 batches per TM per tick).
-      HTC_TIME_MANAGER_INSTANCES: 512
-      HTC_TIME_MANAGER_PER_NODE: 512
+      HTC_TIME_MANAGER_INSTANCES: 112
+      HTC_TIME_MANAGER_PER_NODE: 112
       HTC_TIME_MANAGER_LOOKAHEAD: 10
       HTC_TIME_MANAGER_WINDOW_SIZE: 20
       HTC_TIME_MANAGER_METRICS_INTERVAL: 500
@@ -134,6 +74,9 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
+      HTC_WARMUP_TARGETS: "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
       
       # JVM Configuration
       # -Xmx: cap at 72GB (leaves 8GB headroom for ZGC off-heap + Netty + OS)
@@ -141,17 +84,17 @@ services:
       # Note: -XX:+ZGenerational is already in the command line; no -Xms so ZGC
       # grows the heap lazily (avoids pre-allocating 48GB × 8 nodes = 384GB at startup).
       JAVA_TOOL_OPTIONS: >-
+        -Dconfig.resource=beluga.conf
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
-        -Xmx72g
-        -XX:SoftMaxHeapSize=64g
+        -Xmx740g
 
       # Report Manager Configuration
-      HTC_REPORT_ENABLED: "true"
+      HTC_REPORT_ENABLED: "false"
       HTC_REPORT_CSV_INSTANCES: 16
       HTC_REPORT_CSV_PER_NODE: 1
       HTC_REPORT_JSON_INSTANCES: 128
-      HTC_REPORT_JSON_PER_NODE: 64
+      HTC_REPORT_JSON_PER_NODE: 16
       
       # === KAFKA CONFIGURATION ===
       HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
@@ -209,9 +152,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 640G
+          memory: 800G
         reservations:
-          memory: 440G
+          memory: 740G
 
 volumes:
   redis_data:

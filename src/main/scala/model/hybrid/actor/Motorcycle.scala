@@ -16,7 +16,9 @@ import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
 import org.interscity.htc.model.hybrid.entity.state.{ DriverAttributes, MicroMotorcycleState, MotorcycleState }
 import org.interscity.htc.model.hybrid.entity.event.data._
 import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.util.StringPool
 
 /** Motorcycle actor - NEW vehicle type for hybrid simulator.
   *
@@ -51,6 +53,22 @@ class Motorcycle(
       properties = properties
     )
     with PrivateVehicle[MotorcycleState] {
+
+  override protected def internStateStrings(s: MotorcycleState): MotorcycleState = {
+    val copied = s.copy(
+      origin      = StringPool.intern(s.origin),
+      destination = StringPool.intern(s.destination)
+    )
+    // copy() only replicates MotorcycleState constructor params; restore MovableState vars
+    // that are not in the constructor (otherwise they reset to their defaults).
+    copied.movableStatus             = s.movableStatus
+    copied.movableBestRoute          = s.movableBestRoute
+    copied.movableCurrentPath        = s.movableCurrentPath
+    copied.movableCurrentNode        = s.movableCurrentNode
+    copied.movableBestCost           = s.movableBestCost
+    copied.movableReachedDestination = s.movableReachedDestination
+    copied
+  }
 
   /** Current link being traversed.
     */
@@ -125,6 +143,8 @@ class Motorcycle(
   override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
     nextTick
   )
+  override protected def selfDestructVehicle(): Unit                     = selfDestruct()
+  override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = state.distance
   override protected def sendVehicleMessage(
     entityId: String,
@@ -148,6 +168,11 @@ class Motorcycle(
   /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
     * PrivateVehicle.handleStartTrip before each activation.
     */
+  /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
+    */
+  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+    state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
+
   override protected def resetTripState(): Unit = {
     if (state == null) return
     currentLinkId = None
@@ -289,7 +314,8 @@ class Motorcycle(
   private def requestSignalState(): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
     val routeDepleted = state.bestRoute.forall(_.isEmpty)
-    if (state.destination == currentPathNode || routeDepleted) {
+    val tripDest = getTripDestination.getOrElse(state.destination)
+    if (tripDest == currentPathNode || routeDepleted) {
       val currentNodeId = getCurrentNode
       if (currentNodeId != null) {
         finishJourney("reached_destination", currentNodeId)
@@ -316,15 +342,12 @@ class Motorcycle(
                   )
                   onFinishSpontaneous(Some(currentTick + 1))
                 case null =>
-                  logWarn("No next link available")
                   leavingLink()
               }
             case None =>
-              logWarn(s"Node $nodeId not found")
               leavingLink()
           }
         case null =>
-          logWarn("No current node")
           leavingLink()
       }
     }
@@ -365,6 +388,9 @@ class Motorcycle(
     }
   }
 
+  override protected def microMaxAcceleration: Double = 3.5
+  override protected def microMaxDeceleration: Double = 5.0
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
@@ -376,19 +402,51 @@ class Motorcycle(
     if (state.status == Finished) {
       return
     }
+    // Skip GPS if route was pre-loaded by TravelTimeModeChoiceStrategy (avoids double A*)
+    if (state.bestRoute.exists(_.nonEmpty)) {
+      val preRoute    = state.bestRoute.get
+      val origin      = getTripOrigin.getOrElse(state.origin)
+      val destination = getTripDestination.getOrElse(state.destination)
+      state.bestCost = preRoute.size.toDouble
+      state.status = Ready
+      state.updateCurrentPath(None)
+      MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+      report(
+        data = Map(
+          "event_type"    -> "journey_started",
+          "vehicle_id"    -> getEntityId,
+          "motorcycle_id" -> getEntityId,
+          "origin"        -> origin,
+          "destination"   -> destination,
+          "route_length"  -> preRoute.size,
+          "aggressiveness" -> aggressiveness,
+          "tick"          -> currentTick
+        ),
+        label = "journey_started"
+      )
+      if (preRoute.nonEmpty) enterLink()
+      else {
+        finishJourney("already_at_destination", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
+      }
+      return
+    }
     val origin = getTripOrigin.getOrElse(state.origin)
     val destination = getTripDestination.getOrElse(state.destination)
     if (sumoDepartTick.nonEmpty) {
       sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRoute(originId = origin, destinationId = destination) match {
+      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
           state.status = Ready
           state.updateCurrentPath(None)
 
+          MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
           report(
             data = Map(
               "event_type" -> "journey_started",
@@ -407,16 +465,26 @@ class Motorcycle(
             enterLink()
           } else {
             finishJourney("already_at_destination", origin)
+            onFinishPrivateVehicle(origin)
+            onFinishSpontaneous(None)
+            if (!isPersonCentric) selfDestruct()
           }
 
         case None =>
+          GPSMetrics.gpsCannotFindRoute.labels("motorcycle").inc()
           logError(s"Failed to calculate route for motorcycle ${getEntityId}")
-          finishJourney("route_calculation_failed", origin)
+          finishJourney("teleported", destination)
+          onFinishPrivateVehicle(destination, wasTeleported = true)
+          onFinishSpontaneous(None)
+          if (!isPersonCentric) selfDestruct()
       }
     catch {
       case e: Exception =>
         logError(s"Exception during motorcycle route request: ${e.getMessage}", e)
         finishJourney("exception", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
     }
   }
 
@@ -636,8 +704,9 @@ class Motorcycle(
 
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
-      finishJourney("reached_destination", state.destination)
-      onFinishPrivateVehicle(state.destination)
+      val tripDest = getTripDestination.getOrElse(state.destination)
+      finishJourney("reached_destination", tripDest)
+      onFinishPrivateVehicle(tripDest)
       onFinishSpontaneous(None)
       if (!isPersonCentric) selfDestruct()
     } else {
@@ -649,6 +718,14 @@ class Motorcycle(
     */
   private def finishJourney(reason: String, finalNode: String): Unit = {
     val destination = getTripDestination.getOrElse(state.destination)
+    val vehicleType = getClass.getSimpleName
+    MovableMetrics.journeysCompleted.labels(vehicleType).inc()
+    MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)
+    if (destination == finalNode) {
+      MovableMetrics.journeySuccesses.labels(vehicleType).inc()
+    } else {
+      MovableMetrics.journeyFailures.labels(vehicleType, reason).inc()
+    }
     val origin = getTripOrigin.getOrElse(state.origin)
     report(
       data = Map(
@@ -773,11 +850,11 @@ class Motorcycle(
   /** Override onFinish to use PrivateVehicle completion.
     */
   override protected def onFinish(nodeId: String): Unit = {
-    onFinishPrivateVehicle(nodeId)
     finishJourney("onFinish_called", nodeId)
+    onFinishPrivateVehicle(nodeId)
   }
 
-  override def onDestruct(event: DestructEvent): Unit =
+  override def onDestruct(event: DestructEvent): Unit = {
     if (state != null && !sumoTripInfoReported && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))
@@ -785,6 +862,13 @@ class Motorcycle(
       finishJourney("actor_destructed_before_completion", fallbackNode)
       onFinishPrivateVehicle(fallbackNode)
     }
+    // Release heavy state before context.stop(self)
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.microState = None
+    }
+  }
 }
 
 /** Motorcycle companion object.
