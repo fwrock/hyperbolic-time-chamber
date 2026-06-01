@@ -1,0 +1,40 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # ── 1. HTC Simulator: métricas JVM + Pekko + simulação (porta 9101) ───────
+  - job_name: 'htc-simulation'
+    static_configs:
+      - targets: ['127.0.0.1:9101']
+    relabel_configs:
+      - target_label: instance
+        replacement: 'htc-simulator-vm'
+
+  # ── 2. Node Exporter: CPU, memória, disco, rede da VM ─────────────────────
+  - job_name: 'node'
+    static_configs:
+      - targets: ['127.0.0.1:9100']
+
+  # ── 3. cAdvisor: métricas de containers ────────────────────────────────────
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['127.0.0.1:9888']
+    metric_relabel_configs:
+      # Manter apenas containers HTC para reduzir cardinalidade
+      - source_labels: [container_label_container_name]
+        regex: 'htc-.*'
+        action: keep
+      # Normalizar label de nome de container
+      - source_labels: [container_label_container_name]
+        target_label: container
+      # Descartar pause containers
+      - source_labels: [image]
+        regex: '.*pause.*'
+        action: drop
+
+  # ── 4. Prometheus self-monitoring ──────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['127.0.0.1:9090']

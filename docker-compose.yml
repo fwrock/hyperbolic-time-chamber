@@ -146,9 +146,12 @@ services:
       HTC_API_PORT: 9804
       
       # Simulation Configuration
-      HTC_SCENARIO_NAME: interscsimulator_1M
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/interscsimulator_1M/data/city_map.json
+      HTC_SCENARIO_NAME: sp_tiny_validation_all_entities_auto
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_tiny_validation_all_entities_auto/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_tiny_validation_all_entities_auto/data/city_map.json
+      HTC_PERSON_TRUNCATE_SCHEDULE: "true"
+
+      HTC_ACTOR_TRACE_ENABLED: "true"
       
       # Cluster Sharding — buffer for msgs queued while ShardCoordinator allocates.
       # Default Pekko value (1000) is too small when progressive loader bursts
@@ -194,6 +197,8 @@ services:
       HTC_TIME_MANAGER_SYNC_TIMEOUT_MS: 60000
       HTC_TIME_MANAGER_STALE_EVENT_MAX_AGE_MS: 60000
       HTC_TIME_MANAGER_HEALTH_CHECK_INTERVAL: 120
+      HTC_PLR_RETRY_INTERVAL_SECONDS: "10"
+      HTC_PLR_MAX_RETRIES: "360"
       
       # JVM Configuration — same pattern as k8s/simulation-setup.yaml
       JAVA_TOOL_OPTIONS: >-

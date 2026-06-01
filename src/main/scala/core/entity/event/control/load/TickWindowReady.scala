@@ -3,6 +3,9 @@ package core.entity.event.control.load
 
 import core.types.Tick
 
+import org.interscity.htc.core.entity.event.BaseEvent
+import org.interscity.htc.core.entity.event.data.DefaultBaseEventData
+
 /** Sent by ProgressiveLoadDataManager back to GlobalTimeManager to signal that all actors with
   * startTick <= readyUpToTick have been created and initialized.
   *
@@ -14,4 +17,4 @@ import core.types.Tick
 case class TickWindowReady(
   readyUpToTick: Tick,
   actorsCreated: Long
-)
+) extends BaseEvent[DefaultBaseEventData]

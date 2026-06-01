@@ -80,9 +80,17 @@ case class BusInformation(
   label: String,        // Rótulo da linha (ex: "Bus Line 1")
   capacity: Int,        // Capacidade de passageiros
   numberOfPorts: Int,   // Número de portas (afeta dwell time)
-  size: Double          // Comprimento do veículo em metros
+  size: Double,         // Comprimento do veículo em metros
+  speedFactor: Double = 1.0  // Fator de velocidade desejada no modo MICRO [0.5, 1.5]
 )
 ```
+
+> **Atenção (compatibilidade):** O campo `speedFactor` possui valor default `1.0`. Arquivos JSON
+> de configuração existentes **não precisam ser alterados** — o campo é opcional. Quando omitido,
+> o ônibus opera com a `desiredVelocity` padrão (40 km/h no modo MICRO).
+> Para variar o comportamento, inclua `"speedFactor": <valor>` em cada entrada de `buses`.
+> O valor é **limitado internamente** ao intervalo `[0.5, 1.5]`; valores fora desse range são
+> descartados silenciosamente com log de aviso.
 
 #### `SubRoutePair` (chave do mapa de rotas)
 ```scala
@@ -133,7 +141,7 @@ precisem da mesma rota.
 | `RouteWaiting` | Aguardando rotas (legado; hoje o cálculo é síncrono) |
 | `Ready` | Rotas calculadas; pronto para criar ônibus |
 | `Working` | Criando ônibus periodicamente |
-| `WorkingWithOutBus` | Sem ônibus na fila; continua agendado |
+| `WorkingWithOutBus` | Sem ônibus na fila; continua agendado — recebe ticks do TM mas não cria ônibus. Emite log de diagnóstico (sem `logWarn`) a cada ciclo. |
 | `Finish` | Destruído ao fim da simulação |
 
 ---
@@ -287,14 +295,16 @@ O `BusStation` **não trata nenhuma mensagem** de interação (`actInteractWith`
           "label": "Bus Line 1",
           "capacity": 80,
           "numberOfPorts": 2,
-          "size": 12.0
+          "size": 12.0,
+          "speedFactor": 1.0
         },
         {
           "actorId": "htcaid:bus;bus_L1_002",
           "label": "Bus Line 1",
           "capacity": 80,
           "numberOfPorts": 2,
-          "size": 12.0
+          "size": 12.0,
+          "speedFactor": 0.9
         }
       ]
     }
@@ -351,7 +361,7 @@ TM           BusStation       GPSUtil          Bus
 |---|---|
 | Uma linha por `BusStation` | Não suporta múltiplas linhas no mesmo terminal |
 | Ordem por sufixo numérico | Paradas sem sufixo numérico têm ordem não garantida |
-| Falha de ônibus descarta | Ônibus com rota inválida são descartados (não reenfileirados) |
+| Falha de ônibus descarta | Ônibus com rota inválida são descartados (não reenfileirados); emite log com segmentos faltantes para diagnóstico |
 | Sem passageiros no terminal | Passageiros que partem do terminal devem usar um `BusStop` no mesmo nó |
 | Rota calculada uma única vez | Pesos dinâmicos do grafo são capturados apenas na inicialização |
 
@@ -365,7 +375,21 @@ TM           BusStation       GPSUtil          Bus
 - [PERSON_AGENT.md](PERSON_AGENT.md) — Como `Person` usa ônibus
 - [src/main/scala/model/hybrid/actor/BusStation.scala](../src/main/scala/model/hybrid/actor/BusStation.scala)
 - [src/main/scala/model/hybrid/entity/state/BusStationState.scala](../src/main/scala/model/hybrid/entity/state/BusStationState.scala)
+- [src/main/scala/model/hybrid/entity/state/model/BusInformation.scala](../src/main/scala/model/hybrid/entity/state/model/BusInformation.scala)
+
+### Parâmetros de veículo e car-following (MICRO)
+
+> Todos os parâmetros padrão de `MicroBusState` são propagados via `BusInformation.speedFactor`
+> → `BusState.speedFactor`. Ver [BUS_AGENT.md](BUS_AGENT.md) Seção 15 para referências completas.
+
+- **Krajzewicz, D., Erdmann, J., Behrisch, M. & Bieker, L. (2012).** "Recent Development and
+  Applications of SUMO — Simulation of Urban MObility." *International Journal On Advances in
+  Systems and Measurements*, 5(3&4), 128–138. — Defaults do tipo de veículo `bus`: `length=12m`,
+  `accel=1.2 m/s²`, `speedFactor` (distribuição).
+- **ABNT NBR 15570:2011.** *Transporte — Especificações técnicas para fabricação de veículos de
+  características urbanas para transporte coletivo de passageiros.* — Comprimento mínimo de
+  ônibus urbano simples: 12,0 m.
 - **Bureau of Public Roads (BPR). (1964).** *Traffic Assignment Manual.* US Department of
-  Commerce. — Modelo de velocidade utilizado pelo `Bus` nos links viários.
+  Commerce. — Modelo de velocidade utilizado pelo `Bus` nos links viários (MESO).
 - **Vuchic, V. R. (2005).** *Urban Transit: Operations, Planning and Economics.* Wiley. —
   Parâmetros operacionais de ônibus urbano (headway, capacidade, dwell time).

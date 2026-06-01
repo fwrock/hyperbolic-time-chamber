@@ -1,25 +1,23 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData, PostLoadRegistrationCoordinator }
+import core.actor.manager.load.{CreatorLoadData, CreatorPoolLoadData}
 import core.actor.manager.BaseManager
-import core.entity.actor.properties.{ CreatorProperties, Properties }
+import core.entity.actor.properties.{CreatorProperties, Properties}
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
 import core.entity.state.DefaultState
-import core.enumeration.{ LoadingStrategyEnum, ReportTypeEnum }
-import core.util.ActorCreatorUtil.createActor
-import core.util.ManagerConstantsUtil.{ LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME }
-import core.util.{ ActorCreatorUtil, ManagerConstantsUtil }
+import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
+import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME}
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
 import org.apache.pekko.routing.RoundRobinPool
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
+import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-import scala.concurrent.duration.*
 
 class LoadDataManager(
   val timeSingletonManager: ActorRef,
@@ -39,10 +37,8 @@ class LoadDataManager(
   private val loaders: mutable.Map[ActorRef, Boolean] = mutable.Map[ActorRef, Boolean]()
   private var selfProxy: ActorRef = null
   private val creators = mutable.Map[ActorRef, Boolean]()
-  private var postLoadCoordinator: ActorRef = null
   private var postLoadRegistrationClassesConfig: Set[String] = Set.empty
-  private var postLoadTriggerSent: Boolean = false
-  private var postLoadDone: Boolean = false
+  private var eagerLoadReadySent: Boolean = false
 
   private var sourcesToCreate: mutable.Map[String, mutable.Queue[ActorDataSource]] = uninitialized
   private val sourcesInCreation: mutable.Set[String] = mutable.Set[String]()
@@ -52,14 +48,14 @@ class LoadDataManager(
     reporters = poolReporters
 
   override def handleEvent: Receive = {
-    case event: LoadDataEvent             => loadData(event)
-    case event: FinishLoadDataEvent       => handleFinishLoadData(event)
-    case _: LoadNextEvent                 => handleLoadNext()
-    case _: StopSimulationEvent           => handleStopSimulation()
-    case _: PostLoadRegistrationDoneEvent => handlePostLoadRegistrationDone()
+    case event: LoadDataEvent       => loadData(event)
+    case event: FinishLoadDataEvent => handleFinishLoadData(event)
+    case _: LoadNextEvent           => handleLoadNext()
+    case _: StopSimulationEvent     => handleStopSimulation()
   }
 
-  private def loadData(event: LoadDataEvent): Unit = {
+  private def 
+  loadData(event: LoadDataEvent): Unit = {
     val (eagerSources, progressive) = event.actorsDataSources.partition(
       _.loadingStrategy == LoadingStrategyEnum.EAGER
     )
@@ -77,18 +73,13 @@ class LoadDataManager(
       return
     }
 
-    postLoadCoordinator = context.actorOf(
-      PostLoadRegistrationCoordinator.props(getSelfProxy),
-      "post-load-registration-coordinator"
-    )
-
     val totalSources = event.actorsDataSources.size
     creatorRef = createCreatorLoadData(totalSources)
     creatorPoolRef = createCreatorPoolLoadData(totalSources)
 
     if (eagerSources.isEmpty) {
-      logInfo("No EAGER sources. Triggering post-load registration phase.")
-      postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
+      logInfo("No EAGER sources. Emitting eager-load-ready barrier and waiting for post-load trigger.")
+      notifyEagerLoadReady()
       return
     }
 
@@ -151,7 +142,7 @@ class LoadDataManager(
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters,
-            postLoadCoordinator = postLoadCoordinator,
+            postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
           )
         )
@@ -178,7 +169,7 @@ class LoadDataManager(
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
             reporters = reporters,
-            postLoadCoordinator = postLoadCoordinator,
+            postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
           )
         )
@@ -198,42 +189,29 @@ class LoadDataManager(
 
     getSelfProxy ! LoadNextEvent()
 
-    if (isAllDataLoaded && !postLoadTriggerSent) {
-      postLoadTriggerSent = true
+    if (isAllDataLoaded && !eagerLoadReadySent) {
       logInfo(
         s"All EAGER data loaded! ${progressiveSources.size} PROGRESSIVE sources pending. " +
-          s"Triggering post-load registration phase."
+          s"Emitting eager-load-ready barrier."
       )
-      postLoadCoordinator ! TriggerPostLoadRegistrationEvent(actorRef = getSelfProxy)
-    } else if (postLoadTriggerSent) {
-      logWarn(
-        s"TriggerPostLoadRegistration already sent — ignoring duplicate (isAllDataLoaded=$isAllDataLoaded)"
-      )
+      if (progressiveSources.isEmpty) {
+        SpatialShardIdRegistry.clearPositions()
+      }
+      notifyEagerLoadReady()
     }
   }
 
-  private def handlePostLoadRegistrationDone(): Unit = {
-    if (postLoadDone) {
-      logWarn("PostLoadRegistrationDone received more than once — ignoring duplicate.")
-      return
+  private def notifyEagerLoadReady(): Unit =
+    if (!eagerLoadReadySent) {
+      eagerLoadReadySent = true
+      simulationManager ! EagerLoadDataReadyEvent(
+        eagerSourcesLoaded = dataSourceAmount,
+        progressiveSources = progressiveSources
+      )
     }
-    postLoadDone = true
-    logInfo(
-      "PostLoadRegistrationDone received. All registrations complete. Sending FinishLoadDataEvent to SimulationManager."
-    )
-    sendFinishToSimulationManager()
-  }
 
-  private def sendFinishToSimulationManager(): Unit =
-    simulationManager ! FinishLoadDataEvent(
-      actorRef = selfProxy,
-      amount = loadDataTotalAmount,
-      actorClassType = null,
-      creators = mutable.Set(),
-      progressiveSources = progressiveSources,
-      creatorRef = creatorRef,
-      creatorPoolRef = creatorPoolRef
-    )
+  private def postLoadRegistrationManagerProxy: ActorRef =
+    createSingletonProxy(POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME)
 
   private def isAllDataLoaded: Boolean =
     loaders.values.forall(_ == true) && dataSourceAmount == loaders.size && sourcesToCreate.values

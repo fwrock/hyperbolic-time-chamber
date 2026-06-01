@@ -15,7 +15,6 @@ case class TrafficSignalState(
   nodes: List[String],
   phases: List[Phase],
   signalStates: mutable.Map[String, SignalState]
-) extends BaseState(
-      startTick = startTick,
-      scheduleOnTimeManager = true
-    )
+) extends BaseState(startTick = startTick) {
+  override def getStartTick: Tick = startTick + offset
+}

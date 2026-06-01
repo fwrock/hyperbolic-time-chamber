@@ -12,7 +12,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.EntityEnvelopeEvent
-import core.util.{ IdUtil, StringUtil }
+import core.util.{ IdUtil, StringPool, StringUtil }
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
@@ -23,6 +23,7 @@ import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationStrategy, LaneChangeStrategy, MicroSimulationStrategy, NoLaneChangeStrategy }
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
+import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 
 import scala.collection.mutable
 
@@ -61,6 +62,12 @@ class Link(
 ) extends SimulationBaseActor[LinkState](
       properties = properties
     ) {
+
+  override protected def internStateStrings(s: LinkState): LinkState =
+    s.copy(
+      from = StringPool.intern(s.from),
+      to   = StringPool.intern(s.to)
+    )
 
   /** Calculates the current cost of traversing this link. Cost combines distance, congestion, and
     * travel time factors.
@@ -225,6 +232,7 @@ class Link(
     *   Spontaneous event from time manager
     */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId isMicro=${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
     if (!state.isMicroMode) {
       microTickScheduled = false
       onFinishSpontaneous(None)
@@ -417,7 +425,9 @@ class Link(
       velocity = 0.0,
       acceleration = 0.0,
       vehicleLength = data.actorSize,
-      entryTick = entryTick
+      entryTick = entryTick,
+      maxAcceleration = data.maxAcceleration,
+      maxDeceleration = data.maxDeceleration
     )
 
     state.vehiclesByLane.get(assignedLane).foreach {
@@ -517,7 +527,8 @@ class Link(
     vehicleEntryTick.remove(data.actorId)
     vehicleWaitingSeconds.remove(data.actorId)
     if (wasRegistered) {
-      onVehicleArrived(travelTime = 0.0)
+      val travelTicks = if (entryTick >= 0) (currentTick - entryTick).toDouble else 0.0
+      onVehicleArrived(travelTime = travelTicks)
     }
 
     if (state.isMicroMode) {
@@ -559,6 +570,13 @@ class Link(
       return
     }
 
+    // Get vehicle's actual velocity from lane queue before removing it
+    val vehicleVelocity = state.vehiclesByLane.values
+      .flatMap(_.find(_.actorId == data.actorId))
+      .headOption
+      .map(_.velocity)
+      .getOrElse(0.0)
+
     state.vehiclesByLane.foreach {
       case (_, queue) =>
         queue.dequeueAll(_.actorId == data.actorId)
@@ -567,13 +585,18 @@ class Link(
     val accumulatedWaitingTime = vehicleWaitingSeconds.getOrElse(data.actorId, 0.0)
     vehicleWaitingSeconds.remove(data.actorId)
 
+    val elapsedTicks = math.max(1L, currentTick - entryTick + 1)
+    val avgSpeed =
+      if (state.microTimeStep > 0) state.length / (elapsedTicks * state.microTimeStep)
+      else vehicleVelocity
+
     val microLeaveData = MicroLeaveLinkData(
       linkId = getEntityId,
       finalPosition = state.length,
-      finalVelocity = state.currentSpeed,
-      travelTime = math.max(1L, currentTick - entryTick + 1),
+      finalVelocity = vehicleVelocity,
+      travelTime = elapsedTicks,
       distanceTraveled = state.length,
-      averageSpeed = state.currentSpeed,
+      averageSpeed = avgSpeed,
       waitingTimeSeconds = accumulatedWaitingTime
     )
 
@@ -769,23 +792,30 @@ class Link(
       tickProcessingDurationMs = 0L
     }
 
-  /** Records a vehicle insertion into the link. Updates per-tick and cumulative metrics.
+  /** Records a vehicle insertion into the link. Updates per-tick, cumulative and Prometheus metrics.
     */
   private def onVehicleInserted(): Unit = {
     tickInserted += 1
     cumulativeLoaded += 1
+    val mode = if (state.isMicroMode) "MICRO" else "MESO"
+    LinkMetrics.vehiclesEntered.labels(mode).inc()
+    if (state.isMicroMode) LinkMetrics.vehiclesActive.inc()
   }
 
-  /** Records a vehicle arrival (exit from link). Updates per-tick and cumulative metrics.
+  /** Records a vehicle arrival (exit from link). Updates per-tick, cumulative and Prometheus metrics.
     *
     * @param travelTime
-    *   Travel time through the link (seconds)
+    *   Travel time through the link in ticks
     */
   private def onVehicleArrived(travelTime: Double): Unit = {
     tickArrived += 1
     cumulativeArrived += 1
+    val mode = if (state.isMicroMode) "MICRO" else "MESO"
+    LinkMetrics.vehiclesExited.labels(mode).inc()
+    if (state.isMicroMode) LinkMetrics.vehiclesActive.dec()
     if (travelTime > 0) {
       tickTravelTimeSum += travelTime
+      LinkMetrics.travelTimeTicks.labels(mode).observe(travelTime)
     }
   }
 

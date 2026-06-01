@@ -14,6 +14,7 @@ import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.mobility.util.{ CityMapUtil, GPSUtilWithCache }
+import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
 abstract class Movable[T <: MovableState](
   private val properties: Properties
@@ -43,6 +44,7 @@ abstract class Movable[T <: MovableState](
           logError(
             s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}."
           )
+          GPSMetrics.gpsCannotFindRoute.labels(getClass.getSimpleName.toLowerCase).inc()
           state.movableStatus = Finished
           onFinishSpontaneous()
       }

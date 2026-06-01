@@ -93,7 +93,6 @@ class LocalTimeSteppedTimeManager(
     val nextTickValue = localTickOffset + timeStep
 
     if (nextTickValue - initialTick >= simulationDuration) {
-      // Simulation complete
       reportGlobalTimeManager(hasScheduled = false)
     } else {
       localTickOffset = nextTickValue

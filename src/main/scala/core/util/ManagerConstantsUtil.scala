@@ -8,6 +8,7 @@ object ManagerConstantsUtil {
   val POOL_TIME_MANAGER_ACTOR_NAME = "pool-time-manager"
   val SIMULATION_MANAGER_ACTOR_NAME = "simulation-manager"
   val LOAD_MANAGER_ACTOR_NAME = "load-manager"
+  val POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME = "post-load-registration-manager"
   val POOL_CREATOR_LOAD_DATA_ACTOR_NAME = "pool-creator-load-data"
   val REPORT_MANAGER_ACTOR_NAME = "report-manager"
   val POOL_REPORT_DATA_ACTOR_NAME_PREFIX = "pool-report-data-"
@@ -19,4 +20,5 @@ object ManagerConstantsUtil {
   val PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME = "progressive-load-manager"
   val POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME = "pool-progressive-creator-load-data"
   val POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME = "pool-progressive-creator-pool-load-data"
+  val WARM_UP_MANAGER_ACTOR_NAME = "warm-up-manager"
 }

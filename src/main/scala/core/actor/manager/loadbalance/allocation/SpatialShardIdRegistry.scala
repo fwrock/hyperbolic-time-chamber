@@ -109,6 +109,20 @@ object SpatialShardIdRegistry {
     entityClassNames.clear()
   }
 
+  /** Clears only the entity-position cache.
+   *
+   * Positions are required only during entity creation (used by
+   * [[core.actor.manager.load.CreatorLoadData.extractSpatialPosition]] to resolve indirect
+   * references such as a link's `from` node). Once **all** sources — EAGER and PROGRESSIVE —
+   * have finished loading, no further actors will be created, so this map can be safely released
+   * to give the GC a chance to reclaim the memory mid-simulation.
+   *
+   * `shardAssignments` and `entityClassNames` MUST remain populated, since they are consulted by
+   * the routing layer for every message dispatch during the simulation.
+   */
+  def clearPositions(): Unit =
+    entityPositions.clear()
+
   /** Returns the number of entity-to-shard assignments stored. */
   def size: Int = shardAssignments.size()
 

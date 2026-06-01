@@ -6,7 +6,7 @@ import core.types.Tick
 import model.hybrid.entity.state.{ DriverAttributes, MovableState }
 import model.hybrid.entity.state.enumeration.MovableStatusEnum
 import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Parked, Start }
-import model.hybrid.entity.event.data.person.{ ParkVehicleData, StartTripData, TripCompletedData }
+import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData, TripCompletedData }
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.htc.protobuf.core.entity.actor.Identify
@@ -31,6 +31,13 @@ trait PrivateVehicle[T <: MovableState] {
     * Person.
     */
   private var personCentric: Boolean = false
+
+  /** When true, the vehicle will selfDestruct() on the next call to deactivateVehicle().
+    * Set by handlePersonScheduleComplete() when the owning Person completes its daily schedule.
+    * Vehicles that are already Parked self-destruct immediately; active vehicles set this flag
+    * so they clean up after their current trip finishes naturally.
+    */
+  private var destroyAfterNextPark: Boolean = false
 
   /** Whether this vehicle is managed by a Person actor. Determines lifecycle: person-centric →
     * survive between trips; standalone → selfDestruct on finish.
@@ -74,6 +81,8 @@ trait PrivateVehicle[T <: MovableState] {
   protected def getActorShardId: String
   protected def getActorEntityId: String
   protected def scheduleNextTick(nextTick: Option[Tick]): Unit
+  protected def selfDestructVehicle(): Unit
+  protected def isVehicleStateNull: Boolean
   protected def sendVehicleMessage(
     entityId: String,
     shardId: String,
@@ -100,6 +109,12 @@ trait PrivateVehicle[T <: MovableState] {
     setVehicleStatus(Parked)
     logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
   }
+
+  /** Pre-load a route pre-computed by ModeChoiceStrategy so requestRoute() can skip a second A*.
+    *
+    * Subclasses must set the appropriate route field on their state object.
+    */
+  protected def applyPrecomputedRoute(route: List[(String, String)]): Unit
 
   /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
     * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
@@ -143,7 +158,12 @@ trait PrivateVehicle[T <: MovableState] {
 
       applyDriverAttributes(driverAttributes)
 
+      // Pre-load route if TravelTimeModeChoiceStrategy already computed it (avoids double A*)
+      data.precomputedRoute.foreach(applyPrecomputedRoute)
+
       setVehicleStatus(Start)
+
+      // logVehicleWarn(s"[DIAG] ${getActorEntityId} StartTrip registered on TM at tick=${getActorCurrentTick+1}: ${data.origin} -> ${data.destination}")
 
       registerOnTimeManager(getActorCurrentTick + 1)
     } catch {
@@ -182,7 +202,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Report trip completion back to Person.
     */
-  protected def reportTripCompletion(reason: String, finalNode: String): Unit =
+  protected def reportTripCompletion(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit =
     ownerPersonRef.foreach {
       personRef =>
         val travelTime = tripStartTick
@@ -202,7 +222,8 @@ trait PrivateVehicle[T <: MovableState] {
             travelTime = travelTime,
             finalNode = finalNode,
             completionTick = getActorCurrentTick,
-            completionReason = reason
+            completionReason = reason,
+            wasTeleported = wasTeleported
           ),
           eventType = "TripCompleted",
           actorType = LoadBalancedDistributed
@@ -222,10 +243,17 @@ trait PrivateVehicle[T <: MovableState] {
     ownerPersonRef = None
     tripStartTick = None
     tripStartDistance = 0.0
+    // Release the route queue between trips — it will be recalculated on the next StartTrip.
+    // This is the single largest per-vehicle allocation and parking is the right moment to free it.
+    clearRouteOnPark()
 
-    logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
-
-    scheduleNextTick(None)
+    if (destroyAfterNextPark) {
+      logVehicleDebug(s"${getActorEntityId} destructing after final trip (owner schedule complete)")
+      selfDestructVehicle()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
+      scheduleNextTick(None)
+    }
   }
 
   /** Apply driver attributes to vehicle physics parameters.
@@ -241,11 +269,13 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Override onFinish to report trip completion.
     */
-  protected def onFinishPrivateVehicle(nodeId: String): Unit = {
-    val reachedDestination = tripDestination.contains(nodeId)
-    val reason = if (reachedDestination) "reached_destination" else "trip_ended"
+  protected def onFinishPrivateVehicle(nodeId: String, wasTeleported: Boolean = false): Unit = {
+    val reason =
+      if (wasTeleported) "teleported"
+      else if (tripDestination.contains(nodeId)) "reached_destination"
+      else "trip_ended"
 
-    reportTripCompletion(reason, nodeId)
+    reportTripCompletion(reason, nodeId, wasTeleported)
     deactivateVehicle()
   }
 
@@ -279,7 +309,34 @@ trait PrivateVehicle[T <: MovableState] {
       case d: TripCompletedData =>
         logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
         true
+      case d: PersonScheduleCompleteData =>
+        handlePersonScheduleComplete(d)
+        true
       case _ =>
         false
     }
+
+  /** Handle the owner Person completing its daily schedule.
+    *
+    * Parked vehicles self-destruct immediately to free memory.
+    * Active vehicles (mid-trip) set a flag and self-destruct on the next deactivation.
+    * Guards against duplicate signals and ghost-restart edge cases.
+    */
+  private def handlePersonScheduleComplete(data: PersonScheduleCompleteData): Unit = {
+    // Ghost restart: vehicle was rehydrated with null state after prior passivation.
+    // Passivate immediately to avoid a stale entity lingering in the shard.
+    if (isVehicleStateNull) {
+      logVehicleDebug(s"${getActorEntityId} ghost restart on PersonScheduleComplete — re-passivating")
+      selfDestructVehicle()
+      return
+    }
+    if (destroyAfterNextPark) return // already scheduled
+    if (isParked) {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — destructing (Parked)")
+      selfDestructVehicle()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — will destruct after current trip")
+      destroyAfterNextPark = true
+    }
+  }
 }

@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import core.util.StringPool
 import org.interscity.htc.model.hybrid.entity.state.*
 
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
@@ -27,6 +28,9 @@ class Node(
 ) extends SimulationBaseActor[NodeState](
       properties = properties
     ) {
+
+  override protected def internStateStrings(s: NodeState): NodeState =
+    s.copy(links = s.links.map(StringPool.intern))
 
   private val pendingSignals
     : mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =

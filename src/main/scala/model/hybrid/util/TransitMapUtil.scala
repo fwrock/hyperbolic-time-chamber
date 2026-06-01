@@ -86,21 +86,99 @@ object TransitMapUtil {
   /** `true` when at least one stop was loaded successfully. */
   lazy val isAvailable: Boolean = _stops.nonEmpty
 
+  // ── K-d tree for O(log N) spatial queries ──────────────────────────────────
+
+  /** 2-D k-d tree over transit stops, keyed on (latitude, longitude).
+    *
+    * Built once per stop type at first access. Reduces `nearestStops` from O(N)
+    * to O(log N + k) — critical for large PT networks (São Paulo, Toulouse).
+    */
+  private final class KdTree(stops: Array[TransitStop]) {
+
+    private case class KdNode(
+      stop: TransitStop,
+      left: Option[KdNode],
+      right: Option[KdNode]
+    )
+
+    private val root: Option[KdNode] = build(stops, depth = 0)
+
+    private def build(arr: Array[TransitStop], depth: Int): Option[KdNode] =
+      if (arr.isEmpty) None
+      else {
+        val axis   = depth % 2
+        val sorted = if (axis == 0) arr.sortBy(_.latitude) else arr.sortBy(_.longitude)
+        val mid    = sorted.length / 2
+        Some(KdNode(
+          stop  = sorted(mid),
+          left  = build(sorted.slice(0, mid), depth + 1),
+          right = build(sorted.slice(mid + 1, sorted.length), depth + 1)
+        ))
+      }
+
+    def nearest(
+      lat: Double,
+      lon: Double,
+      maxDistM: Double,
+      maxCount: Int
+    ): List[(TransitStop, Double)] = {
+      val results = scala.collection.mutable.ArrayBuffer.empty[(TransitStop, Double)]
+      search(root, lat, lon, maxDistM, results, depth = 0)
+      results.sortInPlaceBy(_._2)
+      results.take(maxCount).toList
+    }
+
+    private def search(
+      nodeOpt: Option[KdNode],
+      lat: Double,
+      lon: Double,
+      maxDistM: Double,
+      results: scala.collection.mutable.ArrayBuffer[(TransitStop, Double)],
+      depth: Int
+    ): Unit = nodeOpt.foreach { node =>
+      val dist = TransitMapUtil.haversineM(lat, lon, node.stop.latitude, node.stop.longitude)
+      if (dist <= maxDistM) results += ((node.stop, dist))
+
+      val axis      = depth % 2
+      val nodeCoord = if (axis == 0) node.stop.latitude  else node.stop.longitude
+      val qCoord    = if (axis == 0) lat                 else lon
+      // Conservative linear distance along the split axis in metres.
+      // For latitude: 1° ≈ 111 320 m.  For longitude: scaled by cos(lat).
+      val axisDistM =
+        if (axis == 0) math.abs(qCoord - nodeCoord) * 111_320.0
+        else           math.abs(qCoord - nodeCoord) * 111_320.0 * math.cos(math.toRadians(lat))
+
+      val (nearBranch, farBranch) =
+        if (qCoord < nodeCoord) (node.left, node.right) else (node.right, node.left)
+
+      search(nearBranch, lat, lon, maxDistM, results, depth + 1)
+      // Prune the far branch when the split plane is farther than our search radius.
+      if (axisDistM <= maxDistM)
+        search(farBranch, lat, lon, maxDistM, results, depth + 1)
+    }
+  }
+
+  /** One k-d tree per stop type, built lazily on first access. */
+  private lazy val kdTreeByType: Map[String, KdTree] =
+    _stops
+      .groupBy(_.stopType)
+      .view
+      .mapValues(ss => new KdTree(ss.toArray))
+      .toMap
+
+  // ── Public spatial query ────────────────────────────────────────────────────
+
   /** Returns stops of `stopType` within `maxDistanceM` metres of `(lat, lon)`, sorted by ascending
     * distance. Returns at most `maxCount` results.
     *
-    * @param lat
-    *   WGS-84 latitude of the query point.
-    * @param lon
-    *   WGS-84 longitude of the query point.
-    * @param stopType
-    *   `"bus"` or `"subway"`.
-    * @param maxDistanceM
-    *   Maximum haversine distance in metres.
-    * @param maxCount
-    *   Upper bound on results returned (default 5).
-    * @return
-    *   List of `(stop, distanceMetres)` pairs, nearest first.
+    * Uses a per-type k-d tree for O(log N + k) performance instead of a full linear scan.
+    *
+    * @param lat          WGS-84 latitude of the query point.
+    * @param lon          WGS-84 longitude of the query point.
+    * @param stopType     `"bus"` or `"subway"`.
+    * @param maxDistanceM Maximum haversine distance in metres.
+    * @param maxCount     Upper bound on results returned (default 5).
+    * @return             List of `(stop, distanceMetres)` pairs, nearest first.
     */
   def nearestStops(
     lat: Double,
@@ -109,12 +187,10 @@ object TransitMapUtil {
     maxDistanceM: Double,
     maxCount: Int = 5
   ): List[(TransitStop, Double)] =
-    _stops
-      .filter(_.stopType == stopType)
-      .map(s => (s, haversineM(lat, lon, s.latitude, s.longitude)))
-      .filter(_._2 <= maxDistanceM)
-      .sortBy(_._2)
-      .take(maxCount)
+    kdTreeByType
+      .get(stopType)
+      .map(_.nearest(lat, lon, maxDistanceM, maxCount))
+      .getOrElse(List.empty)
 
   /** Haversine great-circle distance in metres between two WGS-84 coordinates.
     *

@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.mobility.util
 
 import org.interscity.htc.model.mobility.entity.state.model.NodeGraph
+import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
 import scala.collection.mutable
 import org.interscity.htc.system.database.redis.RedisClient
@@ -39,6 +40,7 @@ object GPSUtilWithCache {
     cache.get(cacheKey) match {
       case Some(cachedData) =>
         cacheHits += 1
+        GPSMetrics.routeSource.labels("preloaded").inc()
         return cachedData.map {
           case (cost, list) => (cost, mutable.Queue(list: _*))
         }
@@ -52,12 +54,14 @@ object GPSUtilWithCache {
     val result: Option[(Double, mutable.Queue[(String, String)])] =
       (originNodeOpt, destinationNodeOpt) match {
         case (Some(originNode), Some(destinationNode)) =>
+          val startNanos = System.nanoTime()
           CityMapUtil.cityMap.aStarEdgeTargetsOptimized(
             originNode,
             destinationNode,
             heuristicFunc
           ) match {
             case Some((cost, path)) =>
+              val elapsed = (System.nanoTime() - startNanos) / 1e9
               val routeQueue = mutable.Queue[(String, String)]()
               path.foreach {
                 case (edgeObject, targetNodeOfEdgeInPath) =>
@@ -66,6 +70,9 @@ object GPSUtilWithCache {
               val dataToCache = Some((cost, routeQueue.toList))
               cache.put(cacheKey, dataToCache)
               cacheStores += 1
+              GPSMetrics.routeCalcDuration.labels("astar_pure").observe(elapsed)
+              GPSMetrics.routeHops.labels("astar_pure").observe(routeQueue.size.toDouble)
+              GPSMetrics.routeSource.labels("gps_calculated").inc()
               Some((cost, routeQueue))
             case None =>
               println(
@@ -77,9 +84,11 @@ object GPSUtilWithCache {
           }
         case (None, _) =>
           println(s"GPSUtilWithCache: Nó de origem $originId não encontrado no mapa.")
+          GPSMetrics.gpsNodeNotFound.labels("origin").inc()
           None
         case (_, None) =>
           println(s"GPSUtilWithCache: Nó de destino $destinationId não encontrado no mapa.")
+          GPSMetrics.gpsNodeNotFound.labels("destination").inc()
           None
       }
     result

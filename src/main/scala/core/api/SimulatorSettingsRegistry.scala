@@ -132,6 +132,26 @@ object SimulatorSettingsRegistry {
       "HTC_MOBILITY_CITY_MAP_FILE",
       "Path to the city map JSON (Node/Link graph). Required for mobility simulations.",
       "city_map.json"
+    ),
+    SettingDef(
+      "htc.mobility.transit-map-file",
+      "HTC_MOBILITY_TRANSIT_MAP_FILE",
+      "Path to the transit map JSON (bus/subway stops). Enables dynamic PT mode choice.",
+      ""
+    ),
+    SettingDef(
+      "htc.person.truncate-schedule-beyond-duration",
+      "HTC_PERSON_TRUNCATE_SCHEDULE",
+      "When true, removes Person activities whose endTime > simulation duration at actor startup. " +
+        "Use when the input data contains multi-day schedules but the simulation runs only 1 day.",
+      "false"
+    ),
+    SettingDef(
+      "htc.actor-trace.enabled",
+      "HTC_ACTOR_TRACE_ENABLED",
+      "Enable [ACTOR-TRACE] INFO logs for major actor lifecycle events (Person, Bus, Car, Subway, etc.). " +
+        "Toggle at runtime via REST API. Remove from source by searching '// #actor-trace'.",
+      "false"
     )
   )
 
