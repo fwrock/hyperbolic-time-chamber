@@ -513,8 +513,6 @@ class Person(
         advanceToNextActivity()
     }
 
-  /** Calculate total route distance by summing link lengths.
-    */
   /** Initiate private vehicle trip.
     */
   private def initiatePrivateVehicleTrip(
