@@ -179,72 +179,62 @@ class Person(
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     applyScheduleTruncationIfNeeded()
-
     if (state == null) {
-      logWarn(
-        s"${getEntityId} actSpontaneous called with null state at tick=$currentTick — unscheduling"
-      )
+      logWarn(s"${getEntityId} actSpontaneous called with null state at tick=$currentTick — unscheduling")
       onFinishSpontaneous(None)
       return
     }
-    if (state.ptWaitingSince.isDefined) {
-      val waited = currentTick - state.ptWaitingSince.get
-      logWarn(
-        s"${getEntityId} PT wait timed out after $waited ticks — skipping to next activity"
-      )
-      state = state.completeTrip(0.0)
-      state = state.copy(ptWaitingSince = None)
-      advanceToNextActivity()
-      return
-    }
+    if (state.ptWaitingSince.isDefined)       { handlePTTimeout(); return }
+    if (state.isScheduleComplete)              { handleScheduleComplete(); return }
+    if (state.currentTripVehicleId.isDefined) { handleActiveVehicleTrip(); return }
+    handleActivityTick()
+  }
 
-    if (state.isScheduleComplete) {
-      logDebug(
-        s"${getEntityId} completed daily schedule (${state.completedTrips} trips, ${state.totalDistanceTraveled}m)"
-      )
-      PersonMetrics.completeSchedule.inc()
-      ActorMetrics.spontaneousEventAfterCompletion.labels(
-        getClass.getSimpleName, "spontaneous"
-      ).inc()
-      tripManager.notifyVehiclesScheduleComplete(state)
-      onFinishSpontaneous(None, destruct = true)
-      return
-    }
+  private def handlePTTimeout(): Unit = {
+    val waited = currentTick - state.ptWaitingSince.get
+    logWarn(s"${getEntityId} PT wait timed out after $waited ticks — skipping to next activity")
+    state = state.completeTrip(0.0)
+    state = state.copy(ptWaitingSince = None)
+    advanceToNextActivity()
+  }
 
-    if (state.currentTripVehicleId.isDefined) {
-      if (state.currentTripVehicleId.contains("walking")) {
-        if (state.pendingTransferLegs.nonEmpty) {
-          // Journey-internal walk — start next pending leg without advancing activity
-          tripManager.continuePendingTransferLeg(state, currentTick) match {
-            case TripStartResult.TripStarted(newState, nextTick) =>
-              state = newState
-              onFinishSpontaneous(nextTick)
-            case TripStartResult.TripSkipped(newState) =>
-              state = newState
-              advanceToNextActivity()
-            case _ =>
-              advanceToNextActivity()
-          }
-        } else {
-          // Activity-level walk (or final egress walk) — advance to next activity.
-          advanceToNextActivity()
+  private def handleScheduleComplete(): Unit = {
+    logDebug(
+      s"${getEntityId} completed daily schedule (${state.completedTrips} trips, ${state.totalDistanceTraveled}m)"
+    )
+    PersonMetrics.completeSchedule.inc()
+    ActorMetrics.spontaneousEventAfterCompletion.labels(getClass.getSimpleName, "spontaneous").inc()
+    tripManager.notifyVehiclesScheduleComplete(state)
+    onFinishSpontaneous(None, destruct = true)
+  }
+
+  private def handleActiveVehicleTrip(): Unit =
+    if (state.currentTripVehicleId.contains("walking")) {
+      if (state.pendingTransferLegs.nonEmpty)
+        // Journey-internal walk — start next pending leg without advancing activity
+        tripManager.continuePendingTransferLeg(state, currentTick) match {
+          case TripStartResult.TripStarted(newState, nextTick) =>
+            state = newState
+            onFinishSpontaneous(nextTick)
+          case TripStartResult.TripSkipped(newState) =>
+            state = newState
+            advanceToNextActivity()
+          case _ =>
+            advanceToNextActivity()
         }
-        return
-      }
-
-      logDebug(
-        s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}"
-      )
+      else
+        // Activity-level walk (or final egress walk) — advance to next activity.
+        advanceToNextActivity()
+    } else {
+      logDebug(s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}")
       onFinishSpontaneous(None)
-      return
     }
 
+  private def handleActivityTick(): Unit =
     state.currentActivity match {
       case Some(activity) =>
         if (activityManager.isActivityEndTime(activity, state, currentTick)) {
-          logDebug(
-            s"${getEntityId} completing activity ${activity.activityType} at ${activity.nodeId}"
-          )
+          logDebug(s"${getEntityId} completing activity ${activity.activityType} at ${activity.nodeId}")
           activityWaitLogCount = 0L
           startNextTrip()
         } else {
@@ -258,11 +248,9 @@ class Person(
             )
           onFinishSpontaneous(Some(endTick))
         }
-
       case None =>
         advanceToNextActivity()
     }
-  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
