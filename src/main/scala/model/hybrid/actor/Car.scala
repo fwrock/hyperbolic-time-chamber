@@ -269,26 +269,20 @@ class Car(
     }
   }
 
-  private def precomputedRoute = state.precomputedRoute.map {
-    items =>
-      items.flatMap {
-        item =>
-          if (
-            item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty
-          ) {
-            Some((item.linkId, item.nodeId))
-          } else None
-      }
-  }
-    .filter(_.nonEmpty)
-    .map(
-      items => mutable.Queue.from(items)
-    )
 
   override def requestRoute(): Unit = {
     if (state.status == Finished) return
 
-    val precomputedPathQueue = precomputedRoute
+    val precomputedPathQueue = state.precomputedRoute
+      .map { items =>
+        items.flatMap { item =>
+          if (item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty) {
+            Some((item.linkId, item.nodeId))
+          } else None
+        }
+      }
+      .filter(_.nonEmpty)
+      .map(items => mutable.Queue.from(items))
 
     if (precomputedPathQueue.nonEmpty) {
       val fixedRoute = precomputedPathQueue.get
@@ -881,9 +875,6 @@ class Car(
 
     sumoTripInfoReported = true
   }
-
-  private def getCurrentLinkLength: Double =
-    if (currentLinkLength > 0.0) currentLinkLength else 1000.0
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
     super.applyDriverAttributes(attrs)
