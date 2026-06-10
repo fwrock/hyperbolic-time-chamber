@@ -167,11 +167,6 @@ class Person(
   // Original methods (to be gradually replaced by handlers)
   // ============================================================================
 
-  // Note: Removed normalizeMode(), recordModeChoiceMetrics(), maybeLogModeChoiceDecision()
-  // Now handled by PersonMetricsReporter and PersonModeChoiceHandler
-
-  // Note: Removed isDynamicModeChoiceEnabled - now in PersonModeChoiceHandler
-
   /** Person should only re-register on the TM after migration if it was actually registered at
     * migration time. During vehicle trips (and PT trips), Person calls onFinishSpontaneous(None)
     * and yields TM ownership to the vehicle. Walking trips keep Person on TM (scheduled to wake at
@@ -345,8 +340,6 @@ class Person(
   private def effectiveEndTick(activity: Activity): Option[Long] =
     scheduleManager.effectiveEndTick(activity, state)
 
-  // Note: Removed plannedStartTickForActivity() - no longer used
-
   private def updateScheduleDelayOnArrival(arrivedActivityIndex: Int): Unit =
     state = scheduleManager.updateScheduleDelayOnArrival(state, arrivedActivityIndex, currentTick)
 
@@ -383,8 +376,6 @@ class Person(
     )
   }
 
-  // Note: Removed reportTripAndLegMetrics() - now handled by PersonMetricsReporter
-
   /** Start trip to next activity.
     */
   private def startNextTrip(): Unit =
@@ -402,9 +393,6 @@ class Person(
         tripManager.notifyVehiclesScheduleComplete(state)
         onFinishSpontaneous(None, destruct = true)
     }
-
-  // Note: Removed currentTripOriginNodeId - logic inlined where needed
-  // Note: Removed initiateTrip() - logic inlined in actSpontaneous multi-leg journey handling
 
   /** Initiate walking trip (mesoscopic).
     *
@@ -551,15 +539,6 @@ class Person(
         advanceToNextActivity()
     }
 
-  /** Handle notification that a PT line will not operate.
-    *
-    * Sent by BusStop when BusStation reports route calculation failure. The trip
-    * is skipped and the person advances to the next scheduled activity normally.
-    */
-  // Note: Removed handlePTLineNotOperational() - now handled by tripManager.handlePTLineNotOperational()
-
-  // Note: Removed handlePTUnloadRequest() - now handled by tripManager.handlePTUnloadRequest()
-
   /** Calculate total route distance by summing link lengths.
     */
   private def calculateRouteDistance(routeQueue: mutable.Queue[(String, String)]): Double = {
@@ -622,10 +601,6 @@ class Person(
         advanceToNextActivity()
     }
 
-  // Note: Removed cancelPTWait() - now handled by PersonPTTripHandler
-
-  // Note: Removed handleTripCompleted() - now handled by tripManager.handleTripCompleted()
-
   /** Advance to next activity in schedule.
     */
   private def advanceToNextActivity(): Unit = {
@@ -672,8 +647,6 @@ class Person(
         onFinishSpontaneous(None, destruct = true)
     }
   }
-
-  // Note: Removed notifyVehiclesScheduleComplete() - now handled by tripManager.notifyVehiclesScheduleComplete()
 }
 
 /** Person companion object.
