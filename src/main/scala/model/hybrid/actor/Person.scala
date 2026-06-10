@@ -7,9 +7,10 @@ import core.types.Tick
 import core.entity.actor.properties.Properties
 import core.util.StringPool
 import model.hybrid.entity.state.{Activity, PersonState}
-import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, TripCompletedData}
+import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, TripCompletedData, PassengerBoardedVehicleData}
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, PTLineNotOperationalData}
 import model.hybrid.entity.event.data.subway.{SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import model.hybrid.entity.state.enumeration.TravelMode
 import model.hybrid.support.person.{PersonScheduleManager, PersonActivityManager, PersonMetricsReporter, PersonModeChoiceHandler, PersonWalkingTripHandler, PersonPTTripHandler, PersonPrivateVehicleTripHandler, PersonTripManager, TripStartResult}
 
@@ -66,6 +67,10 @@ class Person(
       .getOrElse(200)
 
   private var activityWaitLogCount: Long = 0L
+
+  // PT vehicle reference stored when Bus/Subway sends PassengerBoardedVehicleData.
+  // Used by onDestruct to send isArrival=false if Person dies while still on board.
+  private var currentPTVehicleRef: Option[(String, String)] = None  // (vehicleId, vehicleClassType)
 
   // ============================================================================
   // Support Classes (lazy initialization - created only when needed)
@@ -195,6 +200,7 @@ class Person(
     logWarn(s"${getEntityId} PT wait timed out after $waited ticks — skipping to next activity")
     state = state.completeTrip(0.0)
     state = state.copy(ptWaitingSince = None)
+    currentPTVehicleRef = None
     advanceToNextActivity()
   }
 
@@ -260,27 +266,51 @@ class Person(
         val (newState, shouldAdvance) = tripManager.handleTripCompleted(state, d, currentTick)
         state = newState
         if (shouldAdvance) advanceToNextActivity()
-        
+
+      case d: PassengerBoardedVehicleData =>
+        currentPTVehicleRef = Some((d.vehicleId, d.vehicleClassType))
+
       case d: BusRequestUnloadPassengerData =>
         val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, TravelMode.Bus, state, currentTick)
         state = newState
-        if (shouldAdvance) advanceToNextActivity()
-        
+        if (shouldAdvance) {
+          currentPTVehicleRef = None
+          advanceToNextActivity()
+        }
+
       case d: SubwayRequestUnloadPassengerData =>
         val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, TravelMode.Subway, state, currentTick)
         state = newState
-        if (shouldAdvance) advanceToNextActivity()
-        
+        if (shouldAdvance) {
+          currentPTVehicleRef = None
+          advanceToNextActivity()
+        }
+
       case d: PTLineNotOperationalData =>
         val (newState, shouldAdvance) = tripManager.handlePTLineNotOperational(d, state, currentTick)
         state = newState
         if (shouldAdvance) advanceToNextActivity()
-        
+
       case _ =>
         logWarn(s"Person event not handled: ${event.eventType}")
     }
 
 
+
+  /** If Person dies while on board a PT vehicle (Bus or Subway), send isArrival=false so the
+    * vehicle's unload counter completes and it is not stuck waiting forever.
+    *
+    * This covers the race between a DestructEvent and the vehicle's unload request arriving in
+    * Person's mailbox — whichever order they appear, the vehicle always gets a response.
+    */
+  override def onDestruct(event: DestructEvent): Unit =
+    currentPTVehicleRef.foreach { case (vehicleId, vehicleClassType) =>
+      val responseData: AnyRef =
+        if (vehicleClassType == "hybrid.actor.Subway") SubwayUnloadPassengerData(isArrival = false)
+        else BusUnloadPassengerData(isArrival = false)
+      sendMessageTo(vehicleId, vehicleClassType, responseData, "UnloadPassengerResponse")
+      logDebug(s"${getEntityId} sent isArrival=false to $vehicleId on destruct (still on board PT vehicle)")
+    }
 
   /** Start trip to next activity.
     */

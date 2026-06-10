@@ -7,6 +7,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.subway.{
   SubwayRequestUnloadPassengerData,
   SubwayUnloadPassengerData
 }
+import org.interscity.htc.model.hybrid.entity.event.data.person.PassengerBoardedVehicleData
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
 import org.interscity.htc.core.types.Tick
@@ -83,6 +84,14 @@ class SubwayPassengerHandler(
     state.nodeState.isLoaded = true
     for (person <- data.people)
       state.passengers.put(person.id, person)
+
+    for (person <- data.people)
+      sendMessageFn(
+        person.id,
+        person.classType,
+        PassengerBoardedVehicleData(vehicleId = entityIdFn(), vehicleClassType = "hybrid.actor.Subway")
+      )
+
     if (data.people.nonEmpty) {
       SubwayMetrics.passengersBoarded.labels(state.line).inc(data.people.size)
       SubwayMetrics.activePassengers.inc(data.people.size)

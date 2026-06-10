@@ -120,7 +120,10 @@ class Subway(
     event.data match {
       case d: SubwayLoadPassengerData   => passengerHandler.handleLoadPeople(event, d)
       case d: SubwayUnloadPassengerData =>
-        expectedUnloadResponses = passengerHandler.handleUnloadPassenger(event, d, expectedUnloadResponses)
+        if (expectedUnloadResponses > 0)
+          expectedUnloadResponses = passengerHandler.handleUnloadPassenger(event, d, expectedUnloadResponses)
+        else
+          logWarn(s"[SUBWAY] Spurious SubwayUnloadPassengerData from ${event.actorRefId} — ignoring (no unload in progress) id=$getEntityId")
       case _                            => super.actInteractWith(event)
     }
 
