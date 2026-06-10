@@ -11,6 +11,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.bus.{
   BusRequestUnloadPassengerData,
   BusUnloadPassengerData
 }
+import org.interscity.htc.model.hybrid.entity.event.data.person.PassengerBoardedVehicleData
 import org.interscity.htc.model.hybrid.entity.state.BusState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{
   WaitingLoadPassenger,
@@ -60,6 +61,14 @@ class BusStopHandler(
 
       for (person <- data.people) state.people.put(person.id, person)
 
+      for (person <- data.people)
+        sendMessageFn(
+          person.id,
+          person.classType,
+          PassengerBoardedVehicleData(vehicleId = entityIdFn(), vehicleClassType = "hybrid.actor.Bus"),
+          "PassengerBoardedVehicle"
+        )
+
       BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
       BusMetrics.activePassengers.inc(data.people.size)
       ActorTrace.trace(entityId, tick, "bus_passengers_loaded", // #actor-trace
@@ -85,6 +94,7 @@ class BusStopHandler(
     }
 
   def handleUnloadPassenger(data: BusUnloadPassengerData, personId: String, state: BusState): Unit = {
+    if (expectedUnloadResponses == 0) return  // no active unload round; ignore spurious/late response
     state.countUnloadReceived += 1
 
     if (data.isArrival) {
