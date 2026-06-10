@@ -19,6 +19,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import core.actor.trace.ActorTrace
 import core.util.StringPool
+import model.hybrid.support.car.CarJourneyReporter
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -45,29 +46,10 @@ class Car(
     copied
   }
 
-  private var journeyFinishedReported: Boolean = false
-
   private var currentLinkId: Option[String] = None
   private var currentLinkLength: Double = 0.0
   private var linkEntryTick: Option[Tick] = None
   private var mesoExitTick: Option[Tick] = None
-
-  // SUMO TripInfo variables
-  private var sumoDepartTick: Option[Tick] = None
-  private var sumoDepartSpeed: Double = 0.0
-  private var sumoArrivalSpeed: Double = 0.0
-  private var sumoDepartLane: Option[String] = None
-  private var sumoDepartPos: Double = 0.0
-  private var sumoArrivalLane: Option[String] = None
-  private var sumoArrivalPos: Double = 0.0
-  private var sumoWaitingTimeSeconds: Double = 0.0
-  private var sumoWaitingCount: Int = 0
-  private var sumoStopTimeSeconds: Double = 0.0
-  private var sumoIdealTravelTimeSeconds: Double = 0.0
-  private var sumoCurrentMicroTimeStepSeconds: Double = 1.0
-  private var sumoIsHalting: Boolean = false
-  private var sumoRerouteNo: Int = 0
-  private var sumoTripInfoReported: Boolean = false
 
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
@@ -75,6 +57,16 @@ class Car(
   private var signalWaitUntilTick: Option[Tick] = None
   private var signalStateRetryCounter: Int = 0
   private val MaxSignalStateRetries: Int = 100
+
+  private lazy val journeyReporter = new CarJourneyReporter(
+    reportFn        = (data, label) => report(data = data, label = label),
+    entityIdFn      = () => getEntityId,
+    currentTickFn   = () => currentTick,
+    tripOriginFn    = () => getTripOrigin,
+    tripDestFn      = () => getTripDestination,
+    tripStartTickFn = () => getTripStartTick,
+    driverAttrsFn   = () => getDriverAttributes
+  )
 
   private lazy val staleEventLogEvery: Int =
     sys.env
@@ -90,17 +82,6 @@ class Car(
     staleEventLogCount += 1
     if (staleEventLogCount % staleEventLogEvery == 0L)
       logDebug(s"$message [sample=$staleEventLogCount]")
-  }
-
-  private def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
-    val isHaltingNow = speed < 0.1
-    if (isHaltingNow) {
-      if (!sumoIsHalting) {
-        sumoWaitingCount += 1
-      }
-      sumoWaitingTimeSeconds += math.max(0.0, deltaSeconds)
-    }
-    sumoIsHalting = isHaltingNow
   }
 
   override protected def getVehicleStatus: MovableStatusEnum =
@@ -146,26 +127,11 @@ class Car(
     */
   override protected def resetTripState(): Unit = {
     if (state == null) return
-    journeyFinishedReported = false
     currentLinkId = None
     currentLinkLength = 0.0
     linkEntryTick = None
     mesoExitTick = None
-    sumoDepartTick = None
-    sumoDepartSpeed = 0.0
-    sumoArrivalSpeed = 0.0
-    sumoDepartLane = None
-    sumoDepartPos = 0.0
-    sumoArrivalLane = None
-    sumoArrivalPos = 0.0
-    sumoWaitingTimeSeconds = 0.0
-    sumoWaitingCount = 0
-    sumoStopTimeSeconds = 0.0
-    sumoIdealTravelTimeSeconds = 0.0
-    sumoCurrentMicroTimeStepSeconds = 1.0
-    sumoIsHalting = false
-    sumoRerouteNo = 0
-    sumoTripInfoReported = false
+    journeyReporter.reset()
     signalWaitUntilTick = None
     signalStateRetryCounter = 0
     state.bestRoute = None
@@ -294,7 +260,7 @@ class Car(
       state.precomputedRoute = None
 
       GPSMetrics.routeSource.labels("precomputed").inc()
-      reportRouteEvents(fixedRoute, "precomputed")
+      journeyReporter.reportRouteEvents(fixedRoute, "precomputed", state.origin, state.destination, state.bestCost)
 
       if (fixedRoute.nonEmpty) {
         enterLink()
@@ -312,7 +278,7 @@ class Car(
       state.updateCurrentPath(None)
 
       GPSMetrics.routeSource.labels("preloaded").inc()
-      reportRouteEvents(fixedRoute, "preloaded")
+      journeyReporter.reportRouteEvents(fixedRoute, "preloaded", state.origin, state.destination, state.bestCost)
 
       if (fixedRoute.nonEmpty) {
         enterLink()
@@ -323,7 +289,7 @@ class Car(
       return
     }
 
-    if (sumoDepartTick.nonEmpty) sumoRerouteNo += 1
+    if (journeyReporter.sumoDepartTick.nonEmpty) journeyReporter.sumoRerouteNo += 1
 
     val origin = getTripOrigin.getOrElse(state.origin)
     val destination = getTripDestination.getOrElse(state.destination)
@@ -343,7 +309,7 @@ class Car(
           state.status = Ready
           state.updateCurrentPath(None)
 
-          reportRouteEvents(pathQueue, "calculated", cost)
+          journeyReporter.reportRouteEvents(pathQueue, "calculated", state.origin, state.destination, state.bestCost, cost)
 
           if (pathQueue.nonEmpty) {
             enterLink()
@@ -374,37 +340,8 @@ class Car(
     route: mutable.Queue[(String, String)],
     source: String,
     cost: Double = 0.0
-  ): Unit = {
-    MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
-    ActorTrace.trace(getEntityId, currentTick, "car_journey_started", // #actor-trace
-      s"origin=${state.origin} destination=${state.destination} route=${route.size} cost=$cost source=$source") // #actor-trace
-    report(
-      data = Map(
-        "event_type" -> "journey_started",
-        "vehicle_id" -> getEntityId,
-        "car_id" -> getEntityId,
-        "origin" -> state.origin,
-        "destination" -> state.destination,
-        "route_cost" -> (if (cost > 0) cost else state.bestCost),
-        "route_length" -> route.size,
-        "tick" -> currentTick,
-        "route_source" -> source
-      ),
-      label = "journey_started"
-    )
-
-    report(
-      data = Map(
-        "event_type" -> "route_planned",
-        "car_id" -> getEntityId,
-        "route_links" -> route.map(_._1).mkString(","),
-        "route_nodes" -> route.map(_._2).mkString(","),
-        "tick" -> currentTick,
-        "route_source" -> source
-      ),
-      label = "route_planned"
-    )
-  }
+  ): Unit =
+    journeyReporter.reportRouteEvents(route, source, state.origin, state.destination, state.bestCost, cost)
 
   private def requestSignalState(): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
@@ -472,7 +409,7 @@ class Car(
       val waitTicks = math.max(0L, data.nextTick - currentTick)
       if (waitTicks > 0) {
         val waitSeconds = waitTicks.toDouble
-        updateHaltingState(speed = 0.0, deltaSeconds = waitSeconds)
+        journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitSeconds)
       }
 
       report(
@@ -531,17 +468,17 @@ class Car(
 
     state.activateMicroMode(initialMicroState)
     state.status = Moving
-    sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
+    journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     // Ideal travel time: length(m) / speed(m/s)
-    sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
+    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
     // NOTE: Don't track halting state here - Link tracks it during sub-ticks and sends
     // accumulated waitingTimeSeconds in MicroLeaveLinkData
 
-    if (sumoDepartTick.isEmpty) {
-      sumoDepartTick = Some(currentTick)
-      sumoDepartSpeed = initialMicroState.velocity
-      sumoDepartLane = Some(s"${data.linkId}_${initialMicroState.currentLane}")
-      sumoDepartPos = 0.0
+    if (journeyReporter.sumoDepartTick.isEmpty) {
+      journeyReporter.sumoDepartTick = Some(currentTick)
+      journeyReporter.sumoDepartSpeed = initialMicroState.velocity
+      journeyReporter.sumoDepartLane = Some(s"${data.linkId}_${initialMicroState.currentLane}")
+      journeyReporter.sumoDepartPos = 0.0
     }
 
     report(
@@ -593,7 +530,7 @@ class Car(
         )
 
         state.updateMicroState(updatedMicro)
-        sumoArrivalSpeed = data.velocity
+        journeyReporter.sumoArrivalSpeed = data.velocity
     }
   }
 
@@ -613,13 +550,13 @@ class Car(
       .getOrElse(0L)
 
     state.distance += data.distanceTraveled
-    sumoArrivalSpeed = data.finalVelocity
-    sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
-    sumoArrivalPos = data.finalPosition
+    journeyReporter.sumoArrivalSpeed = data.finalVelocity
+    journeyReporter.sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
+    journeyReporter.sumoArrivalPos = data.finalPosition
 
-    sumoWaitingTimeSeconds += data.waitingTimeSeconds
+    journeyReporter.sumoWaitingTimeSeconds += data.waitingTimeSeconds
     if (data.waitingTimeSeconds > 0.0) {
-      sumoWaitingCount += 1
+      journeyReporter.sumoWaitingCount += 1
     }
 
     report(
@@ -667,13 +604,13 @@ class Car(
 
     val time = data.linkLength / speed
     state.status = Moving
-    sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
+    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
 
-    if (sumoDepartTick.isEmpty) {
-      sumoDepartTick = Some(currentTick)
-      sumoDepartSpeed = speed
-      sumoDepartLane = Some(s"${event.actorRefId}_0")
-      sumoDepartPos = 0.0
+    if (journeyReporter.sumoDepartTick.isEmpty) {
+      journeyReporter.sumoDepartTick = Some(currentTick)
+      journeyReporter.sumoDepartSpeed = speed
+      journeyReporter.sumoDepartLane = Some(s"${event.actorRefId}_0")
+      journeyReporter.sumoDepartPos = 0.0
     }
 
     report(
@@ -716,9 +653,9 @@ class Car(
     }
 
     state.distance += data.linkLength
-    sumoArrivalSpeed = 0.0
-    sumoArrivalLane = Some(s"${event.actorRefId}_0")
-    sumoArrivalPos = data.linkLength
+    journeyReporter.sumoArrivalSpeed = 0.0
+    journeyReporter.sumoArrivalLane = Some(s"${event.actorRefId}_0")
+    journeyReporter.sumoArrivalPos = data.linkLength
 
     linkEntryTick.foreach {
       entryTick =>
@@ -731,7 +668,7 @@ class Car(
           0.0
         }
         
-        updateHaltingState(actualSpeed, travelTimeSeconds)
+        journeyReporter.updateHaltingState(actualSpeed, travelTimeSeconds)
     }
 
     currentLinkId = None
@@ -762,105 +699,8 @@ class Car(
     }
   }
 
-  private def finishJourney(reason: String, finalNode: String): Unit = {
-    if (journeyFinishedReported) return
-    journeyFinishedReported = true
-
-    val destination = getTripDestination.getOrElse(state.destination)
-    val vehicleType = getClass.getSimpleName
-    MovableMetrics.journeysCompleted.labels(vehicleType).inc()
-    MovableMetrics.journeyDistanceMeters.labels(vehicleType).observe(state.distance)
-    if (destination == finalNode) {
-      MovableMetrics.journeySuccesses.labels(vehicleType).inc()
-    } else {
-      MovableMetrics.journeyFailures.labels(vehicleType, reason).inc()
-    }
-    val origin = getTripOrigin.getOrElse(state.origin)
-
-    report(
-      data = Map(
-        "event_type" -> "journey_completed",
-        "vehicle_id" -> getEntityId,
-        "car_id" -> getEntityId,
-        "origin" -> origin,
-        "destination" -> destination,
-        "final_node" -> finalNode,
-        "reached_destination" -> (destination == finalNode),
-        "completion_reason" -> reason,
-        "total_distance" -> state.distance,
-        "best_cost" -> state.bestCost,
-        "tick" -> currentTick
-      ),
-      label = "journey_completed"
-    )
-    
-    MovableMetrics.journeyCompletedReason.labels("car", reason, s"${destination == finalNode}").inc()
-
-    report(
-      data = Map(
-        "event_type" -> "vehicle_event_count",
-        "car_id" -> getEntityId,
-        "tick" -> currentTick
-      ),
-      label = "vehicle_event_count"
-    )
-
-    reportSumoTripInfo(reason = reason, finalNode = finalNode)
-
-    state.status = Finished
-  }
-
-  private def reportSumoTripInfo(reason: String, finalNode: String): Unit = {
-    if (sumoTripInfoReported) return
-
-    val destination = getTripDestination.getOrElse(state.destination)
-    val origin = getTripOrigin.getOrElse(state.origin)
-    val plannedDepart = getTripStartTick.getOrElse(state.startTick)
-    val depart = sumoDepartTick.getOrElse(plannedDepart)
-    val arrival = currentTick
-    val durationTicks = math.max(0L, arrival - depart)
-    val durationSeconds = durationTicks.toDouble
-    val routeLength = state.distance
-    val expectedTravelTime = math.max(0.0, sumoIdealTravelTimeSeconds)
-    val timeLoss = math.max(0.0, durationSeconds - expectedTravelTime)
-    val vaporized = reason == "actor_destructed_before_completion"
-    val departDelay = math.max(0L, depart - plannedDepart)
-
-    report(
-      data = Map(
-        "event_type" -> "sumo_tripinfo",
-        "vehicle_id" -> getEntityId,
-        "vehicle_type" -> "car",
-        "vType" -> "car",
-        "origin" -> origin,
-        "destination" -> destination,
-        "final_node" -> finalNode,
-        "completion_reason" -> reason,
-        "depart" -> depart,
-        "arrival" -> arrival,
-        "departLane" -> sumoDepartLane.getOrElse(""),
-        "departPos" -> sumoDepartPos,
-        "arrivalLane" -> sumoArrivalLane.getOrElse(""),
-        "arrivalPos" -> sumoArrivalPos,
-        "duration" -> durationSeconds,
-        "routeLength" -> routeLength,
-        "waitingTime" -> sumoWaitingTimeSeconds,
-        "waitingCount" -> sumoWaitingCount,
-        "stopTime" -> sumoStopTimeSeconds,
-        "timeLoss" -> timeLoss,
-        "departDelay" -> departDelay,
-        "rerouteNo" -> sumoRerouteNo,
-        "arrivalSpeed" -> sumoArrivalSpeed,
-        "departSpeed" -> sumoDepartSpeed,
-        "speedFactor" -> getDriverAttributes.maxSpeedFactor,
-        "vaporized" -> vaporized,
-        "tick" -> currentTick
-      ),
-      label = "sumo_tripinfo"
-    )
-
-    sumoTripInfoReported = true
-  }
+  private def finishJourney(reason: String, finalNode: String): Unit =
+    journeyReporter.finishJourney(reason, finalNode, state)
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
     super.applyDriverAttributes(attrs)
@@ -880,11 +720,11 @@ class Car(
   override def onDestruct(event: DestructEvent): Unit = {
     if (state == null) return
 
-    if (!sumoTripInfoReported && state.status != Finished) {
+    if (state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))
         .getOrElse(state.origin)
-      finishJourney("actor_destructed_before_completion", fallbackNode)
+      journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
     }
     state.movableBestRoute = None
     state.movableCurrentPath = None
