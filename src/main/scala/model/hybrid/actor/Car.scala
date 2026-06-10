@@ -300,10 +300,7 @@ class Car(
         enterLink()
       } else {
         val tripOrigin = getTripOrigin.getOrElse(state.origin)
-        finishJourney("already_at_destination", tripOrigin)
-        onFinishPrivateVehicle(tripOrigin)
-        onFinishSpontaneous(None)
-        if (!isPersonCentric) selfDestruct()
+        finishAndCleanup("already_at_destination", tripOrigin)
       }
       return
     }
@@ -321,10 +318,7 @@ class Car(
         enterLink()
       } else {
         val tripOrigin = getTripOrigin.getOrElse(state.origin)
-        finishJourney("already_at_destination", tripOrigin)
-        onFinishPrivateVehicle(tripOrigin)
-        onFinishSpontaneous(None)
-        if (!isPersonCentric) selfDestruct()
+        finishAndCleanup("already_at_destination", tripOrigin)
       }
       return
     }
@@ -336,10 +330,7 @@ class Car(
 
     if (origin == null || destination == null) {
       val tripOrigin = getTripOrigin.getOrElse(state.origin)
-      finishJourney("null_origin_or_destination", tripOrigin)
-      onFinishPrivateVehicle(tripOrigin)
-      onFinishSpontaneous(None)
-      if (!isPersonCentric) selfDestruct()
+      finishAndCleanup("null_origin_or_destination", tripOrigin)
       return
     }
 
@@ -357,28 +348,26 @@ class Car(
           if (pathQueue.nonEmpty) {
             enterLink()
           } else {
-            finishJourney("already_at_destination", origin)
-            onFinishPrivateVehicle(origin)
-            onFinishSpontaneous(None)
-            if (!isPersonCentric) selfDestruct()
+            finishAndCleanup("already_at_destination", origin)
           }
 
         case None =>
           GPSMetrics.gpsCannotFindRoute.labels("car").inc()
           logError(s"Failed to calculate route from $origin to $destination")
-          finishJourney("teleported", destination)
-          onFinishPrivateVehicle(destination, wasTeleported = true)
-          onFinishSpontaneous(None)
-          if (!isPersonCentric) selfDestruct()
+          finishAndCleanup("teleported", destination, wasTeleported = true)
       }
     catch {
       case e: Exception =>
         logError(s"Exception during route request: ${e.getMessage}", e)
-        finishJourney("exception_during_route_request", origin)
-        onFinishPrivateVehicle(origin)
-        onFinishSpontaneous(None)
-        if (!isPersonCentric) selfDestruct()
+        finishAndCleanup("exception_during_route_request", origin)
     }
+  }
+
+  private def finishAndCleanup(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit = {
+    finishJourney(reason, finalNode)
+    onFinishPrivateVehicle(finalNode, wasTeleported)
+    onFinishSpontaneous(None)
+    if (!isPersonCentric) selfDestruct()
   }
 
   private def reportRouteEvents(
