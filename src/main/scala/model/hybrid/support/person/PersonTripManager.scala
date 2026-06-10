@@ -172,7 +172,7 @@ class PersonTripManager(
             waitTime = Some(0L),
             currentTick = currentTick
           )
-          TripStartResult.TripStarted(updatedState, Some(currentTick + state.vehicleTripTimeoutTicks))
+          TripStartResult.TripStarted(updatedState, None) // vehicle controls timing; Car.onDestruct guarantees TripCompleted on destruction
         } else {
           TripStartResult.TripSkipped(state) // Vehicle missing
         }
@@ -300,7 +300,7 @@ class PersonTripManager(
           val vehicleId = nextLeg.vehicle.map(_.id).getOrElse("unknown")
           TripStartResult.TripStarted(
             markTripStarted(midState, vehicleId, nextLeg.mode, None, Some(0L), currentTick),
-            Some(currentTick + midState.vehicleTripTimeoutTicks)
+            None // vehicle controls timing; Car.onDestruct guarantees TripCompleted on destruction
           )
         } else {
           TripStartResult.TripSkipped(midState)

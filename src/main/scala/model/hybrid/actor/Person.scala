@@ -226,14 +226,10 @@ class Person(
         // Activity-level walk (or final egress walk) — advance to next activity.
         advanceToNextActivity()
     } else {
-      // Spontaneous tick with an active non-walking vehicle = the vehicleTripTimeoutTicks deadline
-      // fired without a TripCompleted arriving (vehicle stuck or dead). Recover by skipping trip.
-      logWarn(
-        s"${getEntityId} vehicle trip '${state.currentTripVehicleId.get}' timed out " +
-          s"after ${state.vehicleTripTimeoutTicks} ticks — skipping to next activity"
-      )
-      state = state.completeTrip(0.0)
-      advanceToNextActivity()
+      // Should not happen: vehicle actors always send TripCompleted before stopping (via
+      // onFinishPrivateVehicle in their onDestruct). Guard kept as a safety net.
+      logDebug(s"${getEntityId} unexpected spontaneous event during vehicle trip with ${state.currentTripVehicleId.get}")
+      onFinishSpontaneous(None)
     }
 
   private def handleActivityTick(): Unit =
