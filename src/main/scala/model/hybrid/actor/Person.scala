@@ -271,7 +271,7 @@ class Person(
           if (activityWaitLogCount % activityWaitLogEvery == 0L)
             logDebug(
               s"${getEntityId} waiting activity[${activityWaitLogCount}] ${activity.activityType} " +
-                s"endTime=${activity.endTime} effectiveEnd=${effectiveEndTick(activity)} " +
+                s"endTime=${activity.endTime} effectiveEnd=${scheduleManager.effectiveEndTick(activity, state)} " +
                 s"currentTick=$currentTick nextTick=$endTick"
             )
           onFinishSpontaneous(Some(endTick))
@@ -307,9 +307,6 @@ class Person(
       case _ =>
         logWarn(s"Person event not handled: ${event.eventType}")
     }
-
-  private def effectiveEndTick(activity: Activity): Option[Long] =
-    scheduleManager.effectiveEndTick(activity, state)
 
   private def markTripStarted(
     vehicleId: String,
@@ -376,7 +373,19 @@ class Person(
       }
     routeResult match {
       case Some((routeCost, routeQueue)) =>
-        val totalDistance = calculateRouteDistance(routeQueue)
+        // Calculate total distance from route
+        val totalDistance = {
+          var distance = 0.0
+          val routeCopy = routeQueue.clone()
+          while (routeCopy.nonEmpty) {
+            val (linkEdgeGraphId, _) = routeCopy.dequeue()
+            CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
+              case Some(edgeLabel) => distance += edgeLabel.length
+              case None => logWarn(s"Edge label $linkEdgeGraphId not found")
+            }
+          }
+          distance
+        }
 
         val walkingSpeed = 1.4 // m/s
 
@@ -506,25 +515,6 @@ class Person(
 
   /** Calculate total route distance by summing link lengths.
     */
-  private def calculateRouteDistance(routeQueue: mutable.Queue[(String, String)]): Double = {
-    var totalDistance = 0.0
-
-    val routeCopy = routeQueue.clone()
-
-    while (routeCopy.nonEmpty) {
-      val (linkEdgeGraphId, _) = routeCopy.dequeue()
-
-      CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-        case Some(edgeLabel) =>
-          totalDistance += edgeLabel.length
-        case None =>
-          logWarn(s"Edge label $linkEdgeGraphId not found")
-      }
-    }
-
-    totalDistance
-  }
-
   /** Initiate private vehicle trip.
     */
   private def initiatePrivateVehicleTrip(
@@ -596,7 +586,7 @@ class Person(
         )
         
         val endTick =
-          effectiveEndTick(activity)
+          scheduleManager.effectiveEndTick(activity, state)
             .map(effectiveTick => Math.max(currentTick + 1, effectiveTick))
             .getOrElse(currentTick + 1)
         onFinishSpontaneous(Some(endTick))
