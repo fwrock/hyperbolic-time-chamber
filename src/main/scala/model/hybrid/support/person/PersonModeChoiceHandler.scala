@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.person
 
 import model.hybrid.entity.state.{ArrivalLogistics, PersonState}
+import model.hybrid.entity.state.enumeration.TravelMode
 import model.hybrid.util.strategy.{ModeChoiceResult, ModeChoiceStrategyRegistry}
 
 /** Handles mode choice decisions for person trips.
@@ -107,7 +108,7 @@ class PersonModeChoiceHandler(
       }
 
       val effective =
-        if (resolved.mode.equalsIgnoreCase("auto")) {
+        if (resolved.travelMode == TravelMode.Auto) {
           logWarn(
             s"$personId strategy=${state.modeChoiceStrategyType} returned unresolved mode='auto'; " +
               s"keeping requested mode='${logistics.mode}'"

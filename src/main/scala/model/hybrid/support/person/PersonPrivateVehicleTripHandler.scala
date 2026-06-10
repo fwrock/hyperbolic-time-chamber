@@ -4,6 +4,7 @@ package model.hybrid.support.person
 import core.types.Tick
 import model.hybrid.entity.state.{ArrivalLogistics, PersonState}
 import model.hybrid.entity.event.data.person.StartTripData
+import model.hybrid.entity.state.enumeration.TravelMode
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 /** Handles private vehicle trips (car, bicycle, motorcycle) for person actors.
@@ -88,8 +89,7 @@ class PersonPrivateVehicleTripHandler(
     destinationNodeId: String,
     state: PersonState
   ): PersonState = {
-    val privateVehicleModes = Set("car", "bicycle", "motorcycle")
-    if (privateVehicleModes.contains(mode) && destinationNodeId.nonEmpty) {
+    if (TravelMode.privateVehicle.contains(TravelMode.fromString(mode)) && destinationNodeId.nonEmpty) {
       state.copy(
         vehicleCurrentNode = state.vehicleCurrentNode + (mode -> destinationNodeId)
       )

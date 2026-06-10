@@ -4,6 +4,7 @@ package model.hybrid.entity.state
 import core.entity.state.BaseState
 import core.types.Tick
 import core.util.StringPool
+import enumeration.TravelMode
 import org.htc.protobuf.core.entity.actor.Identify
 
 /** Weights for the utility function used in dynamic mode choice.
@@ -347,6 +348,9 @@ case class ArrivalLogistics(
   fixedMode: Boolean = false,  // when true, skips dynamic mode choice even if the person flag is on
   precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
 ) {
+  /** Type-safe view of [[mode]]. Use this for match expressions instead of raw strings. */
+  def travelMode: TravelMode = TravelMode.fromString(mode)
+
   /** Returns a copy with high-duplication string fields replaced by shared pool instances. */
   def interned: ArrivalLogistics = copy(
     mode                  = StringPool.intern(mode),
