@@ -147,12 +147,6 @@ case class ModeChoiceWeights(
   *   [[org.interscity.htc.model.hybrid.entity.event.data.bus.PTLineNotOperationalData]], so this
   *   timeout only fires for lines that are operational but whose bus never reaches the stop within
   *   the simulation window.
-  * @param vehicleTripTimeoutTicks
-  *   Maximum number of ticks to wait for a private vehicle (car / bicycle / motorcycle) to deliver
-  *   a [[org.interscity.htc.model.hybrid.entity.event.data.person.TripCompletedData]] message
-  *   before giving up and advancing to the next activity. If the vehicle actor dies or gets stuck,
-  *   this safety valve re-inserts the person into the simulation. Defaults to 7200 ticks (two
-  *   simulated hours at 1 tick = 1 second).
   * @param enableDynamicModeChoice
   *   When `true`, the person re-evaluates the transport mode at each trip departure using a
   *   utility-based model instead of following the static logistics in the activity schedule.
@@ -197,7 +191,6 @@ case class PersonState(
   ptLine: Option[String] = None,
   ptWaitingSince: Option[Long] = None,
   ptWaitTimeoutTicks: Long = 86400L,
-  vehicleTripTimeoutTicks: Long = 7200L,
   enableDynamicModeChoice: Boolean = false,
   modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
   modeChoiceStrategyType: String = "utility",

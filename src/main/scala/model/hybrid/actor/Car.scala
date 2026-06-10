@@ -459,6 +459,7 @@ class Car(
         .orElse(state.movableCurrentPath.map(_._2))
         .getOrElse(state.origin)
       journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
+      onFinishPrivateVehicle(fallbackNode)   // notify Person — mirrors Bicycle/Motorcycle
     }
     state.movableBestRoute = None
     state.movableCurrentPath = None
