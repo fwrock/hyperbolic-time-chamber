@@ -6,18 +6,17 @@ import core.types.Tick
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
+
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, MovableStatusEnum, SimulationModeEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
-import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
-import org.interscity.htc.model.hybrid.util.{CityMapUtil, GPSUtil}
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
-import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes, MicroCarState}
+
+import org.interscity.htc.model.hybrid.util.GPSUtil
+import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.event.data.*
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
-import core.actor.trace.ActorTrace
+import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
+
 import core.util.StringPool
 import model.hybrid.support.car.{CarJourneyReporter, CarLinkHandler, CarMicroHandler, CarSignalHandler}
 
@@ -392,13 +391,6 @@ class Car(
     onFinishSpontaneous(None)
     if (!isPersonCentric) selfDestruct()
   }
-
-  private def reportRouteEvents(
-    route: mutable.Queue[(String, String)],
-    source: String,
-    cost: Double = 0.0
-  ): Unit =
-    journeyReporter.reportRouteEvents(route, source, state.origin, state.destination, state.bestCost, cost)
 
   private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
