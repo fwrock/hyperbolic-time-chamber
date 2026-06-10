@@ -332,10 +332,26 @@ class Person(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: TripCompletedData                => handleTripCompleted(event, d)
-      case d: BusRequestUnloadPassengerData    => handlePTUnloadRequest(event, d.nodeId, "bus")
-      case d: SubwayRequestUnloadPassengerData => handlePTUnloadRequest(event, d.nodeId, "subway")
-      case d: PTLineNotOperationalData         => handlePTLineNotOperational(d)
+      case d: TripCompletedData =>
+        val (newState, shouldAdvance) = tripManager.handleTripCompleted(state, d, currentTick)
+        state = newState
+        if (shouldAdvance) advanceToNextActivity()
+        
+      case d: BusRequestUnloadPassengerData =>
+        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, "bus", state, currentTick)
+        state = newState
+        if (shouldAdvance) advanceToNextActivity()
+        
+      case d: SubwayRequestUnloadPassengerData =>
+        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, "subway", state, currentTick)
+        state = newState
+        if (shouldAdvance) advanceToNextActivity()
+        
+      case d: PTLineNotOperationalData =>
+        val (newState, shouldAdvance) = tripManager.handlePTLineNotOperational(d, state, currentTick)
+        state = newState
+        if (shouldAdvance) advanceToNextActivity()
+        
       case _ =>
         logWarn(s"Person event not handled: ${event.eventType}")
     }
@@ -673,116 +689,9 @@ class Person(
     * Sent by BusStop when BusStation reports route calculation failure. The trip
     * is skipped and the person advances to the next scheduled activity normally.
     */
-  private def handlePTLineNotOperational(data: PTLineNotOperationalData): Unit = {
-    logWarn(s"${getEntityId} PT line ${data.line} not operational — skipping trip")
-    cancelPTWait()
-    val currentActivityType = state.currentActivity.map(_.activityType).getOrElse("unknown")
-    val currentMode = state.currentTripMode.getOrElse("pt")
-    val travelTime = state.currentTripStartTick.map(start => currentTick - start).getOrElse(0L)
-    reportTripAndLegMetrics(
-      mode = currentMode,
-      arrivalTick = currentTick,
-      travelTime = travelTime,
-      distance = None,
-      waitTime = state.currentTripWaitTime
-    )
-    PersonMetrics.personTripEnd.labels(currentActivityType, currentMode).inc()
-    PersonMetrics.personCompleteTripReason.labels(currentActivityType, currentMode, "pt_line_not_operational").inc()
-    state = state.completeTrip(0.0)
-    advanceToNextActivity()
-  }
+  // Note: Removed handlePTLineNotOperational() - now handled by tripManager.handlePTLineNotOperational()
 
-  /** Handle unload request from PT vehicle (Bus or Subway).
-    *
-    * The vehicle asks "are you getting off at this node?" Person checks if the node matches its
-    * alighting destination and responds accordingly. If alighting, Person completes the trip and
-    * re-registers with the TimeManager.
-    *
-    * @param event
-    *   the interaction event from the vehicle
-    * @param nodeId
-    *   the node ID the vehicle is currently at
-    * @param ptType
-    *   "bus" or "subway" for logging and response routing
-    */
-  private def handlePTUnloadRequest(
-    event: ActorInteractionEvent,
-    nodeId: String,
-    ptType: String
-  ): Unit = {
-    val isArrival = state.ptAlightingNodeId.contains(nodeId)
-
-    val responseData = ptType match {
-      case "subway" => SubwayUnloadPassengerData(isArrival = isArrival)
-      case _        => BusUnloadPassengerData(isArrival = isArrival)
-    }
-
-    sendMessageTo(
-      entityId = event.actorRefId,
-      shardId = event.actorClassType,
-      data = responseData,
-      eventType = "UnloadPassengerResponse"
-    )
-
-    if (isArrival) {
-      val travelTime = state.currentTripStartTick
-        .map(
-          start => currentTick - start
-        )
-        .getOrElse(0L)
-      val currentMode = state.currentTripMode.getOrElse(ptType)
-
-      logDebug(s"${getEntityId} alighting from $ptType at node $nodeId after ${travelTime}s")
-
-      reportTripAndLegMetrics(
-        mode = currentMode,
-        arrivalTick = currentTick,
-        travelTime = travelTime,
-        distance = None,
-        waitTime = state.currentTripWaitTime
-      )
-
-      report(
-        data = Map(
-          "event_type" -> "pt_trip_completed",
-          "person_id" -> getEntityId,
-          "pt_type" -> ptType,
-          "vehicle_id" -> event.actorRefId,
-          "line" -> state.ptLine.getOrElse("unknown"),
-          "alighting_node" -> nodeId,
-          "travel_time" -> travelTime,
-          "tick" -> currentTick
-        ),
-        label = "person_pt_trip_completed"
-      )
-
-      state = state.completeTrip(0.0)
-      // Track physical position at the alighting stop for correct routing of any subsequent leg.
-      state = state.copy(currentPhysicalNodeId = Some(nodeId))
-      // If RAPTOR produced a multi-leg route, execute the next leg directly instead of
-      // advancing to the next scheduled activity.
-      if (state.pendingTransferLegs.nonEmpty) {
-        val nextLeg  = state.pendingTransferLegs.head
-        val restLegs = state.pendingTransferLegs.tail
-        state = state.copy(pendingTransferLegs = restLegs)
-        logDebug(
-          s"${getEntityId} transfer: mode=${nextLeg.mode} dest=${nextLeg.alightingNodeId.getOrElse("?")} (${restLegs.size} legs remaining)"
-        )
-        val destNodeId = nextLeg.alightingNodeId.getOrElse(
-          state.nextActivity.map(_.nodeId).getOrElse("")
-        )
-        state.currentActivity.foreach { currentAct =>
-          initiateTrip(currentAct.copy(nodeId = destNodeId), nextLeg)
-        }
-      } else {
-        advanceToNextActivity()
-      }
-    } else {
-      logDebug(
-        s"${getEntityId} staying on $ptType at node $nodeId (alighting at ${state.ptAlightingNodeId.getOrElse("?")})"
-      )
-    }
-  }
+  // Note: Removed handlePTUnloadRequest() - now handled by tripManager.handlePTUnloadRequest()
 
   /** Calculate total route distance by summing link lengths.
     */
@@ -859,68 +768,7 @@ class Person(
       onFinishSpontaneous(None) // removes the timeout tick from TM scheduledActors
     }
 
-  /** Handle trip completion from vehicle.
-    */
-  private def handleTripCompleted(event: ActorInteractionEvent, data: TripCompletedData): Unit = {
-    if (state.currentTripVehicleId.isEmpty) {
-      logWarn(
-        s"${getEntityId} received TripCompleted from ${data.vehicleId} while not on any trip — likely stale after PT timeout, ignoring"
-      )
-      return
-    }
-
-    cancelPTWait()
-
-    logDebug(
-      s"${getEntityId} received trip completion from ${data.vehicleId}: " +
-        s"${data.distanceTraveled}m in ${data.travelTime} ticks, reason: ${data.completionReason}"
-    )
-
-    val currentActivityType = state.currentActivity.map(_.activityType).getOrElse("unknown")
-    val currentMode = state.currentTripMode.getOrElse("unknown")
-
-    PersonMetrics.personTripEnd.labels(currentActivityType, currentMode).inc()
-    PersonMetrics.personCompleteTripReason.labels(currentActivityType, currentMode, data.completionReason).inc()
-
-    if (data.wasTeleported)
-      GPSMetrics.teleportCount.labels(currentMode).inc()
-
-    reportTripAndLegMetrics(
-      mode = currentMode,
-      arrivalTick = currentTick,
-      travelTime = data.travelTime,
-      distance = Some(data.distanceTraveled),
-      waitTime = state.currentTripWaitTime
-    )
-
-    // Capture destination BEFORE advancing activity index, then update vehicle location.
-    // A private vehicle travels with the person, so it ends up at the destination node.
-    // This enables mode choice to exclude a car that was left at home when the person is at work.
-    val privateVehicleModes = Set("car", "bicycle", "motorcycle")
-    val destinationNodeId    = state.nextActivity.map(_.nodeId).getOrElse("")
-    state = state.completeTrip(data.distanceTraveled)
-    if (privateVehicleModes.contains(currentMode) && destinationNodeId.nonEmpty)
-      state = state.copy(
-        vehicleCurrentNode = state.vehicleCurrentNode + (currentMode -> destinationNodeId)
-      )
-
-    report(
-      data = Map(
-        "event_type" -> "trip_completed",
-        "person_id" -> getEntityId,
-        "vehicle_id" -> data.vehicleId,
-        "distance_traveled" -> data.distanceTraveled,
-        "travel_time" -> data.travelTime,
-        "completion_reason" -> data.completionReason,
-        "total_distance" -> state.totalDistanceTraveled,
-        "completed_trips" -> state.completedTrips,
-        "tick" -> currentTick
-      ),
-      label = "person_trip_completed"
-    )
-
-    advanceToNextActivity()
-  }
+  // Note: Removed handleTripCompleted() - now handled by tripManager.handleTripCompleted()
 
   /** Advance to next activity in schedule.
     */
