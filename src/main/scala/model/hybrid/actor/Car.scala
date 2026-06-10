@@ -19,7 +19,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import core.actor.trace.ActorTrace
 import core.util.StringPool
-import model.hybrid.support.car.CarJourneyReporter
+import model.hybrid.support.car.{CarJourneyReporter, CarMicroHandler}
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -66,6 +66,28 @@ class Car(
     tripDestFn      = () => getTripDestination,
     tripStartTickFn = () => getTripStartTick,
     driverAttrsFn   = () => getDriverAttributes
+  )
+
+  private lazy val microHandler = new CarMicroHandler(
+    reportFn              = (data, label) => report(data = data, label = label),
+    entityIdFn            = () => getEntityId,
+    currentTickFn         = () => currentTick,
+    simulationEndTickFn   = () => simulationEndTick,
+    extendSimulationFn    = () => model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd,
+    journeyReporter       = journeyReporter,
+    requestSignalStateFn  = () => requestSignalState(),
+    onFinishSpontaneousFn = nextTick => onFinishSpontaneous(nextTick),
+    finishAndCleanupFn    = (reason, node) => finishAndCleanup(reason, node),
+    onFinishPrivateVehicleFn = node => onFinishPrivateVehicle(node),
+    selfDestructFn        = () => selfDestruct(),
+    finishJourneyFn       = (reason, node) => finishJourney(reason, node),
+    logWarnFn             = msg => logWarn(msg),
+    logDebugFn            = msg => logDebug(msg),
+    setCurrentLinkIdFn    = id => currentLinkId = id,
+    setCurrentLinkLengthFn = len => currentLinkLength = len,
+    setLinkEntryTickFn    = tick => linkEntryTick = tick,
+    getLinkEntryTickFn    = () => linkEntryTick,
+    getCurrentLinkIdFn    = () => currentLinkId
   )
 
   private lazy val staleEventLogEvery: Int =
@@ -447,144 +469,14 @@ class Car(
     }
   }
 
-  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
-    currentLinkId = Some(data.linkId)
-    currentLinkLength = data.linkLength
-    linkEntryTick = Some(currentTick)
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit =
+    microHandler.handleMicroEnterLink(data, state)
 
-    // speedLimit from LinkState is stored in km/h; Link micro physics converts with /3.6
-    val speedLimitMs = data.speedLimit / 3.6
+  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
+    microHandler.handleMicroUpdate(data, state)
 
-    val initialMicroState = MicroCarState(
-      positionInLink = 0.0,
-      velocity = state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.8),
-      acceleration = 0.0,
-      currentLane = data.assignedLane,
-      leaderVehicle = None,
-      gapToLeader = data.linkLength,
-      leaderVelocity = speedLimitMs,
-      desiredVelocity = speedLimitMs
-    )
-
-    state.activateMicroMode(initialMicroState)
-    state.status = Moving
-    journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
-    // Ideal travel time: length(m) / speed(m/s)
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
-    // NOTE: Don't track halting state here - Link tracks it during sub-ticks and sends
-    // accumulated waitingTimeSeconds in MicroLeaveLinkData
-
-    if (journeyReporter.sumoDepartTick.isEmpty) {
-      journeyReporter.sumoDepartTick = Some(currentTick)
-      journeyReporter.sumoDepartSpeed = initialMicroState.velocity
-      journeyReporter.sumoDepartLane = Some(s"${data.linkId}_${initialMicroState.currentLane}")
-      journeyReporter.sumoDepartPos = 0.0
-    }
-
-    report(
-      data = Map(
-        "event_type" -> "enter_micro_link",
-        "car_id" -> getEntityId,
-        "link_id" -> data.linkId,
-        "mode" -> "MICRO",
-        "lane" -> data.assignedLane,
-        "link_length" -> data.linkLength,
-        "speed_limit" -> data.speedLimit,
-        "initial_velocity" -> initialMicroState.velocity,
-        "micro_time_step" -> data.microTimeStep,
-        "ticks_per_global_tick" -> data.ticksPerGlobalTick,
-        "tick" -> currentTick
-      ),
-      label = "enter_micro_link"
-    )
-
-    onFinishSpontaneous(None)
-  }
-
-  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit = {
-    if (
-      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
-      && currentTick >= simulationEndTick && state.status != Finished
-    ) {
-      logDebug(
-        s"Car $getEntityId exceeded simulation end time ($simulationEndTick) at tick $currentTick in MICRO mode, force-finishing."
-      )
-      val finalNode = Option(getCurrentNode).getOrElse(state.destination)
-      finishJourney("simulation_time_exceeded", finalNode)
-      onFinishPrivateVehicle(finalNode)
-      onFinishSpontaneous(None)
-      selfDestruct()
-      return
-    }
-
-    state.microState.foreach {
-      micro =>
-        val updatedMicro = micro.copy(
-          positionInLink = data.position,
-          velocity = data.velocity,
-          acceleration = data.acceleration,
-          currentLane = data.currentLane,
-          leaderVehicle = data.leaderVehicle,
-          gapToLeader = data.gapToLeader,
-          leaderVelocity = data.leaderVelocity
-        )
-
-        state.updateMicroState(updatedMicro)
-        journeyReporter.sumoArrivalSpeed = data.velocity
-    }
-  }
-
-  private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit = {
-    if (!currentLinkId.contains(data.linkId)) {
-      logWarn(
-        s"$getEntityId: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
-          s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded."
-      )
-      return
-    }
-
-    val travelTime = linkEntryTick
-      .map(
-        entryTick => currentTick - entryTick
-      )
-      .getOrElse(0L)
-
-    state.distance += data.distanceTraveled
-    journeyReporter.sumoArrivalSpeed = data.finalVelocity
-    journeyReporter.sumoArrivalLane = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
-    journeyReporter.sumoArrivalPos = data.finalPosition
-
-    journeyReporter.sumoWaitingTimeSeconds += data.waitingTimeSeconds
-    if (data.waitingTimeSeconds > 0.0) {
-      journeyReporter.sumoWaitingCount += 1
-    }
-
-    report(
-      data = Map(
-        "event_type" -> "leave_micro_link",
-        "car_id" -> getEntityId,
-        "link_id" -> data.linkId,
-        "mode" -> "MICRO",
-        "final_position" -> data.finalPosition,
-        "final_velocity" -> data.finalVelocity,
-        "travel_time_ticks" -> travelTime,
-        "travel_time_seconds" -> data.travelTime,
-        "distance_traveled" -> data.distanceTraveled,
-        "average_speed" -> data.averageSpeed,
-        "waiting_time_seconds" -> data.waitingTimeSeconds,
-        "total_distance" -> state.distance,
-        "tick" -> currentTick
-      ),
-      label = "leave_micro_link"
-    )
-
-    state.deactivateMicroMode()
-    currentLinkId = None
-    currentLinkLength = 0.0
-    linkEntryTick = None
-
-    requestSignalState()
-  }
+  private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit =
+    microHandler.handleMicroLeaveLink(data, state)
 
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
