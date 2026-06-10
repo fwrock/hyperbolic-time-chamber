@@ -60,18 +60,6 @@ class Person(
     try SimulationUtil.loadSimulationConfig().modeChoiceIncludedModes.map(_.map(_.toLowerCase).toSet)
     catch { case _: Exception => None }
 
-  // Sample mode-choice logs to avoid high-volume output in large scenarios.
-  private lazy val modeChoiceLogEvery: Int =
-    sys.env
-      .get("HTC_PERSON_MODE_CHOICE_LOG_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(
-        scala.util.Try(config.getInt("htc.person.mode-choice-log-every")).toOption
-      )
-      .getOrElse(1000)
-
-  private var modeChoiceDecisionCount: Long = 0L
-
   private lazy val activityWaitLogEvery: Int =
     sys.env
       .get("HTC_PERSON_ACTIVITY_WAIT_LOG_EVERY")
@@ -160,9 +148,6 @@ class Person(
     logError = logError
   )
 
-  // Note: tripManager.setModeChoiceLogEvery(modeChoiceLogEvery) will be called
-  // when tripManager is first accessed, configured via PersonModeChoiceHandler
-
   // ============================================================================
   // Original methods (to be gradually replaced by handlers)
   // ============================================================================
@@ -232,32 +217,31 @@ class Person(
     if (state.currentTripVehicleId.isDefined) {
       if (state.currentTripVehicleId.contains("walking")) {
         if (state.pendingTransferLegs.nonEmpty) {
-          // Journey-internal walk (access or transfer leg) — start next pending leg without
-          // advancing the activity index.
-          val walkDest = state.currentTripDestinationNodeId
-          state = state.completeTrip(0.0)
-          state = state.copy(currentPhysicalNodeId = walkDest)
-          val nextLeg  = state.pendingTransferLegs.head
-          val restLegs = state.pendingTransferLegs.tail
-          state = state.copy(pendingTransferLegs = restLegs)
+          // Journey-internal walk — start next pending leg without advancing activity
+          val nextLeg = state.pendingTransferLegs.head
           val destNodeId = nextLeg.alightingNodeId.getOrElse(
             state.nextActivity.map(_.nodeId).getOrElse("")
           )
+          state = state.completeTrip(0.0).copy(
+            currentPhysicalNodeId = state.currentTripDestinationNodeId,
+            pendingTransferLegs = state.pendingTransferLegs.tail
+          )
           
-          // Start next leg - inline trip initiation logic
-          state.currentActivity.foreach { act =>
-            val origin = state.currentPhysicalNodeId.orElse(Some(act.nodeId)).getOrElse("")
-            nextLeg.mode.toLowerCase match {
-              case "walk" =>
-                initiateWalkingTrip(origin, destNodeId, nextLeg.precomputedRoute)
-              case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-                initiatePTTrip(origin, destNodeId, nextLeg)
-              case "car" | "bicycle" | "motorcycle" =>
-                initiatePrivateVehicleTrip(origin, destNodeId, nextLeg)
-              case _ =>
-                logWarn(s"${getEntityId} unsupported mode ${nextLeg.mode} in multi-leg journey")
-                advanceToNextActivity()
-            }
+          // Start next leg
+          val origin = state.currentPhysicalNodeId
+            .orElse(state.currentActivity.map(_.nodeId))
+            .getOrElse("")
+            
+          nextLeg.mode.toLowerCase match {
+            case "walk" =>
+              initiateWalkingTrip(origin, destNodeId, nextLeg.precomputedRoute)
+            case "transit" | "bus" | "subway" | "pt" | "mixed" =>
+              initiatePTTrip(origin, destNodeId, nextLeg)
+            case "car" | "bicycle" | "motorcycle" =>
+              initiatePrivateVehicleTrip(origin, destNodeId, nextLeg)
+            case _ =>
+              logWarn(s"${getEntityId} unsupported mode ${nextLeg.mode} in multi-leg journey")
+              advanceToNextActivity()
           }
         } else {
           // Activity-level walk (or final egress walk) — advance to next activity.
@@ -275,14 +259,14 @@ class Person(
 
     state.currentActivity match {
       case Some(activity) =>
-        if (isActivityEndTime(activity)) {
+        if (activityManager.isActivityEndTime(activity, state, currentTick)) {
           logDebug(
             s"${getEntityId} completing activity ${activity.activityType} at ${activity.nodeId}"
           )
           activityWaitLogCount = 0L
           startNextTrip()
         } else {
-          val endTick = currentTick + getTickUntilActivityEnd(activity)
+          val endTick = currentTick + activityManager.getTickUntilActivityEnd(activity, state, currentTick)
           activityWaitLogCount += 1
           if (activityWaitLogCount % activityWaitLogEvery == 0L)
             logDebug(
@@ -324,27 +308,8 @@ class Person(
         logWarn(s"Person event not handled: ${event.eventType}")
     }
 
-  /** Check if current activity's end time has been reached.
-    */
-  private def isActivityEndTime(activity: Activity): Boolean =
-    activityManager.isActivityEndTime(activity, state, currentTick)
-
-  /** Calculate ticks until activity end time.
-    */
-  private def getTickUntilActivityEnd(activity: Activity): Long =
-    activityManager.getTickUntilActivityEnd(activity, state, currentTick)
-
-  private def parseTick(value: String): Option[Long] =
-    scheduleManager.parseTick(value)
-
   private def effectiveEndTick(activity: Activity): Option[Long] =
     scheduleManager.effectiveEndTick(activity, state)
-
-  private def updateScheduleDelayOnArrival(arrivedActivityIndex: Int): Unit =
-    state = scheduleManager.updateScheduleDelayOnArrival(state, arrivedActivityIndex, currentTick)
-
-  private def nextTripId: String =
-    s"${getEntityId}:trip:${state.completedTrips + 1}"
 
   private def markTripStarted(
     vehicleId: String,
@@ -352,7 +317,7 @@ class Person(
     expectedDistance: Option[Double] = None,
     waitTime: Option[Long] = Some(0L)
   ): Unit = {
-    val tripId = nextTripId
+    val tripId = s"${getEntityId}:trip:${state.completedTrips + 1}"
     state = state.copy(
       currentTripVehicleId = Some(vehicleId),
       currentTripStartTick = Some(currentTick),
@@ -617,7 +582,7 @@ class Person(
     }
 
     state = activityManager.advanceActivity(state)
-    updateScheduleDelayOnArrival(state.currentActivityIndex)
+    state = scheduleManager.updateScheduleDelayOnArrival(state, state.currentActivityIndex, currentTick)
 
     state.currentActivity match {
       case Some(activity) =>
