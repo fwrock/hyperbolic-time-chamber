@@ -756,10 +756,7 @@ class Car(
 
     if (routeDepleted && state.status != Finished) {
       val tripDest = getTripDestination.getOrElse(state.destination)
-      finishJourney("reached_destination", tripDest)
-      onFinishPrivateVehicle(tripDest)
-      onFinishSpontaneous(None)
-      if (!isPersonCentric) selfDestruct()
+      finishAndCleanup("reached_destination", tripDest)
     } else {
       onFinishSpontaneous(Some(currentTick + 1))
     }
