@@ -229,7 +229,7 @@ class Person(
       ActorMetrics.spontaneousEventAfterCompletion.labels(
         getClass.getSimpleName, "spontaneous"
       ).inc()
-      notifyVehiclesScheduleComplete()
+      tripManager.notifyVehiclesScheduleComplete(state)
       onFinishSpontaneous(None, destruct = true)
       return
     }
@@ -248,8 +248,21 @@ class Person(
           val destNodeId = nextLeg.alightingNodeId.getOrElse(
             state.nextActivity.map(_.nodeId).getOrElse("")
           )
+          
+          // Start next leg - inline trip initiation logic
           state.currentActivity.foreach { act =>
-            initiateTrip(act.copy(nodeId = destNodeId), nextLeg)
+            val origin = state.currentPhysicalNodeId.orElse(Some(act.nodeId)).getOrElse("")
+            nextLeg.mode.toLowerCase match {
+              case "walk" =>
+                initiateWalkingTrip(origin, destNodeId, nextLeg.precomputedRoute)
+              case "transit" | "bus" | "subway" | "pt" | "mixed" =>
+                initiatePTTrip(origin, destNodeId, nextLeg)
+              case "car" | "bicycle" | "motorcycle" =>
+                initiatePrivateVehicleTrip(origin, destNodeId, nextLeg)
+              case _ =>
+                logWarn(s"${getEntityId} unsupported mode ${nextLeg.mode} in multi-leg journey")
+                advanceToNextActivity()
+            }
           }
         } else {
           // Activity-level walk (or final egress walk) — advance to next activity.
@@ -386,61 +399,12 @@ class Person(
         state = newState
         advanceToNextActivity()
       case TripStartResult.ScheduleComplete =>
-        notifyVehiclesScheduleComplete()
+        tripManager.notifyVehiclesScheduleComplete(state)
         onFinishSpontaneous(None, destruct = true)
     }
 
-  /** Returns the person's actual physical position for routing.
-    *
-    * During multi-leg journeys (between access walk, PT legs, transfer walks, and egress walk)
-    * `currentPhysicalNodeId` tracks where the person really is. Outside journeys it falls back
-    * to the current activity's node.
-    */
-  private def currentTripOriginNodeId: String =
-    state.currentPhysicalNodeId
-      .orElse(state.currentActivity.map(_.nodeId))
-      .getOrElse("")
-
-  /** Initiate trip to next activity.
-    */
-  private def initiateTrip(nextActivity: Activity, logistics: ArrivalLogistics): Unit = {
-    val origin = currentTripOriginNodeId
-    state.currentActivity match {
-      case Some(_) =>
-        logistics.mode.toLowerCase match {
-          case "car" | "bicycle" | "motorcycle" =>
-            initiatePrivateVehicleTrip(origin, nextActivity.nodeId, logistics)
-          case "walk" =>
-            initiateWalkingTrip(origin, nextActivity.nodeId, logistics.precomputedRoute)
-          case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-            initiatePTTrip(origin, nextActivity.nodeId, logistics)
-
-          case "auto" if (globalDynamicModeChoiceEnabled || state.enableDynamicModeChoice) =>
-            logWarn(
-              s"${getEntityId} unresolved auto logistics reached initiateTrip even with dynamic mode choice enabled; skipping trip"
-            )
-            PersonMetrics.personTripStart.labels(nextActivity.activityType, "no_viable_mode").inc()
-            advanceToNextActivity()
-
-          case "auto" =>
-            logWarn(
-              s"${getEntityId} auto mode requested but dynamic mode choice is disabled; skipping trip"
-            )
-            advanceToNextActivity()
-
-          case _ =>
-            // TODO: model unsupported modes properly when needed.
-            logDebug(
-              s"Mode '${logistics.mode}' not yet implemented, advancing to next activity using scheduled time"
-            )
-            advanceToNextActivity()
-        }
-
-      case None =>
-        logWarn(s"${getEntityId} has no current activity")
-        advanceToNextActivity()
-    }
-  }
+  // Note: Removed currentTripOriginNodeId - logic inlined where needed
+  // Note: Removed initiateTrip() - logic inlined in actSpontaneous multi-leg journey handling
 
   /** Initiate walking trip (mesoscopic).
     *
@@ -709,19 +673,7 @@ class Person(
     }
   }
 
-  /** Send PersonScheduleCompleteData to all owned private vehicles.
-    */
-  private def notifyVehiclesScheduleComplete(): Unit =
-    state.ownedVehicles.foreach {
-      case (_, vehicleRef) =>
-        sendMessageTo(
-          entityId = vehicleRef.id,
-          shardId = vehicleRef.classType,
-          data = PersonScheduleCompleteData(personId = getEntityId),
-          eventType = "PersonScheduleComplete",
-          actorType = LoadBalancedDistributed
-        )
-    }
+  // Note: Removed notifyVehiclesScheduleComplete() - now handled by tripManager.notifyVehiclesScheduleComplete()
 }
 
 /** Person companion object.
