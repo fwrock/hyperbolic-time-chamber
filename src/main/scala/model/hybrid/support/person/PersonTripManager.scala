@@ -172,7 +172,7 @@ class PersonTripManager(
             waitTime = Some(0L),
             currentTick = currentTick
           )
-          TripStartResult.TripStarted(updatedState, None) // No next tick, vehicle controls timing
+          TripStartResult.TripStarted(updatedState, Some(currentTick + state.vehicleTripTimeoutTicks))
         } else {
           TripStartResult.TripSkipped(state) // Vehicle missing
         }
@@ -300,7 +300,7 @@ class PersonTripManager(
           val vehicleId = nextLeg.vehicle.map(_.id).getOrElse("unknown")
           TripStartResult.TripStarted(
             markTripStarted(midState, vehicleId, nextLeg.mode, None, Some(0L), currentTick),
-            None
+            Some(currentTick + midState.vehicleTripTimeoutTicks)
           )
         } else {
           TripStartResult.TripSkipped(midState)
