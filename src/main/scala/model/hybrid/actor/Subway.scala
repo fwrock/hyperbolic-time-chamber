@@ -5,6 +5,7 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
+import org.interscity.htc.model.hybrid.support.subway.SubwayPassengerHandler
 import org.interscity.htc.model.hybrid.entity.state.SubwayState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped }
 import org.interscity.htc.model.hybrid.util.SubwayUtil
@@ -40,6 +41,19 @@ class Subway(
     ) {
 
   private var expectedUnloadResponses: Int = 0
+
+  private lazy val passengerHandler = new SubwayPassengerHandler(
+    getStateFn       = () => state,
+    entityIdFn       = () => getEntityId,
+    currentTickFn    = () => currentTick,
+    getCurrentNodeFn = () => getCurrentNode,
+    selfRefFn        = () => self,
+    reportFn         = (data, label) => report(data, label),
+    sendMessageFn    = (entityId, shardId, data) => sendMessageTo(entityId, shardId, data),
+    scheduleEventFn  = tick => scheduleEvent(tick),
+    logInfoFn        = logInfo,
+    logWarnFn        = logWarn
+  )
 
   /** Subway trains operate on the rail network, not the road network.
    *  Rail link IDs are resolved directly to their actor reference, bypassing
@@ -87,8 +101,8 @@ class Subway(
             logInfo(s"[SUBWAY] Stopping at station $stationId node=$nodeId id=$getEntityId")
             ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
               s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
-            requestUnloadPeopleData()
-            requestLoadPassenger()
+            passengerHandler.requestUnloadPeopleData()
+            passengerHandler.requestLoadPassenger(stationOpt)
             onFinishSpontaneous(None)
           case None =>
             logInfo(s"[SUBWAY] No station at nodeId=$nodeId, calling leavingLink id=$getEntityId")
@@ -104,133 +118,16 @@ class Subway(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: SubwayLoadPassengerData   => handleBusLoadPeople(event, d)
-      case d: SubwayUnloadPassengerData => handleUnloadPassenger(event, d)
+      case d: SubwayLoadPassengerData   => passengerHandler.handleLoadPeople(event, d)
+      case d: SubwayUnloadPassengerData =>
+        expectedUnloadResponses = passengerHandler.handleUnloadPassenger(event, d, expectedUnloadResponses)
       case _                            => super.actInteractWith(event)
     }
-
-  private def requestLoadPassenger(): Unit = {
-    val nodeId = getCurrentNode
-    val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
-    stationOpt match {
-      case Some(stationId) =>
-        val availableSpace = math.min(
-          x = state.capacity - state.passengers.size,
-          y = SubwayUtil.numberOfPassengerToBoarding(
-            numberOfPorts = state.numberOfPorts,
-            portsCapacity = state.capacity,
-            stopTime = state.stopTime,
-            boardingTimeByPassenger = state.boardingTimeByPassenger
-          )
-        )
-        sendMessageTo(
-          entityId = stationId,
-          shardId = "hybrid.actor.SubwayStation",
-          data = SubwayRequestPassengerData(
-            line = state.line,
-            availableSpace = availableSpace
-          )
-        )
-      case None =>
-        state.nodeState.isLoaded = true
-        onFinishNodeState()
-    }
-  }
-
-  private def requestUnloadPeopleData(): Unit = {
-    if (state.passengers.isEmpty) {
-      logInfo(s"[SUBWAY] No passengers to unload, setting isUnloaded=true id=$getEntityId")
-      state.nodeState.isUnloaded = true
-      onFinishNodeState()
-      return
-    }
-
-    state.countUnloadReceived = 0
-    state.countUnloadPassenger = 0
-    expectedUnloadResponses = state.passengers.size
-    logInfo(
-      s"[SUBWAY] Requesting unload of ${state.passengers.size} passengers | " +
-      s"id=$getEntityId tick=$currentTick"
-    )
-
-    val nodeId = getCurrentNode
-    state.passengers.foreach {
-      case (_, person) =>
-        sendMessageTo(
-          entityId = person.id,
-          shardId = person.classType,
-          data = SubwayRequestUnloadPassengerData(
-            nodeId = nodeId,
-            nodeRef = self
-          )
-        )
-    }
-  }
 
   private def retrieveSubwayStationFromNodeId(value: String): Option[String] =
     state.subwayStations.find {
       case (_, v) => v == value
     }.map(_._1)
-
-  private def handleBusLoadPeople(
-    event: ActorInteractionEvent,
-    data: SubwayLoadPassengerData
-  ): Unit = {
-    state.nodeState.isLoaded = true
-    for (person <- data.people)
-      state.passengers.put(person.id, person)
-    if (data.people.nonEmpty) {
-      SubwayMetrics.passengersBoarded.labels(state.line).inc(data.people.size)
-      SubwayMetrics.activePassengers.inc(data.people.size)
-      report(
-        data = Map(
-          "event_type" -> "subway_load_passengers",
-          "subway_id" -> getEntityId,
-          "line" -> state.line,
-          "passengers_loaded" -> data.people.size,
-          "total_passengers" -> state.passengers.size,
-          "capacity" -> state.capacity,
-          "tick" -> currentTick
-        ),
-        label = "subway_load_passengers"
-      )
-    }
-    onFinishNodeState()
-  }
-
-  private def handleUnloadPassenger(
-    event: ActorInteractionEvent,
-    data: SubwayUnloadPassengerData
-  ): Unit = {
-    state.countUnloadReceived += 1
-    if (data.isArrival) {
-      state.passengers.remove(event.actorRefId)
-      state.countUnloadPassenger += 1
-    }
-    if (state.countUnloadReceived >= expectedUnloadResponses) {
-      val unloadedCount = state.countUnloadPassenger
-      state.countUnloadReceived = 0
-      state.countUnloadPassenger = 0
-      expectedUnloadResponses = 0
-      if (unloadedCount > 0) {
-        SubwayMetrics.passengersAlighted.labels(state.line).inc(unloadedCount)
-        SubwayMetrics.activePassengers.dec(unloadedCount)
-        report(
-          data = Map(
-            "event_type" -> "subway_unload_passengers",
-            "subway_id" -> getEntityId,
-            "line" -> state.line,
-            "passengers_unloaded" -> unloadedCount,
-            "remaining_passengers" -> state.passengers.size,
-            "tick" -> currentTick
-          ),
-          label = "subway_unload_passengers"
-        )
-      }
-      state.nodeState.isUnloaded = true
-      onFinishNodeState()
-    }
-  }
 
   override def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,
@@ -332,19 +229,4 @@ class Subway(
           Some(routePath(0))
       case None =>
         None
-
-  private def onFinishNodeState(): Unit = {
-    logInfo(
-      s"[SUBWAY] onFinishNodeState: isLoaded=${state.nodeState.isLoaded} isUnloaded=${state.nodeState.isUnloaded} " +
-      s"isEnd=${isEndNodeState} id=$getEntityId tick=$currentTick"
-    )
-    if isEndNodeState then
-      state.nodeState.isLoaded = false
-      state.nodeState.isUnloaded = false
-      logInfo(s"[SUBWAY] Scheduling depart in ${state.stopTime} ticks | id=$getEntityId tick=$currentTick")
-      scheduleEvent(currentTick + state.stopTime)
-  }
-
-  private def isEndNodeState: Boolean =
-    state.nodeState.isLoaded && state.nodeState.isUnloaded
 }
