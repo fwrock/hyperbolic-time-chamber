@@ -19,7 +19,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import core.actor.trace.ActorTrace
 import core.util.StringPool
-import model.hybrid.support.car.{CarJourneyReporter, CarLinkHandler, CarMicroHandler}
+import model.hybrid.support.car.{CarJourneyReporter, CarLinkHandler, CarMicroHandler, CarSignalHandler}
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -66,6 +66,25 @@ class Car(
     tripDestFn      = () => getTripDestination,
     tripStartTickFn = () => getTripStartTick,
     driverAttrsFn   = () => getDriverAttributes
+  )
+
+  private lazy val signalHandler = new CarSignalHandler(
+    reportFn                    = (data, label) => report(data = data, label = label),
+    entityIdFn                  = () => getEntityId,
+    currentTickFn               = () => currentTick,
+    journeyReporter             = journeyReporter,
+    onFinishSpontaneousFn       = nextTick => onFinishSpontaneous(nextTick),
+    leavingLinkFn               = () => leavingLink(),
+    selfDestructFn              = () => selfDestruct(),
+    isPersonCentricFn           = () => isPersonCentric,
+    logWarnFn                   = msg => logWarn(msg),
+    logStaleEventDebugFn        = msg => logStaleEventDebug(msg),
+    sendMessageFn               = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
+    getCurrentNodeFn            = () => getCurrentNode,
+    getNextLinkFn               = () => getNextLink,
+    getTripDestinationFn        = () => getTripDestination,
+    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
+    setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick
   )
 
   private lazy val linkHandler = new CarLinkHandler(
@@ -381,92 +400,10 @@ class Car(
   ): Unit =
     journeyReporter.reportRouteEvents(route, source, state.origin, state.destination, state.bestCost, cost)
 
-  private def requestSignalState(): Unit = {
-    val currentPathNode = state.currentPath.map(_._2).orNull
-    val routeDepleted = state.bestRoute.forall(_.isEmpty)
+  private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
-    if (currentPathNode == null && !routeDepleted) {
-      logWarn(
-        s"$getEntityId requestSignalState with null currentPathNode but non-empty route at tick=$currentTick; recovering to Ready"
-      )
-      state.status = Ready
-      onFinishSpontaneous(Some(currentTick + 1))
-      return
-    }
-
-    if (getTripDestination.getOrElse(state.destination) == currentPathNode || routeDepleted) {
-      // NOTE: leavingLink() already calls onFinish(nextNodeId) internally, which invokes
-      // onFinishPrivateVehicle() (sends TripCompletedData to Person) and finishJourney().
-      // It also calls onFinishSpontaneous(None). Do NOT duplicate those calls here —
-      // doing so would send a second TripCompletedData to Person, causing it to skip an
-      // activity and schedule itself at two different future ticks.
-      leavingLink()
-      if (!isPersonCentric) selfDestruct()
-    } else {
-      state.status = WaitingSignalState
-      val nodeId = getCurrentNode
-      if (nodeId != null) {
-        CityMapUtil.nodesById.get(nodeId) match {
-          case Some(node) =>
-            val linkId = getNextLink
-            if (linkId != null) {
-              sendMessageTo(
-                entityId = node.id,
-                shardId = node.classType,
-                data = RequestSignalStateData(targetLinkId = linkId),
-                eventType = EventTypeEnum.RequestSignalState.toString
-              )
-              onFinishSpontaneous(Some(currentTick + 1))
-            } else {
-              leavingLink()
-            }
-          case None =>
-            leavingLink()
-        }
-      } else {
-        leavingLink()
-      }
-    }
-  }
-
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit = {
-    // Guard against stale/duplicate SignalStateData responses caused by the retry mechanism.
-    // When a spontaneous tick fires before the node responds, the car retries requestSignalState,
-    // generating a second request. Both responses eventually arrive. Without this guard, the second
-    // response would call leavingLink() on an already-left link, corrupting the route queue.
-    if (state.status != WaitingSignalState) {
-      logStaleEventDebug(
-        s"$getEntityId: Ignoring stale SignalStateData (current status=${state.status}, expected WaitingSignalState). Race condition guard."
-      )
-      return
-    }
-    signalStateRetryCounter = 0
-    if (data.phase == Red) {
-      state.status = WaitingSignal
-      signalWaitUntilTick = Some(data.nextTick)
-      val waitTicks = math.max(0L, data.nextTick - currentTick)
-      if (waitTicks > 0) {
-        val waitSeconds = waitTicks.toDouble
-        journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitSeconds)
-      }
-
-      report(
-        data = Map(
-          "event_type" -> "signal_wait",
-          "vehicle_type" -> "car",
-          "vehicle_id" -> getEntityId,
-          "phase" -> data.phase.toString,
-          "wait_until_tick" -> data.nextTick,
-          "tick" -> currentTick
-        ),
-        label = "signal_wait"
-      )
-
-      onFinishSpontaneous(Some(data.nextTick))
-    } else {
-      leavingLink()
-    }
-  }
+  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
+    signalHandler.handleSignalState(data, state)
 
   override def leavingLink(): Unit = {
     mesoExitTick = None
