@@ -19,7 +19,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
 import core.actor.trace.ActorTrace
 import core.util.StringPool
-import model.hybrid.support.car.{CarJourneyReporter, CarMicroHandler}
+import model.hybrid.support.car.{CarJourneyReporter, CarLinkHandler, CarMicroHandler}
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -66,6 +66,22 @@ class Car(
     tripDestFn      = () => getTripDestination,
     tripStartTickFn = () => getTripStartTick,
     driverAttrsFn   = () => getDriverAttributes
+  )
+
+  private lazy val linkHandler = new CarLinkHandler(
+    reportFn              = (data, label) => report(data = data, label = label),
+    entityIdFn            = () => getEntityId,
+    currentTickFn         = () => currentTick,
+    journeyReporter       = journeyReporter,
+    onFinishSpontaneousFn = nextTick => onFinishSpontaneous(nextTick),
+    finishAndCleanupFn    = (reason, node) => finishAndCleanup(reason, node),
+    logStaleEventDebugFn  = msg => logStaleEventDebug(msg),
+    setCurrentLinkIdFn    = id => currentLinkId = id,
+    setCurrentLinkLengthFn = len => currentLinkLength = len,
+    setLinkEntryTickFn    = tick => linkEntryTick = tick,
+    getLinkEntryTickFn    = () => linkEntryTick,
+    setMesoExitTickFn     = tick => mesoExitTick = tick,
+    getTripDestinationFn  = () => getTripDestination
   )
 
   private lazy val microHandler = new CarMicroHandler(
@@ -481,115 +497,12 @@ class Car(
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = {
-    currentLinkId = Some(event.actorRefId)
-    currentLinkLength = data.linkLength
-    linkEntryTick = Some(currentTick)
-
-    val speed = linkDensitySpeed(
-      length = data.linkLength,
-      capacity = data.linkCapacity,
-      numberOfCars = data.linkNumberOfCars,
-      freeSpeed = data.linkFreeSpeed,
-      lanes = data.linkLanes
-    )
-
-    val time = data.linkLength / speed
-    state.status = Moving
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
-
-    if (journeyReporter.sumoDepartTick.isEmpty) {
-      journeyReporter.sumoDepartTick = Some(currentTick)
-      journeyReporter.sumoDepartSpeed = speed
-      journeyReporter.sumoDepartLane = Some(s"${event.actorRefId}_0")
-      journeyReporter.sumoDepartPos = 0.0
-    }
-
-    report(
-      data = Map(
-        "event_type" -> "enter_link",
-        "car_id" -> getEntityId,
-        "link_id" -> event.actorRefId,
-        "mode" -> "MESO",
-        "link_length" -> data.linkLength,
-        "link_capacity" -> data.linkCapacity,
-        "cars_in_link" -> data.linkNumberOfCars,
-        "free_speed" -> data.linkFreeSpeed,
-        "calculated_speed" -> speed,
-        "travel_time" -> time,
-        "lanes" -> data.linkLanes,
-        "tick" -> currentTick
-      ),
-      label = "enter_link"
-    )
-
-    val exitTick = currentTick + Math.ceil(time).toLong
-    mesoExitTick = Some(exitTick)
-    onFinishSpontaneous(Some(exitTick))
-  }
+  ): Unit = linkHandler.handleEnterLink(event.actorRefId, data, state)
 
   override def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = {
-    // Guard: this callback arrives AFTER leavingLink() was called. For the last link of a
-    // trip, the car already finalized the journey in requestSignalState() (or actHandleReceiveLeaveLinkInfo
-    // for intermediate links) before this response arrived from the Link. Discard to prevent
-    // double distance accumulation, double finishJourney(), and spurious onFinishSpontaneous().
-    if (state.status == Parked || state.status == Finished) {
-      logStaleEventDebug(
-        s"$getEntityId: Discarding stale ReceiveLeaveLinkInfo for link ${event.actorRefId} " +
-          s"(status=${state.status}, trip already finalized)."
-      )
-      return
-    }
-
-    state.distance += data.linkLength
-    journeyReporter.sumoArrivalSpeed = 0.0
-    journeyReporter.sumoArrivalLane = Some(s"${event.actorRefId}_0")
-    journeyReporter.sumoArrivalPos = data.linkLength
-
-    linkEntryTick.foreach {
-      entryTick =>
-        val travelTimeTicks = currentTick - entryTick
-        val travelTimeSeconds = travelTimeTicks.toDouble // 1 tick = 1 second
-
-        val actualSpeed = if (travelTimeSeconds > 0) {
-          data.linkLength / travelTimeSeconds // m/s
-        } else {
-          0.0
-        }
-        
-        journeyReporter.updateHaltingState(actualSpeed, travelTimeSeconds)
-    }
-
-    currentLinkId = None
-    currentLinkLength = 0.0
-    linkEntryTick = None
-    mesoExitTick = None
-
-    report(
-      data = Map(
-        "event_type" -> "leave_link",
-        "car_id" -> getEntityId,
-        "link_id" -> event.actorRefId,
-        "mode" -> "MESO",
-        "link_length" -> data.linkLength,
-        "total_distance" -> state.distance,
-        "tick" -> currentTick
-      ),
-      label = "leave_link"
-    )
-
-    val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
-
-    if (routeDepleted && state.status != Finished) {
-      val tripDest = getTripDestination.getOrElse(state.destination)
-      finishAndCleanup("reached_destination", tripDest)
-    } else {
-      onFinishSpontaneous(Some(currentTick + 1))
-    }
-  }
+  ): Unit = linkHandler.handleLeaveLink(event.actorRefId, data, state)
 
   private def finishJourney(reason: String, finalNode: String): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
