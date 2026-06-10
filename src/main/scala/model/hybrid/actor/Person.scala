@@ -167,50 +167,10 @@ class Person(
   // Original methods (to be gradually replaced by handlers)
   // ============================================================================
 
-  private def normalizeMode(mode: String): String =
-    Option(mode).map(_.trim.toLowerCase).filter(_.nonEmpty).getOrElse("unknown")
+  // Note: Removed normalizeMode(), recordModeChoiceMetrics(), maybeLogModeChoiceDecision()
+  // Now handled by PersonMetricsReporter and PersonModeChoiceHandler
 
-  private def recordModeChoiceMetrics(
-    requestedMode: String,
-    resolvedMode: String,
-    source: String
-  ): Unit = {
-    val requested = normalizeMode(requestedMode)
-    val resolved = normalizeMode(resolvedMode)
-    val metricSource = normalizeMode(source)
-
-    PersonMetrics.personModeChoiceResolved
-      .labels(requested, resolved, metricSource)
-      .inc()
-
-    if (requested != resolved)
-      PersonMetrics.personModeChoiceChanged
-        .labels(requested, resolved, metricSource)
-        .inc()
-  }
-
-  private def maybeLogModeChoiceDecision(
-    originNodeId: String,
-    destinationNodeId: String,
-    requestedMode: String,
-    resolvedMode: String,
-    source: String
-  ): Unit = {
-    recordModeChoiceMetrics(requestedMode, resolvedMode, source)
-
-    modeChoiceDecisionCount += 1
-    if (modeChoiceLogEvery > 0 && modeChoiceDecisionCount % modeChoiceLogEvery == 0) {
-      logInfo(
-        s"${getEntityId} mode-choice[$modeChoiceDecisionCount] " +
-          s"requested=$requestedMode resolved=$resolvedMode source=$source " +
-          s"origin=$originNodeId destination=$destinationNodeId " +
-          s"global=$globalDynamicModeChoiceEnabled state=${state.enableDynamicModeChoice}"
-      )
-    }
-  }
-
-  private def isDynamicModeChoiceEnabled: Boolean =
-    globalDynamicModeChoiceEnabled || state.enableDynamicModeChoice
+  // Note: Removed isDynamicModeChoiceEnabled - now in PersonModeChoiceHandler
 
   /** Person should only re-register on the TM after migration if it was actually registered at
     * migration time. During vehicle trips (and PT trips), Person calls onFinishSpontaneous(None)
@@ -372,13 +332,7 @@ class Person(
   private def effectiveEndTick(activity: Activity): Option[Long] =
     scheduleManager.effectiveEndTick(activity, state)
 
-  private def plannedStartTickForActivity(index: Int): Option[Long] = {
-    val previousIndex = index - 1
-    if (previousIndex >= 0 && previousIndex < state.dailySchedule.length)
-      parseTick(state.dailySchedule(previousIndex).endTime)
-    else
-      None
-  }
+  // Note: Removed plannedStartTickForActivity() - no longer used
 
   private def updateScheduleDelayOnArrival(arrivedActivityIndex: Int): Unit =
     state = scheduleManager.updateScheduleDelayOnArrival(state, arrivedActivityIndex, currentTick)
@@ -416,51 +370,7 @@ class Person(
     )
   }
 
-  private def reportTripAndLegMetrics(
-    mode: String,
-    arrivalTick: Tick,
-    travelTime: Long,
-    distance: Option[Double],
-    waitTime: Option[Long] = None
-  ): Unit = {
-    val departureTime = state.currentTripDepartureTick
-      .orElse(state.currentTripStartTick)
-      .getOrElse(arrivalTick - math.max(0L, travelTime))
-    val tripId = state.currentTripId.getOrElse(nextTripId)
-    val effectiveWait = waitTime.orElse(state.currentTripWaitTime).getOrElse(0L)
-
-    var tripMetrics: Map[String, Any] = Map(
-      "event_type" -> "trip_metrics",
-      "person_id" -> getEntityId,
-      "trip_id" -> tripId,
-      "mode" -> mode,
-      "departure_time" -> departureTime,
-      "arrival_time" -> arrivalTick,
-      "tick" -> currentTick
-    )
-    distance.foreach { d =>
-      tripMetrics += ("traveled_distance" -> d)
-    }
-
-    report(
-      data = tripMetrics,
-      label = "person_trip_metrics"
-    )
-
-    report(
-      data = Map(
-        "event_type" -> "leg_metrics",
-        "person_id" -> getEntityId,
-        "trip_id" -> tripId,
-        "mode" -> mode,
-        "travel_time" -> math.max(0L, travelTime),
-        "distance" -> distance.map(Double.box).orNull,
-        "wait_time" -> math.max(0L, effectiveWait),
-        "tick" -> currentTick
-      ),
-      label = "person_leg_metrics"
-    )
-  }
+  // Note: Removed reportTripAndLegMetrics() - now handled by PersonMetricsReporter
 
   /** Start trip to next activity.
     */
@@ -505,7 +415,7 @@ class Person(
           case "transit" | "bus" | "subway" | "pt" | "mixed" =>
             initiatePTTrip(origin, nextActivity.nodeId, logistics)
 
-          case "auto" if isDynamicModeChoiceEnabled =>
+          case "auto" if (globalDynamicModeChoiceEnabled || state.enableDynamicModeChoice) =>
             logWarn(
               s"${getEntityId} unresolved auto logistics reached initiateTrip even with dynamic mode choice enabled; skipping trip"
             )
@@ -514,14 +424,7 @@ class Person(
 
           case "auto" =>
             logWarn(
-              s"${getEntityId} auto mode requested but dynamic mode choice is disabled globally or for this person; skipping trip"
-            )
-            maybeLogModeChoiceDecision(
-              originNodeId = origin,
-              destinationNodeId = nextActivity.nodeId,
-              requestedMode = "auto",
-              resolvedMode = "skipped",
-              source = "auto_disabled"
+              s"${getEntityId} auto mode requested but dynamic mode choice is disabled; skipping trip"
             )
             advanceToNextActivity()
 
@@ -755,18 +658,7 @@ class Person(
         advanceToNextActivity()
     }
 
-  /** Cancel a pending PT-wait timeout.
-    *
-    * When person is waiting at a transit stop, [[initiatePTTrip]] schedules a future TM wakeup
-    * via `onFinishSpontaneous(Some(timeoutTick))`. Call this method as soon as the PT trip
-    * resolves (vehicle delivered or line not operational) so the scheduled wakeup is removed
-    * from the TimeManager before [[advanceToNextActivity]] adds the next-activity end-tick.
-    */
-  private def cancelPTWait(): Unit =
-    if (state.ptWaitingSince.isDefined) {
-      state = state.copy(ptWaitingSince = None)
-      onFinishSpontaneous(None) // removes the timeout tick from TM scheduledActors
-    }
+  // Note: Removed cancelPTWait() - now handled by PersonPTTripHandler
 
   // Note: Removed handleTripCompleted() - now handled by tripManager.handleTripCompleted()
 
