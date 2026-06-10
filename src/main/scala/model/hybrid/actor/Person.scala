@@ -12,6 +12,7 @@ import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnl
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
 import model.hybrid.util.{CityMapUtil, GPSUtil}
 import model.hybrid.util.strategy.{ModeChoiceResult, ModeChoiceStrategyRegistry}
+import model.hybrid.support.person.{PersonScheduleManager, PersonActivityManager, PersonMetricsReporter, PersonModeChoiceHandler, PersonWalkingTripHandler, PersonPTTripHandler, PersonPrivateVehicleTripHandler, PersonTripManager, TripStartResult}
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
@@ -80,6 +81,91 @@ class Person(
       .getOrElse(200)
 
   private var activityWaitLogCount: Long = 0L
+
+  // ============================================================================
+  // Support Classes (lazy initialization - created only when needed)
+  // ============================================================================
+  
+  // Wrapper to adapt sendMessageTo signature from AnyRef to Any
+  private def sendMessage(entityId: String, shardId: String, data: Any, eventType: String, actorType: Any): Unit = {
+    sendMessageTo(entityId, shardId, data.asInstanceOf[AnyRef], eventType, actorType.asInstanceOf[org.interscity.htc.core.enumeration.CreationTypeEnum])
+  }
+  
+  private lazy val scheduleManager = new PersonScheduleManager(
+    personId = getEntityId,
+    configProvider = key => scala.util.Try(config.getString(key)).toOption,
+    logDebug = logDebug,
+    logWarn = logWarn,
+    reportFn = report
+  )
+
+  private lazy val activityManager = new PersonActivityManager(
+    personId = getEntityId,
+    scheduleManager = scheduleManager,
+    logDebug = logDebug,
+    logWarn = logWarn
+  )
+
+  private lazy val metricsReporter = new PersonMetricsReporter(
+    personId = getEntityId,
+    reportFn = report,
+    logInfo = logInfo
+  )
+
+  private lazy val modeChoiceHandler = new PersonModeChoiceHandler(
+    personId = getEntityId,
+    globalDynamicModeChoiceEnabled = globalDynamicModeChoiceEnabled,
+    globalModeChoiceIncludedModes = globalModeChoiceIncludedModes,
+    metricsReporter = metricsReporter,
+    logDebug = logDebug,
+    logWarn = logWarn
+  )
+
+  private lazy val walkingHandler = new PersonWalkingTripHandler(
+    personId = getEntityId,
+    metricsReporter = metricsReporter,
+    reportFn = report,
+    logDebug = logDebug,
+    logError = logError
+  )
+
+  private lazy val ptHandler = new PersonPTTripHandler(
+    personId = getEntityId,
+    metricsReporter = metricsReporter,
+    reportFn = report,
+    sendMessageFn = sendMessage,
+    logDebug = logDebug,
+    logWarn = logWarn
+  )
+
+  private lazy val privateVehicleHandler = new PersonPrivateVehicleTripHandler(
+    personId = getEntityId,
+    sendMessageFn = sendMessage,
+    logDebug = logDebug,
+    logError = logError
+  )
+
+  private lazy val tripManager = new PersonTripManager(
+    personId = getEntityId,
+    activityManager = activityManager,
+    modeChoiceHandler = modeChoiceHandler,
+    ptHandler = ptHandler,
+    walkingHandler = walkingHandler,
+    privateVehicleHandler = privateVehicleHandler,
+    metricsReporter = metricsReporter,
+    sendMessageFn = sendMessage,
+    reportFn = report,
+    logDebug = logDebug,
+    logWarn = logWarn,
+    logError = logError
+  )
+
+  // Note: tripManager.setModeChoiceLogEvery(modeChoiceLogEvery) will be called
+  // when tripManager is first accessed, configured via PersonModeChoiceHandler
+
+  // ============================================================================
+  // Original methods (to be gradually replaced by handlers)
+  // ============================================================================
 
   private def normalizeMode(mode: String): String =
     Option(mode).map(_.trim.toLowerCase).filter(_.nonEmpty).getOrElse("unknown")
@@ -151,61 +237,7 @@ class Person(
   private def applyScheduleTruncationIfNeeded(): Unit =
     if (!scheduleAlreadyTruncated) {
       scheduleAlreadyTruncated = true
-
-      val truncate = SimulatorSettingsRegistry
-        .get("htc.person.truncate-schedule-beyond-duration")
-        .orElse(sys.env.get("HTC_PERSON_TRUNCATE_SCHEDULE"))
-        .orElse(
-          scala.util.Try(
-            context.system.settings.config.getString("htc.person.truncate-schedule-beyond-duration")
-          ).toOption
-        )
-        .exists(_.equalsIgnoreCase("true"))
-
-      if (truncate && state != null && state.dailySchedule.nonEmpty) {
-        SimulatorSettingsRegistry
-          .get("htc.simulation.duration")
-          .flatMap(s => scala.util.Try(s.toLong).toOption) match {
-          case None =>
-            logWarn(s"${getEntityId} htc.simulation.duration not set in registry — schedule truncation skipped")
-          case Some(duration) =>
-            val (filtered, removedActivities) = state.dailySchedule.partition { activity =>
-              scala.util.Try(activity.endTime.toLong).toOption.forall(_ <= duration)
-            }
-            val removed = removedActivities.size
-            if (removed > 0) {
-              val byType = removedActivities.groupBy(_.activityType).view.mapValues(_.size).toMap
-              byType.foreach { case (actType, count) =>
-                PersonMetrics.personTruncatedActivity.labels(actType).inc(count.toDouble)
-              }
-              // Histogram: how many ticks beyond sim duration each removed activity falls
-              removedActivities.foreach { activity =>
-                scala.util.Try(activity.endTime.toLong).toOption.foreach { endTick =>
-                  val excess = (endTick - duration).toDouble
-                  PersonMetrics.personTruncatedActivityExcessTicks
-                    .labels(activity.activityType)
-                    .observe(excess)
-                }
-              }
-              report(
-                data = Map(
-                  "event_type"          -> "schedule_truncated",
-                  "person_id"           -> getEntityId,
-                  "removed_count"       -> removed,
-                  "remaining_count"     -> filtered.size,
-                  "simulation_duration" -> duration,
-                  "removed_by_type"     -> byType.map { case (t, c) => s"$t=$c" }.mkString(",")
-                ),
-                label = "person_schedule_truncated"
-              )
-              logDebug(
-                s"${getEntityId} truncated $removed activities with endTime > $duration" +
-                  s" (${filtered.size} remaining): ${byType.map { case (t, c) => s"$t=$c" }.mkString(", ")}"
-              )
-              state = state.copy(dailySchedule = filtered)
-            }
-        }
-      }
+      state = scheduleManager.applyTruncationIfNeeded(state)
     }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
@@ -311,29 +343,18 @@ class Person(
   /** Check if current activity's end time has been reached.
     */
   private def isActivityEndTime(activity: Activity): Boolean =
-    effectiveEndTick(activity) match {
-      case Some(endTick) =>
-        currentTick >= endTick
-      case None =>
-        logWarn(s"Cannot parse endTime: ${activity.endTime}, assuming time reached")
-        true
-    }
+    activityManager.isActivityEndTime(activity, state, currentTick)
 
   /** Calculate ticks until activity end time.
     */
   private def getTickUntilActivityEnd(activity: Activity): Long =
-    effectiveEndTick(activity)
-      .map(endTick => Math.max(1L, endTick - currentTick))
-      .getOrElse(1L)
+    activityManager.getTickUntilActivityEnd(activity, state, currentTick)
 
   private def parseTick(value: String): Option[Long] =
-    try Some(value.toLong)
-    catch {
-      case _: NumberFormatException => None
-    }
+    scheduleManager.parseTick(value)
 
   private def effectiveEndTick(activity: Activity): Option[Long] =
-    parseTick(activity.endTime).map(_ + state.scheduleDelayOffsetTicks)
+    scheduleManager.effectiveEndTick(activity, state)
 
   private def plannedStartTickForActivity(index: Int): Option[Long] = {
     val previousIndex = index - 1
@@ -344,37 +365,7 @@ class Person(
   }
 
   private def updateScheduleDelayOnArrival(arrivedActivityIndex: Int): Unit =
-    plannedStartTickForActivity(arrivedActivityIndex).foreach { plannedStartTick =>
-      val observedDelay = Math.max(0L, currentTick - plannedStartTick)
-      val activityType = state.dailySchedule
-        .lift(arrivedActivityIndex)
-        .map(_.activityType)
-        .getOrElse("unknown")
-
-      PersonMetrics.personArrivalDelayTicks
-        .labels(activityType)
-        .observe(observedDelay.toDouble)
-
-      if (observedDelay > 0L)
-        PersonMetrics.personDelayedArrival.labels(activityType).inc()
-
-      val firstTripDelay =
-        if (arrivedActivityIndex == 1) Some(observedDelay)
-        else state.firstTripDelayTicks
-
-      if (observedDelay > state.scheduleDelayOffsetTicks) {
-        state = state.copy(
-          scheduleDelayOffsetTicks = observedDelay,
-          firstTripDelayTicks = firstTripDelay
-        )
-        logDebug(
-          s"${getEntityId} updated schedule delay offset to ${state.scheduleDelayOffsetTicks}s " +
-            s"after arriving at activity $arrivedActivityIndex"
-        )
-      } else if (arrivedActivityIndex == 1 && state.firstTripDelayTicks.isEmpty) {
-        state = state.copy(firstTripDelayTicks = firstTripDelay)
-      }
-    }
+    state = scheduleManager.updateScheduleDelayOnArrival(state, arrivedActivityIndex, currentTick)
 
   private def nextTripId: String =
     s"${getEntityId}:trip:${state.completedTrips + 1}"
