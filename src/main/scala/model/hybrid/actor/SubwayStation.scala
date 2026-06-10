@@ -12,7 +12,6 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.types.Tick
-import org.interscity.htc.core.util.JsonUtil.toJson
 import org.interscity.htc.core.util.{ IdUtil, IdentifyUtil, JsonUtil }
 import org.interscity.htc.core.util.SimulationUtil
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ RegisterSubwayPassengerData, RegisterSubwayStationData, SubwayLoadPassengerData, SubwayRequestPassengerData }
@@ -21,6 +20,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.SubwayStationSta
 import org.interscity.htc.model.hybrid.entity.state.model.{ RoutePathItem, SubwayInformation, SubwayLineInformation }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.metrics.model.hybrid.SubwayStationMetrics
+import org.interscity.htc.model.hybrid.support.subwaystation.{ SubwayPassengerManager, SubwayStationCreator }
 import core.actor.trace.ActorTrace
 import scala.collection.mutable
 
@@ -31,10 +31,28 @@ class SubwayStation(
     ) {
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
-  // Counter for subways spawned but not yet ACKed in the current spontaneous batch.
-  private var pendingSubwayAckCount: Int = 0
-  // Next tick stored for onFinishSpontaneous until all pending ACKs arrive.
+  private var pendingSubwayAckCount: Int  = 0
   private var pendingSubwayNextTick: Option[Tick] = None
+
+  private lazy val subwayCreator = new SubwayStationCreator(
+    getStateFn          = () => state,
+    entityIdFn          = () => getEntityId,
+    currentTickFn       = () => currentTick,
+    reportFn            = (data, label) => report(data, label),
+    spawnDynamicActorFn = (ct, eid, sd) => spawnDynamicActor(classType = ct, entityId = eid, stateData = sd),
+    addDependencyFn     = (id, ref) => { dependencies(id) = ref },
+    logWarnFn           = logWarn,
+    logDebugFn          = logDebug,
+    logErrorFn          = logError
+  )
+
+  private lazy val passengerManager = new SubwayPassengerManager(
+    getStateFn    = () => state,
+    entityIdFn    = () => getEntityId,
+    currentTickFn = () => currentTick,
+    reportFn      = (data, label) => report(data, label),
+    sendMessageFn = (entityId, shardId, data) => sendMessageTo(entityId, shardId, data)
+  )
 
   override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
@@ -101,10 +119,10 @@ class SubwayStation(
       state.status match
         case Start =>
           state.status = Working
-          createSubwayFrom(state.lines)
+          pendingSubwayAckCount = subwayCreator.createSubwayFrom(state.lines)
           scheduleNextTick()
         case Working =>
-          createSubwayFrom(filterLinesByNextTick())
+          pendingSubwayAckCount = subwayCreator.createSubwayFrom(subwayCreator.filterLinesByNextTick())
           scheduleNextTick()
         case _ =>
           logWarn(s"Event current status not handled ${state.status}")
@@ -112,219 +130,16 @@ class SubwayStation(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: RegisterSubwayPassengerData => handleRegisterPassenger(event, d)
-      case d: SubwayRequestPassengerData  => handleSubwayRequestPassenger(event, d)
+      case d: RegisterSubwayPassengerData => passengerManager.handleRegisterPassenger(event, d.line)
+      case d: SubwayRequestPassengerData  => passengerManager.handleSubwayRequestPassenger(event, d)
       case _                              => logWarn("Event not handled")
     }
 
-  private def handleRegisterPassenger(
-    event: ActorInteractionEvent,
-    data: RegisterSubwayPassengerData
-  ): Unit = {
-    val person = Identify(event.actorRefId, event.actorClassType, event.actorPathRef)
-    state.people.get(data.line) match {
-      case Some(people) =>
-        state.people.put(data.line, people :+ person)
-      case None =>
-        state.people.put(data.line, mutable.Seq(person))
-    }
-    SubwayStationMetrics.passengersArrived.labels(data.line).inc()
-    SubwayStationMetrics.passengersWaiting.labels(data.line).inc()
-    report(
-      data = Map(
-        "event_type" -> "passenger_arrived_at_station",
-        "station_id" -> getEntityId,
-        "person_id" -> event.actorRefId,
-        "line" -> data.line,
-        "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
-        "tick" -> currentTick
-      ),
-      label = "subway_station_passenger_arrived"
-    )
-  }
-
-  private def handleSubwayRequestPassenger(
-    event: ActorInteractionEvent,
-    data: SubwayRequestPassengerData
-  ): Unit =
-    state.people.get(data.line) match {
-      case Some(peopleQueue) =>
-        val peopleToLoad = peopleQueue.take(data.availableSpace)
-        state.people.put(data.line, peopleQueue.drop(data.availableSpace))
-        sendLoadPeopleToSubway(peopleToLoad, event, data)
-      case None =>
-        sendLoadPeopleToSubway(mutable.Seq(), event, data)
-    }
-
-  private def sendLoadPeopleToSubway(
-    peopleToLoad: mutable.Seq[Identify],
-    event: ActorInteractionEvent,
-    data: SubwayRequestPassengerData
-  ): Unit = {
-    if (peopleToLoad.nonEmpty) {
-      SubwayStationMetrics.passengersBoarded.labels(data.line).inc(peopleToLoad.size)
-      SubwayStationMetrics.passengersWaiting.labels(data.line).dec(peopleToLoad.size)
-      report(
-        data = Map(
-          "event_type" -> "passengers_loaded_to_subway",
-          "station_id" -> getEntityId,
-          "subway_id" -> event.actorRefId,
-          "line" -> data.line,
-          "passengers_loaded" -> peopleToLoad.size,
-          "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
-          "tick" -> currentTick
-        ),
-        label = "subway_station_passengers_loaded"
-      )
-    }
-    sendMessageTo(
-      event.actorRefId,
-      event.actorClassType,
-      data = SubwayLoadPassengerData(
-        people = peopleToLoad
-      )
-    )
-  }
-
-  private def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
-    state.lines.filter {
-      case (_, line) => line.nextTick <= currentTick
-    }
-
-  private def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Unit = {
-    pendingSubwayAckCount = 0
-    lines.keys.foreach {
-      line =>
-        state.subways.get(line) match
-          case Some(subwayQueue) =>
-            if (subwayQueue.nonEmpty && state.garage) {
-              val subway = subwayQueue.dequeue()
-              val subwayStartTick = currentTick + lines(line).interval
-              try {
-                createSubway(subway, subwayStartTick)
-                pendingSubwayAckCount += 1
-                ActorTrace.trace(getEntityId, currentTick, "subway_station_train_created", // #actor-trace
-                  s"trainId=${subway.actorId} line=$line nextTick=$subwayStartTick") // #actor-trace
-                dependencies(subway.actorId) = ShardActorId(subway.actorId, classOf[Subway].getName)
-                lines(line).nextTick = subwayStartTick
-              } catch {
-                case e: IllegalStateException =>
-                  logError(
-                    s"Failed to create subway ${subway.actorId} for line $line: ${e.getMessage}"
-                  )
-                  subwayQueue.enqueue(subway)
-                case e: Exception =>
-                  logError(
-                    s"Unexpected error creating subway ${subway.actorId} for line $line: ${e.getMessage}"
-                  )
-                  subwayQueue.enqueue(subway)
-              }
-            }
-          case None =>
-            logWarn(s"Subway not found for line $line")
-    }
-  }
-
   private def scheduleNextTick(): Unit = {
-    val nextTickOpt = state.lines.values.map {
-      line =>
-        if (line.nextTick <= currentTick) {
-          line.nextTick = currentTick + line.interval
-        }
-        line.nextTick
-    }
-      .filter(_ < simulationEnd)
-      .toList
-      .sorted
-      .headOption
+    val nextTickOpt = subwayCreator.computeNextTick(simulationEnd)
     if (pendingSubwayAckCount > 0)
       pendingSubwayNextTick = nextTickOpt
     else
       onFinishSpontaneous(nextTickOpt, destruct = false)
-  }
-
-  private def createSubway(subway: SubwayInformation, startTick: Long = currentTick): Unit = {
-    val route = convertLineRouteToPath(subway.line)
-    if (route.isEmpty) {
-      logWarn(
-        s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available"
-      )
-      throw new IllegalStateException(s"No route available for subway line ${subway.line}")
-    }
-
-    val subwayStations = convertLineToSubwayStations(subway.line)
-    if (subwayStations.isEmpty) {
-      logWarn(
-        s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available"
-      )
-      throw new IllegalStateException(s"No subway stations available for line ${subway.line}")
-    }
-
-    val subwayState = {
-      val s = SubwayState(
-        startTick = startTick,
-        capacity = subway.capacity,
-        numberOfPorts = subway.numberOfPorts,
-        velocity = subway.velocity,
-        stopTime = subway.stopTime,
-        line = subway.line,
-        subwayStations = subwayStations,
-        origin = state.nodeId,
-        destination = subwayStations.values.last,
-        speedFactor = subway.speedFactor
-      )
-      s.bestRoute = Some(route)
-      s.movableStatus = MovableStatusEnum.Start
-      s
-    }
-
-    report(
-      data = Map(
-        "event_type" -> "subway_created",
-        "station_id" -> getEntityId,
-        "subway_id" -> subway.actorId,
-        "line" -> subway.line,
-        "capacity" -> subway.capacity,
-        "velocity" -> subway.velocity,
-        "stop_time" -> subway.stopTime,
-        "route_length" -> route.size,
-        "number_of_stations" -> subwayStations.size,
-        "tick" -> currentTick
-      ),
-      label = "subway_created"
-    )
-
-    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
-
-    val subwayId = IdUtil.format(subway.actorId)
-    spawnDynamicActor(classType = "hybrid.actor.Subway", entityId = subwayId, stateData = toJson(subwayState))
-  }
-
-  private def convertLineToSubwayStations(line: String): mutable.Map[String, String] = {
-    val lineRoute = state.linesRoute(line)
-    val subwayStations = mutable.Map[String, String]()
-    for (i <- lineRoute.indices)
-      subwayStations.put(lineRoute(i)._1.stationId, lineRoute(i)._1.nodeId)
-    subwayStations
-  }
-
-  private def convertLineRouteToPath(
-    line: String
-  ): mutable.Queue[(String, String)] = {
-    val route = mutable.Queue[(String, String)]()
-    val lineRoute = state.linesRoute.get(line)
-
-    lineRoute match {
-      case Some(routeQueue) =>
-        routeQueue.foreach {
-          routeEntry =>
-            route.enqueue((routeEntry.railLinkId, routeEntry.stationNode.nodeId))
-        }
-        logDebug(s"Built route for line $line: ${route.size} segments using RAIL LINKS")
-      case None =>
-        logWarn(s"No route found for line $line")
-    }
-
-    route
   }
 }
