@@ -6,6 +6,7 @@ import core.types.Tick
 import model.hybrid.entity.state.{Activity, ArrivalLogistics, PersonState}
 import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, TripCompletedData}
 import model.hybrid.entity.event.data.bus.PTLineNotOperationalData
+import model.hybrid.entity.state.enumeration.TravelMode
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 import core.actor.trace.ActorTrace
@@ -129,7 +130,7 @@ class PersonTripManager(
               )
               TripStartResult.InstantArrival(updatedState)
             } else {
-              if (!effectiveLogistics.mode.equalsIgnoreCase("auto"))
+            if (effectiveLogistics.travelMode != TravelMode.Auto)
                 metricsReporter.recordTripStart(nextActivity.activityType, effectiveLogistics.mode)
               initiateTrip(updatedState, nextActivity, effectiveLogistics, currentTick)
             }
@@ -160,8 +161,8 @@ class PersonTripManager(
   ): TripStartResult = {
     val origin = modeChoiceHandler.currentTripOriginNodeId(state)
 
-    logistics.mode.toLowerCase match {
-      case "car" | "bicycle" | "motorcycle" =>
+    logistics.travelMode match {
+      case TravelMode.Car | TravelMode.Bicycle | TravelMode.Motorcycle =>
         if (privateVehicleHandler.initiatePrivateVehicleTrip(origin, nextActivity.nodeId, logistics, currentTick)) {
           val updatedState = markTripStarted(
             state,
@@ -176,7 +177,7 @@ class PersonTripManager(
           TripStartResult.TripSkipped(state) // Vehicle missing
         }
 
-      case "walk" =>
+      case TravelMode.Walk =>
         walkingHandler.initiateWalkingTrip(
           origin,
           nextActivity.nodeId,
@@ -200,7 +201,7 @@ class PersonTripManager(
             TripStartResult.TripSkipped(state) // Route not found
         }
 
-      case "transit" | "bus" | "subway" | "pt" | "mixed" =>
+      case TravelMode.Bus | TravelMode.Subway | TravelMode.Transit =>
         ptHandler.initiatePTTrip(
           origin,
           nextActivity.nodeId,
@@ -226,14 +227,14 @@ class PersonTripManager(
             TripStartResult.TripSkipped(state)
         }
 
-      case "auto" if modeChoiceHandler.isDynamicModeChoiceEnabled(state) =>
+      case TravelMode.Auto if modeChoiceHandler.isDynamicModeChoiceEnabled(state) =>
         logWarn(
           s"$personId unresolved auto logistics reached initiateTrip even with dynamic mode choice enabled; skipping trip"
         )
         metricsReporter.recordTripStart(nextActivity.activityType, "no_viable_mode")
         TripStartResult.TripSkipped(state)
 
-      case "auto" =>
+      case TravelMode.Auto =>
         logWarn(
           s"$personId auto mode requested but dynamic mode choice is disabled; skipping trip"
         )
@@ -242,6 +243,72 @@ class PersonTripManager(
       case _ =>
         logDebug(s"$personId mode '${logistics.mode}' not yet implemented, advancing to next activity")
         TripStartResult.TripSkipped(state)
+    }
+  }
+
+  /** Start the next pending leg of a multi-leg journey after an internal walk completes.
+    *
+    * Pops the head of [[PersonState.pendingTransferLegs]], advances the physical position to the
+    * current trip destination, then starts the next leg. The calling actor should dispatch on the
+    * returned [[TripStartResult]] identically to [[startNextTrip]].
+    *
+    * @param state       Current person state (must have pendingTransferLegs.nonEmpty)
+    * @param currentTick Current simulation tick
+    * @return Trip start result with the updated state embedded
+    */
+  def continuePendingTransferLeg(state: PersonState, currentTick: Tick): TripStartResult = {
+    val nextLeg    = state.pendingTransferLegs.head
+    val destNodeId = nextLeg.alightingNodeId.getOrElse(
+      state.nextActivity.map(_.nodeId).getOrElse("")
+    )
+    val midState = state.completeTrip(0.0).copy(
+      currentPhysicalNodeId = state.currentTripDestinationNodeId,
+      pendingTransferLegs   = state.pendingTransferLegs.tail
+    )
+    val origin = midState.currentPhysicalNodeId
+      .orElse(midState.currentActivity.map(_.nodeId))
+      .getOrElse("")
+
+    nextLeg.travelMode match {
+      case TravelMode.Walk =>
+        walkingHandler.initiateWalkingTrip(
+          origin, destNodeId, nextLeg.precomputedRoute, midState, currentTick, logWarn
+        ) match {
+          case Some((s2, arrivalTick)) =>
+            TripStartResult.TripStarted(
+              markTripStarted(s2, "walking", "walk", None, Some(0L), currentTick),
+              Some(arrivalTick)
+            )
+          case None =>
+            TripStartResult.TripSkipped(midState)
+        }
+
+      case TravelMode.Bus | TravelMode.Subway | TravelMode.Transit =>
+        ptHandler.initiatePTTrip(origin, destNodeId, nextLeg, midState, currentTick) match {
+          case Some((s2, timeoutTick)) =>
+            val vehicleId = s"pt:${nextLeg.mode}:${nextLeg.line.getOrElse("unknown")}"
+            TripStartResult.TripStarted(
+              markTripStarted(s2, vehicleId, nextLeg.mode, None, Some(0L), currentTick),
+              Some(timeoutTick)
+            )
+          case None =>
+            TripStartResult.TripSkipped(midState)
+        }
+
+      case TravelMode.Car | TravelMode.Bicycle | TravelMode.Motorcycle =>
+        if (privateVehicleHandler.initiatePrivateVehicleTrip(origin, destNodeId, nextLeg, currentTick)) {
+          val vehicleId = nextLeg.vehicle.map(_.id).getOrElse("unknown")
+          TripStartResult.TripStarted(
+            markTripStarted(midState, vehicleId, nextLeg.mode, None, Some(0L), currentTick),
+            None
+          )
+        } else {
+          TripStartResult.TripSkipped(midState)
+        }
+
+      case _ =>
+        logWarn(s"$personId unsupported mode '${nextLeg.mode}' in multi-leg journey")
+        TripStartResult.TripSkipped(midState)
     }
   }
 
@@ -363,7 +430,7 @@ class PersonTripManager(
   def handlePTUnloadRequest(
     event: ActorInteractionEvent,
     nodeId: String,
-    ptType: String,
+    ptType: TravelMode,
     state: PersonState,
     currentTick: Tick
   ): (PersonState, Boolean) = {
@@ -381,7 +448,7 @@ class PersonTripManager(
           .orElse(updatedState.currentTripStartTick)
           .getOrElse(currentTick - travelTime)
         val tripId = updatedState.currentTripId.getOrElse(nextTripId(updatedState))
-        val currentMode = updatedState.currentTripMode.getOrElse(ptType)
+        val currentMode = updatedState.currentTripMode.getOrElse(ptType.toString.toLowerCase)
 
         metricsReporter.reportTripAndLegMetrics(
           mode = currentMode,

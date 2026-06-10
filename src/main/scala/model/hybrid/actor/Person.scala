@@ -10,6 +10,7 @@ import model.hybrid.entity.state.{Activity, PersonState}
 import model.hybrid.entity.event.data.person.{PersonScheduleCompleteData, TripCompletedData}
 import model.hybrid.entity.event.data.bus.{BusRequestUnloadPassengerData, BusUnloadPassengerData, PTLineNotOperationalData}
 import model.hybrid.entity.event.data.subway.{SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData}
+import model.hybrid.entity.state.enumeration.TravelMode
 import model.hybrid.support.person.{PersonScheduleManager, PersonActivityManager, PersonMetricsReporter, PersonModeChoiceHandler, PersonWalkingTripHandler, PersonPTTripHandler, PersonPrivateVehicleTripHandler, PersonTripManager, TripStartResult}
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
@@ -214,69 +215,14 @@ class Person(
       if (state.currentTripVehicleId.contains("walking")) {
         if (state.pendingTransferLegs.nonEmpty) {
           // Journey-internal walk — start next pending leg without advancing activity
-          val nextLeg = state.pendingTransferLegs.head
-          val destNodeId = nextLeg.alightingNodeId.getOrElse(
-            state.nextActivity.map(_.nodeId).getOrElse("")
-          )
-          state = state.completeTrip(0.0).copy(
-            currentPhysicalNodeId = state.currentTripDestinationNodeId,
-            pendingTransferLegs = state.pendingTransferLegs.tail
-          )
-          
-          // Start next leg
-          val origin = state.currentPhysicalNodeId
-            .orElse(state.currentActivity.map(_.nodeId))
-            .getOrElse("")
-            
-          nextLeg.mode.toLowerCase match {
-            case "walk" =>
-              walkingHandler.initiateWalkingTrip(
-                origin, destNodeId, nextLeg.precomputedRoute, state, currentTick, logWarn
-              ) match {
-                case Some((updatedState, arrivalTick)) =>
-                  state = tripManager.markTripStarted(
-                    updatedState, "walking", "walk", None, Some(0L), currentTick
-                  )
-                  onFinishSpontaneous(Some(arrivalTick))
-                case None =>
-                  advanceToNextActivity()
-              }
-              
-            case "transit" | "bus" | "subway" | "pt" | "mixed" =>
-              ptHandler.initiatePTTrip(origin, destNodeId, nextLeg, state, currentTick) match {
-                case Some((updatedState, timeoutTick)) =>
-                  state = tripManager.markTripStarted(
-                    updatedState,
-                    s"pt:${nextLeg.mode}:${nextLeg.line.getOrElse("unknown")}",
-                    nextLeg.mode,
-                    None,
-                    Some(0L),
-                    currentTick
-                  )
-                  onFinishSpontaneous(Some(timeoutTick))
-                case None =>
-                  advanceToNextActivity()
-              }
-              
-            case "car" | "bicycle" | "motorcycle" =>
-              if (privateVehicleHandler.initiatePrivateVehicleTrip(
-                origin, destNodeId, nextLeg, currentTick
-              )) {
-                state = tripManager.markTripStarted(
-                  state,
-                  nextLeg.vehicle.map(_.id).getOrElse("unknown"),
-                  nextLeg.mode,
-                  None,
-                  Some(0L),
-                  currentTick
-                )
-                onFinishSpontaneous(None)
-              } else {
-                advanceToNextActivity()
-              }
-              
+          tripManager.continuePendingTransferLeg(state, currentTick) match {
+            case TripStartResult.TripStarted(newState, nextTick) =>
+              state = newState
+              onFinishSpontaneous(nextTick)
+            case TripStartResult.TripSkipped(newState) =>
+              state = newState
+              advanceToNextActivity()
             case _ =>
-              logWarn(s"${getEntityId} unsupported mode ${nextLeg.mode} in multi-leg journey")
               advanceToNextActivity()
           }
         } else {
@@ -326,12 +272,12 @@ class Person(
         if (shouldAdvance) advanceToNextActivity()
         
       case d: BusRequestUnloadPassengerData =>
-        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, "bus", state, currentTick)
+        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, TravelMode.Bus, state, currentTick)
         state = newState
         if (shouldAdvance) advanceToNextActivity()
         
       case d: SubwayRequestUnloadPassengerData =>
-        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, "subway", state, currentTick)
+        val (newState, shouldAdvance) = tripManager.handlePTUnloadRequest(event, d.nodeId, TravelMode.Subway, state, currentTick)
         state = newState
         if (shouldAdvance) advanceToNextActivity()
         

@@ -6,6 +6,7 @@ import core.types.Tick
 import model.hybrid.entity.state.{ArrivalLogistics, PersonState}
 import model.hybrid.entity.event.data.bus.{BusUnloadPassengerData, RegisterPassengerData}
 import model.hybrid.entity.event.data.subway.{RegisterSubwayPassengerData, SubwayUnloadPassengerData}
+import model.hybrid.entity.state.enumeration.TravelMode
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import core.actor.trace.ActorTrace
 import core.util.StringPool
@@ -67,10 +68,9 @@ class PersonPTTripHandler(
       logistics.alightingNodeId
     ) match {
       case (Some(line), Some(stopId), Some(stopClassType), Some(alightingNode)) =>
-        val registrationData = logistics.mode.toLowerCase match {
-          case "subway" => RegisterSubwayPassengerData(line = line)
-          case _        => RegisterPassengerData(label = line)
-        }
+        val registrationData =
+          if (logistics.travelMode == TravelMode.Subway) RegisterSubwayPassengerData(line = line)
+          else RegisterPassengerData(label = line)
 
         sendMessageFn(
           stopId,
@@ -131,16 +131,15 @@ class PersonPTTripHandler(
   def handlePTUnloadRequest(
     event: ActorInteractionEvent,
     nodeId: String,
-    ptType: String,
+    ptType: TravelMode,
     state: PersonState,
     currentTick: Tick
   ): (PersonState, Boolean, Option[Long]) = {
     val isArrival = state.ptAlightingNodeId.contains(nodeId)
 
-    val responseData = ptType match {
-      case "subway" => SubwayUnloadPassengerData(isArrival = isArrival)
-      case _        => BusUnloadPassengerData(isArrival = isArrival)
-    }
+    val responseData =
+      if (ptType == TravelMode.Subway) SubwayUnloadPassengerData(isArrival = isArrival)
+      else BusUnloadPassengerData(isArrival = isArrival)
 
     sendMessageFn(
       event.actorRefId,
@@ -154,7 +153,7 @@ class PersonPTTripHandler(
       val travelTime = state.currentTripStartTick
         .map(start => currentTick - start)
         .getOrElse(0L)
-      val currentMode = state.currentTripMode.getOrElse(ptType)
+      val currentMode = state.currentTripMode.getOrElse(ptType.toString.toLowerCase)
 
       logDebug(s"$personId alighting from $ptType at node $nodeId after ${travelTime}s")
 
