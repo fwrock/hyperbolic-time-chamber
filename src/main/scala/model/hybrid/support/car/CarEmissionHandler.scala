@@ -84,6 +84,24 @@ class CarEmissionHandler(
     )
   }
 
+  def onSignalWait(waitTicks: Long, timeStepSeconds: Double = 1.0): Unit = {
+    val duration = waitTicks.toDouble * timeStepSeconds
+    val result   = microStrategy.computeMicro(0.0, 0.0, duration)
+    if (result == EmissionResult.zero) return
+    reportFn(
+      Map(
+        "event_type" -> "emission_signal_idle",
+        "car_id"     -> entityIdFn(),
+        "duration_s" -> duration,
+        "co2_grams"  -> result.co2Grams,
+        "nox_grams"  -> result.noxGrams,
+        "pm25_grams" -> result.pm25Grams,
+        "tick"       -> currentTickFn()
+      ),
+      "emission_signal_idle"
+    )
+  }
+
   def reset(): Unit = {
     accumulated   = EmissionResult.zero
     subTickCount  = 0

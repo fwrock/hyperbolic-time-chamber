@@ -11,6 +11,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{
   MicroVehicleUpdate,
   NoLaneChangeStrategy
 }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 import scala.collection.mutable
@@ -33,6 +34,7 @@ class LinkMicroSimulationHandler(
   costPublishInterval:         Int,
   lastCostPublishTickGetFn:    () => Tick,
   lastCostPublishTickSetFn:    Tick => Unit,
+  getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
   logDebugFn:                  String => Unit
 ) {
@@ -91,7 +93,8 @@ class LinkMicroSimulationHandler(
         speedLimit               = state.speedLimit,
         microTimeStep            = state.microTimeStep,
         microTicksPerGlobalTick  = state.microTicksPerGlobalTick,
-        vehicleWaitingSeconds    = vehicleWaitingSeconds
+        vehicleWaitingSeconds    = vehicleWaitingSeconds,
+        signalAtExit             = getSignalAtExitFn()
       )
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)

@@ -83,7 +83,8 @@ class Car(
     getNextLinkFn               = () => getNextLink,
     getTripDestinationFn        = () => getTripDestination,
     setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
-    setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick
+    setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
+    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
   )
 
   private lazy val linkHandler = new CarLinkHandler(

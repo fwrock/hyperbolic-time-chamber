@@ -23,6 +23,8 @@ import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalSt
 import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.hybrid.support.node.NodeEventHandler
+import org.interscity.htc.model.hybrid.util.CityMapUtil
+import org.interscity.htc.core.entity.actor.ShardActorId
 
 class Node(
   private val properties: Properties
@@ -30,22 +32,36 @@ class Node(
       properties = properties
     ) {
 
-  override protected def internStateStrings(s: NodeState): NodeState =
-    s.copy(links = s.links.map(StringPool.intern))
+  override protected def internStateStrings(s: NodeState): NodeState = {
+    val internedConnections = mutable.Map.from(
+      s.connections.map { case (k, v) => StringPool.intern(k) -> v }
+    )
+    val internedSignals = mutable.Map.from(
+      s.signals.map { case (k, v) => StringPool.intern(k) -> v }
+    )
+    s.copy(
+      links       = s.links.map(StringPool.intern),
+      connections = internedConnections,
+      signals     = internedSignals
+    )
+  }
 
   private val pendingSignals
     : mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
     mutable.Map.empty
 
   private lazy val nodeHandler = new NodeEventHandler(
-    getStateFn    = () => state,
-    entityIdFn    = () => getEntityId,
-    currentTickFn = () => currentTick,
-    pendingSignals = pendingSignals,
-    reportFn      = (data, label) => report(data, label),
-    sendMessageFn = (eid, shardId, data, eventType) =>
+    getStateFn          = () => state,
+    entityIdFn          = () => getEntityId,
+    currentTickFn       = () => currentTick,
+    pendingSignals      = pendingSignals,
+    reportFn            = (data, label) => report(data, label),
+    sendMessageFn       = (eid, shardId, data, eventType) =>
       sendMessageTo(eid, shardId, data, eventType, LoadBalancedDistributed),
-    logWarnFn     = logWarn
+    getLinkDependencyFn = linkId =>
+      CityMapUtil.edgeLabelsById.get(linkId)
+        .map(e => ShardActorId(entityId = e.id, classType = e.classType, shardBucket = e.resourceId)),
+    logWarnFn           = logWarn
   )
 
   override def onInitialize(event: InitializeEvent): Unit = {

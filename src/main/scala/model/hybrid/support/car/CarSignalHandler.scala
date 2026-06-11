@@ -32,7 +32,8 @@ class CarSignalHandler(
   private val getNextLinkFn: () => String,
   private val getTripDestinationFn: () => Option[String],
   private val setSignalStateRetryCounterFn: Int => Unit,
-  private val setSignalWaitUntilTickFn: Option[Tick] => Unit
+  private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
+  private val onSignalWaitFn: Long => Unit
 ) {
 
   def requestSignalState(state: CarState): Unit = {
@@ -96,24 +97,30 @@ class CarSignalHandler(
 
     if (data.phase == Red) {
       val tick      = currentTickFn()
-      val waitTicks = math.max(0L, data.nextTick - tick)
+      // Saturation headway ~2s per vehicle (HCM 6th ed. §19)
+      val headwayTicks     = 2L
+      val adjustedNextTick = data.nextTick + data.queuePosition.toLong * headwayTicks
+      val waitTicks        = math.max(0L, adjustedNextTick - tick)
       state.status = WaitingSignal
-      setSignalWaitUntilTickFn(Some(data.nextTick))
+      setSignalWaitUntilTickFn(Some(adjustedNextTick))
       if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
+      if (waitTicks > 0) onSignalWaitFn(waitTicks)
 
       reportFn(
         Map(
-          "event_type"      -> "signal_wait",
-          "vehicle_type"    -> "car",
-          "vehicle_id"      -> entityIdFn(),
-          "phase"           -> data.phase.toString,
-          "wait_until_tick" -> data.nextTick,
-          "tick"            -> tick
+          "event_type"         -> "signal_wait",
+          "vehicle_type"       -> "car",
+          "vehicle_id"         -> entityIdFn(),
+          "phase"              -> data.phase.toString,
+          "queue_position"     -> data.queuePosition,
+          "wait_until_tick"    -> adjustedNextTick,
+          "adjusted_next_tick" -> adjustedNextTick,
+          "tick"               -> tick
         ),
         "signal_wait"
       )
 
-      onFinishSpontaneousFn(Some(data.nextTick))
+      onFinishSpontaneousFn(Some(adjustedNextTick))
     } else {
       leavingLinkFn()
     }

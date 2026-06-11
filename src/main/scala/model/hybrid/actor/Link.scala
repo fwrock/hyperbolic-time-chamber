@@ -24,6 +24,8 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
+import org.interscity.htc.model.hybrid.entity.event.data.link.LinkSignalStateData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
   LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
 }
@@ -95,6 +97,9 @@ class Link(
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false
 
+  /** Current signal phase at the exit node of this link; None when uncontrolled. */
+  private var signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+
   /** Grace-period counter for MICRO links: stays alive for MICRO_GRACE_TICKS extra ticks when empty
     * to avoid race conditions with late-arriving vehicles from previous batches.
     */
@@ -139,6 +144,7 @@ class Link(
     costPublishInterval           = costPublishInterval,
     lastCostPublishTickGetFn      = () => lastCostPublishTick,
     lastCostPublishTickSetFn      = t => lastCostPublishTick = t,
+    getSignalAtExitFn             = () => signalAtExit,
     metricsReporter               = metricsReporter,
     logDebugFn                    = msg => logDebug(msg)
   )
@@ -173,8 +179,9 @@ class Link(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: EnterLinkData => handleEnterLink(event, d)
-      case d: LeaveLinkData => handleLeaveLink(event, d)
+      case d: EnterLinkData        => handleEnterLink(event, d)
+      case d: LeaveLinkData        => handleLeaveLink(event, d)
+      case d: LinkSignalStateData  => signalAtExit = Some(d.phase)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
