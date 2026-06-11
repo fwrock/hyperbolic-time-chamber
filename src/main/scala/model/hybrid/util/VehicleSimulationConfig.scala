@@ -32,4 +32,32 @@ object VehicleSimulationConfig {
     } catch {
       case _: Exception => false
     }
+
+  /** Micro emission strategy — shared across all vehicle actors (pure strategy, no state).
+    * Configured via simulation.modelPlugins["emission"]["microModel"] (e.g. "virginia_tech_micro").
+    */
+  lazy val microEmissionStrategy: org.interscity.htc.model.hybrid.support.emission.MicroEmissionStrategy =
+    try {
+      val pluginParams = SimulationUtil.loadSimulationConfig().modelPlugins.getOrElse("emission", Map.empty)
+      org.interscity.htc.model.hybrid.support.emission.MicroEmissionStrategy.fromConfigKey(
+        pluginParams.getOrElse("microModel", "none"),
+        pluginParams
+      )
+    } catch {
+      case _: Exception => org.interscity.htc.model.hybrid.support.emission.MicroEmissionStrategy.none
+    }
+
+  /** Meso emission strategy — shared across all vehicle actors (pure strategy, no state).
+    * Configured via simulation.modelPlugins["emission"]["mesoModel"] (e.g. "copert").
+    */
+  lazy val mesoEmissionStrategy: org.interscity.htc.model.hybrid.support.emission.MesoEmissionStrategy =
+    try {
+      val pluginParams = SimulationUtil.loadSimulationConfig().modelPlugins.getOrElse("emission", Map.empty)
+      org.interscity.htc.model.hybrid.support.emission.MesoEmissionStrategy.fromConfigKey(
+        pluginParams.getOrElse("mesoModel", "none"),
+        pluginParams
+      )
+    } catch {
+      case _: Exception => org.interscity.htc.model.hybrid.support.emission.MesoEmissionStrategy.none
+    }
 }

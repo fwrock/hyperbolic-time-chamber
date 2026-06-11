@@ -34,9 +34,14 @@ class Bus(
         if (isEndNodeState && nodeStateMaxTime == event.tick) {
           state.movableStatus = Moving
           leavingLink()
+        } else if (isEndNodeState) {
+          onFinishSpontaneous(Some(nodeStateMaxTime))
+        } else {
+          onFinishSpontaneous(Some(currentTick + 1))
         }
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
+        onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)

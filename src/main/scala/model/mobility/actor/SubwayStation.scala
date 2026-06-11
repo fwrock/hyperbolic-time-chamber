@@ -62,6 +62,7 @@ class SubwayStation(
         createSubwayFrom(filterLinesByNextTick())
       case _ =>
         logWarn(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -114,7 +115,8 @@ class SubwayStation(
       case (_, line) => line.nextTick <= currentTick
     }
 
-  private def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Unit =
+  private def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Unit = {
+    var dispatched = false
     lines.keys.foreach {
       line =>
         state.subways.get(line) match
@@ -125,10 +127,16 @@ class SubwayStation(
               dependencies(subway.actorId) = ShardActorId(subway.actorId, classOf[Subway].getName)
               lines(line).nextTick = currentTick + lines(line).interval
               onFinishSpontaneous(Some(lines(line).nextTick))
+              dispatched = true
             }
           case None =>
             logWarn(s"Subway not found for line $line")
     }
+    if (!dispatched) {
+      val retryIn = lines.values.map(_.interval).minOption.getOrElse(1L)
+      onFinishSpontaneous(Some(currentTick + retryIn))
+    }
+  }
 
   private def createSubway(subway: SubwayInformation): ActorRef =
     createShardedActorSeveralArgs(

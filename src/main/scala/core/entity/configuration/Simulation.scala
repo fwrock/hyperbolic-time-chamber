@@ -48,5 +48,10 @@ case class Simulation(
     * Merged with targets from application.conf [[htc.warmup.targets]].
     * Example: "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
     */
-  warmupTargets: List[String] = List.empty
+  warmupTargets: List[String] = List.empty,
+  /** Plugin configuration map — keys are model names (e.g. "emission", "carFollowing"),
+    * values are free-form string params consumed by each model's factory.
+    * Example: {"emission": {"model": "vt_micro", "co2_per_ml": "2.35"}}
+    */
+  modelPlugins: Map[String, Map[String, String]] = Map.empty
 )

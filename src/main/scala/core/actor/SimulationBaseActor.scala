@@ -78,6 +78,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected var creatorManager: ActorRef =
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
+  private var _spontaneousFinishSent     = false
 
   // Tracks entities spawned via spawnDynamicActor, awaiting ShardRegion.StartEntityAck
   // Key: entityId, Value: (shardRegion, initEvent)
@@ -521,6 +522,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       onFinishSpontaneous(None)
       return
     }
+    _spontaneousFinishSent = false
     try actSpontaneous(event)
     catch
       case e: Throwable =>
@@ -530,6 +532,12 @@ abstract class SimulationBaseActor[T <: BaseState](
         e.printStackTrace()
         if (state == null) onFinishSpontaneous(None)
         else onFinishSpontaneous(Some(currentTick + 1))
+    if (!_spontaneousFinishSent) {
+      logError(
+        s"[BUG] ${getClass.getSimpleName}/${getEntityId} did not call onFinishSpontaneous at tick=$currentTick — auto-recovering"
+      )
+      onFinishSpontaneous(Some(currentTick + 1))
+    }
   }
 
   /** Called when the actor receives a spontaneous event from the time manager. Override this method
@@ -702,10 +710,17 @@ abstract class SimulationBaseActor[T <: BaseState](
     * @param destruct
     *   Whether to destroy the actor after finishing
     */
+  /** Signals that onFinishSpontaneous will be called later (e.g., from onDynamicActorInitialized
+    * after async ACKs arrive). Suppresses the safety-net without sending a FinishEvent.
+    */
+  protected def deferFinishSpontaneous(): Unit =
+    _spontaneousFinishSent = true
+
   protected def onFinishSpontaneous(
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
-  ): Unit =
+  ): Unit = {
+    _spontaneousFinishSent = true
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
@@ -721,6 +736,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManager = currentTimeManager,
       destruct = destruct
     )
+  }
 
   /** Sends a spontaneous event to itself. */
   protected def selfSpontaneous(): Unit =
