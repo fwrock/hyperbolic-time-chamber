@@ -44,6 +44,7 @@ class TrafficSignalPhaseHandler(
 
       state.signalStates.get(phase.origin).foreach { signalState =>
         signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
+        signalState.nextTick      = nextTickTime
         if (signalState.state != newState) {
           TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
           notifyNodes(

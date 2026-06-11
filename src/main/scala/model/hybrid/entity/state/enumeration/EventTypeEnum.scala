@@ -26,4 +26,5 @@ enum EventTypeEnum:
     ReceiveLeaveNodeInfo,
     LinkConnection,
     TrafficSignalChangeStatus,
-    RequestSignalState
+    RequestSignalState,
+    LinkSignalState
