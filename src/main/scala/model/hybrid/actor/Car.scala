@@ -18,7 +18,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
 import core.util.StringPool
-import model.hybrid.support.car.{CarJourneyReporter, CarLinkHandler, CarMicroHandler, CarSignalHandler}
+import model.hybrid.support.car.{CarEmissionHandler, CarJourneyReporter, CarLinkHandler, CarMicroHandler, CarSignalHandler}
 
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 
@@ -124,6 +124,14 @@ class Car(
     getCurrentLinkIdFn    = () => currentLinkId
   )
 
+  private lazy val emissionHandler = new CarEmissionHandler(
+    microStrategy = model.hybrid.util.VehicleSimulationConfig.microEmissionStrategy,
+    mesoStrategy  = model.hybrid.util.VehicleSimulationConfig.mesoEmissionStrategy,
+    reportFn      = (data, label) => report(data = data, label = label),
+    entityIdFn    = () => getEntityId,
+    currentTickFn = () => currentTick
+  )
+
   private lazy val staleEventLogEvery: Int =
     sys.env
       .get("HTC_CAR_STALE_EVENT_LOG_EVERY")
@@ -188,6 +196,7 @@ class Car(
     linkEntryTick = None
     mesoExitTick = None
     journeyReporter.reset()
+    emissionHandler.reset()
     signalWaitUntilTick = None
     signalStateRetryCounter = 0
     state.bestRoute = None
@@ -414,14 +423,20 @@ class Car(
     }
   }
 
-  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit =
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
     microHandler.handleMicroEnterLink(data, state)
+    emissionHandler.onMicroEnterLink(data.linkId, data.microTimeStep)
+  }
 
-  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
+  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit = {
     microHandler.handleMicroUpdate(data, state)
+    emissionHandler.onMicroUpdate(data.velocity, data.acceleration)
+  }
 
-  private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit =
+  private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit = {
     microHandler.handleMicroLeaveLink(data, state)
+    emissionHandler.onMicroLeaveLink(data.linkId, data.distanceTraveled, data.travelTime)
+  }
 
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
@@ -431,7 +446,15 @@ class Car(
   override def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = linkHandler.handleLeaveLink(event.actorRefId, data, state)
+  ): Unit = {
+    // Capture entry tick before linkHandler resets it so emission can compute travel time.
+    val entryTick = linkEntryTick
+    linkHandler.handleLeaveLink(event.actorRefId, data, state)
+    entryTick.foreach { entry =>
+      val travelTimeSecs = (currentTick - entry).toDouble
+      emissionHandler.onLeaveLink(event.actorRefId, data.linkLength, travelTimeSecs)
+    }
+  }
 
   private def finishJourney(reason: String, finalNode: String): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
