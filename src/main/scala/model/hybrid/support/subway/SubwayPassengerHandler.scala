@@ -57,7 +57,6 @@ class SubwayPassengerHandler(
 
   def requestUnloadPeopleData(): Unit = {
     if (state.passengers.isEmpty) {
-      logInfoFn(s"[SUBWAY] No passengers to unload, setting isUnloaded=true id=${entityIdFn()}")
       state.nodeState.isUnloaded = true
       onFinishNodeState()
       return
@@ -66,10 +65,6 @@ class SubwayPassengerHandler(
     state.countUnloadReceived  = 0
     state.countUnloadPassenger = 0
     val nodeId                 = getCurrentNodeFn()
-    logInfoFn(
-      s"[SUBWAY] Requesting unload of ${state.passengers.size} passengers | " +
-        s"id=${entityIdFn()} tick=${currentTickFn()}"
-    )
 
     state.passengers.foreach { case (_, person) =>
       sendMessageFn(
@@ -143,14 +138,9 @@ class SubwayPassengerHandler(
   }
 
   private def onFinishNodeState(): Unit = {
-    logInfoFn(
-      s"[SUBWAY] onFinishNodeState: isLoaded=${state.nodeState.isLoaded} isUnloaded=${state.nodeState.isUnloaded} " +
-        s"id=${entityIdFn()} tick=${currentTickFn()}"
-    )
     if (state.nodeState.isLoaded && state.nodeState.isUnloaded) {
       state.nodeState.isLoaded   = false
       state.nodeState.isUnloaded = false
-      logInfoFn(s"[SUBWAY] Scheduling depart in ${state.stopTime} ticks | id=${entityIdFn()} tick=${currentTickFn()}")
       scheduleEventFn(currentTickFn() + state.stopTime)
     }
   }
