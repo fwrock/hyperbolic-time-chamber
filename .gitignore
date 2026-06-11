@@ -181,3 +181,7 @@ k8s/rendered/
 k8s/generated/
 
 .github/copilot-instructions.md
+/.claude/agents/htc-actor-dev.md
+/.claude/agents/htc-perf-review.md
+/.claude/agents/htc-architect.md
+/CLAUDE.md
