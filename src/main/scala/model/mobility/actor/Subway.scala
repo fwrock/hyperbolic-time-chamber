@@ -27,10 +27,14 @@ class Subway(
         state.status = Stopped
         requestLoadPassenger()
         requestUnloadPeopleData()
+        // Passenger exchange is not yet wired; finish immediately so the LTM can advance.
+        // Remove this line once the station sends are uncommented and onFinishNodeState drives the finish.
+        if (!isEndNodeState) onFinishSpontaneous(Some(currentTick + state.stopTime))
       case Stopped =>
         leavingLink()
       case _ =>
         logWarn(s"Event current status not handled ${state.movableStatus}")
+        onFinishSpontaneous(Some(currentTick + 1))
 
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     super.actInteractWith(event)
