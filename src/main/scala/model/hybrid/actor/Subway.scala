@@ -83,36 +83,26 @@ class Subway(
         )
         ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
           s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
-        logInfo(s"[SUBWAY] Start→Ready, calling enterLink. id=$getEntityId line=${state.line}")
         enterLink()
       case Ready =>
-        logInfo(s"[SUBWAY] Ready, calling enterLink. id=$getEntityId path=${state.movableCurrentPath}")
         enterLink()
       case Moving =>
         val nodeId = getCurrentNode
         val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
-        logInfo(
-          s"[SUBWAY] Moving: nodeId=$nodeId stationFound=${stationOpt.isDefined} " +
-          s"id=$getEntityId path=${state.movableCurrentPath}"
-        )
         stationOpt match {
           case Some(stationId) =>
             state.status = Stopped
-            logInfo(s"[SUBWAY] Stopping at station $stationId node=$nodeId id=$getEntityId")
             ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
               s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
             passengerHandler.requestUnloadPeopleData()
             passengerHandler.requestLoadPassenger(stationOpt)
             onFinishSpontaneous(None)
           case None =>
-            logInfo(s"[SUBWAY] No station at nodeId=$nodeId, calling leavingLink id=$getEntityId")
             leavingLink()
         }
       case Stopped =>
-        logInfo(s"[SUBWAY] Stopped, calling leavingLink id=$getEntityId path=${state.movableCurrentPath}")
         leavingLink()
       case other =>
-        logInfo(s"[SUBWAY] Unhandled status=$other, delegating to super id=$getEntityId")
         super.actSpontaneous(event)
   }
 
@@ -137,11 +127,6 @@ class Subway(
     data: LinkInfoData
   ): Unit = {
     state.distance += data.linkLength
-    logInfo(
-      s"[SUBWAY] ReceiveLeaveLinkInfo from ${event.actorRefId} | " +
-      s"id=$getEntityId status=${state.status} tick=$currentTick " +
-      s"linkLen=${data.linkLength} totalDist=${state.distance}"
-    )
     report(
       data = Map(
         "event_type" -> "leave_link",
@@ -160,11 +145,8 @@ class Subway(
     // by enterLink() for the NEXT segment.
     import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
     if (state.status == Moving) {
-      logInfo(s"[SUBWAY] ReceiveLeaveLinkInfo: status was Moving → setting Ready and scheduling tick+1 | id=$getEntityId")
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
-    } else {
-      logInfo(s"[SUBWAY] ReceiveLeaveLinkInfo: status=${state.status} (not Moving) → suppressing duplicate FinishEvent | id=$getEntityId")
     }
     // If status is already Waiting/Ready/Stopped the subway is managing its
     // own scheduling; suppress the duplicate FinishEvent to avoid a spurious
@@ -175,11 +157,7 @@ class Subway(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    logInfo(
-      s"[SUBWAY] ReceiveEnterLinkInfo from ${event.actorRefId} | " +
-      s"id=$getEntityId status=${state.status} tick=$currentTick " +
-      s"linkLen=${data.linkLength} speed=${data.linkFreeSpeed}"
-    )
+    
     // Guard: zero-length / zero-speed response means the RailLink rejected us.
     // Schedule a retry at the next tick rather than computing time=0 (which
     // would reschedule at currentTick, potentially looping forever at the
@@ -198,10 +176,6 @@ class Subway(
     val time = timeToNextStation(
       distance = data.linkLength,
       velocity = effectiveVelocity
-    )
-    logInfo(
-      s"[SUBWAY] Entering rail link ${event.actorRefId} | id=$getEntityId line=${state.line} " +
-      s"len=${data.linkLength}m speed=${effectiveVelocity}km/h travelTime=$time ticks"
     )
     state.status = Moving
     report(

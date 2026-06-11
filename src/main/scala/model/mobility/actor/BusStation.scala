@@ -32,32 +32,25 @@ class BusStation(
         state.status = RouteWaiting
         requestGoingRoute()
         requestReturningRoute()
-      case Working =>
+        onFinishSpontaneous(Some(currentTick + 1))  // park; actInteractWith will flip status to Ready
+
+      case RouteWaiting =>
+        onFinishSpontaneous(Some(currentTick + 1))  // keep polling until routes arrive
+
+      case Ready | Working =>
+        dispatchNextBus()
+
+      case WorkingWithOutBus =>
         if (state.buses.nonEmpty) {
-          val bus = state.buses.dequeue()
-          try {
-            val actorRef = createBus(bus)
-            val className = classOf[Bus].getName
-            relationships(bus.actorId) = ShardActorId(
-              entityId = bus.actorId,
-              classType = className
-            )
-            onFinishSpontaneous(Some(currentTick + state.interval))
-          } catch {
-            case e: IllegalStateException =>
-              logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
-              state.buses.enqueue(bus)
-              state.status = RouteWaiting
-            case e: Exception =>
-              logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-              state.buses.enqueue(bus)
-              state.status = RouteWaiting
-          }
+          state.status = Working
+          dispatchNextBus()
         } else {
-          state.status = WorkingWithOutBus
+          onFinishSpontaneous(Some(currentTick + state.interval))
         }
+
       case _ =>
         logWarn(s"Event current status not handled ${state.status}")
+        onFinishSpontaneous(Some(currentTick + 1))
     }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
@@ -89,32 +82,7 @@ class BusStation(
 
         if (isCalculateRoutingComplete) {
           state.status = Ready
-          if (state.buses.nonEmpty) {
-            val bus = state.buses.dequeue()
-            try {
-              val actorRef = createBus(bus)
-              val className = classOf[Bus].getName
-              relationships(bus.actorId) = ShardActorId(
-                entityId = bus.actorId,
-                classType = className
-              )
-              state.status = Working
-              onFinishSpontaneous(Some(currentTick + state.interval))
-            } catch {
-              case e: IllegalStateException =>
-                logError(
-                  s"Failed to create bus ${bus.actorId} after route completion: ${e.getMessage}"
-                )
-                state.buses.enqueue(bus)
-                state.status = RouteWaiting
-              case e: Exception =>
-                logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
-                state.buses.enqueue(bus)
-                state.status = RouteWaiting
-            }
-          } else {
-            logWarn("Route calculation completed but no buses available")
-          }
+          // actSpontaneous drives the next step; no onFinishSpontaneous here
         }
       case _ =>
         logWarn(
@@ -122,6 +90,31 @@ class BusStation(
         )
     }
   }
+
+  private def dispatchNextBus(): Unit =
+    if (state.buses.nonEmpty) {
+      val bus = state.buses.dequeue()
+      try {
+        createBus(bus)
+        relationships(bus.actorId) = ShardActorId(entityId = bus.actorId, classType = classOf[Bus].getName)
+        state.status = Working
+        onFinishSpontaneous(Some(currentTick + state.interval))
+      } catch {
+        case e: IllegalStateException =>
+          logError(s"Failed to create bus ${bus.actorId}: ${e.getMessage}")
+          state.buses.enqueue(bus)
+          state.status = RouteWaiting
+          onFinishSpontaneous(Some(currentTick + 1))
+        case e: Exception =>
+          logError(s"Unexpected error creating bus ${bus.actorId}: ${e.getMessage}")
+          state.buses.enqueue(bus)
+          state.status = RouteWaiting
+          onFinishSpontaneous(Some(currentTick + 1))
+      }
+    } else {
+      state.status = WorkingWithOutBus
+      onFinishSpontaneous(Some(currentTick + state.interval))
+    }
 
   private def createBus(bus: BusInformation): ActorRef = {
     val route = calcBusBestRoute()

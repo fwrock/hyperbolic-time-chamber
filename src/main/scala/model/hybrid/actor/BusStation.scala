@@ -86,6 +86,7 @@ class BusStation(
                 classType = classOf[Bus].getName
               )
               pendingSpawnTick = Some(currentTick + state.interval)
+              deferFinishSpontaneous()  // finish arrives via onDynamicActorInitialized
             } catch {
               case e: IllegalStateException =>
                 logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -125,6 +126,7 @@ class BusStation(
           )
           state.status = Working
           pendingSpawnTick = Some(currentTick + state.interval)
+          deferFinishSpontaneous()  // finish arrives via onDynamicActorInitialized
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -195,6 +197,7 @@ class BusStation(
           )
           state.status = Working
           pendingSpawnTick = Some(currentTick + state.interval)
+          deferFinishSpontaneous()  // finish arrives via onDynamicActorInitialized
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable even with partial: ${e.getMessage}")

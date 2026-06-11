@@ -137,7 +137,9 @@ abstract class TimeManagerBase(
     val endTime = System.currentTimeMillis()
     val duration = endTime - startTime
     logInfo(s"Simulation duration: ${duration}ms")
-    logInfo(s"Simulation ticks: ${localTickOffset - initialTick}")
-    logInfo(s"Average tick duration: ${duration.toDouble / (localTickOffset - initialTick)}ms")
+    val ticks = localTickOffset - initialTick
+    logInfo(s"Simulation ticks: $ticks")
+    val avgMs = if (ticks > 0) s"${duration.toDouble / ticks}ms" else "N/A (0 ticks)"
+    logInfo(s"Average tick duration: $avgMs")
   }
 }

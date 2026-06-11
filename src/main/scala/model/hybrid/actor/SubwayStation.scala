@@ -137,9 +137,10 @@ class SubwayStation(
 
   private def scheduleNextTick(): Unit = {
     val nextTickOpt = subwayCreator.computeNextTick(simulationEnd)
-    if (pendingSubwayAckCount > 0)
+    if (pendingSubwayAckCount > 0) {
       pendingSubwayNextTick = nextTickOpt
-    else
+      deferFinishSpontaneous()  // finish arrives via onDynamicActorInitialized
+    } else
       onFinishSpontaneous(nextTickOpt, destruct = false)
   }
 }
