@@ -474,6 +474,7 @@ src/main/scala/
 | [Subway Station Agent](docs/SUBWAY_STATION_AGENT.md) | Train spawning, headway management |
 | [API Reference](docs/API.md) | REST API endpoints, request/response schemas |
 | [ClickHouse Queries](docs/clickhouse-queries.md) | Sample analytical queries |
+| [Known Gaps](docs/KNOWN_GAPS.md) | Honest audit: what's documented vs. what's actually implemented/tested |
 
 ---
 
