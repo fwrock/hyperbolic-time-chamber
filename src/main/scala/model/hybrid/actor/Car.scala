@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
@@ -43,6 +44,19 @@ class Car(
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
     copied
+  }
+
+  /** Wires PrivateVehicle's reply-linkage fields (ownerPersonRef, tripOrigin, etc. — see
+    * docs/KNOWN_GAPS.md "Shard Migration Silently Drops Actor-Local Reply State") into the
+    * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
+    * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
+    */
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreMigrationFields(snapshot)
   }
 
   private var currentLinkId: Option[String] = None

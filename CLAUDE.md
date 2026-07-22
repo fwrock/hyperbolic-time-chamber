@@ -21,7 +21,9 @@ src/main/scala/
     util/            — StringPool, JsonUtil, IdUtil, ActorCreatorUtil
     metrics/         — Prometheus counter/gauge definitions
   model/
-    mobility/        — meso-only: Car, Bus, Subway, Link, Node, Person (actors + states + events)
+    mobility/        — data-only survivors of a removed legacy actor package: entity/ (state,
+                       event data incl. SubRoutePair, VehicleLinkFlowData — still consumed by
+                       JsonUtil / ClickHouseReportData), collections/, util/, types/. No actors.
     hybrid/          — micro+meso: Car, Bus, Link, PrivateVehicle (trait), Movable (abstract)
       micro/         — CarFollowingModel, LaneChangeModel, MicroSimulationStrategy
       support/car/   — CarJourneyReporter, CarLinkHandler, CarMicroHandler, CarSignalHandler
@@ -92,6 +94,91 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - `var` fields on the actor itself must be reset in `resetTripState()` / `onDestruct()`
 - Never hold `ActorRef` in state — use entity IDs + shard IDs
 
+**What must live in `state`, not as an actor-local `var`**: only `state` is carried by
+`BaseActor.buildMigrationSnapshot` across a shard migration/rebalance. Any actor-local `var` that
+represents something needed to reconstruct correct behavior after a restart — most importantly a
+**pending reply obligation to another actor** (e.g. `PrivateVehicle.ownerPersonRef`,
+`Person.currentPTVehicleRef`) — must go in `state`, or it silently vanishes on migration and the
+actor loses the ability to ever answer that sender. See `docs/KNOWN_GAPS.md` ("Shard Migration
+Silently Drops Actor-Local Reply State") for the concrete failure chain this caused.
+
+Actor-local `var`s are fine to keep **outside** `state` when they're cheaply recoverable and hold
+no reply obligation — e.g. handles/proxies to process-wide singletons (`CityMapUtil`,
+`StringPool`), retry/attempt counters that are safe to reset to zero on restart, or caches
+rebuildable from `state` on demand. The test is not "is it mutable" but "does losing this value on
+restart break correctness for someone else, or just cost a recompute."
+
+**Shard rebalancing/migration is currently kept disabled** — the project is prioritizing
+simulation execution correctness and performance first, and migration/snapshot restore is not
+part of the active test loop. Gaps A/B/C in `docs/KNOWN_GAPS.md` are real but dormant under this
+setting; don't treat their absence from observed bugs as evidence they're fixed.
+
+## Synchronization Discipline
+
+HTC avoids deadlocks by protocol invariant, not by watchdog/timeout recovery. Every
+`actSpontaneous` must resolve on every branch (`onFinishSpontaneous(Some(tick))` or `None`), and
+every interaction event's reply obligation is **conditional**, not universal — it depends on
+whether the sender actually needs something back to stay consistent.
+
+**Fire-and-forget** — sender doesn't need anything back, doesn't wait, resolves its own
+spontaneous event regardless of what the receiver does with the message:
+```scala
+// Car reports its speed to the metrics pipeline — no reply expected, no wait.
+override def actSpontaneous(event: BaseEvent): Unit = {
+  report(data = Map("speed" -> currentSpeed, "tick" -> currentTick), label = "car_speed")
+  sendMessageTo(entityId = linkId, shardId = linkShardId, data = LinkInfoData(...), eventType = "CAR_ENTER_LINK")
+  onFinishSpontaneous(Some(nextTick))  // resolves immediately; doesn't wait on the link's reaction
+}
+```
+
+**Consistency-critical** — sender needs the receiver's answer to proceed correctly, so it waits
+for the reply before resolving; the receiver must reply on every branch, including no-ops:
+```scala
+// Car reaching a node needs the signal state before it can decide whether to cross.
+override def actSpontaneous(event: BaseEvent): Unit = {
+  sendMessageTo(entityId = nodeId, shardId = nodeShardId, data = SignalStateRequest(targetLinkId), eventType = "REQUEST_SIGNAL_STATE")
+  // does NOT call onFinishSpontaneous here — waits for NODE's reply as an interaction event
+}
+
+// Node: must answer every request, even when there's no signal control for that movement
+override def actInteractWith(event: BaseEvent): Unit = event.data match {
+  case req: SignalStateRequest =>
+    val state = signalStates.get(req.targetLinkId).getOrElse(SignalState.Green) // default green — still a reply
+    sendMessageTo(entityId = event.sourceId, shardId = event.sourceShardId, data = SignalStateResponse(state), eventType = "SIGNAL_STATE_RESPONSE")
+  case _ => // ...
+}
+
+// Car resolves its own spontaneous event only once the reply arrives
+override def actInteractWith(event: BaseEvent): Unit = event.data match {
+  case resp: SignalStateResponse =>
+    if (resp.state == SignalState.Green) crossIntersection() else waitAndRescheduleSelf()
+    onFinishSpontaneous(Some(nextTick))
+  case _ => // ...
+}
+```
+
+Rules of thumb:
+- If nothing downstream depends on B's answer to decide what A does next, it's fire-and-forget —
+  don't add a reply/wait that isn't needed.
+- If A's own correctness (ordering, state coherence) depends on B's answer, it's
+  consistency-critical — B must reply on **every** branch (a "nothing to report" case is still a
+  reply), and only this case justifies A not resolving its spontaneous event until the reply
+  arrives.
+- Never let B's reply-producing logic require a further round-trip back through A (or anything
+  downstream of A) before B can answer — that creates a logical wait cycle (livelock) even though
+  no actor thread is ever blocked.
+- Ordering between these exchanges is guaranteed by the Lamport clock (`lamportTick` on
+  `BaseEvent`), not by a manual sync with the Time Manager.
+
+Common bugs to check for when reviewing a diff against this discipline:
+- A fire-and-forget path where `onFinishSpontaneous` got moved into a reply handler for no
+  reason — unnecessary coupling/wait that doesn't need to exist.
+- A consistency-critical request handler with a branch that returns without calling
+  `sendMessageTo(...Response...)` — hangs the sender (and transitively the Time Manager).
+- A reply handler that forgets `onFinishSpontaneous` after consuming the response — the sender
+  received its answer but never resolves its own spontaneous event.
+- A watchdog/timeout added to "fix" a hang instead of finding and fixing the missing reply path.
+
 ## Simulation Models
 
 ### Hybrid (micro+meso) — `model.hybrid`
@@ -99,10 +186,6 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - Micro: IDM car-following + MOBIL lane change; Link actor drives via `MicroUpdateData` every sub-tick
 - Transition: `state.activateMicroMode()` / `state.deactivateMicroMode()`
 - `VehicleSimulationConfig` provides simulation-wide tuning from env vars / application.conf
-
-### Mobility (meso-only) — `model.mobility`
-- Simpler; no micro mode; used for Bus, Subway, person trip planning
-- `Person` actor orchestrates multi-modal trips via `PersonTripManager`
 
 ## Key Utilities
 

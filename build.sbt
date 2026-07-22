@@ -138,10 +138,18 @@ lazy val root = (project in file("."))
       // Test
       "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
+      // Classic TestActorRef — needed to construct/inspect classic (non-typed) actors like
+      // Car/Person directly in unit tests without a full cluster-sharded ActorSystem.
+      "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test,
     ),
     
     // No dependency overrides needed currently
-    dependencyOverrides ++= Seq(),
+    // pekko-discovery-kubernetes-api transitively pulls an older pekko-discovery than the rest of
+    // the Pekko modules (1.5.0); left unpinned this becomes a hard startup failure
+    // (fail-mixed-versions) for any ActorSystem created in tests, not just a warning.
+    dependencyOverrides ++= Seq(
+      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion
+    ),
     
     Compile / PB.protoSources := Seq(
       baseDirectory.value / "src" / "main" / "protobuf"
