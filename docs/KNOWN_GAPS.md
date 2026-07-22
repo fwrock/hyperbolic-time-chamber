@@ -4,21 +4,76 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
-## Headline Gap: an Undocumented, Apparently-Orphaned Second Actor Package
+## [RESOLVED 2026-07-22] Headline Gap: an Undocumented, Orphaned Second Actor Package
 
-README and `docs/*_AGENT.md` document only `model.hybrid.actor` (Car, Bus, Subway, Person, etc.).
-There is a **second, complete, parallel actor package**, `model/mobility/actor/` (Car, Bus,
-BusStation, BusStop, Link, Node, Person, Subway, SubwayStation, TrafficSignal, GPS — ~2,184 lines
-total), that is not mentioned anywhere in the README or `docs/`. A repo-wide grep found it is
-**never referenced** by any scenario JSON, docs, or `typeActor` string outside its own package.
-`CLAUDE.md` describes it as an intentional "meso-only" model, but nothing in the actual
-scenario-loading path uses it, and `model/mobility/actor/Person.scala` is a 15-line stub —
-consistent with legacy/orphaned code, not an active alternate simulation mode.
+**Resolution**: `model/mobility/actor/` (Car, Bus, BusStation, BusStop, Link, Node, Person, Subway,
+SubwayStation, TrafficSignal, GPS — ~2,184 lines) has been deleted. Confirmed dead before removal:
+a repo-wide grep found no scenario JSON, doc, or `typeActor` string outside the package itself
+referencing it, with one exception — `DigitalTwinManager.entityTypeClassName` routed
+`EntityType.SUBWAY`/`EntityType.PERSON` to `model.mobility.actor.Subway`/`Person` while every other
+`EntityType` case already routed to `model.hybrid.actor`. That was a genuine mis-routing bug (the
+digital-twin update path for Subway/Person entities would have hit the dead package), fixed as
+part of this removal by routing both cases to `model.hybrid.actor` like the rest.
+`model/mobility/entity`, `model/mobility/collections`, `model/mobility/util`, and
+`model/mobility/types` were kept — they hold data types (`SubRoutePair`,
+`VehicleLinkFlowData`, etc.) still imported by `JsonUtil.scala` and
+`core/actor/manager/report/ClickHouseReportData.scala`; only the `actor` subpackage was orphaned.
 
-**Before touching anything in `model/mobility/actor/`**: confirm with the maintainer whether it's
-dead code safe to remove, or a genuinely planned alternate mode that just hasn't been wired in or
-documented yet. Don't assume either without asking — the answer changes whether the right move is
-deletion or documentation.
+Original finding, kept for history: README and `docs/*_AGENT.md` documented only
+`model.hybrid.actor` (Car, Bus, Subway, Person, etc.). `model/mobility/actor/` was a second,
+complete, parallel actor package not mentioned anywhere in the README or `docs/`, with
+`model/mobility/actor/Person.scala` a 15-line stub — consistent with legacy/orphaned code, not an
+active alternate simulation mode.
+
+## Shard Migration Silently Drops Actor-Local Reply State (Currently Latent — Migration Is Disabled)
+
+**[RESOLVED 2026-07-22] Gaps A and B below are fixed.** `PrivateVehicle` gained
+`captureMigrationFields`/`restoreMigrationFields` (called from each concrete vehicle's
+`buildMigrationSnapshot`/`applyMigrationSnapshot` override — `Car.scala`, `Bicycle.scala`,
+`Motorcycle.scala`, since a trait with a self-type can't itself call `super` on a method it doesn't
+extend), and `Person` got the equivalent override for `currentPTVehicleRef`. `MigrationSnapshot`
+carries the new fields with safe defaults so old snapshots still deserialize. Round-trip coverage:
+`src/test/scala/model/hybrid/actor/PrivateVehicleMigrationSnapshotSpec.scala` and
+`PersonMigrationSnapshotSpec.scala`.
+**Gap C is a distinct, still-open issue** — see its note below; fixing A/B did not resolve it.
+
+Root-caused while investigating why `Car`/`Bicycle`/`Motorcycle` could fail to emit `TripCompleted`.
+The original fix attempt (`vehicleTripTimeoutTicks`, commit `932798f`) was correctly reverted in
+`420b285` in favor of a structural guarantee (`Car.onDestruct` always calls
+`onFinishPrivateVehicle` when `state.status != Finished`). That fixes the trip-lifecycle case, but
+three related gaps trace back to one shared structural cause and are still open:
+
+- **A — `PrivateVehicle` reply-linkage vars aren't covered by migration snapshots.**
+  `ownerPersonRef`, `personCentric`, `tripOrigin`, `tripDestination`, `tripStartTick` live as plain
+  `var`s on the actor (`PrivateVehicle.scala:33-69`), not inside `state: T`. `BaseActor.buildMigrationSnapshot`
+  (`BaseActor.scala:286-291`) only serializes `state`, and no actor under `model.hybrid` overrides
+  `buildMigrationSnapshot`/`applyMigrationSnapshot` to add these fields. If a vehicle migrates
+  shard mid-trip, it rehydrates with `ownerPersonRef = None`; `reportTripCompletion`
+  (`PrivateVehicle.scala:205-206`) becomes a silent no-op, and `personCentric` resetting to `false`
+  also risks an incorrect `selfDestruct()` for a still-owned vehicle.
+- **B — same pattern on `Person.currentPTVehicleRef`.** The Bus/Subway boarding-response barrier
+  (`expectedUnloadResponses`) was correctly fixed in commit `531ca55` by having `Person.onDestruct`
+  always answer the vehicle it's boarded on. That fix depends on `currentPTVehicleRef`, itself a
+  plain actor-local `var`, not part of `PersonState` — so it reopens the same barrier deadlock if
+  `Person` migrates shard while boarded.
+- **C — `Car.signalStateRetryCounter` watchdog (`Car.scala:252-262`) is a live retry/give-up loop,
+  still open — confirmed a distinct root cause from A/B, not fixed by them.** `Car.status ==
+  WaitingSignalState` lives in `state` (a `MovableState` field), so it *does* survive migration via
+  the default `buildMigrationSnapshot` — A/B were about actor-local `var`s outside `state`, which
+  this isn't. The real exposure is the in-flight `REQUEST_SIGNAL_STATE`/`SIGNAL_STATE_RESPONSE`
+  messages themselves during the migration hand-off window: `MessageBuffer` (see its own docstring)
+  silently drops buffered messages once `maxBufferSize` is exceeded, and that's a message-delivery
+  gap, not a missing-snapshot-field gap. `NodeEventHandler.handleRequestSignalState` was confirmed
+  to reply on every branch, so this isn't a Node bug either. A real fix belongs in the migration
+  coordinator/`MessageBuffer` (e.g. backpressure or a non-lossy overflow policy instead of silent
+  drop) — that's a `htc-architect`-level design call, not a Car.scala patch, and out of scope for
+  the A/B fix above.
+
+**Why this hadn't bitten anyone yet**: shard rebalancing/migration is currently kept disabled while
+the project prioritizes simulation execution quality and performance — see `CLAUDE.md`'s Actor
+State section. These gaps were real but dormant; A/B are now fixed (see above) so they no longer
+become load-bearing if migration is turned back on. Gap C remains dormant-but-real for the same
+reason and needs its own fix before migration can be safely re-enabled.
 
 ## Test Coverage
 
