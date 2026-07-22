@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
 import core.entity.actor.properties.Properties
@@ -296,6 +297,36 @@ class Person(
     }
 
 
+
+  /** Carries the boarding barrier's reply-linkage field (`currentPTVehicleRef`) across a shard
+    * migration.
+    *
+    * `currentPTVehicleRef` is an actor-local `var`, not part of `PersonState`, so the default
+    * `BaseActor.buildMigrationSnapshot` (which only serializes `state`) would silently drop it on
+    * migration. `onDestruct` depends on it to answer the boarded Bus/Subway's unload barrier
+    * (`expectedUnloadResponses`) on every path (commit `531ca55`) — losing it on migration reopens
+    * that barrier deadlock. Follows the same override pattern `SimulationBaseActor` already uses
+    * for `currentTick`/`lamportClock`/`relationships`.
+    */
+  override protected def buildMigrationSnapshot(): MigrationSnapshot = {
+    val base = super.buildMigrationSnapshot()
+    base.copy(
+      currentPTVehicleRefId = currentPTVehicleRef.map(_._1).getOrElse(""),
+      currentPTVehicleRefClassType = currentPTVehicleRef.map(_._2).getOrElse("")
+    )
+  }
+
+  /** Restores `currentPTVehicleRef` from a migration snapshot. See [[buildMigrationSnapshot]] for
+    * why this must be carried explicitly.
+    */
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+
+    currentPTVehicleRef =
+      if (snapshot.currentPTVehicleRefId.nonEmpty)
+        Some((snapshot.currentPTVehicleRefId, snapshot.currentPTVehicleRefClassType))
+      else None
+  }
 
   /** If Person dies while on board a PT vehicle (Bus or Subway), send isArrival=false so the
     * vehicle's unload counter completes and it is not stuck waiting forever.

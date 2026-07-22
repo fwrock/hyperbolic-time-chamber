@@ -30,6 +30,37 @@ package core.actor.manager.loadbalance.migration
   *   Map of dependency key → resource ID
   * @param dependencyActorTypes
   *   Map of dependency key → actor type (e.g., "LoadBalancedDistributed")
+  * @param ownerPersonRefId
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: the owning Person's entity id,
+  *   empty when the vehicle has no pending reply obligation (never activated / already parked).
+  * @param ownerPersonRefClassType
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: the owning Person's actor
+  *   class type, paired with [[ownerPersonRefId]].
+  * @param personCentric
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: whether this vehicle has ever
+  *   been activated by a Person (governs selfDestruct-on-finish vs. return-to-Parked).
+  * @param tripOrigin
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: current trip origin override,
+  *   empty when not mid-trip.
+  * @param tripDestination
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: current trip destination
+  *   override, empty when not mid-trip.
+  * @param tripStartTick
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: tick the current trip started,
+  *   `Long.MinValue` when not mid-trip.
+  * @param tripStartDistance
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: odometer distance at trip
+  *   start, used to compute distance traveled on completion.
+  * @param destroyAfterNextPark
+  *   [[org.interscity.htc.model.hybrid.actor.PrivateVehicle]] only: set when the owning Person
+  *   completed its schedule while this vehicle was still mid-trip; the vehicle must self-destruct
+  *   on its next park instead of waiting for another StartTrip.
+  * @param currentPTVehicleRefId
+  *   [[org.interscity.htc.model.hybrid.actor.Person]] only: the boarded Bus/Subway's entity id,
+  *   empty when not currently boarded on a PT vehicle.
+  * @param currentPTVehicleRefClassType
+  *   [[org.interscity.htc.model.hybrid.actor.Person]] only: the boarded Bus/Subway's actor class
+  *   type, paired with [[currentPTVehicleRefId]].
   */
 case class MigrationSnapshot(
   stateJson: String,
@@ -42,5 +73,15 @@ case class MigrationSnapshot(
   dependencyIds: Map[String, String] = Map.empty,
   dependencyTypes: Map[String, String] = Map.empty,
   dependencyResourceIds: Map[String, String] = Map.empty,
-  dependencyActorTypes: Map[String, String] = Map.empty
+  dependencyActorTypes: Map[String, String] = Map.empty,
+  ownerPersonRefId: String = "",
+  ownerPersonRefClassType: String = "",
+  personCentric: Boolean = false,
+  tripOrigin: String = "",
+  tripDestination: String = "",
+  tripStartTick: Long = Long.MinValue,
+  tripStartDistance: Double = 0.0,
+  destroyAfterNextPark: Boolean = false,
+  currentPTVehicleRefId: String = "",
+  currentPTVehicleRefClassType: String = ""
 )

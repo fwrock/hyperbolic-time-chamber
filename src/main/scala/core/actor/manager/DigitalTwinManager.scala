@@ -119,8 +119,8 @@ class DigitalTwinManager(timeManager: ActorRef)
       case EntityType.CAR            => Some("org.interscity.htc.model.hybrid.actor.Car")
       case EntityType.BIKE           => Some("org.interscity.htc.model.hybrid.actor.Car")
       case EntityType.BUS            => Some("org.interscity.htc.model.hybrid.actor.Bus")
-      case EntityType.SUBWAY         => Some("org.interscity.htc.model.mobility.actor.Subway")
-      case EntityType.PERSON         => Some("org.interscity.htc.model.mobility.actor.Person")
+      case EntityType.SUBWAY         => Some("org.interscity.htc.model.hybrid.actor.Subway")
+      case EntityType.PERSON         => Some("org.interscity.htc.model.hybrid.actor.Person")
       case EntityType.NODE           => Some("org.interscity.htc.model.hybrid.actor.Node")
     }
 
@@ -133,6 +133,11 @@ class DigitalTwinManager(timeManager: ActorRef)
     }
 
   private def startBusStream(): Unit = {
+    // Pre-existing gap unrelated to this task: `runForeach` needs a Materializer resolvable via
+    // an implicit ActorSystem/ClassicActorSystemProvider, which an Actor's `context.system` isn't
+    // by default. Matches the `implicit val mat = Materializer(system)` convention already used in
+    // core/api/ConfigApiServer.scala.
+    implicit val mat: org.apache.pekko.stream.Materializer = org.apache.pekko.stream.Materializer(context.system)
     val consumerSettings = SubscriberConfiguration.consumerConfig(
       groupId = DigitalTwinManager.ConsumerGroupId,
       system  = context.system
