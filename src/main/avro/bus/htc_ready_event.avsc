@@ -1,0 +1,20 @@
+{
+  "type": "record",
+  "name": "HtcReadyEvent",
+  "namespace": "org.interscity.htc.avro.bus",
+  "fields": [
+    {"name": "eventId",         "type": "string"},
+    {"name": "entityId",        "type": "string",  "doc": "ID do ator twin alvo na simulação"},
+    {"name": "entityType",      "type": {"type": "enum", "name": "EntityType",
+                                 "symbols": ["CAR","BIKE","BUS","SUBWAY","PERSON","TRAFFIC_SIGNAL","LINK","NODE"]}},
+    {"name": "eventKind",       "type": {"type": "enum", "name": "EventKind",
+                                 "symbols": ["TELEMETRY","COMMAND","ANOMALY","STATE_UPDATE"]}},
+    {"name": "payload",         "type": "string",  "doc": "JSON payload com dados da entidade"},
+    {"name": "sourceTimestamp", "type": "long",    "doc": "Timestamp da fonte real (ms epoch)"},
+    {"name": "simulationTick",  "type": ["null","long"], "default": null},
+    {"name": "htcdlModelId",    "type": ["null","string"], "default": null},
+    {"name": "anomalyType",     "type": ["null", {"type": "enum", "name": "AnomalyType",
+                                 "symbols": ["ACCIDENT","SIGNAL_CHANGE","ROAD_CLOSURE","SENSOR_FAILURE"]}],
+                                 "default": null}
+  ]
+}

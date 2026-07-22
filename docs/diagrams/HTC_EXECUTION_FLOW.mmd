@@ -1,0 +1,60 @@
+%% HTC execution flow as Mermaid sequence diagrams
+%% Scope: general qualification text (without Load Balance Manager and Snapshot Manager)
+
+sequenceDiagram
+    title Fase A - Inicializacao e Carregamento
+    participant SM as Simulation Manager
+    participant GTM as Global Time Manager
+    participant LTM as Local Time Managers
+    participant RM as Report Manager
+    participant R as Reporters
+    participant LDM as Load Data Manager
+    participant CM as Creator Managers
+
+    SM->>GTM: 1. Criar GTM
+    GTM->>LTM: 2. Criar pool de LTMs
+    GTM-->>SM: 3. Registrar refs dos LTMs
+
+    SM->>RM: 4. Criar Report Manager
+    RM->>R: 5. Criar Reporters
+    RM-->>SM: 6. Registrar refs dos Reporters
+
+    SM->>LDM: 7. Criar LDM (quando LTMs e Reporters estao prontos)
+    LDM->>CM: 8. Carregar dados e criar atores
+    CM-->>LDM: 9. Carga concluida
+    LDM-->>SM: 10. Eager load ready
+
+    Note over SM: 11. Barreira de pos-carga (warm-up opcional)
+    SM->>GTM: 12. StartSimulationTime
+
+
+---
+
+sequenceDiagram
+    title Fase B - Loop de Execucao por Tick
+    participant GTM as Global Time Manager
+    participant LTM as Local Time Managers
+    participant SA as Simulation Actor
+    participant SB as Outro Simulation Actor
+    participant R as Reporters
+
+    loop Enquanto houver eventos e tempo valido
+        GTM->>GTM: 1. Selecionar menor proximo tick global
+        GTM->>LTM: 2. UpdateGlobalTime(t)
+        LTM->>SA: 3. Disparar evento espontaneo no tick t
+
+        opt Interacao entre atores
+            SA->>SB: 4. Mensagem entre atores
+            Note over SA,SB: Atualizacao de relogio de Lamport
+        end
+
+        opt Reporte definido pelo desenvolvedor
+            SA-->>R: 5. Evento de reporte
+        end
+
+        SA->>LTM: 6. Agendar eventos futuros (se houver)
+        LTM-->>GTM: 7. LocalTimeReport(nextTick, hasScheduled)
+        GTM->>GTM: 8. Verificar condicao de parada
+    end
+
+    GTM-->>LTM: StopSimulationEvent

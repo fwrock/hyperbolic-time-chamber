@@ -74,6 +74,23 @@ object KafkaTopicNaming {
     val SimulationControl = s"$basePrefix.system.simulation-control.v1"
   }
 
+  /** Simulation output topics — produced by KafkaReportData, consumed by htc-gil */
+  object Simulation {
+    val Metrics       = s"$basePrefix.simulation.metrics.v1"
+    val VehicleStates = s"$basePrefix.simulation.vehicle-states.v1"
+    val LinkStates    = s"$basePrefix.simulation.link-states.v1"
+    val PersonStates  = s"$basePrefix.simulation.person-states.v1"
+  }
+
+  /** HTC-DL Bus integration topics — consumed by DigitalTwinManager */
+  object Bus {
+    val RawApiData  = s"$basePrefix.bus.raw-api-data.v1"
+    val RawFileData = s"$basePrefix.bus.raw-file-data.v1"
+    val RawCdcData  = s"$basePrefix.bus.raw-cdc-data.v1"
+    val ReadyEvents = s"$basePrefix.bus.ready-events.v1"
+    val Anomalies   = s"$basePrefix.bus.anomalies.v1"
+  }
+
   /** Get all defined topics for auto-creation */
   def getAllTopics: Set[String] = Set(
     Routing.DynamicCosts,
@@ -85,7 +102,16 @@ object KafkaTopicNaming {
     Mobility.PersonMovement,
     System.ActorLifecycle,
     System.PerformanceMetrics,
-    System.SimulationControl
+    System.SimulationControl,
+    Simulation.Metrics,
+    Simulation.VehicleStates,
+    Simulation.LinkStates,
+    Simulation.PersonStates,
+    Bus.RawApiData,
+    Bus.RawFileData,
+    Bus.RawCdcData,
+    Bus.ReadyEvents,
+    Bus.Anomalies
   )
 
   /** Get topic configuration for a specific topic
@@ -124,6 +150,25 @@ object KafkaTopicNaming {
           partitions = 4,
           replicationFactor = 1,
           retentionMs = 86400000L,
+          cleanupPolicy = "delete"
+        )
+
+      case Simulation.Metrics | Simulation.VehicleStates | Simulation.LinkStates |
+          Simulation.PersonStates =>
+        TopicConfig(
+          name = topicName,
+          partitions = 12,
+          replicationFactor = 1,
+          retentionMs = 1800000L,
+          cleanupPolicy = "delete"
+        )
+
+      case Bus.RawApiData | Bus.RawFileData | Bus.RawCdcData | Bus.ReadyEvents | Bus.Anomalies =>
+        TopicConfig(
+          name = topicName,
+          partitions = 6,
+          replicationFactor = 1,
+          retentionMs = 3600000L,
           cleanupPolicy = "delete"
         )
 

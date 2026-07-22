@@ -1,0 +1,84 @@
+<mxfile host="Electron" modified="2026-06-04T00:00:00.000Z" agent="GitHub Copilot" version="21.0.0" type="device">
+  <diagram id="seq-phase-a" name="Sequencia - Fase A (Inicializacao)">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t1" value="HTC - Diagrama de Sequencia: Fase A (Inicializacao e Carregamento)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="20" width="940" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n1" value="Escopo: sem Load Balance Manager e sem Snapshot Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="65" width="700" height="32" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1" value="SM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="100" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="p2" value="GTM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="300" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="p3" value="LTM(s)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="500" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="p4" value="Report Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="700" y="120" width="130" height="36" as="geometry" /></mxCell>
+        <mxCell id="p5" value="Reporters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="900" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="p6" value="LDM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1100" y="120" width="110" height="36" as="geometry" /></mxCell>
+
+        <mxCell id="l1" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="155" y="165" width="1" height="650" as="geometry" /></mxCell>
+        <mxCell id="l2" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="355" y="165" width="1" height="650" as="geometry" /></mxCell>
+        <mxCell id="l3" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="555" y="165" width="1" height="650" as="geometry" /></mxCell>
+        <mxCell id="l4" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="765" y="165" width="1" height="650" as="geometry" /></mxCell>
+        <mxCell id="l5" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="955" y="165" width="1" height="650" as="geometry" /></mxCell>
+        <mxCell id="l6" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="1155" y="165" width="1" height="650" as="geometry" /></mxCell>
+
+        <mxCell id="m2" value="1) create GTM" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l1" target="l2"><mxGeometry relative="1" as="geometry"><mxPoint x="155" y="230" as="sourcePoint" /><mxPoint x="355" y="230" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m3" value="2) create LTM pool" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l2" target="l3"><mxGeometry relative="1" as="geometry"><mxPoint x="355" y="270" as="sourcePoint" /><mxPoint x="555" y="270" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m4" value="3) register LTM refs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l2" target="l1"><mxGeometry relative="1" as="geometry"><mxPoint x="355" y="310" as="sourcePoint" /><mxPoint x="155" y="310" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m5" value="4) create Report Manager" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l1" target="l4"><mxGeometry relative="1" as="geometry"><mxPoint x="155" y="350" as="sourcePoint" /><mxPoint x="765" y="350" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m6" value="5) create reporters" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l4" target="l5"><mxGeometry relative="1" as="geometry"><mxPoint x="765" y="390" as="sourcePoint" /><mxPoint x="955" y="390" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m7" value="6) register reporter refs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l4" target="l1"><mxGeometry relative="1" as="geometry"><mxPoint x="765" y="430" as="sourcePoint" /><mxPoint x="155" y="430" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m8" value="7) create LDM (when LTM+reporters ready)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l1" target="l6"><mxGeometry relative="1" as="geometry"><mxPoint x="155" y="470" as="sourcePoint" /><mxPoint x="1155" y="470" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m9" value="8) load data and create actors" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;" edge="1" source="p6" target="p6" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1260" y="510" /><mxPoint x="1260" y="550" /><mxPoint x="1155" y="550" /></Array></mxGeometry></mxCell>
+        <mxCell id="m10" value="9) eager load complete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="l6" target="l1"><mxGeometry relative="1" as="geometry"><mxPoint x="1155" y="590" as="sourcePoint" /><mxPoint x="155" y="590" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="m11" value="10) post-load barrier / optional warm-up" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;" edge="1" source="p1" target="p1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="620" /><mxPoint x="250" y="660" /><mxPoint x="155" y="660" /></Array></mxGeometry></mxCell>
+        <mxCell id="m12" value="11) StartSimulationTime" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="l1" target="l2"><mxGeometry relative="1" as="geometry"><mxPoint x="155" y="700" as="sourcePoint" /><mxPoint x="355" y="700" as="targetPoint" /></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="seq-phase-b" name="Sequencia - Fase B (Execucao por Tick)">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="tb1" value="HTC - Diagrama de Sequencia: Fase B (Loop de Execucao por Tick)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="20" width="960" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pb1" value="GTM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="140" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="pb2" value="LTM(s)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="390" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="pb3" value="SA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="640" y="120" width="110" height="36" as="geometry" /></mxCell>
+        <mxCell id="pb4" value="SA destino" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="890" y="120" width="120" height="36" as="geometry" /></mxCell>
+        <mxCell id="pb5" value="Reporters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1140" y="120" width="120" height="36" as="geometry" /></mxCell>
+
+        <mxCell id="ll1" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="195" y="165" width="1" height="660" as="geometry" /></mxCell>
+        <mxCell id="ll2" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="445" y="165" width="1" height="660" as="geometry" /></mxCell>
+        <mxCell id="ll3" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="695" y="165" width="1" height="660" as="geometry" /></mxCell>
+        <mxCell id="ll4" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="950" y="165" width="1" height="660" as="geometry" /></mxCell>
+        <mxCell id="ll5" value="" style="shape=line;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="1200" y="165" width="1" height="660" as="geometry" /></mxCell>
+
+        <mxCell id="loop" value="loop [enquanto houver eventos e tempo de simulacao valido]" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;strokeWidth=1;fillColor=none;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="210" width="1180" height="540" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s1" value="1) choose next global tick" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" source="ll1" target="ll1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="290" y="250" /><mxPoint x="290" y="280" /><mxPoint x="195" y="280" /></Array></mxGeometry></mxCell>
+        <mxCell id="s2" value="2) UpdateGlobalTimeEvent(t)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll1" target="ll2"><mxGeometry relative="1" as="geometry"><mxPoint x="195" y="320" as="sourcePoint" /><mxPoint x="445" y="320" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s3" value="3) spontaneous events at tick t" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll2" target="ll3"><mxGeometry relative="1" as="geometry"><mxPoint x="445" y="360" as="sourcePoint" /><mxPoint x="695" y="360" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s4" value="4) actor interaction + Lamport update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll3" target="ll4"><mxGeometry relative="1" as="geometry"><mxPoint x="695" y="400" as="sourcePoint" /><mxPoint x="950" y="400" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s5" value="5) optional report event" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll3" target="ll5"><mxGeometry relative="1" as="geometry"><mxPoint x="695" y="440" as="sourcePoint" /><mxPoint x="1200" y="440" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s6" value="6) schedule future events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll3" target="ll2"><mxGeometry relative="1" as="geometry"><mxPoint x="695" y="480" as="sourcePoint" /><mxPoint x="445" y="480" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s7" value="7) LocalTimeReport(nextTick, hasScheduled)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="ll2" target="ll1"><mxGeometry relative="1" as="geometry"><mxPoint x="445" y="520" as="sourcePoint" /><mxPoint x="195" y="520" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="s8" value="8) termination check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;" edge="1" source="ll1" target="ll1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="290" y="560" /><mxPoint x="290" y="590" /><mxPoint x="195" y="590" /></Array></mxGeometry></mxCell>
+        <mxCell id="s9" value="9) stop simulation (if end condition)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="ll1" target="ll2"><mxGeometry relative="1" as="geometry"><mxPoint x="195" y="660" as="sourcePoint" /><mxPoint x="445" y="660" as="targetPoint" /></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

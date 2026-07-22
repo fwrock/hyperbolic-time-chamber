@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "SimulationReportEvent",
+  "namespace": "org.interscity.htc.avro.simulation",
+  "doc": "Simulation metric event published to Redpanda by KafkaReportData",
+  "fields": [
+    {"name": "simulationId",  "type": "string"},
+    {"name": "entityId",      "type": "string"},
+    {"name": "entityType",    "type": ["null","string"], "default": null},
+    {"name": "tick",          "type": "long"},
+    {"name": "lamportTick",   "type": "long"},
+    {"name": "realTimeMs",    "type": "long"},
+    {"name": "label",         "type": ["null","string"], "default": null,
+                               "doc": "Report label from report() call — used for topic routing"},
+    {"name": "dataJson",      "type": "string",
+                               "doc": "JSON-encoded event data payload"}
+  ]
+}
