@@ -51,7 +51,7 @@ The entity types available in the hybrid model are:
 | `hybrid.actor.SubwayStation` | Subway station (spawns Subway actors) |
 | `hybrid.actor.Subway` | Subway/metro train following rail links |
 | `hybrid.actor.Car` | Private car (activated by Person) |
-| `hybrid.actor.Person` | Agent with a daily activity schedule |
+| `hybrid.actor.Person` | Agent that walks a plan of activities/legs, resolving mode choice as needed |
 
 ---
 
@@ -644,7 +644,14 @@ A private car **asset** owned by a Person. Sits **Parked** until the owning Pers
 
 ### 4.11 Person
 
-An agent with a **daily activity schedule**. Manages mode choice and activates vehicles for each trip.
+An agent that walks a **flat list of plan elements** (`originalPlan`/`cursor`) — activities,
+already-resolved travel legs, and pending mode-choice decisions — one element at a time. See
+[PERSON_AGENT.md](PERSON_AGENT.md) for the full model; this section covers only the JSON schema.
+
+> **This schema replaced the old `dailySchedule: List[Activity]` + `currentActivityIndex` +
+> `ArrivalLogistics` model without backward compatibility.** If you have older scenario files using
+> `dailySchedule`/`arrivalLogistics`/`currentActivityIndex`, they must be converted to this shape —
+> there is no runtime fallback for the old fields.
 
 ```json
 {
@@ -653,101 +660,106 @@ An agent with a **daily activity schedule**. Manages mode choice and activates v
   "data": {
     "dataType": "model.hybrid.entity.state.PersonState",
     "content": {
-      "dailySchedule": [
-        {
-          "sequence": 0,
-          "activityType": "home",
-          "nodeId": "htcaid:node;500",
-          "endTime": "28800",
-          "arrivalLogistics": null
-        },
-        {
-          "sequence": 1,
-          "activityType": "work",
-          "nodeId": "htcaid:node;600",
-          "endTime": "64800",
-          "arrivalLogistics": {
-            "mode": "car",
-            "vehicle": { "id": "htcaid:car;person_42_v_car", "classType": "hybrid.actor.Car" },
-            "driverAttributes": {
-              "aggressiveness": 0.5,
-              "maxSpeedFactor": 1.0,
-              "reactionTime": 1.0,
-              "minGapFactor": 1.0
-            }
-          }
-        },
-        {
-          "sequence": 2,
-          "activityType": "home",
-          "nodeId": "htcaid:node;500",
-          "endTime": "86400",
-          "arrivalLogistics": {
-            "mode": "car",
-            "vehicle": { "id": "htcaid:car;person_42_v_car", "classType": "hybrid.actor.Car" },
-            "driverAttributes": {
-              "aggressiveness": 0.6,
-              "maxSpeedFactor": 0.95,
-              "reactionTime": 1.1,
-              "minGapFactor": 1.05
-            }
-          }
-        }
-      ],
-      "currentActivityIndex": 0,
+      "ptWaitTimeoutTicks": 86400,
       "ownedVehicles": {
         "car": { "id": "htcaid:car;person_42_v_car", "classType": "hybrid.actor.Car" }
       },
-      "currentTripVehicleId": null,
-      "currentTripStartTick": null,
       "totalDistanceTraveled": 0.0,
-      "completedTrips": 0
+      "completedTrips": 0,
+      "originalPlan": [
+        {
+          "kind": "Activity",
+          "activityType": "home",
+          "nodeId": "htcaid:node;500",
+          "endTime": { "kind": "AtTick", "tick": 28800 }
+        },
+        {
+          "kind": "PrivateVehicleLeg",
+          "mode": "Car",
+          "vehicle": { "id": "htcaid:car;person_42_v_car", "classType": "hybrid.actor.Car" },
+          "driverAttributes": {
+            "aggressiveness": 0.5,
+            "maxSpeedFactor": 1.0,
+            "reactionTime": 1.0,
+            "minGapFactor": 1.0
+          }
+        },
+        {
+          "kind": "Activity",
+          "activityType": "work",
+          "nodeId": "htcaid:node;600",
+          "endTime": { "kind": "AtTick", "tick": 64800 }
+        },
+        {
+          "kind": "PrivateVehicleLeg",
+          "mode": "Car",
+          "vehicle": { "id": "htcaid:car;person_42_v_car", "classType": "hybrid.actor.Car" },
+          "driverAttributes": {
+            "aggressiveness": 0.6,
+            "maxSpeedFactor": 0.95,
+            "reactionTime": 1.1,
+            "minGapFactor": 1.05
+          }
+        },
+        {
+          "kind": "Activity",
+          "activityType": "home",
+          "nodeId": "htcaid:node;500",
+          "endTime": { "kind": "AtTick", "tick": 86400 }
+        }
+      ]
     }
   },
   "dependencies": {}
 }
 ```
 
-**Activity fields:**
+**Top-level `PersonState` fields:**
 
-| Field | Description |
-|---|---|
-| `sequence` | Zero-based activity index |
-| `activityType` | Any label: `"home"`, `"work"`, `"school"`, `"leisure"`, … |
-| `nodeId` | Location node for this activity |
-| `endTime` | Tick at which the person leaves for the **next** activity. Last activity uses `"86400"` (or simulation end). Set to `"0"` if no return trip is defined. |
-| `arrivalLogistics` | `null` for the first activity; non-null for subsequent activities |
+| Field | Type | Description |
+|---|---|---|
+| `originalPlan` | `List[PlanElement]` | The plan exactly as authored, in order — see below for the five element shapes. Immutable at runtime; kept only for provenance/debugging. |
+| `ownedVehicles` | `Map[String, Identify]` | Mode string (`"car"`/`"bicycle"`/`"motorcycle"`) → the vehicle's `Identify`. Required for any `PrivateVehicleLeg` or any `PendingDecision` that may resolve to a private-vehicle mode. |
+| `ptWaitTimeoutTicks` | `Long` | Max ticks to wait at a PT stop before giving up and triggering a replan. Default `86400` (one full day). |
+| `modeChoiceWeights` | `ModeChoiceWeights` | Default weights passed to whichever `ModeDecisionEngine` resolves a `PendingDecision` — see [PERSON_AGENT.md §6.2](PERSON_AGENT.md#62-decisioncontext-e-pesos-modechoiceweights). Not needed at all if the plan has no `PendingDecision`. |
+| `totalDistanceTraveled` / `completedTrips` | `Double` / `Int` | Usually `0.0` / `0` at scenario authoring time — accumulated at runtime. |
 
-**Arrival logistics — mode values:**
+Do **not** set `cursor` in scenario JSON — there is nothing to resume on a fresh load. It is seeded
+automatically from `originalPlan` on first initialization.
 
-| `mode` | Description |
-|---|---|
-| `"car"` | Uses the owned Car asset |
-| `"pt"` | Public transport (bus or subway, resolved by routing) |
-| `"walk"` | Walking (mesoscopic, no vehicle) |
-| `"bicycle"` | Uses owned Bicycle asset |
-| `"motorcycle"` | Uses owned Motorcycle asset |
+**Plan element shapes** (discriminated by a `"kind"` property):
 
-**`ownedVehicles`:** Map from mode string to the vehicle's `Identify`. Required when `mode` is `"car"`, `"bicycle"`, or `"motorcycle"`.
+| `kind` | Fields | Meaning |
+|---|---|---|
+| `"Activity"` | `activityType`, `nodeId`, `endTime` (an `EndTimeSpec`) | A stay at a location |
+| `"WalkLeg"` | `originNodeId`, `destinationNodeId`, `precomputedRoute` (optional) | A resolved walking leg |
+| `"PrivateVehicleLeg"` | `mode` (`"Car"`\|`"Bicycle"`\|`"Motorcycle"`), `vehicle` (`Identify`, required — never optional), `driverAttributes` | A resolved private-vehicle leg |
+| `"TransitLeg"` | `mode` (`"Bus"`\|`"Subway"`), `line`, `boardingStop` (`StopRef`), `alightingStop` (`StopRef`) | A resolved PT leg |
+| `"PendingDecision"` | `decision`: `{ allowedModes, strategyId, weightsOverride }` | A mode choice to be resolved at runtime by the named `ModeDecisionEngine` — see below |
 
-**Dynamic mode choice fields** (optional — only relevant when `enableDynamicModeChoice: true`):
+`EndTimeSpec` is also discriminated by `"kind"`:
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `enableDynamicModeChoice` | `Boolean` | `false` | Global master switch in `simulation.json` for runtime mode choice |
-| `PersonState.enableDynamicModeChoice` | `Boolean` | `false` | Per-person opt-in for utility-based mode re-evaluation |
-| `modeChoiceWeights.betaMode` | `Double` | `1.0` | Scale applied to mode preference score |
-| `modeChoiceWeights.betaAccess` | `Double` | `0.001` | Per-metre penalty for walking to a boarding stop |
-| `modeChoiceWeights.betaEgress` | `Double` | `0.001` | Per-metre penalty for walking from an alighting stop |
-| `modeChoiceWeights.modePrefSubway` | `Double` | `2.0` | Intrinsic preference score for subway |
-| `modeChoiceWeights.modePrefBus` | `Double` | `1.0` | Intrinsic preference score for bus |
-| `modeChoiceWeights.modePrefWalk` | `Double` | `0.0` | Intrinsic preference score for walking (reference) |
-| `modeChoiceWeights.maxAccessDistanceM` | `Double` | `1500.0` | Max haversine radius (m) to search for stops |
-| `modeChoiceWeights.maxWalkDistanceM` | `Double` | `2000.0` | Max O→D distance (m) for walking to be a candidate |
+| `kind` | Fields | Meaning |
+|---|---|---|
+| `"AtTick"` | `tick` | Ends at this absolute simulation tick (departs one tick after arrival if the person arrives late) |
+| `"Duration"` | `ticks` | Ends this many ticks after the person actually arrived (a late arrival shifts departure forward by the same amount) |
 
-**`arrivalLogistics.fixedMode`:** when `true`, the leg is never re-evaluated even if dynamic mode choice is globally enabled. Useful for car trips that must always remain as car regardless of transit availability.
+`StopRef` (used by `TransitLeg.boardingStop`/`alightingStop`):
 
-**Global override:** when `simulation.json` sets `enableDynamicModeChoice: false`, no Person will perform runtime mode choice, even if a person-level `enableDynamicModeChoice` is `true`.
+```json
+{ "actorId": "htcaid:busstop;busstop_42", "actorClassType": "hybrid.actor.BusStop", "nodeId": "htcaid:node;600" }
+```
+
+**Writing a leg you already know at authoring time:** write it directly as `WalkLeg`/
+`PrivateVehicleLeg`/`TransitLeg` — no runtime resolution happens for it, exactly as in the example
+above. **Writing a leg you want resolved dynamically at simulation time:** write a
+`PendingDecision` instead — see [§13](#13-dynamic-mode-choice).
+
+**`ownedVehicles`:** required whenever a `PrivateVehicleLeg` appears in the plan, or whenever a
+`PendingDecision.decision.allowedModes` includes a private-vehicle mode and you want that vehicle
+considered — only vehicles actually parked at the trip's origin (tracked via
+`PersonState.vehicleCurrentNode`, mode → node id, updated automatically after every private-vehicle
+leg) are offered as candidates.
 
 ---
 
@@ -1051,35 +1063,33 @@ my_scenario/
     "data": {
       "dataType": "model.hybrid.entity.state.PersonState",
       "content": {
-        "dailySchedule": [
-          {
-            "sequence": 0,
-            "activityType": "home",
-            "nodeId": "htcaid:node;1",
-            "endTime": "28800",
-            "arrivalLogistics": null
-          },
-          {
-            "sequence": 1,
-            "activityType": "work",
-            "nodeId": "htcaid:node;2",
-            "endTime": "86400",
-            "arrivalLogistics": {
-              "mode": "car",
-              "vehicle": { "id": "htcaid:car;p1_v_car", "classType": "hybrid.actor.Car" },
-              "driverAttributes": {
-                "aggressiveness": 0.5, "maxSpeedFactor": 1.0,
-                "reactionTime": 1.0, "minGapFactor": 1.0
-              }
-            }
-          }
-        ],
-        "currentActivityIndex": 0,
         "ownedVehicles": {
           "car": { "id": "htcaid:car;p1_v_car", "classType": "hybrid.actor.Car" }
         },
-        "currentTripVehicleId": null, "currentTripStartTick": null,
-        "totalDistanceTraveled": 0.0, "completedTrips": 0
+        "totalDistanceTraveled": 0.0, "completedTrips": 0,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": "htcaid:node;1",
+            "endTime": { "kind": "AtTick", "tick": 28800 }
+          },
+          {
+            "kind": "PrivateVehicleLeg",
+            "mode": "Car",
+            "vehicle": { "id": "htcaid:car;p1_v_car", "classType": "hybrid.actor.Car" },
+            "driverAttributes": {
+              "aggressiveness": 0.5, "maxSpeedFactor": 1.0,
+              "reactionTime": 1.0, "minGapFactor": 1.0
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": "htcaid:node;2",
+            "endTime": { "kind": "AtTick", "tick": 86400 }
+          }
+        ]
       }
     },
     "dependencies": {}
@@ -1199,38 +1209,60 @@ Increase the sample rate for higher fidelity; decrease it for faster prototype r
 
 ## 13. Dynamic Mode Choice
 
-The dynamic mode choice system allows Person agents to **select their transport mode at runtime** instead of following a pre-defined schedule. When enabled, each non-fixed trip leg is resolved by the configured mode-choice strategy (`modeChoiceStrategyType`). Depending on the strategy and `modeChoiceWeights.includedModes`, the agent can evaluate walking, transit, and owned private vehicles at each trip departure.
+Dynamic mode choice lets a Person **resolve a trip's mode at simulation runtime** instead of
+having it fixed in the authored plan. It works by placing a `PendingDecision` plan element (instead
+of a concrete `WalkLeg`/`PrivateVehicleLeg`/`TransitLeg`) wherever you want the choice made
+dynamically. See [PERSON_AGENT.md §6](PERSON_AGENT.md#6-escolha-de-modo--modelhybriddecision) for
+the full model; this section covers only scenario-authoring mechanics.
 
-### When to use
+> This replaces the old global `enableDynamicModeChoice` boolean + per-leg `fixedMode` flag. There
+> is no scenario-wide switch anymore: a plan mixes fixed legs (write them directly as
+> `WalkLeg`/`PrivateVehicleLeg`/`TransitLeg`) and dynamic legs (write a `PendingDecision`) freely,
+> element by element.
 
-| Scenario | Recommended setting |
+### `PendingDecision` schema
+
+```json
+{
+  "kind": "PendingDecision",
+  "decision": {
+    "allowedModes": ["Bus", "Subway", "Walk"],
+    "strategyId": "travel-time",
+    "weightsOverride": null
+  }
+}
+```
+
+| Field | Description |
 |---|---|
-| Replaying a fixed observed demand matrix | `enableDynamicModeChoice: false` (default) — exact schedule, fastest simulation |
-| Studying how persons react to new transit lines or service changes | `enableDynamicModeChoice: true` — persons adapt to the current network |
-| Mixed: some persons are flexible, others have fixed trips | Set per-person; use `fixedMode: true` on individual legs to protect specific trips |
+| `allowedModes` | Modes (`"Walk"`\|`"Car"`\|`"Bicycle"`\|`"Motorcycle"`\|`"Bus"`\|`"Subway"`) the engine is permitted to resolve this decision to. A mode the underlying engine never evaluates (see the table below) is silently never a candidate — no special error, just `NoViableJourney` if nothing else works either. |
+| `strategyId` | Which `ModeDecisionEngine` resolves this decision — see table below. Must match a registered engine id exactly; there is no fallback for a typo. |
+| `weightsOverride` | `null` to use `PersonState.modeChoiceWeights`; otherwise a full `ModeChoiceWeights` object overriding it for this decision only. |
 
-### Utility model
+### Choosing a `strategyId`
 
-For each candidate `(mode, boardingStop, alightingStop)` the system computes:
+| `strategyId` | Evaluates | When to use |
+|---|---|---|
+| `"raptor"` | Bus/subway multi-leg only (RAPTOR router). Never walk-only, never a private vehicle. | Multi-leg transit trips with transfers; requires `transit_route.json` (`HTC_MOBILITY_TRANSIT_ROUTES_FILE`) to be configured — see [PERSON_AGENT.md §6.4](PERSON_AGENT.md#64-fail-fast-na-carga-do-cenário) for how that requirement is enforced (scenario-load fail-fast, not a runtime surprise). |
+| `"nearest-stop-utility"` | Walk + single-leg bus/subway (haversine-distance heuristic). Never a private vehicle. | Simple single-hop PT-vs-walk decisions where multi-leg transfers aren't needed. |
+| `"travel-time"` | Walk, bus, subway, car, bicycle, motorcycle — **the only engine of the three that considers private vehicles.** | Any decision where car/bicycle/motorcycle should be a real candidate — required if you want a person to be able to choose to drive at a `PendingDecision`. |
 
-$$U = \beta_{\text{mode}} \times \text{pref}(m) - \beta_{\text{access}} \times d_{\text{access}} - \beta_{\text{egress}} \times d_{\text{egress}}$$
+> **If you want car to be a candidate at a dynamic decision point, `strategyId` must be
+> `"travel-time"`.** Using `"raptor"` or `"nearest-stop-utility"` with `Car`/`Bicycle`/`Motorcycle`
+> in `allowedModes` will never produce a private-vehicle leg — the underlying implementation those
+> two engines wrap has no notion of a vehicle candidate at all.
 
-where $d_{\text{access}}$ and $d_{\text{egress}}$ are haversine distances in metres. The option with the highest $U$ wins.
+### Fail-fast validation
 
-**Default preferences:** subway (2.0) > bus (1.0) > walk (0.0). With the default betas (`0.001`), a 1 km access walk incurs a penalty of 1.0 — equal to the preference gap between bus and walking. This means a bus is preferred over walking only if the boarding stop is within ~1 km.
+`ScenarioLoadValidator.validateModeDecisionEngines` aborts the *entire* scenario load if any
+`strategyId` referenced by a `PendingDecision` doesn't resolve to a registered engine, or if an
+engine's data prerequisites aren't met (e.g. `"raptor"` without a transit routes file). It is wired
+into the real load pipeline via `core.actor.manager.load.ScenarioPreflightValidator`, run before
+any actor is created for both `EAGER` and `PROGRESSIVE` sources — see
+[PERSON_AGENT.md §6.4](PERSON_AGENT.md#64-fail-fast-na-carga-do-cenário) for the full explanation.
+A bad `strategyId` or missing transit data fails the scenario load up front, not at runtime.
 
-### Compatibility rules
-
-The following table summarises when dynamic re-evaluation is skipped and the original logistics are used as-is:
-
-| Condition | Dynamic evaluation? |
-|---|---|
-| `enableDynamicModeChoice: false` | No — static schedule |
-| `arrivalLogistics.fixedMode: true` | No — leg explicitly locked |
-| `transit_map.json` not configured | No — `TransitMapUtil` unavailable |
-| Origin or destination node not in `city_map.json` | No — cannot compute haversine |
-
-### JSON example — Person with dynamic mode choice
+### JSON example — Person with a mix of fixed and dynamic legs
 
 ```json
 {
@@ -1241,11 +1273,11 @@ The following table summarises when dynamic re-evaluation is skipped and the ori
     "content": {
       "startTick": 0,
       "scheduleOnTimeManager": true,
-      "enableDynamicModeChoice": true,
       "modeChoiceWeights": {
+        "includedModes": ["car", "bus", "subway", "walk"],
         "betaMode": 1.0,
-        "betaAccess": 0.001,
-        "betaEgress": 0.001,
+        "betaAccess": 0.0036,
+        "betaEgress": 0.0036,
         "modePrefSubway": 2.0,
         "modePrefBus": 1.0,
         "modePrefWalk": 0.0,
@@ -1255,39 +1287,41 @@ The following table summarises when dynamic re-evaluation is skipped and the ori
       "ownedVehicles": {
         "car": { "id": "htcaid:car;p42_v_car", "classType": "hybrid.actor.Car" }
       },
-      "dailySchedule": [
+      "totalDistanceTraveled": 0.0,
+      "completedTrips": 0,
+      "originalPlan": [
         {
-          "sequence": 0,
+          "kind": "Activity",
           "activityType": "home",
           "nodeId": "htcaid:node;500",
-          "endTime": "28800",
-          "arrivalLogistics": null
+          "endTime": { "kind": "AtTick", "tick": 28800 }
         },
         {
-          "sequence": 1,
+          "kind": "PendingDecision",
+          "decision": {
+            "allowedModes": ["Bus", "Subway", "Walk"],
+            "strategyId": "nearest-stop-utility",
+            "weightsOverride": null
+          }
+        },
+        {
+          "kind": "Activity",
           "activityType": "work",
           "nodeId": "htcaid:node;600",
-          "endTime": "64800",
-          "arrivalLogistics": {
-            "mode": "bus",
-            "fixedMode": false
-          }
+          "endTime": { "kind": "AtTick", "tick": 64800 }
         },
         {
-          "sequence": 2,
+          "kind": "PrivateVehicleLeg",
+          "mode": "Car",
+          "vehicle": { "id": "htcaid:car;p42_v_car", "classType": "hybrid.actor.Car" }
+        },
+        {
+          "kind": "Activity",
           "activityType": "home",
           "nodeId": "htcaid:node;500",
-          "endTime": "86400",
-          "arrivalLogistics": {
-            "mode": "car",
-            "vehicle": { "id": "htcaid:car;p42_v_car", "classType": "hybrid.actor.Car" },
-            "fixedMode": true
-          }
+          "endTime": { "kind": "AtTick", "tick": 86400 }
         }
-      ],
-      "currentActivityIndex": 0,
-      "totalDistanceTraveled": 0.0,
-      "completedTrips": 0
+      ]
     }
   },
   "dependencies": {}
@@ -1295,8 +1329,12 @@ The following table summarises when dynamic re-evaluation is skipped and the ori
 ```
 
 In the example above:
-- The **work trip** (sequence 1) has `fixedMode: false` — it will be re-evaluated at tick 28800. If a subway station is within 1500 m of node 500 and a closer alighting stop exists near node 600, the person will switch to subway.
-- The **return trip** (sequence 2) has `fixedMode: true` — always uses the car regardless of transit availability.
+- The **outbound trip** (home → work) is a `PendingDecision` resolved by `"nearest-stop-utility"`
+  at tick 28800 — if a bus/subway stop is within `maxAccessDistanceM` of node 500 with a closer
+  alighting stop near node 600, the person boards PT; otherwise it falls back to walking (this
+  engine never considers the car).
+- The **return trip** (work → home) is a fixed `PrivateVehicleLeg` — always the car, never
+  re-evaluated, because it was authored directly rather than behind a `PendingDecision`.
 
 ### Generating `transit_map.json` from GTFS
 
@@ -1322,12 +1360,18 @@ json.dump(stops, open("transit_map.json", "w"))  # flat array, no wrapper
 
 ### Runtime behaviour
 
-At each trip departure (`startNextTrip`):
+When the `PlanCursor` reaches a `PendingDecision` (see
+[PERSON_AGENT.md §7](PERSON_AGENT.md#7-ciclo-de-vida-do-agente)):
 
-1. `ModeChoiceUtil.chooseBestLogistics` is called with the origin and destination node IDs.
-2. `TransitMapUtil.nearestStops` finds up to 5 stops of each type within `maxAccessDistanceM`.
-3. For each reachable boarding stop × line, the closest alighting stop (on the same line, nearest to destination) is found.
-4. All candidates (bus options, subway options, walking if distance ≤ `maxWalkDistanceM`) are scored.
-5. The highest-scoring `ArrivalLogistics` is returned and used to initiate the trip. If no better option exists, the original logistics are used unchanged.
+1. `PersonPlanManager.resolvePending` looks up `ModeDecisionEngineRegistry.get(decision.strategyId)`.
+2. The engine's `decide(originNodeId, destinationNodeId, request, ctx)` is called — for
+   `"nearest-stop-utility"`/`"travel-time"` this internally calls `TransitMapUtil.nearestStops` to
+   find candidate stops within `maxAccessDistanceM`, scores every candidate (bus, subway, walk,
+   and — for `"travel-time"` only — car/bicycle/motorcycle parked at the origin), and returns the
+   best one; `"raptor"` runs a full RAPTOR search instead.
+3. On success, the resolved `AtomicLeg`s are spliced into the plan exactly where the
+   `PendingDecision` was (`PlanCursor.expandPending`), and the person proceeds to execute them.
+4. On failure (`NoViableJourney`), the trip is aborted and the person resumes at the next
+   `Activity` — see [PERSON_AGENT.md §6.5](PERSON_AGENT.md#65-o-que-acontece-quando-uma-decisão-não-tem-opção-viável).
 
 > **Performance note:** `TransitMapUtil` performs a linear scan over stops filtered by type. For large stop sets (> 10,000), consider implementing a spatial index (k-d tree). For typical city scenarios with 2,000–5,000 stops this is negligible compared to actor message processing.
