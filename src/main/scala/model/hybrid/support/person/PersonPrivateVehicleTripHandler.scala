@@ -2,99 +2,91 @@ package org.interscity.htc
 package model.hybrid.support.person
 
 import core.types.Tick
-import model.hybrid.entity.state.{ArrivalLogistics, PersonState}
 import model.hybrid.entity.event.data.person.StartTripData
-import model.hybrid.entity.state.enumeration.TravelMode
+import model.hybrid.entity.state.PersonState
+import model.hybrid.entity.state.plan.{ ConcreteMode, PrivateVehicleLeg }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
-/** Handles private vehicle trips (car, bicycle, motorcycle) for person actors.
+/** Handles private vehicle legs (car, bicycle, motorcycle) for person actors.
   *
   * Responsibilities:
-  *   - Initiate private vehicle trips
+  *   - Initiate private vehicle legs
   *   - Send StartTrip messages to vehicles
-  *   - Track vehicle locations after trips
-  *   - Handle trip completion from vehicles
+  *   - Track vehicle locations after legs complete
+  *
+  * Unlike the pre-redesign handler, [[PrivateVehicleLeg.vehicle]] is a non-optional [[org.htc.protobuf.core.entity.actor.Identify]]
+  * — there is no "vehicle missing" failure mode left to handle here; a `PrivateVehicleLeg` cannot
+  * exist without one (enforced by the type, not a runtime check).
   *
   * @param personId Person actor ID
   * @param sendMessageFn Function to send messages to other actors
   * @param logDebug Debug logging function
-  * @param logError Error logging function
   */
 class PersonPrivateVehicleTripHandler(
   personId: String,
   sendMessageFn: (String, String, Any, String, Any) => Unit,
-  logDebug: String => Unit,
-  logError: String => Unit
+  logDebug: String => Unit
 ) {
 
-  /** Initiate private vehicle trip.
+  /** Sends StartTrip to the leg's vehicle.
     *
-    * Sends StartTrip message to the specified vehicle actor.
-    * Returns true if message sent successfully, false if vehicle ref missing.
-    *
-    * @param origin Origin node ID
-    * @param destination Destination node ID
-    * @param logistics Arrival logistics with vehicle reference
+    * @param origin Origin node ID (person's current physical position)
+    * @param destination Destination node ID (the next Activity's node, or origin if none found)
+    * @param leg Private vehicle leg with vehicle reference and driver attributes
     * @param currentTick Current simulation tick
-    * @return true if trip initiated successfully
     */
   def initiatePrivateVehicleTrip(
     origin: String,
     destination: String,
-    logistics: ArrivalLogistics,
+    leg: PrivateVehicleLeg,
     currentTick: Tick
-  ): Boolean =
-    logistics.vehicle match {
-      case Some(vehicleRef) =>
-        val startTripData = StartTripData(
-          personId         = personId,
-          origin           = origin,
-          destination      = destination,
-          driverAttributes = logistics.driverAttributes,
-          startTick        = currentTick,
-          precomputedRoute = logistics.precomputedRoute
-        )
+  ): Unit = {
+    val startTripData = StartTripData(
+      personId = personId,
+      origin = origin,
+      destination = destination,
+      driverAttributes = leg.driverAttributes,
+      startTick = currentTick
+    )
 
-        sendMessageFn(
-          vehicleRef.id,
-          vehicleRef.classType,
-          startTripData,
-          "StartTrip",
-          LoadBalancedDistributed
-        )
+    sendMessageFn(
+      leg.vehicle.id,
+      leg.vehicle.classType,
+      startTripData,
+      "StartTrip",
+      LoadBalancedDistributed
+    )
 
-        logDebug(
-          s"$personId sent StartTrip to ${vehicleRef.id} " +
-            s"(mode=${logistics.mode}, $origin → $destination)"
-        )
-        true
+    logDebug(
+      s"$personId sent StartTrip to ${leg.vehicle.id} (mode=${leg.mode}, $origin -> $destination)"
+    )
+  }
 
-      case None =>
-        logError(s"$personId no vehicle specified for mode ${logistics.mode}")
-        false
-    }
+  /** Key private vehicles are tracked under in [[PersonState.ownedVehicles]]/[[PersonState.vehicleCurrentNode]]. */
+  def vehicleModeKey(mode: ConcreteMode): String = mode match {
+    case ConcreteMode.Car        => "car"
+    case ConcreteMode.Bicycle    => "bicycle"
+    case ConcreteMode.Motorcycle => "motorcycle"
+    case other                   => other.toString.toLowerCase
+  }
 
-  /** Update vehicle location after trip completion.
+  /** Update vehicle location after a private vehicle leg completes.
     *
-    * Private vehicles travel with the person, so after a trip they're located at the destination.
-    * This enables mode choice to exclude vehicles left at other locations.
+    * Private vehicles travel with the person, so after a leg they're located at the destination.
+    * This enables the next mode decision to exclude vehicles left at other locations.
     *
-    * @param mode Transport mode (car, bicycle, motorcycle)
+    * @param mode Concrete private-vehicle mode
     * @param destinationNodeId Destination node ID
     * @param state Current person state
     * @return Updated PersonState with vehicle location tracked
     */
   def updateVehicleLocation(
-    mode: String,
+    mode: ConcreteMode,
     destinationNodeId: String,
     state: PersonState
-  ): PersonState = {
-    if (TravelMode.privateVehicle.contains(TravelMode.fromString(mode)) && destinationNodeId.nonEmpty) {
-      state.copy(
-        vehicleCurrentNode = state.vehicleCurrentNode + (mode -> destinationNodeId)
-      )
-    } else {
+  ): PersonState =
+    if (destinationNodeId.nonEmpty)
+      state.copy(vehicleCurrentNode = state.vehicleCurrentNode + (vehicleModeKey(mode) -> destinationNodeId))
+    else
       state
-    }
-  }
 }

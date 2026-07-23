@@ -213,9 +213,13 @@ Common bugs to check for when reviewing a diff against this discipline:
 
 ## Testing
 
-Single test file: `src/test/scala/system/broker/kafka/abstraction/KafkaAbstractionSpec.scala`
+`src/test/scala/model/hybrid/entity/state/plan/PlanCursorSpec.scala` covers the plan cursor
+(`PlanElement`/`PlanCursor`/`RemainingQueue`) — pure logic, no Pekko.
 Use `pekko-actor-testkit-typed` for actor tests. Test helpers: `TestKit`, `TestProbe`.
 Pure logic (handlers, models) should be tested without Pekko using plain ScalaTest.
+(`KafkaAbstractionSpec.scala` was removed — it tested a `KafkaSerializerFactory`/
+`KafkaAbstractionFactory` API that was never implemented, only speculative traits in
+`KafkaAbstraction.scala`. Revisit if that abstraction layer is ever built for real.)
 
 ## Build & Run
 

@@ -5,6 +5,12 @@ ThisBuild / version := "2.0.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
+// Makes non-exhaustive `match` on sealed traits/enums a compile error rather than a warning.
+// This is the type-level guarantee the plan/cursor model (model.hybrid.entity.state.plan) relies
+// on: exhaustiveness over AdvanceResult/PlanElement must fail the build, not just warn.
+// Scoped to this one warning category so it doesn't turn unrelated existing warnings fatal.
+ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
+
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 resolvers += "Confluent".at("https://packages.confluent.io/maven/")
 
