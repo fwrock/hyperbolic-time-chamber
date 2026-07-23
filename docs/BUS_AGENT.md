@@ -204,7 +204,9 @@ Person ──[BusUnloadPassengerData(isArrival)]──► Bus
 
 1. Bus envia `BusRequestUnloadPassengerData` para **todos** os passageiros a bordo.
 2. Registra `expectedUnloadResponses = people.size`.
-3. Cada Person responde com `isArrival=true` se o `nodeId` é o seu `ptAlightingNodeId`.
+3. Cada Person responde com `isArrival=true` se o `nodeId` é o `alightingNodeId` do seu
+   `PTWaitState` atual (ver [PERSON_AGENT.md](PERSON_AGENT.md) — antigo `ptAlightingNodeId`, hoje
+   carregado em `TripExecutionState.Traveling.ptWait.alightingNodeId`).
 4. Bus remove passageiros que alightam de `state.people`.
 5. Quando todas as respostas chegam (`countUnloadReceived >= expectedUnloadResponses`):
    - Se houve desembarques → aplica delay e avança para embarque.

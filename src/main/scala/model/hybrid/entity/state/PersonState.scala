@@ -5,6 +5,7 @@ import core.entity.state.BaseState
 import core.types.Tick
 import core.util.StringPool
 import enumeration.TravelMode
+import org.interscity.htc.model.hybrid.entity.state.plan.{ Activity as PlanActivity, ExecutedElement, PendingDecision, PlanCursor, PlanElement, PrivateVehicleLeg, RemainingQueue, TransitLeg, WalkLeg }
 import org.htc.protobuf.core.entity.actor.Identify
 
 /** Weights for the utility function used in dynamic mode choice.
@@ -114,206 +115,162 @@ case class ModeChoiceWeights(
 
 /** Person state representing a person agent in the simulation.
   *
-  * Person-centric model where the Person actor persists throughout the day and manages their daily
-  * schedule, making mode choices and activating private vehicles (Car, Bicycle, Motorcycle) as
-  * needed.
+  * Person-centric model where the Person actor persists throughout the day, walking a
+  * [[model.hybrid.entity.state.plan.PlanCursor]] one [[model.hybrid.entity.state.plan.PlanElement]]
+  * at a time — see `model.hybrid.support.person.PersonPlanManager` for the orchestration and
+  * `docs/PERSON_AGENT.md` for the full model description.
   *
-  * @param dailySchedule
-  *   List of activities scheduled for the day
-  * @param currentActivityIndex
-  *   Current activity being performed
+  * @param originalPlan
+  *   The plan exactly as loaded from the scenario, in order. Immutable for the lifetime of the
+  *   actor — kept only for provenance/debugging (e.g. reporting what was originally scheduled vs.
+  *   what actually executed after replans). [[cursor]], not this field, drives execution.
+  * @param cursor
+  *   The person's actual position within the plan: what has executed so far and what's left to
+  *   run. Starts as `PlanCursor(Nil, RemainingQueue(originalPlan))` and only ever advances via
+  *   `PlanCursor.advance`/`expandPending`/`expandReplan` — this is the sole source of truth for
+  *   "what activity/leg is the person on right now", replacing the old `dailySchedule` +
+  *   `currentActivityIndex` pair.
+  * @param tripExecution
+  *   Whether a leg is currently in flight and, if so, everything needed to resume/recover it. See
+  *   [[TripExecutionState]] — this single field replaces every one of the pre-redesign
+  *   `PersonState`'s ad hoc `currentTripXxx`/`ptXxx`/`pendingTransferLegs`/`currentPhysicalNodeId`
+  *   fields.
   * @param ownedVehicles
-  *   Map of vehicle references owned by this person (mode -> Identify with id + classType)
-  * @param currentTripVehicleId
-  *   Vehicle currently being used (if any)
-  * @param currentTripStartTick
-  *   When current trip started
-  * @param totalDistanceTraveled
-  *   Total distance traveled today (meters)
-  * @param completedTrips
-  *   Number of trips completed today
-  * @param ptAlightingNodeId
-  *   Node ID where Person should alight from current PT vehicle. Set when boarding a bus/subway,
-  *   cleared on alighting.
-  * @param ptLine
-  *   Current PT line being used (e.g. "Bus Line 1"). Set when boarding, cleared on alighting.
-  * @param ptWaitingSince
-  *   Tick when the person registered at a PT stop and started waiting for the vehicle. `None` when
-  *   not in a PT wait state. Used together with [[ptWaitTimeoutTicks]] to implement a safety
-  *   timeout so persons never wait indefinitely for a bus/subway that never arrives.
-  * @param ptWaitTimeoutTicks
-  *   Maximum number of ticks to wait at a PT stop before giving up and advancing to the next
-  *   activity. Defaults to 86400 (one full simulated day). Dead lines are ejected immediately via
-  *   [[org.interscity.htc.model.hybrid.entity.event.data.bus.PTLineNotOperationalData]], so this
-  *   timeout only fires for lines that are operational but whose bus never reaches the stop within
-  *   the simulation window.
-  * @param enableDynamicModeChoice
-  *   When `true`, the person re-evaluates the transport mode at each trip departure using a
-  *   utility-based model instead of following the static logistics in the activity schedule.
-  *   Defaults to `false` to preserve the existing static-schedule behaviour.
-  * @param modeChoiceWeights
-  *   Weights and thresholds for the utility function used when dynamic mode choice is active.
-  * @param modeChoiceStrategyType
-  *   Name of the [[model.hybrid.util.strategy.ModeChoiceStrategy]] to use when an activity's
-  *   `arrivalLogistics.mode` is `"auto"`. Must match a key registered in
-  *   [[model.hybrid.util.strategy.ModeChoiceStrategyRegistry]]. Defaults to `"utility"`
-  *   (additive utility function over bus / subway / walk).
+  *   Map of vehicle references owned by this person (mode -> Identify with id + classType).
   * @param vehicleCurrentNode
   *   Tracks the current road-network node where each owned private vehicle is parked
   *   (mode -> nodeId). When absent for a given mode the vehicle is assumed to be at the person's
   *   current activity location (i.e. the start of the first day). Updated after each private
   *   vehicle trip so that a car left at home is unavailable from work.
-  * @param pendingTransferLegs
-  *   Remaining transit legs for an ongoing multi-leg trip produced by the RAPTOR algorithm.
-  *   Non-empty only between consecutive PT legs within the same trip (e.g. a bus+subway transfer).
-  *   The [[model.hybrid.actor.Person]] actor pops legs from this list after each alighting instead
-  *   of advancing to the next scheduled activity.
+  * @param totalDistanceTraveled
+  *   Total distance traveled today (meters). Only private-vehicle legs contribute a real,
+  *   non-zero distance here (reported by the vehicle actor itself on `TripCompletedData`) — this
+  *   mirrors the pre-redesign behaviour, where walk/PT legs always completed with `distance = 0.0`.
+  * @param completedTrips
+  *   Number of trips completed today. Incremented once per contiguous leg run (not once per leg) —
+  *   a multi-leg walk+transit+walk journey counts as a single trip.
+  * @param ptWaitTimeoutTicks
+  *   Maximum number of ticks to wait at a PT stop before giving up and triggering a replan (see
+  *   `PersonPlanManager.replanAfterPTTimeout`). Defaults to 86400 (one full simulated day). Dead
+  *   lines are ejected immediately via
+  *   [[org.interscity.htc.model.hybrid.entity.event.data.bus.PTLineNotOperationalData]], so this
+  *   timeout only fires for lines that are operational but whose vehicle never reaches the stop
+  *   within the simulation window.
+  * @param modeChoiceWeights
+  *   Default utility weights used as `DecisionContext.weights` for every
+  *   `model.hybrid.decision.ModeDecisionEngine.decide` call, unless a specific
+  *   `PendingDecision.decision.weightsOverride` is present.
   */
 case class PersonState(
   startTick: Tick = 0L,
   scheduleOnTimeManager: Boolean = true,
-  dailySchedule: List[Activity] = List.empty,
-  currentActivityIndex: Int = 0,
+  originalPlan: List[PlanElement] = List.empty,
+  cursor: PlanCursor = PlanCursor(executed = Nil, remaining = RemainingQueue(Nil)),
+  tripExecution: TripExecutionState = TripExecutionState.Idle,
   ownedVehicles: Map[String, Identify] = Map.empty,
   vehicleCurrentNode: Map[String, String] = Map.empty,
-  currentTripVehicleId: Option[String] = None,
-  currentTripStartTick: Option[Tick] = None,
-  currentTripMode: Option[String] = None,
-  currentTripId: Option[String] = None,
-  currentTripDepartureTick: Option[Tick] = None,
-  currentTripExpectedDistance: Option[Double] = None,
-  currentTripWaitTime: Option[Long] = None,
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0,
-  scheduleDelayOffsetTicks: Long = 0L,
-  firstTripDelayTicks: Option[Long] = None,
-  ptAlightingNodeId: Option[String] = None,
-  ptLine: Option[String] = None,
-  ptWaitingSince: Option[Long] = None,
   ptWaitTimeoutTicks: Long = 86400L,
-  enableDynamicModeChoice: Boolean = false,
-  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
-  modeChoiceStrategyType: String = "utility",
-  pendingTransferLegs: List[ArrivalLogistics] = Nil,
-  /** Road-network node where the person physically is during a multi-leg journey
-    * (between access walk, PT legs, transfer walks, and egress walk).
-    * `None` between journeys — position is implied by the current activity node.
-    */
-  currentPhysicalNodeId: Option[String] = None,
-  /** Destination node of the walking leg currently in progress.
-    * Set when a walking leg starts; cleared by [[completeTrip]].
-    * Used to update [[currentPhysicalNodeId]] when the walk completes.
-    */
-  currentTripDestinationNodeId: Option[String] = None
+  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights()
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
 
-  /** Get current activity.
+  /** Road-network node the person is physically at right now.
+    *
+    * While traveling, this is [[TripExecutionState.Traveling.physicalNodeId]]. While idle
+    * (dwelling at an activity, or before the plan has started), it is the most recently executed
+    * [[model.hybrid.entity.state.plan.Activity]]'s node — the same node the person will depart
+    * from once [[model.hybrid.entity.state.plan.LatenessPolicy]] resolves the departure tick.
     */
-  def currentActivity: Option[Activity] =
-    if (currentActivityIndex >= 0 && currentActivityIndex < dailySchedule.length) {
-      Some(dailySchedule(currentActivityIndex))
-    } else {
-      None
+  def currentPhysicalNodeId: Option[String] =
+    tripExecution match {
+      case t: TripExecutionState.Traveling => Some(t.physicalNodeId)
+      case TripExecutionState.Idle =>
+        cursor.executed.reverseIterator.collectFirst { case a: PlanActivity => a.nodeId }
     }
 
-  /** Get next activity.
-    */
-  def nextActivity: Option[Activity] = {
-    val nextIndex = currentActivityIndex + 1
-    if (nextIndex < dailySchedule.length) {
-      Some(dailySchedule(nextIndex))
-    } else {
-      None
-    }
-  }
-
-  /** Advance to next activity.
-    */
-  def advanceActivity(): PersonState =
-    copy(
-      currentActivityIndex = currentActivityIndex + 1,
-      currentPhysicalNodeId = None,
-      currentTripDestinationNodeId = None
-    )
-
-  /** Returns a copy with all high-duplication string fields in the daily schedule replaced by
-    * shared StringPool instances. Call once per actor at initialization time to deduplicate
-    * activity-type strings ("home", "work"), transport mode strings ("car", "walk"), node IDs, and
-    * PT stop IDs that are identical across many Person actors at city scale.
+  /** Returns a copy with all high-duplication string fields replaced by shared StringPool
+    * instances. Call once per actor at initialization time to deduplicate activity-type strings
+    * ("home", "work"), node IDs, line names, and PT stop IDs that are identical across many Person
+    * actors at city scale.
     */
   def withInternedStrings: PersonState =
     copy(
-      dailySchedule         = dailySchedule.map(_.interned),
-      modeChoiceStrategyType = StringPool.intern(modeChoiceStrategyType)
+      originalPlan = originalPlan.map(PersonState.internPlanElement),
+      cursor = cursor.copy(
+        executed = cursor.executed.map(PersonState.internExecuted),
+        remaining = RemainingQueue(
+          PersonState.drainRemaining(cursor.remaining).map(PersonState.internPlanElement)
+        )
+      )
     )
 
-  /** Check if person has completed all activities.
-    */
+  /** True once the plan cursor has nothing left to run and nothing currently in flight. */
   def isScheduleComplete: Boolean =
-    currentActivityIndex >= dailySchedule.length
+    tripExecution == TripExecutionState.Idle && cursor.remaining.isEmpty
 
-  /** Start a trip.
-    */
-  def startTrip(vehicleId: String, tick: Tick): PersonState =
-    copy(
-      currentTripVehicleId = Some(vehicleId),
-      currentTripStartTick = Some(tick),
-      currentTripDepartureTick = Some(tick)
-    )
-
-  /** Complete a trip.
+  /** Record the completion of one contiguous leg run (a "trip"): bump the trip counter and add any
+    * real distance traveled, then return to [[TripExecutionState.Idle]].
     */
   def completeTrip(distanceTraveled: Double): PersonState =
     copy(
-      currentTripVehicleId = None,
-      currentTripStartTick = None,
-      currentTripMode = None,
-      currentTripId = None,
-      currentTripDepartureTick = None,
-      currentTripExpectedDistance = None,
-      currentTripWaitTime = None,
       totalDistanceTraveled = totalDistanceTraveled + distanceTraveled,
       completedTrips = completedTrips + 1,
-      ptAlightingNodeId = None,
-      ptLine = None,
-      currentTripDestinationNodeId = None
+      tripExecution = TripExecutionState.Idle
     )
 }
 
-/** Activity in a person's daily schedule.
-  *
-  * @param sequence
-  *   Order in the schedule (0-based)
-  * @param activityType
-  *   Type of activity ("Home", "Work", "School", "Shopping", etc.)
-  * @param nodeId
-  *   Location node ID
-  * @param endTime
-  *   When this activity ends (format: "HH:MM" or tick number)
-  * @param arrivalLogistics
-  *   How to arrive at this location (None for first activity)
-  */
-case class Activity(
-  sequence: Int,
-  activityType: String,
-  nodeId: String,
-  endTime: String, // Could be "08:00" or tick number as string
-  arrivalLogistics: Option[ArrivalLogistics] = None
-) {
-  /** Returns a copy with high-duplication string fields replaced by shared pool instances.
-    * Calling this once per actor at startup can recover several hundred MB at city scale.
-    */
-  def interned: Activity = copy(
-    activityType = StringPool.intern(activityType),
-    nodeId       = StringPool.intern(nodeId),
-    arrivalLogistics = arrivalLogistics.map(_.interned)
-  )
+object PersonState {
+
+  private def drainRemaining(queue: RemainingQueue): List[PlanElement] =
+    queue.dequeue match {
+      case None            => Nil
+      case Some((h, rest)) => h :: drainRemaining(rest)
+    }
+
+  private def internExecuted(e: ExecutedElement): ExecutedElement = e match {
+    case a: PlanActivity =>
+      a.copy(activityType = StringPool.intern(a.activityType), nodeId = StringPool.intern(a.nodeId))
+    case w: WalkLeg =>
+      w.copy(
+        originNodeId = StringPool.intern(w.originNodeId),
+        destinationNodeId = StringPool.intern(w.destinationNodeId)
+      )
+    case t: TransitLeg =>
+      t.copy(
+        line = StringPool.intern(t.line),
+        boardingStop = t.boardingStop.copy(
+          actorId = StringPool.intern(t.boardingStop.actorId),
+          actorClassType = StringPool.intern(t.boardingStop.actorClassType),
+          nodeId = StringPool.intern(t.boardingStop.nodeId)
+        ),
+        alightingStop = t.alightingStop.copy(
+          actorId = StringPool.intern(t.alightingStop.actorId),
+          actorClassType = StringPool.intern(t.alightingStop.actorClassType),
+          nodeId = StringPool.intern(t.alightingStop.nodeId)
+        )
+      )
+    case p: PrivateVehicleLeg => p
+  }
+
+  private def internPlanElement(e: PlanElement): PlanElement = e match {
+    case ex: ExecutedElement => internExecuted(ex)
+    case d: PendingDecision  => d
+  }
 }
 
 /** Logistics for arriving at an activity location.
+  *
+  * Retained as the internal input/output shape of the pre-existing, already-audited routing
+  * implementations ([[model.hybrid.util.ModeChoiceUtil]],
+  * [[model.hybrid.util.strategy.TravelTimeModeChoiceStrategy]]) that
+  * `model.hybrid.decision.ModeDecisionEngine`s wrap — see
+  * `model.hybrid.decision.ArrivalLogisticsTranslation`. No longer used directly by
+  * `PersonState`/`Person` (superseded by `model.hybrid.entity.state.plan.AtomicLeg`), so this type
+  * now lives purely as that internal seam.
   *
   * @param mode
   *   Transportation mode ("car", "bicycle", "motorcycle", "walk", "transit", "bus", "subway")

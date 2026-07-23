@@ -246,7 +246,9 @@ Person ──[SubwayUnloadPassengerData(isArrival)]──► Subway
 ```
 
 - Enviado a **todos** os passageiros simultaneamente.
-- Person responde `isArrival=true` se `nodeId == ptAlightingNodeId`.
+- Person responde `isArrival=true` se `nodeId == alightingNodeId` do `PTWaitState` atual (ver
+  [PERSON_AGENT.md](PERSON_AGENT.md) — antigo `ptAlightingNodeId`, hoje carregado em
+  `TripExecutionState.Traveling.ptWait.alightingNodeId`).
 - Subway remove passageiros que alightam de `state.passengers`.
 - Concluído quando `countUnloadReceived >= countUnloadPassenger + passengers.remaining`.
 
@@ -457,18 +459,24 @@ O `Subway` herda os relatórios de `Movable` (enter/leave link) mais os de passa
 
 ### Registro de passageiro via `Person` (para embarcar)
 
+Na Person, essa viagem é um `TransitLeg` (ver [PERSON_AGENT.md](PERSON_AGENT.md)) no plano —
+diretamente, se já conhecido em tempo de autoria, ou resolvido em runtime a partir de uma
+`PendingDecision`:
+
 ```json
 {
-  "sequence": 2,
-  "activityType": "Work",
-  "nodeId": "htcaid:node;node_sul",
-  "endTime": "61200",
-  "arrivalLogistics": {
-    "mode": "subway",
-    "line": "Linha 1",
-    "boardingStopId": "htcaid:subwaystation;station_01",
-    "boardingStopClassType": "hybrid.actor.SubwayStation",
-    "alightingNodeId": "htcaid:node;node_sul"
+  "kind": "TransitLeg",
+  "mode": "Subway",
+  "line": "Linha 1",
+  "boardingStop": {
+    "actorId": "htcaid:subwaystation;station_01",
+    "actorClassType": "hybrid.actor.SubwayStation",
+    "nodeId": "htcaid:node;node_centro"
+  },
+  "alightingStop": {
+    "actorId": "htcaid:subwaystation;station_02",
+    "actorClassType": "hybrid.actor.SubwayStation",
+    "nodeId": "htcaid:node;node_sul"
   }
 }
 ```

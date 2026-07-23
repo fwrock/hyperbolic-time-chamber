@@ -122,6 +122,39 @@ When creating or modifying an actor:
 
 10. **Prometheus** — add counters/gauges to the appropriate metrics object in `core/metrics/`. Keep label cardinality low; never use entity IDs as labels.
 
+11. **Tests — grow coverage on every touch, don't just avoid breaking it.** This repo's Scala
+    coverage is currently thin (a single spec file at
+    `src/test/scala/system/broker/kafka/abstraction/KafkaAbstractionSpec.scala` — see root
+    `CLAUDE.md`). Any actor, handler, or model change you make is a chance to close that gap, not
+    just an obligation to not regress it.
+    - **Prefer testing handlers over actors.** Handlers are stateless lambda-injected classes with
+      no Pekko dependency — test them with plain ScalaTest, no `TestKit`/`TestProbe` needed. This
+      is almost always cheaper and more readable than standing up actor-level tests, and it's where
+      most of the interesting logic (CarMicroHandler, CarLinkHandler, etc.) actually lives.
+    - **Reserve `pekko-actor-testkit-typed` (`TestKit`, `TestProbe`) for what handler tests can't
+      cover** — tick lifecycle (`actSpontaneous`/`actInteractWith` resolving on every branch),
+      shard routing, and message-passing sequences between actors.
+    - **Test quality over test count.** Name tests for the behavior they guarantee (not
+      `test1`/`worksCorrectly`), cover the actual edge cases this checklist calls out — an
+      unresolved `actSpontaneous` branch, a consistency-critical reply missing on one branch, a
+      forgotten `resetTripState()` field — and avoid asserting on incidental implementation detail
+      (internal field order, exact log text) that would make the test brittle without protecting
+      anything real.
+    - **Compile and the full suite, not just your new test.** Run `sbt compile` before `sbt test`
+      — a passing new spec doesn't prove the rest of the module still builds — and run the whole
+      suite, since actor/handler changes here can have non-local effects (shared state classes,
+      StringPool interning, event type constants).
+
+12. **Docs — update the model's guide whenever you change the model.** Several actors have a
+    dedicated technical doc in `docs/` (`PERSON_AGENT.md`, `BUS_AGENT.md`, `SUBWAY_AGENT.md`,
+    `BUS_STOP_AGENT.md`, `BUS_STATION_AGENT.md`, `SUBWAY_STATION_AGENT.md`, plus `API.md` for
+    cross-cutting event/API surface). If you add or change state fields, events, handlers, or
+    behavior for one of these actors, update its doc in the same change — don't leave the doc
+    describing the pre-change model. If no doc exists yet for the actor you're touching and the
+    change is non-trivial, that's a signal to create one (hand off to `htc-docs-writer` for the
+    actual writing if the change is large). A stale model doc is worse than no doc — it actively
+    misleads the next person who reads it instead of the code.
+
 ## Handler Pattern Template
 
 ```scala
@@ -163,3 +196,9 @@ case class MyEventData(
 - Do not leave any branch of `actSpontaneous` without a call to `onFinishSpontaneous` — every path must resolve, including errors and no-op branches
 - Do not receive an interaction event that expects a reply and silently drop it on some branch — every such request must get a response, or the sender (and transitively the Time Manager) can hang
 - Do not reach for a watchdog/timeout as the first fix for a hang — find and fix the unanswered message path; timeouts are a last resort, not a design pattern here
+- Do not skip adding a test for a new handler or non-trivial branch because "the actor test would
+  be complicated" — test the handler directly instead of skipping coverage entirely
+- Do not write a test with no real assertion (or one that only checks a mock was called, not with
+  what) just to have a test file present — it hides the coverage gap instead of closing it
+- Do not call a change done on green tests alone without a clean `sbt compile` first — a stale
+  compiled artifact can hide a build break

@@ -20,7 +20,7 @@ import org.interscity.htc.core.actor.manager.time.GlobalTimeManager
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
-import org.interscity.htc.core.entity.event.control.load.{EagerLoadDataReadyEvent, LoadDataEvent, PostLoadRegistrationDoneEvent, ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, SimulationConfigLoadFailedEvent, SimulationConfigLoadedEvent, StartPostLoadRegistrationPhaseEvent, StartProgressiveLoadingEvent, TickWindowReady}
+import org.interscity.htc.core.entity.event.control.load.{EagerLoadDataReadyEvent, LoadDataEvent, PostLoadRegistrationDoneEvent, ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, ScenarioPreflightValidationFailedEvent, SimulationConfigLoadFailedEvent, SimulationConfigLoadedEvent, StartPostLoadRegistrationPhaseEvent, StartProgressiveLoadingEvent, TickWindowReady}
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.LoadBalanceReadyEvent
 import org.interscity.htc.core.actor.manager.loadbalance.LoadBalanceManager
@@ -82,6 +82,8 @@ class SimulationManager(
       prepareSimulation()
     case event: SimulationConfigLoadedEvent     => onSimulationConfigLoaded(event)
     case event: SimulationConfigLoadFailedEvent => onSimulationConfigLoadFailed(event)
+    case event: ScenarioPreflightValidationFailedEvent =>
+      onScenarioPreflightValidationFailed(event)
   }
 
   override def onStart(): Unit = {
@@ -319,6 +321,17 @@ class SimulationManager(
   private def onSimulationConfigLoadFailed(event: SimulationConfigLoadFailedEvent): Unit = {
     configLoadInProgress = false
     logError(s"Failed to load simulation configuration: ${event.cause.getMessage}", event.cause)
+    selfDestruct()
+  }
+
+  /** A scenario-wide mode-decision-engine pre-flight check failed (see
+    * `core.actor.manager.load.ScenarioPreflightValidator`) — abort the whole simulation the same
+    * way an unparsable `simulation.json` does. This always arrives before any Person/Node/Link
+    * actor has been created, since both `LoadDataManager` and `ProgressiveLoadDataManager` run the
+    * check before creating `creatorRef`/`creatorPoolRef`.
+    */
+  private def onScenarioPreflightValidationFailed(event: ScenarioPreflightValidationFailedEvent): Unit = {
+    logError(s"Scenario load aborted: ${event.error.message}")
     selfDestruct()
   }
 

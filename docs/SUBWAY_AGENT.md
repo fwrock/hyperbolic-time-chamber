@@ -177,7 +177,9 @@ Person ──[SubwayUnloadPassengerData(isArrival)]──► Subway
 ```
 
 - Enviado a **todos** os passageiros simultaneamente.
-- `isArrival = true` se `nodeId == ptAlightingNodeId` da Person (destino da viagem).
+- `isArrival = true` se `nodeId == alightingNodeId` do `PTWaitState` da Person (ver
+  [PERSON_AGENT.md](PERSON_AGENT.md) — antigo `ptAlightingNodeId`, hoje carregado em
+  `TripExecutionState.Traveling.ptWait.alightingNodeId`).
 - Trem remove passageiros que alightam de `state.passengers`.
 - Contagem: `countUnloadReceived` acumula respostas; quando `countUnloadReceived >= countUnloadPassenger + passengers.remaining`, o desembarque está completo.
 
