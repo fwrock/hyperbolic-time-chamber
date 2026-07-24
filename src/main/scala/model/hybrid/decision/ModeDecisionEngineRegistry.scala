@@ -19,7 +19,8 @@ object ModeDecisionEngineRegistry {
   private val engines: TrieMap[String, ModeDecisionEngine] = TrieMap(
     "raptor"               -> new RaptorMultiModalEngine(),
     "nearest-stop-utility" -> new NearestStopUtilityEngine(),
-    "travel-time"          -> new TravelTimeEngine()
+    "travel-time"          -> new TravelTimeEngine(),
+    "travel-time-logit"    -> new TravelTimeLogitEngine()
   )
 
   /** `None` for an unregistered id — no silent fallback, see class doc. */
