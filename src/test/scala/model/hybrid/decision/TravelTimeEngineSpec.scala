@@ -72,3 +72,51 @@ class TravelTimeEngineSpec extends AnyFlatSpec with Matchers {
     result shouldBe Right(List(WalkLeg(sameNode, sameNode, Some(Nil))))
   }
 }
+
+/** Coverage for `TravelTimeEngine.raptorIncludedStopTypes` — the pure narrowing logic that decides
+  * which PT stop types are worth a real `RaptorRouter.route` call when the cheap approximation's
+  * winning candidate is bus/subway (see `TravelTimeEngine`'s class doc, "Lazy RAPTOR validation").
+  * Deliberately pure — no `CityMapUtil`/`TransitMapUtil`/`RaptorRouter` singleton access — so the
+  * mode-narrowing decision itself is testable independent of the eager-singleton constraints
+  * documented on `RaptorMultiModalEngineSpec`.
+  */
+class TravelTimeEngineRaptorIncludedStopTypesSpec extends AnyFlatSpec with Matchers {
+
+  private def weightsWith(includedModes: Set[String]): ModeChoiceWeights =
+    ModeChoiceWeights(includedModes = includedModes)
+
+  "raptorIncludedStopTypes" should "include both bus and subway when both are in includedModes and allowedModes" in {
+    val weights = weightsWith(Set("bus", "subway", "walk"))
+    val allowed = Set(ConcreteMode.Bus, ConcreteMode.Subway, ConcreteMode.Walk)
+
+    TravelTimeEngine.raptorIncludedStopTypes(weights, allowed) shouldBe Set("bus", "subway")
+  }
+
+  it should "exclude subway when allowedModes forbids it even though includedModes allows it" in {
+    val weights = weightsWith(Set("bus", "subway"))
+    val allowed = Set(ConcreteMode.Bus)
+
+    TravelTimeEngine.raptorIncludedStopTypes(weights, allowed) shouldBe Set("bus")
+  }
+
+  it should "exclude bus when includedModes doesn't name it even though allowedModes permits it" in {
+    val weights = weightsWith(Set("subway", "walk"))
+    val allowed = Set(ConcreteMode.Bus, ConcreteMode.Subway)
+
+    TravelTimeEngine.raptorIncludedStopTypes(weights, allowed) shouldBe Set("subway")
+  }
+
+  it should "return an empty set when neither bus nor subway survives both filters" in {
+    val weights = weightsWith(Set("walk", "car"))
+    val allowed = Set(ConcreteMode.Walk, ConcreteMode.Car)
+
+    TravelTimeEngine.raptorIncludedStopTypes(weights, allowed) shouldBe empty
+  }
+
+  it should "be case-insensitive on includedModes, matching TravelTimeModeChoiceStrategy's own lowercasing" in {
+    val weights = weightsWith(Set("Bus", "SUBWAY"))
+    val allowed = Set(ConcreteMode.Bus, ConcreteMode.Subway)
+
+    TravelTimeEngine.raptorIncludedStopTypes(weights, allowed) shouldBe Set("bus", "subway")
+  }
+}

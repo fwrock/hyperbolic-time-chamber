@@ -109,6 +109,30 @@ object TransitRouteUtil {
   /** `true` when at least one route was loaded successfully. */
   lazy val isAvailable: Boolean = _routes.nonEmpty
 
+  /** Stop IDs a rider can actually reach by staying aboard `route` from `boardingStopId`, in the
+    * direction `route.stops` is ordered (first terminal to last terminal — see [[TransitRoute]]'s
+    * own doc). `None` when `boardingStopId` doesn't appear on `route` at all — directionality
+    * can't be verified in that case, distinct from `Some(Set.empty)` (boarding stop found but is
+    * the route's last stop, so genuinely nothing is reachable from it).
+    *
+    * Pure — no singleton/file reads — so callers can unit-test the direction logic itself with
+    * synthetic `TransitRoute` values, and this repo's single-leg mode-choice heuristics
+    * (`TravelTimeModeChoiceStrategy.bestAlightingStop`, `ModeChoiceUtil.bestAlightingStop`) use it
+    * to stop offering an alighting stop the line's real scheduled service never reaches from the
+    * chosen boarding stop — the class of bug found via `htc-scenario-qa`'s hybrid smoke-test
+    * scenario (2026-07-23): those two heuristics used to rank every stop sharing a `line` label
+    * purely by haversine distance to the destination, with no notion of the line's actual
+    * direction of travel, so they could (and did) offer a PT trip no vehicle ever fulfills —
+    * silently stranding the rider forever, no exception. [[RaptorRouter]] (used by the `"raptor"`
+    * engine) never had this defect; it already treats `transit_routes.json`'s stop order as
+    * authoritative.
+    */
+  def reachableStopIdsAfter(route: TransitRoute, boardingStopId: String): Option[Set[String]] = {
+    val boardIdx = route.stops.indexWhere(_.stopId == boardingStopId)
+    if (boardIdx < 0) None
+    else Some(route.stops.drop(boardIdx + 1).map(_.stopId).toSet)
+  }
+
   private def loadRoutes(filePath: String): Try[List[TransitRoute]] =
     Using(new BufferedInputStream(new FileInputStream(new File(filePath)))) { stream =>
       val listType: CollectionType =
