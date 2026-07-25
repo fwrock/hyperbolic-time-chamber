@@ -45,9 +45,10 @@ class CarLinkHandler(
       lanes        = data.linkLanes
     )
 
-    val time = data.linkLength / speed
+    val speedMs = speed / 3.6
+    val time = data.linkLength / speedMs
     state.status = Moving
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
+    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
 
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(tick)

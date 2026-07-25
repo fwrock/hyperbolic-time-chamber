@@ -16,6 +16,9 @@ import org.interscity.htc.core.metrics.system.InfrastructureMetrics
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
 import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
 
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+
 /** Subscribes to the Pekko DeadLetter stream and increments the Prometheus counter. Also logs
   * message type for diagnostics when dead letters are persistent.
   */
@@ -97,5 +100,13 @@ object HyperbolicTimeChamber {
       ),
       name = SIMULATION_MANAGER_ACTOR_NAME
     )
+
+    // Everything above is async actor-system setup — start() otherwise returns immediately,
+    // and main()'s thread finishing would exit the JVM right after startup under `sbt run`/
+    // `runMain` (confirmed directly: a single-node cluster formed, then the JVM exited before
+    // the simulation ever ran). The assembled-jar/`java -jar` path has stayed alive incidentally
+    // via Pekko's non-daemon dispatcher threads; blocking here makes that explicit instead of
+    // relying on it.
+    Await.ready(system.whenTerminated, Duration.Inf)
   }
 }

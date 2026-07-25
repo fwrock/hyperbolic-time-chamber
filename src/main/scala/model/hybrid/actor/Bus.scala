@@ -100,6 +100,19 @@ class Bus(
       .filter(_ > 0)
       .getOrElse(500)
 
+  /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
+    * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
+    * publishing every sub-tick unconditionally would be an order of magnitude more volume than
+    * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
+    */
+  private lazy val microUpdateReportEvery: Int =
+    sys.env
+      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+      .filter(_ >= 0)
+      .getOrElse(0)
+
   private var microUpdateLogCount: Long = 0L
   private var busStopProbeLogCount: Long = 0L
 
@@ -150,7 +163,7 @@ class Bus(
   )
 
   private lazy val microHandler = new BusMicroHandler(
-    reportFn               = (data, label) => report(data = data, label = label),
+    reportFn               = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn             = () => getEntityId,
     currentTickFn          = () => currentTick,
     journeyReporter        = journeyReporter,
@@ -163,11 +176,13 @@ class Bus(
     getCurrentLinkLengthFn = () => stopHandler.getCurrentLinkLength,
     findNextBusStopFn      = () => stopHandler.findNextBusStop(state),
     checkBusStopAtPositionFn = pos => stopHandler.checkBusStopAtPosition(pos, state),
-    microUpdateLogEvery    = microUpdateLogEvery
+    microUpdateLogEvery    = microUpdateLogEvery,
+    getCurrentLinkIdFn     = () => currentLinkId,
+    microUpdateReportEvery = microUpdateReportEvery
   )
 
   private lazy val linkHandler = new BusLinkHandler(
-    reportFn             = (data, label) => report(data = data, label = label),
+    reportFn             = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn           = () => getEntityId,
     currentTickFn        = () => currentTick,
     journeyReporter      = journeyReporter,
@@ -204,7 +219,7 @@ class Bus(
     journeyReporter      = journeyReporter,
     sendMessageFn        = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
     onFinishSpontaneousFn = nextTick => onFinishSpontaneous(nextTick),
-    scheduleEventFn      = tick => scheduleEvent(tick),
+    deferFinishSpontaneousFn = () => deferFinishSpontaneous(),
     enterLinkFn          = () => enterLink(),
     selfRefFn            = () => self,
     getCurrentStopNodeFn = () => currentStopNode,
@@ -272,7 +287,15 @@ class Bus(
           requestUnloadPeopleData()
         } else {
           currentStopNode = None
-          enterLink()
+          // If movableStatus is already Waiting, enterLink() was already called and we're
+          // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
+          // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
+          // this bus is already registered on. Just poll again next tick instead.
+          if (state.movableStatus == Waiting) {
+            onFinishSpontaneous(Some(currentTick + 1))
+          } else {
+            enterLink()
+          }
         }
 
       case Moving =>
@@ -329,7 +352,13 @@ class Bus(
       case WaitingLoadPassenger =>
 //        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
         currentStopNode = None
-        enterLink()
+        // Same re-entry race as the Ready case above: guard against resending EnterLinkData
+        // if enterLink() was already called and we're still waiting on the Link's reply.
+        if (state.movableStatus == Waiting) {
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          enterLink()
+        }
 
       case WaitingUnloadPassenger =>
         requestLoadPassenger()

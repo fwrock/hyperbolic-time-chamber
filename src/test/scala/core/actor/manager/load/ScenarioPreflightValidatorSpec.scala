@@ -14,6 +14,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.nio.file.{ Files, Path }
+import java.sql.DriverManager
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Await
 import scala.concurrent.duration.*
@@ -81,6 +82,62 @@ class ScenarioPreflightValidatorSpec extends AnyFlatSpec with Matchers with Befo
     )
   }
 
+  /** Same scenario shape as [[writePersonSourceFile]], but written to a SQLite `.db` (the
+    * `actor_simulation` schema `tools/scenario-db-converter/convert.py` produces) instead of a
+    * JSON array — proves `ScenarioPreflightValidator.validate` picks the SQLite-reading branch
+    * (`SqliteActorSimulationUtil.openIterator`) instead of unconditionally treating every source
+    * as JSON, which is exactly the real bug found running this end-to-end (`Unrecognized token
+    * 'SQLite'` — the JSON parser choking on a `.db` file's binary header).
+    */
+  private def writePersonSourceDb(strategyId: String, personCount: Int = 1): ActorDataSource = {
+    val dbPath = Files.createTempFile("scenario-preflight-spec", ".db")
+    Files.delete(dbPath)
+    tempFiles = dbPath :: tempFiles
+
+    Class.forName("org.sqlite.JDBC")
+    val conn = DriverManager.getConnection(s"jdbc:sqlite:${dbPath.toString}")
+    try {
+      val stmt = conn.createStatement()
+      stmt.execute(
+        """CREATE TABLE actor_simulation (
+          |  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          |  id TEXT NOT NULL, name TEXT, type_actor TEXT NOT NULL,
+          |  creation_type TEXT NOT NULL, start_tick INTEGER NOT NULL DEFAULT 0,
+          |  pool_round_robin_pool INTEGER, pool_total_instances INTEGER,
+          |  pool_max_instances_per_node INTEGER, pool_allow_local_routes INTEGER,
+          |  pool_use_roles TEXT, data_type TEXT NOT NULL, data_content TEXT NOT NULL,
+          |  relationships TEXT
+          |)""".stripMargin
+      )
+      stmt.close()
+
+      val insert = conn.prepareStatement(
+        """INSERT INTO actor_simulation
+          |  (id, type_actor, creation_type, data_type, data_content)
+          |VALUES (?, 'hybrid.actor.Person', 'LoadBalancedDistributed', 'model.hybrid.entity.state.PersonState', ?)""".stripMargin
+      )
+      (1 to personCount).foreach {
+        i =>
+          val state = PersonState(originalPlan = personPlan(strategyId))
+          insert.setString(1, s"person-$i")
+          insert.setString(2, JsonUtil.toJson(state))
+          insert.executeUpdate()
+      }
+      insert.close()
+    } finally conn.close()
+
+    ActorDataSource(
+      id = s"persons-db-$strategyId",
+      classType = "hybrid.actor.Person",
+      creationType = CreationTypeEnum.LoadBalancedDistributed,
+      dataSource = DataSource(
+        sourceType = DataSourceTypeEnum.sqlite,
+        info = Map("path" -> dbPath.toAbsolutePath.toString)
+      ),
+      loadingStrategy = LoadingStrategyEnum.EAGER
+    )
+  }
+
   private def await[T](f: scala.concurrent.Future[T]): T = Await.result(f, 10.seconds)
 
   "isPersonSource" should "recognize a Person data source regardless of package-prefix form" in {
@@ -133,6 +190,31 @@ class ScenarioPreflightValidatorSpec extends AnyFlatSpec with Matchers with Befo
 
   it should "succeed for an empty list of Person sources (nothing to validate)" in {
     await(ScenarioPreflightValidator.validate(Nil, noTransitRoutesCtx)) shouldBe Right(())
+  }
+
+  it should "succeed for a SQLite-backed Person source (not just JSON)" in {
+    val source = writePersonSourceDb(strategyId = "travel-time", personCount = 5)
+
+    await(ScenarioPreflightValidator.validate(List(source), availableCtx)) shouldBe Right(())
+  }
+
+  it should "abort with the unknown-strategy error for a SQLite-backed source too" in {
+    val source = writePersonSourceDb(strategyId = "no-such-strategy")
+
+    val result = await(ScenarioPreflightValidator.validate(List(source), availableCtx))
+
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("no-such-strategy")
+  }
+
+  it should "validate a scenario mixing JSON and SQLite Person sources in the same run" in {
+    val jsonSource = writePersonSourceFile(strategyId = "travel-time", personCount = 2)
+    val dbSource = writePersonSourceDb(strategyId = "no-such-strategy", personCount = 2)
+
+    val result = await(ScenarioPreflightValidator.validate(List(jsonSource, dbSource), availableCtx))
+
+    result.isLeft shouldBe true
+    result.left.toOption.get.message should include("no-such-strategy")
   }
 
   it should "short-circuit on the first bad strategyId without needing to read every source" in {

@@ -1,0 +1,32 @@
+[
+  {
+    "lineId": "mini_bus_loop",
+    "stopType": "bus",
+    "headwaySeconds": 3600,
+    "stops": [
+      {
+        "stopId": "htcaid:stop;bus_mini_terminal",
+        "travelTimeFromPrevSeconds": 0
+      },
+      {
+        "stopId": "htcaid:stop;bus_mini_mid",
+        "travelTimeFromPrevSeconds": 60
+      }
+    ]
+  },
+  {
+    "lineId": "mini_subway_line",
+    "stopType": "subway",
+    "headwaySeconds": 600,
+    "stops": [
+      {
+        "stopId": "htcaid:stop;subway_mini_terminal",
+        "travelTimeFromPrevSeconds": 0
+      },
+      {
+        "stopId": "htcaid:stop;subway_mini_dest",
+        "travelTimeFromPrevSeconds": 120
+      }
+    ]
+  }
+]

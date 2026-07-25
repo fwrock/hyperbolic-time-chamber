@@ -1,0 +1,130 @@
+{
+  "id": "sqlite_validation_test",
+  "name": "S\u00e3o Paulo EQAsim \u2013 tiny validation all entities",
+  "description": "Tiny self-contained validation scenario with bus, subway, person, car, nodes, links, bus stops, bus station, and rail link.",
+  "startTick": 0,
+  "endTick": 86400,
+  "startRealTime": "2025-01-01T00:00:00.000",
+  "timeUnit": "seconds",
+  "timeStep": 1.0,
+  "duration": 86400,
+  "tickDuration": 1.0,
+  "randomSeed": 42,
+  "actorsDataSources": [
+    {
+      "id": "nodes_0",
+      "classType": "hybrid.actor.Node",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/nodes_0.db"
+        }
+      }
+    },
+    {
+      "id": "links_0",
+      "classType": "hybrid.actor.Link",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/links_0.db"
+        }
+      }
+    },
+    {
+      "id": "persons_0",
+      "classType": "hybrid.actor.Person",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/persons_0.db"
+        }
+      }
+    },
+    {
+      "id": "cars_0",
+      "classType": "hybrid.actor.Car",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/cars_0.db"
+        }
+      }
+    },
+    {
+      "id": "bus_stops_0",
+      "classType": "hybrid.actor.BusStop",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/bus_stops_0.db"
+        }
+      }
+    },
+    {
+      "id": "bus_stations_0",
+      "classType": "hybrid.actor.BusStation",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/bus_stations_0.db"
+        }
+      }
+    },
+    {
+      "id": "subway_stations_0",
+      "classType": "hybrid.actor.SubwayStation",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/subway_stations_0.db"
+        }
+      }
+    },
+    {
+      "id": "rail_links_0",
+      "classType": "hybrid.actor.RailLink",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "sqlite",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/rail_links_0.db"
+        }
+      }
+    }
+  ],
+  "cityMapFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/city_map.json",
+  "warmupTargets": [
+    "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
+  ],
+  "postLoadRegistrationClasses": [
+    "org.interscity.htc.model.hybrid.actor.BusStop",
+    "org.interscity.htc.model.hybrid.actor.BusStation",
+    "org.interscity.htc.model.hybrid.actor.SubwayStation"
+  ],
+  "transitMapFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/transit_map.json",
+  "transitRoutesFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/sqlite_validation_test/data/transit_routes.json"
+}

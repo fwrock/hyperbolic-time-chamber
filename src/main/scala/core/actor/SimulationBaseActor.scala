@@ -845,6 +845,18 @@ abstract class SimulationBaseActor[T <: BaseState](
         )
     }
 
+  /** Reports to the default strategy (e.g. Parquet) and mirrors the same payload to the `kafka`
+    * reporter for live consumers (htc-play), if and only if `kafka` is present in
+    * `htc.report-manager.enabled-strategies`. No-op mirror otherwise — see
+    * [[reportToSpecificReporter]]. `KafkaReportData`/`KafkaPublisher` are themselves fail-safe if
+    * Redpanda is unreachable, so this call never affects simulation correctness or liveness
+    * regardless of whether Redpanda is configured, running, or reachable.
+    */
+  protected def reportMirrored(data: Any, label: String = null): Unit = {
+    report(data = data, label = label)
+    reportToSpecificReporter(ReportTypeEnum.kafka, data, label)
+  }
+
   /** Gets a relationship by entity id.
     * @param entityId
     *   The entity id

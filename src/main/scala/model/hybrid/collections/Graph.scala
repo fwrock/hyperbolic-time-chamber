@@ -3,8 +3,10 @@ package org.interscity.htc.model.hybrid.collections
 import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.interscity.htc.model.hybrid.collections.graph.{ Edge, EdgeInfo }
+import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
 
 import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
+import java.sql.DriverManager
 import scala.reflect.ClassTag
 import scala.collection.immutable.{ Map, Queue, Set }
 import scala.collection.mutable
@@ -785,5 +787,124 @@ object Graph {
         throw e
       case e: Exception =>
         throw new Exception(s"Erro ao processar o JSON ou construir o grafo: ${e.getMessage}", e)
+    }
+
+  /** Carrega um grafo a partir de um `.db` SQLite gerado por
+    * `tools/scenario-db-converter/convert.py` (tabelas `city_map_meta`/`city_map_node`/
+    * `city_map_edge`), como alternativa a [[loadFromJsonFile]].
+    *
+    * Unlike `loadFromJsonFile`, this is NOT generic over `V`/`ID`/`W`/`L` — the `.db` schema is
+    * concretely shaped around `NodeGraph`/`EdgeGraph` (the converter's schema mirrors those exact
+    * case classes), so there is no equivalent of Jackson's reflective `JsonGraphRefFormat[V, ID,
+    * W, L]` to build here. The one real call site (`CityMapUtil.loadedCityData`) only ever
+    * instantiates the generic JSON loader with `[NodeGraph, String, Double, EdgeGraph]` anyway.
+    *
+    * Opened with `immutable=1`/`PRAGMA query_only=ON` for the same reason as
+    * `SqliteLoadData`/`ProgressiveSqliteLoadData`: the `.db` is produced once by the converter and
+    * never mutated afterward.
+    *
+    * @param dbPath
+    *   path to the SQLite database.
+    * @param defaultWeightForUnweighted
+    *   peso padrão quando `weight` é NULL na tabela `city_map_edge`.
+    * @return
+    *   Try[LoadedGraphData] contendo o grafo e mapas de consulta — mesmo formato de retorno de
+    *   [[loadFromJsonFile]].
+    */
+  def loadFromSqliteFile(
+    dbPath: String,
+    defaultWeightForUnweighted: Double = 0.0
+  ): Try[LoadedGraphData[NodeGraph, String, Double, EdgeGraph]] =
+    Try {
+      Class.forName("org.sqlite.JDBC")
+      val conn = DriverManager.getConnection(s"jdbc:sqlite:file:$dbPath?immutable=1")
+      try {
+        val pragma = conn.createStatement()
+        pragma.execute("PRAGMA query_only = ON")
+        pragma.close()
+
+        val directed = {
+          val stmt = conn.createStatement()
+          try {
+            val rs = stmt.executeQuery("SELECT directed FROM city_map_meta")
+            try {
+              rs.next()
+              rs.getInt("directed") != 0
+            } finally rs.close()
+          } finally stmt.close()
+        }
+
+        val nodeMapBuilder = Map.newBuilder[String, NodeGraph]
+        val nodeStmt = conn.createStatement()
+        try {
+          val nodeRs = nodeStmt.executeQuery(
+            "SELECT id, resource_id, class_type, latitude, longitude FROM city_map_node"
+          )
+          try
+            while (nodeRs.next()) {
+              val node = NodeGraph(
+                id = nodeRs.getString("id"),
+                resourceId = nodeRs.getString("resource_id"),
+                classType = nodeRs.getString("class_type"),
+                latitude = nodeRs.getDouble("latitude"),
+                longitude = nodeRs.getDouble("longitude")
+              )
+              nodeMapBuilder += (node.id -> node)
+            }
+          finally nodeRs.close()
+        } finally nodeStmt.close()
+        val nodesByIdMap: Map[String, NodeGraph] = nodeMapBuilder.result()
+
+        var graph = Graph.empty[NodeGraph, Double, EdgeGraph]
+        val edgeLabelMapBuilder = Map.newBuilder[String, EdgeGraph]
+        val seenEdgeLabelIds = mutable.Set[String]()
+
+        val edgeStmt = conn.createStatement()
+        try {
+          val edgeRs = edgeStmt.executeQuery(
+            "SELECT id, resource_id, class_type, length, source_id, target_id, weight FROM city_map_edge"
+          )
+          try
+            while (edgeRs.next()) {
+              val sourceId = edgeRs.getString("source_id")
+              val targetId = edgeRs.getString("target_id")
+
+              (nodesByIdMap.get(sourceId), nodesByIdMap.get(targetId)) match {
+                case (Some(sourceNode), Some(targetNode)) =>
+                  val label = EdgeGraph(
+                    id = edgeRs.getString("id"),
+                    resourceId = edgeRs.getString("resource_id"),
+                    classType = edgeRs.getString("class_type"),
+                    length = edgeRs.getDouble("length")
+                  )
+
+                  if (!seenEdgeLabelIds.contains(label.id)) {
+                    edgeLabelMapBuilder += (label.id -> label)
+                    seenEdgeLabelIds.add(label.id)
+                  }
+
+                  val weightObj = edgeRs.getObject("weight")
+                  val weight = if (weightObj == null) defaultWeightForUnweighted else edgeRs.getDouble("weight")
+
+                  graph =
+                    if (directed) graph.addEdge(sourceNode, targetNode, weight, label)
+                    else graph.addUndirectedEdge(sourceNode, targetNode, weight, label)
+
+                case (None, _) =>
+                  throw new NoSuchElementException(s"Nó de origem com ID '$sourceId' não encontrado.")
+                case (_, None) =>
+                  throw new NoSuchElementException(s"Nó de destino com ID '$targetId' não encontrado.")
+              }
+            }
+          finally edgeRs.close()
+        } finally edgeStmt.close()
+
+        LoadedGraphData(graph, nodesByIdMap, edgeLabelMapBuilder.result())
+      } finally conn.close()
+    }.recover {
+      case e @ (_: IllegalArgumentException | _: NoSuchElementException) =>
+        throw e
+      case e: Exception =>
+        throw new Exception(s"Erro ao processar o SQLite ou construir o grafo: ${e.getMessage}", e)
     }
 }
