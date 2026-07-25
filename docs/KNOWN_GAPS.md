@@ -75,7 +75,7 @@ State section. These gaps were real but dormant; A/B are now fixed (see above) s
 become load-bearing if migration is turned back on. Gap C remains dormant-but-real for the same
 reason and needs its own fix before migration can be safely re-enabled.
 
-## Simulation Runs Are Not Fully Reproducible for a Fixed Seed — Duplicate Spontaneous-Event Dispatch (Bus loop scenario: RESOLVED 2026-07-25; underlying pattern still present elsewhere)
+## Simulation Runs Are Not Fully Reproducible for a Fixed Seed — Duplicate Spontaneous-Event Dispatch (Structural duplicate dispatch: RESOLVED 2026-07-25, TM-level fix; small residual timing drift still open)
 
 Found 2026-07-24 while validating the new SQLite input format (see `SCENARIO_MODELING.md` §3/§8)
 end-to-end against a real cluster run. Running the **identical** scenario (same `simulation.json`,
@@ -258,6 +258,78 @@ relative to an actor's more recent dispatch, instead of "rescuing" it into a pha
 close the whole family of gaps at once rather than one reply handler at a time, and remains the
 more complete option for whoever wants to close this permanently rather than reactively.
 
+**Root cause, part 4 (implemented 2026-07-25): the TimeManager-level generation-counter fix
+suggested above.** Closes part 2's remaining architectural gap without touching any actor-level
+reply handler.
+
+Added a per-actor **dispatch generation** counter to `LocalTimeManagerBase`
+(`dispatchGeneration: mutable.Map[String, Long]`), incremented every time the TM actually sends an
+actor a `SpontaneousEvent` (in `sendSpontaneousEvent(tick, identity)`, covering both the shard and
+pool dispatch paths, and both `LocalDiscreteEventTimeManager`'s batching and
+`LocalTimeSteppedTimeManager`). The new generation value is embedded in the `SpontaneousEvent`
+itself (`SpontaneousEvent.generation: Long`, new field, default 0). `SimulationBaseActor` records
+whatever generation it most recently received (`currentGeneration`, updated in `handleSpontaneous`)
+and echoes it on **every** `FinishEvent` it sends (`FinishEvent.generation: Long`, new field) —
+regardless of whether that `FinishEvent` is sent synchronously from `actSpontaneous` or later from
+an async reply handler (`handleEnterLink`, `handleLeaveLink`, `handleBusLoadPeople`,
+`handleSignalState`, etc.) — since `currentGeneration` isn't touched by
+`actInteractWith`/interaction-event processing, only by receiving a new `SpontaneousEvent`.
+
+`LocalTimeManagerBase.finishEvent` now checks, before doing anything else:
+```scala
+val currentGen = dispatchGeneration(finish.identify.id)
+if (!finish.destruct && finish.generation < currentGen) {
+  // stale — drop without touching scheduledActors/runningEvents/advanceToNextTick
+  return
+}
+```
+`destruct` events always bypass the check (destruction is terminal and one-way; there's no "newer
+dispatch" scenario to protect against). `dispatchGeneration` entries are removed on destruct to
+avoid unbounded growth over a long run with many transient actors.
+
+**Why this closes part 2's mechanism precisely**: in the tick-3651 triple-`FinishEvent` example,
+all three redundant calls (`requestSignalState`, `Movable.leavingLink`, `BusLinkHandler.
+handleLeaveLink`) fire while the actor is still on the *same* generation (say `G`, from the 3651
+dispatch) and normally collapse harmlessly into one `scheduledActors` entry. The failure required
+one of them (typically the Link's reply — an extra round-trip) to arrive **after** the TM had
+already dispatched the actor again (tick 3652, generation `G+1`). That straggler still carries
+`generation = G` — by definition **provably stale**, since generation `G+1` could only have been
+dispatched if the actor's `G`-cycle was already resolved by one of the other two. The fix requires
+no case-by-case reasoning about *which* call site is "the real resolver": any `FinishEvent` whose
+generation trails the actor's current one is, by construction, chasing an already-superseded
+cycle.
+
+**Note this is a different (complementary) mechanism from part 3's fix.** A stale
+`handleBusLoadPeople` reply can arrive *after* the bus's own subsequent `enterLink()` poll has
+already bumped `currentGeneration` — meaning by the time the stale reply is processed, it echoes
+the *same, current* generation, not an older one (the actor's local `currentGeneration` field
+reflects whatever `SpontaneousEvent` it most recently received, which can race ahead of a
+still-in-flight reply). So this TM-level generation check, by itself, does **not** catch part 3's
+mechanism — the `state.status`-based stale-reply guard added in part 3 is still required for that
+case. The two fixes protect against genuinely different failure windows and are both kept.
+
+**Validated**: three independent full 86,400-tick runs with the fixed `randomSeed`, no
+`[STALL]`/`[GTM-STALL]` warnings in any of them, 0 same-link duplicate `enter_link`s in every run
+(1750, 1752, then a third confirmed 0-duplicate run). 111/111 tests pass.
+
+**However — diffing the exact tick-by-tick event sequences between two of these runs (not just
+counts) revealed a separate, much smaller-magnitude divergence that neither this fix nor part 3's
+was targeting.** The first `enter_link` of the whole run already differs by a few ticks between
+runs (e.g. tick 3603 vs. 3606) — before any of the leaving-link or load-passenger machinery has
+had a chance to run even once — so this is unrelated to the duplicate-dispatch mechanisms fixed in
+parts 1/3/4. The per-event offset then drifts slowly (mostly ±1 tick shifts accumulating over
+hundreds of laps, reaching roughly +66 ticks by tick ~86,000) and **plateaus** rather than growing
+without bound, which is not consistent with a repeated logical duplicate (that pattern historically
+compounded much faster and produced visibly different final counts, as in the original ~9150 vs.
+~5527 divergence). This magnitude (2 events out of ~1750, i.e. ~0.1%) is two full orders of
+magnitude smaller than the original ~1.7% bug and doesn't manifest as the "already registered,
+no intervening leave" signature this whole investigation has been keying on — it looks more like
+sub-tick floating-point/timing computation nondeterminism (e.g. in `SpeedUtil.linkDensitySpeed`'s
+travel-time math) than a scheduling-layer logic bug, though this wasn't root-caused this session.
+**Not yet investigated further — flagged here for whoever wants perfect bit-for-bit
+reproducibility** rather than "no structurally duplicated events," which is what parts 1/3/4 now
+guarantee for the scenario tested.
+
 **Ruled out as causes** (still valid from the original investigation):
 - Concurrent-vehicle contention (the bus is the only vehicle on its own two links in this
   scenario).
@@ -301,15 +373,18 @@ new ones.
 
 **Why this matters beyond the bus**: `state.registered`-based density speed
 (`SpeedUtil.linkDensitySpeed`) is shared by every MESO `Movable` link handler (`CarLinkHandler`,
-`BicycleLinkHandler`, `MotorcycleLinkHandler`) and the "send + poll" pattern in part 2 is used
-throughout `Movable`/`*SignalHandler`/`*LinkHandler` — the same class of run-to-run drift could in
-principle affect any of them, not just `Bus`. **For the bus-loop scenario that was actually
-tested, two independent full-length runs with the same seed now produce identical
-`enter_link`/`leave_link` totals** (part 3's fix). Whether other vehicle types or exchanges have
-their own not-yet-observed instance of the same "missing stale-reply guard" pattern is unverified
-— this was fixed reactively (found via evidence from one scenario), not via a system-wide audit,
-so treat other exchanges as unconfirmed rather than assumed-safe until they're put through the
-same full-scenario, two-runs-diffed validation loop described above.
+`BicycleLinkHandler`, `MotorcycleLinkHandler`) and the "send + poll" pattern is used throughout
+`Movable`/`*SignalHandler`/`*LinkHandler` — the same class of run-to-run drift could in principle
+have affected any of them, not just `Bus`. Part 4's TM-level generation-counter fix is
+**general** — it applies to every actor dispatched through `LocalTimeManagerBase`, not just `Bus`,
+so it should close the "redundant-poll-arrives-late-and-gets-bumped" mechanism platform-wide
+without needing per-vehicle-type verification the way part 3's targeted guard did. **For the
+bus-loop scenario actually tested, three independent full-length runs with the same seed now
+produce zero structurally-duplicated `enter_link`/`leave_link` events** (parts 1/3/4 combined).
+A separate, much smaller-magnitude (~0.1%) timing drift remains unexplained (see part 4's closing
+note) — worth chasing for bit-exact reproducibility, but it is not the duplicate-dispatch class of
+bug this investigation was scoped to, and does not threaten result validity the way the original
+~1.7% structural-duplicate bug did.
 
 ## Test Coverage
 
