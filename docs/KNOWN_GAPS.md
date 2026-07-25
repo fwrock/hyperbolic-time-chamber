@@ -314,21 +314,58 @@ case. The two fixes protect against genuinely different failure windows and are 
 
 **However — diffing the exact tick-by-tick event sequences between two of these runs (not just
 counts) revealed a separate, much smaller-magnitude divergence that neither this fix nor part 3's
-was targeting.** The first `enter_link` of the whole run already differs by a few ticks between
-runs (e.g. tick 3603 vs. 3606) — before any of the leaving-link or load-passenger machinery has
-had a chance to run even once — so this is unrelated to the duplicate-dispatch mechanisms fixed in
-parts 1/3/4. The per-event offset then drifts slowly (mostly ±1 tick shifts accumulating over
-hundreds of laps, reaching roughly +66 ticks by tick ~86,000) and **plateaus** rather than growing
-without bound, which is not consistent with a repeated logical duplicate (that pattern historically
-compounded much faster and produced visibly different final counts, as in the original ~9150 vs.
-~5527 divergence). This magnitude (2 events out of ~1750, i.e. ~0.1%) is two full orders of
-magnitude smaller than the original ~1.7% bug and doesn't manifest as the "already registered,
-no intervening leave" signature this whole investigation has been keying on — it looks more like
-sub-tick floating-point/timing computation nondeterminism (e.g. in `SpeedUtil.linkDensitySpeed`'s
-travel-time math) than a scheduling-layer logic bug, though this wasn't root-caused this session.
-**Not yet investigated further — flagged here for whoever wants perfect bit-for-bit
-reproducibility** rather than "no structurally duplicated events," which is what parts 1/3/4 now
-guarantee for the scenario tested.
+was targeting**, and this one **was** root-caused (2026-07-25, same session).
+
+**Root cause, part 5 (characterized, not fixed): the number of harmless "Waiting" poll cycles
+before an async reply lands is itself a real-wall-clock race, not a logical value.**
+`Movable.enterLink()` sends `EnterLinkData` then immediately polls
+(`onFinishSpontaneous(Some(currentTick+1))`). Until the Link's reply actually arrives,
+`state.movableStatus` stays `Waiting`, and every dispatch in between falls through to
+`Movable`'s own `case Waiting => waitingTicksCounter += 1; onFinishSpontaneous(Some(currentTick+1))`
+— a harmless, side-effect-free re-poll (unlike the `Ready`/`WaitingLoadPassenger` cases fixed in
+part 1, calling `enterLink()` again here would be wrong, but this fallback correctly doesn't).
+Traced with temporary tick+wall-clock-tagged logging (since removed) across two runs of the same
+scenario/seed, isolating just the bus's very first `enterLink()` cycle (tick 3601, the first event
+of the whole run):
+
+| Run | Waiting polls before reply | Reply processed at | `enter_link` reported at |
+|---|---|---|---|
+| 1 | 2 (ticks 3602, 3603) | tick 3603 | tick 3604 (`Moving`) |
+| 2 | 4 (ticks 3602–3605) | tick 3605 | tick 3606 (`Moving`) |
+
+Both runs send `EnterLinkData` at the *same* tick (3601) and the Link receives it at the *same*
+tick (3601) — genuinely identical up to that point. The divergence is entirely in **how many
+logical ticks elapse before the Link's real, cross-actor-mailbox reply happens to be processed** —
+i.e. a race between two things that run on different clocks: the "poll again next tick" cycle
+(governed by the simulation's own tick-advancement machinery) and the actual Pekko message
+round-trip for `EnterLinkData`/`LinkInfoData` (governed by real JVM thread scheduling, GC, and
+whatever else the process happens to be doing at that wall-clock moment). Since the real round-trip
+has no fixed relationship to the logical tick cycle, a slower JVM moment can let 1-2 extra
+"Waiting" polls slip in before the reply wins the race, shifting the tick at which the transition
+to `Moving` (and thus the `enter_link` report) is recorded — with no lost or duplicated events,
+just a shifted timestamp. This is the exact same architectural pattern documented in part 2
+(logical polling racing a real async reply) — the only reason it doesn't *also* duplicate a
+registration here is that `Waiting`'s fallback handler is a no-op re-poll rather than a
+side-effecting action like `enterLink()`.
+
+**Consistent with all observed symptoms**: explains why the very first `enter_link` of the whole
+run already differs (this race exists from the bus's first tick, independent of anything the
+leaving-link/load-passenger fixes touch); explains the small, slowly-accumulating, plateauing
+magnitude (each of the bus's ~875 `enterLink()`/`leavingLink()` waits across a run independently
+has a small chance of landing on a different number of extra polls, ~0.1% aggregate effect, with
+no mechanism for it to compound the way genuine duplicate registration did).
+
+**Not fixed this session.** The direct fix — stop polling and rely solely on the Link's reply
+(`deferFinishSpontaneous()` instead of the immediate poll) — is *exactly* the change already
+attempted twice in part 2 (once for `enterLink`, once for `leavingLink`) and reverted both times
+after causing real regressions (worse duplicate rate; an actual stall). There is no reason to
+expect a third attempt at removing this specific poll would fare differently without first
+addressing why removing it breaks other actors' assumptions (see part 2's `Subway` stale-guard
+finding). This is deliberately left as a documented, understood, low-severity characteristic —
+worth pursuing only if bit-exact reproducibility (not just "no structurally duplicated events") is
+required, e.g. via part 2's suggested TimeManager-level generation check extended to also gate
+*when* a `Waiting`-fallback re-poll is allowed to fire, or via a more fundamental redesign of the
+`enterLink`/`leavingLink` wait pattern — not a quick fix.
 
 **Ruled out as causes** (still valid from the original investigation):
 - Concurrent-vehicle contention (the bus is the only vehicle on its own two links in this
