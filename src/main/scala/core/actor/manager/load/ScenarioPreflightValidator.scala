@@ -1,8 +1,10 @@
 package org.interscity.htc
 package core.actor.manager.load
 
+import core.entity.actor.ActorSimulation
 import core.entity.configuration.ActorDataSource
-import core.util.{ JsonStreamingUtil, JsonUtil, StringUtil }
+import core.enumeration.DataSourceTypeEnum
+import core.util.{ JsonStreamingUtil, JsonUtil, SqliteActorSimulationUtil, StringUtil }
 
 import org.interscity.htc.model.hybrid.actor.Person
 import org.interscity.htc.model.hybrid.decision.{ ScenarioLoadError, ScenarioLoadValidator, ScenarioValidationContext }
@@ -78,9 +80,16 @@ object ScenarioPreflightValidator {
       while (sourceIterator.hasNext && result.isRight) {
         val source = sourceIterator.next()
         val path = source.dataSource.info("path").asInstanceOf[String]
-        val is = new BufferedInputStream(new FileInputStream(new File(path)))
+        val (closeable, actorIterator): (AutoCloseable, Iterator[ActorSimulation]) =
+          source.dataSource.sourceType match {
+            case DataSourceTypeEnum.json =>
+              val is = new BufferedInputStream(new FileInputStream(new File(path)))
+              val (_, iter) = JsonStreamingUtil.createParser(is)
+              (is, iter)
+            case DataSourceTypeEnum.sqlite =>
+              SqliteActorSimulationUtil.openIterator(path)
+          }
         try {
-          val (_, actorIterator) = JsonStreamingUtil.createParser(is)
           while (actorIterator.hasNext && result.isRight) {
             val actor = actorIterator.next()
             val personState = JsonUtil.convertValue[PersonState](actor.data.content)
@@ -96,7 +105,7 @@ object ScenarioPreflightValidator {
               }
             }
           }
-        } finally is.close()
+        } finally closeable.close()
       }
 
       result

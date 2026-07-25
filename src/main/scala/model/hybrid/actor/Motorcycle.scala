@@ -112,6 +112,19 @@ class Motorcycle(
   private var signalStateRetryCounter: Int = 0
   private val MaxSignalStateRetries: Int = 100
 
+  /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
+    * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
+    * publishing every sub-tick unconditionally would be an order of magnitude more volume than
+    * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
+    */
+  private lazy val microUpdateReportEvery: Int =
+    sys.env
+      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+      .filter(_ >= 0)
+      .getOrElse(0)
+
   private lazy val journeyReporter = new MotorcycleJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
     entityIdFn      = () => getEntityId,
@@ -123,7 +136,7 @@ class Motorcycle(
   )
 
   private lazy val microHandler = new MotorcycleMicroHandler(
-    reportFn                 = (data, label) => report(data = data, label = label),
+    reportFn                 = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn               = () => getEntityId,
     currentTickFn            = () => currentTick,
     journeyReporter          = journeyReporter,
@@ -138,11 +151,12 @@ class Motorcycle(
     setCurrentLinkIdFn       = id => currentLinkId = id,
     setLinkEntryTickFn       = t => linkEntryTick = t,
     getLinkEntryTickFn       = () => linkEntryTick,
-    getCurrentLinkIdFn       = () => currentLinkId
+    getCurrentLinkIdFn       = () => currentLinkId,
+    microUpdateReportEvery   = microUpdateReportEvery
   )
 
   private lazy val linkHandler = new MotorcycleLinkHandler(
-    reportFn                 = (data, label) => report(data = data, label = label),
+    reportFn                 = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn               = () => getEntityId,
     currentTickFn            = () => currentTick,
     journeyReporter          = journeyReporter,
@@ -267,7 +281,15 @@ class Motorcycle(
         requestRoute()
 
       case Ready =>
-        enterLink()
+        // If movableStatus is already Waiting, enterLink() was already called and we're
+        // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
+        // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
+        // this motorcycle is already registered on. Just poll again next tick instead.
+        if (state.movableStatus == Waiting) {
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          enterLink()
+        }
 
       case WaitingSignal =>
         signalWaitUntilTick match {

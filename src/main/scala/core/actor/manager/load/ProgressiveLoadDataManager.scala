@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.strategy.ProgressiveJsonLoadData
 import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData }
 import core.actor.manager.BaseManager
 import core.entity.actor.properties.{ CreatorProperties, Properties }
@@ -237,7 +236,7 @@ class ProgressiveLoadDataManager(
       case (source, idx) =>
         val targetAddress = upMembers(idx % upMembers.size).address
         val loaderProps = Props(
-          classOf[ProgressiveJsonLoadData],
+          source.dataSource.sourceType.progressiveClazz,
           Properties(
             entityId = s"progressive-loader-${source.id.hashCode}",
             resourceId = "",

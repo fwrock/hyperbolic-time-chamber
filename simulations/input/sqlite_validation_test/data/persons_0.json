@@ -1,0 +1,84 @@
+[
+  {
+    "id": "htcaid:person;tiny_0",
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "origin": "htcaid:node;mini_bus_terminal",
+        "destination": "htcaid:node;mini_bus_terminal",
+        "dailySchedule": [
+          {
+            "sequence": 0,
+            "activityType": "home",
+            "nodeId": "htcaid:node;mini_bus_terminal",
+            "endTime": "300",
+            "arrivalLogistics": null
+          },
+          {
+            "sequence": 1,
+            "activityType": "work",
+            "nodeId": "htcaid:node;mini_bus_mid",
+            "endTime": "1800",
+            "arrivalLogistics": {
+              "mode": "auto",
+              "fixedMode": false,
+              "instant": false
+            }
+          },
+          {
+            "sequence": 2,
+            "activityType": "home",
+            "nodeId": "htcaid:node;mini_bus_terminal",
+            "endTime": "86400",
+            "arrivalLogistics": {
+              "mode": "auto",
+              "fixedMode": false,
+              "instant": false
+            }
+          }
+        ],
+        "currentActivityIndex": 0,
+        "ownedVehicles": {},
+        "vehicleCurrentNode": {},
+        "currentTripVehicleId": null,
+        "currentTripStartTick": null,
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "enableDynamicModeChoice": true,
+        "modeChoiceStrategyType": "utility",
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  }
+]

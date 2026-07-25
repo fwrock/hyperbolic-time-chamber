@@ -102,7 +102,7 @@ class Car(
   )
 
   private lazy val linkHandler = new CarLinkHandler(
-    reportFn              = (data, label) => report(data = data, label = label),
+    reportFn              = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn            = () => getEntityId,
     currentTickFn         = () => currentTick,
     journeyReporter       = journeyReporter,
@@ -118,7 +118,7 @@ class Car(
   )
 
   private lazy val microHandler = new CarMicroHandler(
-    reportFn              = (data, label) => report(data = data, label = label),
+    reportFn              = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn            = () => getEntityId,
     currentTickFn         = () => currentTick,
     simulationEndTickFn   = () => simulationEndTick,
@@ -136,7 +136,8 @@ class Car(
     setCurrentLinkLengthFn = len => currentLinkLength = len,
     setLinkEntryTickFn    = tick => linkEntryTick = tick,
     getLinkEntryTickFn    = () => linkEntryTick,
-    getCurrentLinkIdFn    = () => currentLinkId
+    getCurrentLinkIdFn    = () => currentLinkId,
+    microUpdateReportEvery = microUpdateReportEvery
   )
 
   private lazy val emissionHandler = new CarEmissionHandler(
@@ -156,6 +157,19 @@ class Car(
       .getOrElse(100)
 
   private var staleEventLogCount: Long = 0L
+
+  /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
+    * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
+    * publishing every sub-tick unconditionally would be an order of magnitude more volume than
+    * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
+    */
+  private lazy val microUpdateReportEvery: Int =
+    sys.env
+      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+      .filter(_ >= 0)
+      .getOrElse(0)
 
   private def logStaleEventDebug(message: String): Unit = {
     staleEventLogCount += 1

@@ -32,8 +32,11 @@ class CarMicroHandler(
   private val setCurrentLinkLengthFn: Double => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
-  private val getCurrentLinkIdFn: () => Option[String]
+  private val getCurrentLinkIdFn: () => Option[String],
+  private val microUpdateReportEvery: Int = 0
 ) {
+
+  private var microUpdateReportCount: Long = 0L
 
   def handleMicroEnterLink(data: MicroEnterLinkData, state: CarState): Unit = {
     val tick     = currentTickFn()
@@ -117,6 +120,24 @@ class CarMicroHandler(
       )
       state.updateMicroState(updatedMicro)
       journeyReporter.sumoArrivalSpeed = data.velocity
+
+      microUpdateReportCount += 1
+      if (microUpdateReportEvery > 0 && microUpdateReportCount % microUpdateReportEvery == 0L) {
+        reportFn(
+          Map(
+            "event_type" -> "micro_update",
+            "car_id"     -> entityIdFn(),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "mode"       -> "MICRO",
+            "position"   -> data.position,
+            "velocity"   -> data.velocity,
+            "lane"       -> data.currentLane,
+            "sub_tick"   -> data.subTick,
+            "tick"       -> currentTickFn()
+          ),
+          "micro_update"
+        )
+      }
     }
   }
 

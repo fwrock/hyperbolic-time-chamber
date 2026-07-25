@@ -26,8 +26,11 @@ class MotorcycleMicroHandler(
   setCurrentLinkIdFn:      Option[String] => Unit,
   setLinkEntryTickFn:      Option[Tick] => Unit,
   getLinkEntryTickFn:      () => Option[Tick],
-  getCurrentLinkIdFn:      () => Option[String]
+  getCurrentLinkIdFn:      () => Option[String],
+  microUpdateReportEvery:  Int = 0
 ) {
+
+  private var microUpdateReportCount: Long = 0L
 
   def handleMicroEnterLink(data: MicroEnterLinkData, state: MotorcycleState): Unit = {
     logDebugFn(s"Motorcycle entering MICRO link ${data.linkId}, lane ${data.assignedLane}")
@@ -35,18 +38,20 @@ class MotorcycleMicroHandler(
     setLinkEntryTickFn(Some(currentTickFn()))
 
     val agg = aggressivenessFn()
+    // speedLimit from LinkState is stored in km/h; micro physics runs in m/s
+    val speedLimitMs = data.speedLimit / 3.6
     val initialMicroState = MicroMotorcycleState(
       positionInLink       = 0.0,
-      velocity             = data.speedLimit * 0.9,
+      velocity             = speedLimitMs * 0.9,
       acceleration         = 0.0,
       currentLane          = data.assignedLane,
       leaderVehicle        = None,
       gapToLeader          = data.linkLength,
-      leaderVelocity       = data.speedLimit,
+      leaderVelocity       = speedLimitMs,
       maxAcceleration      = 3.5,
       maxDeceleration      = 5.0,
       minGap               = 1.5,
-      desiredVelocity      = math.min(data.speedLimit, 16.67),
+      desiredVelocity      = math.min(speedLimitMs, 16.67),
       reactionTime         = 0.9,
       vehicleLength        = 2.5,
       canFilterLanes       = true,
@@ -61,7 +66,7 @@ class MotorcycleMicroHandler(
     journeyReporter.sumoCurrentMicroTimeStepSeconds =
       math.max(0.001, data.microTimeStep)
     journeyReporter.sumoIdealTravelTimeSeconds +=
-      data.linkLength / math.max(0.1, data.speedLimit)
+      data.linkLength / math.max(0.1, speedLimitMs)
     journeyReporter.updateHaltingState(initialMicroState.velocity, 0.0)
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(currentTickFn())
@@ -108,6 +113,24 @@ class MotorcycleMicroHandler(
         data.velocity,
         journeyReporter.sumoCurrentMicroTimeStepSeconds
       )
+
+      microUpdateReportCount += 1
+      if (microUpdateReportEvery > 0 && microUpdateReportCount % microUpdateReportEvery == 0L) {
+        reportFn(
+          Map(
+            "event_type"    -> "micro_update",
+            "motorcycle_id" -> entityIdFn(),
+            "link_id"       -> getCurrentLinkIdFn().getOrElse(""),
+            "mode"          -> "MICRO",
+            "position"      -> data.position,
+            "velocity"      -> data.velocity,
+            "lane"          -> data.currentLane,
+            "sub_tick"      -> data.subTick,
+            "tick"          -> currentTickFn()
+          ),
+          "micro_update"
+        )
+      }
     }
 
   def handleMicroLeaveLink(data: MicroLeaveLinkData, state: MotorcycleState): Unit = {

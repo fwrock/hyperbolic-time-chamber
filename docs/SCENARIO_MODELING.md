@@ -150,10 +150,39 @@ The entity types available in the hybrid model are:
 |---|---|
 | `startTick` / `endTick` | Simulation time window (usually `0` to `86400` for a full day in seconds) |
 | `tickDuration` | Duration of one tick in real-world seconds (`1.0` = 1 s/tick) |
-| `cityMapFile` | Path to the in-memory road graph used for routing |
+| `cityMapFile` | Declared for documentation purposes, but not currently read by the loader — the road-map path actually used is `htc.mobility.city-map-file` / `HTC_MOBILITY_CITY_MAP_FILE` (see below) |
 | `postLoadRegistrationClasses` | Classes that must register with their parent node after load (BusStop, BusStation, SubwayStation) |
 | `loadingStrategy` | `EAGER` = load at startup; `PROGRESSIVE` = load on demand |
 | `entityLifecycle` | `STATIC` = actor lives for the full simulation; `DYNAMIC` = actor may be created/destroyed |
+
+### `dataSource.sourceType`
+
+Each entry in `actorsDataSources` picks its own `dataSource.sourceType` independently, so a single
+scenario can freely mix formats across files:
+
+| `sourceType` | `info.path` points at | Backing strategy classes |
+|---|---|---|
+| `"json"` | a `.json` file (array of entity envelopes, as in [§4](#4-entity-reference)) | `JsonLoadData` (EAGER) / `ProgressiveJsonLoadData` (PROGRESSIVE) |
+| `"sqlite"` | a `.db` file (SQLite, `actor_simulation` table) | `SqliteLoadData` (EAGER) / `ProgressiveSqliteLoadData` (PROGRESSIVE) |
+
+```json
+{
+  "id": "person-source",
+  "classType": "person",
+  "loadingStrategy": "PROGRESSIVE",
+  "entityLifecycle": "DYNAMIC",
+  "dataSource": { "sourceType": "sqlite", "info": { "path": "/data/person.db" } }
+}
+```
+
+Both formats carry exactly the same per-entity data — a `.db` is produced from the equivalent
+`.json` (and vice versa) via `tools/scenario-db-converter/convert.py`, see [§11](#11-scaling-data-files).
+Pick `sqlite` for any source you're loading `PROGRESSIVE`: the `.db`'s `actor_simulation` table has
+an indexed `start_tick` column, so each tick window is fetched with a direct
+`WHERE start_tick BETWEEN ? AND ?` query instead of the full-file re-scan the JSON path repeats per
+window — see [§8](#8-loading-strategies-and-lifecycle) for why that matters at scale. For `EAGER`
+sources (loaded once, in full, at startup) the two formats are roughly equivalent — `json` remains
+the simpler default there.
 
 ---
 
@@ -789,6 +818,42 @@ Minimal structure (exact schema depends on the routing implementation):
 
 > The `weight` field is used by the shortest-path algorithm; it can be the physical `length` or a generalised cost.
 
+### city_map.json — SQLite alternative
+
+`CityMapUtil` picks the loader automatically from the configured path's extension: a path ending
+in `.db` goes through `Graph.loadFromSqliteFile`, anything else through `Graph.loadFromJsonFile`.
+No other configuration changes — `htc.mobility.city-map-file` / `HTC_MOBILITY_CITY_MAP_FILE` just
+point at the `.db` file instead (`simulation.json`'s `cityMapFile` field is not read by the loader
+either way — see [§3](#3-simulationjson--manifest)).
+
+Unlike the `actor_simulation` format below, this is a pure load-time optimisation, not a
+progressive-loading feature — `CityMapUtil` still loads the whole graph into a single permanent
+in-memory singleton either way. It matters once the graph itself is large (a whole-city network can
+be hundreds of thousands of nodes/edges): `NodeGraph`/`EdgeGraph` are flat, fully-typed case
+classes, so they normalise into plain relational tables with no JSON parsing/blob overhead on load.
+
+```sql
+CREATE TABLE city_map_meta (directed INTEGER NOT NULL);
+CREATE TABLE city_map_node (
+  id TEXT PRIMARY KEY, resource_id TEXT, class_type TEXT,
+  latitude REAL NOT NULL, longitude REAL NOT NULL
+);
+CREATE TABLE city_map_edge (
+  id TEXT PRIMARY KEY, resource_id TEXT, class_type TEXT, length REAL,
+  source_id TEXT NOT NULL REFERENCES city_map_node(id),
+  target_id TEXT NOT NULL REFERENCES city_map_node(id),
+  weight REAL
+);
+CREATE INDEX idx_city_map_edge_source ON city_map_edge(source_id);
+CREATE INDEX idx_city_map_edge_target ON city_map_edge(target_id);
+```
+
+Convert an existing `city_map.json` with `tools/scenario-db-converter/convert.py`:
+
+```bash
+python convert.py city-map json-to-db city_map.json city_map.db
+```
+
 ### transit_map.json
 
 `transit_map.json` is an **optional** flat JSON array of transit access points (bus stops and subway stations) used exclusively by the [dynamic mode choice](#13-dynamic-mode-choice) system. It is **not** required for static-schedule simulations.
@@ -898,6 +963,25 @@ Car  ←── Person (ownedVehicles)
 |---|---|---|
 | `STATIC` | Actor exists for the full simulation | Infrastructure |
 | `DYNAMIC` | Actor can be created or destroyed mid-simulation | Vehicles, persons |
+
+### PROGRESSIVE loading: JSON vs SQLite
+
+`PROGRESSIVE` sources are read in tick-windowed batches as the simulation advances, rather than all
+at once at startup. How each window is fetched depends on `dataSource.sourceType`
+([§3](#3-simulationjson--manifest)):
+
+- **`json`** (`ProgressiveJsonLoadData`) — the file has no index into it by `startTick`, so each
+  window re-scans the file, discarding records outside the requested `[fromTick, toTick]` range
+  (see `TickIndexUtil`). Cost per window grows with total file size, not window size.
+- **`sqlite`** (`ProgressiveSqliteLoadData`) — `startTick` is promoted to its own indexed column in
+  the `actor_simulation` table (see [§11](#11-scaling-data-files) for the schema), so a window is
+  fetched with `WHERE start_tick BETWEEN ? AND ?` directly against the index. Cost per window
+  depends on the window's own size, not the file's.
+
+This is the reason the SQLite format exists at all: at the scale this doc's scenarios run at
+(tens of thousands of agents per file, millions across a scenario), repeated full-file rescans per
+tick window are the dominant cost of `PROGRESSIVE` loading. `EAGER` sources don't see this
+difference — they load the entire source once, so there's no window to index into.
 
 ---
 
@@ -1163,6 +1247,30 @@ Register each file as a separate entry in `actorsDataSources` with a unique `id`
 ```
 
 The recommended maximum items per file is **50,000** (see `itemsPerFile` in the generation configuration).
+
+### SQLite as the scaling path
+
+Once a scenario reaches this scale — 50k agents per file, multiple files, a city-scale
+`city_map.json` with hundreds of thousands of nodes/edges — the recommended path is to convert the
+JSON data sources to SQLite (`sourceType: "sqlite"`, [§3](#3-simulationjson--manifest)) rather than
+keep splitting into more numbered JSON files. The `actor_simulation` table's indexed `start_tick`
+column also removes the full-file rescan `PROGRESSIVE` loading otherwise pays per tick window
+([§8](#8-loading-strategies-and-lifecycle)).
+
+Convert with `tools/scenario-db-converter/convert.py` (stdlib `sqlite3` + `ijson`; both directions
+stream record-by-record, so memory stays bounded regardless of input size — see the script's
+module docstring):
+
+```bash
+python convert.py actor-simulation json-to-db persons_0.json persons_0.db
+python convert.py actor-simulation db-to-json persons_0.db persons_0.json   # round trip
+python convert.py city-map         json-to-db city_map.json city_map.db
+```
+
+Only per-entity `ActorSimulation` data sources and `city_map.json` have a SQLite path.
+`simulation.json` itself and `transit_map.json`/`transit_routes.json` remain JSON-only. Each cluster
+node still needs its own local copy of any `.db` file, same as JSON today — SQLite's locking model
+isn't safe for concurrent multi-node reads over a shared network filesystem.
 
 ---
 

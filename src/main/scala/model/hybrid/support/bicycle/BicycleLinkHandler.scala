@@ -26,7 +26,7 @@ class BicycleLinkHandler(
     val time         = data.linkLength / bicycleSpeed
     state.status = Moving
     journeyReporter.sumoIdealTravelTimeSeconds +=
-      data.linkLength / math.max(0.1, data.linkFreeSpeed)
+      data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
     journeyReporter.updateHaltingState(bicycleSpeed, 0.0)
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(currentTickFn())

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "htcaid:busstop;mini_terminal",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;mini_bus_terminal",
+        "label": "Mini Terminal",
+        "people": {},
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;mini_bus_terminal",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:busstop;mini_mid",
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": "htcaid:node;mini_bus_mid",
+        "label": "Mini Mid",
+        "people": {},
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;mini_bus_mid",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

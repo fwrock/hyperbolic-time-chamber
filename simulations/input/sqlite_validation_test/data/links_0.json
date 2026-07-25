@@ -1,0 +1,88 @@
+[
+  {
+    "id": "htcaid:link;mini_bus_ab",
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": "htcaid:node;mini_bus_terminal",
+        "to": "htcaid:node;mini_bus_mid",
+        "length": 500.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;mini_bus_terminal",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;mini_bus_mid",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:link;mini_bus_ba",
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": "htcaid:node;mini_bus_mid",
+        "to": "htcaid:node;mini_bus_terminal",
+        "length": 500.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;mini_bus_mid",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;mini_bus_terminal",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

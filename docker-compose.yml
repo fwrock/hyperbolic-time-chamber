@@ -23,9 +23,9 @@ services:
       - --advertise-rpc-addr
       - localhost:33145
       - --pandaproxy-addr
-      - 0.0.0.0:8082
+      - 0.0.0.0:18082
       - --advertise-pandaproxy-addr
-      - localhost:8082
+      - localhost:18082
       - --smp
       - "1"
       - --memory

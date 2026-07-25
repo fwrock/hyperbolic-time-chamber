@@ -57,6 +57,10 @@ class KafkaReportData(
 
   override def postStop(): Unit = {
     if (buffer.nonEmpty) flush()
+    implicit val ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+    publisher.close().failed.foreach { err =>
+      logWarn(s"Error closing Kafka producer: ${err.getMessage}")
+    }
     super.postStop()
   }
 
