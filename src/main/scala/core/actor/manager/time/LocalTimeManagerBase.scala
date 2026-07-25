@@ -45,6 +45,13 @@ abstract class LocalTimeManagerBase(
   private var selfProxy: ActorRef = null
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
+  // Per-actor monotonically increasing dispatch counter. Incremented every time this TM actually
+  // sends an actor a SpontaneousEvent; echoed back by the actor on its FinishEvent so finishEvent
+  // can recognize and drop a FinishEvent belonging to a dispatch cycle already superseded by a
+  // newer one (e.g. a redundant/late "poll again next tick" reschedule racing against the real
+  // reply that resolves the same wait) instead of "rescuing" it into a phantom extra schedule.
+  // See docs/KNOWN_GAPS.md's non-reproducibility investigation.
+  private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -142,6 +149,24 @@ abstract class LocalTimeManagerBase(
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       ActorMetrics.eventsProcessed.labels("finish").inc()
+
+      val currentGen = dispatchGeneration(finish.identify.id)
+      if (!finish.destruct && finish.generation < currentGen) {
+        // Stale FinishEvent: this actor has already been dispatched again under a newer
+        // generation since this resolution was decided — e.g. a redundant/late "poll again next
+        // tick" reschedule (sent alongside another call resolving the very same wait) that only
+        // reaches the TM after the actor's own next dispatch already went out. Left unguarded,
+        // such a straggler would fall into the "arrived too late for its tick" bump below and
+        // create a genuinely extra, unintended schedule entry — the root cause of one class of
+        // non-reproducible duplicate dispatch documented in docs/KNOWN_GAPS.md. Drop it here
+        // instead: don't touch scheduledActors/runningEvents/advanceToNextTick, since those
+        // reflect the actor's current, newer dispatch, which is still legitimately pending.
+        logDebug(
+          s"Dropping stale FinishEvent for ${finish.identify.id}: generation=${finish.generation} < current=$currentGen"
+        )
+        return
+      }
+
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
       
       finish.scheduleTick.foreach {
@@ -186,6 +211,7 @@ abstract class LocalTimeManagerBase(
     if (finish.destruct) {
       ActorMetrics.eventsProcessed.labels("destruct").inc()
       registeredActors.remove(finish.identify.id)
+      dispatchGeneration.remove(finish.identify.id)
       val removedIdentity = registeredIdentities.remove(finish.identify.id)
       // Prometheus: decrement active actors gauge
       removedIdentity.foreach {
@@ -288,28 +314,32 @@ abstract class LocalTimeManagerBase(
       return
     }
 
+    // Bump this actor's dispatch generation before sending — see dispatchGeneration's doc.
+    val generation = dispatchGeneration(identity.id) + 1
+    dispatchGeneration(identity.id) = generation
+
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>
-        sendSpontaneousEventShard(tick, identity)
+        sendSpontaneousEventShard(tick, identity, generation)
       case CreationTypeEnum.PoolDistributed =>
-        sendSpontaneousEventPool(tick, identity)
+        sendSpontaneousEventPool(tick, identity, generation)
       case _ =>
         logWarn(s"Unknown creation type '${identity.actorType}' for actor ${identity.id}, removing from runningEvents to prevent stall")
         runningEvents.filterInPlace(_.id != identity.id)
     }
   }
 
-  private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit = {
+  private def sendSpontaneousEventShard(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
     actorRef ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(identity.id),
-      SpontaneousEvent(tick = tick, actorRef = self)
+      SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
     )
   }
 
-  private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit = {
+  private def sendSpontaneousEventPool(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = context.system.actorSelection(identity.actorRef)
-    actorRef ! SpontaneousEvent(tick = tick, actorRef = self)
+    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
   }
 
   private def terminateSimulation(): Unit = synchronized {
