@@ -12,15 +12,24 @@ object CityMapUtil {
 
   val edgeGraphIdExtractor: EdgeGraph => String = (edgeLabel: EdgeGraph) => edgeLabel.id
 
+  private lazy val cityMapFilePath: String =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.city-map-file")
+      .orElse(sys.env.get("HTC_MOBILITY_CITY_MAP_FILE"))
+      .getOrElse("city_map.json")
+
   private lazy val loadedCityData: LoadedGraphData[NodeGraph, String, Double, EdgeGraph] =
-    Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
-      SimulatorSettingsRegistry
-        .get("htc.mobility.city-map-file")
-        .orElse(sys.env.get("HTC_MOBILITY_CITY_MAP_FILE"))
-        .getOrElse("city_map.json"),
-      nodeGraphIdExtractor,
-      edgeGraphIdExtractor,
-      0.0
+    (
+      if (cityMapFilePath.endsWith(".db")) {
+        Graph.loadFromSqliteFile(cityMapFilePath)
+      } else {
+        Graph.loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
+          cityMapFilePath,
+          nodeGraphIdExtractor,
+          edgeGraphIdExtractor,
+          0.0
+        )
+      }
     ) match {
       case Success(data) =>
         println("Mapa da cidade carregado com sucesso.")

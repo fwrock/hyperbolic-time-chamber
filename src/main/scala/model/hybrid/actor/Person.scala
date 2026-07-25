@@ -73,7 +73,7 @@ class Person(
 
   private lazy val walkingHandler = new PersonWalkingTripHandler(
     personId = getEntityId,
-    reportFn = report,
+    reportFn = reportMirrored,
     logDebug = logDebug,
     logError = logError
   )

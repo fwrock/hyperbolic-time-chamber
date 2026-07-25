@@ -49,6 +49,7 @@ val hadoopVersion = "3.5.0"
 val kafkaConnectorsVersion = "1.1.0"
 val jedisVersion = "7.4.1"
 val levelDBVersion = "1.8"
+val sqliteJdbcVersion = "3.47.1.0"
 
 // Prometheus Metrics
 val prometheusVersion = "0.16.0"
@@ -98,6 +99,7 @@ lazy val root = (project in file("."))
       //Databases
       "redis.clients" % "jedis" % jedisVersion,
       "org.fusesource.leveldbjni" % "leveldbjni-all" % levelDBVersion,
+      "org.xerial" % "sqlite-jdbc" % sqliteJdbcVersion,
 
       // Jackson
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,

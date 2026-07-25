@@ -165,7 +165,7 @@ class LoadDataManager(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
           val props = Props(
-            source.dataSource.sourceType.clazz,
+            source.dataSource.sourceType.eagerClazz,
             Properties(
               entityId = s"loader-${source.dataSource.hashCode()}",
               resourceId = "",

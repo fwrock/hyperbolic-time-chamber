@@ -25,8 +25,11 @@ class BicycleMicroHandler(
   setCurrentLinkIdFn:      Option[String] => Unit,
   setLinkEntryTickFn:      Option[Tick] => Unit,
   getLinkEntryTickFn:      () => Option[Tick],
-  getCurrentLinkIdFn:      () => Option[String]
+  getCurrentLinkIdFn:      () => Option[String],
+  microUpdateReportEvery:  Int = 0
 ) {
+
+  private var microUpdateReportCount: Long = 0L
 
   def handleMicroEnterLink(data: MicroEnterLinkData, state: BicycleState): Unit = {
     logDebugFn(s"Bicycle entering MICRO link ${data.linkId}, lane ${data.assignedLane}")
@@ -59,7 +62,7 @@ class BicycleMicroHandler(
     journeyReporter.sumoCurrentMicroTimeStepSeconds =
       math.max(0.001, data.microTimeStep)
     journeyReporter.sumoIdealTravelTimeSeconds +=
-      data.linkLength / math.max(0.1, data.speedLimit)
+      data.linkLength / (math.max(0.1, data.speedLimit) / 3.6)
     journeyReporter.updateHaltingState(initialMicroState.velocity, 0.0)
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(currentTickFn())
@@ -103,6 +106,24 @@ class BicycleMicroHandler(
         data.velocity,
         journeyReporter.sumoCurrentMicroTimeStepSeconds
       )
+
+      microUpdateReportCount += 1
+      if (microUpdateReportEvery > 0 && microUpdateReportCount % microUpdateReportEvery == 0L) {
+        reportFn(
+          Map(
+            "event_type" -> "micro_update",
+            "bicycle_id" -> entityIdFn(),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "mode"       -> "MICRO",
+            "position"   -> data.position,
+            "velocity"   -> data.velocity,
+            "lane"       -> data.currentLane,
+            "sub_tick"   -> data.subTick,
+            "tick"       -> currentTickFn()
+          ),
+          "micro_update"
+        )
+      }
     }
 
   def handleMicroLeaveLink(data: MicroLeaveLinkData, state: BicycleState): Unit = {

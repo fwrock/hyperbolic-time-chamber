@@ -36,10 +36,11 @@ class BusLinkHandler(
       freeSpeed    = data.linkFreeSpeed,
       lanes        = data.linkLanes
     )
-    val time = if (speed > 0.0) data.linkLength / speed else data.linkLength
+    val speedMs = speed / 3.6
+    val time = if (speed > 0.0) data.linkLength / speedMs else data.linkLength
 
     state.status = Moving
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.linkFreeSpeed)
+    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
     journeyReporter.updateHaltingState(speed, 0.0)
 
     if (journeyReporter.sumoDepartTick.isEmpty) {
