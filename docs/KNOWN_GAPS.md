@@ -423,6 +423,139 @@ note) — worth chasing for bit-exact reproducibility, but it is not the duplica
 bug this investigation was scoped to, and does not threaten result validity the way the original
 ~1.7% structural-duplicate bug did.
 
+## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to the Already-Documented Entry-Scheduling Delay, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31)
+
+**Path correction first**: despite every reference in this doc reading `tools/sumo_validation/`,
+the harness actually lives at `<htc-platform>/tools/sumo_validation/` — a **sibling** of this repo
+(`hyperbolic-time-chamber/`), not a subdirectory of it. `hyperbolic-time-chamber/tools/` does not
+exist. Run it from the platform root, one level up from this repo.
+
+**Found and fixed first: the harness's own SUMO runner had a real, silent bug making every prior
+`run_validation.py` invocation compare HTC against a stale SUMO trace.**
+`runners/sumo_runner.py`'s `run_sumo` sets `cwd=sumocfg.parent` but then also passes the *same*
+(possibly repo-root-relative) `sumocfg` path as the `-c` argument — SUMO looks for
+`output/scenario_a/sumo/scenario.sumocfg` *inside* `output/scenario_a/sumo/`, doubly nested, which
+never exists, so `sumo` exits 1 with `Error: Could not access configuration ...` every single run.
+`run_validation.py` only logs this as a `WARNING` and continues, silently reusing whatever
+`scenario_fcd.xml` happened to already be on disk (a 2026-07-30 file, confirmed by its mtime) as if
+it were fresh ground truth. Every metrics run between 2026-07-30 and this fix was unknowingly
+diffing HTC's (evolving, being-fixed) output against a frozen, un-refreshed SUMO baseline. Fixed by
+passing `sumocfg.name` (the bare filename) instead of the full path, since `cwd` is already the
+config's own directory. Added `tests/test_sumo_runner.py` (previously zero coverage for this
+module) — one regression test reproducing the exact double-resolution failure via a fake `sumo`
+executable that only succeeds on a bare filename, one sanity check that genuine failures are still
+surfaced. Harness test count: 22 -> 24, all passing.
+
+**The primary chase-down**: `car_1` in scenario A (~56-69m position RMSE vs. the ~4.6m baseline
+every other unaffected car in both scenarios consistently hits) has **no traffic signal in its
+scenario at all**, ruling out every already-documented signal-related mechanism above. Root-caused
+by comparing `journey_started` (the tick a car's trip logically begins) against `enter_micro_link`
+(the tick it actually starts moving) per car, across three independent runs, read directly from
+the harness's own Parquet output — not assumed:
+
+```
+Run 1: car_0 journey_started=0  enter_micro_link=6   car_1 journey_started=6  enter_micro_link=6
+Run 2: car_0 journey_started=0  enter_micro_link=13  car_1 journey_started=6  enter_micro_link=13  car_2 journey_started=12 enter_micro_link=13
+Run 3: car_0 journey_started=0  enter_micro_link=10  car_1 journey_started=6  enter_micro_link=11
+```
+
+This is **the same mechanism as the "`scheduleEvent`'s Past-Tick Guard..." section above, still
+not fully closed for an actor's very first dispatch** despite that section's 2026-07-30 fix: each
+car's actual first micro-link entry lags its own `journey_started` tick by a real-time-race-sized
+delay (6, 7, 10, and 13 ticks observed for `car_0` across different runs — not a fixed constant,
+which is itself consistent with a wall-clock race in the shared `LocalTimeManager` pool, not a
+deterministic logic bug). Scenario A's four cars are meant to depart 6 seconds apart specifically
+to exercise Krauss gap-closing (see `tools/sumo_validation/README.md`'s scenario description) — but
+when two cars' independent entry delays happen to land within 0-2 ticks of each other (as they did
+in all three runs above), the follower's actual starting gap to its leader collapses from the
+intended "6 seconds of free-flow travel" (tens of meters) to almost nothing, forcing genuine (given
+the corrupted input, *correct*) Krauss emergency braking and a slow multi-tick recovery that
+dominates that car's own position RMSE for the rest of its trip. Whichever car in a given run
+*doesn't* get caught in a same-tick pile-up lands at exactly the same ~4.6m baseline as every other
+unaffected car — confirming the Krauss car-following math itself is not implicated, only the timing
+of when cars are handed their first real tick.
+
+**Explicitly ruled out** (with direct evidence, not assumption):
+- **Harness car-id mapping bug**: `journey_started` ticks tie out exactly to each car's configured
+  `depart_tick` (`scenario/scenario_a.py`: `car_i` departs at `i * 6`) on both the HTC and SUMO
+  sides — car identities are not being crossed or misaligned between the two parsers.
+- **Leader/follower index bug in `DefaultMicroSimulationStrategy.processMicroLane`**: read the
+  code directly (`model/hybrid/micro/strategy/DefaultMicroSimulationStrategy.scala:149-151`) — a
+  vehicle's leader is `vehicles(i-1)` from a `Queue` that is re-sorted by descending position after
+  *every* sub-tick (`vehicles.sortBy(v => -v.position)`, line 227-231), so the leader assignment is
+  always positionally correct regardless of vehicle-ID order. Confirmed empirically too: in every
+  run, whichever car is physically ahead is the one setting the pace, never the reverse.
+- **The residual ~0.1% `Waiting`-poll timing drift documented in part 5 above**: that mechanism
+  produces rare (one-per-86,400-tick-run) duplicate dispatches later in a simulation, not a
+  registration-time-only delay of 6-13 ticks affecting a car's very first dispatch. Different
+  trigger, different magnitude, different point in the actor's lifecycle.
+
+**Independent, real, now-fixed bug found along the way — contributes to, but does not by itself
+explain, the anomaly's full magnitude.** `CarMicroHandler.handleMicroEnterLink`
+(`model/hybrid/support/car/CarMicroHandler.scala`) computed a car's initial MICRO-mode velocity as
+`state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.8)`. The `.map` branch can **never**
+actually fire: `handleMicroLeaveLink` always calls `state.deactivateMicroMode()` (clearing
+`microState` to `None`) on link exit, before the next `handleMicroEnterLink` runs — so every single
+micro-link entry, first-ever or chained, fell into the `getOrElse` fallback and started the car
+cruising at a flat 80% of the link's speed limit (40 km/h on a 50 km/h link), regardless of whether
+it had genuinely never moved before (SUMO's default `departSpeed=0` — cars there visibly accelerate
+from a dead stop) or had just been cruising at the end of a previous chained micro-link (e.g.
+scenario B's `link_ab` -> `link_bc`), whose real exit velocity was silently discarded every time.
+Fixed by reading `journeyReporter.sumoArrivalSpeed` instead — it is `0.0` by construction until a
+car's first `handleMicroLeaveLink` ever fires, then holds the real exit velocity from then on
+(already being written correctly by both `handleMicroUpdate` and `handleMicroLeaveLink`, just never
+read back on the next entry). Same dead-fallback pattern found, **not fixed** (out of scope — not
+exercised by this harness, not independently verified), in `BusMicroHandler.scala:51`
+(`speedLimitMs * 0.7`) and, more crudely, hardcoded unconditionally with no `state.microState` check
+at all in `MotorcycleMicroHandler.scala:45` and `BicycleMicroHandler`'s equivalent
+(`speedLimitMs * 0.9`).
+
+**Why fixing this alone did not close the `car_1` gap**: with initial velocity now correctly `0.0`
+for a car's first-ever movement, two cars still entering the same link within 1-2 ticks of each
+other (per the still-open scheduling delay above) now both depart from a dead stop instead of
+already cruising at 11.1 m/s — this changes the specific shape of the resulting Krauss interaction
+but does not remove the near-zero-gap collision itself. Re-running the harness after this fix
+(Run 3's numbers above) still shows `car_1` at 68.7m RMSE, materially unchanged from before the
+fix (66.7m) — exactly as this analysis predicts, since the dominant cause (entry-timing collision)
+is untouched by a velocity-default fix.
+
+**Validation**:
+- `sbt compile` and `sbt test`: clean. Added `CarMicroHandlerSpec`
+  (`src/test/scala/model/hybrid/support/car/`) — 3 new specs, no Pekko (pure handler test, per
+  this repo's convention): a car's first-ever micro link departs at rest (0 m/s); a second,
+  chained micro link resumes at the car's real carried-over exit velocity, not a flat fraction of
+  speed limit; the reported `initial_velocity` event field matches what's actually stored. Full
+  suite: 119 specs (116 pre-existing + 3 new), all green.
+- `tools/sumo_validation` end-to-end, both before and after the `CarMicroHandler` fix (with the
+  `sumo_runner.py` fix already applied so both comparisons are against genuinely fresh SUMO
+  ground truth): scenario A `car_1` RMSE 66.7m -> 68.7m (no material change, as predicted above).
+  Scenario B did show real improvement on some vehicles from this fix alone — `car_2` 52.2m ->
+  4.3m, `car_4` 74.4m -> 6.8m — consistent with the fix's actual mechanism (chained-link velocity
+  carryover matters most on scenario B's two-link `link_ab` -> `link_bc` route). Scenario B's
+  travel-time deltas got *larger* for the cars genuinely queued at Red (up to +203s, vs. the
+  already-documented +161-167s in the section above) — consistent with, and not a new instance of,
+  the already-flagged, explicitly-out-of-scope "cars queued at Red overshoot their travel time"
+  issue: correcting the departure-speed bug means more cars now *genuinely* reach and queue at the
+  signal (instead of sailing past mid-cruise), so that pre-existing bug's effect is more exposed,
+  not newly introduced.
+- 86,400-tick reproducibility baseline: not re-run for this fix — it only changes which value is
+  used as a micro-link's initial velocity (a value that, per the dead-code analysis above, could
+  never previously be reached any other way), with no change to control flow, tick scheduling, or
+  message ordering, so it cannot affect the duplicate-dispatch/reproducibility concerns tracked
+  elsewhere in this doc.
+
+**Status**: root cause identified and confirmed — it is the same registration/first-dispatch
+scheduling delay already documented and deliberately left open in the "`scheduleEvent`'s Past-Tick
+Guard..." section above, **not independently re-fixed here**. Per that section's own assessment,
+the real fix (extending the per-actor watermark to cover an actor's very first dispatch, then
+re-validating against the 86,400-tick baseline) is a nontrivial scheduler change warranting its own
+dedicated investigation, not a delta safely landed alongside a validation-harness chase-down. What
+**is** fixed here — the harness's silently-stale SUMO ground truth, and the `CarMicroHandler`
+velocity-carryover/rest-start bug — are both real and independently worth having, but neither is
+sufficient alone to close this specific RMSE gap. Whoever picks up the scheduling fix next has a
+harness that can immediately, correctly confirm it: `tools/sumo_validation/run_validation.py
+--scenarios a b` from the platform root.
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file

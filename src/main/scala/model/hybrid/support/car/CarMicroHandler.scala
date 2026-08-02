@@ -49,9 +49,20 @@ class CarMicroHandler(
     // speedLimit from LinkState is stored in km/h; Link micro physics converts with /3.6
     val speedLimitMs = data.speedLimit / 3.6
 
+    // `state.microState` is always None here: `handleMicroLeaveLink` calls
+    // `state.deactivateMicroMode()` (clearing microState) on every link exit, so the
+    // `.map(_.velocity)` branch below can never actually fire -- it silently discarded the
+    // car's real velocity on *every* micro-link entry, not just the trip's first one, and
+    // fell back to a flat `speedLimit * 0.8` regardless of whether the car had just been
+    // cruising at the end of the previous micro link or had never moved at all. Use
+    // `journeyReporter.sumoArrivalSpeed` instead: it's 0.0 by default (matches SUMO's
+    // departSpeed=0 for a genuinely fresh trip -- see tools/sumo_validation/README.md's
+    // "Known gap" section) and is updated to the car's actual final velocity by
+    // `handleMicroLeaveLink` on every link exit, so chained micro-links (e.g. scenario B's
+    // link_ab -> link_bc) now carry velocity over correctly instead of resetting it.
     val initialMicroState = MicroCarState(
       positionInLink = 0.0,
-      velocity       = state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.8),
+      velocity       = state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed),
       acceleration   = 0.0,
       currentLane    = data.assignedLane,
       leaderVehicle  = None,
