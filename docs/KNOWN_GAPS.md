@@ -423,7 +423,7 @@ note) — worth chasing for bit-exact reproducibility, but it is not the duplica
 bug this investigation was scoped to, and does not threaten result validity the way the original
 ~1.7% structural-duplicate bug did.
 
-## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to the Already-Documented Entry-Scheduling Delay, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31)
+## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to Part 5's `enterLink()`-Poll Race, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31, Corrected 2026-08-01)
 
 **Path correction first**: despite every reference in this doc reading `tools/sumo_validation/`,
 the harness actually lives at `<htc-platform>/tools/sumo_validation/` — a **sibling** of this repo
@@ -485,10 +485,100 @@ of when cars are handed their first real tick.
   *every* sub-tick (`vehicles.sortBy(v => -v.position)`, line 227-231), so the leader assignment is
   always positionally correct regardless of vehicle-ID order. Confirmed empirically too: in every
   run, whichever car is physically ahead is the one setting the pace, never the reverse.
-- **The residual ~0.1% `Waiting`-poll timing drift documented in part 5 above**: that mechanism
+- ~~**The residual ~0.1% `Waiting`-poll timing drift documented in part 5 above**: that mechanism
   produces rare (one-per-86,400-tick-run) duplicate dispatches later in a simulation, not a
   registration-time-only delay of 6-13 ticks affecting a car's very first dispatch. Different
-  trigger, different magnitude, different point in the actor's lifecycle.
+  trigger, different magnitude, different point in the actor's lifecycle.~~ **Corrected
+  2026-08-01 — this bullet was wrong; see the "Correction" subsection immediately below.** Part 5's
+  *mechanism* (poll-vs-async-reply race) is exactly what produces this gap; only part 5's own
+  *worked example* (2-4 polls, mid-run bus) had smaller magnitude than car_1's 6-13 polls, which is
+  a difference in degree (four cars registering into one Link actor's mailbox in a tight window vs.
+  a single bus with no contention), not a difference in mechanism or in which point of an actor's
+  lifecycle it can strike.
+
+### Correction (2026-08-01): the "still-open" framing above was wrong — this *is* part 5's mechanism, not a separate one
+
+Re-investigated per a direct instruction to verify the "ruled out" bullet above with live
+instrumentation rather than the static trace this section originally relied on. Added temporary
+`Console.err` tick+`System.nanoTime()` tracing (same method as parts 1/2/5's own investigations,
+since removed) at four points: `Movable.actSpontaneous`'s entry (status), `Movable.enterLink()`'s
+`EnterLinkData` send, the `Waiting`-case re-poll, and `CarMicroHandler.handleMicroEnterLink` (where
+`enter_micro_link` is actually reported). Ran `tools/sumo_validation`'s scenario A twice with this
+build.
+
+**Direct, unambiguous result — the entire `journey_started`-to-`enter_micro_link` gap is made of
+`Waiting`-case re-polls, one per tick, with no other event in between:**
+
+```
+Run 2 (13-tick gap on car_0, the largest observed):
+tick=0  car_0 ENTERLINK-SEND (journey_started)   status set to Waiting
+tick=1..12  car_0 WAITPOLL (waitingTicksCounter 0..11)   -- 12 consecutive re-polls, one per tick
+tick=13 car_0 MICROENTER (enter_micro_link reported)
+
+Same run, car_1 (departs tick=6, a 7-tick gap):
+tick=6  car_1 ENTERLINK-SEND      tick=7..12  car_1 WAITPOLL (counter 0..5)      tick=13 car_1 MICROENTER
+```
+
+Car_0's real entry (delayed 0->13 by its own poll race) and car_1's real entry (delayed 6->13 by
+its *independent* poll race) land on the **exact same tick**, collapsing their intended 6-tick
+departure gap to zero and forcing the Krauss emergency-braking recovery that dominates car_1's RMSE
+(68.5m vs. the ~4.6m baseline) in that run. Car_2 (entering at tick 14, one tick behind car_1's 13)
+picked up an elevated RMSE too (20.5m) in this same run for the identical reason, one tick less
+severe. Car_3, whose poll race happened to finish with zero extra ticks (SEND and MICROENTER both
+at tick 18, no contention left in the mailbox by then), landed exactly on the unaffected baseline.
+A second run showed the same pattern with different magnitudes (car_0: 0->8, 8 ticks; car_1: 6->8,
+2 ticks — same-tick collision again, same RMSE profile) — confirming, as part 5's own bus example
+already found, that the number of extra `Waiting` polls before the async reply lands is a real
+wall-clock race, not a fixed constant.
+
+Also confirmed why no `TRACE-ENTERLINK-REPLY` (`Car.actHandleReceiveEnterLinkInfo`, the MESO
+`ReceiveEnterLinkInfo` path part 5's own bus example used) ever fired in either run:
+`LinkVehicleFlowHandler.handleEnterLinkMicro` (not `handleEnterLinkMeso`) answers `EnterLinkData`
+for a MICRO-mode link like scenario A's, replying with `MicroEnterLinkData` directly instead of
+`LinkInfoData`. Same race, same `Movable.enterLink()`/`Waiting` poll pattern — just resolved via a
+different reply message on the MICRO branch than the MESO branch part 5 happened to trace.
+
+**What this means for the "explicitly ruled out" bullet above and the "Status" note below**: they
+were wrong. This is not a "registration/first-dispatch" mechanism distinct from part 5 — it is
+part 5's poll-vs-async-reply race, observed for the first time at an actor's *very first*
+`actSpontaneous` dispatch (which this investigation confirms fires exactly on the actor's own
+`depart_tick`/`startTick`, with no additional delay *before* the first dispatch — `TRACE-ENTRY`
+for `car_0` landed at tick 0 precisely). Scenario A's four cars registering into the same `Link`
+actor's mailbox within a 0-18-tick window is what amplifies the race's magnitude (6-13 polls
+observed here vs. part 5's 2-4) and, combined with this harness's Krauss gap-closing scenario being
+sensitive to timing in a way part 5's duplicate-dispatch-counting validation never checked, is what
+makes the resulting position error large and visible for the first time.
+
+**Consistent with, not contradicting, the "`scheduleEvent`'s Past-Tick Guard..." section's own
+2026-07-30 fix and its "remaining open question."** That fix targets a different guard
+(`scheduleEvent`'s `localTickOffset` comparison) protecting against a different failure (an
+actor's own legitimate next-tick request getting bumped forward because unrelated actors on the
+same LTM advanced the shared clock first) — real, and correctly fixed, but not what's producing
+*this* gap. This gap is entirely on the `enterLink()`/`Waiting`-poll side, which that fix never
+touched.
+
+**No code change made here — per the standing guidance in part 5 and part 2 above, do not attempt
+to remove `Movable.enterLink()`'s poll a third time.** Both prior attempts (see part 2: `Subway`
+stall; part 5: 137 vs. 41 duplicates, worse not better) are unrelated to *this* scenario but prove
+the same architectural point: every reply handler in this family assumes a fallback poll exists
+elsewhere, and removing one poll site in isolation has repeatedly caused regressions rather than
+fixes. No new evidence surfaced during this investigation that changes that risk assessment — the
+TimeManager-level "recognize a stale `Waiting`-fallback re-poll" approach part 5 sketches (extending
+the existing `dispatchGeneration`/`highestProcessedTick` watermark machinery to also gate *when* a
+`Waiting` re-poll is allowed to fire, not just whether a `FinishEvent`/`ScheduleEvent` is stale) is
+still the only avenue that doesn't require touching every interacting reply handler at once, and
+remains unimplemented, deliberately, for the same reason part 5 left it that way: it needs its own
+dedicated investigation and full 86,400-tick reproducibility validation, not a delta landed
+alongside a documentation correction.
+
+**Validation for this correction**: `sbt compile` clean; `sbt test` — 119/119 specs pass (all
+pre-existing, no new specs added — this session made no production code change, only temporary
+instrumentation, added and fully reverted). All four instrumentation call sites confirmed removed
+(`git diff` against `HEAD` for `Movable.scala`/`Car.scala`/`CarMicroHandler.scala` is empty).
+`tools/sumo_validation/run_validation.py --scenarios a b` re-run against the freshly rebuilt,
+instrumentation-free jar to confirm no behavioral change from the trace-and-revert cycle: scenario
+A car_1 RMSE 68.463m, scenario B unaffected — both consistent with the numbers already on record
+in this doc, confirming the instrumentation left no residue.
 
 **Independent, real, now-fixed bug found along the way — contributes to, but does not by itself
 explain, the anomaly's full magnitude.** `CarMicroHandler.handleMicroEnterLink`
@@ -544,17 +634,31 @@ is untouched by a velocity-default fix.
   message ordering, so it cannot affect the duplicate-dispatch/reproducibility concerns tracked
   elsewhere in this doc.
 
-**Status**: root cause identified and confirmed — it is the same registration/first-dispatch
-scheduling delay already documented and deliberately left open in the "`scheduleEvent`'s Past-Tick
-Guard..." section above, **not independently re-fixed here**. Per that section's own assessment,
-the real fix (extending the per-actor watermark to cover an actor's very first dispatch, then
-re-validating against the 86,400-tick baseline) is a nontrivial scheduler change warranting its own
-dedicated investigation, not a delta safely landed alongside a validation-harness chase-down. What
-**is** fixed here — the harness's silently-stale SUMO ground truth, and the `CarMicroHandler`
+**Status (corrected 2026-08-01 — see the "Correction" subsection above for the instrumented
+evidence)**: root cause identified and confirmed. It is **not** a distinct registration/first-
+dispatch mechanism, and it is **not** the `scheduleEvent`-past-tick-guard mechanism from the section
+above (that guard was checked and correctly fixed on 2026-07-30, but protects a different code
+path). It is part 5's already-documented `Movable.enterLink()`-send-then-poll race
+(`onFinishSpontaneous(Some(currentTick+1))` racing the real, cross-actor-mailbox `EnterLinkData`/
+`MicroEnterLinkData` round-trip), now observed to also strike an actor's very first dispatch and,
+in this harness's multi-car-into-one-Link-mailbox scenario, to reach 6-13 polls instead of part 5's
+2-4 — large enough to collapse two cars' intended 6-tick departure gap to zero and trigger the
+Krauss emergency-braking recovery that produces the elevated RMSE. **Not independently re-fixed
+here, deliberately**, for the same reason part 5 itself was left unfixed: the direct fix (stop
+polling, rely solely on the reply) has been attempted and reverted twice already (part 2: caused a
+`Subway` stall; part 5: made duplicate dispatch rates worse, 137 vs. 41), and there's no new
+evidence from this investigation suggesting a third attempt would fare differently without first
+either auditing every interacting reply handler system-wide or implementing the TimeManager-level
+stale-repoll-detection part 5 sketches (extending the existing `dispatchGeneration`/
+`highestProcessedTick` watermarks to gate *when* a `Waiting`-fallback re-poll may fire). What **is**
+fixed in this section — the harness's silently-stale SUMO ground truth, and the `CarMicroHandler`
 velocity-carryover/rest-start bug — are both real and independently worth having, but neither is
-sufficient alone to close this specific RMSE gap. Whoever picks up the scheduling fix next has a
-harness that can immediately, correctly confirm it: `tools/sumo_validation/run_validation.py
---scenarios a b` from the platform root.
+sufficient alone to close this specific RMSE gap, and no further code fix is safe to land without
+the dedicated scheduler-level investigation part 5 and this correction both point at. Whoever picks
+up that scheduling fix next has a harness that can immediately, correctly confirm it:
+`tools/sumo_validation/run_validation.py --scenarios a b` from the platform root — watch `car_1`
+(scenario A) and any car whose `MICROENTER`/`enter_link` tick collides with another car's within
+1-2 ticks (scenario B).
 
 ## Test Coverage
 
