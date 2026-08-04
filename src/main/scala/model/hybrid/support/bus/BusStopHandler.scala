@@ -83,8 +83,8 @@ class BusStopHandler(
 
       BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
       BusMetrics.activePassengers.inc(data.people.size)
-      ActorTrace.trace(entityId, tick, "bus_passengers_loaded", // #actor-trace
-        s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
+      // ActorTrace.trace(entityId, tick, "bus_passengers_loaded", // #actor-trace
+      //   s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
 
       reportFn(
         Map(
@@ -134,8 +134,8 @@ class BusStopHandler(
 
         BusMetrics.passengersAlighted.labels(state.label).inc(unloadedCount)
         BusMetrics.activePassengers.dec(unloadedCount)
-        ActorTrace.trace(entityId, tick, "bus_passengers_unloaded", // #actor-trace
-          s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
+        // ActorTrace.trace(entityId, tick, "bus_passengers_unloaded", // #actor-trace
+        //   s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
 
         reportFn(
           Map(
@@ -163,8 +163,8 @@ class BusStopHandler(
         busStopProbeLogCount += 1
         if (busStopProbeLogCount % busStopProbeLogEvery == 0L) {
           logDebugFn(s"Bus stop probe[$busStopProbeLogCount]: position=$position, nextStop=$stopId")
-          ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_stop_probe", // #actor-trace
-            s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
+          // ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_stop_probe", // #actor-trace
+          //   s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
         }
       }
     }

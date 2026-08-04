@@ -90,8 +90,8 @@ class CarJourneyReporter(
     val entityId = entityIdFn()
     val tick     = currentTickFn()
     MovableMetrics.journeysStarted.labels("Car").inc()
-    ActorTrace.trace(entityId, tick, "car_journey_started", // #actor-trace
-      s"origin=$origin destination=$destination route=${route.size} cost=$cost source=$source") // #actor-trace
+    // ActorTrace.trace(entityId, tick, "car_journey_started", // #actor-trace
+    //   s"origin=$origin destination=$destination route=${route.size} cost=$cost source=$source") // #actor-trace
     reportFn(
       Map(
         "event_type"   -> "journey_started",

@@ -81,8 +81,8 @@ class Subway(
           ),
           label = "journey_started"
         )
-        ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
-          s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
+        // ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
+        //   s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
         enterLink()
       case Ready =>
         // If movableStatus is already Waiting, enterLink() was already called and we're
@@ -100,8 +100,8 @@ class Subway(
         stationOpt match {
           case Some(stationId) =>
             state.status = Stopped
-            ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
-              s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
+            // ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
+            //   s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
             passengerHandler.requestUnloadPeopleData()
             passengerHandler.requestLoadPassenger(stationOpt)
             onFinishSpontaneous(None)

@@ -10,7 +10,6 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum.Tr
 import org.interscity.htc.core.metrics.model.hybrid.TrafficSignalMetrics
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.types.Tick
-import scala.collection.mutable
 
 class TrafficSignalPhaseHandler(
   getStateFn:     () => TrafficSignalState,
@@ -30,20 +29,30 @@ class TrafficSignalPhaseHandler(
   def handlePhaseTransition(currentTick: Tick): Unit = {
     val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
 
-    val ticksSinceStart = currentTick - state.startTick + state.offset
-    val nextCycleStart  = ((ticksSinceStart / state.cycleDuration) + 1) * state.cycleDuration
-    val nextTickTime    = state.startTick + nextCycleStart - state.offset
+    // Next tick at which ANY phase's state can change: the earliest upcoming transition
+    // boundary (a phase's greenStart or greenStart + greenDuration) across all phases,
+    // wrapping to the next cycle if a boundary has already passed within this one.
+    // The previous formula (`((ticksSinceStart / cycleDuration) + 1) * cycleDuration`) always
+    // jumped to the start of the next FULL cycle, which lands back at cycle-offset 0 — inside
+    // the Green window for a phase with greenStart=0 — so the Red transition at
+    // greenStart + greenDuration was never reached, and the signal reported Green forever
+    // after tick 0. See docs/KNOWN_GAPS.md.
+    val transitionPoints = state.phases.flatMap(p => Seq(p.greenStart, p.greenStart + p.greenDuration))
+    val nextTickTime = currentTick + transitionPoints.map {
+      point =>
+        val delta = point - currentCycleTick
+        if (delta > 0) delta else delta + state.cycleDuration
+    }.min
 
     logDebugFn(
       s"TrafficSignal tick=$currentTick, currentCycleTick=$currentCycleTick, nextTick=$nextTickTime"
     )
 
     state.phases.foreach { phase =>
-      val newState      = calcNewState(currentCycleTick, phase)
-      val changedOrigins = mutable.Set[String]()
+      val newState = calcNewState(currentCycleTick, phase)
 
       state.signalStates.get(phase.origin).foreach { signalState =>
-        signalState.remainingTime = phase.greenStart + phase.greenDuration - currentCycleTick
+        signalState.remainingTime = nextTickTime - currentTick
         signalState.nextTick      = nextTickTime
         if (signalState.state != newState) {
           TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
@@ -57,7 +66,6 @@ class TrafficSignalPhaseHandler(
             phase.origin,
             nextTickTime
           )
-          changedOrigins.add(phase.origin)
         }
         signalState.state = newState
       }

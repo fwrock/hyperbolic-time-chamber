@@ -25,7 +25,8 @@ class NodeEventHandler(
   reportFn:            (Map[String, Any], String) => Unit,
   sendMessageFn:       (String, String, AnyRef, String) => Unit,
   getLinkDependencyFn: String => Option[ShardActorId],
-  logWarnFn:           String => Unit
+  logWarnFn:           String => Unit,
+  logDebugFn:          String => Unit
 ) {
 
   private def state: NodeState = getStateFn()
@@ -90,7 +91,8 @@ class NodeEventHandler(
               )
             case None =>
               // Signal not registered for this connection — treat as uncontrolled intersection.
-              logWarnFn(
+              // Expected for most intersections in a real map, so this is debug-level, not a warning.
+              logDebugFn(
                 s"Node ${entityIdFn()}: no signal entry for id=${identify.id} (link=${data.targetLinkId}); assuming Green"
               )
               sendMessageFn(
@@ -102,7 +104,8 @@ class NodeEventHandler(
           }
         case None =>
           // No signal for this outgoing link — uncontrolled intersection, pass freely.
-          logWarnFn(
+          // Expected for most intersections in a real map, so this is debug-level, not a warning.
+          logDebugFn(
             s"Node ${entityIdFn()}: no connection entry for link=${data.targetLinkId}; assuming Green"
           )
           sendMessageFn(

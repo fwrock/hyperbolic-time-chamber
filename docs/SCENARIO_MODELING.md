@@ -103,7 +103,6 @@ The entity types available in the hybrid model are:
   "cityMapFile": "/app/.../data/city_map.json",
   "postLoadRegistrationClasses": [
     "org.interscity.htc.model.hybrid.actor.BusStop",
-    "org.interscity.htc.model.hybrid.actor.BusStation",
     "org.interscity.htc.model.hybrid.actor.SubwayStation"
   ],
   "actorsDataSources": [
@@ -223,8 +222,7 @@ Represents a road intersection, endpoint, or any geographic point in the network
       "signals": {},
       "busStops": {},
       "subwayStations": {},
-      "hasHybridConnections": false,
-      "conflictZones": [],
+      "signalWaitingCounts": {},
       "scheduleOnTimeManager": false
     }
   },
@@ -236,13 +234,13 @@ Represents a road intersection, endpoint, or any geographic point in the network
 
 | Field | Type | Description |
 |---|---|---|
-| `latitude` / `longitude` | `Double` | Coordinates in the project's CRS (UTM metres recommended) |
+| `latitude` / `longitude` | `Double` | Coordinates in the project's CRS (EPSG:32723 UTM metres recommended) |
 | `links` | `List[String]` | Outgoing link IDs (populated at runtime by links registering themselves) |
 | `connections` | `Map[String, Identify]` | Link-to-node routing table (populated at runtime) |
 | `signals` | `Map[String, SignalState]` | Current signal state per incoming link (updated by TrafficSignal) |
 | `busStops` | `Map[String, Identify]` | Bus stops registered at this node |
 | `subwayStations` | `Map[String, Identify]` | Subway stations registered at this node |
-| `hasHybridConnections` | `Boolean` | `true` if any adjacent link is in MICRO mode |
+| `signalWaitingCounts` | `Map[String, Int]` | Waiting vehicle count per signal link |
 | `scheduleOnTimeManager` | `Boolean` | Usually `false` for static infrastructure nodes |
 
 > **Tip:** `latitude`/`longitude` are used for routing and GPS calculations. Keep them consistent with the CRS used in `city_map.json`.
@@ -275,13 +273,10 @@ A directed road segment connecting two nodes. Supports both MESO (aggregate) and
         { "laneId": 0, "type": "normal", "width": 3.5, "speedLimit": null },
         { "laneId": 1, "type": "normal", "width": 3.5, "speedLimit": null }
       ],
-      "linkType": "secondary",
       "congestionFactor": 1.0,
       "currentSpeed": 50.0,
       "registered": [],
-      "vehiclesByLane": {},
-      "modes": ["car", "car_passenger"],
-      "name": "Avenida Paulista"
+      "vehiclesByLane": {}
     }
   },
   "dependencies": {
@@ -305,9 +300,7 @@ A directed road segment connecting two nodes. Supports both MESO (aggregate) and
 | `microTimeStep` | `Double` | Sub-tick duration in seconds (used in MICRO mode) |
 | `microTicksPerGlobalTick` | `Int` | Sub-ticks per global tick (e.g., `10` → 0.1 s resolution) |
 | `laneConfigurations` | `List` | Per-lane configuration. Types: `normal`, `bus_lane`, `bike_lane` |
-| `linkType` | `String` | OSM highway type (`motorway`, `primary`, `secondary`, `residential`, …) |
 | `congestionFactor` | `Double` | Multiplier for congestion calculations (`1.0` = no bias) |
-| `modes` | `List[String]` | Allowed vehicle modes (`car`, `bus`, `bicycle`, …) |
 
 **Dependencies:** Both `from_node` and `to_node` must reference valid Node IDs.
 
@@ -381,28 +374,26 @@ Controls the green/red phases for a set of links at one or more nodes.
       "nodes": ["htcaid:node;200"],
       "phases": [
         {
-          "phaseId": 0,
-          "duration": 60,
-          "greenLinks": ["htcaid:link;2001"],
-          "yellowDuration": 3,
-          "allRedDuration": 2
+          "origin": "htcaid:link;2001",
+          "greenStart": 0,
+          "greenDuration": 60,
+          "state": "Red"
         },
         {
-          "phaseId": 1,
-          "duration": 60,
-          "greenLinks": ["htcaid:link;2002"],
-          "yellowDuration": 3,
-          "allRedDuration": 2
+          "origin": "htcaid:link;2002",
+          "greenStart": 61,
+          "greenDuration": 57,
+          "state": "Red"
         }
       ],
       "signalStates": {
-        "htcaid:link;2001": { "state": "Red", "timeInState": 0 },
-        "htcaid:link;2002": { "state": "Red", "timeInState": 0 }
+        "htcaid:link;2001": { "state": "Red", "remainingTime": 0, "nextTick": 0 },
+        "htcaid:link;2002": { "state": "Red", "remainingTime": 0, "nextTick": 0 }
       }
     }
   },
   "dependencies": {
-    "node": { "id": "htcaid:node;200", "classType": "hybrid.actor.Node" }
+    "htcaid:node;200": { "id": "htcaid:node;200", "classType": "hybrid.actor.Node" }
   }
 }
 ```
@@ -411,9 +402,13 @@ Controls the green/red phases for a set of links at one or more nodes.
 |---|---|
 | `cycleDuration` | Total cycle length in ticks (seconds) |
 | `offset` | Phase offset in ticks — used to stagger signals on a corridor |
-| `phases[].greenLinks` | Links that receive green during this phase |
-| `phases[].duration` | Duration of the phase in ticks |
-| `signalStates` | Initial state for each controlled link (usually all `"Red"`) |
+| `phases[].origin` | Incoming link ID controlled by this phase |
+| `phases[].greenStart` | Tick within the cycle when green begins |
+| `phases[].greenDuration` | Green duration in ticks |
+| `phases[].state` | Initial phase state (always `"Red"` at creation) |
+| `signalStates` | Initial state for each controlled link (all `"Red"`) |
+
+> **Note:** `dependencies` is a flat map of `nodeId → {id, classType}` — one entry per signal-controlled node — matching how `TrafficSignal.scala`'s `NodeEventHandler` routes per-node state updates.
 
 ---
 
@@ -1050,7 +1045,7 @@ my_scenario/
         "startTick": 0, "latitude": 7393000.0, "longitude": 326000.0,
         "links": [], "connections": {}, "signals": {},
         "busStops": {}, "subwayStations": {},
-        "hasHybridConnections": false, "conflictZones": [],
+        "signalWaitingCounts": {},
         "scheduleOnTimeManager": false
       }
     },
@@ -1065,7 +1060,7 @@ my_scenario/
         "startTick": 0, "latitude": 7393500.0, "longitude": 326000.0,
         "links": [], "connections": {}, "signals": {},
         "busStops": {}, "subwayStations": {},
-        "hasHybridConnections": false, "conflictZones": [],
+        "signalWaitingCounts": {},
         "scheduleOnTimeManager": false
       }
     },
@@ -1094,9 +1089,8 @@ my_scenario/
           { "laneId": 0, "type": "normal", "width": 3.5, "speedLimit": null },
           { "laneId": 1, "type": "normal", "width": 3.5, "speedLimit": null }
         ],
-        "linkType": "primary", "congestionFactor": 1.0,
-        "currentSpeed": 50.0, "registered": [], "vehiclesByLane": {},
-        "modes": ["car", "car_passenger"], "name": "Main Street"
+        "congestionFactor": 1.0,
+        "currentSpeed": 50.0, "registered": [], "vehiclesByLane": {}
       }
     },
     "dependencies": {
@@ -1117,16 +1111,15 @@ my_scenario/
     "data": {
       "dataType": "model.hybrid.entity.state.CarState",
       "content": {
-        "startTick": 28800, "origin": "htcaid:node;1", "destination": "htcaid:node;1",
-        "actorType": "Car", "size": 4.5,
-        "currentSimulationMode": "MESO", "microState": null, "status": "Parked",
-        "bestRoute": null, "currentNode": "htcaid:node;1",
-        "distance": 0.0, "eventCount": 0,
-        "driverAttributes": {
-          "aggressiveness": 0.5, "reactionTimeFactor": 1.0,
-          "speedFactor": 1.0, "minGapFactor": 1.0
-        },
-        "scheduleOnTimeManager": false
+        "startTick": 28800,
+        "origin": "htcaid:node;1",
+        "destination": "htcaid:node;1",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "precomputedRoute": null,
+        "distance": 0.0
       }
     },
     "dependencies": {
@@ -1147,10 +1140,17 @@ my_scenario/
     "data": {
       "dataType": "model.hybrid.entity.state.PersonState",
       "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "ptWaitTimeoutTicks": 86400,
         "ownedVehicles": {
           "car": { "id": "htcaid:car;p1_v_car", "classType": "hybrid.actor.Car" }
         },
-        "totalDistanceTraveled": 0.0, "completedTrips": 0,
+        "vehicleCurrentNode": {
+          "car": "htcaid:node;1"
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
         "originalPlan": [
           {
             "kind": "Activity",
