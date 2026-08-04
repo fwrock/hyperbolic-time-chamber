@@ -52,6 +52,15 @@ abstract class LocalTimeManagerBase(
   // reply that resolves the same wait) instead of "rescuing" it into a phantom extra schedule.
   // See docs/KNOWN_GAPS.md's non-reproducibility investigation.
   private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
+  // Per-actor watermark: the highest tick at which THIS specific actor was actually dispatched
+  // a SpontaneousEvent by this TM. Distinct from the TM-wide `localTickOffset`, which advances
+  // based on every actor sharing this LocalTimeManager pool instance. scheduleEvent's past-tick
+  // guard must compare a request against this per-actor value, not the shared clock — otherwise
+  // a busier sibling actor on the same LTM instance advancing localTickOffset can cause this
+  // actor's own genuinely-future ScheduleEvent to be wrongly treated as stale and lose real
+  // causal time. See docs/KNOWN_GAPS.md ("scheduleEvent's Past-Tick Guard Discards Real Causal
+  // Time When Actors Share an LTM Instance").
+  private val highestProcessedTick: mutable.Map[String, Tick] = mutable.Map().withDefaultValue(-1L)
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -102,20 +111,26 @@ abstract class LocalTimeManagerBase(
 
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
-    // CRITICAL: If the requested tick is in the past (< localTickOffset), it has already
-    // been processed and removed from scheduledActors by processTick. Any entry added at
-    // that past tick is orphaned — nextTick filters out ticks < localTickOffset, so they
-    // are never dispatched again. This happens when ScheduleEvent is routed via the pool
-    // router to a TM that has already advanced past the requested tick (e.g. from MICRO
-    // link handleEnterLinkMicro calling scheduleEvent while a "fast" TM receives it).
-    // Use <= localTickOffset (not just <) to also guard against same-tick races where
-    // processTick(T) already cleared scheduledActors[T] but localTickOffset is still T.
-    // Fix: bump past-tick/same-tick requests to localTickOffset + 1, guaranteeing future processing.
-    val effectiveTick = if (event.tick <= localTickOffset) {
+    // Guard against a genuinely stale request: one for a tick THIS actor has already been
+    // dispatched at (or past). We compare against this actor's own highestProcessedTick
+    // watermark, NOT the shared localTickOffset — localTickOffset advances whenever ANY actor
+    // sharing this LTM pool instance is processed, so using it here would wrongly discard an
+    // actor's real future tick just because a busier sibling actor ran ahead of it on the same
+    // LTM instance (see docs/KNOWN_GAPS.md's past-tick guard gap). A request at or behind this
+    // actor's own watermark is bumped to watermark + 1, guaranteeing future processing without
+    // losing any causal time that genuinely belongs to a still-earlier, not-yet-processed tick.
+    // Key by identity.id (the entity id), NOT event.actorRef: actorRef holds the entity id when
+    // this message originates from registerActor, but holds the actor's Pekko path when it
+    // originates from SimulationBaseActor.scheduleEvent(tick) — the same two-value inconsistency
+    // that sendSpontaneousEvent avoids by always keying dispatchGeneration/highestProcessedTick
+    // off identity.id.
+    val actorId = event.identify.map(_.id).getOrElse(event.actorRef)
+    val actorWatermark = highestProcessedTick(actorId)
+    val effectiveTick = if (event.tick <= actorWatermark) {
       logDebug(
-        s"ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}"
+        s"ScheduleEvent tick=${event.tick} for actor=$actorId is at/behind its own highestProcessedTick=$actorWatermark; bumping to ${actorWatermark + 1}"
       )
-      localTickOffset + 1
+      actorWatermark + 1
     } else {
       event.tick
     }
@@ -212,6 +227,7 @@ abstract class LocalTimeManagerBase(
       ActorMetrics.eventsProcessed.labels("destruct").inc()
       registeredActors.remove(finish.identify.id)
       dispatchGeneration.remove(finish.identify.id)
+      highestProcessedTick.remove(finish.identify.id)
       val removedIdentity = registeredIdentities.remove(finish.identify.id)
       // Prometheus: decrement active actors gauge
       removedIdentity.foreach {
@@ -269,9 +285,15 @@ abstract class LocalTimeManagerBase(
     }
 
   protected def nextTick: Option[Tick] = {
-    val scheduled = scheduledActors.keys.filter(_ >= localTickOffset)
-    val scheduledOnFinish = scheduledTicksOnFinish.filter(_ >= localTickOffset)
-    val allTicks = scheduled ++ scheduledOnFinish
+    // Do NOT filter by `>= localTickOffset` here. A legitimately-preserved earlier tick (an
+    // actor's own request that scheduleEvent correctly left alone because it was still ahead
+    // of THAT actor's highestProcessedTick watermark, even though behind the LTM-wide
+    // localTickOffset) must stay visible to advanceToNextTick/reportGlobalTimeManager, or the
+    // GTM loses track of it and this LTM's entry is silently orphaned. processTick's existing
+    // skip-tick catch-up logic (`scheduledActors.keys.filter(_ <= tick).minOption`) already
+    // knows how to process an entry earlier than localTickOffset once the GTM re-syncs this
+    // LTM to it — see docs/KNOWN_GAPS.md's past-tick guard gap.
+    val allTicks = scheduledActors.keys ++ scheduledTicksOnFinish
 
     if (allTicks.nonEmpty) {
       Some(allTicks.min)
@@ -317,6 +339,10 @@ abstract class LocalTimeManagerBase(
     // Bump this actor's dispatch generation before sending — see dispatchGeneration's doc.
     val generation = dispatchGeneration(identity.id) + 1
     dispatchGeneration(identity.id) = generation
+    // Record this actor's own processed-tick watermark — see highestProcessedTick's doc.
+    if (tick > highestProcessedTick(identity.id)) {
+      highestProcessedTick(identity.id) = tick
+    }
 
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>

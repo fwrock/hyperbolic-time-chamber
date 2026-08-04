@@ -199,7 +199,7 @@ class Link(
     *   Spontaneous event from time manager
     */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
-    logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId isMicro=${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
+    // logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId =${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
     if (!state.isMicroMode) {
       microTickScheduled = false
       onFinishSpontaneous(None)
