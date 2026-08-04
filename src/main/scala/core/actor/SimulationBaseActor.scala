@@ -79,6 +79,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
   private var _spontaneousFinishSent     = false
+  // The dispatch generation of the last SpontaneousEvent received (see SpontaneousEvent.scala's
+  // doc). Echoed on every FinishEvent so the TimeManager can drop stale/superseded resolutions.
+  private var currentGeneration: Long = 0L
 
   // Tracks entities spawned via spawnDynamicActor, awaiting ShardRegion.StartEntityAck
   // Key: entityId, Value: (shardRegion, initEvent)
@@ -509,6 +512,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
     currentTick = event.tick
     currentTimeManager = event.actorRef
+    currentGeneration = event.generation
     if (state == null) {
       ActorMetrics.eventsWhenStateIsNull.labels(
         getClass.getSimpleName,
@@ -734,7 +738,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       scheduleTick = scheduleTick.map(_.toString),
       scheduleEvent = None,
       timeManager = currentTimeManager,
-      destruct = destruct
+      destruct = destruct,
+      generation = currentGeneration
     )
   }
 
@@ -844,6 +849,18 @@ abstract class SimulationBaseActor[T <: BaseState](
           label = label
         )
     }
+
+  /** Reports to the default strategy (e.g. Parquet) and mirrors the same payload to the `kafka`
+    * reporter for live consumers (htc-play), if and only if `kafka` is present in
+    * `htc.report-manager.enabled-strategies`. No-op mirror otherwise — see
+    * [[reportToSpecificReporter]]. `KafkaReportData`/`KafkaPublisher` are themselves fail-safe if
+    * Redpanda is unreachable, so this call never affects simulation correctness or liveness
+    * regardless of whether Redpanda is configured, running, or reachable.
+    */
+  protected def reportMirrored(data: Any, label: String = null): Unit = {
+    report(data = data, label = label)
+    reportToSpecificReporter(ReportTypeEnum.kafka, data, label)
+  }
 
   /** Gets a relationship by entity id.
     * @param entityId

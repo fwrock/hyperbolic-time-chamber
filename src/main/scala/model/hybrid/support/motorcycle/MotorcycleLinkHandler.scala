@@ -31,11 +31,12 @@ class MotorcycleLinkHandler(
       lanes         = data.linkLanes
     )
     val motorcycleSpeed = baseSpeed * 1.2
-    val time            = data.linkLength / motorcycleSpeed
+    val motorcycleSpeedMs = motorcycleSpeed / 3.6
+    val time            = data.linkLength / motorcycleSpeedMs
 
     state.status = Moving
     journeyReporter.sumoIdealTravelTimeSeconds +=
-      data.linkLength / math.max(0.1, data.linkFreeSpeed)
+      data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
     journeyReporter.updateHaltingState(motorcycleSpeed, 0.0)
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(currentTickFn())

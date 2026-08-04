@@ -2,29 +2,27 @@ package org.interscity.htc
 package model.hybrid.support.person
 
 import core.types.Tick
-import model.hybrid.entity.state.PersonState
-import model.hybrid.util.{CityMapUtil, GPSUtil}
+import model.hybrid.entity.state.plan.WalkLeg
+import model.hybrid.util.{ CityMapUtil, GPSUtil }
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
 import scala.collection.mutable
 
-/** Handles walking trips for person actors.
+/** Handles walking legs for person actors.
   *
   * Responsibilities:
   *   - Calculate walking routes
   *   - Compute walking time based on distance
-  *   - Report walking trip events
+  *   - Report walking leg events
   *   - Handle route calculation failures
   *
   * @param personId Person actor ID
-  * @param metricsReporter Metrics reporter
   * @param reportFn Reporting function for events
   * @param logDebug Debug logging function
   * @param logError Error logging function
   */
 class PersonWalkingTripHandler(
   personId: String,
-  metricsReporter: PersonMetricsReporter,
   reportFn: (Map[String, Any], String) => Unit,
   logDebug: String => Unit,
   logError: String => Unit
@@ -56,46 +54,41 @@ class PersonWalkingTripHandler(
     totalDistance
   }
 
-  /** Initiate walking trip (mesoscopic).
+  /** Initiate a walking leg (mesoscopic).
     *
-    * Calculates route using road network, computes walking time based on distance and walking speed,
-    * and schedules arrival. Returns updated state and arrival tick, or None if route not found.
+    * Calculates a route using the road network (or reuses `leg.precomputedRoute`), computes
+    * walking time based on distance and walking speed, and returns the arrival tick.
     *
-    * @param origin Origin node ID
-    * @param destination Destination node ID
-    * @param precomputedRoute Optional precomputed route
-    * @param state Current person state
+    * @param leg Walking leg to execute
     * @param currentTick Current simulation tick
     * @param logWarn Warning logging function
-    * @return Some((updated state, arrival tick)) if successful, None if route not found
+    * @return Some(arrivalTick) if a route was found, None if no route exists between the leg's
+    *         origin and destination
     */
   def initiateWalkingTrip(
-    origin: String,
-    destination: String,
-    precomputedRoute: Option[List[(String, String)]],
-    state: PersonState,
+    leg: WalkLeg,
     currentTick: Tick,
     logWarn: String => Unit
-  ): Option[(PersonState, Tick)] = {
+  ): Option[Tick] = {
     val routeResult: Option[(Double, mutable.Queue[(String, String)])] =
-      precomputedRoute match {
+      leg.precomputedRoute match {
         case Some(route) => Some((0.0, mutable.Queue(route: _*)))
-        case None        => GPSUtil.calcRouteCompactWalking(
-            originId = origin,
-            destinationId = destination,
+        case None => GPSUtil.calcRouteCompactWalking(
+            originId = leg.originNodeId,
+            destinationId = leg.destinationNodeId,
             maxExpansions = Int.MaxValue
           )
       }
 
     routeResult match {
-      case Some((routeCost, routeQueue)) =>
+      case Some((_, routeQueue)) =>
         val totalDistance = calculateRouteDistance(routeQueue, logWarn)
         val walkingTimeSeconds = totalDistance / walkingSpeed
         val walkingTimeTicks = math.ceil(walkingTimeSeconds).toLong
         val arrivalTick = currentTick + walkingTimeTicks
 
         logDebug(
-          s"$personId walking from $origin to $destination: " +
+          s"$personId walking from ${leg.originNodeId} to ${leg.destinationNodeId}: " +
             s"${totalDistance.toInt}m, ${walkingTimeTicks}s, arriving at tick $arrivalTick"
         )
 
@@ -103,8 +96,8 @@ class PersonWalkingTripHandler(
           Map(
             "event_type" -> "walking_trip_start",
             "person_id" -> personId,
-            "origin" -> origin,
-            "destination" -> destination,
+            "origin" -> leg.originNodeId,
+            "destination" -> leg.destinationNodeId,
             "distance" -> totalDistance,
             "walking_time_ticks" -> walkingTimeTicks,
             "arrival_tick" -> arrivalTick,
@@ -114,17 +107,16 @@ class PersonWalkingTripHandler(
           "person_walking_start"
         )
 
-        val updatedState = state.copy(currentTripDestinationNodeId = Some(destination))
-        Some((updatedState, arrivalTick))
+        Some(arrivalTick)
 
       case None =>
-        logError(s"$personId cannot find walking route from $origin to $destination")
+        logError(s"$personId cannot find walking route from ${leg.originNodeId} to ${leg.destinationNodeId}")
         GPSMetrics.gpsCannotFindRoute.labels("person_walking").inc()
         None
     }
   }
 
-  /** Report walking trip completion.
+  /** Report walking leg completion.
     *
     * @param travelTime Travel time in ticks
     * @param currentTick Current simulation tick
@@ -141,6 +133,6 @@ class PersonWalkingTripHandler(
       "person_walking_completed"
     )
 
-    logDebug(s"$personId completed walking trip in ${travelTime}s")
+    logDebug(s"$personId completed walking leg in ${travelTime}s")
   }
 }

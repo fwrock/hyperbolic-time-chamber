@@ -1,0 +1,50 @@
+[
+  {
+    "id": "htcaid:stop;bus_mini_terminal",
+    "actorId": "htcaid:busstop;mini_terminal",
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": "htcaid:node;mini_bus_terminal",
+    "latitude": -23.4315944,
+    "longitude": -46.7929983,
+    "stopType": "bus",
+    "lines": [
+      "mini_bus_loop"
+    ]
+  },
+  {
+    "id": "htcaid:stop;bus_mini_mid",
+    "actorId": "htcaid:busstop;mini_mid",
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": "htcaid:node;mini_bus_mid",
+    "latitude": -23.4357649,
+    "longitude": -46.7867581,
+    "stopType": "bus",
+    "lines": [
+      "mini_bus_loop"
+    ]
+  },
+  {
+    "id": "htcaid:stop;subway_mini_terminal",
+    "actorId": "htcaid:subwaystation;mini_terminal",
+    "actorClassType": "hybrid.actor.SubwayStation",
+    "nodeId": "htcaid:node;mini_subway_terminal",
+    "latitude": -23.6588121,
+    "longitude": -46.7678791,
+    "stopType": "subway",
+    "lines": [
+      "mini_subway_line"
+    ]
+  },
+  {
+    "id": "htcaid:stop;subway_mini_dest",
+    "actorId": "htcaid:subwaystation;mini_dest",
+    "actorClassType": "hybrid.actor.SubwayStation",
+    "nodeId": "htcaid:node;mini_subway_dest",
+    "latitude": -23.6485,
+    "longitude": -46.763,
+    "stopType": "subway",
+    "lines": [
+      "mini_subway_line"
+    ]
+  }
+]

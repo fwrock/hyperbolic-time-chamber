@@ -1,0 +1,105 @@
+[
+  {
+    "id": "htcaid:node;mini_bus_terminal",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.4315944,
+        "longitude": -46.7929983,
+        "links": [
+          "htcaid:link;mini_bus_ab"
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;mini_bus_mid",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.4357649,
+        "longitude": -46.7867581,
+        "links": [
+          "htcaid:link;mini_bus_ba"
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;mini_person_home",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.554022,
+        "longitude": -46.671108,
+        "links": [],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;mini_subway_terminal",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.6588121,
+        "longitude": -46.7678791,
+        "links": [
+          "htcaid:rail_link;mini_subway_ab"
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": "htcaid:node;mini_subway_dest",
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.6485,
+        "longitude": -46.763,
+        "links": [
+          "htcaid:rail_link;mini_subway_ba"
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  }
+]

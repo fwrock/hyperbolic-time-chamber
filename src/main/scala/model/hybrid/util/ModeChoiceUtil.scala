@@ -200,17 +200,29 @@ object ModeChoiceUtil {
     )
 
   /** Finds the stop on `line` (other than `boardingStop`) that minimises haversine distance to
-    * `(destLat, destLon)`. Returns `None` when the line has no other stops.
+    * `(destLat, destLon)`, filtered to stops the line's real scheduled service actually reaches
+    * from `boardingStop` — see `TransitRouteUtil.reachableStopIdsAfter`'s doc for why this filter
+    * exists (it prevents offering a PT trip no vehicle ever fulfills, the class of bug found via
+    * `htc-scenario-qa`'s hybrid smoke-test scenario, 2026-07-23). Falls back to the old undirected
+    * candidate set (every other stop on the line, regardless of direction) when
+    * `transit_routes.json` has no ordered entry for `line` — the same graceful-degradation
+    * behavior as every other `TransitRouteUtil.isAvailable`-gated check in this codebase, not a
+    * new failure mode. Returns `None` when no candidate remains either way.
     */
   private def bestAlightingStop(
     boardingStop: TransitStop,
     line: String,
     destLat: Double,
     destLon: Double
-  ): Option[(TransitStop, Double)] =
-    TransitMapUtil.stopsByLine
-      .getOrElse(line, Nil)
-      .filter(_.id != boardingStop.id)
+  ): Option[(TransitStop, Double)] = {
+    val candidates = TransitMapUtil.stopsByLine.getOrElse(line, Nil).filter(_.id != boardingStop.id)
+    val reachable = TransitRouteUtil.routesByLine
+      .get(line)
+      .flatMap(route => TransitRouteUtil.reachableStopIdsAfter(route, boardingStop.id))
+      .map(reachableIds => candidates.filter(s => reachableIds.contains(s.id)))
+      .getOrElse(candidates)
+    reachable
       .map(s => (s, TransitMapUtil.haversineM(s.latitude, s.longitude, destLat, destLon)))
       .minByOption(_._2)
+  }
 }

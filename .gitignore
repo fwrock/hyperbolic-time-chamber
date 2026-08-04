@@ -182,3 +182,7 @@ k8s/generated/
 
 .github/copilot-instructions.md
 
+# Claude Code agents and project instructions (local-only, not shared via repo)
+.claude/agents/
+CLAUDE.md
+

@@ -15,9 +15,11 @@ import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSet
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
 import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
+import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
+import scala.util.{Failure, Success}
 
 class LoadDataManager(
   val timeSingletonManager: ActorRef,
@@ -48,14 +50,14 @@ class LoadDataManager(
     reporters = poolReporters
 
   override def handleEvent: Receive = {
-    case event: LoadDataEvent       => loadData(event)
-    case event: FinishLoadDataEvent => handleFinishLoadData(event)
-    case _: LoadNextEvent           => handleLoadNext()
-    case _: StopSimulationEvent     => handleStopSimulation()
+    case event: LoadDataEvent                  => loadData(event)
+    case event: FinishLoadDataEvent            => handleFinishLoadData(event)
+    case _: LoadNextEvent                      => handleLoadNext()
+    case _: StopSimulationEvent                => handleStopSimulation()
+    case event: LoadDataManager.PreflightDone  => handlePreflightDone(event)
   }
 
-  private def 
-  loadData(event: LoadDataEvent): Unit = {
+  private def loadData(event: LoadDataEvent): Unit = {
     val (eagerSources, progressive) = event.actorsDataSources.partition(
       _.loadingStrategy == LoadingStrategyEnum.EAGER
     )
@@ -74,6 +76,65 @@ class LoadDataManager(
     }
 
     val totalSources = event.actorsDataSources.size
+    val personEagerSources = eagerSources.filter(ScenarioPreflightValidator.isPersonSource)
+
+    if (personEagerSources.isEmpty) {
+      proceedWithLoad(eagerSources, progressive, totalSources)
+    } else {
+      runScenarioPreflight(personEagerSources, eagerSources, progressive, totalSources)
+    }
+  }
+
+  /** Fail-fast, scenario-wide mode-decision-engine check (see
+    * `core.actor.manager.load.ScenarioPreflightValidator` /
+    * `model.hybrid.decision.ScenarioLoadValidator.validateModeDecisionEngines`) run over every
+    * EAGER Person source before `creatorRef`/`creatorPoolRef` — and therefore any actor — is
+    * created. Only reachable for EAGER sources; see `ProgressiveLoadDataManager` for the
+    * equivalent PROGRESSIVE-mode check.
+    */
+  private def runScenarioPreflight(
+    personEagerSources: List[ActorDataSource],
+    eagerSources: List[ActorDataSource],
+    progressive: List[ActorDataSource],
+    totalSources: Int
+  ): Unit = {
+    logInfo(
+      s"Running scenario-wide mode-decision-engine pre-flight check over " +
+        s"${personEagerSources.size} EAGER Person source(s) before creating any actor."
+    )
+    val ctx = ScenarioPreflightValidator.currentValidationContext()
+    val ioEc = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+    ScenarioPreflightValidator.validate(personEagerSources, ctx)(ioEc).onComplete {
+      case Success(result) =>
+        self ! LoadDataManager.PreflightDone(result, eagerSources, progressive, totalSources)
+      case Failure(cause) =>
+        self ! LoadDataManager.PreflightDone(
+          Left(ScenarioLoadError(s"Scenario pre-flight check crashed: ${cause.getMessage}")),
+          eagerSources,
+          progressive,
+          totalSources
+        )
+    }(context.dispatcher)
+  }
+
+  private def handlePreflightDone(event: LoadDataManager.PreflightDone): Unit =
+    event.result match {
+      case Right(()) =>
+        proceedWithLoad(event.eagerSources, event.progressive, event.totalSources)
+      case Left(error) =>
+        logError(s"Scenario load aborted by pre-flight check: ${error.message}")
+        simulationManager ! ScenarioPreflightValidationFailedEvent(error)
+        selfDestruct()
+    }
+
+  /** Continuation of `loadData` once the scenario has either passed pre-flight validation, or
+    * didn't need it (no EAGER Person sources referencing any `PendingDecision`).
+    */
+  private def proceedWithLoad(
+    eagerSources: List[ActorDataSource],
+    progressive: List[ActorDataSource],
+    totalSources: Int
+  ): Unit = {
     creatorRef = createCreatorLoadData(totalSources)
     creatorPoolRef = createCreatorPoolLoadData(totalSources)
 
@@ -104,7 +165,7 @@ class LoadDataManager(
             s"Load data source ${source.dataSource} of type ${source.classType}"
           )
           val props = Props(
-            source.dataSource.sourceType.clazz,
+            source.dataSource.sourceType.eagerClazz,
             Properties(
               entityId = s"loader-${source.dataSource.hashCode()}",
               resourceId = "",
@@ -236,6 +297,18 @@ class LoadDataManager(
 }
 
 object LoadDataManager {
+
+  /** Internal self-message carrying the result of `ScenarioPreflightValidator.validate`, along
+    * with the state `loadData` needs to resume (or abort) once the async scan completes. Never
+    * sent by anything outside this actor.
+    */
+  private[load] final case class PreflightDone(
+    result: Either[ScenarioLoadError, Unit],
+    eagerSources: List[ActorDataSource],
+    progressive: List[ActorDataSource],
+    totalSources: Int
+  )
+
   def props(
     timeSingletonManager: ActorRef,
     poolTimeManager: ActorRef,

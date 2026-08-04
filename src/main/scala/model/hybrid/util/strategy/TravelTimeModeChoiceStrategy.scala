@@ -3,7 +3,7 @@ package model.hybrid.util.strategy
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.hybrid.entity.state.{ArrivalLogistics, ModeChoiceWeights}
-import org.interscity.htc.model.hybrid.util.{CityMapUtil, DynamicWeightCache, GPSUtil, ModeChoiceUtil, TransitMapUtil}
+import org.interscity.htc.model.hybrid.util.{CityMapUtil, DynamicWeightCache, GPSUtil, ModeChoiceUtil, TransitMapUtil, TransitRouteUtil}
 
 /** Strategy that estimates **travel time in seconds** for every candidate mode and picks the
   * highest-scoring option using the standard additive utility function.
@@ -50,7 +50,27 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
     destinationNodeId: String,
     weights: ModeChoiceWeights,
     ownedVehicles: Map[String, Identify] = Map.empty
-  ): ModeChoiceResult = {
+  ): ModeChoiceResult =
+    ModeChoiceResult(
+      scoredCandidates(originNodeId, destinationNodeId, weights, ownedVehicles)
+        .maxByOption(_._2)
+        .map(_._1)
+        .getOrElse(ArrivalLogistics(mode = "walk", instant = true))
+    )
+
+  /** Every viable `(ArrivalLogistics, score)` candidate this strategy can build — the same
+    * evaluation `choose` runs, minus the final argmax. Exposed so a probabilistic strategy
+    * ([[org.interscity.htc.model.hybrid.decision.TravelTimeLogitEngine]]) can sample from the full
+    * set instead of deterministically taking the highest score every time — real riders don't all
+    * make the identical choice when two options score close to each other (random utility theory,
+    * McFadden 1974); `choose`'s `maxByOption` is the simplification, not the ground truth.
+    */
+  def scoredCandidates(
+    originNodeId: String,
+    destinationNodeId: String,
+    weights: ModeChoiceWeights,
+    ownedVehicles: Map[String, Identify] = Map.empty
+  ): List[(ArrivalLogistics, Double)] = {
     val included = weights.includedModes.map(_.toLowerCase)
 
     // --- Walk ---
@@ -144,25 +164,35 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
         }
         .toList
 
-    // --- Pick best viable candidate ---
+    // --- Every viable candidate, unranked — caller (choose, or a probabilistic strategy) picks ---
     val allCandidates = transitCandidates ++ privateVehicleCandidates ++ walkCandidate.toList
-    val viable = allCandidates.filter(_._2 > Double.MinValue)
-    ModeChoiceResult(
-      viable.maxByOption(_._2).map(_._1).getOrElse(ArrivalLogistics(mode = "walk", instant = true))
-    )
+    allCandidates.filter(_._2 > Double.MinValue)
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
+  /** Finds the stop on `line` (other than `boardingStop`) that minimises haversine distance to
+    * `(destLat, destLon)`, filtered to stops the line's real scheduled service actually reaches
+    * from `boardingStop` — see `TransitRouteUtil.reachableStopIdsAfter`'s doc for why this filter
+    * exists and what it fixes. Falls back to the old undirected candidate set (every other stop on
+    * the line, regardless of direction) when `transit_routes.json` has no ordered entry for `line`
+    * — the same graceful-degradation behavior as every other `TransitRouteUtil.isAvailable` check
+    * in this codebase, not a new failure mode.
+    */
   private def bestAlightingStop(
     boardingStop: org.interscity.htc.model.hybrid.entity.state.model.TransitStop,
     line: String,
     destLat: Double,
     destLon: Double
-  ): Option[(org.interscity.htc.model.hybrid.entity.state.model.TransitStop, Double)] =
-    TransitMapUtil.stopsByLine
-      .getOrElse(line, Nil)
-      .filter(_.id != boardingStop.id)
+  ): Option[(org.interscity.htc.model.hybrid.entity.state.model.TransitStop, Double)] = {
+    val candidates = TransitMapUtil.stopsByLine.getOrElse(line, Nil).filter(_.id != boardingStop.id)
+    val reachable = TransitRouteUtil.routesByLine
+      .get(line)
+      .flatMap(route => TransitRouteUtil.reachableStopIdsAfter(route, boardingStop.id))
+      .map(reachableIds => candidates.filter(s => reachableIds.contains(s.id)))
+      .getOrElse(candidates)
+    reachable
       .map(s => (s, TransitMapUtil.haversineM(s.latitude, s.longitude, destLat, destLon)))
       .minByOption(_._2)
+  }
 }

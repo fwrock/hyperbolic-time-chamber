@@ -23,9 +23,9 @@ services:
       - --advertise-rpc-addr
       - localhost:33145
       - --pandaproxy-addr
-      - 0.0.0.0:8082
+      - 0.0.0.0:18082
       - --advertise-pandaproxy-addr
-      - localhost:8082
+      - localhost:18082
       - --smp
       - "1"
       - --memory
@@ -123,9 +123,9 @@ services:
       HTC_API_PORT: 9804
 
       # Simulation Configuration
-      HTC_SCENARIO_NAME: sp_tiny_validation_all_entities_auto
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_tiny_validation_all_entities_auto/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/sp_tiny_validation_all_entities_auto/data/city_map.json
+      HTC_SCENARIO_NAME: tl_1pct
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/tl_1pct/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/tl_1pct/data/city_map.json
       HTC_PERSON_TRUNCATE_SCHEDULE: "true"
 
       HTC_ACTOR_TRACE_ENABLED: "true"

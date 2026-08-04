@@ -11,6 +11,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{
   MicroVehicleUpdate,
   NoLaneChangeStrategy
 }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 import scala.collection.mutable
@@ -33,6 +34,7 @@ class LinkMicroSimulationHandler(
   costPublishInterval:         Int,
   lastCostPublishTickGetFn:    () => Tick,
   lastCostPublishTickSetFn:    Tick => Unit,
+  getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
   logDebugFn:                  String => Unit
 ) {
@@ -91,7 +93,8 @@ class LinkMicroSimulationHandler(
         speedLimit               = state.speedLimit,
         microTimeStep            = state.microTimeStep,
         microTicksPerGlobalTick  = state.microTicksPerGlobalTick,
-        vehicleWaitingSeconds    = vehicleWaitingSeconds
+        vehicleWaitingSeconds    = vehicleWaitingSeconds,
+        signalAtExit             = getSignalAtExitFn()
       )
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)
@@ -111,10 +114,16 @@ class LinkMicroSimulationHandler(
     removeVehicleWaitingSecondsFn(update.vehicleId)
 
     val entryTick    = getVehicleEntryTickFn(update.vehicleId).getOrElse(currentTickFn())
+    // entryTick/currentTickFn are global ticks (1s each by convention), not sub-ticks —
+    // the elapsed duration is elapsedTicks global ticks, each microTicksPerGlobalTick *
+    // microTimeStep seconds long, not a single microTimeStep. Using microTimeStep alone
+    // here previously understated elapsed time by a factor of microTicksPerGlobalTick,
+    // which is the exact root cause of the average_speed mismatch noted in KNOWN_GAPS.md.
     val elapsedTicks = math.max(1L, currentTickFn() - entryTick + 1)
+    val secondsPerGlobalTick = state.microTicksPerGlobalTick * state.microTimeStep
     val avgSpeed =
-      if (elapsedTicks > 0 && state.microTimeStep > 0)
-        state.length / (elapsedTicks * state.microTimeStep)
+      if (elapsedTicks > 0 && secondsPerGlobalTick > 0)
+        state.length / (elapsedTicks * secondsPerGlobalTick)
       else update.velocity
 
     sendMessageFn(

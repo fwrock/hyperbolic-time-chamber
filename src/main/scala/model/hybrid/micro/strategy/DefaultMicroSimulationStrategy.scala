@@ -3,6 +3,8 @@ package model.hybrid.micro.strategy
 
 import core.types.Tick
 import model.hybrid.entity.state.model.VehicleInLane
+import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
+import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
 
 import scala.collection.mutable
@@ -53,7 +55,8 @@ class DefaultMicroSimulationStrategy(
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double]
+    vehicleWaitingSeconds: mutable.Map[String, Double],
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[String, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
@@ -71,7 +74,8 @@ class DefaultMicroSimulationStrategy(
               speedLimit = speedLimit,
               microTimeStep = microTimeStep,
               microTicksPerGlobalTick = nSubTicks,
-              vehicleWaitingSeconds = vehicleWaitingSeconds
+              vehicleWaitingSeconds = vehicleWaitingSeconds,
+              signalAtExit = signalAtExit
             )
             laneUpdates.foreach(
               u => lastUpdateByVehicle.put(u.vehicleId, u)
@@ -120,14 +124,31 @@ class DefaultMicroSimulationStrategy(
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double]
+    vehicleWaitingSeconds: mutable.Map[String, Double],
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
   ): Seq[MicroVehicleUpdate] = {
+
+    // Virtual leader placed at link exit when Red; IDM naturally decelerates to a stop.
+    val signalLeader: Option[VehicleInLane] =
+      signalAtExit.collect {
+        case Red =>
+          VehicleInLane(
+            actorId         = "__signal__",
+            shardId         = "",
+            position        = linkLength,
+            velocity        = 0.0,
+            acceleration    = 0.0,
+            vehicleLength   = 0.0,
+            maxAcceleration = 0.0,
+            maxDeceleration = 0.0
+          )
+      }
 
     val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
 
     for (i <- vehicles.indices) {
       val vehicle = vehicles(i)
-      val leader = if (i > 0) Some(vehicles(i - 1)) else None
+      val leader = if (i > 0) Some(vehicles(i - 1)) else signalLeader
 
       val (rawGap, leaderVel) = leader match {
         case Some(l) =>

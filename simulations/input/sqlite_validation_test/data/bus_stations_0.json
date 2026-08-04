@@ -1,0 +1,45 @@
+[
+  {
+    "id": "htcaid:busstation;mini_loop",
+    "typeActor": "hybrid.actor.BusStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStationState",
+      "content": {
+        "startTick": 0,
+        "name": "mini_bus_loop (tiny validation)",
+        "origin": "htcaid:node;mini_bus_terminal",
+        "destination": "htcaid:node;mini_bus_mid",
+        "busStops": {
+          "htcaid:busstop;mini_terminal": "htcaid:node;mini_bus_terminal",
+          "htcaid:busstop;mini_mid": "htcaid:node;mini_bus_mid"
+        },
+        "interval": 3600,
+        "buses": [
+          {
+            "actorId": "htcaid:bus;mini_loop_bus_0",
+            "label": "mini_bus_loop",
+            "capacity": 40,
+            "numberOfPorts": 2,
+            "size": 12.0,
+            "speedFactor": 1.0
+          }
+        ],
+        "goingRoute": {},
+        "goingBestCost": 1000000000000.0,
+        "returningRoute": {},
+        "returningBestCost": 1000000000000.0,
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "htcaid:node;mini_bus_terminal": {
+        "id": "htcaid:node;mini_bus_terminal",
+        "classType": "hybrid.actor.Node"
+      },
+      "htcaid:node;mini_bus_mid": {
+        "id": "htcaid:node;mini_bus_mid",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]
