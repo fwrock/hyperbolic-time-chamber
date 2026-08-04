@@ -134,13 +134,6 @@ class Bus(
     */
   private var signalWaitUntilTick: Option[Tick] = None
 
-  /** Counts successive spontaneous ticks spent in WaitingSignalState without a node response.
-    * Mirrors Car's recovery mechanism: if the node never replies, the bus force-leaves the link
-    * instead of deadlocking indefinitely.
-    */
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
-
   /** Number of passengers asked to unload at current stop. Used to track when all responses
     * arrived.
     */
@@ -207,7 +200,6 @@ class Bus(
     sendMessageFn          = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
     logWarnFn              = msg => logWarn(msg),
     logDebugFn             = msg => logDebug(msg),
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
     setSignalWaitUntilTickFn = tick => signalWaitUntilTick = tick,
     restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx)
   )
@@ -338,16 +330,11 @@ class Bus(
         }
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          requestSignalState()
-        }
+        // Should never actually fire — requestSignalState() no longer self-schedules
+        // after sending; only handleSignalState (the Node's reply) resolves this status.
+        // Do not resend the request if reached anyway (see Car.scala for rationale).
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case WaitingLoadPassenger =>
 //        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
@@ -435,7 +422,6 @@ class Bus(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()

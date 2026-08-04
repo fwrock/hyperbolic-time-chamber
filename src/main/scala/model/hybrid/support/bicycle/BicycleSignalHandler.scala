@@ -29,7 +29,6 @@ class BicycleSignalHandler(
   getTripDestinationFn:        () => Option[String],
   finishJourneyFn:             (String, String) => Unit,
   onFinishPrivateVehicleFn:    String => Unit,
-  setSignalStateRetryCounterFn: Int => Unit,
   setSignalWaitUntilTickFn:    Option[Tick] => Unit
 ) {
 
@@ -63,7 +62,9 @@ class BicycleSignalHandler(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                  onFinishSpontaneousFn(Some(currentTickFn() + 1))
+                // Consistency-critical: do NOT resolve here. Node always replies on every
+                // branch — wait for that reply as an interaction event; handleSignalState
+                // resolves the spontaneous event.
                 case null =>
                   leavingLinkFn()
               }
@@ -84,7 +85,6 @@ class BicycleSignalHandler(
       )
       return
     }
-    setSignalStateRetryCounterFn(0)
     if (data.phase == Red) {
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(data.nextTick))
