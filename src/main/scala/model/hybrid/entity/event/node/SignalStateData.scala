@@ -8,5 +8,6 @@ import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 
 case class SignalStateData(
   phase: TrafficSignalPhaseStateEnum,
-  nextTick: Tick
+  nextTick: Tick,
+  queuePosition: Int = 0
 ) extends BaseEventData

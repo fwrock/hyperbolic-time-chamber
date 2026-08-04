@@ -53,8 +53,8 @@ class BusStationBusCreator(
     }
 
     logDebugFn(s"Creating bus ${bus.actorId} at tick $busStartTick (route size=${route.size})")
-    ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_station_create_bus", // #actor-trace
-      s"busId=${bus.actorId} label=${bus.label} capacity=${bus.capacity} route=${route.size} startTick=$busStartTick") // #actor-trace
+    // ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_station_create_bus", // #actor-trace
+    //   s"busId=${bus.actorId} label=${bus.label} capacity=${bus.capacity} route=${route.size} startTick=$busStartTick") // #actor-trace
 
     reportFn(
       Map(

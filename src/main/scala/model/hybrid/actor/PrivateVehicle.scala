@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import model.hybrid.entity.state.{ DriverAttributes, MovableState }
 import model.hybrid.entity.state.enumeration.MovableStatusEnum
 import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Parked, Start }
@@ -286,6 +287,53 @@ trait PrivateVehicle[T <: MovableState] {
   /** Check if vehicle is parked.
     */
   protected def isParked: Boolean = getVehicleStatus == Parked
+
+  /** Adds reply-linkage and lifecycle-intent fields onto an already-built migration snapshot.
+    *
+    * `ownerPersonRef`, `personCentric`, `tripOrigin`, `tripDestination`, `tripStartTick`,
+    * `tripStartDistance`, and `destroyAfterNextPark` are actor-local `var`s, not part of `T
+    * <: MovableState`, so the default `BaseActor.buildMigrationSnapshot` (which only serializes
+    * `state`) would silently drop them on migration — `ownerPersonRef` in particular is a pending
+    * reply obligation to the owning Person, and losing it makes `reportTripCompletion` a silent
+    * no-op after rehydration. `Option[String]`/`Option[Tick]` fields are flattened to sentinel
+    * empty-string / `Long.MinValue` because [[MigrationSnapshot]] must stay Jackson-serializable
+    * with simple field types.
+    *
+    * This trait cannot itself `override` `BaseActor.buildMigrationSnapshot`/
+    * `applyMigrationSnapshot` and call `super` — a trait's `self: Movable[T] =>` self-type
+    * constrains what concrete class it can be mixed into, but `super` resolution only follows the
+    * trait's own linearization, which (absent an `extends`) is just `AnyRef`. So each concrete
+    * vehicle (`Car`, `Bicycle`, `Motorcycle`) — which genuinely extends `Movable[T]` and can call
+    * `super` — wires these two methods into its own `buildMigrationSnapshot`/
+    * `applyMigrationSnapshot` override. See `Car.scala` for the wiring.
+    */
+  protected def captureMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(""),
+      ownerPersonRefClassType = ownerPersonRef.map(_.classType).getOrElse(""),
+      personCentric = personCentric,
+      tripOrigin = tripOrigin.getOrElse(""),
+      tripDestination = tripDestination.getOrElse(""),
+      tripStartTick = tripStartTick.getOrElse(Long.MinValue),
+      tripStartDistance = tripStartDistance,
+      destroyAfterNextPark = destroyAfterNextPark
+    )
+
+  /** Restores reply-linkage and lifecycle-intent fields from a migration snapshot. See
+    * [[captureMigrationFields]] for why these must be carried explicitly.
+    */
+  protected def restoreMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    ownerPersonRef =
+      if (snapshot.ownerPersonRefId.nonEmpty)
+        Some(Identify(id = snapshot.ownerPersonRefId, classType = snapshot.ownerPersonRefClassType))
+      else None
+    personCentric = snapshot.personCentric
+    tripOrigin = if (snapshot.tripOrigin.nonEmpty) Some(snapshot.tripOrigin) else None
+    tripDestination = if (snapshot.tripDestination.nonEmpty) Some(snapshot.tripDestination) else None
+    tripStartTick = if (snapshot.tripStartTick != Long.MinValue) Some(snapshot.tripStartTick) else None
+    tripStartDistance = snapshot.tripStartDistance
+    destroyAfterNextPark = snapshot.destroyAfterNextPark
+  }
 
   /** Private vehicles should only re-register on the TM after migration when they are NOT parked.
     * When parked they are waiting passively for a StartTrip message from Person; re-registering

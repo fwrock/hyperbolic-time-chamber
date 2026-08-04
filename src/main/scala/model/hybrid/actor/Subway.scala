@@ -7,7 +7,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.interscity.htc.model.hybrid.support.subway.SubwayPassengerHandler
 import org.interscity.htc.model.hybrid.entity.state.SubwayState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, Waiting }
 import org.interscity.htc.model.hybrid.util.SubwayUtil
 import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
 import org.interscity.htc.core.metrics.model.hybrid.{ MovableMetrics, SubwayMetrics }
@@ -81,19 +81,27 @@ class Subway(
           ),
           label = "journey_started"
         )
-        ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
-          s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
+        // ActorTrace.trace(getEntityId, currentTick, "subway_journey_started", // #actor-trace
+        //   s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
         enterLink()
       case Ready =>
-        enterLink()
+        // If movableStatus is already Waiting, enterLink() was already called and we're
+        // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
+        // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
+        // this subway is already registered on. Just poll again next tick instead.
+        if (state.movableStatus == Waiting) {
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          enterLink()
+        }
       case Moving =>
         val nodeId = getCurrentNode
         val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
         stationOpt match {
           case Some(stationId) =>
             state.status = Stopped
-            ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
-              s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
+            // ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
+            //   s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
             passengerHandler.requestUnloadPeopleData()
             passengerHandler.requestLoadPassenger(stationOpt)
             onFinishSpontaneous(None)

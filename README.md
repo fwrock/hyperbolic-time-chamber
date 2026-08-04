@@ -151,15 +151,23 @@ where $\tau$ = reaction time (1.0 s), $b$ = max deceleration (4.5 m/s²).
 
 ### Person Agent
 
-`Person` is the **activity-based decision-maker**.  It persists for the entire simulation,
-manages a daily schedule of `Activity` records, and owns references to private vehicles.
+`Person` is the **activity-based decision-maker**. It persists for the entire simulation, walking
+a flat **plan** — a list of `Activity`/`AtomicLeg` (`WalkLeg`, `PrivateVehicleLeg`, `TransitLeg`)
+/`PendingDecision` elements — one element at a time via a `PlanCursor`, and owns references to
+private vehicles.
 
 Key features:
-- **Activity schedule** — ordered list of (`activityType`, `nodeId`, `endTime`, `arrivalLogistics`)
-- **Mode choice** — `car | bicycle | motorcycle | walk | bus | subway | transit`
-- **Dynamic mode choice** — optional utility-based selection (`ModeChoiceUtil`, configurable weights)
-- **Trip lifecycle** — activates vehicle → waits for `TripCompletedData` → advances to next activity
+- **Plan** — flat ordered list of plan elements (`originalPlan` for provenance, `cursor` for actual
+  execution position), replacing the older `dailySchedule`/`currentActivityIndex` pair
+- **Mode choice** — `Walk | Car | Bicycle | Motorcycle | Bus | Subway`; a leg is either already
+  concrete in the plan (fixed) or a `PendingDecision` resolved at runtime
+- **Dynamic mode choice** — pluggable `ModeDecisionEngine`s (`"raptor"`, `"nearest-stop-utility"`,
+  `"travel-time"`) registered in `ModeDecisionEngineRegistry`; only `"travel-time"` evaluates
+  private vehicles as a candidate
+- **Trip lifecycle** — activates vehicle → waits for `TripCompletedData` → advances the plan cursor
 - **Statistics** — accumulates `totalDistanceTraveled` and `completedTrips`
+
+See **[Person Agent docs](docs/PERSON_AGENT.md)** for the full model.
 
 ---
 
@@ -261,7 +269,7 @@ A scenario is a **directory of JSON files** read at startup:
 }
 ```
 
-### Person actor JSON (activity-based)
+### Person actor JSON (plan-based)
 
 ```json
 {
@@ -275,19 +283,23 @@ A scenario is a **directory of JSON files** read at startup:
       "ownedVehicles": {
         "car": {"id": "htcaid:car;alice_car", "classType": "hybrid.actor.Car"}
       },
-      "dailySchedule": [
+      "originalPlan": [
         {
-          "sequence": 0,
+          "kind": "Activity",
           "activityType": "Home",
           "nodeId": "htcaid:node;home_node",
-          "endTime": "28800"
+          "endTime": {"kind": "AtTick", "tick": 28800}
         },
         {
-          "sequence": 1,
+          "kind": "PrivateVehicleLeg",
+          "mode": "Car",
+          "vehicle": {"id": "htcaid:car;alice_car", "classType": "hybrid.actor.Car"}
+        },
+        {
+          "kind": "Activity",
           "activityType": "Work",
           "nodeId": "htcaid:node;work_node",
-          "endTime": "64800",
-          "arrivalLogistics": {"mode": "car"}
+          "endTime": {"kind": "AtTick", "tick": 64800}
         }
       ]
     }
@@ -441,8 +453,12 @@ src/main/scala/
         ├── entity/
         │   ├── state/              ← *State case classes (one per actor type)
         │   │   ├── MicroCarState, MicroBusState, MicroBicycleState …
-        │   │   └── MicroMovableState (trait)
+        │   │   ├── MicroMovableState (trait)
+        │   │   └── plan/           ← Person plan model: PlanElement, PlanCursor,
+        │   │                       │   EndTimeSpec, LatenessPolicy, RemainingQueue
         │   └── event/data/         ← MicroEnterLinkData, MicroUpdateData …
+        ├── decision/                ← ModeDecisionEngine + raptor/nearest-stop-utility/
+        │                           │   travel-time engines, ModeDecisionEngineRegistry
         ├── micro/
         │   ├── model/              ← CarFollowingModel, KraussModel
         │   ├── lane/               ← LaneChangeModel, MobilLaneChange
@@ -474,6 +490,7 @@ src/main/scala/
 | [Subway Station Agent](docs/SUBWAY_STATION_AGENT.md) | Train spawning, headway management |
 | [API Reference](docs/API.md) | REST API endpoints, request/response schemas |
 | [ClickHouse Queries](docs/clickhouse-queries.md) | Sample analytical queries |
+| [Known Gaps](docs/KNOWN_GAPS.md) | Honest audit: what's documented vs. what's actually implemented/tested |
 
 ---
 

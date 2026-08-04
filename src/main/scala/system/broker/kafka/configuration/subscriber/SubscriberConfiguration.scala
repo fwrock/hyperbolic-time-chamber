@@ -9,7 +9,7 @@ import org.apache.kafka.common.serialization.{ ByteArrayDeserializer, StringDese
 
 object SubscriberConfiguration {
 
-  private val config = ConfigFactory.load().getConfig("brokers.kafka")
+  private val config = ConfigFactory.load().getConfig("htc.brokers.kafka")
 
   def consumerConfig(groupId: String, system: ActorSystem): ConsumerSettings[String, Array[Byte]] =
     ConsumerSettings(

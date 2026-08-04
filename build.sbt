@@ -5,6 +5,12 @@ ThisBuild / version := "2.0.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
+// Makes non-exhaustive `match` on sealed traits/enums a compile error rather than a warning.
+// This is the type-level guarantee the plan/cursor model (model.hybrid.entity.state.plan) relies
+// on: exhaustiveness over AdvanceResult/PlanElement must fail the build, not just warn.
+// Scoped to this one warning category so it doesn't turn unrelated existing warnings fatal.
+ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
+
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 resolvers += "Confluent".at("https://packages.confluent.io/maven/")
 
@@ -43,6 +49,7 @@ val hadoopVersion = "3.5.0"
 val kafkaConnectorsVersion = "1.1.0"
 val jedisVersion = "7.4.1"
 val levelDBVersion = "1.8"
+val sqliteJdbcVersion = "3.47.1.0"
 
 // Prometheus Metrics
 val prometheusVersion = "0.16.0"
@@ -92,6 +99,7 @@ lazy val root = (project in file("."))
       //Databases
       "redis.clients" % "jedis" % jedisVersion,
       "org.fusesource.leveldbjni" % "leveldbjni-all" % levelDBVersion,
+      "org.xerial" % "sqlite-jdbc" % sqliteJdbcVersion,
 
       // Jackson
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
@@ -138,10 +146,18 @@ lazy val root = (project in file("."))
       // Test
       "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
+      // Classic TestActorRef — needed to construct/inspect classic (non-typed) actors like
+      // Car/Person directly in unit tests without a full cluster-sharded ActorSystem.
+      "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test,
     ),
     
     // No dependency overrides needed currently
-    dependencyOverrides ++= Seq(),
+    // pekko-discovery-kubernetes-api transitively pulls an older pekko-discovery than the rest of
+    // the Pekko modules (1.5.0); left unpinned this becomes a hard startup failure
+    // (fail-mixed-versions) for any ActorSystem created in tests, not just a warning.
+    dependencyOverrides ++= Seq(
+      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion
+    ),
     
     Compile / PB.protoSources := Seq(
       baseDirectory.value / "src" / "main" / "protobuf"
