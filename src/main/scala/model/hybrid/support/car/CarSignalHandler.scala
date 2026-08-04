@@ -31,7 +31,6 @@ class CarSignalHandler(
   private val getCurrentNodeFn: () => String,
   private val getNextLinkFn: () => String,
   private val getTripDestinationFn: () => Option[String],
-  private val setSignalStateRetryCounterFn: Int => Unit,
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val onSignalWaitFn: Long => Unit
 ) {
@@ -70,7 +69,9 @@ class CarSignalHandler(
                 RequestSignalStateData(targetLinkId = linkId),
                 EventTypeEnum.RequestSignalState.toString
               )
-              onFinishSpontaneousFn(Some(currentTickFn() + 1))
+              // Consistency-critical: do NOT resolve here. Node always replies on every
+              // branch (NodeEventHandler.handleRequestSignalState) — wait for that reply
+              // as an interaction event; handleSignalState resolves the spontaneous event.
             } else {
               leavingLinkFn()
             }
@@ -92,8 +93,6 @@ class CarSignalHandler(
       )
       return
     }
-
-    setSignalStateRetryCounterFn(0)
 
     if (data.phase == Red) {
       val tick      = currentTickFn()
