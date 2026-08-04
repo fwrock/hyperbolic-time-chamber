@@ -16,6 +16,7 @@ class LinkMetricsReporter(
   entityIdFn:                 () => String,
   currentTickFn:              () => Tick,
   cacheTtl:                   Int,
+  costPublishInterval:        Int,
   getLinkStateFn:             () => LinkState,
   getVehicleEntryTickFn:      String => Option[Tick],
   getVehicleWaitingSecondsFn: String => Double,
@@ -23,6 +24,9 @@ class LinkMetricsReporter(
   logWarnFn:                  String => Unit
 ) {
 
+  // Matches the pre-existing MICRO-side initial value (not Long.MinValue: `tick -
+  // lastCostPublishTick` would silently overflow/wrap for the first call otherwise).
+  private var lastCostPublishTick: Tick  = 0L
   private var summaryTick: Tick          = Long.MinValue
   private var tickLoaded: Int            = 0
   var tickInserted: Int                  = 0
@@ -117,6 +121,16 @@ class LinkMetricsReporter(
       "sumo_summary_step"
     )
   }
+
+  /** Publishes the dynamic cost only if `costPublishInterval` ticks have elapsed since the last
+    * publish. Shared by both MESO (called on vehicle enter/leave) and MICRO (called every global
+    * tick) link dynamics, so neither mode floods Redis/Kafka with a publish per event.
+    */
+  def maybePublishDynamicCost(tick: Tick): Unit =
+    if (tick - lastCostPublishTick >= costPublishInterval) {
+      publishDynamicCost()
+      lastCostPublishTick = tick
+    }
 
   def publishDynamicCost(): Unit = {
     val state       = getLinkStateFn()
