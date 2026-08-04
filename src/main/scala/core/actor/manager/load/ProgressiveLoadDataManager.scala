@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.actor.manager.load.strategy.ProgressiveJsonLoadData
 import core.actor.manager.load.{ CreatorLoadData, CreatorPoolLoadData }
 import core.actor.manager.BaseManager
 import core.entity.actor.properties.{ CreatorProperties, Properties }
@@ -20,10 +19,12 @@ import org.apache.pekko.remote.RemoteScope
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 import org.interscity.htc.core.metrics.core.ProgressiveLoadingMetrics
+import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable
 import scala.compiletime.uninitialized
+import scala.util.{ Failure, Success }
 
 /** Progressive Load Data Manager - coordinates tick-windowed actor creation during simulation.
   *
@@ -128,13 +129,14 @@ class ProgressiveLoadDataManager(
     reporters = poolReporters
 
   override def handleEvent: Receive = {
-    case event: StartProgressiveLoadingEvent => startProgressiveLoading(event)
-    case event: TickIndexBuiltEvent          => handleTickIndexBuilt(event)
-    case event: TickWindowRequest            => handleTickWindowRequest(event)
-    case event: TickRangeLoadedEvent         => handleTickRangeLoaded(event)
-    case event: FinishCreationEvent          => handleFinishCreation(event)
-    case event: FinishLoadDataEvent          => handleSourceFinished(event)
-    case _: StopSimulationEvent              => handleStopSimulation()
+    case event: StartProgressiveLoadingEvent                  => startProgressiveLoading(event)
+    case event: TickIndexBuiltEvent                           => handleTickIndexBuilt(event)
+    case event: TickWindowRequest                              => handleTickWindowRequest(event)
+    case event: TickRangeLoadedEvent                           => handleTickRangeLoaded(event)
+    case event: FinishCreationEvent                            => handleFinishCreation(event)
+    case event: FinishLoadDataEvent                             => handleSourceFinished(event)
+    case _: StopSimulationEvent                                 => handleStopSimulation()
+    case event: ProgressiveLoadDataManager.PreflightDone       => handlePreflightDone(event)
   }
 
   /** Initialize progressive loading. Creates loader actors for each progressive data source and
@@ -151,6 +153,64 @@ class ProgressiveLoadDataManager(
       return
     }
 
+    val personSources = event.progressiveSources.filter(ScenarioPreflightValidator.isPersonSource)
+    if (personSources.isEmpty) {
+      proceedWithProgressiveLoading(event)
+    } else {
+      runScenarioPreflight(personSources, event)
+    }
+  }
+
+  /** Fail-fast, scenario-wide mode-decision-engine check (see
+    * `core.actor.manager.load.ScenarioPreflightValidator` /
+    * `model.hybrid.decision.ScenarioLoadValidator.validateModeDecisionEngines`) run over every
+    * PROGRESSIVE Person source before `creatorRef`/`creatorPoolRef` or any loader — and therefore
+    * any actor — is created.
+    *
+    * Unlike EAGER mode, PROGRESSIVE data isn't meant to fit in memory all at once, but this scan
+    * doesn't need it to: it streams each Person source once, converts one entity at a time, and
+    * retains only the distinct `strategyId`s seen so far — the same bounded-memory shape as
+    * `TickIndexUtil.buildLightIndex`. The trade-off accepted here is an extra sequential read of
+    * the PROGRESSIVE Person file(s) before indexing starts, in exchange for the same "abort before
+    * any actor is created" guarantee EAGER mode gets — worth paying once per scenario load to
+    * catch a scenario-wide configuration error before ticks start consuming tick windows.
+    */
+  private def runScenarioPreflight(
+    personSources: List[ActorDataSource],
+    event: StartProgressiveLoadingEvent
+  ): Unit = {
+    logInfo(
+      s"Running scenario-wide mode-decision-engine pre-flight check over " +
+        s"${personSources.size} PROGRESSIVE Person source(s) before creating any actor."
+    )
+    val ctx = ScenarioPreflightValidator.currentValidationContext()
+    val ioEc = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+    ScenarioPreflightValidator.validate(personSources, ctx)(ioEc).onComplete {
+      case Success(result) =>
+        self ! ProgressiveLoadDataManager.PreflightDone(result, event)
+      case Failure(cause) =>
+        self ! ProgressiveLoadDataManager.PreflightDone(
+          Left(ScenarioLoadError(s"Scenario pre-flight check crashed: ${cause.getMessage}")),
+          event
+        )
+    }(context.dispatcher)
+  }
+
+  private def handlePreflightDone(msg: ProgressiveLoadDataManager.PreflightDone): Unit =
+    msg.result match {
+      case Right(()) =>
+        proceedWithProgressiveLoading(msg.originalEvent)
+      case Left(error) =>
+        logError(s"Progressive scenario load aborted by pre-flight check: ${error.message}")
+        simulationManager ! ScenarioPreflightValidationFailedEvent(error)
+        selfDestruct()
+    }
+
+  /** Continuation of `startProgressiveLoading` once the scenario has either passed pre-flight
+    * validation, or didn't need it (no PROGRESSIVE Person sources referencing any
+    * `PendingDecision`).
+    */
+  private def proceedWithProgressiveLoading(event: StartProgressiveLoadingEvent): Unit = {
     val totalSources = event.progressiveSources.size
     this.creatorRef = createCreatorLoadData(totalSources)
     this.creatorPoolRef = createCreatorPoolLoadData(totalSources)
@@ -176,7 +236,7 @@ class ProgressiveLoadDataManager(
       case (source, idx) =>
         val targetAddress = upMembers(idx % upMembers.size).address
         val loaderProps = Props(
-          classOf[ProgressiveJsonLoadData],
+          source.dataSource.sourceType.progressiveClazz,
           Properties(
             entityId = s"progressive-loader-${source.id.hashCode}",
             resourceId = "",
@@ -599,6 +659,16 @@ class ProgressiveLoadDataManager(
 }
 
 object ProgressiveLoadDataManager {
+
+  /** Internal self-message carrying the result of `ScenarioPreflightValidator.validate`, along
+    * with the original `StartProgressiveLoadingEvent` needed to resume (or abort) once the async
+    * scan completes. Never sent by anything outside this actor.
+    */
+  private[load] final case class PreflightDone(
+    result: Either[ScenarioLoadError, Unit],
+    originalEvent: StartProgressiveLoadingEvent
+  )
+
   def props(
     poolTimeManager: ActorRef,
     simulationManager: ActorRef,

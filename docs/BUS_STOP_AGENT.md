@@ -50,7 +50,8 @@ case class BusStopState(
 | `people` | `Map[String, Seq[Identify]]` | Fila de passageiros indexada por linha de ônibus |
 
 A chave do mapa `people` é o **label da linha de ônibus** (ex: `"Bus Line 1"`), o mesmo valor
-presente em `ArrivalLogistics.line` na `PersonState` e em `RegisterPassengerData.label`.
+presente em `TransitLeg.line` (`model.hybrid.entity.state.plan`, ver
+[PERSON_AGENT.md](PERSON_AGENT.md)) e em `RegisterPassengerData.label`.
 
 ---
 
@@ -182,26 +183,30 @@ agendamento. O ator existe passivamente durante toda a simulação.
 }
 ```
 
-### Referência no cronograma da Person
+### Referência no plano da Person
+
+Na Person, essa viagem é um `TransitLeg` no plano (ver [PERSON_AGENT.md](PERSON_AGENT.md)):
 
 ```json
 {
-  "sequence": 2,
-  "activityType": "Home",
-  "nodeId": "htcaid:node;60609822",
-  "endTime": "86400",
-  "arrivalLogistics": {
-    "mode": "bus",
-    "line": "Bus Line 1",
-    "boardingStopId": "htcaid:busstop;busstop_42",
-    "boardingStopClassType": "hybrid.actor.BusStop",
-    "alightingNodeId": "htcaid:node;60609822"
+  "kind": "TransitLeg",
+  "mode": "Bus",
+  "line": "Bus Line 1",
+  "boardingStop": {
+    "actorId": "htcaid:busstop;busstop_42",
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": "htcaid:node;300"
+  },
+  "alightingStop": {
+    "actorId": "htcaid:busstop;busstop_87",
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": "htcaid:node;60609822"
   }
 }
 ```
 
-> O `line` em `arrivalLogistics` deve coincidir exatamente com o `label` configurado no ônibus
-> (`Bus.state.label`) — é a chave que liga Person → BusStop → Bus.
+> O `line` deve coincidir exatamente com o `label` configurado no ônibus (`Bus.state.label`) — é a
+> chave que liga Person → BusStop → Bus.
 
 ---
 

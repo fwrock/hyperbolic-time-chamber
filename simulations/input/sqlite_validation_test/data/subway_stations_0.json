@@ -1,0 +1,86 @@
+[
+  {
+    "id": "htcaid:subwaystation;mini_terminal",
+    "typeActor": "hybrid.actor.SubwayStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayStationState",
+      "content": {
+        "startTick": 0,
+        "name": "Mini Terminal",
+        "nodeId": "htcaid:node;mini_subway_terminal",
+        "terminal": true,
+        "garage": true,
+        "lines": {
+          "mini_subway_line": {
+            "interval": 600,
+            "nextTick": 0
+          }
+        },
+        "subways": {
+          "mini_subway_line": [
+            {
+              "line": "mini_subway_line",
+              "actorId": "htcaid:subway;mini_line_train_0",
+              "capacity": 400,
+              "numberOfPorts": 4,
+              "velocity": 22.22,
+              "stopTime": 20,
+              "speedFactor": 1.0
+            }
+          ]
+        },
+        "linesRoute": {
+          "mini_subway_line": [
+            {
+              "stationNode": {
+                "stationId": "htcaid:subwaystation;mini_dest",
+                "nodeId": "htcaid:node;mini_subway_dest"
+              },
+              "railLinkId": "htcaid:rail_link;mini_subway_ab"
+            },
+            {
+              "stationNode": {
+                "stationId": "htcaid:subwaystation;mini_terminal",
+                "nodeId": "htcaid:node;mini_subway_terminal"
+              },
+              "railLinkId": "htcaid:rail_link;mini_subway_ba"
+            }
+          ]
+        },
+        "people": {},
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;mini_subway_terminal",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": "htcaid:subwaystation;mini_dest",
+    "typeActor": "hybrid.actor.SubwayStation",
+    "data": {
+      "dataType": "model.hybrid.entity.state.SubwayStationState",
+      "content": {
+        "startTick": 0,
+        "name": "Mini Destination",
+        "nodeId": "htcaid:node;mini_subway_dest",
+        "terminal": false,
+        "garage": false,
+        "lines": {},
+        "subways": {},
+        "linesRoute": {},
+        "people": {},
+        "status": "Start"
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": "htcaid:node;mini_subway_dest",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

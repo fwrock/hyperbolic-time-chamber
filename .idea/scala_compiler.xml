@@ -2,6 +2,11 @@
 <project version="4">
   <component name="ScalaCompilerConfiguration">
     <option name="separateProdTestSources" value="true" />
-    <profile name="sbt 1" modules="hyperbolic-time-chamber,hyperbolic-time-chamber.main,hyperbolic-time-chamber.test" />
+    <profile name="sbt 1" modules="hyperbolic-time-chamber" />
+    <profile name="sbt 2" modules="hyperbolic-time-chamber.main,hyperbolic-time-chamber.test">
+      <parameters>
+        <parameter value="-Wconf:msg=match may not be exhaustive:error" />
+      </parameters>
+    </profile>
   </component>
 </project>

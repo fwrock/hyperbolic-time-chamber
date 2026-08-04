@@ -38,8 +38,8 @@ class SubwayStationCreator(
             try {
               createSubway(subway, subwayStartTick)
               spawned += 1
-              ActorTrace.trace(entityIdFn(), currentTickFn(), "subway_station_train_created", // #actor-trace
-                s"trainId=${subway.actorId} line=$line nextTick=$subwayStartTick") // #actor-trace
+              // ActorTrace.trace(entityIdFn(), currentTickFn(), "subway_station_train_created", // #actor-trace
+              //   s"trainId=${subway.actorId} line=$line nextTick=$subwayStartTick") // #actor-trace
               addDependencyFn(subway.actorId, ShardActorId(subway.actorId, "hybrid.actor.Subway"))
               lines(line).nextTick = subwayStartTick
             } catch {

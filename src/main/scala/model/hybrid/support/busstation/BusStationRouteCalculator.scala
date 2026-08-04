@@ -87,12 +87,12 @@ class BusStationRouteCalculator(
         s"BusStation ${entityIdFn()} route calculation complete " +
           s"(${orderedBusStopIds.size - 1} going + ${orderedBusStopIds.size - 1} returning segments)"
       )
-      ActorTrace.trace(entityIdFn(), tick, "bus_station_route_ok", // #actor-trace
-        s"stops=${orderedBusStopIds.size} going=${state.goingRoute.map(_.size).getOrElse(0)} returning=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
+      // ActorTrace.trace(entityIdFn(), tick, "bus_station_route_ok", // #actor-trace
+      //   s"stops=${orderedBusStopIds.size} going=${state.goingRoute.map(_.size).getOrElse(0)} returning=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
     } else {
       logWarnFn(s"BusStation ${entityIdFn()} route calculation incomplete after calculateRoutes()")
-      ActorTrace.trace(entityIdFn(), tick, "bus_station_route_incomplete", // #actor-trace
-        s"goingRoute=${state.goingRoute.map(_.size).getOrElse(0)} returningRoute=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
+      // ActorTrace.trace(entityIdFn(), tick, "bus_station_route_incomplete", // #actor-trace
+      //   s"goingRoute=${state.goingRoute.map(_.size).getOrElse(0)} returningRoute=${state.returningRoute.map(_.size).getOrElse(0)}") // #actor-trace
     }
   }
 

@@ -27,10 +27,13 @@ class BusMicroHandler(
   private val getCurrentLinkLengthFn: () => Double,
   private val findNextBusStopFn: () => Option[String],
   private val checkBusStopAtPositionFn: Double => Unit,
-  private val microUpdateLogEvery: Int
+  private val microUpdateLogEvery: Int,
+  private val getCurrentLinkIdFn: () => Option[String] = () => None,
+  private val microUpdateReportEvery: Int = 0
 ) {
 
   private var microUpdateLogCount: Long = 0L
+  private var microUpdateReportCount: Long = 0L
 
   def handleMicroEnterLink(data: MicroEnterLinkData, state: BusState): Unit = {
     val tick     = currentTickFn()
@@ -41,18 +44,20 @@ class BusMicroHandler(
     setCurrentLinkIdFn(Some(data.linkId))
     setLinkEntryTickFn(Some(tick))
 
+    // speedLimit from LinkState is stored in km/h; micro physics runs in m/s
+    val speedLimitMs = data.speedLimit / 3.6
     val initialMicroState = MicroBusState(
       positionInLink  = 0.0,
-      velocity        = state.microState.map(_.velocity).getOrElse(data.speedLimit * 0.7),
+      velocity        = state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.7),
       acceleration    = 0.0,
       currentLane     = data.assignedLane,
       leaderVehicle   = None,
       gapToLeader     = data.linkLength,
-      leaderVelocity  = data.speedLimit,
+      leaderVelocity  = speedLimitMs,
       maxAcceleration = 1.2,
       maxDeceleration = 3.5,
       minGap          = 3.0,
-      desiredVelocity = math.min(data.speedLimit, 11.11) * math.max(0.5, math.min(1.5, state.speedFactor)),
+      desiredVelocity = math.min(speedLimitMs, 11.11) * math.max(0.5, math.min(1.5, state.speedFactor)),
       reactionTime    = 1.5,
       vehicleLength   = 12.0,
       capacity        = state.capacity,
@@ -67,7 +72,7 @@ class BusMicroHandler(
     state.activateMicroMode(initialMicroState)
     state.status = Moving
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, data.speedLimit)
+    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
     journeyReporter.updateHaltingState(initialMicroState.velocity, 0.0)
 
     if (journeyReporter.sumoDepartTick.isEmpty) {
@@ -116,6 +121,24 @@ class BusMicroHandler(
       microUpdateLogCount += 1
       if (microUpdateLogCount % microUpdateLogEvery == 0L)
         logDebugFn(s"Bus micro update[$microUpdateLogCount]: pos=${data.position}, vel=${data.velocity}, passengers=${state.people.size}")
+
+      microUpdateReportCount += 1
+      if (microUpdateReportEvery > 0 && microUpdateReportCount % microUpdateReportEvery == 0L) {
+        reportFn(
+          Map(
+            "event_type" -> "micro_update",
+            "bus_id"     -> entityIdFn(),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "mode"       -> "MICRO",
+            "position"   -> data.position,
+            "velocity"   -> data.velocity,
+            "lane"       -> data.currentLane,
+            "sub_tick"   -> data.subTick,
+            "tick"       -> currentTickFn()
+          ),
+          "micro_update"
+        )
+      }
 
       checkBusStopAtPositionFn(data.position)
     }

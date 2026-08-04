@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.types.Tick
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
@@ -45,6 +46,19 @@ class Car(
     copied
   }
 
+  /** Wires PrivateVehicle's reply-linkage fields (ownerPersonRef, tripOrigin, etc. — see
+    * docs/KNOWN_GAPS.md "Shard Migration Silently Drops Actor-Local Reply State") into the
+    * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
+    * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
+    */
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreMigrationFields(snapshot)
+  }
+
   private var currentLinkId: Option[String] = None
   private var currentLinkLength: Double = 0.0
   private var linkEntryTick: Option[Tick] = None
@@ -83,11 +97,12 @@ class Car(
     getNextLinkFn               = () => getNextLink,
     getTripDestinationFn        = () => getTripDestination,
     setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
-    setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick
+    setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
+    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
   )
 
   private lazy val linkHandler = new CarLinkHandler(
-    reportFn              = (data, label) => report(data = data, label = label),
+    reportFn              = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn            = () => getEntityId,
     currentTickFn         = () => currentTick,
     journeyReporter       = journeyReporter,
@@ -103,7 +118,7 @@ class Car(
   )
 
   private lazy val microHandler = new CarMicroHandler(
-    reportFn              = (data, label) => report(data = data, label = label),
+    reportFn              = (data, label) => reportMirrored(data = data, label = label),
     entityIdFn            = () => getEntityId,
     currentTickFn         = () => currentTick,
     simulationEndTickFn   = () => simulationEndTick,
@@ -121,7 +136,8 @@ class Car(
     setCurrentLinkLengthFn = len => currentLinkLength = len,
     setLinkEntryTickFn    = tick => linkEntryTick = tick,
     getLinkEntryTickFn    = () => linkEntryTick,
-    getCurrentLinkIdFn    = () => currentLinkId
+    getCurrentLinkIdFn    = () => currentLinkId,
+    microUpdateReportEvery = microUpdateReportEvery
   )
 
   private lazy val emissionHandler = new CarEmissionHandler(
@@ -141,6 +157,19 @@ class Car(
       .getOrElse(100)
 
   private var staleEventLogCount: Long = 0L
+
+  /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
+    * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
+    * publishing every sub-tick unconditionally would be an order of magnitude more volume than
+    * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
+    */
+  private lazy val microUpdateReportEvery: Int =
+    sys.env
+      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
+      .flatMap(v => scala.util.Try(v.toInt).toOption)
+      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+      .filter(_ >= 0)
+      .getOrElse(0)
 
   private def logStaleEventDebug(message: String): Unit = {
     staleEventLogCount += 1

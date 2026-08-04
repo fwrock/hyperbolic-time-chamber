@@ -45,6 +45,22 @@ abstract class LocalTimeManagerBase(
   private var selfProxy: ActorRef = null
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
+  // Per-actor monotonically increasing dispatch counter. Incremented every time this TM actually
+  // sends an actor a SpontaneousEvent; echoed back by the actor on its FinishEvent so finishEvent
+  // can recognize and drop a FinishEvent belonging to a dispatch cycle already superseded by a
+  // newer one (e.g. a redundant/late "poll again next tick" reschedule racing against the real
+  // reply that resolves the same wait) instead of "rescuing" it into a phantom extra schedule.
+  // See docs/KNOWN_GAPS.md's non-reproducibility investigation.
+  private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
+  // Per-actor watermark: the highest tick at which THIS specific actor was actually dispatched
+  // a SpontaneousEvent by this TM. Distinct from the TM-wide `localTickOffset`, which advances
+  // based on every actor sharing this LocalTimeManager pool instance. scheduleEvent's past-tick
+  // guard must compare a request against this per-actor value, not the shared clock — otherwise
+  // a busier sibling actor on the same LTM instance advancing localTickOffset can cause this
+  // actor's own genuinely-future ScheduleEvent to be wrongly treated as stale and lose real
+  // causal time. See docs/KNOWN_GAPS.md ("scheduleEvent's Past-Tick Guard Discards Real Causal
+  // Time When Actors Share an LTM Instance").
+  private val highestProcessedTick: mutable.Map[String, Tick] = mutable.Map().withDefaultValue(-1L)
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -95,20 +111,26 @@ abstract class LocalTimeManagerBase(
 
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
-    // CRITICAL: If the requested tick is in the past (< localTickOffset), it has already
-    // been processed and removed from scheduledActors by processTick. Any entry added at
-    // that past tick is orphaned — nextTick filters out ticks < localTickOffset, so they
-    // are never dispatched again. This happens when ScheduleEvent is routed via the pool
-    // router to a TM that has already advanced past the requested tick (e.g. from MICRO
-    // link handleEnterLinkMicro calling scheduleEvent while a "fast" TM receives it).
-    // Use <= localTickOffset (not just <) to also guard against same-tick races where
-    // processTick(T) already cleared scheduledActors[T] but localTickOffset is still T.
-    // Fix: bump past-tick/same-tick requests to localTickOffset + 1, guaranteeing future processing.
-    val effectiveTick = if (event.tick <= localTickOffset) {
+    // Guard against a genuinely stale request: one for a tick THIS actor has already been
+    // dispatched at (or past). We compare against this actor's own highestProcessedTick
+    // watermark, NOT the shared localTickOffset — localTickOffset advances whenever ANY actor
+    // sharing this LTM pool instance is processed, so using it here would wrongly discard an
+    // actor's real future tick just because a busier sibling actor ran ahead of it on the same
+    // LTM instance (see docs/KNOWN_GAPS.md's past-tick guard gap). A request at or behind this
+    // actor's own watermark is bumped to watermark + 1, guaranteeing future processing without
+    // losing any causal time that genuinely belongs to a still-earlier, not-yet-processed tick.
+    // Key by identity.id (the entity id), NOT event.actorRef: actorRef holds the entity id when
+    // this message originates from registerActor, but holds the actor's Pekko path when it
+    // originates from SimulationBaseActor.scheduleEvent(tick) — the same two-value inconsistency
+    // that sendSpontaneousEvent avoids by always keying dispatchGeneration/highestProcessedTick
+    // off identity.id.
+    val actorId = event.identify.map(_.id).getOrElse(event.actorRef)
+    val actorWatermark = highestProcessedTick(actorId)
+    val effectiveTick = if (event.tick <= actorWatermark) {
       logDebug(
-        s"ScheduleEvent tick=${event.tick} is at/behind localTickOffset=$localTickOffset; bumping to ${localTickOffset + 1}"
+        s"ScheduleEvent tick=${event.tick} for actor=$actorId is at/behind its own highestProcessedTick=$actorWatermark; bumping to ${actorWatermark + 1}"
       )
-      localTickOffset + 1
+      actorWatermark + 1
     } else {
       event.tick
     }
@@ -142,6 +164,24 @@ abstract class LocalTimeManagerBase(
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       ActorMetrics.eventsProcessed.labels("finish").inc()
+
+      val currentGen = dispatchGeneration(finish.identify.id)
+      if (!finish.destruct && finish.generation < currentGen) {
+        // Stale FinishEvent: this actor has already been dispatched again under a newer
+        // generation since this resolution was decided — e.g. a redundant/late "poll again next
+        // tick" reschedule (sent alongside another call resolving the very same wait) that only
+        // reaches the TM after the actor's own next dispatch already went out. Left unguarded,
+        // such a straggler would fall into the "arrived too late for its tick" bump below and
+        // create a genuinely extra, unintended schedule entry — the root cause of one class of
+        // non-reproducible duplicate dispatch documented in docs/KNOWN_GAPS.md. Drop it here
+        // instead: don't touch scheduledActors/runningEvents/advanceToNextTick, since those
+        // reflect the actor's current, newer dispatch, which is still legitimately pending.
+        logDebug(
+          s"Dropping stale FinishEvent for ${finish.identify.id}: generation=${finish.generation} < current=$currentGen"
+        )
+        return
+      }
+
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
       
       finish.scheduleTick.foreach {
@@ -186,6 +226,8 @@ abstract class LocalTimeManagerBase(
     if (finish.destruct) {
       ActorMetrics.eventsProcessed.labels("destruct").inc()
       registeredActors.remove(finish.identify.id)
+      dispatchGeneration.remove(finish.identify.id)
+      highestProcessedTick.remove(finish.identify.id)
       val removedIdentity = registeredIdentities.remove(finish.identify.id)
       // Prometheus: decrement active actors gauge
       removedIdentity.foreach {
@@ -243,9 +285,15 @@ abstract class LocalTimeManagerBase(
     }
 
   protected def nextTick: Option[Tick] = {
-    val scheduled = scheduledActors.keys.filter(_ >= localTickOffset)
-    val scheduledOnFinish = scheduledTicksOnFinish.filter(_ >= localTickOffset)
-    val allTicks = scheduled ++ scheduledOnFinish
+    // Do NOT filter by `>= localTickOffset` here. A legitimately-preserved earlier tick (an
+    // actor's own request that scheduleEvent correctly left alone because it was still ahead
+    // of THAT actor's highestProcessedTick watermark, even though behind the LTM-wide
+    // localTickOffset) must stay visible to advanceToNextTick/reportGlobalTimeManager, or the
+    // GTM loses track of it and this LTM's entry is silently orphaned. processTick's existing
+    // skip-tick catch-up logic (`scheduledActors.keys.filter(_ <= tick).minOption`) already
+    // knows how to process an entry earlier than localTickOffset once the GTM re-syncs this
+    // LTM to it — see docs/KNOWN_GAPS.md's past-tick guard gap.
+    val allTicks = scheduledActors.keys ++ scheduledTicksOnFinish
 
     if (allTicks.nonEmpty) {
       Some(allTicks.min)
@@ -288,28 +336,36 @@ abstract class LocalTimeManagerBase(
       return
     }
 
+    // Bump this actor's dispatch generation before sending — see dispatchGeneration's doc.
+    val generation = dispatchGeneration(identity.id) + 1
+    dispatchGeneration(identity.id) = generation
+    // Record this actor's own processed-tick watermark — see highestProcessedTick's doc.
+    if (tick > highestProcessedTick(identity.id)) {
+      highestProcessedTick(identity.id) = tick
+    }
+
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>
-        sendSpontaneousEventShard(tick, identity)
+        sendSpontaneousEventShard(tick, identity, generation)
       case CreationTypeEnum.PoolDistributed =>
-        sendSpontaneousEventPool(tick, identity)
+        sendSpontaneousEventPool(tick, identity, generation)
       case _ =>
         logWarn(s"Unknown creation type '${identity.actorType}' for actor ${identity.id}, removing from runningEvents to prevent stall")
         runningEvents.filterInPlace(_.id != identity.id)
     }
   }
 
-  private def sendSpontaneousEventShard(tick: Tick, identity: Identify): Unit = {
+  private def sendSpontaneousEventShard(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
     actorRef ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(identity.id),
-      SpontaneousEvent(tick = tick, actorRef = self)
+      SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
     )
   }
 
-  private def sendSpontaneousEventPool(tick: Tick, identity: Identify): Unit = {
+  private def sendSpontaneousEventPool(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = context.system.actorSelection(identity.actorRef)
-    actorRef ! SpontaneousEvent(tick = tick, actorRef = self)
+    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
   }
 
   private def terminateSimulation(): Unit = synchronized {

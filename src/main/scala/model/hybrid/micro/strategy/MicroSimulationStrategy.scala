@@ -3,6 +3,7 @@ package model.hybrid.micro.strategy
 
 import core.types.Tick
 import model.hybrid.entity.state.model.VehicleInLane
+import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 
 import scala.collection.mutable
 
@@ -46,7 +47,8 @@ trait MicroSimulationStrategy {
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double]
+    vehicleWaitingSeconds: mutable.Map[String, Double],
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
   ): Seq[MicroVehicleUpdate]
 
   /** Initializes the strategy with link-specific parameters. Called once when the link enters MICRO

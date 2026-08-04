@@ -36,7 +36,7 @@ class BusStopHandler(
   private val journeyReporter: BusJourneyReporter,
   private val sendMessageFn: (String, String, AnyRef, String) => Unit,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val scheduleEventFn: Tick => Unit,
+  private val deferFinishSpontaneousFn: () => Unit,
   private val enterLinkFn: () => Unit,
   private val selfRefFn: () => ActorRef,
   private val getCurrentStopNodeFn: () => Option[String],
@@ -49,7 +49,19 @@ class BusStopHandler(
   private var busStopProbeLogCount: Long = 0L
   private var expectedUnloadResponses: Int = 0
 
-  def handleBusLoadPeople(data: BusLoadPassengerData, state: BusState): Unit =
+  def handleBusLoadPeople(data: BusLoadPassengerData, state: BusState): Unit = {
+    // Stale-reply guard, mirroring the pattern already used elsewhere in this codebase
+    // (BusSignalHandler.handleSignalState's `state.status != WaitingSignalState` check;
+    // Car/Motorcycle/Bicycle's `status == Parked || Finished` checks in their own
+    // handleLeaveLink). If the bus has already moved on from this WaitingLoadPassenger cycle
+    // by the time the stop's reply arrives (e.g. the reply was queued behind other messages),
+    // re-setting status back to WaitingLoadPassenger and rescheduling here would make
+    // Bus.actSpontaneous's `case WaitingLoadPassenger => enterLink()` fire a second, spurious
+    // time for a link already entered — confirmed via instrumentation as the dominant
+    // remaining source of duplicate enter_link events. Passengers still board either way (the
+    // stop already committed to handing them over) — only the status/reschedule side effect is
+    // skipped for a stale reply. See docs/KNOWN_GAPS.md.
+    val isStaleReply = state.status != WaitingLoadPassenger
     if (data.people.nonEmpty) {
       val tick         = currentTickFn()
       val entityId     = entityIdFn()
@@ -71,8 +83,8 @@ class BusStopHandler(
 
       BusMetrics.passengersBoarded.labels(state.label).inc(data.people.size)
       BusMetrics.activePassengers.inc(data.people.size)
-      ActorTrace.trace(entityId, tick, "bus_passengers_loaded", // #actor-trace
-        s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
+      // ActorTrace.trace(entityId, tick, "bus_passengers_loaded", // #actor-trace
+      //   s"loaded=${data.people.size} total=${state.people.size} occupancy=${state.occupancyPercentage}% label=${state.label}") // #actor-trace
 
       reportFn(
         Map(
@@ -86,12 +98,15 @@ class BusStopHandler(
         "bus_load_passengers"
       )
 
+      if (!isStaleReply) {
+        state.status = WaitingLoadPassenger
+        onFinishSpontaneousFn(Some(nextTickTime))
+      }
+    } else if (!isStaleReply) {
       state.status = WaitingLoadPassenger
-      scheduleEventFn(nextTickTime)
-    } else {
-      state.status = WaitingLoadPassenger
-      scheduleEventFn(currentTickFn() + 1)
+      onFinishSpontaneousFn(Some(currentTickFn() + 1))
     }
+  }
 
   def handleUnloadPassenger(data: BusUnloadPassengerData, personId: String, state: BusState): Unit = {
     if (expectedUnloadResponses == 0) return  // no active unload round; ignore spurious/late response
@@ -119,8 +134,8 @@ class BusStopHandler(
 
         BusMetrics.passengersAlighted.labels(state.label).inc(unloadedCount)
         BusMetrics.activePassengers.dec(unloadedCount)
-        ActorTrace.trace(entityId, tick, "bus_passengers_unloaded", // #actor-trace
-          s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
+        // ActorTrace.trace(entityId, tick, "bus_passengers_unloaded", // #actor-trace
+        //   s"unloaded=$unloadedCount remaining=${state.people.size} label=${state.label}") // #actor-trace
 
         reportFn(
           Map(
@@ -134,10 +149,10 @@ class BusStopHandler(
         )
 
         state.status = WaitingUnloadPassenger
-        scheduleEventFn(nextTickTime)
+        onFinishSpontaneousFn(Some(nextTickTime))
       } else {
         state.status = WaitingUnloadPassenger
-        scheduleEventFn(currentTickFn() + 1)
+        onFinishSpontaneousFn(Some(currentTickFn() + 1))
       }
     }
   }
@@ -148,8 +163,8 @@ class BusStopHandler(
         busStopProbeLogCount += 1
         if (busStopProbeLogCount % busStopProbeLogEvery == 0L) {
           logDebugFn(s"Bus stop probe[$busStopProbeLogCount]: position=$position, nextStop=$stopId")
-          ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_stop_probe", // #actor-trace
-            s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
+          // ActorTrace.trace(entityIdFn(), currentTickFn(), "bus_stop_probe", // #actor-trace
+          //   s"position=$position nextStop=$stopId label=${state.label}") // #actor-trace
         }
       }
     }
@@ -180,7 +195,14 @@ class BusStopHandler(
         "RequestUnloadPassenger"
       )
     }
-    onFinishSpontaneousFn(Some(currentTickFn() + 1))
+    // Consistency-critical: handleUnloadPassenger resolves the spontaneous event (via
+    // onFinishSpontaneousFn) once every passenger has replied. Polling again unconditionally at
+    // tick+1 here raced with that — if not all passengers replied within one tick, the poll
+    // fired case WaitingUnloadPassenger => requestLoadPassenger() prematurely, before unload
+    // actually finished, sending a duplicate RequestPassenger to the stop. See
+    // docs/KNOWN_GAPS.md's non-reproducibility investigation for the analogous enter_link bug
+    // this pattern caused via requestLoadPassenger below.
+    deferFinishSpontaneousFn()
   }
 
   def requestLoadPassenger(state: BusState): Unit = {
@@ -197,7 +219,17 @@ class BusStopHandler(
           ),
           "RequestPassenger"
         )
-        onFinishSpontaneousFn(Some(currentTickFn() + 1))
+        // Consistency-critical: handleBusLoadPeople (triggered by the stop's
+        // BusLoadPassengerData reply) is what actually resolves this spontaneous event, via
+        // onFinishSpontaneousFn. Polling again unconditionally at tick+1 (as before) raced with that
+        // reply: BusState.status and BusState.movableStatus are the *same* field
+        // (BusState.status delegates to movableStatus), so a premature tick+1 wake-up here saw
+        // status still == WaitingLoadPassenger (indistinguishable from "boarding just
+        // finished") and Bus.actSpontaneous's `case WaitingLoadPassenger => enterLink()`
+        // treated it as "ready to leave", sending a duplicate EnterLinkData for a link it was
+        // (or was about to be) already registered on. Confirmed via direct instrumentation —
+        // see docs/KNOWN_GAPS.md.
+        deferFinishSpontaneousFn()
       case None =>
         setCurrentStopNodeFn(None)
         state.status = org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Ready

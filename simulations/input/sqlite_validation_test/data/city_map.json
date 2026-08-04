@@ -1,0 +1,86 @@
+{
+  "nodes": [
+    {
+      "id": "htcaid:node;mini_bus_terminal",
+      "classType": "hybrid.actor.Node",
+      "resourceId": "htcaid:node;mini_bus_terminal",
+      "latitude": -23.4315944,
+      "longitude": -46.7929983
+    },
+    {
+      "id": "htcaid:node;mini_bus_mid",
+      "classType": "hybrid.actor.Node",
+      "resourceId": "htcaid:node;mini_bus_mid",
+      "latitude": -23.4357649,
+      "longitude": -46.7867581
+    },
+    {
+      "id": "htcaid:node;mini_person_home",
+      "classType": "hybrid.actor.Node",
+      "resourceId": "htcaid:node;mini_person_home",
+      "latitude": -23.554022,
+      "longitude": -46.671108
+    },
+    {
+      "id": "htcaid:node;mini_subway_terminal",
+      "classType": "hybrid.actor.Node",
+      "resourceId": "htcaid:node;mini_subway_terminal",
+      "latitude": -23.6588121,
+      "longitude": -46.7678791
+    },
+    {
+      "id": "htcaid:node;mini_subway_dest",
+      "classType": "hybrid.actor.Node",
+      "resourceId": "htcaid:node;mini_subway_dest",
+      "latitude": -23.6485,
+      "longitude": -46.763
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "htcaid:node;mini_bus_terminal",
+      "target_id": "htcaid:node;mini_bus_mid",
+      "weight": 500.0,
+      "label": {
+        "id": "htcaid:link;mini_bus_ab",
+        "resourceId": "htcaid:link;mini_bus_ab",
+        "classType": "hybrid.actor.Link",
+        "length": 500.0
+      }
+    },
+    {
+      "source_id": "htcaid:node;mini_bus_mid",
+      "target_id": "htcaid:node;mini_bus_terminal",
+      "weight": 500.0,
+      "label": {
+        "id": "htcaid:link;mini_bus_ba",
+        "resourceId": "htcaid:link;mini_bus_ba",
+        "classType": "hybrid.actor.Link",
+        "length": 500.0
+      }
+    },
+    {
+      "source_id": "htcaid:node;mini_subway_terminal",
+      "target_id": "htcaid:node;mini_subway_dest",
+      "weight": 1200.0,
+      "label": {
+        "id": "htcaid:rail_link;mini_subway_ab",
+        "resourceId": "htcaid:rail_link;mini_subway_ab",
+        "classType": "hybrid.actor.RailLink",
+        "length": 1200.0
+      }
+    },
+    {
+      "source_id": "htcaid:node;mini_subway_dest",
+      "target_id": "htcaid:node;mini_subway_terminal",
+      "weight": 1200.0,
+      "label": {
+        "id": "htcaid:rail_link;mini_subway_ba",
+        "resourceId": "htcaid:rail_link;mini_subway_ba",
+        "classType": "hybrid.actor.RailLink",
+        "length": 1200.0
+      }
+    }
+  ],
+  "directed": true
+}

@@ -1,0 +1,33 @@
+[
+  {
+    "id": "htcaid:car;tiny_0",
+    "typeActor": "hybrid.actor.Car",
+    "data": {
+      "dataType": "model.hybrid.entity.state.CarState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": "htcaid:node;mini_person_home",
+        "destination": "htcaid:node;mini_person_home",
+        "actorType": "Car",
+        "size": 4.5,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": "htcaid:node;mini_person_home",
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": "htcaid:node;mini_person_home",
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": "htcaid:node;mini_person_home",
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]
