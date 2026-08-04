@@ -14,6 +14,7 @@ import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, SimulationModeEnum }
 import org.interscity.htc.model.hybrid.entity.state.model.{ LinkRegister, VehicleInLane }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.model.hybrid.util.SpeedUtil
 
 import scala.collection.mutable
 
@@ -38,6 +39,31 @@ class LinkVehicleFlowHandler(
   findLeastOccupiedLaneFn:        () => Int,
   logDebugFn:                     String => Unit
 ) {
+
+  /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
+    * count and publishes the updated routing cost (rate-limited by
+    * `LinkMetricsReporter.maybePublishDynamicCost`). MESO-only: MICRO links get their own
+    * per-tick recompute in `LinkMicroSimulationHandler.handleGlobalTick`, driven by real
+    * per-vehicle velocities rather than an aggregate density estimate. Event-driven (called on
+    * enter/leave) rather than on a self-scheduled tick, since MESO links don't otherwise run a
+    * spontaneous tick loop at all — this avoids adding one just to keep two numbers current.
+    */
+  private def recomputeAndPublishMesoDynamics(): Unit = {
+    val state = getLinkStateFn()
+    if (state.isMesoMode) {
+      val volume = state.registered.size
+      val newSpeed = SpeedUtil.linkDensitySpeed(
+        length       = state.length,
+        capacity     = state.capacity,
+        numberOfCars = volume.toLong,
+        freeSpeed    = state.freeSpeed,
+        lanes        = state.lanes
+      )
+      val newCongestionFactor = SpeedUtil.bprCongestionFactor(volume = volume.toDouble, capacity = state.capacity)
+      setLinkStateFn(state.copy(currentSpeed = newSpeed, congestionFactor = newCongestionFactor))
+      metricsReporter.maybePublishDynamicCost(currentTickFn())
+    }
+  }
 
   def handleEnterLinkMeso(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     val state = getLinkStateFn()
@@ -67,6 +93,7 @@ class LinkVehicleFlowHandler(
       actorSize         = data.actorSize,
       actorCreationType = data.actorCreationType
     ))
+    recomputeAndPublishMesoDynamics()
 
     sendMessageFn(
       event.actorRefId, event.shardRefId,
@@ -154,6 +181,7 @@ class LinkVehicleFlowHandler(
   ): Unit = {
     val state = getLinkStateFn()
     state.registered.filterInPlace(_.actorId != data.actorId)
+    recomputeAndPublishMesoDynamics()
 
     val entryTick = getVehicleEntryTickFn(data.actorId).getOrElse(-1L)
     removeVehicleEntryTickFn(data.actorId)
