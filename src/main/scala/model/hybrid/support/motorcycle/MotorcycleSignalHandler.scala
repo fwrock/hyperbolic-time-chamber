@@ -30,7 +30,6 @@ class MotorcycleSignalHandler(
   finishJourneyFn:             (String, String) => Unit,
   onFinishPrivateVehicleFn:    String => Unit,
   aggressivenessFn:            () => Double,
-  setSignalStateRetryCounterFn: Int => Unit,
   setSignalWaitUntilTickFn:    Option[Tick] => Unit
 ) {
 
@@ -64,7 +63,9 @@ class MotorcycleSignalHandler(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                  onFinishSpontaneousFn(Some(currentTickFn() + 1))
+                // Consistency-critical: do NOT resolve here. Node always replies on every
+                // branch — wait for that reply as an interaction event; handleSignalState
+                // resolves the spontaneous event.
                 case null =>
                   leavingLinkFn()
               }
@@ -85,7 +86,6 @@ class MotorcycleSignalHandler(
       )
       return
     }
-    setSignalStateRetryCounterFn(0)
     if (data.phase == Red) {
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(data.nextTick))

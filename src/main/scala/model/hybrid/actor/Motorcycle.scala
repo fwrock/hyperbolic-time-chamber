@@ -109,8 +109,6 @@ class Motorcycle(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
 
   /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
     * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
@@ -187,7 +185,6 @@ class Motorcycle(
     finishJourneyFn              = (reason, node) => journeyReporter.finishJourney(reason, node, state),
     onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
     aggressivenessFn             = () => aggressiveness,
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
     setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t
   )
 
@@ -241,7 +238,6 @@ class Motorcycle(
     linkEntryTick = None
     mesoExitTick = None
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
     journeyReporter.reset()
     state.bestRoute = None
     state.deactivateMicroMode()
@@ -317,16 +313,11 @@ class Motorcycle(
         onFinishSpontaneous()
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"Motorcycle ${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          onFinishSpontaneous(Some(currentTick + 1))
-        }
+        // Should never actually fire — requestSignalState() no longer self-schedules
+        // after sending; only handleSignalState (the Node's reply) resolves this status.
+        // Do not resend the request if reached anyway (see Car.scala for rationale).
+        logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case _ =>
         super.actSpontaneous(event)

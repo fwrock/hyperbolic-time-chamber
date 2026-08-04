@@ -68,8 +68,6 @@ class Car(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
 
   private lazy val journeyReporter = new CarJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
@@ -96,7 +94,6 @@ class Car(
     getCurrentNodeFn            = () => getCurrentNode,
     getNextLinkFn               = () => getNextLink,
     getTripDestinationFn        = () => getTripDestination,
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
     onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
   )
@@ -227,7 +224,6 @@ class Car(
     journeyReporter.reset()
     emissionHandler.reset()
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
     state.bestRoute = None
     state.precomputedRoute = None
     state.deactivateMicroMode()
@@ -278,16 +274,14 @@ class Car(
         }
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          requestSignalState()
-        }
+        // Should never actually fire: requestSignalState() no longer calls
+        // onFinishSpontaneous after sending RequestSignalStateData, so the car has no
+        // self-scheduled wake while waiting — only handleSignalState (triggered by the
+        // Node's reply as an interaction event) resolves this status. Reaching this branch
+        // means a SpontaneousEvent was dispatched despite that; do not resend the request
+        // (that's what corrupted NodeState.signalWaitingCounts before), just log and wait.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))

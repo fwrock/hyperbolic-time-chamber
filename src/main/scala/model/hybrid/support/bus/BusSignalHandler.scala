@@ -30,7 +30,6 @@ class BusSignalHandler(
   private val sendMessageFn: (String, String, AnyRef, String) => Unit,
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
-  private val setSignalStateRetryCounterFn: Int => Unit,
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val restoreRouteIfMissingFn: String => Unit
 ) {
@@ -57,7 +56,9 @@ class BusSignalHandler(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                  onFinishSpontaneousFn(Some(currentTickFn() + 1))
+                // Consistency-critical: do NOT resolve here. Node always replies on every
+                // branch — wait for that reply as an interaction event; handleSignalState
+                // resolves the spontaneous event.
                 case null =>
                   logWarnFn("No next link available")
                   leavingLinkFn()
@@ -81,7 +82,6 @@ class BusSignalHandler(
       )
       return
     }
-    setSignalStateRetryCounterFn(0)
     if (data.phase == Red) {
       val tick      = currentTickFn()
       val waitTicks = math.max(0L, data.nextTick - tick)
