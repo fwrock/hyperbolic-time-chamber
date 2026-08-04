@@ -423,6 +423,238 @@ note) — worth chasing for bit-exact reproducibility, but it is not the duplica
 bug this investigation was scoped to, and does not threaten result validity the way the original
 ~1.7% structural-duplicate bug did.
 
+## `scheduleEvent`'s Past-Tick Guard Discards Real Causal Time When Actors Share an LTM Instance (Found 2026-07-30, Fixed 2026-07-30 — Partial Improvement, Residual RMSE Unexplained)
+
+**Different mechanism from the section above — do not assume part 4's generation-counter fix
+already covers this.** Part 4 protects `finishEvent` against a *stale* `FinishEvent` from an
+actor's own earlier dispatch generation arriving late. This gap is in the sibling guard,
+`LocalTimeManagerBase.scheduleEvent` (lines ~103-121), and the request it discards is not stale —
+it's the actor's own next legitimate tick, lost because a *different* actor sharing the same
+`LocalTimeManager` pool instance advanced the shared `localTickOffset` further in the meantime.
+`ScheduleEvent` is a protobuf message (`org.htc.protobuf.core.entity.event.communication.
+ScheduleEvent`, no `generation` field in `src/main/protobuf/core/entity/event/communication.
+proto`), unlike the plain-Scala `FinishEvent`/`SpontaneousEvent` that part 4's fix touched — so
+extending that fix here isn't a drop-in reuse, it needs its own design (see below).
+
+**Found investigating two HTC-vs-SUMO Krauss car-following accuracy artifacts** in
+`tools/sumo_validation/` (a new validation harness comparing HTC MICRO-mode output against real
+SUMO on hand-authored scenarios — see `tools/sumo_validation/README.md`): a fixed-looking ~10-13
+simulated-second startup latency on early vehicles, and a much larger ~106-119 tick stall when a
+previously-idle `Link` reactivates mid-run. Root-caused via a live run instrumented with
+`-Dpekko.loglevel=DEBUG` (the existing `logDebug` calls in `scheduleEvent` are gated by Pekko's
+log level, separate from logback, which is why prior `htc_run.log`s never showed this) — captured
+directly:
+```
+ScheduleEvent tick=63 is at/behind localTickOffset=180; bumping to 181
+```
+`link_bc` asked to be rescheduled at tick 63 (its own next tick after its idle grace period).
+The `LocalTimeManager` instance it shares with other, busier actors (Cars on other links; the LTM
+pool is small — `htc.time-manager.max-instances-per-node = 4` locally, confirmed only 4 routees
+for a 6-vehicle run) had already advanced `localTickOffset` to 180 servicing those other actors.
+The guard at `LocalTimeManagerBase.scala:114-121` can't distinguish "this tick was already
+processed and cleared for this specific actor" (the case it was written to protect against, per
+its own comment) from "this actor's own request is genuinely earlier than the shared clock only
+because unrelated actors on the same LTM instance ran ahead of it" — and bumps both cases the same
+way, silently discarding 118 ticks of real causal time for `link_bc` in this example. Matches the
+Parquet evidence exactly: nothing recorded for the affected vehicles between tick 70 and 181 in
+`tools/sumo_validation/output/scenario_b/htc_parquet/`.
+
+**Corrects an earlier hypothesis for the smaller artifact**: it isn't fixed JVM/Pekko-cluster
+warm-up — it's the same registration-time bump (`ScheduleEvent tick=0 is at/behind
+localTickOffset=0; bumping to 1` was also captured, for a car's initial registration), whose
+magnitude is a genuine real-time race (how far the shared LTM's clock has advanced when the new
+actor's registration is processed), which is why repeat runs of the same scenario showed
+different-sized offsets for the same vehicles rather than a constant.
+
+**Fixed via the proposed per-actor watermark, plus one keying bug caught during validation.**
+Added `highestProcessedTick: mutable.Map[String, Tick]` to `LocalTimeManagerBase`, updated
+whenever `sendSpontaneousEvent(tick, identity)` actually dispatches an actor (keyed on
+`identity.id`, mirroring `dispatchGeneration`, and cleared on destruct alongside it).
+`scheduleEvent`'s guard (`LocalTimeManagerBase.scala:112-136`) now bumps only when
+`event.tick <= highestProcessedTick(actorId)` — i.e. only when *this* actor's own dispatch history
+says the tick is stale — instead of comparing against the LTM-wide `localTickOffset`. `nextTick`
+(`~281-297`) no longer filters `scheduledActors`/`scheduledTicksOnFinish` by `>= localTickOffset`,
+since that filter was exactly what hid a legitimately-preserved earlier tick from
+`reportGlobalTimeManager`; `processTick`'s pre-existing skip-tick catch-up logic
+(`scheduledActors.keys.filter(_ <= tick).minOption`) already knows how to process an entry behind
+`localTickOffset` once the GTM re-syncs this LTM to it, confirmed by reading
+`LocalDiscreteEventTimeManager.processTick` and `GlobalTimeManager.calculateAndBroadcastNextGlobalTick`
+(the latter takes `scheduled.map(_.tick).min` across LTMs, so an earlier-than-`localTickOffset`
+report is an expected, supported case, not a foot-gun).
+
+**Keying bug caught by validation, not by review — worth flagging for future changes to this
+file.** `ScheduleEvent.actorRef` is *not* a stable actor-id key: `registerActor`
+(line ~107) sets it to the entity id, but `SimulationBaseActor.scheduleEvent(tick)`
+(`SimulationBaseActor.scala:759-775` — the actual self-reschedule path that produced this gap's
+`link_bc` log evidence) sets it to `getPath`, the actor's Pekko path. A first pass keyed
+`highestProcessedTick` off `event.actorRef` directly; it compiled and passed all 111 existing
+specs, but the guard became a silent no-op for every self-reschedule (write side keys on
+`identity.id` in `sendSpontaneousEvent`, read side never matched). Caught only by rerunning
+`tools/sumo_validation/run_validation.py` and seeing no RMSE change from the pre-fix baseline.
+Fixed by keying on `event.identify.map(_.id).getOrElse(event.actorRef)` instead, matching the key
+`sendSpontaneousEvent` writes under.
+
+**Validation performed:**
+- `sbt compile` and `sbt test`: clean, all 111 existing specs still pass, both before and after
+  the keying fix.
+- `tools/sumo_validation/run_validation.py --scenarios a b` (path is `tools/sumo_validation/`, not
+  `tools/sumo-validation/`, and the script is `run_validation.py` singular): real, substantial
+  improvement on some vehicles, not full closure. Scenario A: `car_0` position RMSE 18.5m → 4.6m
+  (now matches the unaffected baseline exactly); max travel-time delta 7s → 3s. Scenario B:
+  `car_4` RMSE 75.5m → 6.8m; max travel-time delta 119s → 25s (down ~80%). But `car_1` in scenario
+  A (~56-69m across repeated runs) and `car_0`/`car_1`/`car_2` in scenario B (~90-150m) remain
+  elevated well above the ~4.6-6.8m baseline, and vary noticeably run-to-run even with the fix
+  applied and the same nominal seed — this looks like a **separate, still-open issue**, not
+  something this specific guard-plus-`nextTick` change was scoped to fix. Worth a fresh
+  investigation rather than folding into this section.
+- 86,400-tick reproducibility baseline (`simulations/input/sqlite_validation_test/
+  simulation_json_baseline.json`, JSON reporter, method as in parts 4/5 above): ran to completion
+  both before and after this fix (max tick observed 86,362 of 86,400 across both runs — the
+  simulation itself finishes in under a minute; the `timeout` calls in ad-hoc verification runs
+  were catching Pekko's slow *coordinated-shutdown* teardown afterward, not a simulation stall).
+  Per-link duplicate-`enter_link`-without-intervening-`leave_link` check: **exactly one duplicate
+  in both the pre-fix and post-fix run** (same subway train, different tick/link each run) — i.e.
+  this fix neither introduces nor removes duplicate dispatches; the single duplicate is the
+  pre-existing ~0.1% residual timing drift already flagged as unexplained in part 4's closing
+  note above, not a new regression from this change.
+
+**Remaining open question for whoever picks this up next**: what's causing the still-elevated
+RMSE on the specific vehicles listed above. Given the fix here closed the *documented* mechanism
+(confirmed by the `car_0`/`car_4` numbers landing exactly on the unaffected-vehicle baseline) but
+left other vehicles untouched, the leftover pattern is probably a different bug, not a partial fix
+of this one — recommend a fresh instrumented run (same DEBUG-log method used to find this gap)
+scoped to `car_1` (scenario A) and `car_0`/`car_1`/`car_2` (scenario B) specifically, rather than
+re-opening `scheduleEvent`/`nextTick` again without new evidence pointing there.
+
+**Why this matters beyond these two small scenarios**: LTM pool sharing get more likely, not
+less, as scenarios scale up (more actors, same small pool), so this class of lost-causal-time bug
+plausibly affects large scenarios (e.g. São Paulo-scale) more than the tiny ones that surfaced it
+— just less visibly, since there's no SUMO ground truth to diff against there. The underlying
+Krauss car-following math itself was *not* implicated: vehicles unaffected by this scheduling bug
+in the same validation runs tracked SUMO closely (~4.6 m position RMSE over a ~300 m trip).
+
+## `TrafficSignalPhaseHandler` Never Transitions Past Its First Phase (Found 2026-07-30, Fixed 2026-07-31)
+
+**Root cause: a code bug, not a data/config bug.** The exported traffic-signal JSON (`phases:
+[{greenStart: 0, greenDuration: 30}], cycleDuration: 60`) correctly expresses "green for the
+first 30s of a 60s cycle" — the same spec SUMO's `.tll.xml` uses, and SUMO cycles correctly on it.
+The bug was entirely in `TrafficSignalPhaseHandler.handlePhaseTransition`
+(`model/hybrid/support/trafficsignal/TrafficSignalPhaseHandler.scala`): the formula computing when
+to next re-evaluate the signal,
+`nextCycleStart = ((ticksSinceStart / cycleDuration) + 1) * cycleDuration`, always jumps to the
+start of the next **full cycle** (tick 60, 120, ...), never to the phase's own Red-transition
+boundary (`greenStart + greenDuration` = tick 30). For a phase with `greenStart = 0`, every one of
+those full-cycle landing points is itself inside the Green window (`currentCycleTick = 0`), so the
+computed state is Green every single time the actor re-checks — the signal notifies Green once at
+tick 0 and then never changes again for the rest of the simulation.
+
+**Found while investigating the residual scenario-B RMSE gap left after the `scheduleEvent`
+past-tick-guard fix above.** Instrumented via the JSON reporter (not logs — Pekko's `-D
+pekko.loglevel=DEBUG` alone doesn't reach the actual log line; this repo's `logback.xml` pins
+`root level="INFO"` and Pekko's `Slf4jLoggingFilter` defers to it, so DEBUG-level `logDebugFn`
+calls need a `-Dlogback.configurationFile=...` override, not just the Pekko system property):
+across a full 240-tick run of `tools/sumo_validation`'s scenario B (60s signal cycle), exactly
+**one** `signal_phase_change` event was ever recorded (Green, tick 0, `next_tick=60`) — no Red
+transition, ever. Confirmed further that `NodeEventHandler.handleRequestSignalState`'s only
+report()-emitting branch (`state.signals.get(identify.id) => Some(sig)`) was never reached either
+— zero `node_signal_requested` events across the whole run — so every car's signal-state query
+fell through to the "uncontrolled intersection, assume Green" fallback the entire time. The signal
+had **zero** behavioral effect on any vehicle in that scenario, not just a delayed one.
+
+**Not the cause of the ~20-40 tick stalls also observed on `car_0`/`car_3`/`car_4` in scenario B**
+(see the section above's validation notes). Since the signal never gated anyone, those stalls are
+a separate, still-open bug, most likely in `CarSignalHandler`'s request/retry round-trip
+(`Car.scala:280-290`, `MaxSignalStateRetries = 100`) — worth a fresh look, but out of scope for
+this fix.
+
+**Fix**: replaced the next-tick formula with one that finds the earliest upcoming transition
+boundary (`greenStart` or `greenStart + greenDuration`, for every phase) after the current
+cycle-relative tick, wrapping to the next cycle only when a boundary has already passed within
+this one:
+```scala
+val transitionPoints = state.phases.flatMap(p => Seq(p.greenStart, p.greenStart + p.greenDuration))
+val nextTickTime = currentTick + transitionPoints.map { point =>
+  val delta = point - currentCycleTick
+  if (delta > 0) delta else delta + state.cycleDuration
+}.min
+```
+Also simplified `remainingTime`/`nextTick` on `SignalState` to derive from this same corrected
+`nextTickTime` (previously computed from the same broken `greenStart + greenDuration -
+currentCycleTick` expression, which could go negative once the signal actually reached Red), and
+removed a dead `changedOrigins` local (computed, never read). `nextTick` is not report-only — it's
+consumed by `Car`/`Bus`/`Motorcycle`/`Bicycle` `SignalHandler`s to compute how long to wait at Red
+— confirmed via grep before changing its derivation.
+
+**Validation**:
+- Added `TrafficSignalPhaseHandlerSpec` (`src/test/scala/model/hybrid/support/trafficsignal/`) —
+  pure handler test, no Pekko, matching this repo's "prefer testing handlers over actors"
+  convention. Asserts the exact scenario-B cycle (Green at 0, Red at 30, Green at 60, Red at 90,
+  ...) alternates correctly across multiple cycles — the previous code would have failed this
+  after the very first transition. 5 new specs, all passing; full suite (116 specs total) green.
+- `sbt compile`: clean.
+- `tools/sumo_validation/run_validation.py --scenarios a b`: the fix is logically verified correct
+  in isolation (unit tests above), but scenario B's end-to-end RMSE did **not** show a clean
+  aggregate improvement across two repeated runs (mean RMSE ~74-76m vs. ~65m before this fix; max
+  travel-time delta improved on one run, 25s, but not the other, 57s). This is expected, not a
+  regression from this change: scenario A (which has **no** traffic signal at all, so this fix
+  cannot affect it) shows the same magnitude of run-to-run car-level RMSE swings (e.g. `car_2`
+  jumped from its usual ~4.6m to 123m in one of the two runs) — confirming the swings are driven
+  by the residual scheduling nondeterminism noted in the section above, compounded now by the
+  still-open `CarSignalHandler` stall bug actually mattering more once the signal genuinely cycles
+  (cars now really do queue at Red instead of sailing through on the old always-Green bug, so any
+  latent race in the queue/retry path is more exposed than before, not less).
+- 86,400-tick reproducibility baseline: not re-run — confirmed
+  `simulations/input/sqlite_validation_test/` contains zero `TrafficSignal` actors, so this change
+  is inert there.
+
+**Update 2026-07-31: found the actual reason the phase-handler fix alone didn't move scenario B's
+RMSE — a second, independent bug, this time in the validation harness's *data export*, not engine
+code.** `tools/sumo_validation/htc_export/export.py`'s `_node_connections_and_signals` built
+`Node.connections` keyed by `TrafficLight.controlled_link_id` directly — which is the SUMO-style
+**approach edge** (`link_ab`, the link a car is arriving *on*, matching `.tll.xml`'s own
+convention). But `NodeEventHandler.handleRequestSignalState` looks connections up by
+`data.targetLinkId`, which `CarSignalHandler.requestSignalState` populates from
+`getNextLinkFn()` (`Movable.getNextLink`) — the **outgoing** link a car is about to *enter next*
+(`link_bc`). Confirmed via the exported `nodes_0.json`: node `n_b`'s `connections` had exactly one
+entry, keyed `"htcaid:link;link_ab"`, which `handleRequestSignalState` could never match against a
+query for `link_bc` — every single request across the whole run fell through to the "no connection
+entry — uncontrolled intersection, assume Green" fallback, regardless of the (now-correctly-cycling)
+signal phase. This is why the phase-handler fix alone produced no behavioral change for scenario
+B's cars: the signal was cycling correctly internally, but genuinely disconnected from every car's
+decision, both before and after that fix.
+
+Fixed by keying `connections` on each node's *outgoing* link(s) instead (computed the same way the
+exporter already computes `incoming_links` for the `Node.links` field, just mirrored on
+`from_node`). Updated the one existing test that had encoded the old (wrong) key
+(`test_export_htc_scenario_b_wires_traffic_signal_to_node_connection` in
+`tools/sumo_validation/tests/test_htc_export.py`) to assert the corrected `link_bc` key instead.
+All 22 harness tests pass.
+
+**Result after both fixes (phase-cycling + connection-keying)**: scenario B's mean position RMSE
+dropped from ~65-75m to **~25.6-25.8m** (stable across two repeat runs) — cars that now correctly
+see and react to Red track SUMO's position closely while actually moving (`car_2`: 51m→7.4m,
+`car_4`: 68m→6.8-16.3m). This is the real, load-bearing fix for the signal-gated portion of
+scenario B; the earlier phase-handler-only fix was necessary but not sufficient on its own.
+
+**New issue surfaced by this fix, not previously visible (the signal had zero effect before, so
+nothing could react to it wrongly): whichever 1-2 cars end up genuinely queued at Red overshoot
+their travel time enormously** — `+161` to `+167`s deltas in both repeat runs (vs. SUMO), for
+different specific cars each run, despite good *position* RMSE (meaning they track correctly while
+moving, then apparently wait far longer than warranted before being released). This is reproducible
+in magnitude, not the small run-to-run noise discussed elsewhere in this doc, and is most likely in
+`CarSignalHandler.handleSignalState`'s wait-duration calc
+(`adjustedNextTick = data.nextTick + queuePosition * headwayTicks`) or in
+`NodeEventHandler`'s `signalWaitingCounts` bookkeeping (reset-on-Green logic, keyed by the
+connections map this fix just repointed) — not investigated further; flagged here rather than
+expanding scope past "fix the signal bug" again.
+
+**Next step for whoever continues this**: instrument `queuePosition`/`signalWaitingCounts` directly
+(report their value on every `RequestSignalState` reply) for the specific cars that overshoot, to
+see whether the queue count itself is wrong (e.g. never reset between cycles) or `data.nextTick`
+is stale by the time the car finally re-queries. The separate `CarSignalHandler` stall-retry
+concern noted in the previous version of this section is superseded by this more concrete lead —
+start here instead.
+
 ## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to Part 5's `enterLink()`-Poll Race, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31, Corrected 2026-08-01)
 
 **Path correction first**: despite every reference in this doc reading `tools/sumo_validation/`,

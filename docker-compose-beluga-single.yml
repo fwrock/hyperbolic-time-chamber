@@ -1,5 +1,68 @@
 ---
 services:
+  # Redpanda — Kafka-protocol compatible broker with built-in schema registry.
+  # No Zookeeper needed. network_mode: host to match the rest of this file
+  # (Redis/node1 are also host-networked) so HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
+  # resolves without a docker bridge network.
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: htc-redpanda
+    hostname: redpanda
+    network_mode: host
+    command:
+      - redpanda
+      - start
+      - --kafka-addr
+      - 0.0.0.0:9092
+      - --advertise-kafka-addr
+      - localhost:9092
+      - --schema-registry-addr
+      - 0.0.0.0:8081
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - localhost:33145
+      - --pandaproxy-addr
+      - 0.0.0.0:18082
+      - --advertise-pandaproxy-addr
+      - localhost:18082
+      - --smp
+      - "4"
+      - --memory
+      - 8G
+      - --reserve-memory
+      - 0M
+      - --default-log-level=warn
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+
+  # Redpanda Console — optional web UI for topics/consumer groups/schema registry.
+  # Not required by the simulator at runtime; safe to drop this service if you
+  # don't want the extra container. Available at http://localhost:8080
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: htc-redpanda-console
+    hostname: redpanda-console
+    network_mode: host
+    depends_on:
+      - redpanda
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["localhost:9092"]
+        schemaRegistry:
+          enabled: true
+          urls: ["http://localhost:8081"]
+      LOGGING_LEVEL_ROOT: WARN
+
   redis:
     image: redis:latest
     container_name: htc-redis
@@ -21,6 +84,7 @@ services:
     container_name: node_1
     depends_on:
       - redis
+      - redpanda
     hostname: node1
     network_mode: host
     environment:
@@ -158,7 +222,5 @@ services:
 
 volumes:
   redis_data:
-  kafka_data:
-  zookeeper_data:
-  zookeeper_logs:
+  redpanda_data:
 

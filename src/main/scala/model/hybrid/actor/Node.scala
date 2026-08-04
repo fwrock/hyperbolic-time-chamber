@@ -61,7 +61,8 @@ class Node(
     getLinkDependencyFn = linkId =>
       CityMapUtil.edgeLabelsById.get(linkId)
         .map(e => ShardActorId(entityId = e.id, classType = e.classType, shardBucket = e.resourceId)),
-    logWarnFn           = logWarn
+    logWarnFn           = logWarn,
+    logDebugFn          = logDebug
   )
 
   override def onInitialize(event: InitializeEvent): Unit = {

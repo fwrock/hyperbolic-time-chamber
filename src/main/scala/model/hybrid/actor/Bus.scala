@@ -271,16 +271,16 @@ class Bus(
           label = "journey_started"
         )
         state.status = Ready
-        ActorTrace.trace(getEntityId, currentTick, "bus_journey_started", // #actor-trace
-          s"origin=${state.origin} destination=${state.destination} route=${state.bestRoute.map(_.size).getOrElse(0)} label=${state.label}") // #actor-trace
+        // ActorTrace.trace(getEntityId, currentTick, "bus_journey_started", // #actor-trace
+        //   s"origin=${state.origin} destination=${state.destination} route=${state.bestRoute.map(_.size).getOrElse(0)} label=${state.label}") // #actor-trace
         enterLink()
 
       case Ready =>
         val nodeId = currentStopNode.orNull
         if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
           stopArrivalCount += 1
-          ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
-            s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
+          // ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
+          //   s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
           if (stopArrivalCount % 100 == 0 || stopArrivalCount <= 5) {
 //            logInfo(s"[BUS-CYCLE] ${getEntityId} stop #$stopArrivalCount at $nodeId tick=$currentTick")
           }
