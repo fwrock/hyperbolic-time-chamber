@@ -70,6 +70,7 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       currentTickFn = () => currentTick,
       journeyReporter = journeyReporter,
       onFinishSpontaneousFn = tick => finishCalls += tick,
+      deferFinishSpontaneousFn = () => (),
       leavingLinkFn = () => leavingLinkCalls += (()),
       selfDestructFn = () => (),
       isPersonCentricFn = () => false,
