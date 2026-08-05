@@ -55,14 +55,26 @@ priority in `docs/KNOWN_GAPS.md`, tracked separately from this feature.
 
 ### Storage capacity (point 3, "how do we know a link is full")
 
-- A single literature-grounded constant — **jam spacing** (~7-8m/vehicle, standard traffic
-  engineering value) — drives "full" in both modes, not two separate concepts:
-  - **MESO**: `storageCapacity = length × lanes / jamSpacing`, checked against aggregate
-    occupancy (`registered.size`).
-  - **MICRO**: no new number needed — "full" is already physically expressed as the queue
-    reaching `position ≈ 0` (front of link). The same `jamSpacing` constant should inform the
-    minimum-gap parameter the Krauss car-following model already uses, so both modes derive
-    "full" from the same physical assumption.
+**Revised 2026-08-05**: earlier drafts of this section proposed a *new* derived
+`storageCapacity = length × lanes / jamSpacing` field, reasoning from `docs/SCENARIO_MODELING.md`'s
+description of `LinkState.capacity` as "maximum vehicles per hour" (a flow rate) — which would have
+made it the wrong denominator for occupancy-based "is this link full" checks. Confirmed with the
+model's author that this was a **documentation** error, not the field's actual intended semantics:
+`capacity` was always meant as the link's physical vehicle-occupancy capacity (how many vehicles
+fit), matching how `SpeedUtil.linkDensitySpeed`/`bprCongestionFactor` already use it — no separate
+field needed. `docs/SCENARIO_MODELING.md`'s Link field table has been corrected to match. (Side
+benefit of chasing this down: `numberOfCars / capacity` in `linkDensitySpeed`, with the corrected
+occupancy semantics, is mathematically the Greenshields (1935) density-speed ratio
+`k/k_jam` — the existing formula was already the right literature model, just previously
+undocumented as such.)
+
+- **MESO**: "full" is `registered.size >= state.capacity` (no new number, no new field).
+- **MICRO**: no new number needed either — "full" is already physically expressed as the queue
+  reaching `position ≈ 0` (front of link). A shared jam-spacing-style constant *could* still be
+  worth introducing later to keep MICRO's minimum-gap parameter and MESO's `capacity` values
+  mutually consistent (i.e. `capacity ≈ length × lanes / jamSpacing` as a sanity check on
+  scenario data, not a runtime dependency) — not needed for this feature to work, noted as a
+  possible follow-up.
 
 ### Where the wait happens (point 3, solving the "limbo" problem)
 
@@ -266,29 +278,28 @@ that is the *only* authority on how many grants `Node` may hand out for that lin
 .size)` vehicles, decrementing `availableCapacity` by 1 per grant as it goes — never a fixed number,
 never a raw echo of the Link's last message.
 
-**New dependency this creates on the still-open storage-capacity question below**:
-`availableCapacity` needs a correct *initial* value per link, seeded from that link's
-`storageCapacity` — otherwise `Node` starts with an unknown/wrong baseline and every subsequent
-increment/decrement is offset from the wrong number. Whatever mechanism question 2 settles on for
-computing `storageCapacity` must also define how/when `Node` first learns it (most likely: `Link`
-reports it once, at `Node`↔`Link` connection setup, alongside or via the same channel as
-`connections`).
+**`availableCapacity` needs a correct *initial* value per link** — resolved 2026-08-05 (see the
+revised "Storage capacity" section above): seeded directly from that link's existing
+`LinkState.capacity`, no separate field or computation. `Node` still needs to *learn* this value
+once, the same way as before — `Link` reports its own `state.capacity` once, at `Node`↔`Link`
+connection setup (alongside or via the same channel that already builds `NodeState.connections`),
+and `Node` stores it as `availableCapacity(linkId)`'s starting point.
 
 ## Open questions / next decisions needed before coding starts
 
-1. Whether `LinkState.capacity` (already used by `SpeedUtil.linkDensitySpeed` and
-   `bprCongestionFactor`) should be reused as-is for `storageCapacity`, or whether flow capacity
-   and storage capacity need to become two distinct fields — and, per the new dependency above, how
-   `Node` first learns a link's `storageCapacity` to seed `availableCapacity`.
+All previously-open design-level questions are now closed. Remaining work is implementation:
+wiring `RequestLinkAccessData`/`LinkAccessData`, `NodeState.capacityWaitQueue`/`availableCapacity`,
+the two drain triggers, and the one-time `Node`↔`Link` capacity handshake described above.
 
 ## Relevant file map (for whoever picks this up)
 
 | File | Role |
 |---|---|
 | `model/hybrid/support/node/NodeEventHandler.scala` | `Node`'s signal/capacity reply logic; would own `tryDrainCapacityQueue` and both drain triggers |
-| `model/hybrid/entity/state/NodeState.scala` | Gains `capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]]` |
+| `model/hybrid/entity/state/NodeState.scala` | Gains `capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]]` and `availableCapacity: mutable.Map[String, Int]` |
 | `model/hybrid/entity/state/model/PendingLinkAccessRequest.scala` (new) | Minimal per-waiting-vehicle record: `actorRefId`, `shardRefId` |
 | `model/hybrid/support/car/CarSignalHandler.scala` (+ Bus/Bicycle/Motorcycle equivalents) | Vehicle-side request/reply handling; already fixed for the deregister/`scheduleEvent` pattern this feature must reuse |
-| `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | Where `LeaveLinkData` is processed; would own "N slots freed" notification to `state.from` |
-| `model/hybrid/util/SpeedUtil.scala` | Already has `bprCongestionFactor`; would gain the jam-spacing-based storage-capacity helper |
+| `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | Where `LeaveLinkData` is processed; would own "N slots freed" notification to `state.from`, and the one-time `state.capacity` report to `Node` at connection setup |
+| `model/hybrid/util/SpeedUtil.scala` | `linkDensitySpeed`/`bprCongestionFactor` already use `capacity` correctly as-is — no change needed; confirmed `linkDensitySpeed` is mathematically the Greenshields (1935) speed-density model once `capacity` is read as occupancy, not flow |
+| `docs/SCENARIO_MODELING.md` | Link's `capacity` field description corrected 2026-08-05 (was wrongly documented as "vehicles per hour") |
 | `docs/KNOWN_GAPS.md` | Tracks the `deferFinishSpontaneous` batch-stall gap this design must not reintroduce |
