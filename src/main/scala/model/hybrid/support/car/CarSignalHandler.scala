@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.car
 
 import core.types.Tick
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.CarState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, LinkCapacityStateEnum, MovableStatusEnum}
@@ -156,4 +156,25 @@ class CarSignalHandler(
       scheduleEventFn(tick)
     }
   }
+
+  /** Call from `onDestruct`, before any state clearing, when a car is destroyed while
+    * `WaitingCapacity` (buffered at a Node, never yet granted) — otherwise that stale buffer
+    * entry sits forever and could eventually waste a real capacity slot on a dead actor. No-op
+    * for any other status. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    */
+  def cancelPendingCapacityRequest(state: CarState): Unit =
+    if (state.status == WaitingCapacity) {
+      val nodeId = getCurrentNodeFn()
+      val linkId = getNextLinkFn()
+      if (nodeId != null && linkId != null) {
+        CityMapUtil.nodesById.get(nodeId).foreach { node =>
+          sendMessageFn(
+            node.id,
+            node.classType,
+            CancelLinkAccessRequestData(targetLinkId = linkId),
+            EventTypeEnum.CancelLinkAccessRequest.toString
+          )
+        }
+      }
+    }
 }
