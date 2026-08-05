@@ -85,7 +85,7 @@ class Car(
     currentTickFn               = () => currentTick,
     journeyReporter             = journeyReporter,
     onFinishSpontaneousFn       = nextTick => onFinishSpontaneous(nextTick),
-    deferFinishSpontaneousFn    = () => deferFinishSpontaneous(),
+    scheduleEventFn             = tick => scheduleEvent(tick),
     leavingLinkFn               = () => leavingLink(),
     selfDestructFn              = () => selfDestruct(),
     isPersonCentricFn           = () => isPersonCentric,

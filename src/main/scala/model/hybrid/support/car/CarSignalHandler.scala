@@ -22,7 +22,7 @@ class CarSignalHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: CarJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val deferFinishSpontaneousFn: () => Unit,
+  private val scheduleEventFn: Tick => Unit,
   private val leavingLinkFn: () => Unit,
   private val selfDestructFn: () => Unit,
   private val isPersonCentricFn: () => Boolean,
@@ -70,13 +70,18 @@ class CarSignalHandler(
                 RequestSignalStateData(targetLinkId = linkId),
                 EventTypeEnum.RequestSignalState.toString
               )
-              // Consistency-critical: do NOT resolve here. Node always replies on every
-              // branch (NodeEventHandler.handleRequestSignalState) — wait for that reply
-              // as an interaction event; handleSignalState resolves the spontaneous event.
-              // deferFinishSpontaneousFn() suppresses SimulationBaseActor's own "actSpontaneous
-              // returned without resolving" safety net (which would otherwise auto-recover with
-              // onFinishSpontaneous(currentTick + 1) AND log a [BUG] error on every request).
-              deferFinishSpontaneousFn()
+              // Consistency-critical: do NOT poll. Node always replies on every branch
+              // (NodeEventHandler.handleRequestSignalState) — genuinely deregister from the
+              // TimeManager (onFinishSpontaneous(None), a real FinishEvent, not a deferred
+              // safety-net suppression) and wait for the reply as an interaction event.
+              // handleSignalState re-registers via scheduleEvent when the reply lands — the
+              // same disengage-then-scheduleEvent shape already used by Person's StartTrip ->
+              // Car handoff, which correctly re-notifies the Global TM of new work (see
+              // LocalTimeManagerBase.scheduleEvent's wasIdle re-notification). A plain
+              // onFinishSpontaneous(Some(tick)) called later from actInteractWith would NOT
+              // re-notify the Global TM the same way, risking premature termination if this
+              // was the last scheduled work.
+              onFinishSpontaneousFn(None)
             } else {
               leavingLinkFn()
             }
@@ -99,14 +104,17 @@ class CarSignalHandler(
       return
     }
 
-    if (data.phase == Red) {
-      val tick      = currentTickFn()
+    val tick = currentTickFn()
+    val waitUntilTick = if (data.phase == Red) {
       // Saturation headway ~2s per vehicle (HCM 6th ed. §19)
-      val headwayTicks     = 2L
-      val adjustedNextTick = data.nextTick + data.queuePosition.toLong * headwayTicks
-      val waitTicks        = math.max(0L, adjustedNextTick - tick)
-      state.status = WaitingSignal
-      setSignalWaitUntilTickFn(Some(adjustedNextTick))
+      val headwayTicks = 2L
+      data.nextTick + data.queuePosition.toLong * headwayTicks
+    } else {
+      tick
+    }
+
+    if (data.phase == Red) {
+      val waitTicks = math.max(0L, waitUntilTick - tick)
       if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
       if (waitTicks > 0) onSignalWaitFn(waitTicks)
 
@@ -117,16 +125,22 @@ class CarSignalHandler(
           "vehicle_id"         -> entityIdFn(),
           "phase"              -> data.phase.toString,
           "queue_position"     -> data.queuePosition,
-          "wait_until_tick"    -> adjustedNextTick,
-          "adjusted_next_tick" -> adjustedNextTick,
+          "wait_until_tick"    -> waitUntilTick,
+          "adjusted_next_tick" -> waitUntilTick,
           "tick"               -> tick
         ),
         "signal_wait"
       )
-
-      onFinishSpontaneousFn(Some(adjustedNextTick))
-    } else {
-      leavingLinkFn()
     }
+
+    // Re-registers with the TimeManager for waitUntilTick (now, for Green) via scheduleEvent
+    // rather than resolving directly here — this car fully deregistered (onFinishSpontaneous(
+    // None)) when it sent the request, so there is no pending spontaneous event to "finish"
+    // anymore; scheduleEvent is the correct re-entry point (see requestSignalState's comment).
+    // The existing WaitingSignal branch in actSpontaneous picks this up at waitUntilTick and
+    // calls leavingLinkFn() from a genuine dispatched context, uniformly for both phases.
+    state.status = WaitingSignal
+    setSignalWaitUntilTickFn(Some(waitUntilTick))
+    scheduleEventFn(waitUntilTick)
   }
 }

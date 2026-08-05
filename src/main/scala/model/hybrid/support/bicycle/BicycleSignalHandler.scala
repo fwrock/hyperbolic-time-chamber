@@ -19,7 +19,7 @@ class BicycleSignalHandler(
   currentTickFn:               () => Tick,
   journeyReporter:             BicycleJourneyReporter,
   onFinishSpontaneousFn:       Option[Tick] => Unit,
-  deferFinishSpontaneousFn:    () => Unit,
+  scheduleEventFn:             Tick => Unit,
   leavingLinkFn:               () => Unit,
   selfDestructFn:              () => Unit,
   isPersonCentricFn:           () => Boolean,
@@ -63,11 +63,11 @@ class BicycleSignalHandler(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                // Consistency-critical: do NOT resolve here. Node always replies on every
-                // branch — wait for that reply as an interaction event; handleSignalState
-                // resolves the spontaneous event. Suppress the actor's own safety net so it
-                // doesn't auto-recover with a [BUG] log (see CarSignalHandler for rationale).
-                deferFinishSpontaneousFn()
+                // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
+                // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
+                // reply as an interaction event; handleSignalState re-registers via
+                // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
+                onFinishSpontaneousFn(None)
                 case null =>
                   leavingLinkFn()
               }
@@ -88,10 +88,11 @@ class BicycleSignalHandler(
       )
       return
     }
+    val tick = currentTickFn()
+    val waitUntilTick = if (data.phase == Red) data.nextTick else tick
+
     if (data.phase == Red) {
-      state.status = WaitingSignal
-      setSignalWaitUntilTickFn(Some(data.nextTick))
-      val waitTicks = math.max(0L, data.nextTick - currentTickFn())
+      val waitTicks = math.max(0L, waitUntilTick - tick)
       if (waitTicks > 0) journeyReporter.updateHaltingState(0.0, waitTicks.toDouble)
       reportFn(
         Map(
@@ -99,14 +100,17 @@ class BicycleSignalHandler(
           "vehicle_type"   -> "bicycle",
           "vehicle_id"     -> entityIdFn(),
           "phase"          -> data.phase.toString,
-          "wait_until_tick" -> data.nextTick,
-          "tick"           -> currentTickFn()
+          "wait_until_tick" -> waitUntilTick,
+          "tick"           -> tick
         ),
         "signal_wait"
       )
-      onFinishSpontaneousFn(Some(data.nextTick))
-    } else {
-      leavingLinkFn()
     }
+
+    // See CarSignalHandler.handleSignalState for why scheduleEvent (not onFinishSpontaneous)
+    // is the correct re-entry point here.
+    state.status = WaitingSignal
+    setSignalWaitUntilTickFn(Some(waitUntilTick))
+    scheduleEventFn(waitUntilTick)
   }
 }

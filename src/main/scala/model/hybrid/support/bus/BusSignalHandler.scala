@@ -22,7 +22,7 @@ class BusSignalHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val deferFinishSpontaneousFn: () => Unit,
+  private val scheduleEventFn: Tick => Unit,
   private val onFinishDestructFn: () => Unit,
   private val leavingLinkFn: () => Unit,
   private val finishJourneyFn: (String, String) => Unit,
@@ -57,11 +57,11 @@ class BusSignalHandler(
                     RequestSignalStateData(targetLinkId = linkId),
                     EventTypeEnum.RequestSignalState.toString
                   )
-                // Consistency-critical: do NOT resolve here. Node always replies on every
-                // branch — wait for that reply as an interaction event; handleSignalState
-                // resolves the spontaneous event. Suppress the actor's own safety net so it
-                // doesn't auto-recover with a [BUG] log (see CarSignalHandler for rationale).
-                deferFinishSpontaneousFn()
+                // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
+                // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
+                // reply as an interaction event; handleSignalState re-registers via
+                // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
+                onFinishSpontaneousFn(None)
                 case null =>
                   logWarnFn("No next link available")
                   leavingLinkFn()
@@ -85,11 +85,11 @@ class BusSignalHandler(
       )
       return
     }
+    val tick = currentTickFn()
+    val waitUntilTick = if (data.phase == Red) data.nextTick else tick
+
     if (data.phase == Red) {
-      val tick      = currentTickFn()
-      val waitTicks = math.max(0L, data.nextTick - tick)
-      state.status = WaitingSignal
-      setSignalWaitUntilTickFn(Some(data.nextTick))
+      val waitTicks = math.max(0L, waitUntilTick - tick)
       if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
       reportFn(
         Map(
@@ -97,16 +97,20 @@ class BusSignalHandler(
           "vehicle_type"       -> "bus",
           "vehicle_id"         -> entityIdFn(),
           "phase"              -> data.phase.toString,
-          "wait_until_tick"    -> data.nextTick,
+          "wait_until_tick"    -> waitUntilTick,
           "capacity"           -> state.capacity,
           "current_passengers" -> state.people.size,
           "tick"               -> tick
         ),
         "signal_wait"
       )
-      onFinishSpontaneousFn(Some(data.nextTick))
-    } else {
-      leavingLinkFn()
     }
+
+    // See CarSignalHandler.handleSignalState for why scheduleEvent (not onFinishSpontaneous)
+    // is the correct re-entry point here: this bus fully deregistered when it sent the
+    // request, so there is no pending spontaneous event to resolve directly.
+    state.status = WaitingSignal
+    setSignalWaitUntilTickFn(Some(waitUntilTick))
+    scheduleEventFn(waitUntilTick)
   }
 }
