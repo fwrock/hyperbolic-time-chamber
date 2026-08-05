@@ -37,13 +37,17 @@ class Node(
     val internedConnections = mutable.Map.from(
       s.connections.map { case (k, v) => StringPool.intern(k) -> v }
     )
+    val internedApproachConnections = mutable.Map.from(
+      s.approachConnections.map { case (k, v) => StringPool.intern(k) -> v }
+    )
     val internedSignals = mutable.Map.from(
       s.signals.map { case (k, v) => StringPool.intern(k) -> v }
     )
     s.copy(
-      links       = s.links.map(StringPool.intern),
-      connections = internedConnections,
-      signals     = internedSignals
+      links                = s.links.map(StringPool.intern),
+      connections          = internedConnections,
+      approachConnections  = internedApproachConnections,
+      signals              = internedSignals
     )
   }
 

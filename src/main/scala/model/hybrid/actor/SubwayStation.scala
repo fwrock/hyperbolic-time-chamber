@@ -33,6 +33,13 @@ class SubwayStation(
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSubwayAckCount: Int  = 0
   private var pendingSubwayNextTick: Option[Tick] = None
+  // Bounded poll while pendingSubwayAckCount > 0, replacing deferFinishSpontaneous() — see the
+  // identical rationale on BusStation.awaitingDynamicInit and docs/KNOWN_GAPS.md: deferring holds
+  // this station's TimeManager slot open for the full multi-hop dynamic-Subway-spawn round trip,
+  // stalling every other actor on the same LocalTimeManager instance; a genuine full disengage
+  // was tried instead and reverted after it terminated the 86,400-tick baseline after 0 ticks by
+  // racing the Global TM's one-shot grace period.
+  private val dynamicInitPollIntervalTicks: Tick = 1L
 
   private lazy val subwayCreator = new SubwayStationCreator(
     getStateFn          = () => state,
@@ -101,12 +108,11 @@ class SubwayStation(
 
   override protected def onDynamicActorInitialized(entityId: String, classType: String): Unit = {
     pendingSubwayAckCount -= 1
-    if (pendingSubwayAckCount <= 0) {
-      pendingSubwayAckCount = 0
-      val tick = pendingSubwayNextTick
-      pendingSubwayNextTick = None
-      onFinishSpontaneous(tick, destruct = false)
-    }
+    if (pendingSubwayAckCount < 0) pendingSubwayAckCount = 0
+    // No onFinishSpontaneous/scheduleEvent call here — see actSpontaneous's awaitingDynamicInit
+    // guard (pendingSubwayAckCount > 0) below: this station stayed genuinely registered via the
+    // bounded poll, so its next dispatch — at most dynamicInitPollIntervalTicks away — will see
+    // pendingSubwayAckCount == 0 (once every ack has landed) and proceed to pendingSubwayNextTick.
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -115,6 +121,10 @@ class SubwayStation(
         s"SubwayStation ${getEntityId} reached simulation end tick=$simulationEnd, stopping scheduling"
       )
       onFinishSpontaneous(None)
+    } else if (pendingSubwayAckCount > 0) {
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    } else if (pendingSubwayNextTick.exists(currentTick < _)) {
+      onFinishSpontaneous(pendingSubwayNextTick)
     } else
       state.status match
         case Start =>
@@ -137,10 +147,10 @@ class SubwayStation(
 
   private def scheduleNextTick(): Unit = {
     val nextTickOpt = subwayCreator.computeNextTick(simulationEnd)
-    if (pendingSubwayAckCount > 0) {
-      pendingSubwayNextTick = nextTickOpt
-      deferFinishSpontaneous()  // finish arrives via onDynamicActorInitialized
-    } else
+    pendingSubwayNextTick = nextTickOpt
+    if (pendingSubwayAckCount > 0)
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    else
       onFinishSpontaneous(nextTickOpt, destruct = false)
   }
 }

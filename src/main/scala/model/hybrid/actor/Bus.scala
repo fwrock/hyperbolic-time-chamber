@@ -214,7 +214,7 @@ class Bus(
     journeyReporter      = journeyReporter,
     sendMessageFn        = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
     onFinishSpontaneousFn = nextTick => onFinishSpontaneous(nextTick),
-    deferFinishSpontaneousFn = () => deferFinishSpontaneous(),
+    scheduleEventFn      = tick => scheduleEvent(tick),
     enterLinkFn          = () => enterLink(),
     selfRefFn            = () => self,
     getCurrentStopNodeFn = () => currentStopNode,
