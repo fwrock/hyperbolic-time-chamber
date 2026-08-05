@@ -139,13 +139,69 @@ is working and validated.
   frees up) is **correct**, not a bug, and should not be "fixed" — noted so it isn't confused with
   a real stall bug during testing.
 
+## Decided: wire format (2026-08-04)
+
+Unified into a single, renamed message pair — the old names described "signal state" only, but
+the payload now also carries link capacity, so both the data classes and the event-type enum
+entries are renamed:
+
+| Before | After |
+|---|---|
+| `RequestSignalStateData` | `RequestLinkAccessData` |
+| `SignalStateData` | `LinkAccessData` |
+| `EventTypeEnum.RequestSignalState` | `EventTypeEnum.RequestLinkAccess` |
+| `EventTypeEnum.ReceiveSignalState` | `EventTypeEnum.ReceiveLinkAccess` |
+| *(new)* | `LinkCapacityStateEnum { Available, Full }` |
+
+`TrafficSignalPhaseStateEnum` is unchanged — it's still purely the signal-phase sub-field, nested
+inside the larger reply, not renamed. Vehicle-side handler/status names (`CarSignalHandler`,
+`WaitingSignalState`, `WaitingSignal`) are *not* renamed as part of this — out of scope for the
+wire-format decision, larger blast radius, can be revisited separately if wanted.
+
+```scala
+case class LinkAccessData(
+  phase: TrafficSignalPhaseStateEnum,
+  nextTick: Tick,
+  queuePosition: Int = 0,
+  capacityState: LinkCapacityStateEnum = LinkCapacityStateEnum.Available
+) extends BaseEventData
+```
+
+`capacityState` only matters when `phase == Green` (while Red, the vehicle isn't crossing yet
+regardless, so capacity isn't checked at request time).
+
+**Correctness wrinkle this surfaced, and how it's resolved**: today, once `Node` replies Red, the
+vehicle computes a deterministic `waitUntilTick` and — once reached — calls `leavingLinkFn()`
+*directly*, without asking `Node` again (safe today because fixed-time signal phase is exactly
+predictable). Once capacity is a second, independent gate, that shortcut is no longer sufficient:
+downstream capacity could still be `Full` even after the red phase legitimately ends. Fix: when a
+Red wait's `waitUntilTick` is reached, the vehicle re-calls the request (re-verifying phase *and*
+capacity together, at the moment it actually matters) instead of proceeding unilaterally. This adds
+one extra round-trip, but only once per red-wait cycle (not per tick) — far cheaper than the
+resend-storm bug already eliminated.
+
+**Phase 2 push semantics — decided as a direct grant, not a re-ask** (2026-08-04): when `Node`
+dequeues a vehicle from the capacity-FIFO buffer, it sends `LinkAccessData` again, unsolicited,
+already populated as `Green`/`Available` — the vehicle treats it exactly like an initial Green
+reply, no re-verification round-trip. Rejected the alternative (push is a mere nudge prompting the
+vehicle to re-call `RequestLinkAccessData`) as strictly worse: more messages, and shaped like a
+retry loop reminiscent of the resend bug already fixed once.
+
+**Proposed, not yet confirmed**: the direct-grant choice above leaves a gap — the signal could have
+cycled back to Red while the vehicle sat in the capacity buffer, so a blind direct grant could send
+a vehicle across on a Red it can't see. Closeable for zero new messages: `Node` already holds the
+current signal phase locally (`state.signals`, kept current by `TrafficSignalPhaseHandler`'s
+existing phase-change notifications), so it could check that *local, already-in-memory* state
+before dequeuing a vehicle from the capacity buffer — if Red at that instant, don't dequeue yet;
+pick it up again the next time either more capacity frees, or the relevant phase turns Green
+(`Node` already receives that transition as an existing event, `handleReceiveSignalChangeStatus`).
+That would mean the capacity-FIFO buffer gets re-scanned/drained from **two** triggers instead of
+one. Not yet decided whether to build this in now or accept the (likely rare) risk and revisit if
+it shows up in validation.
+
 ## Open questions / next decisions needed before coding starts
 
-1. Exact wire shape: extend `SignalStateData`/`RequestSignalStateData` with a capacity-wait
-   variant (one round-trip, one message family), or a fully separate message pair? Leaning toward
-   unifying into the existing signal exchange to avoid doubling round-trips per approach, but not
-   finalized.
-2. How many vehicles to wake per freed slot — exactly N (matching the link's reported freed
+1. How many vehicles to wake per freed slot — exactly N (matching the link's reported freed
    count) was the working assumption; confirm this before implementing the `Node`-side buffer.
 3. `Node`-side buffer data structure and its interaction with `NodeState`/migration snapshot rules
    (per `CLAUDE.md`'s "what must live in `state`" guidance — a pending FIFO queue of waiting
