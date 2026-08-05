@@ -7,7 +7,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
 import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, LinkCapacityStateEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
@@ -64,6 +64,21 @@ class NodeEventHandler(
         s"Node ${entityIdFn()}: RegisterLinkCapacityData arrived before initialization for link=${data.linkId}. " +
           s"This should not happen — PostLoadRegistrationCoordinator guarantees Node is initialized first."
       )
+    }
+
+  /** Sent by a vehicle destroyed while buffered (`WaitingCapacity`, never yet granted) so its
+    * stale `PendingLinkAccessRequest` doesn't sit in `capacityWaitQueue` forever — left
+    * unhandled, a later freed-slot drain would eventually grant a dead actor (a dead-letter),
+    * silently losing that capacity slot for the rest of the simulation. No-op if the entry was
+    * already dequeued (e.g. a race with a grant in flight) or never existed. See
+    * docs/CONGESTION_PROPAGATION_DESIGN.md.
+    */
+  def handleCancelLinkAccessRequest(event: ActorInteractionEvent, data: CancelLinkAccessRequestData): Unit =
+    if (state != null) {
+      state.capacityWaitQueue.get(data.targetLinkId).foreach { queue =>
+        queue.dequeueAll(_.actorRefId == event.actorRefId)
+        if (queue.isEmpty) state.capacityWaitQueue.remove(data.targetLinkId)
+      }
     }
 
   def handleRequestLinkAccess(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit =

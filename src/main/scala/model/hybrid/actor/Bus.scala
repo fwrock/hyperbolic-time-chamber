@@ -484,6 +484,7 @@ class Bus(
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null) signalHandler.cancelPendingCapacityRequest(state)
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))

@@ -5,7 +5,7 @@ import core.entity.actor.ShardActorId
 import core.entity.event.ActorInteractionEvent
 import model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
 import model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
-import model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import model.hybrid.entity.event.node.LinkAccessData
 import model.hybrid.entity.state.NodeState
 import model.hybrid.entity.state.enumeration.LinkCapacityStateEnum.{ Available, Full }
@@ -231,6 +231,60 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
 
     sent.last shouldBe (("car_north", "hybrid.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
     capacityWaitQueue("link_ab") shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = "car_west", shardRefId = "hybrid.actor.Bus"))
+  }
+
+  // ── Capacity: cancellation (destroyed while buffered) ────────────────────────────────────
+
+  "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
+    // Regression coverage for the leak this closes: a car destroyed while WaitingCapacity
+    // (buffered, never granted) used to leave a stale PendingLinkAccessRequest in the queue
+    // forever -- eventually reaching the front and being granted to a dead actor (a dead-letter),
+    // silently losing that capacity slot for the rest of the simulation, since no LeaveLinkData
+    // would ever arrive to compensate. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
+    val signals = mutable.Map("signal_1" -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map("link_ab" -> 0)
+    val capacityWaitQueue = mutable.Map(
+      "link_ab" -> mutable.Queue(
+        PendingLinkAccessRequest(actorRefId = "car_1", shardRefId = "hybrid.actor.Car"),
+        PendingLinkAccessRequest(actorRefId = "car_2", shardRefId = "hybrid.actor.Car")
+      )
+    )
+    val (handler, _) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleCancelLinkAccessRequest(requestEvent("car_1"), CancelLinkAccessRequestData(targetLinkId = "link_ab"))
+    capacityWaitQueue("link_ab") shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = "car_2", shardRefId = "hybrid.actor.Car"))
+
+    handler.handleCancelLinkAccessRequest(requestEvent("car_2"), CancelLinkAccessRequestData(targetLinkId = "link_ab"))
+    capacityWaitQueue.get("link_ab") shouldBe None
+  }
+
+  it should "be a no-op when there is no matching entry (already dequeued, or never existed) or when state is not yet initialized" in {
+    val capacityWaitQueue = mutable.Map("link_ab" -> mutable.Queue(PendingLinkAccessRequest(actorRefId = "car_2", shardRefId = "hybrid.actor.Car")))
+    val (handler, _) = newHandler(newState(capacityWaitQueue = capacityWaitQueue))
+
+    handler.handleCancelLinkAccessRequest(requestEvent("car_1"), CancelLinkAccessRequestData(targetLinkId = "link_ab"))
+    capacityWaitQueue("link_ab") should have size 1
+
+    handler.handleCancelLinkAccessRequest(requestEvent("car_1"), CancelLinkAccessRequestData(targetLinkId = "link_unknown"))
+    capacityWaitQueue.get("link_unknown") shouldBe None
+
+    noException should be thrownBy {
+      val nullStateHandler = new NodeEventHandler(
+        getStateFn = () => null,
+        entityIdFn = () => "htcaid:node;n_test",
+        currentTickFn = () => 100L,
+        pendingSignals = mutable.Map.empty,
+        reportFn = (_, _) => (),
+        sendMessageFn = (_, _, _, _) => (),
+        getLinkDependencyFn = _ => None,
+        logWarnFn = _ => (),
+        logDebugFn = _ => ()
+      )
+      nullStateHandler.handleCancelLinkAccessRequest(requestEvent("car_1"), CancelLinkAccessRequestData(targetLinkId = "link_ab"))
+    }
   }
 
   it should "never buffer or check capacity for a Red reply" in {

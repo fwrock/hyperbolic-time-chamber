@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.bus
 
 import core.types.Tick
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.BusState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, LinkCapacityStateEnum, MovableStatusEnum}
@@ -127,4 +127,24 @@ class BusSignalHandler(
       scheduleEventFn(tick)
     }
   }
+
+  /** Call from `onDestruct`, before any state clearing, when a bus is destroyed while
+    * `WaitingCapacity`. See `CarSignalHandler.cancelPendingCapacityRequest` for the full
+    * rationale.
+    */
+  def cancelPendingCapacityRequest(state: BusState): Unit =
+    if (state.status == WaitingCapacity) {
+      val nodeId = getCurrentNodeFn()
+      val linkId = getNextLinkFn()
+      if (nodeId != null && linkId != null) {
+        CityMapUtil.nodesById.get(nodeId).foreach { node =>
+          sendMessageFn(
+            node.id,
+            node.classType,
+            CancelLinkAccessRequestData(targetLinkId = linkId),
+            EventTypeEnum.CancelLinkAccessRequest.toString
+          )
+        }
+      }
+    }
 }

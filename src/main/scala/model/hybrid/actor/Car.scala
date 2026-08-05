@@ -523,6 +523,11 @@ class Car(
   override def onDestruct(event: DestructEvent): Unit = {
     if (state == null) return
 
+    // Before any state clearing below (which erases the link/node info this needs): if this
+    // car was buffered at a Node for downstream link capacity and never got granted, tell the
+    // Node so it doesn't eventually waste a real slot on a dead actor.
+    signalHandler.cancelPendingCapacityRequest(state)
+
     if (state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))

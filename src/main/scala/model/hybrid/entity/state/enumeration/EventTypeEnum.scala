@@ -29,4 +29,5 @@ enum EventTypeEnum:
     RequestLinkAccess,
     LinkSignalState,
     LinkCapacityFreed,
-    RegisterLinkCapacity
+    RegisterLinkCapacity,
+    CancelLinkAccessRequest

@@ -314,13 +314,33 @@ the two drain triggers, and the one-time `Node`↔`Link` capacity handshake desc
 | `model/hybrid/actor/{Car,Bus,Bicycle,Motorcycle}.scala` | New `signalWaitNeedsReverify` var + `WaitingCapacity` status case (safety-net, same shape as `WaitingSignalState`) |
 | `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | `handleLeaveLink` sends `LinkCapacityFreedData(linkId, freedCount = 1)` to `state.from` whenever `wasRegistered` |
 | `model/hybrid/actor/Link.scala` | `onInitialize` sends `RegisterLinkCapacityData(linkId, state.capacity.toInt)` to `state.from` |
+| `model/hybrid/entity/event/data/vehicle/CancelLinkAccessRequestData.scala` (new) | Vehicle → Node: sent from `onDestruct` when destroyed while `WaitingCapacity`, so its stale buffer entry doesn't eventually waste a real slot on a dead actor |
+| `model/hybrid/support/node/NodeEventHandler.scala` (cont.) | `handleCancelLinkAccessRequest` removes the matching entry from `capacityWaitQueue` |
+| `model/hybrid/support/car/CarSignalHandler.scala` (+ Bus/Bicycle/Motorcycle equivalents) (cont.) | `cancelPendingCapacityRequest`, called from each actor's `onDestruct` before any state clearing |
 | `model/hybrid/util/SpeedUtil.scala` | `linkDensitySpeed`/`bprCongestionFactor` already used `capacity` correctly as-is — no change needed; confirmed `linkDensitySpeed` is mathematically the Greenshields (1935) speed-density model once `capacity` is read as occupancy, not flow |
 | `docs/SCENARIO_MODELING.md` | Link's `capacity` field description corrected 2026-08-05 (was wrongly documented as "vehicles per hour") |
 | `docs/KNOWN_GAPS.md` | Tracks the `deferFinishSpontaneous` batch-stall gap this design must not reintroduce |
 | `src/test/scala/model/hybrid/support/node/NodeEventHandlerSpec.scala`, `src/test/scala/model/hybrid/support/car/CarSignalHandlerSpec.scala` | Updated/extended for the renamed types and capacity behavior |
 
+**Fixed 2026-08-05, found before this branch shipped**: a vehicle destroyed while `WaitingCapacity`
+(buffered, never granted — e.g. every still-active vehicle is force-destructed at simulation end)
+used to leave a stale entry in `capacityWaitQueue` forever; if it ever reached the front of the
+queue on a later freed slot, the grant went to a dead actor (a dead-letter) and that capacity slot
+was silently lost for the rest of the simulation. `onDestruct` now cancels the pending request
+first. Covered in `NodeEventHandlerSpec`'s `handleCancelLinkAccessRequest` tests; the vehicle-side
+call site (`cancelPendingCapacityRequest`) isn't unit-tested directly for the same `CityMapUtil`
+JVM-singleton reason `requestSignalState`'s send branch isn't.
+
+**Confirmed working end-to-end**: ran the real simulator (`sqlite_validation_test` scenario,
+~86,400 ticks) via `sbt runMain org.interscity.htc.main` — loaded, warmed up, ran to completion,
+all `LocalTimeManager`s and actor coordinators (including `Node`/`Link`/`Car`) terminated cleanly,
+no exceptions traced to this feature's code. That scenario has no `TrafficSignal` actors and too
+few vehicles to actually fill a link, so it didn't exercise the `Full`/buffering branch itself —
+only the registration/request/free message flow under real Pekko sharding and serialization.
+
 **Not yet done**: point 5 (saturation-flow/gap-acceptance intersection throughput modeling),
 priority-between-competing-movements fairness (FIFO only today), and no scenario-level integration
-test yet exercising the full spillback path end-to-end (current coverage is handler-level unit
-tests only, per the existing `CityMapUtil` JVM-singleton constraint noted in `CarSignalHandlerSpec`'s
-doc comment).
+test yet exercising a link actually reaching capacity and the `Full`/buffer/grant cycle firing in a
+real running simulation (current coverage: handler-level unit tests, a hand-wired
+`NodeEventHandler`+`CarSignalHandler` integration spec, and the real-simulator smoke run above —
+but no scenario small enough to deliberately saturate a link has been authored yet).
