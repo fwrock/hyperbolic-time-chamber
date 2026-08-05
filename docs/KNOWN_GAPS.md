@@ -911,7 +911,7 @@ up that scheduling fix next has a harness that can immediately, correctly confir
 (scenario A) and any car whose `MICROENTER`/`enter_link` tick collides with another car's within
 1-2 ticks (scenario B).
 
-## `deferFinishSpontaneous()` Holds an Entire LTM Batch Open for the Duration of an Unbounded Async Wait (Found 2026-08-04, Partially Fixed — Signal Wait Only; Next Priority)
+## `deferFinishSpontaneous()` Holds an Entire LTM Batch Open for the Duration of an Unbounded Async Wait (Found 2026-08-04, Partially Fixed 2026-08-05 — Message-Reply Sites Only; Dynamic-Actor-Spawn Sites Are NOT Safe to Fix the Same Way)
 
 **Found while designing congestion-propagation/spillback work** (a car waiting at a `Node` for
 downstream link capacity, discussed but not yet built), specifically while answering "does the
@@ -959,36 +959,84 @@ already-fully-resolved context would silently add to `scheduledActors` without t
 TM there's new work, risking premature simulation termination if this was the last scheduled item
 on this LTM.
 
-**Still open — three more call sites with the same shape, not yet fixed:**
+**2026-08-05: `BusStopHandler`'s two call sites fixed with the identical disengage-then-
+`scheduleEvent` pattern. The other three (`BusStation`/`SubwayStation`, waiting on dynamic-actor-
+spawn acks) were also converted the same way, then reverted after live validation showed the
+conversion breaks the simulation.**
 
-- **`BusStopHandler.requestLoadPassenger`** (single reply from one `BusStop` — same shape as the
-  now-fixed signal wait, likely the least severe of the three).
-- **`BusStopHandler.requestUnloadPeopleData`** (fan-out to *every* boarded `Person`, resolves only
-  once `countUnloadReceived >= expectedUnloadResponses` in `handleUnloadPassenger` — the LTM batch
-  stays blocked for as long as the *slowest* of N passengers takes to reply; likely the most
-  exposed of the three, since more messages means more chances of one being slow).
-- **`SubwayStation.scheduleNextTick`** and **`BusStation.actSpontaneous`/`dispatchFirstBus`**
-  (3 call sites, same pattern): both defer while waiting for `onDynamicActorInitialized` ACKs from
-  freshly-spawned `Bus`/`Subway` actors — dynamic actor creation/activation via Pekko cluster
-  sharding is not guaranteed instant, especially under load, making this a plausible real-world
-  stall source, not just a theoretical one.
+- **Fixed: `BusStopHandler.requestLoadPassenger`/`requestUnloadPeopleData`**
+  (`BusStopHandler.scala`): both now call `onFinishSpontaneousFn(None)` (a real, immediate
+  `FinishEvent`) right after sending the request instead of `deferFinishSpontaneousFn()`.
+  `handleBusLoadPeople` and `handleUnloadPassenger` — the reply handlers that used to call
+  `onFinishSpontaneousFn(Some(tick))` directly — now call a new `scheduleEventFn: Tick => Unit`
+  lambda instead (wired to `scheduleEvent(tick)` in `Bus.scala`), for the same reason
+  `CarSignalHandler.handleLinkAccess` already had to: a second `onFinishSpontaneous(Some(tick))`
+  call from an already-disengaged actor silently adds to `scheduledActors` without re-notifying the
+  Global TM. The `deferFinishSpontaneousFn` constructor parameter was removed from `BusStopHandler`
+  entirely. This one is safe because both replies come from a single message round trip between two
+  already-live actors (`Bus` ↔ `BusStop`/boarded `Person`s) — the same shape as the already-proven
+  signal-wait fix.
 
-Unlike the signal-wait bug, none of these three have the *second*, more dangerous defect (the
-"silent scheduling, no Global TM re-notify" trap) — their eventual `onFinishSpontaneous(tick)`
-call correctly resolves the *same* `runningEvents` entry that was held open by
-`deferFinishSpontaneous()` in the first place, since nothing else clears it in between. The only
-defect here is the batch-stall itself.
+- **Attempted, then reverted: `BusStation.actSpontaneous`'s `Working` case,
+  `BusStation.dispatchFirstBus`'s two call sites, and `SubwayStation.scheduleNextTick`** (4 call
+  sites). These defer while waiting for `onDynamicActorInitialized` — the callback fired after the
+  full `ShardRegion.StartEntity → StartEntityAck → InitializeEvent → InitializeEntityAckEvent`
+  dynamic-actor-spawn protocol completes for a newly-created `Bus`/`Subway`, a much longer,
+  multi-hop async chain than a single request/reply message. Converting these to
+  `onFinishSpontaneous(None)` + `scheduleEvent(tick)` in `onDynamicActorInitialized` (mirroring the
+  `BusStopHandler` fix exactly) compiled clean and passed all 159 specs, but **broke the actual
+  simulation**: run against the full 86,400-tick baseline
+  (`simulations/input/sqlite_validation_test/simulation_json_baseline.json`), the simulation
+  terminated after **0 ticks** — `GlobalTimeManager` log: `"No scheduled events: broadcasting
+  QueryNextTickEvent grace-period probe to all LTMs"` immediately followed by `"No more scheduled
+  events across local time managers. Terminating simulation"`. Root cause: `BusStation`/
+  `SubwayStation` are dispatched very early (tick 0) in this scenario, and once they genuinely
+  disengage, **nothing else is scheduled anywhere** until the newly-spawned `Bus`/`Subway` finishes
+  its multi-hop registration — but the Global TM's "no scheduled events, terminate" grace period
+  (a single `QueryNextTickEvent` probe, sized for a single in-flight message like
+  `Car.handleStartTrip`, per its own code comment in `GlobalTimeManager.scala:70-73`) fires and wins
+  the race before that registration completes, permanently ending the simulation. Confirmed this
+  was a genuine regression, not a pre-existing bug: stashed the fix, rebuilt, reran the identical
+  scenario — pre-fix reached 197,441 ticks cleanly. Reverted all 4 call sites back to
+  `deferFinishSpontaneous()`/`onFinishSpontaneous(tick)` (verified `git diff` against `HEAD` for
+  both files is empty after reverting). Re-ran with only the `BusStopHandler` fix applied: two
+  independent full runs reached 195,044 and 198,129 ticks respectively, confirming the revert
+  restored correct behavior and isolating the `BusStopHandler` fix as safe on its own.
 
-**Next step for whoever picks this up**: apply the same disengage-then-`scheduleEvent` pattern to
-all three remaining call sites (7 total, across `BusStopHandler`, `SubwayStation`, `BusStation`).
-Recommended order: `BusStopHandler.requestUnloadPeopleData` first (fan-out, most exposed), then the
-dynamic-actor-creation sites in `BusStation`/`SubwayStation`, then
-`BusStopHandler.requestLoadPassenger` last (single-reply, least exposed). No test currently
-exercises `runningEvents`/batch-stall behavior directly — consider whether a
-`pekko-actor-testkit-typed` test asserting an LTM's `runningEvents` clears immediately (not just
-eventually) around one of these calls is worth adding alongside the fix, to prevent the same class
-of regression the signal-wait fix's own tests couldn't catch (see `CarSignalHandlerSpec`'s doc
-comment on why it only tests the pure-handler layer, not `SimulationBaseActor.handleSpontaneous`).
+**Why the signal-wait fix and `BusStopHandler` fix don't have this problem**: in both cases, the
+thing being waited on (`Node`, `BusStop`/boarded `Person`s) is an *already-registered, already-live*
+actor answering one message — fast enough that the Global TM's existing one-shot grace period
+reliably catches the in-flight reply. Dynamic actor *creation* is categorically slower (cluster
+sharding round trip, not a single message hop) and needs its own fix, not a copy of this one.
+
+**Validation**: `sbt compile` clean; `sbt test` — 159/159 specs pass (all pre-existing). Full
+86,400-tick baseline scenario run twice with only the `BusStopHandler` fix applied (JSON reporter,
+`batch-size=1` for guaranteed per-event flush, method per the diagnostic section elsewhere in this
+doc): run 1 reached 195,044 ticks with 1/1903 same-link duplicate `enter_link`s (the ~0.1%
+residual timing drift already documented and understood elsewhere in this file — not a new issue);
+run 2 reached 198,129 ticks with 0/2124 duplicates. Both consistent with the pre-existing baseline
+behavior this file already documents elsewhere.
+
+**Still open**:
+- The three `BusStation`/`SubwayStation` sites remain on `deferFinishSpontaneous()` — genuinely
+  unresolved, not just deprioritized. A real fix needs to address the underlying race, e.g.:
+  extending the Global TM's grace period to account for known-pending dynamic-actor spawns (a
+  "pending dynamic init count" the GTM/LTM checks before terminating, incremented on
+  `spawnDynamicActor` and decremented on `onDynamicActorInitialized`), or having the spawning actor
+  stay genuinely registered with a self-reschedule (poll) at a short interval instead of disengaging
+  at all — trading the batch-stall (this section's original problem) for a smaller, bounded delay
+  instead of the unbounded one, since dynamic actor creation is expected to be bounded in practice.
+  Do not re-attempt the disengage-then-`scheduleEvent` conversion on these three sites without
+  addressing this race first — it has now failed once, reproducibly, against the standard
+  reproducibility baseline.
+- No test currently exercises `runningEvents`/batch-stall behavior directly, nor the Global TM's
+  grace-period race against dynamic actor spawn specifically — worth adding a
+  `pekko-actor-testkit-typed` test for both: one asserting an LTM's `runningEvents` clears
+  immediately (not just eventually) around the now-fixed `BusStopHandler` calls, to catch a
+  regression back to `deferFinishSpontaneous()`; and one reproducing this section's 0-tick failure
+  mode directly (a scenario where the only scheduled actor at tick 0 is one that disengages to await
+  a dynamic-actor spawn), so any future attempt at the `BusStation`/`SubwayStation` sites has a fast
+  local repro instead of needing the full 86,400-tick baseline to catch the regression.
 
 ## Test Coverage
 
