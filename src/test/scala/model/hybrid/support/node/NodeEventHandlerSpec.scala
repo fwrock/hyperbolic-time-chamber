@@ -197,6 +197,42 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     availableCapacity("link_ab") shouldBe 0
   }
 
+  it should "queue vehicles FIFO by arrival order regardless of which approach link/shard they requested from -- fairness across competing movements comes for free from a single per-destination-link buffer, not from any per-origin logic" in {
+    // See docs/CONGESTION_PROPAGATION_DESIGN.md's Fairness section: capacityWaitQueue is keyed
+    // only by targetLinkId, never by the requester's origin link/shard -- two cars converging on
+    // the same destination link from different approaches are ordered purely by request arrival
+    // order, with no special-casing needed. Priority/right-of-way between movements remains
+    // explicitly deferred; this test locks in that plain FIFO fairness (not starvation, not
+    // origin-based bias) already holds without it.
+    val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
+    val signals = mutable.Map("signal_1" -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map("link_ab" -> 0)
+    val capacityWaitQueue = mutable.Map.empty[String, mutable.Queue[PendingLinkAccessRequest]]
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    def requestFrom(carId: String, shardRefId: String): ActorInteractionEvent =
+      requestEvent(carId).copy(shardRefId = shardRefId, actorClassType = shardRefId)
+
+    // car_north approaches via a different shard/actor class than car_west, but both want the
+    // same destination link.
+    handler.handleRequestLinkAccess(requestFrom("car_north", "hybrid.actor.Car"), RequestLinkAccessData(targetLinkId = "link_ab"))
+    handler.handleRequestLinkAccess(requestFrom("car_west", "hybrid.actor.Bus"), RequestLinkAccessData(targetLinkId = "link_ab"))
+
+    capacityWaitQueue("link_ab") shouldBe mutable.Queue(
+      PendingLinkAccessRequest(actorRefId = "car_north", shardRefId = "hybrid.actor.Car"),
+      PendingLinkAccessRequest(actorRefId = "car_west", shardRefId = "hybrid.actor.Bus")
+    )
+
+    // One slot frees -- the FIRST arrival (car_north) is granted, not car_west, even though
+    // nothing in the request distinguished their approach direction.
+    handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = "link_ab", freedCount = 1))
+
+    sent.last shouldBe (("car_north", "hybrid.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
+    capacityWaitQueue("link_ab") shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = "car_west", shardRefId = "hybrid.actor.Bus"))
+  }
+
   it should "never buffer or check capacity for a Red reply" in {
     val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
     val signals = mutable.Map("signal_1" -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
