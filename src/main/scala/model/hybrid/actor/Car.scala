@@ -8,7 +8,7 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 
@@ -68,6 +68,10 @@ class Car(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
+  // Set when a WaitingSignal wait was scheduled from a Red reply (capacity wasn't checked then —
+  // only matters once Green). Cleared (false) when scheduled from a direct Green/capacity-granted
+  // reply, which was already fully verified. Consumed by actSpontaneous's WaitingSignal branch.
+  private var signalWaitNeedsReverify: Boolean = false
 
   private lazy val journeyReporter = new CarJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
@@ -96,6 +100,7 @@ class Car(
     getNextLinkFn               = () => getNextLink,
     getTripDestinationFn        = () => getTripDestination,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
   )
 
@@ -225,6 +230,7 @@ class Car(
     journeyReporter.reset()
     emissionHandler.reset()
     signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
     state.bestRoute = None
     state.precomputedRoute = None
     state.deactivateMicroMode()
@@ -271,17 +277,32 @@ class Car(
             onFinishSpontaneous(Some(waitTick))
           case _ =>
             signalWaitUntilTick = None
-            leavingLink()
+            if (signalWaitNeedsReverify) {
+              // This wait came from a Red reply — capacity wasn't checked then (only matters
+              // once Green), so re-verify signal + capacity together via a fresh request rather
+              // than proceeding unilaterally. See CarSignalHandler.handleLinkAccess.
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
         }
 
       case WaitingSignalState =>
         // Should never actually fire: requestSignalState() no longer calls
-        // onFinishSpontaneous after sending RequestSignalStateData, so the car has no
-        // self-scheduled wake while waiting — only handleSignalState (triggered by the
+        // onFinishSpontaneous after sending RequestLinkAccessData, so the car has no
+        // self-scheduled wake while waiting — only handleLinkAccess (triggered by the
         // Node's reply as an interaction event) resolves this status. Reaching this branch
         // means a SpontaneousEvent was dispatched despite that; do not resend the request
         // (that's what corrupted NodeState.signalWaitingCounts before), just log and wait.
         logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        // Should never actually fire, same reasoning as WaitingSignalState: this car has no
+        // self-scheduled wake while buffered at the Node for downstream link capacity — only a
+        // later, unsolicited LinkAccessData grant (handled via handleLinkAccess) resolves it.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
       case Stopped =>
@@ -316,7 +337,7 @@ class Car(
     }
 
     event.data match {
-      case d: SignalStateData    => handleSignalState(event, d)
+      case d: LinkAccessData     => handleLinkAccess(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData    => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
@@ -427,12 +448,13 @@ class Car(
 
   private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
-    signalHandler.handleSignalState(data, state)
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
 
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
     state.status = Ready
     super.leavingLink()
   }

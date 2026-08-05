@@ -2,19 +2,20 @@ package org.interscity.htc
 package model.hybrid.support.bus
 
 import core.types.Tick
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.BusState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, MovableStatusEnum}
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{WaitingSignal, WaitingSignalState}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{EventTypeEnum, LinkCapacityStateEnum, MovableStatusEnum}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{WaitingCapacity, WaitingSignal, WaitingSignalState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import org.interscity.htc.model.hybrid.util.CityMapUtil
 
-/** Handles traffic signal interaction for Bus actors.
+/** Handles traffic signal and downstream-link-capacity interaction for Bus actors.
   *
   * Responsibilities:
-  *   - requestSignalState: destination check or send signal request to node
-  *   - handleSignalState: react to Red/Green, guard against stale duplicates
+  *   - requestSignalState: destination check or send link access request to node
+  *   - handleLinkAccess: react to Green/Red/capacity-Full (or a later capacity-freed grant),
+  *     guard against stale duplicates
   */
 class BusSignalHandler(
   private val reportFn: (Map[String, Any], String) => Unit,
@@ -32,6 +33,7 @@ class BusSignalHandler(
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
+  private val setSignalWaitNeedsReverifyFn: Boolean => Unit,
   private val restoreRouteIfMissingFn: String => Unit
 ) {
 
@@ -54,12 +56,12 @@ class BusSignalHandler(
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestSignalStateData(targetLinkId = linkId),
-                    EventTypeEnum.RequestSignalState.toString
+                    RequestLinkAccessData(targetLinkId = linkId),
+                    EventTypeEnum.RequestLinkAccess.toString
                   )
                 // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
                 // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
-                // reply as an interaction event; handleSignalState re-registers via
+                // reply as an interaction event; handleLinkAccess re-registers via
                 // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
                 onFinishSpontaneousFn(None)
                 case null =>
@@ -77,18 +79,18 @@ class BusSignalHandler(
     }
   }
 
-  def handleSignalState(data: SignalStateData, state: BusState): Unit = {
-    if (state.status != WaitingSignalState) {
+  def handleLinkAccess(data: LinkAccessData, state: BusState): Unit = {
+    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
       logDebugFn(
-        s"${entityIdFn()}: Ignoring stale SignalStateData " +
-          s"(current status=${state.status}, expected WaitingSignalState). Race condition guard."
+        s"${entityIdFn()}: Ignoring stale LinkAccessData " +
+          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
       )
       return
     }
-    val tick = currentTickFn()
-    val waitUntilTick = if (data.phase == Red) data.nextTick else tick
 
     if (data.phase == Red) {
+      val tick = currentTickFn()
+      val waitUntilTick = data.nextTick
       val waitTicks = math.max(0L, waitUntilTick - tick)
       if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
       reportFn(
@@ -104,13 +106,25 @@ class BusSignalHandler(
         ),
         "signal_wait"
       )
-    }
 
-    // See CarSignalHandler.handleSignalState for why scheduleEvent (not onFinishSpontaneous)
-    // is the correct re-entry point here: this bus fully deregistered when it sent the
-    // request, so there is no pending spontaneous event to resolve directly.
-    state.status = WaitingSignal
-    setSignalWaitUntilTickFn(Some(waitUntilTick))
-    scheduleEventFn(waitUntilTick)
+      // See CarSignalHandler.handleLinkAccess for why this needs re-verification: capacity
+      // wasn't checked for this Red reply (only matters once Green), so it could still be Full
+      // once this deterministic wait ends.
+      state.status = WaitingSignal
+      setSignalWaitUntilTickFn(Some(waitUntilTick))
+      setSignalWaitNeedsReverifyFn(true)
+      scheduleEventFn(waitUntilTick)
+    } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      // Node has buffered this bus (FIFO) for the target link's capacity. Stay genuinely
+      // deregistered and wait purely for the later, unsolicited LinkAccessData grant.
+      state.status = WaitingCapacity
+    } else {
+      // Green + Available: already fully verified at reply time, no re-verification needed.
+      val tick = currentTickFn()
+      state.status = WaitingSignal
+      setSignalWaitUntilTickFn(Some(tick))
+      setSignalWaitNeedsReverifyFn(false)
+      scheduleEventFn(tick)
+    }
   }
 }

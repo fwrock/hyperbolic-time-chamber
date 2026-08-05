@@ -17,10 +17,11 @@ import scala.collection.mutable
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.hybrid.support.node.NodeEventHandler
 import org.interscity.htc.model.hybrid.util.CityMapUtil
@@ -86,7 +87,9 @@ class Node(
     event.data match {
       case d: RegisterBusStopData       => nodeHandler.handleRegisterBusStop(event, d)
       case d: RegisterSubwayStationData => nodeHandler.handleRegisterSubwayStation(event, d)
-      case d: RequestSignalStateData    => nodeHandler.handleRequestSignalState(event, d)
+      case d: RequestLinkAccessData     => nodeHandler.handleRequestLinkAccess(event, d)
+      case d: RegisterLinkCapacityData  => nodeHandler.handleRegisterLinkCapacity(d)
+      case d: LinkCapacityFreedData     => nodeHandler.handleLinkCapacityFreed(d)
       case d: TrafficSignalChangeStatusData =>
         nodeHandler.handleReceiveSignalChangeStatus(event, d)
       case _ =>

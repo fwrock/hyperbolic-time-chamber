@@ -51,7 +51,7 @@ class BusStopHandler(
 
   def handleBusLoadPeople(data: BusLoadPassengerData, state: BusState): Unit = {
     // Stale-reply guard, mirroring the pattern already used elsewhere in this codebase
-    // (BusSignalHandler.handleSignalState's `state.status != WaitingSignalState` check;
+    // (BusSignalHandler.handleLinkAccess's `state.status != WaitingSignalState` check;
     // Car/Motorcycle/Bicycle's `status == Parked || Finished` checks in their own
     // handleLeaveLink). If the bus has already moved on from this WaitingLoadPassenger cycle
     // by the time the stop's reply arrives (e.g. the reply was queued behind other messages),

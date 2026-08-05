@@ -8,6 +8,7 @@ enum MovableStatusEnum:
     Moving,
     WaitingSignal,
     WaitingSignalState,
+    WaitingCapacity,
     Stopped,
     Waiting,
     WaitingLoadPassenger,
