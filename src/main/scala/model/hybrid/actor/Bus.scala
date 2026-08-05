@@ -7,8 +7,7 @@ import core.types.Tick
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
@@ -133,13 +132,8 @@ class Bus(
     * triggering premature leavingLink.
     */
   private var signalWaitUntilTick: Option[Tick] = None
-
-  /** Counts successive spontaneous ticks spent in WaitingSignalState without a node response.
-    * Mirrors Car's recovery mechanism: if the node never replies, the bus force-leaves the link
-    * instead of deadlocking indefinitely.
-    */
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
+  // See Car.scala's signalWaitNeedsReverify for what this flags and why.
+  private var signalWaitNeedsReverify: Boolean = false
 
   /** Number of passengers asked to unload at current stop. Used to track when all responses
     * arrived.
@@ -199,6 +193,7 @@ class Bus(
     currentTickFn          = () => currentTick,
     journeyReporter        = journeyReporter,
     onFinishSpontaneousFn  = nextTick => onFinishSpontaneous(nextTick),
+    scheduleEventFn        = tick => scheduleEvent(tick),
     onFinishDestructFn     = () => onFinishSpontaneous(None, destruct = true),
     leavingLinkFn          = () => leavingLink(),
     finishJourneyFn        = (reason, node) => finishJourney(reason, node),
@@ -207,8 +202,8 @@ class Bus(
     sendMessageFn          = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
     logWarnFn              = msg => logWarn(msg),
     logDebugFn             = msg => logDebug(msg),
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
     setSignalWaitUntilTickFn = tick => signalWaitUntilTick = tick,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx)
   )
 
@@ -334,20 +329,25 @@ class Bus(
             onFinishSpontaneous(Some(waitTick))
           case _ =>
             signalWaitUntilTick = None
-            leavingLink()
+            if (signalWaitNeedsReverify) {
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
         }
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          requestSignalState()
-        }
+        // Should never actually fire — requestSignalState() no longer self-schedules
+        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
+        // Do not resend the request if reached anyway (see Car.scala for rationale).
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        // Should never actually fire, same reasoning as WaitingSignalState.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case WaitingLoadPassenger =>
 //        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
@@ -370,7 +370,7 @@ class Bus(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: SignalStateData        => handleSignalState(event, d)
+      case d: LinkAccessData         => handleLinkAccess(event, d)
       case d: MicroEnterLinkData     => handleMicroEnterLink(event, d)
       case d: MicroUpdateData        => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData     => handleMicroLeaveLink(event, d)
@@ -426,8 +426,8 @@ class Bus(
 
   /** Handle signal state.
     */
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
-    signalHandler.handleSignalState(data, state)
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
 
   override protected def microMaxAcceleration: Double = 1.2
   override protected def microMaxDeceleration: Double = 3.5
@@ -435,7 +435,7 @@ class Bus(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
+    signalWaitNeedsReverify = false
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
@@ -484,6 +484,7 @@ class Bus(
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null) signalHandler.cancelPendingCapacityRequest(state)
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))

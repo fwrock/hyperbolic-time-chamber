@@ -183,11 +183,29 @@ abstract class LocalTimeManagerBase(
       }
 
       finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
-      
+
       finish.scheduleTick.foreach {
         tickStr =>
           val tick = tickStr.toLong
-          val effectiveTick = if (tick <= localTickOffset) localTickOffset + 1 else tick
+          // Same past-tick guard as scheduleEvent's handler, and for the same reason: compare
+          // against THIS actor's own highestProcessedTick watermark, not the shared
+          // localTickOffset. This is the far more common re-registration path in practice
+          // (every onFinishSpontaneous(Some(tick)) call goes through here, including e.g. a
+          // Car's mesoExitTick) — using localTickOffset here silently pushes the actor's
+          // legitimately-computed future tick (e.g. a correctly-computed link travel time) even
+          // later, whenever a busier sibling actor on the same LTM instance has advanced
+          // localTickOffset past it in the meantime, with no error or log to reveal the drift.
+          // See docs/KNOWN_GAPS.md's past-tick guard gap — this sibling code path was missed by
+          // that fix.
+          val actorWatermark = highestProcessedTick(finish.identify.id)
+          val effectiveTick = if (tick <= actorWatermark) {
+            logDebug(
+              s"FinishEvent scheduleTick=$tick for actor=${finish.identify.id} is at/behind its own highestProcessedTick=$actorWatermark; bumping to ${actorWatermark + 1}"
+            )
+            actorWatermark + 1
+          } else {
+            tick
+          }
           val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
           actorsSet.add(finish.identify)
       }

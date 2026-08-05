@@ -8,7 +8,7 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 
@@ -68,8 +68,10 @@ class Car(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
+  // Set when a WaitingSignal wait was scheduled from a Red reply (capacity wasn't checked then —
+  // only matters once Green). Cleared (false) when scheduled from a direct Green/capacity-granted
+  // reply, which was already fully verified. Consumed by actSpontaneous's WaitingSignal branch.
+  private var signalWaitNeedsReverify: Boolean = false
 
   private lazy val journeyReporter = new CarJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
@@ -87,6 +89,7 @@ class Car(
     currentTickFn               = () => currentTick,
     journeyReporter             = journeyReporter,
     onFinishSpontaneousFn       = nextTick => onFinishSpontaneous(nextTick),
+    scheduleEventFn             = tick => scheduleEvent(tick),
     leavingLinkFn               = () => leavingLink(),
     selfDestructFn              = () => selfDestruct(),
     isPersonCentricFn           = () => isPersonCentric,
@@ -96,8 +99,8 @@ class Car(
     getCurrentNodeFn            = () => getCurrentNode,
     getNextLinkFn               = () => getNextLink,
     getTripDestinationFn        = () => getTripDestination,
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
   )
 
@@ -227,7 +230,7 @@ class Car(
     journeyReporter.reset()
     emissionHandler.reset()
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
+    signalWaitNeedsReverify = false
     state.bestRoute = None
     state.precomputedRoute = None
     state.deactivateMicroMode()
@@ -274,20 +277,33 @@ class Car(
             onFinishSpontaneous(Some(waitTick))
           case _ =>
             signalWaitUntilTick = None
-            leavingLink()
+            if (signalWaitNeedsReverify) {
+              // This wait came from a Red reply — capacity wasn't checked then (only matters
+              // once Green), so re-verify signal + capacity together via a fresh request rather
+              // than proceeding unilaterally. See CarSignalHandler.handleLinkAccess.
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
         }
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"$getEntityId stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          requestSignalState()
-        }
+        // Should never actually fire: requestSignalState() no longer calls
+        // onFinishSpontaneous after sending RequestLinkAccessData, so the car has no
+        // self-scheduled wake while waiting — only handleLinkAccess (triggered by the
+        // Node's reply as an interaction event) resolves this status. Reaching this branch
+        // means a SpontaneousEvent was dispatched despite that; do not resend the request
+        // (that's what corrupted NodeState.signalWaitingCounts before), just log and wait.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        // Should never actually fire, same reasoning as WaitingSignalState: this car has no
+        // self-scheduled wake while buffered at the Node for downstream link capacity — only a
+        // later, unsolicited LinkAccessData grant (handled via handleLinkAccess) resolves it.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case Stopped =>
         onFinishSpontaneous(Some(currentTick + 1))
@@ -321,7 +337,7 @@ class Car(
     }
 
     event.data match {
-      case d: SignalStateData    => handleSignalState(event, d)
+      case d: LinkAccessData     => handleLinkAccess(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData    => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
@@ -432,12 +448,13 @@ class Car(
 
   private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
-    signalHandler.handleSignalState(data, state)
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
 
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
     state.status = Ready
     super.leavingLink()
   }
@@ -505,6 +522,11 @@ class Car(
 
   override def onDestruct(event: DestructEvent): Unit = {
     if (state == null) return
+
+    // Before any state clearing below (which erases the link/node info this needs): if this
+    // car was buffered at a Node for downstream link capacity and never got granted, tell the
+    // Node so it doesn't eventually waste a real slot on a dead actor.
+    signalHandler.cancelPendingCapacityRequest(state)
 
     if (state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)

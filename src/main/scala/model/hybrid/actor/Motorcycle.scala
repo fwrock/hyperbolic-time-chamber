@@ -7,8 +7,7 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.*
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
@@ -109,8 +108,8 @@ class Motorcycle(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
-  private var signalStateRetryCounter: Int = 0
-  private val MaxSignalStateRetries: Int = 100
+  // See Car.scala's signalWaitNeedsReverify for what this flags and why.
+  private var signalWaitNeedsReverify: Boolean = false
 
   /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
     * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
@@ -176,6 +175,7 @@ class Motorcycle(
     currentTickFn                = () => currentTick,
     journeyReporter              = journeyReporter,
     onFinishSpontaneousFn        = tick => onFinishSpontaneous(tick),
+    scheduleEventFn              = tick => scheduleEvent(tick),
     leavingLinkFn                = () => leavingLink(),
     selfDestructFn               = () => selfDestruct(),
     isPersonCentricFn            = () => isPersonCentric,
@@ -187,8 +187,8 @@ class Motorcycle(
     finishJourneyFn              = (reason, node) => journeyReporter.finishJourney(reason, node, state),
     onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
     aggressivenessFn             = () => aggressiveness,
-    setSignalStateRetryCounterFn = v => signalStateRetryCounter = v,
-    setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t
+    setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v
   )
 
   // ===== PrivateVehicle Accessor Methods =====
@@ -241,7 +241,7 @@ class Motorcycle(
     linkEntryTick = None
     mesoExitTick = None
     signalWaitUntilTick = None
-    signalStateRetryCounter = 0
+    signalWaitNeedsReverify = false
     journeyReporter.reset()
     state.bestRoute = None
     state.deactivateMicroMode()
@@ -297,7 +297,12 @@ class Motorcycle(
             onFinishSpontaneous(Some(waitTick))
           case _ =>
             signalWaitUntilTick = None
-            leavingLink()
+            if (signalWaitNeedsReverify) {
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
         }
 
       case Moving =>
@@ -317,16 +322,15 @@ class Motorcycle(
         onFinishSpontaneous()
 
       case WaitingSignalState =>
-        signalStateRetryCounter += 1
-        if (signalStateRetryCounter > MaxSignalStateRetries) {
-          logWarn(
-            s"Motorcycle ${getEntityId} stuck in WaitingSignalState for $signalStateRetryCounter ticks at tick $currentTick (Node not responding). Recovering by leaving link."
-          )
-          signalStateRetryCounter = 0
-          leavingLink()
-        } else {
-          onFinishSpontaneous(Some(currentTick + 1))
-        }
+        // Should never actually fire — requestSignalState() no longer self-schedules
+        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
+        // Do not resend the request if reached anyway (see Car.scala for rationale).
+        logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
 
       case _ =>
         super.actSpontaneous(event)
@@ -357,7 +361,7 @@ class Motorcycle(
     }
 
     event.data match {
-      case d: SignalStateData    => handleSignalState(event, d)
+      case d: LinkAccessData     => handleLinkAccess(event, d)
       case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
       case d: MicroUpdateData    => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
@@ -367,8 +371,8 @@ class Motorcycle(
 
   private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
-    signalHandler.handleSignalState(data, state)
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
 
   override protected def microMaxAcceleration: Double = 3.5
   override protected def microMaxDeceleration: Double = 5.0
@@ -376,6 +380,7 @@ class Motorcycle(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
     state.status = Ready
     super.leavingLink()
   }
@@ -511,6 +516,7 @@ class Motorcycle(
   }
 
   override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null) signalHandler.cancelPendingCapacityRequest(state)
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))
