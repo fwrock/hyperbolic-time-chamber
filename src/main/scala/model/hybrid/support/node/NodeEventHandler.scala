@@ -2,14 +2,14 @@ package org.interscity.htc
 package model.hybrid.support.node
 
 import org.interscity.htc.model.hybrid.entity.state.NodeState
-import org.interscity.htc.model.hybrid.entity.state.model.SignalState
+import org.interscity.htc.model.hybrid.entity.state.model.{ PendingLinkAccessRequest, SignalState }
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.hybrid.entity.event.data.link.LinkSignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
-import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, LinkCapacityStateEnum, TrafficSignalPhaseStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
@@ -53,22 +53,30 @@ class NodeEventHandler(
       )
     }
 
-  def handleRequestSignalState(event: ActorInteractionEvent, data: RequestSignalStateData): Unit =
+  /** One-time registration (Link → Node at Link init) seeding this Node's authoritative
+    * available-capacity counter for that link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    */
+  def handleRegisterLinkCapacity(data: RegisterLinkCapacityData): Unit =
+    if (state != null) {
+      state.availableCapacity(data.linkId) = data.capacity
+    } else {
+      logWarnFn(
+        s"Node ${entityIdFn()}: RegisterLinkCapacityData arrived before initialization for link=${data.linkId}. " +
+          s"This should not happen — PostLoadRegistrationCoordinator guarantees Node is initialized first."
+      )
+    }
+
+  def handleRequestLinkAccess(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit =
     if (state != null) {
       state.connections.get(data.targetLinkId) match {
         case Some(identify) =>
           state.signals.get(identify.id) match {
-            case Some(sig) =>
+            case Some(sig) if sig.state == Red =>
               val queuePos =
-                if (sig.state == Red)
-                  state.signalWaitingCounts.updateWith(data.targetLinkId) {
-                    case Some(n) => Some(n + 1)
-                    case None    => Some(1)
-                  }.getOrElse(1) - 1
-                else {
-                  state.signalWaitingCounts.remove(data.targetLinkId)
-                  0
-                }
+                state.signalWaitingCounts.updateWith(data.targetLinkId) {
+                  case Some(n) => Some(n + 1)
+                  case None    => Some(1)
+                }.getOrElse(1) - 1
               reportFn(
                 Map(
                   "event_type"     -> "signal_state_requested",
@@ -86,71 +94,147 @@ class NodeEventHandler(
               sendMessageFn(
                 event.actorRefId,
                 event.shardRefId,
-                SignalStateData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos),
-                EventTypeEnum.ReceiveSignalState.toString
+                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos),
+                EventTypeEnum.ReceiveLinkAccess.toString
               )
+            case Some(_) =>
+              state.signalWaitingCounts.remove(data.targetLinkId)
+              replyGreenOrBufferForCapacity(event, data.targetLinkId)
             case None =>
               // Signal not registered for this connection — treat as uncontrolled intersection.
               // Expected for most intersections in a real map, so this is debug-level, not a warning.
               logDebugFn(
                 s"Node ${entityIdFn()}: no signal entry for id=${identify.id} (link=${data.targetLinkId}); assuming Green"
               )
-              sendMessageFn(
-                event.actorRefId,
-                event.shardRefId,
-                SignalStateData(phase = Green, nextTick = currentTickFn()),
-                EventTypeEnum.ReceiveSignalState.toString
-              )
+              replyGreenOrBufferForCapacity(event, data.targetLinkId)
           }
         case None =>
-          // No signal for this outgoing link — uncontrolled intersection, pass freely.
+          // No signal for this outgoing link — uncontrolled intersection, pass freely (subject
+          // to capacity, which is orthogonal to signal control).
           // Expected for most intersections in a real map, so this is debug-level, not a warning.
           logDebugFn(
             s"Node ${entityIdFn()}: no connection entry for link=${data.targetLinkId}; assuming Green"
           )
-          sendMessageFn(
-            event.actorRefId,
-            event.shardRefId,
-            SignalStateData(phase = Green, nextTick = currentTickFn()),
-            EventTypeEnum.ReceiveSignalState.toString
-          )
+          replyGreenOrBufferForCapacity(event, data.targetLinkId)
       }
     } else {
       logWarnFn(
-        s"Node ${entityIdFn()} state not initialized, deferring signal state request for link: ${data.targetLinkId}"
+        s"Node ${entityIdFn()} state not initialized, deferring link access request for link: ${data.targetLinkId}"
       )
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
-        SignalStateData(phase = Green, nextTick = currentTickFn()),
-        EventTypeEnum.ReceiveSignalState.toString
+        LinkAccessData(phase = Green, nextTick = currentTickFn()),
+        EventTypeEnum.ReceiveLinkAccess.toString
       )
     }
+
+  /** Shared by every "signal says go" outcome (Green, no signal registered, uncontrolled
+    * intersection) — capacity backpressure is orthogonal to signal control, so all three funnel
+    * through the same check. Grants immediately if capacity is available (or unknown — see
+    * `availableCapacity`'s doc on `NodeState`), decrementing Node's own counter; otherwise
+    * buffers the requester FIFO and replies with `capacityState = Full`.
+    */
+  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: String): Unit = {
+    val capacityKnown = state.availableCapacity.contains(targetLinkId)
+    val hasCapacity   = !capacityKnown || state.availableCapacity(targetLinkId) > 0
+    if (hasCapacity) {
+      if (capacityKnown) state.availableCapacity(targetLinkId) -= 1
+      sendMessageFn(
+        event.actorRefId,
+        event.shardRefId,
+        LinkAccessData(phase = Green, nextTick = currentTickFn()),
+        EventTypeEnum.ReceiveLinkAccess.toString
+      )
+    } else {
+      state.capacityWaitQueue
+        .getOrElseUpdate(targetLinkId, mutable.Queue.empty)
+        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId))
+      sendMessageFn(
+        event.actorRefId,
+        event.shardRefId,
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full),
+        EventTypeEnum.ReceiveLinkAccess.toString
+      )
+    }
+  }
+
+  /** A Link reports exactly how many slots freed (never an estimate) every time a vehicle leaves
+    * it. Increments this Node's authoritative counter and attempts to drain any vehicles buffered
+    * for that link.
+    */
+  def handleLinkCapacityFreed(data: LinkCapacityFreedData): Unit =
+    if (state != null) {
+      state.availableCapacity(data.linkId) = state.availableCapacity.getOrElse(data.linkId, 0) + data.freedCount
+      tryDrainCapacityQueue(data.linkId)
+    } else {
+      logWarnFn(
+        s"Node ${entityIdFn()}: LinkCapacityFreedData arrived before initialization for link=${data.linkId}"
+      )
+    }
+
+  /** Grants access to buffered vehicles up to `availableCapacity`, FIFO, only while the relevant
+    * signal (if any) is currently Green — checked against this Node's own already-in-memory
+    * `state.signals`, at zero message cost. This closes the gap where a signal could have cycled
+    * back to Red while a vehicle sat in the capacity buffer: if Red right now, nothing is
+    * dequeued; the buffer is picked up again either on the next freed-slots notification or the
+    * next time `handleReceiveSignalChangeStatus` sees this movement turn Green. See
+    * docs/CONGESTION_PROPAGATION_DESIGN.md.
+    */
+  private def tryDrainCapacityQueue(linkId: String): Unit = {
+    val signalCurrentlyGreen: Boolean =
+      state.connections.get(linkId).flatMap(identify => state.signals.get(identify.id)) match {
+        case Some(sig) => sig.state == Green
+        case None      => true // no signal registered — uncontrolled intersection, always passable
+      }
+    if (!signalCurrentlyGreen) return
+
+    state.capacityWaitQueue.get(linkId).foreach { queue =>
+      var available = state.availableCapacity.getOrElse(linkId, 0)
+      while (available > 0 && queue.nonEmpty) {
+        val pending = queue.dequeue()
+        available -= 1
+        sendMessageFn(
+          pending.actorRefId,
+          pending.shardRefId,
+          LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Available),
+          EventTypeEnum.ReceiveLinkAccess.toString
+        )
+      }
+      state.availableCapacity(linkId) = available
+      if (queue.isEmpty) state.capacityWaitQueue.remove(linkId)
+    }
+  }
 
   def handleReceiveSignalChangeStatus(event: ActorInteractionEvent, data: TrafficSignalChangeStatusData): Unit =
     if (state != null) {
       state.signals.put(StringPool.intern(data.phaseOrigin), data.signalState)
 
-      // Drain queue counts when phase turns Green so stale counts don't accumulate.
+      val linksForThisPhase = state.connections.collect {
+        case (linkId, identify) if identify.id == data.phaseOrigin => linkId
+      }
+
+      // Drain queue counts when phase turns Green so stale counts don't accumulate, and attempt
+      // to drain any vehicles buffered for capacity on this movement (second drain trigger — see
+      // tryDrainCapacityQueue's doc).
       if (data.signalState.state == Green) {
-        state.connections
-          .collect { case (linkId, identify) if identify.id == data.phaseOrigin => linkId }
-          .foreach(state.signalWaitingCounts.remove)
+        linksForThisPhase.foreach { linkId =>
+          state.signalWaitingCounts.remove(linkId)
+          tryDrainCapacityQueue(linkId)
+        }
       }
 
       // Notify the outgoing Link so MICRO vehicles get the updated signal phase.
-      state.connections
-        .collect { case (linkId, identify) if identify.id == data.phaseOrigin => linkId }
-        .foreach { linkId =>
-          getLinkDependencyFn(linkId).foreach { dep =>
-            sendMessageFn(
-              dep.entityId,
-              dep.classType,
-              LinkSignalStateData(phase = data.signalState.state, nextTick = data.signalState.nextTick),
-              EventTypeEnum.LinkSignalState.toString
-            )
-          }
+      linksForThisPhase.foreach { linkId =>
+        getLinkDependencyFn(linkId).foreach { dep =>
+          sendMessageFn(
+            dep.entityId,
+            dep.classType,
+            LinkSignalStateData(phase = data.signalState.state, nextTick = data.signalState.nextTick),
+            EventTypeEnum.LinkSignalState.toString
+          )
         }
+      }
     } else {
       pendingSignals.put(data.phaseOrigin, data.signalState)
       logWarnFn(

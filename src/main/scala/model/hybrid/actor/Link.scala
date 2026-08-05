@@ -24,7 +24,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
-import org.interscity.htc.model.hybrid.entity.event.data.link.LinkSignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
   LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
@@ -158,6 +158,15 @@ class Link(
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
     metricsReporter.publishDynamicCost()
+    // One-time report so the entry Node can seed its availableCapacity counter before any
+    // vehicle ever requests access to this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    sendMessageTo(
+      entityId  = state.from,
+      shardId   = "hybrid.actor.Node",
+      data      = RegisterLinkCapacityData(linkId = getEntityId, capacity = state.capacity.toInt),
+      eventType = EventTypeEnum.RegisterLinkCapacity.toString,
+      actorType = LoadBalancedDistributed
+    )
     logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
