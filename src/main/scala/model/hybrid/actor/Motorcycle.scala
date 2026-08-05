@@ -516,6 +516,7 @@ class Motorcycle(
   }
 
   override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null) signalHandler.cancelPendingCapacityRequest(state)
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.movableCurrentPath.map(_._2))

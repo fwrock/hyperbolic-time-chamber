@@ -20,7 +20,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
 import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import org.interscity.htc.model.hybrid.support.node.NodeEventHandler
@@ -90,6 +90,7 @@ class Node(
       case d: RequestLinkAccessData     => nodeHandler.handleRequestLinkAccess(event, d)
       case d: RegisterLinkCapacityData  => nodeHandler.handleRegisterLinkCapacity(d)
       case d: LinkCapacityFreedData     => nodeHandler.handleLinkCapacityFreed(d)
+      case d: CancelLinkAccessRequestData => nodeHandler.handleCancelLinkAccessRequest(event, d)
       case d: TrafficSignalChangeStatusData =>
         nodeHandler.handleReceiveSignalChangeStatus(event, d)
       case _ =>

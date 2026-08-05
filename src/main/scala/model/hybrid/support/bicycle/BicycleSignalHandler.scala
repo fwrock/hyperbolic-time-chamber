@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.bicycle
 
 import core.types.Tick
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.BicycleState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, LinkCapacityStateEnum }
@@ -123,4 +123,24 @@ class BicycleSignalHandler(
       scheduleEventFn(tick)
     }
   }
+
+  /** Call from `onDestruct`, before any state clearing, when a bicycle is destroyed while
+    * `WaitingCapacity`. See `CarSignalHandler.cancelPendingCapacityRequest` for the full
+    * rationale.
+    */
+  def cancelPendingCapacityRequest(state: BicycleState): Unit =
+    if (state.status == WaitingCapacity) {
+      val nodeId = getCurrentNodeFn()
+      val linkId = getNextLinkFn()
+      if (nodeId != null && linkId != null) {
+        CityMapUtil.nodesById.get(nodeId).foreach { node =>
+          sendMessageFn(
+            node.id,
+            node.classType,
+            CancelLinkAccessRequestData(targetLinkId = linkId),
+            EventTypeEnum.CancelLinkAccessRequest.toString
+          )
+        }
+      }
+    }
 }
