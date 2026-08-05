@@ -2,11 +2,12 @@ package org.interscity.htc
 package model.hybrid.support.bicycle
 
 import core.types.Tick
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.BicycleState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, LinkCapacityStateEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{
+  WaitingCapacity,
   WaitingSignal,
   WaitingSignalState
 }
@@ -19,6 +20,7 @@ class BicycleSignalHandler(
   currentTickFn:               () => Tick,
   journeyReporter:             BicycleJourneyReporter,
   onFinishSpontaneousFn:       Option[Tick] => Unit,
+  scheduleEventFn:             Tick => Unit,
   leavingLinkFn:               () => Unit,
   selfDestructFn:              () => Unit,
   isPersonCentricFn:           () => Boolean,
@@ -29,8 +31,8 @@ class BicycleSignalHandler(
   getTripDestinationFn:        () => Option[String],
   finishJourneyFn:             (String, String) => Unit,
   onFinishPrivateVehicleFn:    String => Unit,
-  setSignalStateRetryCounterFn: Int => Unit,
-  setSignalWaitUntilTickFn:    Option[Tick] => Unit
+  setSignalWaitUntilTickFn:    Option[Tick] => Unit,
+  setSignalWaitNeedsReverifyFn: Boolean => Unit
 ) {
 
   def requestSignalState(state: BicycleState): Unit = {
@@ -60,10 +62,14 @@ class BicycleSignalHandler(
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestSignalStateData(targetLinkId = linkId),
-                    EventTypeEnum.RequestSignalState.toString
+                    RequestLinkAccessData(targetLinkId = linkId),
+                    EventTypeEnum.RequestLinkAccess.toString
                   )
-                  onFinishSpontaneousFn(Some(currentTickFn() + 1))
+                // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
+                // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
+                // reply as an interaction event; handleLinkAccess re-registers via
+                // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
+                onFinishSpontaneousFn(None)
                 case null =>
                   leavingLinkFn()
               }
@@ -76,19 +82,19 @@ class BicycleSignalHandler(
     }
   }
 
-  def handleSignalState(data: SignalStateData, state: BicycleState): Unit = {
-    if (state.status != WaitingSignalState) {
+  def handleLinkAccess(data: LinkAccessData, state: BicycleState): Unit = {
+    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
       logDebugFn(
-        s"${entityIdFn()}: Ignoring stale SignalStateData " +
-          s"(current status=${state.status}, expected WaitingSignalState). Race condition guard."
+        s"${entityIdFn()}: Ignoring stale LinkAccessData " +
+          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
       )
       return
     }
-    setSignalStateRetryCounterFn(0)
+
     if (data.phase == Red) {
-      state.status = WaitingSignal
-      setSignalWaitUntilTickFn(Some(data.nextTick))
-      val waitTicks = math.max(0L, data.nextTick - currentTickFn())
+      val tick = currentTickFn()
+      val waitUntilTick = data.nextTick
+      val waitTicks = math.max(0L, waitUntilTick - tick)
       if (waitTicks > 0) journeyReporter.updateHaltingState(0.0, waitTicks.toDouble)
       reportFn(
         Map(
@@ -96,14 +102,45 @@ class BicycleSignalHandler(
           "vehicle_type"   -> "bicycle",
           "vehicle_id"     -> entityIdFn(),
           "phase"          -> data.phase.toString,
-          "wait_until_tick" -> data.nextTick,
-          "tick"           -> currentTickFn()
+          "wait_until_tick" -> waitUntilTick,
+          "tick"           -> tick
         ),
         "signal_wait"
       )
-      onFinishSpontaneousFn(Some(data.nextTick))
+
+      // See CarSignalHandler.handleLinkAccess for why this needs re-verification.
+      state.status = WaitingSignal
+      setSignalWaitUntilTickFn(Some(waitUntilTick))
+      setSignalWaitNeedsReverifyFn(true)
+      scheduleEventFn(waitUntilTick)
+    } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      state.status = WaitingCapacity
     } else {
-      leavingLinkFn()
+      val tick = currentTickFn()
+      state.status = WaitingSignal
+      setSignalWaitUntilTickFn(Some(tick))
+      setSignalWaitNeedsReverifyFn(false)
+      scheduleEventFn(tick)
     }
   }
+
+  /** Call from `onDestruct`, before any state clearing, when a bicycle is destroyed while
+    * `WaitingCapacity`. See `CarSignalHandler.cancelPendingCapacityRequest` for the full
+    * rationale.
+    */
+  def cancelPendingCapacityRequest(state: BicycleState): Unit =
+    if (state.status == WaitingCapacity) {
+      val nodeId = getCurrentNodeFn()
+      val linkId = getNextLinkFn()
+      if (nodeId != null && linkId != null) {
+        CityMapUtil.nodesById.get(nodeId).foreach { node =>
+          sendMessageFn(
+            node.id,
+            node.classType,
+            CancelLinkAccessRequestData(targetLinkId = linkId),
+            EventTypeEnum.CancelLinkAccessRequest.toString
+          )
+        }
+      }
+    }
 }

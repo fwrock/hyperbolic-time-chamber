@@ -295,7 +295,7 @@ A directed road segment connecting two nodes. Supports both MESO (aggregate) and
 | `lanes` | `Int` | Number of lanes |
 | `speedLimit` | `Double` | Legal speed limit in km/h |
 | `freeSpeed` | `Double` | Free-flow speed in km/h (often equal to `speedLimit`) |
-| `capacity` | `Double` | Maximum vehicles per hour |
+| `capacity` | `Double` | Maximum vehicle occupancy (how many vehicles physically fit on the link), used as the denominator in density-based speed/congestion calculations (`SpeedUtil.linkDensitySpeed`, `bprCongestionFactor`) — not a vehicles-per-hour flow rate |
 | `simulationMode` | `"MESO"` \| `"MICRO"` | Simulation mode for this link |
 | `microTimeStep` | `Double` | Sub-tick duration in seconds (used in MICRO mode) |
 | `microTicksPerGlobalTick` | `Int` | Sub-ticks per global tick (e.g., `10` → 0.1 s resolution) |

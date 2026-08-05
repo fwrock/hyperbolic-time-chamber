@@ -13,6 +13,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{
 }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.model.hybrid.util.SpeedUtil
 
 import scala.collection.mutable
 
@@ -31,9 +32,6 @@ class LinkMicroSimulationHandler(
   vehicleWaitingSeconds:       mutable.Map[String, Double],
   isMicroScheduledFn:          () => Boolean,
   setMicroScheduledFn:         Boolean => Unit,
-  costPublishInterval:         Int,
-  lastCostPublishTickGetFn:    () => Tick,
-  lastCostPublishTickSetFn:    Tick => Unit,
   getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
   logDebugFn:                  String => Unit
@@ -78,11 +76,6 @@ class LinkMicroSimulationHandler(
     val startNs = System.nanoTime()
     metricsReporter.ensureSummaryTick(tick)
 
-    if (tick - lastCostPublishTickGetFn() >= costPublishInterval) {
-      metricsReporter.publishDynamicCost()
-      lastCostPublishTickSetFn(tick)
-    }
-
     val state = getLinkStateFn()
     if (state.isMicroMode && state.totalVehiclesInMicro > 0) {
       val updates = microSimulationStrategy.executeSubTick(
@@ -101,6 +94,18 @@ class LinkMicroSimulationHandler(
         else sendMicroUpdateToVehicle(u)
       }
     }
+
+    // Recompute currentSpeed/congestionFactor from the vehicles actually present after this
+    // tick's sub-tick update (mean of real per-vehicle velocities, not the frozen 0.0/1.0
+    // defaults LinkState used to carry forever) before publishing the routing cost signal.
+    val freshState = getLinkStateFn()
+    if (freshState.isMicroMode) {
+      val vehicles  = freshState.vehiclesByLane.valuesIterator.flatMap(_.iterator).toVector
+      val meanSpeed = if (vehicles.nonEmpty) vehicles.map(_.velocity).sum / vehicles.size else 0.0
+      val congestionFactor = SpeedUtil.bprCongestionFactor(volume = vehicles.size.toDouble, capacity = freshState.capacity)
+      setLinkStateFn(freshState.copy(currentSpeed = meanSpeed, congestionFactor = congestionFactor))
+    }
+    metricsReporter.maybePublishDynamicCost(tick)
 
     metricsReporter.tickProcessingDurationMs = (System.nanoTime() - startNs) / 1_000_000L
     metricsReporter.emitSumoSummaryStep(tick)

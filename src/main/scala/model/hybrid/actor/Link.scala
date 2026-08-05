@@ -24,7 +24,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
-import org.interscity.htc.model.hybrid.entity.event.data.link.LinkSignalStateData
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
   LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
@@ -74,20 +74,6 @@ class Link(
       to   = StringPool.intern(s.to)
     )
 
-  /** Calculates the current cost of traversing this link. Cost combines distance, congestion, and
-    * travel time factors.
-    *
-    * @return
-    *   Current link cost (higher = less desirable for routing)
-    */
-  private def cost: Double = {
-    val speedFactor =
-      if (state.currentSpeed > 0) state.length / state.currentSpeed else Double.MaxValue
-    state.length * state.congestionFactor + speedFactor
-  }
-
-  private var lastCostPublishTick: Tick = 0
-
   /** Tracks when each vehicle entered the link (for travel time calculation) */
   private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
 
@@ -121,6 +107,7 @@ class Link(
     entityIdFn                 = () => getEntityId,
     currentTickFn              = () => currentTick,
     cacheTtl                   = cacheTtl,
+    costPublishInterval        = costPublishInterval,
     getLinkStateFn             = () => state,
     getVehicleEntryTickFn      = id => vehicleEntryTick.get(id),
     getVehicleWaitingSecondsFn = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
@@ -141,9 +128,6 @@ class Link(
     vehicleWaitingSeconds         = vehicleWaitingSeconds,
     isMicroScheduledFn            = () => microTickScheduled,
     setMicroScheduledFn           = v => microTickScheduled = v,
-    costPublishInterval           = costPublishInterval,
-    lastCostPublishTickGetFn      = () => lastCostPublishTick,
-    lastCostPublishTickSetFn      = t => lastCostPublishTick = t,
     getSignalAtExitFn             = () => signalAtExit,
     metricsReporter               = metricsReporter,
     logDebugFn                    = msg => logDebug(msg)
@@ -174,6 +158,15 @@ class Link(
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
     metricsReporter.publishDynamicCost()
+    // One-time report so the entry Node can seed its availableCapacity counter before any
+    // vehicle ever requests access to this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    sendMessageTo(
+      entityId  = state.from,
+      shardId   = "hybrid.actor.Node",
+      data      = RegisterLinkCapacityData(linkId = getEntityId, capacity = state.capacity.toInt),
+      eventType = EventTypeEnum.RegisterLinkCapacity.toString,
+      actorType = LoadBalancedDistributed
+    )
     logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
