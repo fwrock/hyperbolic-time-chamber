@@ -1106,8 +1106,11 @@ with it. Also confirmed real-world production scenario generators
 `hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py`) all currently
 emit `"connections": {}` unconditionally — this bug has been latent in production the whole time,
 never triggered outside `tools/sumo_validation`'s hand-authored scenario B, the only place any
-scenario populates `connections` at all. Worth a follow-up pass once production scenarios start
-wiring real signal connections — not done here, out of scope for this fix.
+scenario populates `connections` at all. **[PARTIALLY RESOLVED 2026-08-05]** See "Production
+Scenario Generators Never Wire `Node.connections`/`approachConnections`" further down this file —
+`tools/interscsimulator_scenario/convert_interscsimulator.py` now wires `approachConnections`;
+`tools/sao-paulo/generate_hybrid_input.py` needs a pipeline-ordering fix, not attempted; Toulouse
+and the tiny-validation generator have no signal generation to wire at all.
 
 **Fix**: added a second field, `NodeState.approachConnections: mutable.Map[String, Identify]`,
 keyed by the APPROACH link (opposite direction of `connections`). `handleReceiveSignalChangeStatus`
@@ -1186,6 +1189,88 @@ Full suite: 170 specs (161 pre-existing + 9 new), all green. Not independently r
 `tools/sumo_validation` — scenario A/B only exercise Car; no equivalent Bus/Motorcycle/Bicycle
 harness scenario exists yet to measure a direct RMSE effect, same caveat `CarMicroHandler`'s own
 fix noted for its own validation scope.
+
+## Production Scenario Generators Never Wire `Node.connections`/`approachConnections` — Signals Have Zero Effect Outside `tools/sumo_validation` (Found 2026-08-05, Partially Fixed)
+
+**Direct follow-up to the flagged-but-not-done note in the "`NodeEventHandler` Notified the Wrong
+Link" section above.** All four scenario generators found in the platform
+(`tools/sao-paulo/generate_hybrid_input.py`, `tools/toulouse/generate_hybrid_input.py`,
+`tools/interscsimulator_scenario/convert_interscsimulator.py`,
+`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py`) emit
+`"connections": {}` (and, before this session, no `approachConnections` field at all)
+unconditionally — meaning every traffic signal ever generated for a real scenario has had zero
+behavioral effect on any vehicle, MICRO or MESO, network-wide, for the platform's entire history.
+`tools/sumo_validation`'s hand-authored scenario B is the *only* place any scenario has ever
+populated these fields. Investigated each generator individually; findings differ enough per tool
+that a single fix doesn't cover all four:
+
+- **`tools/interscsimulator_scenario/convert_interscsimulator.py` — fixed.** This is the
+  "explicit, per the platform maintainer... robust, well-tested part" of the converter (its own
+  module docstring), and it already had everything needed: `signals.xml` gives each phase an
+  explicit approach-node origin, and `build_traffic_signal_actors` already resolves that to the
+  real incoming link id (`_incoming_link_id`) to key `TrafficSignalState.signalStates`/`phases`.
+  Added `wire_node_approach_connections(node_actors, signals, links)`, called right after
+  `build_traffic_signal_actors` in `run()`: reuses the same `_incoming_link_id` resolution to patch
+  each controlled node's `approachConnections` in place (mutates the already-built actor dicts, no
+  re-merge needed since `actors` holds the same dict references). Also added the
+  `"approachConnections": {}` default field to `build_node_actors`'s per-node content dict
+  (previously missing entirely, not just empty). Two new regression tests
+  (`test_wire_node_approach_connections_keys_by_approach_link_on_the_controlled_node`,
+  `test_wire_node_approach_connections_against_real_base_scenario`) added to
+  `tests/test_convert_interscsimulator.py`; full suite 43/45 passing (2 new; the same 4 pre-existing
+  failures — `test_end_to_end_*sqlite*`/`*json*` — reproduce identically with this session's changes
+  fully reverted, confirmed by diffing a manually-reverted copy of the file and re-running; root
+  cause not investigated, looks like a `tools/scenario-db-converter/convert.py`/`ijson` environment
+  issue in whatever venv runs this suite, unrelated to node-connection wiring).
+- **`tools/sao-paulo/generate_hybrid_input.py` — investigated, NOT fixed; needs a deliberate design
+  decision before attempting.** `TrafficSignalGenerator` already computes exactly the needed
+  per-node incoming-link list (`self._node_incoming_links`, keyed by node id, populated during
+  `_write_links()`) — the raw data isn't missing. The blocker is purely one of *pipeline ordering*:
+  `_build_node_actor`/`self._node_writer.add(...)` streams each node actor to disk immediately
+  during the single-pass OSM XML iterparse (`OsmNetworkParser`'s own architecture, deliberately
+  memory-bounded for real full-city-scale runs — see the class's docstrings), which happens
+  *before* `_write_links()` (and therefore `_node_incoming_links`) has run at all. Node actors are
+  gone to disk by the time incoming-link data exists, so there's no in-memory dict left to patch
+  the way `wire_node_approach_connections` does for InterSCSimulator above. Two possible fixes,
+  neither attempted: (a) buffer signal-tagged node actors in memory instead of streaming them
+  immediately, patch and flush after `_write_links()` — bounded by signal-node count, not total
+  node count, so probably safe even at city scale, but changes the class's core memory-bounding
+  invariant and needs care; (b) a separate post-hoc pass that reads back the already-written
+  `nodes_*.json` files after `TrafficSignalGenerator.generate()` runs, patches matching signal
+  nodes, rewrites — more surgery, but doesn't touch the existing streaming architecture at all.
+  **Not attempted in this session because `tools/sao-paulo/` has zero test coverage of any kind**
+  (confirmed: no `tests/` directory, unlike `interscsimulator_scenario/`) — implementing either
+  fix blind, in a 3,982-line generator whose whole design is built around a memory constraint,
+  without a way to verify correctness first, was judged too risky to guess at. Whoever picks this
+  up next should probably stand up at least minimal pytest coverage for `_write_links`/
+  `TrafficSignalGenerator` first.
+- **`tools/toulouse/generate_hybrid_input.py` — not applicable, different gap entirely.** This
+  generator has no traffic-signal generation code at all (confirmed: no `TrafficSignalGenerator`,
+  no `include_signals` flag, no OSM `highway=traffic_signals` handling — `grep` for
+  `signal|traffic_light` only matches the static `"signals": {}` placeholder). There is no signal
+  data to wire connections to in the first place. Adding real signal generation here would be a
+  new feature (presumably portable from `tools/sao-paulo/`'s `TrafficSignalGenerator`, since both
+  are OSM-based), not a wiring fix — separate scope, not attempted.
+- **`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py` — same as
+  Toulouse.** No signal generation; `"connections": {}` is the only signal-adjacent content, a
+  static placeholder with nothing to wire.
+
+**Separate, deeper architectural gap surfaced by this investigation, affecting even the fixed
+InterSCSimulator path**: `connections` (outgoing-link keyed, required for MESO-mode admission
+control — `Car.actSpontaneous`'s `case Moving if !isMicroMode` calls `requestSignalState()`, which
+depends entirely on `connections`, not `approachConnections`, which only matters for MICRO's
+`signalAtExit`) is **not** wired by this fix, deliberately. Resolving it correctly requires
+per-(incoming-link, outgoing-link) turn-movement data — "does traffic from this specific approach
+have a green for this specific exit" — that none of network.xml/signals.xml/OSM `highway` tags
+provide. A naive heuristic (e.g. "gate every outgoing link of a signalized node by whichever
+incoming phase was processed last") risks silently mis-gating a legal movement, which is worse than
+today's status quo of no MESO gating at all — considered and rejected for that reason rather than
+implemented speculatively. Since most real São Paulo-scale traffic is expected to run MESO (MICRO
+is reserved for small/dense/validation scenarios per `_select_mode`'s `micro_ratio` config), this
+means even a fully-fixed São Paulo generator would only gate MICRO-mode vehicles near a signal
+until this deeper gap is addressed — a genuine `htc-architect`-level design question (does HTC's
+signal model need turn-movement-aware admission control, and if so what data/format would supply
+it), not a follow-up wiring task. Flagged here, not designed or implemented.
 
 ## Test Coverage
 
