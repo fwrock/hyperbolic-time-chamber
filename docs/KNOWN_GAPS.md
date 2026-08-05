@@ -892,6 +892,85 @@ up that scheduling fix next has a harness that can immediately, correctly confir
 (scenario A) and any car whose `MICROENTER`/`enter_link` tick collides with another car's within
 1-2 ticks (scenario B).
 
+## `deferFinishSpontaneous()` Holds an Entire LTM Batch Open for the Duration of an Unbounded Async Wait (Found 2026-08-04, Partially Fixed — Signal Wait Only; Next Priority)
+
+**Found while designing congestion-propagation/spillback work** (a car waiting at a `Node` for
+downstream link capacity, discussed but not yet built), specifically while answering "does the
+TimeManager actually guarantee this waiting car gets woken up, and does anything else stall in the
+meantime?"
+
+`deferFinishSpontaneous()` (`SimulationBaseActor.scala:720-721`, pre-existing —
+`git blame` attributes it to commit `c03d70d`, 2026-06-10, "chore: refactoring hybrid actors", not
+introduced by this investigation) suppresses the "did you forget to call `onFinishSpontaneous`"
+safety net in `handleSpontaneous` **without sending any `FinishEvent`**. That safety net exists so
+`actSpontaneous` never returns without resolving; `deferFinishSpontaneous()` is the sanctioned way
+to say "I'll resolve later, from an interaction event, not right now."
+
+The problem: `LocalTimeManagerBase`/`LocalDiscreteEventTimeManager` dispatch one **batch** of
+`SpontaneousEvent`s per tick (`sendSpontaneousEvent`, adding every dispatched actor to
+`runningEvents`), and **do not advance to the next tick until `runningEvents` is empty** —
+`LocalDiscreteEventTimeManager.processTick`'s own doc comment: *"Time only advances when all
+events at the current time have been processed."* `runningEvents` is only cleared by an actual
+`FinishEvent` (`finishEvent`, `runningEvents.filterInPlace(...)`), regardless of `scheduleTick`.
+`deferFinishSpontaneous()` sends no `FinishEvent` — so **every other actor scheduled in the same
+batch on the same `LocalTimeManager` pool instance is blocked from its own next-tick dispatch**
+until whatever this one actor is waiting on resolves and it finally calls the real
+`onFinishSpontaneous(...)`.
+
+**This is not a deadlock** (the wait does resolve — the counterpart always eventually replies in
+every usage found so far) **but it is a real stall**, proportional to however long the async
+operation takes, applied to every co-scheduled actor on that LTM instance, not just the waiting
+one. Under load (busy shard, actor mailbox contention, slow dynamic-actor spin-up) this is
+plausibly a contributor to the class of multi-tick stalls already documented in this file (the
+past-tick-guard section above; the 10-13s startup latency and 106-119 tick idle-`Link`-reactivation
+stall in the enterLink()-poll-race section) — not confirmed as the root cause of any specific one
+of those, but the same shape of problem, and worth keeping in mind when chasing them.
+
+**Already fixed**: the signal-wait exchange in `Car`/`Bus`/`Bicycle`/`Motorcycle`'s
+`*SignalHandler.requestSignalState`/`handleSignalState` (this fix's own git history:
+`deferFinishSpontaneous` was added there, found to hold the batch open, and replaced with the
+pattern the project already used correctly for `Person`'s `StartTrip → Car` handoff — see
+`LocalTimeManagerBase.scheduleEvent`'s `wasIdle` re-notification comment). The car now genuinely
+deregisters (`onFinishSpontaneous(None)`, a real `FinishEvent`, clears `runningEvents`
+immediately) when it sends `RequestSignalStateData`, and re-registers via `scheduleEvent(tick)`
+(not `onFinishSpontaneous`) once the `Node`'s reply lands — `scheduleEvent` is required here, not
+optional, because `finishEvent`'s own `scheduleTick`-add path has **no** `wasIdle`/Global-TM
+re-notification logic; calling `onFinishSpontaneous(Some(tick))` a second time from an
+already-fully-resolved context would silently add to `scheduledActors` without telling the Global
+TM there's new work, risking premature simulation termination if this was the last scheduled item
+on this LTM.
+
+**Still open — three more call sites with the same shape, not yet fixed:**
+
+- **`BusStopHandler.requestLoadPassenger`** (single reply from one `BusStop` — same shape as the
+  now-fixed signal wait, likely the least severe of the three).
+- **`BusStopHandler.requestUnloadPeopleData`** (fan-out to *every* boarded `Person`, resolves only
+  once `countUnloadReceived >= expectedUnloadResponses` in `handleUnloadPassenger` — the LTM batch
+  stays blocked for as long as the *slowest* of N passengers takes to reply; likely the most
+  exposed of the three, since more messages means more chances of one being slow).
+- **`SubwayStation.scheduleNextTick`** and **`BusStation.actSpontaneous`/`dispatchFirstBus`**
+  (3 call sites, same pattern): both defer while waiting for `onDynamicActorInitialized` ACKs from
+  freshly-spawned `Bus`/`Subway` actors — dynamic actor creation/activation via Pekko cluster
+  sharding is not guaranteed instant, especially under load, making this a plausible real-world
+  stall source, not just a theoretical one.
+
+Unlike the signal-wait bug, none of these three have the *second*, more dangerous defect (the
+"silent scheduling, no Global TM re-notify" trap) — their eventual `onFinishSpontaneous(tick)`
+call correctly resolves the *same* `runningEvents` entry that was held open by
+`deferFinishSpontaneous()` in the first place, since nothing else clears it in between. The only
+defect here is the batch-stall itself.
+
+**Next step for whoever picks this up**: apply the same disengage-then-`scheduleEvent` pattern to
+all three remaining call sites (7 total, across `BusStopHandler`, `SubwayStation`, `BusStation`).
+Recommended order: `BusStopHandler.requestUnloadPeopleData` first (fan-out, most exposed), then the
+dynamic-actor-creation sites in `BusStation`/`SubwayStation`, then
+`BusStopHandler.requestLoadPassenger` last (single-reply, least exposed). No test currently
+exercises `runningEvents`/batch-stall behavior directly — consider whether a
+`pekko-actor-testkit-typed` test asserting an LTM's `runningEvents` clears immediately (not just
+eventually) around one of these calls is worth adding alongside the fix, to prevent the same class
+of regression the signal-wait fix's own tests couldn't catch (see `CarSignalHandlerSpec`'s doc
+comment on why it only tests the pure-handler layer, not `SimulationBaseActor.handleSpontaneous`).
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file
