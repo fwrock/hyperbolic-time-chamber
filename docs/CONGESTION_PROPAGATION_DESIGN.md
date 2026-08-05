@@ -187,17 +187,19 @@ reply, no re-verification round-trip. Rejected the alternative (push is a mere n
 vehicle to re-call `RequestLinkAccessData`) as strictly worse: more messages, and shaped like a
 retry loop reminiscent of the resend bug already fixed once.
 
-**Proposed, not yet confirmed**: the direct-grant choice above leaves a gap — the signal could have
-cycled back to Red while the vehicle sat in the capacity buffer, so a blind direct grant could send
-a vehicle across on a Red it can't see. Closeable for zero new messages: `Node` already holds the
+**Decided (2026-08-04): close the gap for zero new messages.** The direct-grant choice above leaves
+a gap — the signal could have cycled back to Red while the vehicle sat in the capacity buffer, so a
+blind direct grant could send a vehicle across on a Red it can't see. `Node` already holds the
 current signal phase locally (`state.signals`, kept current by `TrafficSignalPhaseHandler`'s
-existing phase-change notifications), so it could check that *local, already-in-memory* state
-before dequeuing a vehicle from the capacity buffer — if Red at that instant, don't dequeue yet;
-pick it up again the next time either more capacity frees, or the relevant phase turns Green
-(`Node` already receives that transition as an existing event, `handleReceiveSignalChangeStatus`).
-That would mean the capacity-FIFO buffer gets re-scanned/drained from **two** triggers instead of
-one. Not yet decided whether to build this in now or accept the (likely rare) risk and revisit if
-it shows up in validation.
+existing phase-change notifications), so before dequeuing a vehicle from the capacity buffer it
+checks that *local, already-in-memory* state — if Red at that instant, don't dequeue yet; the
+vehicle is picked up again the next time either more capacity frees, or the relevant phase turns
+Green (`Node` already receives that transition as an existing event,
+`handleReceiveSignalChangeStatus`). This means the capacity-FIFO buffer must be
+re-scanned/drained from **two** triggers, not one: `Link`'s "N slots freed" notification (original
+design) and `Node`'s own phase-change handler turning the relevant movement Green (this decision).
+Both are cheap, both are already-existing event entry points — no new message types needed for
+either.
 
 ## Open questions / next decisions needed before coding starts
 
