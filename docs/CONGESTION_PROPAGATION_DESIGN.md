@@ -91,11 +91,12 @@ set the whole time. No new "vehicle is nowhere" limbo state needs to be invented
   vehicle actually departing), it knows *exactly* how many slots freed (not an estimate). It
   notifies its governing `Node` — which is already knowable without a new lookup: `LinkState.from`
   **is** that Node's id, since that's exactly the Node a vehicle already queries before entering
-  this link. Node dequeues up to N waiting vehicles (FIFO) and sends each a "go" message. The
-  vehicle treats this exactly like a Green reply: `scheduleEvent(tick)` (its own current tick,
-  updated to at least the sender's tick via the standard `handleInteractWith` monotonic-tick rule —
-  see "TimeManager tick safety" below) to re-register, then proceeds via the existing
-  `WaitingSignal`/`leavingLinkFn()` machinery once genuinely re-dispatched.
+  this link. Node dequeues waiting vehicles (FIFO) and sends each a "go" message — see "How many to
+  wake" below for exactly how many. The vehicle treats this exactly like a Green reply:
+  `scheduleEvent(tick)` (its own current tick, updated to at least the sender's tick via the
+  standard `handleInteractWith` monotonic-tick rule — see "TimeManager tick safety" below) to
+  re-register, then proceeds via the existing `WaitingSignal`/`leavingLinkFn()` machinery once
+  genuinely re-dispatched.
 
 ### Why event-driven (Phase 2 push), not an analytical "next free tick" estimate
 
@@ -239,15 +240,46 @@ accidentally keeping this as a handler/actor-local `var` instead.
 `Node`'s own phase-change handler turning the relevant movement Green — call one shared internal
 method (working name: `tryDrainCapacityQueue(linkId, maxToWake)`) that checks `state.signals` is
 Green for that movement, dequeues up to `maxToWake` entries FIFO, and sends each a `LinkAccessData`
-(`Green`/`Available`) grant.
+(`Green`/`Available`) grant. `maxToWake` is not a raw pass-through of the Link's last-reported
+count — see "How many to wake" below.
+
+## Decided: how many vehicles to wake per freed slot (2026-08-04)
+
+**Not a blind pass-through of the Link's reported freed-count.** Every vehicle, for every link, asks
+its `Node` before entering — there is no direct-entry path that bypasses this gate. That means a
+race is possible: between the `Link`'s "N slots freed" notification and `Node` finishing the drain,
+fresh `RequestLinkAccessData` from vehicles that were never queued can arrive for the same link, and
+`Node`'s single-threaded (Pekko actor) processing interleaves all of it — freed-notifications,
+buffer drains, and fresh requests — in one sequential stream. If `Node` only ever passed through the
+Link's last-reported count without tracking its own grants, it could hand out more slots than
+actually exist (a fresh grant and a buffer-drain grant both "spending" the same reported freed slot).
+
+Fix: `Node` keeps its own per-link running counter — call it `availableCapacity: mutable.Map[String,
+Int]` in `NodeState` (same migration-snapshot-visibility reasoning as `capacityWaitQueue` above) —
+that is the *only* authority on how many grants `Node` may hand out for that link, right now:
+
+- **Decrement by 1** on every grant `Node` issues for that link — fresh `Green`/`Available` replies
+  *and* buffer-drain grants alike, no distinction.
+- **Increment** by whatever count the `Link`'s freed-slots notification reports.
+
+`tryDrainCapacityQueue(linkId, ...)` wakes `min(availableCapacity(linkId), capacityWaitQueue(linkId)
+.size)` vehicles, decrementing `availableCapacity` by 1 per grant as it goes — never a fixed number,
+never a raw echo of the Link's last message.
+
+**New dependency this creates on the still-open storage-capacity question below**:
+`availableCapacity` needs a correct *initial* value per link, seeded from that link's
+`storageCapacity` — otherwise `Node` starts with an unknown/wrong baseline and every subsequent
+increment/decrement is offset from the wrong number. Whatever mechanism question 2 settles on for
+computing `storageCapacity` must also define how/when `Node` first learns it (most likely: `Link`
+reports it once, at `Node`↔`Link` connection setup, alongside or via the same channel as
+`connections`).
 
 ## Open questions / next decisions needed before coding starts
 
-1. How many vehicles to wake per freed slot — exactly N (matching the link's reported freed
-   count) was the working assumption; still needs explicit confirmation.
-2. Whether `LinkState.capacity` (already used by `SpeedUtil.linkDensitySpeed` and
+1. Whether `LinkState.capacity` (already used by `SpeedUtil.linkDensitySpeed` and
    `bprCongestionFactor`) should be reused as-is for `storageCapacity`, or whether flow capacity
-   and storage capacity need to become two distinct fields.
+   and storage capacity need to become two distinct fields — and, per the new dependency above, how
+   `Node` first learns a link's `storageCapacity` to seed `availableCapacity`.
 
 ## Relevant file map (for whoever picks this up)
 
