@@ -201,15 +201,51 @@ design) and `Node`'s own phase-change handler turning the relevant movement Gree
 Both are cheap, both are already-existing event entry points — no new message types needed for
 either.
 
+## Decided: `Node`-side FIFO buffer structure (2026-08-04)
+
+New model class, same location/style convention as `LinkRegister`/`SignalState`
+(`model/hybrid/entity/state/model/PendingLinkAccessRequest.scala`):
+
+```scala
+case class PendingLinkAccessRequest(
+  actorRefId: String,
+  shardRefId: String
+)
+```
+
+Deliberately minimal — exactly what `sendMessageFn(entityId, shardId, data, eventType)` needs to
+reply later, both already available on the original request event (`event.actorRefId`/
+`event.shardRefId`). No `nextTick` or other signal-wait fields here; those belong to the vehicle's
+own `WaitingCapacity` state, not the `Node`'s buffer entry.
+
+New `NodeState` field:
+
+```scala
+capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty
+```
+
+Keyed by `targetLinkId` (the link the waiting vehicle wants to enter). `mutable.Map[String,
+mutable.Queue[X]]` is an already-precedented shape in this codebase's JSON-serialized state
+(`SubwayStationState.subways`, `LinkState.vehiclesByLane`) — no new serialization concern.
+
+**Resolves the migration-snapshot question for free**: because this lives in `NodeState` (part of
+`state`, not an actor-local `var` on `Node`/`NodeEventHandler`), it's automatically covered by the
+same generic state serialization/snapshot mechanism every other `NodeState` field already uses —
+exactly what `CLAUDE.md`'s "what must live in `state`" guidance calls for a pending
+reply-obligation like this. No special migration code needed; the only failure mode to avoid is
+accidentally keeping this as a handler/actor-local `var` instead.
+
+**Draining**: both trigger points decided earlier — `Link`'s "N slots freed" notification, and
+`Node`'s own phase-change handler turning the relevant movement Green — call one shared internal
+method (working name: `tryDrainCapacityQueue(linkId, maxToWake)`) that checks `state.signals` is
+Green for that movement, dequeues up to `maxToWake` entries FIFO, and sends each a `LinkAccessData`
+(`Green`/`Available`) grant.
+
 ## Open questions / next decisions needed before coding starts
 
 1. How many vehicles to wake per freed slot — exactly N (matching the link's reported freed
-   count) was the working assumption; confirm this before implementing the `Node`-side buffer.
-3. `Node`-side buffer data structure and its interaction with `NodeState`/migration snapshot rules
-   (per `CLAUDE.md`'s "what must live in `state`" guidance — a pending FIFO queue of waiting
-   vehicles is exactly the kind of reply-obligation state that must not be an actor-local `var`
-   invisible to `buildMigrationSnapshot`, even though migration is currently disabled).
-4. Whether `LinkState.capacity` (already used by `SpeedUtil.linkDensitySpeed` and
+   count) was the working assumption; still needs explicit confirmation.
+2. Whether `LinkState.capacity` (already used by `SpeedUtil.linkDensitySpeed` and
    `bprCongestionFactor`) should be reused as-is for `storageCapacity`, or whether flow capacity
    and storage capacity need to become two distinct fields.
 
@@ -217,8 +253,9 @@ either.
 
 | File | Role |
 |---|---|
-| `model/hybrid/support/node/NodeEventHandler.scala` | `Node`'s signal/capacity reply logic; would own the new FIFO buffer |
-| `model/hybrid/entity/state/NodeState.scala` | Would carry the buffer, migration-snapshot-visible |
+| `model/hybrid/support/node/NodeEventHandler.scala` | `Node`'s signal/capacity reply logic; would own `tryDrainCapacityQueue` and both drain triggers |
+| `model/hybrid/entity/state/NodeState.scala` | Gains `capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]]` |
+| `model/hybrid/entity/state/model/PendingLinkAccessRequest.scala` (new) | Minimal per-waiting-vehicle record: `actorRefId`, `shardRefId` |
 | `model/hybrid/support/car/CarSignalHandler.scala` (+ Bus/Bicycle/Motorcycle equivalents) | Vehicle-side request/reply handling; already fixed for the deregister/`scheduleEvent` pattern this feature must reuse |
 | `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | Where `LeaveLinkData` is processed; would own "N slots freed" notification to `state.from` |
 | `model/hybrid/util/SpeedUtil.scala` | Already has `bprCongestionFactor`; would gain the jam-spacing-based storage-capacity helper |
