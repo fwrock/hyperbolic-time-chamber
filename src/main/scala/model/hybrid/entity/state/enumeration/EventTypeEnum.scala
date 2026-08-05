@@ -15,7 +15,7 @@ enum EventTypeEnum:
     RequestRoute,
     ForwardRoute,
     ReceiveRoute,
-    ReceiveSignalState,
+    ReceiveLinkAccess,
     EnterLink,
     LeaveLink,
     EnterNode,
@@ -26,5 +26,7 @@ enum EventTypeEnum:
     ReceiveLeaveNodeInfo,
     LinkConnection,
     TrafficSignalChangeStatus,
-    RequestSignalState,
-    LinkSignalState
+    RequestLinkAccess,
+    LinkSignalState,
+    LinkCapacityFreed,
+    RegisterLinkCapacity

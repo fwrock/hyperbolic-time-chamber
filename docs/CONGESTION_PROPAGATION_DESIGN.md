@@ -1,8 +1,13 @@
-# Congestion Propagation & Intersection Design (Work in Progress)
+# Congestion Propagation & Intersection Design
 
-Status as of 2026-08-04. This document captures the design decisions made so far on
-`feat/congestion-propagation`, before implementation of the link-capacity/spillback feature
-begins. It is a working design log, not a finished spec — update it as decisions change.
+Status as of 2026-08-05: **the point-3/4 link-capacity/spillback mechanism designed below is
+implemented** (`RequestLinkAccessData`/`LinkAccessData`, `NodeState.capacityWaitQueue`/
+`availableCapacity`, both drain triggers, the Link→Node capacity registration and freed-slot
+notifications, and the vehicle-side `WaitingCapacity` status across Car/Bus/Bicycle/Motorcycle).
+Point 5 (intersection throughput/conflict modeling beyond capacity backpressure — saturation flow,
+gap acceptance) is **not** started. This document remains the design log/rationale — update it if
+the implementation diverges from what's recorded here, don't treat it as aspirational anymore for
+the parts marked implemented.
 
 ## Motivation
 
@@ -291,15 +296,28 @@ All previously-open design-level questions are now closed. Remaining work is imp
 wiring `RequestLinkAccessData`/`LinkAccessData`, `NodeState.capacityWaitQueue`/`availableCapacity`,
 the two drain triggers, and the one-time `Node`↔`Link` capacity handshake described above.
 
-## Relevant file map (for whoever picks this up)
+## Relevant file map (implemented 2026-08-05)
 
 | File | Role |
 |---|---|
-| `model/hybrid/support/node/NodeEventHandler.scala` | `Node`'s signal/capacity reply logic; would own `tryDrainCapacityQueue` and both drain triggers |
-| `model/hybrid/entity/state/NodeState.scala` | Gains `capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]]` and `availableCapacity: mutable.Map[String, Int]` |
+| `model/hybrid/support/node/NodeEventHandler.scala` | `handleRequestLinkAccess` (renamed from `handleRequestSignalState`), `replyGreenOrBufferForCapacity`, `tryDrainCapacityQueue`, `handleLinkCapacityFreed`, `handleRegisterLinkCapacity`; `handleReceiveSignalChangeStatus` now also drains on Green (second trigger) |
+| `model/hybrid/entity/state/NodeState.scala` | `capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]]`, `availableCapacity: mutable.Map[String, Int]` |
 | `model/hybrid/entity/state/model/PendingLinkAccessRequest.scala` (new) | Minimal per-waiting-vehicle record: `actorRefId`, `shardRefId` |
-| `model/hybrid/support/car/CarSignalHandler.scala` (+ Bus/Bicycle/Motorcycle equivalents) | Vehicle-side request/reply handling; already fixed for the deregister/`scheduleEvent` pattern this feature must reuse |
-| `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | Where `LeaveLinkData` is processed; would own "N slots freed" notification to `state.from`, and the one-time `state.capacity` report to `Node` at connection setup |
-| `model/hybrid/util/SpeedUtil.scala` | `linkDensitySpeed`/`bprCongestionFactor` already use `capacity` correctly as-is — no change needed; confirmed `linkDensitySpeed` is mathematically the Greenshields (1935) speed-density model once `capacity` is read as occupancy, not flow |
+| `model/hybrid/entity/state/enumeration/LinkCapacityStateEnum.scala` (new) | `Available` / `Full` |
+| `model/hybrid/entity/event/data/vehicle/RequestLinkAccessData.scala` (renamed from `RequestSignalStateData`) | Vehicle → Node request |
+| `model/hybrid/entity/event/node/LinkAccessData.scala` (renamed from `SignalStateData`) | Node → vehicle reply/grant; gained `capacityState` field |
+| `model/hybrid/entity/event/data/link/LinkCapacityFreedData.scala`, `RegisterLinkCapacityData.scala` (new) | Link → Node: exact freed count per departure; one-time capacity registration at Link init |
+| `model/hybrid/support/car/CarSignalHandler.scala` (+ Bus/Bicycle/Motorcycle equivalents) | `handleLinkAccess` (renamed from `handleSignalState`); Red replies now flag `signalWaitNeedsReverify` so `actSpontaneous`'s `WaitingSignal` branch re-verifies (fresh request) instead of proceeding unilaterally once capacity is a second, independent gate |
+| `model/hybrid/actor/{Car,Bus,Bicycle,Motorcycle}.scala` | New `signalWaitNeedsReverify` var + `WaitingCapacity` status case (safety-net, same shape as `WaitingSignalState`) |
+| `model/hybrid/support/link/LinkVehicleFlowHandler.scala` | `handleLeaveLink` sends `LinkCapacityFreedData(linkId, freedCount = 1)` to `state.from` whenever `wasRegistered` |
+| `model/hybrid/actor/Link.scala` | `onInitialize` sends `RegisterLinkCapacityData(linkId, state.capacity.toInt)` to `state.from` |
+| `model/hybrid/util/SpeedUtil.scala` | `linkDensitySpeed`/`bprCongestionFactor` already used `capacity` correctly as-is — no change needed; confirmed `linkDensitySpeed` is mathematically the Greenshields (1935) speed-density model once `capacity` is read as occupancy, not flow |
 | `docs/SCENARIO_MODELING.md` | Link's `capacity` field description corrected 2026-08-05 (was wrongly documented as "vehicles per hour") |
 | `docs/KNOWN_GAPS.md` | Tracks the `deferFinishSpontaneous` batch-stall gap this design must not reintroduce |
+| `src/test/scala/model/hybrid/support/node/NodeEventHandlerSpec.scala`, `src/test/scala/model/hybrid/support/car/CarSignalHandlerSpec.scala` | Updated/extended for the renamed types and capacity behavior |
+
+**Not yet done**: point 5 (saturation-flow/gap-acceptance intersection throughput modeling),
+priority-between-competing-movements fairness (FIFO only today), and no scenario-level integration
+test yet exercising the full spillback path end-to-end (current coverage is handler-level unit
+tests only, per the existing `CityMapUtil` JVM-singleton constraint noted in `CarSignalHandlerSpec`'s
+doc comment).

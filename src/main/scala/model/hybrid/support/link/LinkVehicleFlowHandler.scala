@@ -190,6 +190,14 @@ class LinkVehicleFlowHandler(
     if (wasRegistered) {
       val travelTicks = if (entryTick >= 0) (currentTickFn() - entryTick).toDouble else 0.0
       metricsReporter.onVehicleArrived(isMicro = state.isMicroMode, travelTime = travelTicks)
+      // Exact count, never an estimate — the Node uses this to drain any vehicles it has
+      // buffered waiting for capacity on this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+      sendMessageFn(
+        state.from,
+        "hybrid.actor.Node",
+        model.hybrid.entity.event.data.link.LinkCapacityFreedData(linkId = entityIdFn(), freedCount = 1),
+        EventTypeEnum.LinkCapacityFreed.toString
+      )
     }
 
     if (state.isMicroMode) sendLeaveLinkMicro(event, data, entryTick)

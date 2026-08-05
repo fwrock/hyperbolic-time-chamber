@@ -7,8 +7,7 @@ import core.types.Tick
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
-import org.interscity.htc.model.hybrid.entity.event.data.vehicle.RequestSignalStateData
-import org.interscity.htc.model.hybrid.entity.event.node.SignalStateData
+import org.interscity.htc.model.hybrid.entity.event.node.LinkAccessData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.EventTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
@@ -133,6 +132,8 @@ class Bus(
     * triggering premature leavingLink.
     */
   private var signalWaitUntilTick: Option[Tick] = None
+  // See Car.scala's signalWaitNeedsReverify for what this flags and why.
+  private var signalWaitNeedsReverify: Boolean = false
 
   /** Number of passengers asked to unload at current stop. Used to track when all responses
     * arrived.
@@ -202,6 +203,7 @@ class Bus(
     logWarnFn              = msg => logWarn(msg),
     logDebugFn             = msg => logDebug(msg),
     setSignalWaitUntilTickFn = tick => signalWaitUntilTick = tick,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx)
   )
 
@@ -327,14 +329,24 @@ class Bus(
             onFinishSpontaneous(Some(waitTick))
           case _ =>
             signalWaitUntilTick = None
-            leavingLink()
+            if (signalWaitNeedsReverify) {
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
         }
 
       case WaitingSignalState =>
         // Should never actually fire — requestSignalState() no longer self-schedules
-        // after sending; only handleSignalState (the Node's reply) resolves this status.
+        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
         // Do not resend the request if reached anyway (see Car.scala for rationale).
         logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        // Should never actually fire, same reasoning as WaitingSignalState.
+        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
       case WaitingLoadPassenger =>
@@ -358,7 +370,7 @@ class Bus(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: SignalStateData        => handleSignalState(event, d)
+      case d: LinkAccessData         => handleLinkAccess(event, d)
       case d: MicroEnterLinkData     => handleMicroEnterLink(event, d)
       case d: MicroUpdateData        => handleMicroUpdate(event, d)
       case d: MicroLeaveLinkData     => handleMicroLeaveLink(event, d)
@@ -414,8 +426,8 @@ class Bus(
 
   /** Handle signal state.
     */
-  private def handleSignalState(event: ActorInteractionEvent, data: SignalStateData): Unit =
-    signalHandler.handleSignalState(data, state)
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
 
   override protected def microMaxAcceleration: Double = 1.2
   override protected def microMaxDeceleration: Double = 3.5
@@ -423,6 +435,7 @@ class Bus(
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
     currentStopNode = state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
