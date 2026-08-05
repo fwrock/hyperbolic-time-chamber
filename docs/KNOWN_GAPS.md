@@ -56,24 +56,65 @@ three related gaps trace back to one shared structural cause and are still open:
   always answer the vehicle it's boarded on. That fix depends on `currentPTVehicleRef`, itself a
   plain actor-local `var`, not part of `PersonState` — so it reopens the same barrier deadlock if
   `Person` migrates shard while boarded.
-- **C — `Car.signalStateRetryCounter` watchdog (`Car.scala:252-262`) is a live retry/give-up loop,
-  still open — confirmed a distinct root cause from A/B, not fixed by them.** `Car.status ==
-  WaitingSignalState` lives in `state` (a `MovableState` field), so it *does* survive migration via
-  the default `buildMigrationSnapshot` — A/B were about actor-local `var`s outside `state`, which
-  this isn't. The real exposure is the in-flight `REQUEST_SIGNAL_STATE`/`SIGNAL_STATE_RESPONSE`
-  messages themselves during the migration hand-off window: `MessageBuffer` (see its own docstring)
-  silently drops buffered messages once `maxBufferSize` is exceeded, and that's a message-delivery
-  gap, not a missing-snapshot-field gap. `NodeEventHandler.handleRequestSignalState` was confirmed
-  to reply on every branch, so this isn't a Node bug either. A real fix belongs in the migration
-  coordinator/`MessageBuffer` (e.g. backpressure or a non-lossy overflow policy instead of silent
-  drop) — that's a `htc-architect`-level design call, not a Car.scala patch, and out of scope for
-  the A/B fix above.
+- **C — [CORRECTED 2026-08-05, original diagnosis was stale] not a retry-loop/lossy-buffer bug;
+  re-investigated and found a different, more precise real gap.** The original write-up named
+  `Car.signalStateRetryCounter` (`Car.scala:252-262`) — **this no longer exists**, superseded by
+  the `RequestLinkAccess`/`LinkAccessData` rework (the congestion-propagation feature): `Car` now
+  genuinely deregisters (`onFinishSpontaneous(None)`) and waits for the Node's reply as a pure
+  interaction event, no polling/retry counter at all. The original write-up also named `MessageBuffer`
+  as "silently drops buffered messages once `maxBufferSize` is exceeded" — checked directly:
+  `MessageBuffer.buffer()`, the only method that would ever enqueue a real message, **had zero
+  callers anywhere in the codebase**. `ShardMigrationCoordinator` only ever called
+  `startBuffering`/`drainBuffer`/`abortBuffering`/`totalBufferedCount` — bookkeeping methods that
+  never actually intercepted a message. It provided no protection whatsoever, working or broken;
+  it was dead scaffolding, not a flawed-but-active safety net. **Removed** (`MessageBuffer.scala`
+  deleted; `ShardMigrationCoordinator`'s unused `messageBuffer` field and its call sites removed;
+  `MigrationStats.totalBufferedMessages` removed, since it always reported 0 and nothing consumed
+  it) rather than left as misleading dead code implying a protection that doesn't exist.
+
+  **What actually protects in-flight messages during migration, confirmed by reading the real
+  protocol end-to-end (`LoadBalanceManager.handleMigrationSafe`/`handleWindowAck`,
+  `MigrationWindowSubscriber`, `SimulationBaseActor.preStart`)**: (1) `LoadBalanceManager` asks the
+  TimeManager to pause at a safe tick boundary before migrating anything — no spontaneous events
+  are in flight during the whole migration wave; (2) a distributed "migration window" protocol
+  (`MigrationWindowOpenEvent`/`Close`, `DistributedPubSub`) sets a per-node
+  `MigrationStateStoreRegistry.isMigrationActive` flag *before* Pekko's rebalance is triggered; (3)
+  on the target node, `SimulationBaseActor.preStart` checks that flag — if set, the entity queries
+  the `SnapshotManager` for its restored state and **genuinely `stash()`es every other incoming
+  message** until `MigrationContextEvent`/`NoPendingMigrationEvent` arrives, then `unstashAll()`s;
+  (4) the actual shard relocation goes through real `org.apache.pekko.cluster.sharding.ClusterSharding`
+  (confirmed in `ActorCreatorUtil.scala`), which has its own native, well-tested hand-off buffering
+  for messages arriving mid-rebalance. This is a real, working, reasonably sophisticated protocol —
+  `MessageBuffer` was apparently an earlier or parallel design that got superseded by it and never
+  cleaned up.
+
+  **The real remaining gap, more precise than the original**: `LoadBalanceManager.handlePrepareForMigration`
+  (via each entity's `BaseActor.handlePrepareForMigration`) captures a source entity's
+  `MigrationSnapshot` and sends it to the `SnapshotManager` — but the source entity is **not**
+  stopped, passivated, or put into any restricted mode at that point; it keeps processing messages
+  completely normally until Pekko's rebalance is triggered later (only after every cluster node
+  ACKs "window open", per `handleWindowAck`'s `PHASE_OPEN` branch). The TimeManager pause prevents
+  the entity's *own* spontaneous activity in this window, but an **interaction-event reply from
+  another actor** (e.g. a `LinkAccessData` a Car was already waiting on) can still arrive and be
+  processed normally in that gap — mutating `state`/actor-local vars *after* the snapshot was
+  already captured and sent. That mutation is never reflected in what gets restored on the target
+  node: a genuine lost-update window, not a dropped message. Still open, still dormant (migration
+  disabled — see below), and still an `htc-architect`-level design call (e.g. have the source
+  entity also enter a stash/reject mode the moment it sends `PrepareForMigrationEvent`, or
+  re-snapshot immediately before the actual Pekko-triggered stop instead of once, early) — not
+  attempted here; scoped and documented per the maintainer's own call not to guess at a protocol
+  change to dormant, currently-untested code in this session.
+
+  **Validation for the dead-code removal**: `sbt compile` clean, `sbt test` 172/172 (no test
+  referenced `MessageBuffer`/`ShardMigrationCoordinator` at all — confirmed by grep before
+  removing, so there was nothing to update). `sbt assembly` succeeds.
 
 **Why this hadn't bitten anyone yet**: shard rebalancing/migration is currently kept disabled while
 the project prioritizes simulation execution quality and performance — see `CLAUDE.md`'s Actor
 State section. These gaps were real but dormant; A/B are now fixed (see above) so they no longer
-become load-bearing if migration is turned back on. Gap C remains dormant-but-real for the same
-reason and needs its own fix before migration can be safely re-enabled.
+become load-bearing if migration is turned back on. Gap C's corrected finding (the
+`PrepareForMigrationEvent`-to-actual-stop lost-update window) remains dormant-but-real for the
+same reason and needs its own design before migration can be safely re-enabled.
 
 ## Simulation Runs Are Not Fully Reproducible for a Fixed Seed — Duplicate Spontaneous-Event Dispatch (Structural duplicate dispatch: RESOLVED 2026-07-25, TM-level fix; small residual timing drift still open)
 
