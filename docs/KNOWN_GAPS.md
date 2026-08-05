@@ -1079,12 +1079,29 @@ duplicates. Both `bus_created`/`subway_created` counts matched the pre-fix basel
 2), confirming dynamic actor creation itself is unaffected — only the TimeManager registration
 shape around the wait changed.
 
-**Still open**: no test currently exercises `runningEvents`/batch-stall behavior directly, nor the
-specific 0-tick termination race this section's first fix attempt hit — worth adding a
-`pekko-actor-testkit-typed` regression test reproducing that failure mode directly (a scenario
-where the only actor scheduled at tick 0 disengages to await a dynamic-actor spawn), so a future
-change to this file's fix doesn't need the full 86,400-tick baseline to catch a regression back to
-either `deferFinishSpontaneous()` or the unsafe full-disengage shape.
+**[RESOLVED 2026-08-05]** Added `LocalTimeManagerBatchStallSpec`
+(`src/test/scala/core/actor/manager/time/`), exercising `LocalDiscreteEventTimeManager`'s real
+`runningEvents`/`scheduledActors` bookkeeping directly on `underlyingActor` (same pattern
+`PrivateVehicleMigrationSnapshotSpec` uses for a `PersistentActor` under test — protected methods
+called directly, bypassing the mailbox for the outer call while still routing through the actor's
+real `handleEvent` for messages that need it, e.g. `UpdateGlobalTimeEvent` to trigger dispatch).
+`TestProbe`s stand in for the "actors" (`PoolDistributed`/`actorSelection`-addressed, matching
+`sendSpontaneousEventPool`, so no cluster sharding is needed — `pekko.actor.provider = local`
+throughout). Two specs:
+1. A co-scheduled sibling actor's own next tick becomes reachable (`runningEvents` clears,
+   `reportGlobalTimeManager(hasScheduled = true)` reaches the parent) once a genuinely-disengaged
+   actor sends its `FinishEvent(scheduleTick = None)` — the fixed pattern.
+2. A fully-disengaged actor (idle LTM, `reportGlobalTimeManager(hasScheduled = false)` reaches the
+   parent) can be re-woken later via a fresh `ScheduleEvent`, and the LTM's `wasIdle`
+   re-notification correctly reaches the parent — the exact protocol `BusStation`/`SubwayStation`
+   depend on after a dynamic-actor-spawn ack, whose absence would reproduce the 0-tick termination
+   race this section's first (reverted) fix attempt hit.
+
+**Verified the test actually catches the regression, not just passes vacuously**: temporarily
+removed spec 1's genuine-disengage `FinishEvent` call (simulating `deferFinishSpontaneous()`'s
+"send nothing at all") and re-ran — failed exactly as expected
+(`Set("actor-a") was not empty`, i.e. the batch stayed held open), confirmed via `git diff`-clean
+revert back to the real assertions afterward. `sbt test`: 172/172 (170 pre-existing + 2 new).
 
 ## `NodeEventHandler` Notified the Wrong Link on Signal Phase Change — Root Cause of the "+161-203s Signal-Wait Overshoot" (Found/Fixed 2026-08-05)
 
