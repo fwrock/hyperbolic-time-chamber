@@ -9,6 +9,31 @@ gap acceptance) is **not** started. This document remains the design log/rationa
 the implementation diverges from what's recorded here, don't treat it as aspirational anymore for
 the parts marked implemented.
 
+## Next up (queued, 2026-08-05): Point 5 — intersection throughput/conflict modeling
+
+Deliberately excluded from the points-3/4 work in this document/branch, to keep that a
+self-contained, reviewable unit — scope it as its own branch/PR/design pass, not a continuation of
+this one. What's already known, so the next session doesn't start from zero:
+
+- **Where it starts**: `Node` today is a binary Green/Red gate with no throughput limit and no
+  conflict resolution between competing movements (see "Problem scope" below, "Point 5" bullet).
+- **Saturation-flow discharge (signalized intersections)**: HCM 6th ed. §19's ~2s/vehicle headway
+  is *already* the model used in `CarSignalHandler.handleLinkAccess`'s Red-reply wait calculation
+  (`headwayTicks = 2L`) — this was root-caused and fixed as part of the `+161-167s` overshoot bug
+  earlier on this branch (see `docs/KNOWN_GAPS.md`). Point 5 work here is mostly about extending an
+  already-correct, already-literature-grounded mechanism to more scenarios, not inventing one.
+- **Gap acceptance (unsignalized/uncontrolled intersections)**: not started. Literature starting
+  point: HCM Ch. 9 / Tanner (1962) critical-gap-based capacity for minor-street movements. Today
+  `NodeEventHandler` just assumes Green ("uncontrolled intersection, pass freely") whenever no
+  signal is registered for a connection — see the "no signal entry"/"no connection entry" branches
+  funneling into `replyGreenOrBufferForCapacity`.
+- **Movement-conflict matrices**: explicitly out of scope unless/until signal phase plans are
+  ever auto-generated — today they're authored externally in `simulation.json`, so conflicts are
+  already resolved by whoever wrote the scenario.
+- **Priority/right-of-way between movements**: still deferred from the points-3/4 fairness work
+  too (see "Fairness" section below) — plain FIFO across the capacity buffer doesn't model
+  protected turns or major-road precedence.
+
 ## Motivation
 
 Investigated as points 3, 4, 5 of a broader congestion-modeling review (see conversation history /
