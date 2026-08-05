@@ -533,6 +533,25 @@ plausibly affects large scenarios (e.g. São Paulo-scale) more than the tiny one
 Krauss car-following math itself was *not* implicated: vehicles unaffected by this scheduling bug
 in the same validation runs tracked SUMO closely (~4.6 m position RMSE over a ~300 m trip).
 
+**Update 2026-08-04: found the sibling code path this fix missed, likely explaining the ~0.1%
+residual drift referenced throughout this section.** The fix above only patched `scheduleEvent`
+(the `ScheduleEvent` message handler, used by `SimulationBaseActor.scheduleEvent(tick)`) to compare
+against the actor's own `highestProcessedTick` watermark instead of the shared `localTickOffset`.
+`finishEvent`'s own inline handling of `finish.scheduleTick` (`LocalTimeManagerBase.scala`, the
+`onFinishSpontaneous(Some(tick))` path — used far more pervasively than `scheduleEvent` itself,
+since it's how nearly every actor re-registers after resolving a wait, including e.g. a `Car`'s
+`mesoExitTick`) still used `if (tick <= localTickOffset) localTickOffset + 1 else tick` unchanged.
+Same mechanism, same silent-mis-scheduling failure mode (not a discard — the actor is still
+scheduled, just at a later, physically-incorrect tick — whenever a busier sibling actor on the same
+LTM instance has pushed `localTickOffset` past the correctly-computed tick in the meantime), just
+on the far more heavily-used code path. Found while designing the congestion-propagation
+link-capacity wait (`docs/CONGESTION_PROPAGATION_DESIGN.md`) — that feature creates much longer,
+less-bounded dormancy periods than anything previously exercising this path, making the bug both
+more likely to trigger and larger in magnitude. Fixed by applying the identical per-actor-watermark
+guard to `finishEvent`'s `scheduleTick` handling. Not yet re-run against the SUMO validation harness
+to confirm this closes the residual RMSE gap — worth doing before considering this section fully
+resolved.
+
 ## `TrafficSignalPhaseHandler` Never Transitions Past Its First Phase (Found 2026-07-30, Fixed 2026-07-31)
 
 **Root cause: a code bug, not a data/config bug.** The exported traffic-signal JSON (`phases:
