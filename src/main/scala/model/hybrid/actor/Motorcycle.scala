@@ -174,6 +174,7 @@ class Motorcycle(
     currentTickFn                = () => currentTick,
     journeyReporter              = journeyReporter,
     onFinishSpontaneousFn        = tick => onFinishSpontaneous(tick),
+    deferFinishSpontaneousFn     = () => deferFinishSpontaneous(),
     leavingLinkFn                = () => leavingLink(),
     selfDestructFn               = () => selfDestruct(),
     isPersonCentricFn            = () => isPersonCentric,

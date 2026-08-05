@@ -19,6 +19,7 @@ class BicycleSignalHandler(
   currentTickFn:               () => Tick,
   journeyReporter:             BicycleJourneyReporter,
   onFinishSpontaneousFn:       Option[Tick] => Unit,
+  deferFinishSpontaneousFn:    () => Unit,
   leavingLinkFn:               () => Unit,
   selfDestructFn:              () => Unit,
   isPersonCentricFn:           () => Boolean,
@@ -64,7 +65,9 @@ class BicycleSignalHandler(
                   )
                 // Consistency-critical: do NOT resolve here. Node always replies on every
                 // branch — wait for that reply as an interaction event; handleSignalState
-                // resolves the spontaneous event.
+                // resolves the spontaneous event. Suppress the actor's own safety net so it
+                // doesn't auto-recover with a [BUG] log (see CarSignalHandler for rationale).
+                deferFinishSpontaneousFn()
                 case null =>
                   leavingLinkFn()
               }
