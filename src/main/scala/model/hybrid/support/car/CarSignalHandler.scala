@@ -22,6 +22,7 @@ class CarSignalHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: CarJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
+  private val deferFinishSpontaneousFn: () => Unit,
   private val leavingLinkFn: () => Unit,
   private val selfDestructFn: () => Unit,
   private val isPersonCentricFn: () => Boolean,
@@ -72,6 +73,10 @@ class CarSignalHandler(
               // Consistency-critical: do NOT resolve here. Node always replies on every
               // branch (NodeEventHandler.handleRequestSignalState) — wait for that reply
               // as an interaction event; handleSignalState resolves the spontaneous event.
+              // deferFinishSpontaneousFn() suppresses SimulationBaseActor's own "actSpontaneous
+              // returned without resolving" safety net (which would otherwise auto-recover with
+              // onFinishSpontaneous(currentTick + 1) AND log a [BUG] error on every request).
+              deferFinishSpontaneousFn()
             } else {
               leavingLinkFn()
             }

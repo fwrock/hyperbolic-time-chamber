@@ -22,6 +22,7 @@ class BusSignalHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
+  private val deferFinishSpontaneousFn: () => Unit,
   private val onFinishDestructFn: () => Unit,
   private val leavingLinkFn: () => Unit,
   private val finishJourneyFn: (String, String) => Unit,
@@ -58,7 +59,9 @@ class BusSignalHandler(
                   )
                 // Consistency-critical: do NOT resolve here. Node always replies on every
                 // branch — wait for that reply as an interaction event; handleSignalState
-                // resolves the spontaneous event.
+                // resolves the spontaneous event. Suppress the actor's own safety net so it
+                // doesn't auto-recover with a [BUG] log (see CarSignalHandler for rationale).
+                deferFinishSpontaneousFn()
                 case null =>
                   logWarnFn("No next link available")
                   leavingLinkFn()
