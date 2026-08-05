@@ -548,9 +548,32 @@ on the far more heavily-used code path. Found while designing the congestion-pro
 link-capacity wait (`docs/CONGESTION_PROPAGATION_DESIGN.md`) — that feature creates much longer,
 less-bounded dormancy periods than anything previously exercising this path, making the bug both
 more likely to trigger and larger in magnitude. Fixed by applying the identical per-actor-watermark
-guard to `finishEvent`'s `scheduleTick` handling. Not yet re-run against the SUMO validation harness
-to confirm this closes the residual RMSE gap — worth doing before considering this section fully
-resolved.
+guard to `finishEvent`'s `scheduleTick` handling.
+
+**Re-run against `tools/sumo_validation` 2026-08-05 (three runs each, scenarios A and B), together
+with this session's other fixes already landed (the `NodeEventHandler` approach-link fix and the
+`Bus`/`Motorcycle`/`Bicycle` velocity-fallback fix above) — partially confirms the fix, but doesn't
+fully close the residual gap this note was tracking.** Scenario A (no signal, so this fix and
+today's signal fixes are the only variables in play): `car_1`'s RMSE landed at 68.366-68.463m
+across two runs, matching the number already on record in the `sumo_validation` correction section
+almost exactly — no regression, consistent with expectations. But `car_0`/`car_2` (normally at the
+~4.6m unaffected baseline) showed real run-to-run variance in this batch (`car_0` travel-time delta
+-6s vs -10s; `car_2` RMSE 4.6m in one run vs 122.987m in another) — this is the same *class* of
+residual scheduling nondeterminism already documented in this section and the correction section
+below (a wall-clock race in the shared `LocalTimeManager` pool, not a new bug), not something this
+specific `finishEvent` fix was scoped to eliminate on its own. Scenario B: `car_2`-`car_5` (the
+signal-queued cars) came back **byte-identical across all three runs** (RMSE 50.678/61.595/70.492/
+55.941m, every time) — a genuine, reproducible improvement over this section's own original
+finding of car-level RMSE varying `run-to-run even with the fix applied`. Max travel-time delta
+stayed in an 8-9s band across all three runs, consistent with (not exceeding) the 8-9s already
+recorded in the `NodeEventHandler` approach-link fix's own validation above — i.e. this fix and
+that one are not fighting each other, and together they hold the signal-gated cars' behavior
+stable. **Conclusion: this fix demonstrably closes the residual mis-scheduling for the
+signal-queued/deterministic-wait cars it targeted (scenario B's `car_2`-`car_5`), but the separate,
+already-documented free-running-car timing race (scenario A/B's `car_0`/`car_1`/`car_2` when not
+signal-gated) remains exactly as unresolved as parts 2/4/5 and the correction section already
+describe** — not a new finding, just confirmation that this fix didn't accidentally touch it either
+way. `sbt test`: 170/170 (unchanged, no Scala edits this session).
 
 ## `TrafficSignalPhaseHandler` Never Transitions Past Its First Phase (Found 2026-07-30, Fixed 2026-07-31)
 
