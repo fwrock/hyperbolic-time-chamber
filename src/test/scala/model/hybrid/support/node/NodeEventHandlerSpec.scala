@@ -34,6 +34,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
 
   private def newState(
     connections: mutable.Map[String, Identify] = mutable.Map.empty,
+    approachConnections: mutable.Map[String, Identify] = mutable.Map.empty,
     signals: mutable.Map[String, SignalState] = mutable.Map.empty,
     signalWaitingCounts: mutable.Map[String, Int] = mutable.Map.empty,
     capacityWaitQueue: mutable.Map[String, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty,
@@ -45,13 +46,17 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       longitude = 0.0,
       links = List.empty,
       connections = connections,
+      approachConnections = approachConnections,
       signals = signals,
       signalWaitingCounts = signalWaitingCounts,
       capacityWaitQueue = capacityWaitQueue,
       availableCapacity = availableCapacity
     )
 
-  private def newHandler(state: NodeState): (NodeEventHandler, mutable.ArrayBuffer[(String, String, AnyRef, String)]) = {
+  private def newHandler(
+    state: NodeState,
+    getLinkDependencyFn: String => Option[ShardActorId] = _ => None
+  ): (NodeEventHandler, mutable.ArrayBuffer[(String, String, AnyRef, String)]) = {
     val sent = mutable.ArrayBuffer.empty[(String, String, AnyRef, String)]
     val handler = new NodeEventHandler(
       getStateFn = () => state,
@@ -60,7 +65,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       pendingSignals = mutable.Map.empty,
       reportFn = (_, _) => (),
       sendMessageFn = (id, shard, data, evType) => sent += ((id, shard, data, evType)),
-      getLinkDependencyFn = _ => None,
+      getLinkDependencyFn = getLinkDependencyFn,
       logWarnFn = _ => (),
       logDebugFn = _ => ()
     )
@@ -424,5 +429,64 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     )
 
     waitingCounts("link_ab") shouldBe 4
+  }
+
+  // ── Regression: docs/KNOWN_GAPS.md "NodeEventHandler Notifies the Wrong Link on Signal
+  // Phase Change" — the connections-keying fix (approach edge -> outgoing edge) that fixed
+  // handleRequestLinkAccess's lookup broke this handler's own use of the same map: it needs the
+  // approach link (what a MICRO vehicle is physically traveling ON), not the outgoing link,
+  // or the virtual stopped leader from DefaultMicroSimulationStrategy's `signalAtExit` gets
+  // planted on the wrong link, braking vehicles already past the intersection mid-transit on a
+  // downstream link with no signal of its own. ─────────────────────────────────────────────────
+
+  it should "notify the APPROACH link (from approachConnections), not the outgoing link (from connections), of a phase change" in {
+    val connections = mutable.Map("link_bc" -> Identify(id = "signal_1")) // outgoing edge
+    val approachConnections = mutable.Map("link_ab" -> Identify(id = "signal_1")) // approach edge
+    val signals = mutable.Map.empty[String, SignalState]
+    val dependencies = mutable.Map(
+      "link_ab" -> ShardActorId(entityId = "link_ab", classType = "hybrid.actor.Link", shardBucket = "res-ab"),
+      "link_bc" -> ShardActorId(entityId = "link_bc", classType = "hybrid.actor.Link", shardBucket = "res-bc")
+    )
+    val (handler, sent) = newHandler(
+      newState(connections = connections, approachConnections = approachConnections, signals = signals),
+      getLinkDependencyFn = dependencies.get
+    )
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Red, remainingTime = 30L, nextTick = 190L),
+        nextTick = 190L,
+        phaseOrigin = "signal_1"
+      )
+    )
+
+    val notifiedEntityIds = sent.filter(_._4 == "LinkSignalState").map(_._1)
+    notifiedEntityIds shouldBe Seq("link_ab")
+    notifiedEntityIds should not contain "link_bc"
+  }
+
+  it should "still drain signalWaitingCounts/capacityWaitQueue by the OUTGOING link (connections) even though notification uses approachConnections" in {
+    // The two maps serve genuinely different consumers (queue/capacity bookkeeping mirrors
+    // handleRequestLinkAccess's outgoing-link keying; MICRO notification needs the approach
+    // link) -- this test locks in that the fix didn't accidentally collapse them onto one.
+    val connections = mutable.Map("link_bc" -> Identify(id = "signal_1"))
+    val approachConnections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
+    val signals = mutable.Map.empty[String, SignalState]
+    val waitingCounts = mutable.Map("link_bc" -> 5)
+    val (handler, _) = newHandler(
+      newState(connections = connections, approachConnections = approachConnections, signals = signals, signalWaitingCounts = waitingCounts)
+    )
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Green, remainingTime = 0L, nextTick = 160L),
+        nextTick = 160L,
+        phaseOrigin = "signal_1"
+      )
+    )
+
+    waitingCounts.get("link_bc") shouldBe None
   }
 }

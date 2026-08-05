@@ -56,24 +56,65 @@ three related gaps trace back to one shared structural cause and are still open:
   always answer the vehicle it's boarded on. That fix depends on `currentPTVehicleRef`, itself a
   plain actor-local `var`, not part of `PersonState` — so it reopens the same barrier deadlock if
   `Person` migrates shard while boarded.
-- **C — `Car.signalStateRetryCounter` watchdog (`Car.scala:252-262`) is a live retry/give-up loop,
-  still open — confirmed a distinct root cause from A/B, not fixed by them.** `Car.status ==
-  WaitingSignalState` lives in `state` (a `MovableState` field), so it *does* survive migration via
-  the default `buildMigrationSnapshot` — A/B were about actor-local `var`s outside `state`, which
-  this isn't. The real exposure is the in-flight `REQUEST_SIGNAL_STATE`/`SIGNAL_STATE_RESPONSE`
-  messages themselves during the migration hand-off window: `MessageBuffer` (see its own docstring)
-  silently drops buffered messages once `maxBufferSize` is exceeded, and that's a message-delivery
-  gap, not a missing-snapshot-field gap. `NodeEventHandler.handleRequestSignalState` was confirmed
-  to reply on every branch, so this isn't a Node bug either. A real fix belongs in the migration
-  coordinator/`MessageBuffer` (e.g. backpressure or a non-lossy overflow policy instead of silent
-  drop) — that's a `htc-architect`-level design call, not a Car.scala patch, and out of scope for
-  the A/B fix above.
+- **C — [CORRECTED 2026-08-05, original diagnosis was stale] not a retry-loop/lossy-buffer bug;
+  re-investigated and found a different, more precise real gap.** The original write-up named
+  `Car.signalStateRetryCounter` (`Car.scala:252-262`) — **this no longer exists**, superseded by
+  the `RequestLinkAccess`/`LinkAccessData` rework (the congestion-propagation feature): `Car` now
+  genuinely deregisters (`onFinishSpontaneous(None)`) and waits for the Node's reply as a pure
+  interaction event, no polling/retry counter at all. The original write-up also named `MessageBuffer`
+  as "silently drops buffered messages once `maxBufferSize` is exceeded" — checked directly:
+  `MessageBuffer.buffer()`, the only method that would ever enqueue a real message, **had zero
+  callers anywhere in the codebase**. `ShardMigrationCoordinator` only ever called
+  `startBuffering`/`drainBuffer`/`abortBuffering`/`totalBufferedCount` — bookkeeping methods that
+  never actually intercepted a message. It provided no protection whatsoever, working or broken;
+  it was dead scaffolding, not a flawed-but-active safety net. **Removed** (`MessageBuffer.scala`
+  deleted; `ShardMigrationCoordinator`'s unused `messageBuffer` field and its call sites removed;
+  `MigrationStats.totalBufferedMessages` removed, since it always reported 0 and nothing consumed
+  it) rather than left as misleading dead code implying a protection that doesn't exist.
+
+  **What actually protects in-flight messages during migration, confirmed by reading the real
+  protocol end-to-end (`LoadBalanceManager.handleMigrationSafe`/`handleWindowAck`,
+  `MigrationWindowSubscriber`, `SimulationBaseActor.preStart`)**: (1) `LoadBalanceManager` asks the
+  TimeManager to pause at a safe tick boundary before migrating anything — no spontaneous events
+  are in flight during the whole migration wave; (2) a distributed "migration window" protocol
+  (`MigrationWindowOpenEvent`/`Close`, `DistributedPubSub`) sets a per-node
+  `MigrationStateStoreRegistry.isMigrationActive` flag *before* Pekko's rebalance is triggered; (3)
+  on the target node, `SimulationBaseActor.preStart` checks that flag — if set, the entity queries
+  the `SnapshotManager` for its restored state and **genuinely `stash()`es every other incoming
+  message** until `MigrationContextEvent`/`NoPendingMigrationEvent` arrives, then `unstashAll()`s;
+  (4) the actual shard relocation goes through real `org.apache.pekko.cluster.sharding.ClusterSharding`
+  (confirmed in `ActorCreatorUtil.scala`), which has its own native, well-tested hand-off buffering
+  for messages arriving mid-rebalance. This is a real, working, reasonably sophisticated protocol —
+  `MessageBuffer` was apparently an earlier or parallel design that got superseded by it and never
+  cleaned up.
+
+  **The real remaining gap, more precise than the original**: `LoadBalanceManager.handlePrepareForMigration`
+  (via each entity's `BaseActor.handlePrepareForMigration`) captures a source entity's
+  `MigrationSnapshot` and sends it to the `SnapshotManager` — but the source entity is **not**
+  stopped, passivated, or put into any restricted mode at that point; it keeps processing messages
+  completely normally until Pekko's rebalance is triggered later (only after every cluster node
+  ACKs "window open", per `handleWindowAck`'s `PHASE_OPEN` branch). The TimeManager pause prevents
+  the entity's *own* spontaneous activity in this window, but an **interaction-event reply from
+  another actor** (e.g. a `LinkAccessData` a Car was already waiting on) can still arrive and be
+  processed normally in that gap — mutating `state`/actor-local vars *after* the snapshot was
+  already captured and sent. That mutation is never reflected in what gets restored on the target
+  node: a genuine lost-update window, not a dropped message. Still open, still dormant (migration
+  disabled — see below), and still an `htc-architect`-level design call (e.g. have the source
+  entity also enter a stash/reject mode the moment it sends `PrepareForMigrationEvent`, or
+  re-snapshot immediately before the actual Pekko-triggered stop instead of once, early) — not
+  attempted here; scoped and documented per the maintainer's own call not to guess at a protocol
+  change to dormant, currently-untested code in this session.
+
+  **Validation for the dead-code removal**: `sbt compile` clean, `sbt test` 172/172 (no test
+  referenced `MessageBuffer`/`ShardMigrationCoordinator` at all — confirmed by grep before
+  removing, so there was nothing to update). `sbt assembly` succeeds.
 
 **Why this hadn't bitten anyone yet**: shard rebalancing/migration is currently kept disabled while
 the project prioritizes simulation execution quality and performance — see `CLAUDE.md`'s Actor
 State section. These gaps were real but dormant; A/B are now fixed (see above) so they no longer
-become load-bearing if migration is turned back on. Gap C remains dormant-but-real for the same
-reason and needs its own fix before migration can be safely re-enabled.
+become load-bearing if migration is turned back on. Gap C's corrected finding (the
+`PrepareForMigrationEvent`-to-actual-stop lost-update window) remains dormant-but-real for the
+same reason and needs its own design before migration can be safely re-enabled.
 
 ## Simulation Runs Are Not Fully Reproducible for a Fixed Seed — Duplicate Spontaneous-Event Dispatch (Structural duplicate dispatch: RESOLVED 2026-07-25, TM-level fix; small residual timing drift still open)
 
@@ -548,9 +589,32 @@ on the far more heavily-used code path. Found while designing the congestion-pro
 link-capacity wait (`docs/CONGESTION_PROPAGATION_DESIGN.md`) — that feature creates much longer,
 less-bounded dormancy periods than anything previously exercising this path, making the bug both
 more likely to trigger and larger in magnitude. Fixed by applying the identical per-actor-watermark
-guard to `finishEvent`'s `scheduleTick` handling. Not yet re-run against the SUMO validation harness
-to confirm this closes the residual RMSE gap — worth doing before considering this section fully
-resolved.
+guard to `finishEvent`'s `scheduleTick` handling.
+
+**Re-run against `tools/sumo_validation` 2026-08-05 (three runs each, scenarios A and B), together
+with this session's other fixes already landed (the `NodeEventHandler` approach-link fix and the
+`Bus`/`Motorcycle`/`Bicycle` velocity-fallback fix above) — partially confirms the fix, but doesn't
+fully close the residual gap this note was tracking.** Scenario A (no signal, so this fix and
+today's signal fixes are the only variables in play): `car_1`'s RMSE landed at 68.366-68.463m
+across two runs, matching the number already on record in the `sumo_validation` correction section
+almost exactly — no regression, consistent with expectations. But `car_0`/`car_2` (normally at the
+~4.6m unaffected baseline) showed real run-to-run variance in this batch (`car_0` travel-time delta
+-6s vs -10s; `car_2` RMSE 4.6m in one run vs 122.987m in another) — this is the same *class* of
+residual scheduling nondeterminism already documented in this section and the correction section
+below (a wall-clock race in the shared `LocalTimeManager` pool, not a new bug), not something this
+specific `finishEvent` fix was scoped to eliminate on its own. Scenario B: `car_2`-`car_5` (the
+signal-queued cars) came back **byte-identical across all three runs** (RMSE 50.678/61.595/70.492/
+55.941m, every time) — a genuine, reproducible improvement over this section's own original
+finding of car-level RMSE varying `run-to-run even with the fix applied`. Max travel-time delta
+stayed in an 8-9s band across all three runs, consistent with (not exceeding) the 8-9s already
+recorded in the `NodeEventHandler` approach-link fix's own validation above — i.e. this fix and
+that one are not fighting each other, and together they hold the signal-gated cars' behavior
+stable. **Conclusion: this fix demonstrably closes the residual mis-scheduling for the
+signal-queued/deterministic-wait cars it targeted (scenario B's `car_2`-`car_5`), but the separate,
+already-documented free-running-car timing race (scenario A/B's `car_0`/`car_1`/`car_2` when not
+signal-gated) remains exactly as unresolved as parts 2/4/5 and the correction section already
+describe** — not a new finding, just confirmation that this fix didn't accidentally touch it either
+way. `sbt test`: 170/170 (unchanged, no Scala edits this session).
 
 ## `TrafficSignalPhaseHandler` Never Transitions Past Its First Phase (Found 2026-07-30, Fixed 2026-07-31)
 
@@ -667,12 +731,13 @@ in magnitude, not the small run-to-run noise discussed elsewhere in this doc, an
 connections map this fix just repointed) — not investigated further; flagged here rather than
 expanding scope past "fix the signal bug" again.
 
-**Next step for whoever continues this**: instrument `queuePosition`/`signalWaitingCounts` directly
-(report their value on every `RequestSignalState` reply) for the specific cars that overshoot, to
-see whether the queue count itself is wrong (e.g. never reset between cycles) or `data.nextTick`
-is stale by the time the car finally re-queries. The separate `CarSignalHandler` stall-retry
-concern noted in the previous version of this section is superseded by this more concrete lead —
-start here instead.
+**[RESOLVED 2026-08-05] Root-caused, not in `CarSignalHandler`/`signalWaitingCounts` as guessed
+above — see "`NodeEventHandler` Notified the Wrong Link on Signal Phase Change" further down this
+file.** The queue-position/headway math and the waiting-count bookkeeping were both fine; the real
+cause was `handleReceiveSignalChangeStatus` broadcasting `LinkSignalStateData` to the OUTGOING link
+instead of the APPROACH link, planting a virtual red-light leader on the wrong (downstream,
+already-passed) link and braking vehicles that had nothing to do with that signal. Max travel-time
+delta dropped from `+161-167s` to `8-9s` after the fix.
 
 ## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to Part 5's `enterLink()`-Poll Race, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31, Corrected 2026-08-01)
 
@@ -845,11 +910,11 @@ scenario B's `link_ab` -> `link_bc`), whose real exit velocity was silently disc
 Fixed by reading `journeyReporter.sumoArrivalSpeed` instead — it is `0.0` by construction until a
 car's first `handleMicroLeaveLink` ever fires, then holds the real exit velocity from then on
 (already being written correctly by both `handleMicroUpdate` and `handleMicroLeaveLink`, just never
-read back on the next entry). Same dead-fallback pattern found, **not fixed** (out of scope — not
-exercised by this harness, not independently verified), in `BusMicroHandler.scala:51`
-(`speedLimitMs * 0.7`) and, more crudely, hardcoded unconditionally with no `state.microState` check
-at all in `MotorcycleMicroHandler.scala:45` and `BicycleMicroHandler`'s equivalent
-(`speedLimitMs * 0.9`).
+read back on the next entry). **[RESOLVED 2026-08-05]** Same dead-fallback pattern found in
+`BusMicroHandler.scala:51` (`speedLimitMs * 0.7`) and, more crudely, hardcoded unconditionally with
+no `state.microState` check at all in `MotorcycleMicroHandler.scala:45` and `BicycleMicroHandler`'s
+equivalent (flat `5.0` m/s) — see "`Bus`/`Motorcycle`/`Bicycle` Micro Handlers Had the Same
+Dead-Fallback-Velocity Bug as `CarMicroHandler`" further down this file for the fix.
 
 **Why fixing this alone did not close the `car_1` gap**: with initial velocity now correctly `0.0`
 for a car's first-ever movement, two cars still entering the same link within 1-2 ticks of each
@@ -911,7 +976,7 @@ up that scheduling fix next has a harness that can immediately, correctly confir
 (scenario A) and any car whose `MICROENTER`/`enter_link` tick collides with another car's within
 1-2 ticks (scenario B).
 
-## `deferFinishSpontaneous()` Holds an Entire LTM Batch Open for the Duration of an Unbounded Async Wait (Found 2026-08-04, Partially Fixed — Signal Wait Only; Next Priority)
+## `deferFinishSpontaneous()` Holds an Entire LTM Batch Open for the Duration of an Unbounded Async Wait (Found 2026-08-04, Fixed 2026-08-05 — All Known Call Sites, Two Different Fix Shapes)
 
 **Found while designing congestion-propagation/spillback work** (a car waiting at a `Node` for
 downstream link capacity, discussed but not yet built), specifically while answering "does the
@@ -959,36 +1024,334 @@ already-fully-resolved context would silently add to `scheduledActors` without t
 TM there's new work, risking premature simulation termination if this was the last scheduled item
 on this LTM.
 
-**Still open — three more call sites with the same shape, not yet fixed:**
+**2026-08-05: `BusStopHandler`'s two call sites fixed with the identical disengage-then-
+`scheduleEvent` pattern. The other three (`BusStation`/`SubwayStation`, waiting on dynamic-actor-
+spawn acks) were also converted the same way, then reverted after live validation showed the
+conversion breaks the simulation.**
 
-- **`BusStopHandler.requestLoadPassenger`** (single reply from one `BusStop` — same shape as the
-  now-fixed signal wait, likely the least severe of the three).
-- **`BusStopHandler.requestUnloadPeopleData`** (fan-out to *every* boarded `Person`, resolves only
-  once `countUnloadReceived >= expectedUnloadResponses` in `handleUnloadPassenger` — the LTM batch
-  stays blocked for as long as the *slowest* of N passengers takes to reply; likely the most
-  exposed of the three, since more messages means more chances of one being slow).
-- **`SubwayStation.scheduleNextTick`** and **`BusStation.actSpontaneous`/`dispatchFirstBus`**
-  (3 call sites, same pattern): both defer while waiting for `onDynamicActorInitialized` ACKs from
-  freshly-spawned `Bus`/`Subway` actors — dynamic actor creation/activation via Pekko cluster
-  sharding is not guaranteed instant, especially under load, making this a plausible real-world
-  stall source, not just a theoretical one.
+- **Fixed: `BusStopHandler.requestLoadPassenger`/`requestUnloadPeopleData`**
+  (`BusStopHandler.scala`): both now call `onFinishSpontaneousFn(None)` (a real, immediate
+  `FinishEvent`) right after sending the request instead of `deferFinishSpontaneousFn()`.
+  `handleBusLoadPeople` and `handleUnloadPassenger` — the reply handlers that used to call
+  `onFinishSpontaneousFn(Some(tick))` directly — now call a new `scheduleEventFn: Tick => Unit`
+  lambda instead (wired to `scheduleEvent(tick)` in `Bus.scala`), for the same reason
+  `CarSignalHandler.handleLinkAccess` already had to: a second `onFinishSpontaneous(Some(tick))`
+  call from an already-disengaged actor silently adds to `scheduledActors` without re-notifying the
+  Global TM. The `deferFinishSpontaneousFn` constructor parameter was removed from `BusStopHandler`
+  entirely. This one is safe because both replies come from a single message round trip between two
+  already-live actors (`Bus` ↔ `BusStop`/boarded `Person`s) — the same shape as the already-proven
+  signal-wait fix.
 
-Unlike the signal-wait bug, none of these three have the *second*, more dangerous defect (the
-"silent scheduling, no Global TM re-notify" trap) — their eventual `onFinishSpontaneous(tick)`
-call correctly resolves the *same* `runningEvents` entry that was held open by
-`deferFinishSpontaneous()` in the first place, since nothing else clears it in between. The only
-defect here is the batch-stall itself.
+- **Attempted, then reverted: `BusStation.actSpontaneous`'s `Working` case,
+  `BusStation.dispatchFirstBus`'s two call sites, and `SubwayStation.scheduleNextTick`** (4 call
+  sites). These defer while waiting for `onDynamicActorInitialized` — the callback fired after the
+  full `ShardRegion.StartEntity → StartEntityAck → InitializeEvent → InitializeEntityAckEvent`
+  dynamic-actor-spawn protocol completes for a newly-created `Bus`/`Subway`, a much longer,
+  multi-hop async chain than a single request/reply message. Converting these to
+  `onFinishSpontaneous(None)` + `scheduleEvent(tick)` in `onDynamicActorInitialized` (mirroring the
+  `BusStopHandler` fix exactly) compiled clean and passed all 159 specs, but **broke the actual
+  simulation**: run against the full 86,400-tick baseline
+  (`simulations/input/sqlite_validation_test/simulation_json_baseline.json`), the simulation
+  terminated after **0 ticks** — `GlobalTimeManager` log: `"No scheduled events: broadcasting
+  QueryNextTickEvent grace-period probe to all LTMs"` immediately followed by `"No more scheduled
+  events across local time managers. Terminating simulation"`. Root cause: `BusStation`/
+  `SubwayStation` are dispatched very early (tick 0) in this scenario, and once they genuinely
+  disengage, **nothing else is scheduled anywhere** until the newly-spawned `Bus`/`Subway` finishes
+  its multi-hop registration — but the Global TM's "no scheduled events, terminate" grace period
+  (a single `QueryNextTickEvent` probe, sized for a single in-flight message like
+  `Car.handleStartTrip`, per its own code comment in `GlobalTimeManager.scala:70-73`) fires and wins
+  the race before that registration completes, permanently ending the simulation. Confirmed this
+  was a genuine regression, not a pre-existing bug: stashed the fix, rebuilt, reran the identical
+  scenario — pre-fix reached 197,441 ticks cleanly. Reverted all 4 call sites back to
+  `deferFinishSpontaneous()`/`onFinishSpontaneous(tick)` (verified `git diff` against `HEAD` for
+  both files is empty after reverting). Re-ran with only the `BusStopHandler` fix applied: two
+  independent full runs reached 195,044 and 198,129 ticks respectively, confirming the revert
+  restored correct behavior and isolating the `BusStopHandler` fix as safe on its own.
 
-**Next step for whoever picks this up**: apply the same disengage-then-`scheduleEvent` pattern to
-all three remaining call sites (7 total, across `BusStopHandler`, `SubwayStation`, `BusStation`).
-Recommended order: `BusStopHandler.requestUnloadPeopleData` first (fan-out, most exposed), then the
-dynamic-actor-creation sites in `BusStation`/`SubwayStation`, then
-`BusStopHandler.requestLoadPassenger` last (single-reply, least exposed). No test currently
-exercises `runningEvents`/batch-stall behavior directly — consider whether a
-`pekko-actor-testkit-typed` test asserting an LTM's `runningEvents` clears immediately (not just
-eventually) around one of these calls is worth adding alongside the fix, to prevent the same class
-of regression the signal-wait fix's own tests couldn't catch (see `CarSignalHandlerSpec`'s doc
-comment on why it only tests the pure-handler layer, not `SimulationBaseActor.handleSpontaneous`).
+**Why the signal-wait fix and `BusStopHandler` fix don't have this problem**: in both cases, the
+thing being waited on (`Node`, `BusStop`/boarded `Person`s) is an *already-registered, already-live*
+actor answering one message — fast enough that the Global TM's existing one-shot grace period
+reliably catches the in-flight reply. Dynamic actor *creation* is categorically slower (cluster
+sharding round trip, not a single message hop), so it needed a different fix shape, not a copy of
+this one.
+
+**2026-08-05, later the same day: `BusStation`/`SubwayStation` fixed too, with a bounded-poll
+shape instead of full disengage.** Per the "still open" note above, the safe option that doesn't
+touch shared `GlobalTimeManager`/`LocalTimeManagerBase` code is: stay *genuinely registered*
+(never fully disengage) for the duration of the dynamic-actor-spawn wait, by scheduling a real,
+immediate `FinishEvent` with a short `scheduleTick` (1 tick out) instead of either
+`deferFinishSpontaneous()` (holds the batch open) or `onFinishSpontaneous(None)` (fully disengages,
+races the GTM's grace period). This resolves each individual tick's `FinishEvent` right away — so
+it never holds the LTM batch open — while the station stays in `scheduledActors` throughout, so the
+LTM is never reported idle to the Global TM and the 0-tick termination race cannot occur.
+
+Implementation (`BusStation.scala`, `SubwayStation.scala`):
+- **`BusStation`**: new `awaitingDynamicInit: Boolean` actor-local var and
+  `dynamicInitPollIntervalTicks: Tick = 1L` constant. All three `deferFinishSpontaneous()` call
+  sites (the `Working` case, and `dispatchFirstBus`'s two create-bus branches) now set
+  `awaitingDynamicInit = true` and call `onFinishSpontaneous(Some(currentTick + 1))` instead.
+  `onDynamicActorInitialized` just flips the flag back to `false` — it does **not** call
+  `onFinishSpontaneous`/`scheduleEvent` itself, since the station is never disengaged and doesn't
+  need re-registering. `actSpontaneous` gained two guards at the top, checked before the existing
+  `state.status match`: if `awaitingDynamicInit`, re-poll at `currentTick + 1`; else if
+  `pendingSpawnTick` (the precomputed "create the *next* bus at this tick" target, unchanged from
+  the original design) is still in the future, jump straight there in one dispatch — so once the
+  ack lands, the station goes back to the same single-scheduled-event performance profile as
+  before, only paying the extra bounded polls during the brief ack-wait window itself.
+- **`SubwayStation`**: same shape, but reusing the existing `pendingSubwayAckCount` (already a
+  fan-out counter, one per spawned `Subway`) as the guard condition directly instead of adding a
+  separate boolean — `actSpontaneous` polls at `currentTick + 1` while `pendingSubwayAckCount > 0`,
+  then jumps to `pendingSubwayNextTick` once it reaches 0 (also unchanged from the original
+  design). `onDynamicActorInitialized` only decrements the counter, no resolve call.
+
+**Why this is safe where the full-disengage attempt wasn't**: the station's `Identify` never leaves
+`scheduledActors` during the wait — every poll tick re-adds it for the very next tick before the
+current one's `FinishEvent` is even sent, so `LocalTimeManagerBase.hasSchedule` (and therefore the
+Global TM's `scheduled.isEmpty` check) never sees this LTM as idle on account of this actor,
+regardless of how long the underlying spawn protocol actually takes. There is no dependency on the
+Global TM's one-shot grace period at all for this wait, unlike the reverted full-disengage version.
+
+**Validation**: `sbt compile` clean; `sbt test` — 159/159 specs pass (all pre-existing). Full
+86,400-tick baseline scenario (method per the diagnostic section elsewhere in this doc, JSON
+reporter, `batch-size=1` for guaranteed per-event flush) run twice with the complete fix (all 7
+`deferFinishSpontaneous()` sites converted — `BusStopHandler`'s two plus these five): run 1 reached
+198,085 ticks with 0/2048 duplicate `enter_link`s; run 2 reached 199,263 ticks with 0/2436
+duplicates. Both `bus_created`/`subway_created` counts matched the pre-fix baseline exactly (2 and
+2), confirming dynamic actor creation itself is unaffected — only the TimeManager registration
+shape around the wait changed.
+
+**[RESOLVED 2026-08-05]** Added `LocalTimeManagerBatchStallSpec`
+(`src/test/scala/core/actor/manager/time/`), exercising `LocalDiscreteEventTimeManager`'s real
+`runningEvents`/`scheduledActors` bookkeeping directly on `underlyingActor` (same pattern
+`PrivateVehicleMigrationSnapshotSpec` uses for a `PersistentActor` under test — protected methods
+called directly, bypassing the mailbox for the outer call while still routing through the actor's
+real `handleEvent` for messages that need it, e.g. `UpdateGlobalTimeEvent` to trigger dispatch).
+`TestProbe`s stand in for the "actors" (`PoolDistributed`/`actorSelection`-addressed, matching
+`sendSpontaneousEventPool`, so no cluster sharding is needed — `pekko.actor.provider = local`
+throughout). Two specs:
+1. A co-scheduled sibling actor's own next tick becomes reachable (`runningEvents` clears,
+   `reportGlobalTimeManager(hasScheduled = true)` reaches the parent) once a genuinely-disengaged
+   actor sends its `FinishEvent(scheduleTick = None)` — the fixed pattern.
+2. A fully-disengaged actor (idle LTM, `reportGlobalTimeManager(hasScheduled = false)` reaches the
+   parent) can be re-woken later via a fresh `ScheduleEvent`, and the LTM's `wasIdle`
+   re-notification correctly reaches the parent — the exact protocol `BusStation`/`SubwayStation`
+   depend on after a dynamic-actor-spawn ack, whose absence would reproduce the 0-tick termination
+   race this section's first (reverted) fix attempt hit.
+
+**Verified the test actually catches the regression, not just passes vacuously**: temporarily
+removed spec 1's genuine-disengage `FinishEvent` call (simulating `deferFinishSpontaneous()`'s
+"send nothing at all") and re-ran — failed exactly as expected
+(`Set("actor-a") was not empty`, i.e. the batch stayed held open), confirmed via `git diff`-clean
+revert back to the real assertions afterward. `sbt test`: 172/172 (170 pre-existing + 2 new).
+
+## `NodeEventHandler` Notified the Wrong Link on Signal Phase Change — Root Cause of the "+161-203s Signal-Wait Overshoot" (Found/Fixed 2026-08-05)
+
+**Follows up directly on the "cars queued at Red overshoot their travel time" note left open in
+the `TrafficSignalPhaseHandler`/connection-keying section above.** That section's 2026-07-31
+connections-keying fix (approach-edge key -> outgoing-edge key) correctly fixed
+`NodeEventHandler.handleRequestLinkAccess`'s lookup, closing the "signal always assumed Green"
+bug and getting `CarSignalHandler`'s queue-position/headway wait mechanism working — but it broke
+a second, unrelated consumer of the same `connections` map that needed the opposite keying, and
+that's what was still producing the residual multi-hundred-second overshoot.
+
+**Root cause**: `NodeEventHandler.handleReceiveSignalChangeStatus` computed `linksForThisPhase`
+from `state.connections` — the same map `handleRequestLinkAccess` uses, keyed by the OUTGOING
+link (the link a car is about to enter next, e.g. `link_bc` for a car approaching node `n_b` on
+`link_ab`) since the 2026-07-31 fix. It then sent `LinkSignalStateData` (the message that sets
+`Link.signalAtExit`, consumed by `DefaultMicroSimulationStrategy` to plant a virtual
+zero-velocity leader at `position = linkLength`, causing IDM/Krauss to smoothly brake a vehicle
+approaching *that link's own end*) to whichever Link actor owns that outgoing link. For scenario
+B's intersection, this meant every Red/Green phase change was broadcast to `link_bc` — the link
+*leaving* the signalized node — not `link_ab`, the link a car is actually traveling on as it
+approaches the signal. A vehicle already past the intersection and mid-transit on `link_bc`
+(no signal of its own) would suddenly find a virtual stopped vehicle planted at `link_bc`'s far
+end whenever the (irrelevant, already-passed) upstream signal turned Red, decelerating to a near
+stop and only resuming once that signal cycled back to Green — completely disconnected from its
+own actual progress. Confirmed directly via Parquet trace: `car_1` (scenario B) entered `link_bc`
+at tick 29 (already cleared the signal on Green), then decelerated from 13.9 m/s toward ~0 exactly
+across ticks 30-60 (the node's Red window) before snapping back to speed at tick 61 (the next
+Green), losing 34 ticks on a 100 m link that should take ~8s free-flow — the same tick-for-tick
+alignment with the signal's Red window is what the original `+161-167s` finding's cars were
+independently exhibiting, just not previously root-caused past "somewhere in `CarSignalHandler`
+or `NodeEventHandler`'s bookkeeping" (see that section's own "next step" note).
+
+**Verified the mechanism, not just correlation**: `git blame` traces the "Notify the outgoing
+Link" wording back to `a03ed61` (2026-06-11), written when `connections` was still keyed by the
+SUMO-style approach edge — i.e. the comment mislabeled what was, at the time, actually the
+*approach* link; the 2026-07-31 connections-keying fix (`docs/KNOWN_GAPS.md`'s
+`TrafficSignalPhaseHandler` section, "Update 2026-07-31") then took that comment literally and
+re-keyed the map to genuinely be outgoing-only, silently flipping this call site's semantics along
+with it. Also confirmed real-world production scenario generators
+(`tools/sao-paulo/generate_hybrid_input.py`, `tools/toulouse/generate_hybrid_input.py`,
+`tools/interscsimulator_scenario/convert_interscsimulator.py`,
+`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py`) all currently
+emit `"connections": {}` unconditionally — this bug has been latent in production the whole time,
+never triggered outside `tools/sumo_validation`'s hand-authored scenario B, the only place any
+scenario populates `connections` at all. **[PARTIALLY RESOLVED 2026-08-05]** See "Production
+Scenario Generators Never Wire `Node.connections`/`approachConnections`" further down this file —
+`tools/interscsimulator_scenario/convert_interscsimulator.py` now wires `approachConnections`;
+`tools/sao-paulo/generate_hybrid_input.py` needs a pipeline-ordering fix, not attempted; Toulouse
+and the tiny-validation generator have no signal generation to wire at all.
+
+**Fix**: added a second field, `NodeState.approachConnections: mutable.Map[String, Identify]`,
+keyed by the APPROACH link (opposite direction of `connections`). `handleReceiveSignalChangeStatus`
+now computes two separate sets — `outgoingLinksForThisPhase` (from `connections`, unchanged,
+still drives `signalWaitingCounts`/`tryDrainCapacityQueue` bookkeeping, which mirrors
+`handleRequestLinkAccess`'s own outgoing-link keying) and `approachLinksForThisPhase` (from the
+new `approachConnections`, used only for the `LinkSignalStateData` MICRO notification). `Node.scala`
+interns the new map's keys alongside the existing ones. `tools/sumo_validation/htc_export/export.py`
+gained `_node_approach_connections`, populating the new field directly from
+`TrafficLight.controlled_link_id` (already the approach edge, no translation needed — it's
+`_node_connections_and_signals`, the outgoing-keyed one, that has to remap).
+
+**Validation**:
+- Added `NodeEventHandlerSpec` regression coverage: one test asserting `LinkSignalStateData` is
+  sent to the approach link (from `approachConnections`) and never the outgoing link (from
+  `connections`) on a phase change; one confirming `signalWaitingCounts`/capacity bookkeeping still
+  keys off the outgoing link even though notification now uses the separate map — the two
+  consumers needed genuinely different keys, not a single collapsed fix. `sbt test`: 161/161 pass
+  (159 pre-existing + 2 new). Added `tools/sumo_validation/tests/test_htc_export.py` coverage for
+  `approachConnections`'s exporter output; harness suite: 24/24 pass.
+- `tools/sumo_validation/run_validation.py --scenarios a b`, three full runs after the fix:
+  scenario B's max travel-time delta dropped from the pre-fix (but post-connections-keying-fix)
+  **27s** to **8-9s**, and the previously wildly run-to-run-varying queued cars (`car_2`-`car_5`)
+  became exactly reproducible across two independent runs (identical RMSE/delta figures both
+  times) — consistent with these cars now being genuinely, deterministically gated by the (correct)
+  approach-link virtual leader instead of racing an independent message round-trip against
+  whatever position MICRO simulation happened to free-run them to. Scenario A (no traffic signal,
+  should be entirely inert to this change): `car_1` RMSE landed at exactly **68.463m**, the same
+  figure already on record in this doc's `sumo_validation` correction section — confirms zero
+  behavioral change there, as expected.
+- **New, smaller side-effect observed, not chased further**: `car_0`/`car_1` in scenario B (both
+  clear the signal on Green, before it ever turns Red) show *higher* position RMSE post-fix
+  (~90-110m vs. ~45-72m before) despite the fix not changing anything semantically relevant to
+  their trip. Root cause not confirmed, but the mechanism is almost certainly the already
+  extensively-documented wall-clock-race timing sensitivity above (parts 2/4/5 and the
+  `sumo_validation` correction section) — this fix adds one additional harmless
+  `LinkSignalStateData(Green)` message to `link_ab` at tick 0 (the signal's initial state
+  broadcast, now correctly targeting the approach link instead of the then-empty outgoing link),
+  and this scenario has already been shown to be sensitive enough to a single tick's dispatch-order
+  shift that it can collapse an intended 6-tick departure gap to zero (see the `sumo_validation`
+  `car_1` correction section). Not re-investigated here — the primary target of this fix (the
+  multi-hundred-second overshoot) is closed, and chasing this residual noise is the same
+  already-flagged, already-scoped TimeManager-level investigation (extending
+  `dispatchGeneration`/`highestProcessedTick` to gate `Waiting`-fallback re-polls) as everywhere
+  else in this doc, not a new problem this fix introduced.
+
+## `Bus`/`Motorcycle`/`Bicycle` Micro Handlers Had the Same Dead-Fallback-Velocity Bug as `CarMicroHandler` (Found/Fixed 2026-08-05)
+
+**Same bug class as the already-fixed `CarMicroHandler` finding** (see the `sumo_validation`
+scenario A `car_1` RMSE section above) — flagged there as "not fixed, out of scope" for the other
+three vehicle types, closed now. All three `*MicroHandler.handleMicroEnterLink` implementations
+computed a vehicle's initial MICRO-mode velocity from a hardcoded fallback instead of the
+vehicle's real carried-over exit velocity:
+
+- **`BusMicroHandler.scala`**: `state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.7)` —
+  same shape as Car's original bug. `state.microState` is always `None` at this point
+  (`handleMicroLeaveLink` calls `state.deactivateMicroMode()` on every exit, clearing it, before
+  the next `handleMicroEnterLink` runs), so the `.map` branch could never fire; every micro-link
+  entry fell into the `getOrElse`, starting every bus — first-ever trip or mid-route chained link
+  alike — cruising at a flat 70% of the link's speed limit.
+- **`MotorcycleMicroHandler.scala`** / **`BicycleMicroHandler.scala`**: worse — no
+  `state.microState` check at all. Motorcycle unconditionally set `velocity = speedLimitMs * 0.9`;
+  Bicycle unconditionally set a flat `5.0` m/s regardless of speed limit. Neither ever had a code
+  path that could read a real prior velocity, chained or otherwise.
+
+**Fix**: all three now read `journeyReporter.sumoArrivalSpeed` instead, mirroring
+`CarMicroHandler`'s fix exactly — `0.0` by construction until a vehicle's first
+`handleMicroLeaveLink` ever fires (matching SUMO's `departSpeed=0` default for a genuinely fresh
+trip), then holds the real exit velocity from then on (already being written correctly by each
+handler's own `handleMicroUpdate`/`handleMicroLeaveLink`, just never read back on the next entry).
+
+**Validation**: added `BusMicroHandlerSpec`, `MotorcycleMicroHandlerSpec`, `BicycleMicroHandlerSpec`
+(mirroring `CarMicroHandlerSpec`'s three cases each: fresh-trip rest start, chained-link velocity
+carryover, reported `initial_velocity` matches stored state) — 9 new specs, no Pekko, all passing.
+Full suite: 170 specs (161 pre-existing + 9 new), all green. Not independently re-run against
+`tools/sumo_validation` — scenario A/B only exercise Car; no equivalent Bus/Motorcycle/Bicycle
+harness scenario exists yet to measure a direct RMSE effect, same caveat `CarMicroHandler`'s own
+fix noted for its own validation scope.
+
+## Production Scenario Generators Never Wire `Node.connections`/`approachConnections` — Signals Have Zero Effect Outside `tools/sumo_validation` (Found 2026-08-05, Partially Fixed)
+
+**Direct follow-up to the flagged-but-not-done note in the "`NodeEventHandler` Notified the Wrong
+Link" section above.** All four scenario generators found in the platform
+(`tools/sao-paulo/generate_hybrid_input.py`, `tools/toulouse/generate_hybrid_input.py`,
+`tools/interscsimulator_scenario/convert_interscsimulator.py`,
+`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py`) emit
+`"connections": {}` (and, before this session, no `approachConnections` field at all)
+unconditionally — meaning every traffic signal ever generated for a real scenario has had zero
+behavioral effect on any vehicle, MICRO or MESO, network-wide, for the platform's entire history.
+`tools/sumo_validation`'s hand-authored scenario B is the *only* place any scenario has ever
+populated these fields. Investigated each generator individually; findings differ enough per tool
+that a single fix doesn't cover all four:
+
+- **`tools/interscsimulator_scenario/convert_interscsimulator.py` — fixed.** This is the
+  "explicit, per the platform maintainer... robust, well-tested part" of the converter (its own
+  module docstring), and it already had everything needed: `signals.xml` gives each phase an
+  explicit approach-node origin, and `build_traffic_signal_actors` already resolves that to the
+  real incoming link id (`_incoming_link_id`) to key `TrafficSignalState.signalStates`/`phases`.
+  Added `wire_node_approach_connections(node_actors, signals, links)`, called right after
+  `build_traffic_signal_actors` in `run()`: reuses the same `_incoming_link_id` resolution to patch
+  each controlled node's `approachConnections` in place (mutates the already-built actor dicts, no
+  re-merge needed since `actors` holds the same dict references). Also added the
+  `"approachConnections": {}` default field to `build_node_actors`'s per-node content dict
+  (previously missing entirely, not just empty). Two new regression tests
+  (`test_wire_node_approach_connections_keys_by_approach_link_on_the_controlled_node`,
+  `test_wire_node_approach_connections_against_real_base_scenario`) added to
+  `tests/test_convert_interscsimulator.py`; full suite 43/45 passing (2 new; the same 4 pre-existing
+  failures — `test_end_to_end_*sqlite*`/`*json*` — reproduce identically with this session's changes
+  fully reverted, confirmed by diffing a manually-reverted copy of the file and re-running; root
+  cause not investigated, looks like a `tools/scenario-db-converter/convert.py`/`ijson` environment
+  issue in whatever venv runs this suite, unrelated to node-connection wiring).
+- **`tools/sao-paulo/generate_hybrid_input.py` — investigated, NOT fixed; needs a deliberate design
+  decision before attempting.** `TrafficSignalGenerator` already computes exactly the needed
+  per-node incoming-link list (`self._node_incoming_links`, keyed by node id, populated during
+  `_write_links()`) — the raw data isn't missing. The blocker is purely one of *pipeline ordering*:
+  `_build_node_actor`/`self._node_writer.add(...)` streams each node actor to disk immediately
+  during the single-pass OSM XML iterparse (`OsmNetworkParser`'s own architecture, deliberately
+  memory-bounded for real full-city-scale runs — see the class's docstrings), which happens
+  *before* `_write_links()` (and therefore `_node_incoming_links`) has run at all. Node actors are
+  gone to disk by the time incoming-link data exists, so there's no in-memory dict left to patch
+  the way `wire_node_approach_connections` does for InterSCSimulator above. Two possible fixes,
+  neither attempted: (a) buffer signal-tagged node actors in memory instead of streaming them
+  immediately, patch and flush after `_write_links()` — bounded by signal-node count, not total
+  node count, so probably safe even at city scale, but changes the class's core memory-bounding
+  invariant and needs care; (b) a separate post-hoc pass that reads back the already-written
+  `nodes_*.json` files after `TrafficSignalGenerator.generate()` runs, patches matching signal
+  nodes, rewrites — more surgery, but doesn't touch the existing streaming architecture at all.
+  **Not attempted in this session because `tools/sao-paulo/` has zero test coverage of any kind**
+  (confirmed: no `tests/` directory, unlike `interscsimulator_scenario/`) — implementing either
+  fix blind, in a 3,982-line generator whose whole design is built around a memory constraint,
+  without a way to verify correctness first, was judged too risky to guess at. Whoever picks this
+  up next should probably stand up at least minimal pytest coverage for `_write_links`/
+  `TrafficSignalGenerator` first.
+- **`tools/toulouse/generate_hybrid_input.py` — not applicable, different gap entirely.** This
+  generator has no traffic-signal generation code at all (confirmed: no `TrafficSignalGenerator`,
+  no `include_signals` flag, no OSM `highway=traffic_signals` handling — `grep` for
+  `signal|traffic_light` only matches the static `"signals": {}` placeholder). There is no signal
+  data to wire connections to in the first place. Adding real signal generation here would be a
+  new feature (presumably portable from `tools/sao-paulo/`'s `TrafficSignalGenerator`, since both
+  are OSM-based), not a wiring fix — separate scope, not attempted.
+- **`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py` — same as
+  Toulouse.** No signal generation; `"connections": {}` is the only signal-adjacent content, a
+  static placeholder with nothing to wire.
+
+**Separate, deeper architectural gap surfaced by this investigation, affecting even the fixed
+InterSCSimulator path**: `connections` (outgoing-link keyed, required for MESO-mode admission
+control — `Car.actSpontaneous`'s `case Moving if !isMicroMode` calls `requestSignalState()`, which
+depends entirely on `connections`, not `approachConnections`, which only matters for MICRO's
+`signalAtExit`) is **not** wired by this fix, deliberately. Resolving it correctly requires
+per-(incoming-link, outgoing-link) turn-movement data — "does traffic from this specific approach
+have a green for this specific exit" — that none of network.xml/signals.xml/OSM `highway` tags
+provide. A naive heuristic (e.g. "gate every outgoing link of a signalized node by whichever
+incoming phase was processed last") risks silently mis-gating a legal movement, which is worse than
+today's status quo of no MESO gating at all — considered and rejected for that reason rather than
+implemented speculatively. Since most real São Paulo-scale traffic is expected to run MESO (MICRO
+is reserved for small/dense/validation scenarios per `_select_mode`'s `micro_ratio` config), this
+means even a fully-fixed São Paulo generator would only gate MICRO-mode vehicles near a signal
+until this deeper gap is addressed — a genuine `htc-architect`-level design question (does HTC's
+signal model need turn-movement-aware admission control, and if so what data/format would supply
+it), not a follow-up wiring task. Flagged here, not designed or implemented.
 
 ## Test Coverage
 

@@ -12,12 +12,26 @@ import scala.collection.mutable
   * Responsibilities:
   *   - Track active migrations (only one per shard at a time)
   *   - Coordinate with TimeManager for safe migration windows
-  *   - Manage message buffering during transit
   *   - Track migration statistics
   *
   * The coordinator does NOT directly move shards — it orchestrates the process: 1. Announce
-  * migration start (triggers buffering) 2. Signal Pekko shard hand-off 3. Wait for re-hydration
-  * confirmation 4. Release buffered messages 5. Announce migration complete
+  * migration start 2. Signal Pekko shard hand-off 3. Wait for re-hydration confirmation
+  * 4. Announce migration complete
+  *
+  * In-flight-message safety during the actual hand-off is provided elsewhere, not by this class:
+  * `LoadBalanceManager`'s distributed migration-window protocol pauses the TimeManager at a safe
+  * tick boundary before migrating (no spontaneous events in flight), and
+  * `SimulationBaseActor.preStart`'s `awaitingMigration`/`stash()`/`unstashAll()` handling covers
+  * messages arriving at the re-hydrating entity on the target node before its snapshot restore
+  * completes (see `MigrationWindowSubscriber`/`MigrationStateStoreRegistry.isMigrationActive`).
+  * A previous `MessageBuffer` class here (`buffer`/`drainBuffer`/etc.) was never actually wired
+  * into the message path — `buffer()`, the only method that would enqueue a real message, had no
+  * callers anywhere in the codebase — so it provided no protection despite the docs/KNOWN_GAPS.md
+  * write-up describing it as a lossy-at-capacity safety net. Removed 2026-08-05 as dead code,
+  * not a working mechanism that regressed; see docs/KNOWN_GAPS.md's Gap C entry for the real
+  * remaining risk this investigation found (a lost-update window between a source entity's
+  * `PrepareForMigrationEvent` snapshot and its actual Pekko-triggered stop), which is a distinct,
+  * still-open architectural question this removal does not address.
   */
 class ShardMigrationCoordinator(
   val maxConcurrentMigrations: Int = 3
@@ -33,9 +47,6 @@ class ShardMigrationCoordinator(
   private var completedCount: Long = 0L
   private var failedCount: Long = 0L
   private var totalMigrationTimeNanos: Long = 0L
-
-  /** Message buffer shared across all migrations */
-  val messageBuffer: MessageBuffer = new MessageBuffer()
 
   /** Attempts to start a migration. Returns true if started, false if queued or rejected. */
   def requestMigration(plan: MigrationPlan): MigrationRequestResult =
@@ -58,9 +69,6 @@ class ShardMigrationCoordinator(
         if (success) completedCount += 1
         else failedCount += 1
     }
-
-    // Release buffered messages
-    messageBuffer.drainBuffer(shardId)
 
     // Start next pending migration if any
     if (pendingMigrations.nonEmpty && activeMigrations.size < maxConcurrentMigrations) {
@@ -92,13 +100,11 @@ class ShardMigrationCoordinator(
     failedMigrations = failedCount,
     avgMigrationTimeMs =
       if (completedCount > 0) (totalMigrationTimeNanos / completedCount / 1e6).toLong
-      else 0L,
-    totalBufferedMessages = messageBuffer.totalBufferedCount
+      else 0L
   )
 
   /** Aborts all active and pending migrations. */
   def abortAll(): Unit = {
-    activeMigrations.keys.foreach(messageBuffer.abortBuffering)
     activeMigrations.clear()
     pendingMigrations.clear()
   }
@@ -112,7 +118,6 @@ class ShardMigrationCoordinator(
       phase = MigrationPhase.Preparing
     )
     activeMigrations.put(plan.shardId, state)
-    messageBuffer.startBuffering(plan.shardId)
   }
 }
 
@@ -144,6 +149,5 @@ case class MigrationStats(
   pendingMigrations: Int,
   completedMigrations: Long,
   failedMigrations: Long,
-  avgMigrationTimeMs: Long,
-  totalBufferedMessages: Int
+  avgMigrationTimeMs: Long
 )
