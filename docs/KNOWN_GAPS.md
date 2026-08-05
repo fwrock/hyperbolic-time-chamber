@@ -667,12 +667,13 @@ in magnitude, not the small run-to-run noise discussed elsewhere in this doc, an
 connections map this fix just repointed) — not investigated further; flagged here rather than
 expanding scope past "fix the signal bug" again.
 
-**Next step for whoever continues this**: instrument `queuePosition`/`signalWaitingCounts` directly
-(report their value on every `RequestSignalState` reply) for the specific cars that overshoot, to
-see whether the queue count itself is wrong (e.g. never reset between cycles) or `data.nextTick`
-is stale by the time the car finally re-queries. The separate `CarSignalHandler` stall-retry
-concern noted in the previous version of this section is superseded by this more concrete lead —
-start here instead.
+**[RESOLVED 2026-08-05] Root-caused, not in `CarSignalHandler`/`signalWaitingCounts` as guessed
+above — see "`NodeEventHandler` Notified the Wrong Link on Signal Phase Change" further down this
+file.** The queue-position/headway math and the waiting-count bookkeeping were both fine; the real
+cause was `handleReceiveSignalChangeStatus` broadcasting `LinkSignalStateData` to the OUTGOING link
+instead of the APPROACH link, planting a virtual red-light leader on the wrong (downstream,
+already-passed) link and braking vehicles that had nothing to do with that signal. Max travel-time
+delta dropped from `+161-167s` to `8-9s` after the fix.
 
 ## `sumo_validation` Scenario A `car_1` RMSE Anomaly: Root-Caused to Part 5's `enterLink()`-Poll Race, Plus One New, Now-Fixed `CarMicroHandler` Bug (Found/Fixed 2026-07-31, Corrected 2026-08-01)
 
@@ -1061,6 +1062,97 @@ specific 0-tick termination race this section's first fix attempt hit — worth 
 where the only actor scheduled at tick 0 disengages to await a dynamic-actor spawn), so a future
 change to this file's fix doesn't need the full 86,400-tick baseline to catch a regression back to
 either `deferFinishSpontaneous()` or the unsafe full-disengage shape.
+
+## `NodeEventHandler` Notified the Wrong Link on Signal Phase Change — Root Cause of the "+161-203s Signal-Wait Overshoot" (Found/Fixed 2026-08-05)
+
+**Follows up directly on the "cars queued at Red overshoot their travel time" note left open in
+the `TrafficSignalPhaseHandler`/connection-keying section above.** That section's 2026-07-31
+connections-keying fix (approach-edge key -> outgoing-edge key) correctly fixed
+`NodeEventHandler.handleRequestLinkAccess`'s lookup, closing the "signal always assumed Green"
+bug and getting `CarSignalHandler`'s queue-position/headway wait mechanism working — but it broke
+a second, unrelated consumer of the same `connections` map that needed the opposite keying, and
+that's what was still producing the residual multi-hundred-second overshoot.
+
+**Root cause**: `NodeEventHandler.handleReceiveSignalChangeStatus` computed `linksForThisPhase`
+from `state.connections` — the same map `handleRequestLinkAccess` uses, keyed by the OUTGOING
+link (the link a car is about to enter next, e.g. `link_bc` for a car approaching node `n_b` on
+`link_ab`) since the 2026-07-31 fix. It then sent `LinkSignalStateData` (the message that sets
+`Link.signalAtExit`, consumed by `DefaultMicroSimulationStrategy` to plant a virtual
+zero-velocity leader at `position = linkLength`, causing IDM/Krauss to smoothly brake a vehicle
+approaching *that link's own end*) to whichever Link actor owns that outgoing link. For scenario
+B's intersection, this meant every Red/Green phase change was broadcast to `link_bc` — the link
+*leaving* the signalized node — not `link_ab`, the link a car is actually traveling on as it
+approaches the signal. A vehicle already past the intersection and mid-transit on `link_bc`
+(no signal of its own) would suddenly find a virtual stopped vehicle planted at `link_bc`'s far
+end whenever the (irrelevant, already-passed) upstream signal turned Red, decelerating to a near
+stop and only resuming once that signal cycled back to Green — completely disconnected from its
+own actual progress. Confirmed directly via Parquet trace: `car_1` (scenario B) entered `link_bc`
+at tick 29 (already cleared the signal on Green), then decelerated from 13.9 m/s toward ~0 exactly
+across ticks 30-60 (the node's Red window) before snapping back to speed at tick 61 (the next
+Green), losing 34 ticks on a 100 m link that should take ~8s free-flow — the same tick-for-tick
+alignment with the signal's Red window is what the original `+161-167s` finding's cars were
+independently exhibiting, just not previously root-caused past "somewhere in `CarSignalHandler`
+or `NodeEventHandler`'s bookkeeping" (see that section's own "next step" note).
+
+**Verified the mechanism, not just correlation**: `git blame` traces the "Notify the outgoing
+Link" wording back to `a03ed61` (2026-06-11), written when `connections` was still keyed by the
+SUMO-style approach edge — i.e. the comment mislabeled what was, at the time, actually the
+*approach* link; the 2026-07-31 connections-keying fix (`docs/KNOWN_GAPS.md`'s
+`TrafficSignalPhaseHandler` section, "Update 2026-07-31") then took that comment literally and
+re-keyed the map to genuinely be outgoing-only, silently flipping this call site's semantics along
+with it. Also confirmed real-world production scenario generators
+(`tools/sao-paulo/generate_hybrid_input.py`, `tools/toulouse/generate_hybrid_input.py`,
+`tools/interscsimulator_scenario/convert_interscsimulator.py`,
+`hyperbolic-time-chamber/scripts/scenario/generate_tiny_validation_scenario.py`) all currently
+emit `"connections": {}` unconditionally — this bug has been latent in production the whole time,
+never triggered outside `tools/sumo_validation`'s hand-authored scenario B, the only place any
+scenario populates `connections` at all. Worth a follow-up pass once production scenarios start
+wiring real signal connections — not done here, out of scope for this fix.
+
+**Fix**: added a second field, `NodeState.approachConnections: mutable.Map[String, Identify]`,
+keyed by the APPROACH link (opposite direction of `connections`). `handleReceiveSignalChangeStatus`
+now computes two separate sets — `outgoingLinksForThisPhase` (from `connections`, unchanged,
+still drives `signalWaitingCounts`/`tryDrainCapacityQueue` bookkeeping, which mirrors
+`handleRequestLinkAccess`'s own outgoing-link keying) and `approachLinksForThisPhase` (from the
+new `approachConnections`, used only for the `LinkSignalStateData` MICRO notification). `Node.scala`
+interns the new map's keys alongside the existing ones. `tools/sumo_validation/htc_export/export.py`
+gained `_node_approach_connections`, populating the new field directly from
+`TrafficLight.controlled_link_id` (already the approach edge, no translation needed — it's
+`_node_connections_and_signals`, the outgoing-keyed one, that has to remap).
+
+**Validation**:
+- Added `NodeEventHandlerSpec` regression coverage: one test asserting `LinkSignalStateData` is
+  sent to the approach link (from `approachConnections`) and never the outgoing link (from
+  `connections`) on a phase change; one confirming `signalWaitingCounts`/capacity bookkeeping still
+  keys off the outgoing link even though notification now uses the separate map — the two
+  consumers needed genuinely different keys, not a single collapsed fix. `sbt test`: 161/161 pass
+  (159 pre-existing + 2 new). Added `tools/sumo_validation/tests/test_htc_export.py` coverage for
+  `approachConnections`'s exporter output; harness suite: 24/24 pass.
+- `tools/sumo_validation/run_validation.py --scenarios a b`, three full runs after the fix:
+  scenario B's max travel-time delta dropped from the pre-fix (but post-connections-keying-fix)
+  **27s** to **8-9s**, and the previously wildly run-to-run-varying queued cars (`car_2`-`car_5`)
+  became exactly reproducible across two independent runs (identical RMSE/delta figures both
+  times) — consistent with these cars now being genuinely, deterministically gated by the (correct)
+  approach-link virtual leader instead of racing an independent message round-trip against
+  whatever position MICRO simulation happened to free-run them to. Scenario A (no traffic signal,
+  should be entirely inert to this change): `car_1` RMSE landed at exactly **68.463m**, the same
+  figure already on record in this doc's `sumo_validation` correction section — confirms zero
+  behavioral change there, as expected.
+- **New, smaller side-effect observed, not chased further**: `car_0`/`car_1` in scenario B (both
+  clear the signal on Green, before it ever turns Red) show *higher* position RMSE post-fix
+  (~90-110m vs. ~45-72m before) despite the fix not changing anything semantically relevant to
+  their trip. Root cause not confirmed, but the mechanism is almost certainly the already
+  extensively-documented wall-clock-race timing sensitivity above (parts 2/4/5 and the
+  `sumo_validation` correction section) — this fix adds one additional harmless
+  `LinkSignalStateData(Green)` message to `link_ab` at tick 0 (the signal's initial state
+  broadcast, now correctly targeting the approach link instead of the then-empty outgoing link),
+  and this scenario has already been shown to be sensitive enough to a single tick's dispatch-order
+  shift that it can collapse an intended 6-tick departure gap to zero (see the `sumo_validation`
+  `car_1` correction section). Not re-investigated here — the primary target of this fix (the
+  multi-hundred-second overshoot) is closed, and chasing this residual noise is the same
+  already-flagged, already-scoped TimeManager-level investigation (extending
+  `dispatchGeneration`/`highestProcessedTick` to gate `Waiting`-fallback re-polls) as everywhere
+  else in this doc, not a new problem this fix introduced.
 
 ## Test Coverage
 
