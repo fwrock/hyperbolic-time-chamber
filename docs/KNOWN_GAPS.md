@@ -846,11 +846,11 @@ scenario B's `link_ab` -> `link_bc`), whose real exit velocity was silently disc
 Fixed by reading `journeyReporter.sumoArrivalSpeed` instead — it is `0.0` by construction until a
 car's first `handleMicroLeaveLink` ever fires, then holds the real exit velocity from then on
 (already being written correctly by both `handleMicroUpdate` and `handleMicroLeaveLink`, just never
-read back on the next entry). Same dead-fallback pattern found, **not fixed** (out of scope — not
-exercised by this harness, not independently verified), in `BusMicroHandler.scala:51`
-(`speedLimitMs * 0.7`) and, more crudely, hardcoded unconditionally with no `state.microState` check
-at all in `MotorcycleMicroHandler.scala:45` and `BicycleMicroHandler`'s equivalent
-(`speedLimitMs * 0.9`).
+read back on the next entry). **[RESOLVED 2026-08-05]** Same dead-fallback pattern found in
+`BusMicroHandler.scala:51` (`speedLimitMs * 0.7`) and, more crudely, hardcoded unconditionally with
+no `state.microState` check at all in `MotorcycleMicroHandler.scala:45` and `BicycleMicroHandler`'s
+equivalent (flat `5.0` m/s) — see "`Bus`/`Motorcycle`/`Bicycle` Micro Handlers Had the Same
+Dead-Fallback-Velocity Bug as `CarMicroHandler`" further down this file for the fix.
 
 **Why fixing this alone did not close the `car_1` gap**: with initial velocity now correctly `0.0`
 for a car's first-ever movement, two cars still entering the same link within 1-2 ticks of each
@@ -1153,6 +1153,39 @@ gained `_node_approach_connections`, populating the new field directly from
   already-flagged, already-scoped TimeManager-level investigation (extending
   `dispatchGeneration`/`highestProcessedTick` to gate `Waiting`-fallback re-polls) as everywhere
   else in this doc, not a new problem this fix introduced.
+
+## `Bus`/`Motorcycle`/`Bicycle` Micro Handlers Had the Same Dead-Fallback-Velocity Bug as `CarMicroHandler` (Found/Fixed 2026-08-05)
+
+**Same bug class as the already-fixed `CarMicroHandler` finding** (see the `sumo_validation`
+scenario A `car_1` RMSE section above) — flagged there as "not fixed, out of scope" for the other
+three vehicle types, closed now. All three `*MicroHandler.handleMicroEnterLink` implementations
+computed a vehicle's initial MICRO-mode velocity from a hardcoded fallback instead of the
+vehicle's real carried-over exit velocity:
+
+- **`BusMicroHandler.scala`**: `state.microState.map(_.velocity).getOrElse(speedLimitMs * 0.7)` —
+  same shape as Car's original bug. `state.microState` is always `None` at this point
+  (`handleMicroLeaveLink` calls `state.deactivateMicroMode()` on every exit, clearing it, before
+  the next `handleMicroEnterLink` runs), so the `.map` branch could never fire; every micro-link
+  entry fell into the `getOrElse`, starting every bus — first-ever trip or mid-route chained link
+  alike — cruising at a flat 70% of the link's speed limit.
+- **`MotorcycleMicroHandler.scala`** / **`BicycleMicroHandler.scala`**: worse — no
+  `state.microState` check at all. Motorcycle unconditionally set `velocity = speedLimitMs * 0.9`;
+  Bicycle unconditionally set a flat `5.0` m/s regardless of speed limit. Neither ever had a code
+  path that could read a real prior velocity, chained or otherwise.
+
+**Fix**: all three now read `journeyReporter.sumoArrivalSpeed` instead, mirroring
+`CarMicroHandler`'s fix exactly — `0.0` by construction until a vehicle's first
+`handleMicroLeaveLink` ever fires (matching SUMO's `departSpeed=0` default for a genuinely fresh
+trip), then holds the real exit velocity from then on (already being written correctly by each
+handler's own `handleMicroUpdate`/`handleMicroLeaveLink`, just never read back on the next entry).
+
+**Validation**: added `BusMicroHandlerSpec`, `MotorcycleMicroHandlerSpec`, `BicycleMicroHandlerSpec`
+(mirroring `CarMicroHandlerSpec`'s three cases each: fresh-trip rest start, chained-link velocity
+carryover, reported `initial_velocity` matches stored state) — 9 new specs, no Pekko, all passing.
+Full suite: 170 specs (161 pre-existing + 9 new), all green. Not independently re-run against
+`tools/sumo_validation` — scenario A/B only exercise Car; no equivalent Bus/Motorcycle/Bicycle
+harness scenario exists yet to measure a direct RMSE effect, same caveat `CarMicroHandler`'s own
+fix noted for its own validation scope.
 
 ## Test Coverage
 
