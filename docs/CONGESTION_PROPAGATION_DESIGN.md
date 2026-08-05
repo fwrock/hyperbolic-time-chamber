@@ -140,12 +140,15 @@ consequence of a slow relay is that the waiting vehicle "skips" the intervening 
 dormant for — already-accepted, pre-existing behavior for every async exchange in this codebase,
 not a new risk.
 
-### Fairness (point 5, deferred detail)
+### Fairness (point 5, priority still deferred)
 
-FIFO per destination link to start (the buffer at `Node` naturally provides this ordering). Not yet
-decided: priority between multiple competing movements/approach links converging on the same
-destination link (real-world right-of-way, protected turns, etc.) — explicitly deferred until FIFO
-is working and validated.
+**Validated 2026-08-05** (`NodeEventHandlerSpec`, "queue vehicles FIFO by arrival order..."):
+FIFO across competing movements/approach links comes for free from `capacityWaitQueue` being keyed
+only by `targetLinkId`, never by the requester's origin — two vehicles converging on the same
+destination link from different approaches are ordered purely by request arrival order, no
+per-origin logic needed. Still explicitly deferred: actual priority/right-of-way between movements
+(protected turns, major-road precedence, etc.) — plain FIFO doesn't model that, by design, until
+there's a concrete need for it.
 
 ### Explicitly deferred / out of scope for now
 
