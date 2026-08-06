@@ -4,16 +4,22 @@ Status as of 2026-08-06: **all five "Suggested order" steps below have landed, e
 deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
 §6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
 /GVT), and §10 (anti-message cascade math) — see "Implementation log" below for what's real vs.
-scoped in each. Started on §10's post-suggested-order "not live yet" list too: `RollbackHistoryHandler` is now
-composed into `SimulationBaseActor`, and `rollbackTo` is now genuinely safe and correct to call
-(the `actSpontaneous`/`actInteractWith` replay-safety gap found mid-step is solved via an
-`isReplaying` flag) — see that section's two follow-up log entries. **Time Warp is still not
-runnable**: nothing calls `rollbackTo` yet (the straggler trigger itself isn't activated), and the
-wire protocol (`ActorInteractionEvent`'s `messageId`/`isAntiMessage`) is untouched, so even once
-triggered, a rollback's anti-messages have nowhere real to go. This document is the design
-log/rationale from the planning conversation that produced it — update it as decisions are
-revisited or implementation diverges, don't treat it as aspirational once code lands (same
-convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+scoped in each. Finished §10's post-suggested-order "not live yet" list: `RollbackHistoryHandler` is composed into
+`SimulationBaseActor`, `rollbackTo` is safe and correct (`isReplaying` flag), `ActorInteractionEvent`
+carries the two wire fields the anti-message cascade needs (`seq`/`isAntiMessage`), and the
+straggler trigger is activated in `handleInteractWith` for both real causes (a genuinely
+causally-earlier interaction, and receiving a real anti-message) — see §10's three follow-up log
+entries for the full history, including a reconsideration that dropped the originally-planned
+second trigger point in `OptimisticLocalTimeManager` as not actually a Time-Warp-specific case.
+**Time Warp is implemented and tested end-to-end** (`SimulationBaseActorStragglerTriggerSpec`
+drives a real rollback + real anti-message cascade through real actor mailboxes). What's left: the
+one always-acknowledged "not solved yet, not blocking" edge case (anti-message arriving before its
+original is locatable), and — separately — `OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
+still aren't reachable from any scenario config (three hardcode points, named in §2/§4's log
+entries, still pointing at the conservative side). This document is the design log/rationale from
+the planning conversation that produced it — update it as decisions are revisited or implementation
+diverges, don't treat it as aspirational once code lands (same convention as
+`docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -685,9 +691,87 @@ thing that would have surfaced during real integration otherwise:**
    — not a retry loop, a single documented startup synchronization for a known Pekko/Akka
    PersistentActor-in-tests race.
 
-**Still not done from §10's "not live yet" list**: `ActorInteractionEvent`'s wire fields (item 1),
-item 3 (nothing calls `rollbackTo` yet — the straggler trigger itself is still not activated,
-though it's now safe to activate), item 4 (the anti-message-before-original stash edge case).
+**Still not done from §10's "not live yet" list** (as of the entry above): `ActorInteractionEvent`'s
+wire fields (item 1), item 3 (the straggler trigger itself), item 4 (the anti-message-before-
+original stash edge case).
+
+### §10, items 1 and 3 completed: wire fields added, straggler trigger activated — Time Warp is now end-to-end functional (2026-08-06)
+
+New: `core/actor/rollback/AntiMessagePayload.scala`, `SimulationBaseActorStragglerTriggerSpec.scala`
+(3 tests). Modified: `communication.proto` (+2 fields), `ActorInteractionEvent.scala`,
+`ActorInteractionSerializer.scala`, `EntityEnvelopeSerializer.scala`, `RollbackHistoryHandler.scala`
+(+`findEvent`), `SimulationBaseActor.scala` (the real trigger). Full suite (231 tests) passes.
+
+**Item 1 — the wire fields, done with much less blast radius than feared.** Investigated
+`ActorInteractionSerializer`/`EntityEnvelopeSerializer` in full before touching anything: the wire
+format is proto3 (scalapb-generated `ActorInteraction` message, tag-numbered fields 1-17), not a
+fixed-positional byte stream — appending new tag numbers (18, 19) is exactly the growth path proto3
+tags already exist for, with zero risk to the 17 existing fields or their encode/decode order. No
+test in the repo hardcodes an exact byte count (the one size-related assertion is a relative
+comparison against a deliberately-larger "legacy shape," unaffected by two small appended fields).
+Turned out to need only **two** new fields, not three: `ActorInteractionEvent.actorRefId` (sender)
+and `.tick` already exist as top-level fields, and `MessageId = (senderId, tick, seq)` reuses both
+via a derived `.messageId` method — the only genuinely new data is `seq: Long` and
+`isAntiMessage: Boolean`. Both default to `0`/`false`, and proto3 encodes a zero-valued field as
+zero bytes — so every conservative-mode send stays byte-identical to before these fields existed.
+**Caught before it shipped**: an early version generated a fresh `seq` unconditionally in
+`sendMessageTo` (reasoning: "cheap, one Long increment") — that would have made every
+conservative-mode message carry a real non-zero `seq`, silently growing the wire size for a field
+nothing conservative-mode reads, exactly the class of regression this codebase's own git history
+(recent dedicated commits shrinking this same struct) exists to prevent. Fixed: `seq` generation
+and the `SentMessage` capture below are both now gated behind `isTimeWarp`, same as everything else
+in this feature — conservative-mode sends keep `seq=0`.
+
+**Item 3 — the straggler trigger, activated in `handleInteractWith` only.** Reconsidered the
+original plan (a second trigger point in `OptimisticLocalTimeManager.scheduleEvent`'s stale-tick
+guard) and dropped it: that guard fires on an actor's own *self*-rescheduling racing its own
+dispatch history — an LTM pool-sharing bookkeeping artifact today, not a message from another
+actor arriving out of causal order. Since `isReplaying` already makes `scheduleEvent` a no-op
+during replay, this case can't actually represent a Time-Warp-specific causality violation the way
+the design doc's phrasing implied — the *only* real straggler source is cross-actor interaction
+messages, which is where all of the following now lives, in `handleInteractWith`:
+
+- **Genuine straggler** (`event.tick < currentTick`, not an anti-message): calls
+  `rollbackAndCascade(event.tick)` — restore-and-replay back to before it via
+  `RollbackHistoryHandler.rollbackTo`, turn every undone send into a real anti-message via
+  `AntiMessageCascade.messagesToRetract`, *then* process the straggler itself normally, now in its
+  causally-correct position. Exactly Jefferson's "roll back to before the violation, then process
+  it in order" — not a separate code path from normal processing, just a preamble to it.
+- **Anti-message receipt** (`event.isAntiMessage`): looks up the original send via
+  `findLoggedEventForMessage` (matching `ActorInteractionEvent.messageId` against this actor's own
+  log — the only event type it ever logs whose identity an anti-message could reference), then
+  rolls back to *that* entry's tick and cascades, same as above. If the original can't be found
+  (already fossil-collected, or a stray message), logs a warning and does nothing — not fatal,
+  since there's nothing left that could need undoing.
+- `sendMessageTo` now captures every real send into `currentEventSentMessages` (only when
+  `isTimeWarp`), flushed into `LoggedEvent.sentMessages` when `handleSpontaneous`/
+  `handleInteractWith` finish — the capture `AntiMessageCascade` needed and didn't have since step
+  5. `sendAntiMessage` constructs and routes the actual anti-message through the same
+  `sendMessageToShard`/`sendMessageToPool` machinery a normal send uses, carrying the *original*
+  send's `tick`/`seq` (not this actor's current ones) so the receiver's lookup matches.
+
+**Verified end-to-end** by `SimulationBaseActorStragglerTriggerSpec`, real mailbox traffic, no
+shortcuts: a genuine straggler triggers a real rollback, a real anti-message lands on the correct
+peer with the correct `(tick, seq, isAntiMessage)`, and the actor then correctly reprocesses the
+straggler and resumes; receiving a real anti-message rolls back and cascades a further anti-message
+for what that itself undid; an anti-message for an unresolvable original is a quiet no-op.
+
+**Known, explicitly scoped-out limitation** (documented in code, not just here): a replayed event's
+fresh `sendMessageTo` calls populate `currentEventSentMessages` same as a live dispatch, but nothing
+flushes that back onto the `LoggedEvent` being replayed (only a *live* dispatch does, via
+`recordProcessedEvent`). If that same event is ever rolled back a **second** time, its cascade would
+use the sends from its first dispatch, not the replay's. Real, but a deeper-nested-rollback edge
+case beyond what this step's tests exercise — not designed further here.
+
+**What's left of §10's original four-item list**: only item 4, the anti-message-arrives-before-its-
+original stash edge case (`docs/TIME_WARP_DESIGN.md`'s original §10 already named this "not solved
+yet, not blocking" — still true; nothing in this step's testing exercised message reordering deep
+enough to hit it). Every other piece of Time Warp described in this document — GVT, termination
+detection, checkpoint/replay, the anti-message cascade, and now the trigger and wire format that
+activate it — is implemented and tested. **`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
+are still not reachable from any config** (the three hardcode points named in the §2 and §4 log
+entries) — that remains the one gap between "Time Warp works" and "a scenario can actually select
+it."
 
 ## Open questions / not designed yet
 
@@ -717,10 +801,11 @@ though it's now safe to activate), item 4 (the anti-message-before-original stas
 | `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (done) | GVT coordinator + termination-plateau detection |
 | `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala`, `TerminationPlateauDetector.scala`, `LocalVirtualTimeReport.scala` (done) | Pluggable GVT strategy + §11 termination detector; Mattern-style GVT variant still deferred |
 | `core/entity/event/control/execution/LvtReportEvent.scala` (done) | Fire-and-forget LTM→GTM LVT report |
-| `core/actor/rollback/RollbackHistoryHandler.scala` (done, not yet composed into any actor) | Per-actor checkpoint+event-log handler |
-| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala`, `SentMessage.scala` (done) | Event-log entry format; message identity + addressing for anti-messages (fields exist, unpopulated — no live capture wired yet) |
+| `core/actor/rollback/RollbackHistoryHandler.scala` (done, composed into `SimulationBaseActor`) | Per-actor checkpoint+event-log handler; `rollbackTo` is live and triggered |
+| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala`, `SentMessage.scala` (done) | Event-log entry format; message identity + addressing for anti-messages, populated by `sendMessageTo` under Time Warp |
 | `core/actor/rollback/AntiMessageCascade.scala` (done) | Pure "which sends must be retracted" math over a rollback's undone events |
-| `core/entity/event/ActorInteractionEvent.scala` (not done — see §10 log's item 1) | Needs `messageId`/`isAntiMessage`; deferred, hot-path wire-format change needing its own serializer-aware pass |
+| `core/actor/rollback/AntiMessagePayload.scala` (done) | Marker payload for an anti-message's otherwise-empty `data` field |
+| `core/entity/event/ActorInteractionEvent.scala`, `communication.proto`, `ActorInteractionSerializer.scala`, `EntityEnvelopeSerializer.scala` (done) | `seq`/`isAntiMessage` fields added (proto tags 18/19, zero-cost on the wire when unused) |
 | `core/enumeration/TimeManagerTypeEnum.scala` (done) | Added `TIME_WARP` — string exists, not yet reachable from config (see §2/§3/§11 log's "Other scope notes") |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
 | `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
