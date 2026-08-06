@@ -328,6 +328,120 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
     tocado. Cobertura: `KryoEventDataSerializationSpec`/`LinkVehicleFlowHandlerSpec` atualizados
     para o novo formato dos case classes. Suíte completa: 198 testes verdes.
 
+### Adiado — grande escopo, aguardando gatilho de profiling
+
+12. **Migração de `entityId`/`actorRefId` de `String` para `Long`.** Duas motivações independentes
+    — tamanho de mensagem na rede **e** footprint de heap por ator vivo — ambas com ganho real
+    medido (não estimado) nesta seção, escopo mapeado, **deliberadamente não iniciado**. Ver
+    justificativa depois das duas medições.
+
+    **Ganho de rede, medido** (mesma rodada, mesmo stream de 17.047 mensagens do cenário
+    `sqlite_validation_test`, dia inteiro):
+
+    | Formato | Bytes | Economia vs. legado |
+    |---|---|---|
+    | Legado (pré-recomendações 9/10) | 3.875.741 | — |
+    | **Atual (em produção)** | 2.952.439 | 23,82% |
+    | Long-id (IDs numéricos únicos, teto realista) | 2.207.735 | 43,04% |
+
+    O `Long` daria **mais ~25% em cima do que já está em produção** (2.952.439 → 2.207.735),
+    chegando a 43% de redução total. Medição feita atribuindo um `Long` sintético único a cada
+    `entityId`/`actorRefId` real capturado da rodada (simula um dataset gerado com IDs numéricos
+    desde a origem) — não é uma estimativa teórica, é sobre tráfego real do cenário.
+
+    **Ganho de memória heap, medido (não estimado)** — a motivação não é só rede: cada ator vivo
+    guarda seus próprios IDs em `state`, e estruturas como `LinkState.registered`/`vehiclesByLane`
+    acumulam um `LinkRegister`/`VehicleInLane` por veículo simultâneo no link, cada um carregando
+    `actorId`/`shardId` como `String`. Medido com `jol-core` (`org.openjdk.jol:jol-core:0.17`, já é
+    dependência do build — `build.sbt:58,138` — nunca usada até agora; requer HotSpot/OpenJDK real,
+    a JVM IBM Semeru/OpenJ9 padrão deste ambiente não é suportada pelo JOL, rodado via
+    `~/.sdkman/candidates/java/21.0.8-oracle`) via `GraphLayout.parseInstance(obj).totalSize()` —
+    tamanho real de heap reportado pela própria JVM, não um modelo de bytes calculado à mão:
+
+    | Estrutura real | `String` (hoje) | `Long` (hipotético, mesmos campos) | Economia por instância |
+    |---|---|---|---|
+    | `LinkRegister` (`actorId`+`shardId`) | 352 bytes | 208 bytes | 144 bytes (40,9%) |
+    | `VehicleInLane` (`actorId`+`shardId`) | 248 bytes | 104 bytes | 144 bytes (58,1%) |
+    | 1 `String` id isolado (4 exemplos reais, 16-31 chars) | 56-72 bytes | 8 bytes (campo primitivo) / 24 bytes (`Long` boxed avulso) | ~48-64 bytes |
+
+    Essas duas estruturas (`LinkRegister`/`VehicleInLane`) são exatamente as que
+    `LinkVehicleFlowHandler` acumula **por veículo simultâneo em cada link** (recomendação 11) — ou
+    seja, o "fan-out" relevante aqui não é o grafo de nós/links (não conseguimos medir isso com o
+    dataset de teste disponível, ver conversa anterior), é o **número de veículos em trânsito ao
+    mesmo tempo**, que escala com o tamanho da população simulada, não do mapa. Em 5M atores (a
+    escala documentada em `application.conf`), mesmo uma fração pequena em trânsito simultâneo já
+    multiplica 144 bytes por um número grande — mas sem um cenário real de escala de cidade rodando,
+    não dá pra transformar isso num total confiável (mesma limitação já registrada para o fan-out do
+    grafo). O número confiável aqui é o **delta por instância** (144 bytes, medido, não chutado), não
+    o total agregado.
+
+    **Por que não abrir agora:**
+    1. Nem o argumento de rede nem o de memória têm, ainda, um profiling real (heap dump / GC log de
+       uma rodada em escala de cidade) mostrando que um dos dois é hoje o fator limitante de
+       performance — vs. CPU de scheduling de atores, contenção de mailbox, etc. Os números acima
+       são reais e precisos *por instância*, mas sem o multiplicador de escala real (população viva
+       simultânea, distribuição de veículos por link) não dá pra saber se o ganho absoluto é
+       "irrelevante" ou "o maior item do orçamento de heap" — as duas hipóteses são plausíveis e só
+       um profiling real decide.
+    2. O custo/risco é desproporcional ao ganho marginal enquanto isso não for confirmado: é um
+       refactor transversal (inventário abaixo), não um patch contido como as recomendações 9-11.
+       `CLAUDE.md` já deixa explícito que o projeto prioriza correção/performance de execução da
+       simulação sobre features maiores neste momento (é o mesmo motivo pelo qual shard migration
+       está desligada de propósito, ver `docs/KNOWN_GAPS.md`).
+
+    **Gatilho para revisitar (qualquer um dos dois):**
+    - Profiling de rede/serialização em escala de cidade apontando isso como gargalo, **ou**
+    - Heap dump / GC log de uma rodada em escala de cidade mostrando que `LinkRegister`/
+      `VehicleInLane`/`ShardActorId`/o `relationships` map (ou estruturas equivalentes) são uma
+      fração significativa do heap residente ou motor de pausas de GC frequentes.
+
+    Não é preciso os dois: qualquer um dos dois profilings, isoladamente, já justificaria reabrir
+    isso — são motivações independentes com a mesma solução.
+
+    **Veredito: vale a pena hoje? Não.** Os percentuais são bons (41-58% de heap por instância,
+    43% de rede no teto), mas os valores absolutos, na melhor extrapolação possível sem dado real
+    de escala, são pequenos frente ao sistema como um todo:
+    - Heap: mesmo no cenário mais generoso (5M atores, todos simultaneamente registrados num link
+      — irrealista, população em trânsito é sempre uma fração disso) a economia fica em torno de
+      **~720 MB**. Real, mas o resto do `state` de cada ator (rotas, agenda, histórico) provavelmente
+      pesa mais que esses dois campos de ID somados — não é obviamente "a" fatia do orçamento de
+      heap.
+    - Rede: o ganho só se realiza em deployment multi-nó de verdade — mensagens entre atores no
+      mesmo nó nem passam pelo serializer (Pekko despacha local por referência). Enquanto shard
+      migration estiver desligada e o ambiente for majoritariamente single-node/teste, esse ganho
+      fica adormecido.
+
+    O que muda o veredito não é o percentual — é a *fração do total* que só um profiling real
+    resolve (ver gatilho acima). Até lá: documentado, não priorizado. É o tipo de otimização fácil
+    de justificar no papel e difícil de justificar no orçamento de esforço sem esse dado.
+
+    **Inventário do escopo, se/quando for aberto:**
+    - **Fronteira do Pekko Cluster Sharding continua exigindo `String`.** `ShardRegion.ExtractEntityId`/
+      `ExtractShardId` (`ActorCreatorUtil.scala`) são `PartialFunction[Any, (String, Any)]`/
+      `PartialFunction[Any, String]` — tipos do próprio Pekko, não deste projeto. `Long` não elimina
+      essa conversão, só desloca: o entityId "de domínio" pode ser `Long`, mas o `.toString` pra
+      roteamento local continua necessário em algum ponto (custo de CPU, não de wire).
+    - **IDs reais do dataset não são uniformemente numéricos.** Confirmado em
+      `docs/MATSIM_CONVERSION_GUIDE.md` e no fixture de teste: `htcaid:car;42_v_car`,
+      `htcaid:subwaystation;station_A` — nomes alfanuméricos convivem com IDs OSM numéricos
+      (`htcaid:node;60609822`). Uma migração completa exige ou (a) regenerar todo dataset com IDs
+      numéricos únicos atribuídos no load (a premissa usada pra medir o teto acima), ou (b) uma
+      camada de ID surrogate (dicionário `String↔Long`) pros tipos que não são naturalmente
+      numéricos — pessoa, veículo, estação — o que adiciona uma indireção nova em todo o sistema.
+    - **`state class` que guardam referência de ID como `String`** — cada uma vira um ponto de
+      migração: `NodeState.links: List[String]`, `LinkState.from`/`.to`, `Car`/`Bicycle`/`Motorcycle`/
+      `Bus`/`Subway.origin`/`.destination`/`.currentNode`, `PersonState.dailySchedule[].nodeId`,
+      `ShardActorId.entityId`, `LinkRegister.actorId`/`.shardId`, `VehicleInLane.actorId`/`.shardId`,
+      as chaves de `SimulationBaseActor.relationships: mutable.Map[String, ShardActorId]`.
+    - **Relatórios/saída** — `ClickHouseReportData`/`VehicleLinkFlowData` e o Parquet writer emitem
+      `vehicleId`/`linkId`/etc. como string legível para análise externa; se o `entityId` interno
+      virar `Long`, esses relatórios precisam de uma tradução de volta pra string (ou aceitar
+      números crus, o que degrada usabilidade pra quem consome o output).
+    - **Testes** — todo teste que constrói um `entityId`/`actorRefId` manualmente (dezenas de specs)
+      muda de tipo.
+    - **Não é uma mudança que cabe num commit ou dois**, ao contrário das recomendações 9-11 — é
+      multi-sessão, com superfície de regressão real em código de simulação (não só serialização).
+
 ### A não fazer / falso positivo já descartado
 - **Não é necessário mexer no `StringPool`** para reduzir tamanho de mensagem — ele já cumpre
   seu papel (dedup de heap pós-deserialização), mas não influencia bytes na rede/disco. Qualquer
