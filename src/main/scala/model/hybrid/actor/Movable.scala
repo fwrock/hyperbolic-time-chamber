@@ -168,8 +168,6 @@ abstract class Movable[T <: MovableState](
               entityId = entityId,
               shardId = shardId,
               data = EnterLinkData(
-                actorId = getEntityId,
-                shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
                 actorCreationType = LoadBalancedDistributed
@@ -212,8 +210,6 @@ abstract class Movable[T <: MovableState](
               entityId = entityId,
               shardId = shardId,
               data = LeaveLinkData(
-                actorId = getEntityId,
-                shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
                 actorCreationType = LoadBalancedDistributed
