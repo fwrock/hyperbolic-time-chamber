@@ -30,7 +30,7 @@ class RollbackHistoryHandlerSpec extends AnyFlatSpec with Matchers {
     def capture(): MigrationSnapshot = MigrationSnapshot(stateJson = counter.toString, stateClassName = "Int")
     def restore(snapshot: MigrationSnapshot): Unit = counter = snapshot.stateJson.toInt
 
-    def apply(event: BaseEvent[?]): Unit =
+    def apply(event: AnyRef): Unit =
       event match {
         case TestEvent(_, label) =>
           counter += 1

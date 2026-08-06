@@ -4,13 +4,16 @@ Status as of 2026-08-06: **all five "Suggested order" steps below have landed, e
 deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
 §6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
 /GVT), and §10 (anti-message cascade math) — see "Implementation log" below for what's real vs.
-scoped in each. **Time Warp is not runnable yet**: the coordinator/rollback/cascade *logic* all
-exists and is tested in isolation, but nothing is wired live into `BaseActor`/`SimulationBaseActor`
-or the wire protocol (`ActorInteractionEvent`) — see §10's log entry for the exact four-item list
-of what's left, which is now the actual remaining work, not a "Suggested order" item. This
-document is the design log/rationale from the planning conversation that produced it — update it
-as decisions are revisited or implementation diverges, don't treat it as aspirational once code
-lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+scoped in each. Started on §10's post-suggested-order "not live yet" list too: `RollbackHistoryHandler`
+is now composed into `SimulationBaseActor`, mechanically (logging/checkpointing only) — see that
+section's follow-up log entry for a real design gap found in the process (`actSpontaneous`/
+`actInteractWith` aren't replay-safe) that still blocks `rollbackTo` itself from being callable.
+**Time Warp is not runnable yet**: the coordinator/rollback/cascade *logic* all exists and is
+tested in isolation (or, for the `SimulationBaseActor` wiring, live but fully inert behind a gate
+nothing sets), but the wire protocol (`ActorInteractionEvent`) is untouched and no rollback can
+actually execute. This document is the design log/rationale from the planning conversation that
+produced it — update it as decisions are revisited or implementation diverges, don't treat it as
+aspirational once code lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -565,6 +568,67 @@ isolation the way every other piece of Time Warp so far has been. This is where 
 "Suggested order" list of five steps ends; what's left is exactly the four items above, in
 roughly that order (1 and 2 can proceed in parallel; 3 depends on both; 4 depends on 3 landing and
 being observed to actually matter in practice).
+
+### §10 follow-up: `RollbackHistoryHandler` composed into `SimulationBaseActor` — mechanical part only (2026-08-06)
+
+After closing out the five suggested steps, started on the "not live yet" list from §10's log. Hit
+a new, real design gap immediately (see below), so — per explicit direction to not risk
+conservative mode — scoped this pass to exactly the mechanical, side-effect-free half of item 2
+from that list: composing the handler and its bookkeeping calls, with `rollbackTo` itself left
+uncallable. New: `TimeWarpConfigSpec.scala` (1 test, catches exactly the class of bug found below).
+Modified: `SimulationBaseActor.scala`, `application.conf`, `RollbackHistoryHandler`/`LoggedEvent`
+(a type fix, see below). Full suite (225 tests) passes.
+
+**New design gap found (not previously flagged anywhere): `actSpontaneous`/`actInteractWith` are
+not replay-safe.** `RollbackHistoryHandler.rollbackTo`'s replay phase needs to re-execute an
+already-processed event against a just-restored checkpoint to walk state forward — the design
+sketch's `replayEventFn` assumed this was just "call the event's handler again." But
+`SimulationBaseActor.handleSpontaneous`/`handleInteractWith` interleave state mutation with
+protocol side effects that must *not* repeat during a replay the way they do during a live
+dispatch: `onFinishSpontaneous` signaling the time manager (`FinishEvent`), and `sendMessageTo`'s
+real sends. Re-invoking `actSpontaneous`/`actInteractWith` verbatim during replay would resend
+spurious `FinishEvent`s and corrupt the time manager's `runningEvents` bookkeeping — a live-system
+correctness bug, not a hypothetical one. Fixing this needs those side effects to be separable from
+the state mutation (e.g. a "replay mode" that suppresses the protocol effects while still running
+the business logic), which is a real design decision not made anywhere in this document. Presented
+to the user as an explicit choice given the "don't interfere with conservative mode" instruction;
+decided: **do the safe mechanical wiring now, leave `rollbackTo` uncallable, solve replay-safety as
+a separate future decision** — not blocking, since nothing calls `rollbackTo` yet regardless.
+
+**What's real and live, but fully inert for conservative mode:**
+- `SimulationBaseActor` gained `private lazy val rollbackHandler: RollbackHistoryHandler`,
+  `private var processedEventSeq: Long` (the actor's own monotonic processed-event counter,
+  correctly a local `var` not `state` per `CLAUDE.md`'s rule — no reply obligation, cheap to
+  reset), and `private def isTimeWarp: Boolean = currentTimeManagerType ==
+  TimeManagerTypeEnum.TIME_WARP`. Every new call site (`registerOnTimeManager` calling
+  `rollbackHandler.initialize(startTick)`; `handleSpontaneous`/`handleInteractWith` each calling
+  `rollbackHandler.recordProcessedEvent(...)`) is gated behind `isTimeWarp`. Since nothing sets
+  `currentTimeManagerType` to `TIME_WARP` anywhere reachable yet, `isTimeWarp` is provably always
+  `false` today — the `lazy val` never initializes, none of the new code ever runs, and the full
+  225-test suite (unchanged behavior, same count modulo the one new config test) confirms nothing
+  regressed. `replayEventFn` is a documented stub that throws `UnsupportedOperationException` —
+  deliberately, so if something ever *did* wrongly call `rollbackTo` before replay-safety is
+  solved, it fails loudly instead of corrupting state silently.
+- **A second, real type-correctness fix found while wiring this**: `RollbackHistoryHandler`/
+  `LoggedEvent` were typed around `core.entity.event.BaseEvent[?]` (`SpontaneousEvent`'s type),
+  but `ActorInteractionEvent` — the *other* real event type `actInteractWith` receives — is a
+  separate, unrelated case class, not a `BaseEvent` subtype. Both are now typed `AnyRef`, the true
+  common supertype, since the handler only ever stores/passes the event through, never calls a
+  `BaseEvent`-specific method on it.
+- **A path bug caught before it could ever bite**: the checkpoint-interval config was first wired
+  to read `htc.time-manager.time-warp.checkpoint-interval`, but the new `application.conf` block
+  is a sibling of `time-manager` under `htc`, not nested inside it — the real path is
+  `htc.time-warp.checkpoint-interval`. Because the read only happens behind `isTimeWarp`, this
+  typo would have thrown `ConfigException.Missing` the moment Time Warp was ever actually enabled,
+  with zero test coverage to catch it beforehand — exactly the "silently never verified" risk of
+  gating everything behind an unreachable flag. Fixed, and `TimeWarpConfigSpec` now resolves the
+  path independently of the gate specifically so a future typo like this doesn't sit undetected
+  again.
+
+**Still not done from §10's "not live yet" list**: `ActorInteractionEvent`'s wire fields
+(item 1, unchanged — still deliberately deferred), the rest of item 2 (`rollbackTo` itself, blocked
+on the replay-safety gap above), item 3 (activating the straggler trigger), item 4 (the
+anti-message-before-original stash edge case).
 
 ## Open questions / not designed yet
 
