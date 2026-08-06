@@ -1,10 +1,11 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-Status as of 2026-08-06: **implementation started**. §8 (RNG determinism) is done — see
-"Implementation log" below. Everything else in "Decisions" is still design-only. This document is
-the design log/rationale from the planning conversation that produced it — update it as decisions
-are revisited or implementation diverges, don't treat it as aspirational once code lands (same
-convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+Status as of 2026-08-06: **implementation started**. §8 (RNG determinism) and §2
+(Conservative/GlobalTimeManagerBase extraction) are done — see "Implementation log" below.
+Everything else in "Decisions" is still design-only. This document is the design log/rationale
+from the planning conversation that produced it — update it as decisions are revisited or
+implementation diverges, don't treat it as aspirational once code lands (same convention as
+`docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -319,6 +320,55 @@ already uses in conservative mode — extend that probe rather than inventing a 
   directly, so this is a compile-level correctness check, not a behavioral regression check —
   flagging since `docs/KNOWN_GAPS.md` already notes near-zero coverage on this area.
 
+### §2 Conservative/GlobalTimeManagerBase extraction — done (2026-08-06)
+
+Local side (clean split, matches the design exactly):
+- `LocalTimeManagerBase` is now genuinely strategy-agnostic: actor registration/dispatch
+  bookkeeping (`dispatchGeneration`, `highestProcessedTick`, `sendSpontaneousEvent*`,
+  `finishEvent`, `terminateSimulation`, `forceDestructActiveActors`). `advanceToNextTick` and
+  `reportGlobalTimeManager` are abstract (no body); a new hook,
+  `onActorRescheduled(effectiveTick, wasIdle, isEarlierTick)`, replaces the inline barrier
+  re-notify call in `scheduleEvent` (default no-op).
+- New `ConservativeLocalTimeManager` (abstract) implements the barrier: `syncWithGlobalTime`,
+  `advanceToNextTick` (wait for `runningEvents.isEmpty`), `reportGlobalTimeManager`
+  (`LocalTimeReportEvent` to the parent), and `onActorRescheduled`'s re-notify. Handles
+  `UpdateGlobalTimeEvent`/`QueryNextTickEvent`.
+- `LocalDiscreteEventTimeManager`/`LocalTimeSteppedTimeManager` now extend
+  `ConservativeLocalTimeManager` instead of `LocalTimeManagerBase` directly — their own
+  `advanceToNextTick` overrides and `super.advanceToNextTick()` calls needed no changes.
+
+Global side (partial, deliberately — see caveat): `GlobalTimeManagerBase` extracts only what's
+truly strategy-independent — creating the LTM pool (`createTimeManagersPool`, now parameterized by
+an abstract `localTimeManagerProps()` hook), `notifyLocalManagers`, `getSelfProxy`. Everything else
+(the `SelectiveBarrier`'s `localTimeManagers` per-LTM tick/isProcessed map, migration-pause,
+progressive-loading, termination) stayed in the renamed `ConservativeGlobalTimeManager`, verbatim.
+
+**Caveat**: unlike the Local side, this is *not* a full base/strategy split — migration-pause and
+progressive-loading are deeply entangled with the `SelectiveBarrier`'s specific per-LTM state
+(`localTimeManagers.values.forall(_.isProcessed)` gates almost everything). Inventing shared hooks
+for them now, before `OptimisticGlobalTimeManager` exists to demonstrate what it actually needs
+from GVT-based idle/pause detection (§3/§11), would be speculative abstraction built to a guess.
+Deferred until that class is built for real; flagged explicitly in `GlobalTimeManagerBase`'s
+doc-comment so it isn't mistaken for finished.
+
+`SimulationManager.createSingletonTimeManager` now wires `ConservativeGlobalTimeManager.props`
+instead of `GlobalTimeManager.props`.
+
+Verification: full test suite (198 tests) passes, including
+`LocalTimeManagerBatchStallSpec` which directly exercises `LocalDiscreteEventTimeManager`'s
+`runningEvents`/`advanceToNextTick`/`reportGlobalTimeManager` machinery — the part of this refactor
+with real regression coverage. `ConservativeGlobalTimeManager` itself has no direct unit test
+(same pre-existing gap `docs/KNOWN_GAPS.md` already notes for this area) — this move was verified
+by full-suite pass plus careful line-by-line relocation (no logic rewritten), not by new test
+coverage; flagging honestly rather than claiming more confidence than that warrants. No scenario
+smoke run was performed this session (needs a live cluster/Redpanda).
+
+Still not done from the design doc's item 2: the config-driven LTM-strategy factory
+(`createTimeManagersPool`'s hardcoded `LocalDiscreteEventTimeManager.props`, and the GTM singleton
+`Props` selection) — noted in the original decisions as "a fix needed regardless of Time Warp,"
+but out of scope for this pure-refactor step; `localTimeManagerProps()` is the extension point
+that fix would hang off of.
+
 ## Open questions / not designed yet
 
 - Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
@@ -356,11 +406,11 @@ already uses in conservative mode — extend that probe rather than inventing a 
 ## Next steps
 
 Implementation-ready per the decisions above, except for the items in "Open questions." Suggested
-order: (1) ~~the RNG determinism fix (§8)~~ — done, see "Implementation log"; (2) the
-`Conservative*`/`GlobalTimeManagerBase` extraction (§2) — pure refactor, no behavior change,
-de-risks the rest; (3) `RollbackHistoryHandler` + checkpoint/replay (§6/§7) in isolation, testable
-without a live optimistic LTM; (4) `OptimisticLocalTimeManager` +
-`OptimisticGlobalTimeManager`/GVT (§2/§3/§11); (5) anti-messages (§10) last, since it depends on
-the event log's "what did I send" data already being correct from step 3.
+order: (1) ~~the RNG determinism fix (§8)~~ — done; (2) ~~the `Conservative*`/`GlobalTimeManagerBase`
+extraction (§2)~~ — done (Local side fully split; Global side partially, see caveat above); (3)
+`RollbackHistoryHandler` + checkpoint/replay (§6/§7) in isolation, testable without a live
+optimistic LTM; (4) `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11);
+(5) anti-messages (§10) last, since it depends on the event log's "what did I send" data already
+being correct from step 3.
 
-**Next up: step (2), the `Conservative*`/`GlobalTimeManagerBase` extraction.**
+**Next up: step (3), `RollbackHistoryHandler` + checkpoint/replay.**

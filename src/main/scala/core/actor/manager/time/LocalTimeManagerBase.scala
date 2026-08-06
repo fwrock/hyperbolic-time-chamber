@@ -20,8 +20,13 @@ import java.nio.file.{ Files, Paths, StandardOpenOption }
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-/** Base abstract class for local time managers. Local time managers handle the actual execution of
-  * simulation events and report progress back to the global time manager.
+/** Base abstract class for local time managers, holding only what every synchronization strategy
+  * needs regardless of whether it's conservative (barrier-gated, see [[ConservativeLocalTimeManager]])
+  * or optimistic (Time Warp, see `docs/TIME_WARP_DESIGN.md`): actor registration/dispatch
+  * bookkeeping and the mechanics of actually sending a `SpontaneousEvent`/`DestructEvent`. It does
+  * *not* implement `advanceToNextTick`/`reportGlobalTimeManager` — those encode the barrier
+  * protocol itself and are strategy-specific, left abstract here for the strategy base class to
+  * provide.
   *
   * @param simulationDuration
   *   The total duration of the simulation in ticks
@@ -43,7 +48,7 @@ abstract class LocalTimeManagerBase(
 
   protected var countScheduled = 0
   private var selfProxy: ActorRef = null
-  @volatile private var isTerminated = false
+  @volatile protected var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
   // Per-actor monotonically increasing dispatch counter. Incremented every time this TM actually
   // sends an actor a SpontaneousEvent; echoed back by the actor on its FinishEvent so finishEvent
@@ -74,8 +79,6 @@ abstract class LocalTimeManagerBase(
     case schedule: ScheduleEvent         => scheduleEvent(schedule)
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
-    case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
-    case QueryNextTickEvent              => reportGlobalTimeManager(hasScheduled = nextTick.isDefined)
     case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>
       stopSimulation()
       forceDestructActiveActors()
@@ -146,20 +149,20 @@ abstract class LocalTimeManagerBase(
     val prevNextTick = nextTick
     val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
-    // Re-notify GTM if:
-    //   1. TM was idle before this actor arrived (existing wasIdle logic), OR
-    //   2. The new actor's tick is EARLIER than the previously reported next-tick.
-    //      Without this, if Car(tick=56) registers first (wasIdle → GTM entry tick=56)
+    // A new actor's tick is EARLIER than the previously reported next-tick if:
+    //   Without this, if Car(tick=56) registers first (wasIdle → GTM entry tick=56)
     //      and SubwayStation(tick=1) registers next (LTM not idle → no report), GTM
     //      keeps tick=56 for this LTM and never wakes it at tick 1, causing a rewind.
     val isEarlierTick = !wasIdle && prevNextTick.exists(effectiveTick < _)
-    if ((wasIdle || isEarlierTick) && runningEvents.isEmpty) {
-      logDebug(
-        s"scheduleEvent: re-notifying GTM (wasIdle=$wasIdle, isEarlierTick=$isEarlierTick, tick=$effectiveTick, actor=${event.identify.map(_.id).getOrElse("?")})"
-      )
-      reportGlobalTimeManager(hasScheduled = true)
-    }
+    onActorRescheduled(effectiveTick, wasIdle, isEarlierTick)
   }
+
+  /** Called after `scheduleEvent` records a new/updated schedule entry, so a strategy that needs
+    * to re-notify its coordinator of newly-available work (the conservative barrier's re-notify;
+    * see [[ConservativeLocalTimeManager]]) can do so. No-op by default — an optimistic strategy
+    * dispatching without a barrier has nothing to re-notify here.
+    */
+  protected def onActorRescheduled(effectiveTick: Tick, wasIdle: Boolean, isEarlierTick: Boolean): Unit = ()
 
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
@@ -261,46 +264,11 @@ abstract class LocalTimeManagerBase(
       processTick(spontaneous.tick)
     }
 
-  private def syncWithGlobalTime(globalTick: Tick): Unit = {
-    if (globalTick % 1000 == 0) {
-      logInfo(
-        s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
-      )
-    }
-    // If startSimulation was never called (e.g. LTM joined the pool after the
-    // StartSimulationTimeEvent broadcast), initialise startTime and initialTick lazily
-    // so printSimulationDuration() reports a meaningful wall-clock value instead of
-    // ~Unix-epoch-ms (currentTime - 0).
-    if (startTime == 0L) {
-      startTime = System.currentTimeMillis()
-      initialTick = globalTick
-      logDebug(s"[LocalTM] startTime lazily initialised at globalTick=$globalTick (StartSimulationTimeEvent may have been missed)")
-    }
-    localTickOffset = globalTick
-    tickOffset = globalTick - initialTick
-    if (isRunning && !isTerminated) {
-      // Trigger micro links before processing regular events
-      triggerMicroLinks(globalTick)
-      processTick(localTickOffset)
-    }
-  }
-
   /** Processes a simulation tick. Subclasses implement specific time management strategies.
     * @param tick
     *   The tick to process
     */
   protected def processTick(tick: Tick): Unit
-
-  /** Advances to the next simulation tick. */
-  protected def advanceToNextTick(): Unit =
-    if (runningEvents.isEmpty) {
-      nextTick match {
-        case Some(tick) =>
-          reportGlobalTimeManager(hasScheduled = true)
-        case None =>
-          reportGlobalTimeManager(hasScheduled = false)
-      }
-    }
 
   protected def nextTick: Option[Tick] = {
     // Do NOT filter by `>= localTickOffset` here. A legitimately-preserved earlier tick (an
@@ -440,16 +408,12 @@ abstract class LocalTimeManagerBase(
     identitiesToDestruct.values.foreach(sendDestructEvent)
   }
 
-  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
-    if (parentManager.nonEmpty) {
-      // Report the NEXT tick we want to process (not current tick)
-      val reportTick = if (hasScheduled) nextTick.getOrElse(localTickOffset) else localTickOffset
-      parentManager.get ! LocalTimeReportEvent(
-        tick = reportTick,
-        hasScheduled = hasScheduled,
-        actorRef = self.path.toString
-      )
-    }
+  /** Reports this LTM's progress to its coordinator. What "reports" means is strategy-specific —
+    * the conservative barrier's blocking `LocalTimeReportEvent` handshake
+    * (see [[ConservativeLocalTimeManager]]) vs. an eventual optimistic strategy's non-blocking LVT
+    * report to a GVT coordinator (`docs/TIME_WARP_DESIGN.md` §3) — so it's left abstract here.
+    */
+  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit = {
     val actorRef = getActorRef(finishEvent.identify.actorRef)
