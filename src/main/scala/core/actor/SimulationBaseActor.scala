@@ -5,6 +5,8 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
+import core.actor.rollback.RollbackHistoryHandler
+import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
 import core.types.Tick
@@ -88,6 +90,49 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
   // Remembers classType per spawned entity until InitializeEntityAckEvent is received
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
+
+  // --- Time Warp (docs/TIME_WARP_DESIGN.md) --- everything below is gated behind
+  // `currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, which nothing sets yet (see the
+  // design doc's step-4/5 implementation log) — under every currently reachable configuration
+  // (i.e. conservative mode, always, today) `rollbackHandler` is never touched, so its `lazy`
+  // initializer never runs and this costs conservative-mode actors nothing.
+  //
+  // This actor's own monotonically increasing processed-event counter — the `seq` RollbackHistoryHandler
+  // orders its log by (see LoggedEvent.seq's doc). A plain actor-local `var`, not `state`: safe per
+  // CLAUDE.md's rule for actor-local mutable fields, since it holds no reply obligation and is
+  // cheap to recompute/reset — it only orders this actor's own already-in-memory replay log, not
+  // anything another actor is waiting to hear back about.
+  private var processedEventSeq: Long = 0L
+
+  /** Per-actor checkpoint + event-log handler (`docs/TIME_WARP_DESIGN.md` §6/§7), composed the same
+    * lambda-only, no-`ActorRef` way `CarMicroHandler` is. `replayEventFn` deliberately throws
+    * rather than attempting to re-invoke `actSpontaneous`/`actInteractWith`: those methods
+    * interleave state mutation with protocol side effects (`onFinishSpontaneous` signaling the
+    * time manager, real `sendMessageTo` sends) that a replay reconstructing state at an earlier
+    * log position must not repeat the same way a live dispatch does — re-running them verbatim
+    * would resend spurious `FinishEvent`s and corrupt the time manager's `runningEvents`
+    * bookkeeping. Making replay safe needs those side effects to be separable from the state
+    * mutation, which is a real design decision not yet made anywhere in the design doc. Until
+    * that's decided, `rollbackTo` is simply not called by anything — only `initialize`/
+    * `recordProcessedEvent` (pure logging, no replay) are wired below.
+    */
+  private lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
+    checkpointInterval =
+      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
+    captureSnapshotFn = () => buildMigrationSnapshot(),
+    restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
+    replayEventFn = _ =>
+      throw new UnsupportedOperationException(
+        "RollbackHistoryHandler.rollbackTo is not callable yet: actSpontaneous/actInteractWith " +
+          "aren't replay-safe (see this field's doc). Nothing should be invoking rollbackTo " +
+          "until that's fixed."
+      )
+  )
+
+  /** True only under Time Warp — the one gate every new-but-not-yet-safe-to-activate call site
+    * below checks before touching [[rollbackHandler]], so conservative mode is provably unaffected.
+    */
+  private def isTimeWarp: Boolean = currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
 
   /** Interns all String fields in the [[relationships]] map to reduce heap duplication.
     * Called once per actor in [[onFinishInitialize]], and again after migration restore.
@@ -287,6 +332,9 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   private def registerOnTimeManager(): Unit = {
+    if (isTimeWarp) {
+      rollbackHandler.initialize(startTick)
+    }
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) {
       logWarn(
@@ -542,6 +590,10 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
       onFinishSpontaneous(Some(currentTick + 1))
     }
+    if (isTimeWarp) {
+      processedEventSeq += 1
+      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq)
+    }
   }
 
   /** Called when the actor receives a spontaneous event from the time manager. Override this method
@@ -569,6 +621,10 @@ abstract class SimulationBaseActor[T <: BaseState](
             s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
         )
         e.printStackTrace()
+    if (isTimeWarp) {
+      processedEventSeq += 1
+      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq)
+    }
   }
 
   /** Called when the actor receives an interaction event from another actor. Override this method

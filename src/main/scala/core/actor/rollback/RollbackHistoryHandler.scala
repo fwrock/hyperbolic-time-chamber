@@ -2,7 +2,6 @@ package org.interscity.htc
 package core.actor.rollback
 
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
-import core.entity.event.BaseEvent
 import core.types.Tick
 
 import scala.collection.mutable
@@ -20,6 +19,13 @@ import scala.collection.mutable
   * [[initialize]], so a rollback can always reach back to "before anything happened"); everything
   * in between is reconstructed by restoring the nearest earlier checkpoint and replaying the
   * intervening log entries.
+  *
+  * `event`/`replayEventFn` are typed `AnyRef`, not `core.entity.event.BaseEvent[?]` as originally
+  * assumed when [[LoggedEvent]] was first introduced: `SpontaneousEvent` extends `BaseEvent`, but
+  * `ActorInteractionEvent` (the other real event type an actor processes, via `actInteractWith`)
+  * does not — it's a separate, unrelated case class. Found when actually wiring this handler into
+  * `SimulationBaseActor`; `AnyRef` is the true common supertype of everything this handler needs
+  * to log.
   *
   * Deliberately not generic over a state type `T` the way `docs/TIME_WARP_DESIGN.md`'s original
   * sketch showed (`RollbackHistoryHandler[T <: BaseState]`): `MigrationSnapshot` itself already
@@ -45,7 +51,7 @@ final class RollbackHistoryHandler(
   checkpointInterval: Int,
   captureSnapshotFn: () => MigrationSnapshot,
   restoreSnapshotFn: MigrationSnapshot => Unit,
-  replayEventFn: BaseEvent[?] => Unit
+  replayEventFn: AnyRef => Unit
 ) {
   require(checkpointInterval >= 1, s"checkpointInterval must be >= 1, got $checkpointInterval")
 
@@ -78,7 +84,7 @@ final class RollbackHistoryHandler(
     *   passed to [[initialize]] (`0L`).
     */
   def recordProcessedEvent(
-    event: BaseEvent[?],
+    event: AnyRef,
     tick: Tick,
     seq: Long,
     sentMessages: Seq[SentMessage] = Seq.empty

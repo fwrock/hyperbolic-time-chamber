@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor.rollback
 
-import core.entity.event.BaseEvent
 import core.types.Tick
 
 /** One entry in a [[RollbackHistoryHandler]]'s event log: an event this actor has already
@@ -14,7 +13,10 @@ import core.types.Tick
   *   this actor's own monotonically increasing processed-event counter — the true ordering key
   *   for replay, since multiple events can share the same `tick` (e.g. a batch dispatch)
   * @param event
-  *   the original event, kept so `replayEventFn` can re-execute it against a restored checkpoint
+  *   the original event, kept so `replayEventFn` can re-execute it against a restored checkpoint.
+  *   Typed `AnyRef`, not `core.entity.event.BaseEvent[?]` — `ActorInteractionEvent`, one of the
+  *   two real event types an actor processes, isn't a `BaseEvent` subtype; see
+  *   `RollbackHistoryHandler`'s doc for how this was found.
   * @param sentMessages
   *   every message this actor sent while processing this event, with enough addressing info
   *   ([[SentMessage]]) for [[AntiMessageCascade]] to turn each into an anti-message once this
@@ -25,6 +27,6 @@ import core.types.Tick
 final case class LoggedEvent(
   tick: Tick,
   seq: Long,
-  event: BaseEvent[?],
+  event: AnyRef,
   sentMessages: Seq[SentMessage] = Seq.empty
 )
