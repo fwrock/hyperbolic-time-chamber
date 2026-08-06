@@ -21,16 +21,17 @@ prática:
   ```
   "org.interscity.htc.core.entity.event.data.BaseEventData" = jackson-cbor
   ```
-  (`application.conf:61`). Isso inclui **toda a família de mensagens do modelo hybrid** —
-  `EnterLinkData`, `LeaveLinkData`, `LinkInfoData`, `RequestRouteData`, `ReceiveRouteData`,
-  `ForwardRouteData`, `LinkAccessData`, `TrafficSignalChangeStatusData`, todos os dados de
-  bus/subway/vehicle/link — **nenhuma delas tem binding explícito**, só as ~15 classes MICRO e
-  `person` que foram adicionadas depois (redundantes, já que herdam o mesmo binding de
-  `BaseEventData`; o Pekko resolve por MRO de qualquer forma).
+  (`application.conf:61`, no momento da auditoria original). Isso inclui **toda a família de
+  mensagens do modelo hybrid** — `EnterLinkData`, `LeaveLinkData`, `LinkInfoData`,
+  `LinkAccessData`, `TrafficSignalChangeStatusData`, todos os dados de bus/subway/vehicle/link —
+  **nenhuma delas tinha binding explícito**, só as ~15 classes MICRO e `person` que foram
+  adicionadas depois (redundantes, já que herdam o mesmo binding de `BaseEventData`; o Pekko
+  resolve por MRO de qualquer forma). *(Status: ver recomendação 3 — já implementado, o binding
+  agora é Kryo.)*
 - Ou seja: **as mensagens de maior frequência do simulador (entrada/saída de link, toda
-  atualização MICRO, toda requisição de rota) usam o serializador reflexivo mais caro
-  configurado no sistema**, enquanto o serializador mais eficiente disponível na classpath
-  (Kryo) fica sem uso algum.
+  atualização MICRO) usavam o serializador reflexivo mais caro configurado no sistema**, enquanto
+  o serializador mais eficiente disponível na classpath (Kryo) ficava sem uso algum. *(Status:
+  corrigido — recomendação 3.)*
 
 ## 2. Arquitetura de envelope: três camadas aninhadas por mensagem remota
 
@@ -65,37 +66,53 @@ Custo fixo por mensagem, antes de qualquer byte de dado útil:
 - manifest de classe completo do payload (CBOR) — dezenas de bytes por mensagem, repetido
   milhões de vezes ao longo de uma simulação.
 
-## 3. Risco de correção, não só de tamanho: `Identify` (protobuf) aninhado em payload Jackson
+## 3. `Identify` (protobuf) aninhado em payload — e uma descoberta maior: código morto
 
-`RequestRouteData`, `ForwardRouteData` e `ReceiveRouteData` carregam
-`path: mutable.Queue[(Identify, Identify)]`, onde `Identify` é uma classe **gerada pelo scalapb**
-(`scalapb.GeneratedMessage`, com binding próprio `= proto` em `application.conf:50`). Esse binding
-só se aplica quando o Pekko despacha `Identify` como mensagem de nível superior. Quando `Identify`
-aparece **aninhado dentro de um campo** de uma classe serializada via Jackson (como aqui), o
-Jackson não delega para o protobuf — ele reflete sobre os campos internos do `Identify` gerado
-(incluindo estruturas internas do scalapb como `unknownFields`, índices de memoização, etc.),
-o que é mais caro e potencialmente frágil a mudanças na geração de código do scalapb. Isso é um
-mistura de dois mundos de serialização que não deveria acontecer — **route data deveria expor um
-tipo de payload puro (par de strings `linkId`/`nodeId`), não a mensagem protobuf `Identify`
-diretamente**, tanto por tamanho quanto por robustez.
+**Atualização (recomendação 4): `RequestRouteData`, `ForwardRouteData`, `ReceiveRouteData`,
+`RequestRoute` e `ReceiveRoute` (model.hybrid) eram código morto e foram removidos.** A análise
+original desta seção assumia que essas classes eram tráfego real (forwarding distribuído de rota
+salto-a-salto entre Node/Link). Investigação para implementar a recomendação 4 mostrou que
+**nenhuma delas era construída em lugar nenhum de `src/main`** — o roteamento no modelo hybrid é
+inteiramente local e síncrono via `GPSUtil.calcRouteCompact` (A*), chamado direto por
+Car/Bicycle/Motorcycle/Movable/PersonWalkingTripHandler/BusStationRouteCalculator/etc. Essas 5
+classes (e os 3 casos correspondentes `RequestRoute`/`ForwardRoute`/`ReceiveRoute` em
+`EventTypeEnum`) eram resquício de um design anterior de roteamento distribuído por
+troca-de-mensagens, substituído pelo A* local sem que o código de mensagens fosse removido junto.
+Deletadas nesta sessão — ver §7 recomendação 4 e a entrada correspondente em
+`docs/KNOWN_GAPS.md`.
 
-Ademais, o `path` cresce a cada hop do algoritmo de forwarding de rota (`ForwardRouteData`,
-`RequestRouteData`) — a fila inteira é **retransmitida e reserializada em cada salto do grafo**,
-não só o incremento. Para rotas longas (muitos nós), isso é O(hops²) em bytes trafegados no
-cálculo de uma única rota.
+O problema de fundo que essas classes ilustravam continua real para quem ainda existe: `Identify`
+é uma classe **gerada pelo scalapb** (`scalapb.GeneratedMessage`, com binding próprio `= proto` em
+`application.conf`). Esse binding só se aplica quando o Pekko despacha `Identify` como mensagem de
+nível superior — quando `Identify` aparece **aninhado dentro de um campo** de um payload
+`BaseEventData` (como em `BusLoadPassengerData.people: mutable.Seq[Identify]` e o equivalente em
+`SubwayLoadPassengerData`, ambas *vivas*), o serializador externo (antes Jackson, agora Kryo — ver
+recomendação 3) não delega para o protobuf; reflete sobre os campos internos do `Identify` gerado.
+Com Kryo isso é bem mais barato que era com Jackson (binário posicional, sem nomes de campo), mas
+ainda não é o ideal — o payload poderia expor só os `String`s que `BusLoadPassengerData`
+realmente usa em vez da mensagem protobuf inteira. Como as únicas classes vivas com esse padrão
+carregam uma lista pequena e limitada (passageiros embarcando, não uma rota que cresce a cada
+hop), o ganho de reescrever isso é bem menor do que parecia quando `RequestRouteData`/
+`ForwardRouteData` (cuja fila crescia O(hops) a cada salto) ainda pareciam estar em uso — não
+priorizado nesta rodada.
 
 ## 4. Catálogo de mensagens (modelo hybrid — o único vivo em produção)
 
 | Categoria | Mensagens | Frequência | Binding efetivo |
 |---|---|---|---|
 | Link ↔ Veículo (MESO) | `EnterLinkData`, `LeaveLinkData`, `LinkInfoData` | Altíssima (todo hop de link) | `BaseEventData` → jackson-cbor |
-| Link ↔ Veículo (MICRO) | `MicroEnterLinkData`, `MicroLeaveLinkData`, `MicroUpdateData`, `MicroStepData`, `LaneChangeData`, `FollowingUpdateData`, `IntersectionMicroData`, `MicroTicksCompleted`, `GlobalTickEvent` | Muito alta — por sub-tick, por veículo em modo micro | jackson-cbor (binding explícito, redundante) |
-| Roteamento | `RequestRoute`, `RequestRouteData`, `ForwardRouteData`, `ReceiveRoute`, `ReceiveRouteData` | Alta — 1 por trip + N por hop de forwarding | `BaseEventData` → jackson-cbor (contém `Identify` protobuf aninhado, §3) |
-| Node ↔ Link (capacidade/sinal) | `LinkAccessData`, `RequestLinkAccessData`, `CancelLinkAccessRequestData`, `LinkCapacityFreedData`, `RegisterLinkCapacityData`, `LinkSignalStateData`, `LinkConnectionsData`, `TrafficSignalChangeStatusData` | Alta — por veículo por interseção | `BaseEventData` → jackson-cbor |
-| Bus/Subway (embarque) | `BusLoadPassengerData`, `BusRequestPassengerData`, `BusRequestUnloadPassengerData`, `BusUnloadPassengerData`, `RegisterPassengerData`, `LineNotOperationalData`, `PTLineNotOperationalData`, `RegisterBusStopData`, subway equivalentes | Média — por parada, por linha | `BaseEventData` → jackson-cbor |
-| Person ↔ Vehicle | `StartTripData`, `TripCompletedData`, `ParkVehicleData`, `PersonScheduleCompleteData`, `PassengerBoardedVehicleData`, `ModeChoiceDecision` | Média — por trip | jackson-cbor (algumas com binding explícito redundante) |
+| Link ↔ Veículo (MICRO) | `MicroEnterLinkData`, `MicroLeaveLinkData`, `MicroUpdateData`, `MicroStepData`, `LaneChangeData`, `FollowingUpdateData`, `IntersectionMicroData`, `MicroTicksCompleted`, `GlobalTickEvent` | Muito alta — por sub-tick, por veículo em modo micro | `BaseEventData` → Kryo |
+| ~~Roteamento~~ | ~~`RequestRoute`, `RequestRouteData`, `ForwardRouteData`, `ReceiveRoute`, `ReceiveRouteData`~~ | — | **Removidas (recomendação 4) — código morto, nunca construídas.** Roteamento é local via `GPSUtil.calcRouteCompact`. |
+| Node ↔ Link (capacidade/sinal) | `LinkAccessData`, `RequestLinkAccessData`, `CancelLinkAccessRequestData`, `LinkCapacityFreedData`, `RegisterLinkCapacityData`, `LinkSignalStateData`, `TrafficSignalChangeStatusData` | Alta — por veículo por interseção | `BaseEventData` → Kryo |
+| Bus/Subway (embarque) | `BusLoadPassengerData`, `BusRequestPassengerData`, `BusRequestUnloadPassengerData`, `BusUnloadPassengerData`, `RegisterPassengerData`, `LineNotOperationalData`, `PTLineNotOperationalData`, `RegisterBusStopData`, subway equivalentes | Média — por parada, por linha | `BaseEventData` → Kryo |
+| Person ↔ Vehicle | `StartTripData`, `TripCompletedData`, `ParkVehicleData`, `PersonScheduleCompleteData`, `PassengerBoardedVehicleData`, `ModeChoiceDecision` | Média — por trip | `BaseEventData` → Kryo |
 | Ciclo de tick (TimeManager) | `SpontaneousEvent`, `FinishEvent`, `ActorInteractionEvent` (envelope) | **Máxima** — 2 mensagens por ator por tick, para toda a população simulada | binário dedicado (protobuf, ver §5) |
 | Controle/carga/migração/warm-up | `CreateActorsEvent`, `LoadDataEvent`, `InitializeEvent`, eventos de `control.load`/`control.migration`/`control.loadbalance`/`control.warmup` | Baixa — fases de setup/rebalance, não no hot loop de simulação | jackson-cbor (bindings explícitos individuais) |
+
+`LinkConnectionsData` (categoria Node↔Link) também parece não ter nenhum call-site em `src/main` —
+descoberta ao lado do trabalho da recomendação 4, mas fora do escopo aprovado para remoção nesta
+rodada (o usuário autorizou especificamente as classes de roteamento). Fica registrada aqui como
+candidata a uma futura limpeza de código morto.
 
 ## 5. `SpontaneousEvent` / `FinishEvent` — via `ActorInteractionEvent`? Não.
 
@@ -116,8 +133,7 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
 |---|---|---|
 | `LinkInfoData` | `linkLength, linkCapacity, linkNumberOfCars, linkFreeSpeed, linkLanes` — 5 `Double`/`Int` | Denso, sem redundância. Bom caso de referência para os demais. |
 | `EnterLinkData` | `shardId, actorId, actorType, actorCreationType, actorSize, maxAcceleration=2.6, maxDeceleration=4.5` | `maxAcceleration`/`maxDeceleration` são quase sempre os defaults (constantes de veículo, não do evento) — **deveriam vir do estado do Link/Veículo já conhecido no destinatário**, não retransmitidos em toda entrada de link. `shardId`+`actorId` já são redundantes com `actorRefId`/`shardRefId` do envelope `ActorInteractionEvent` que os contém — a mesma identidade é escrita duas vezes por mensagem (uma no envelope, outra no payload). |
-| `RequestRouteData` | `requester: ActorRef, requesterId, requesterClassType, targetNodeId, currentCost, originNodeId, path: Queue[(Identify,Identify)], label` | `requester: ActorRef` **e** `requesterId: String` carregam a mesma identidade por dois caminhos diferentes (ActorRef via Jackson + string). `path` cresce a cada hop (§3). `label="default"` quase sempre não usado. |
-| `ForwardRouteData` | `requester: ActorRef, requesterId, updatedCost, targetNodeId, path: Queue[(Identify,Identify)]` | Mesmo padrão de `path` crescente + `Identify` protobuf aninhado. |
+| ~~`RequestRouteData`~~/~~`ForwardRouteData`~~ | — | **Removidas (recomendação 4) — código morto**, nunca construídas; carregavam `requester: ActorRef` duplicando `requesterId: String`, e um `path: Queue[(Identify,Identify)]` que crescia a cada hop de forwarding — motivo original das recomendações 4/5 abaixo, que perderam o alvo junto com a remoção. |
 | `LinkAccessData` | `phase, nextTick, queuePosition=0, capacityState=Available` | Enxuto; nenhum campo obviamente descartável. |
 | `FinishEvent` | `actorRef, identify: Identify, end, scheduleTick: Option[String], scheduleEvent: Option[ScheduleEvent], timeManager: ActorRef, destruct, eventsAmount, generation` | `actorRef` e `identify.actorRef` (dentro do protobuf `Identify`) frequentemente carregam a mesma referência por dois caminhos — um via Jackson (`ActorRef` nativo), outro via string dentro do protobuf `Identify`. `timeManager: ActorRef` é conhecido estaticamente pelo remetente (é sempre o TM que disparou o `SpontaneousEvent` correspondente) — candidato a eliminar do payload e inferir no receptor por correlação de generation/tick. |
 | `ActorInteractionEvent`/envelope | `tick, lamportTick, actorRefId, shardRefId, actorRef(path), actorClassType, eventType, actorType, resourceId` + `EntityEnvelope.entityId` | `entityId` do `EntityEnvelope` e `actorRefId` do payload interno frequentemente coincidem (mesmo ator origem/destino) — dependendo do fluxo, uma das duas strings é redundante. `actorClassType` e `actorType` são baixíssima cardinalidade (dezenas de valores possíveis) mas viajam como string completa em toda mensagem — candidatos ideais a `byte`/enum protobuf. |
@@ -178,44 +194,56 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
    primeiro encontra cada classe, e nós diferentes veriam ordens diferentes, fazendo Kryo
    desserializar bytes como a classe errada silenciosamente. A lista está comentada como
    *append-only* (nunca reordenar/remover uma entrada já implantada).
-   `ActorRef` (presente em `RequestRouteData`, `ForwardRouteData`,
-   `BusRequestUnloadPassengerData`, etc.) funciona sem trabalho extra: a
+   `ActorRef` (presente em `BusRequestUnloadPassengerData`, `SubwayRequestUnloadPassengerData`,
+   etc.) funciona sem trabalho extra: a
    `io.altoo.serialization.kryo.pekko.DefaultKryoInitializer` da própria biblioteca já registra
    um `ActorRefSerializer` para isso. `Identify` (protobuf, aninhado dentro de
-   `mutable.Queue[(Identify,Identify)]` — o problema descrito em §3) também é coberto
-   automaticamente pelo serializador de campo genérico do Kryo — continua funcionando (não é o
-   ideal — ver recomendação 4 abaixo — mas Kryo o serializa de forma binária/posicional, mais
-   compacto que a reflexão do Jackson sobre os internals do scalapb). Cobertura:
+   `mutable.Seq[Identify]` em `BusLoadPassengerData`/`SubwayLoadPassengerData` — o problema
+   descrito em §3) também é coberto automaticamente pelo serializador de campo genérico do Kryo —
+   continua funcionando (Kryo o serializa de forma binária/posicional, mais compacto que a
+   reflexão do Jackson sobre os internals do scalapb). Cobertura:
    `KryoEventDataSerializationSpec` — confirma que o binding resolve para
    `PekkoKryoSerializer` (não jackson-cbor) e faz round-trip de `EnterLinkData` (enums Scala),
-   `MicroUpdateData` (`Option[String]`, `Some`/`None`) e `RequestRouteData` (a combinação mais
-   arriscada: `Identify` protobuf aninhado + campo `ActorRef` cru). Suíte completa: 187 testes
-   verdes.
-
-### Alto impacto, esforço maior (mudança de contrato)
-4. **Trocar `Identify` (protobuf `scalapb.GeneratedMessage`) por um par de `String` simples
-   (`linkId`, `nodeId`) dentro de `RequestRouteData`/`ForwardRouteData`/`ReceiveRouteData`.**
-   Elimina o aninhamento protobuf-dentro-de-Jackson descrito em §3 e reduz o tamanho de cada
-   hop da fila de rota.
-5. **Parar de retransmitir o `path` inteiro a cada hop de forwarding de rota.** Hoje
-   `ForwardRouteData`/`RequestRouteData` reenviam a fila acumulada completa; considerar apenas
-   acumular no lado do nó atual (mantendo estado local do cálculo em andamento) e enviar só o
-   incremento, ou (mais simples) despachar o cálculo de rota via A* local sem forwarding
-   distribuído incremental quando o grafo permitir.
+   `MicroUpdateData` (`Option[String]`, `Some`/`None`), `BusLoadPassengerData` (`Identify`
+   protobuf aninhado) e `BusRequestUnloadPassengerData` (campo `ActorRef` cru). Suíte completa:
+   187 testes verdes (depois ajustada para 188 pela recomendação 4, ver abaixo).
+4. **✅ Implementado, mas não como planejado — as classes-alvo eram código morto e foram
+   removidas em vez de reescritas.** Investigação para trocar `Identify` por um par de `String`
+   simples em `RequestRouteData`/`ForwardRouteData`/`ReceiveRouteData`/`RequestRoute`/
+   `ReceiveRoute` (model.hybrid) achou que **nenhuma dessas 5 classes é construída em lugar
+   nenhum de `src/main`** — roteamento é feito localmente via `GPSUtil.calcRouteCompact` (A*), não
+   por forwarding distribuído de mensagens. São resquício de um design de roteamento anterior. Ver
+   §3 para os detalhes da investigação. Ação tomada (aprovada explicitamente pelo usuário antes de
+   remover):
+   - As 5 classes deletadas de `model/hybrid/entity/event/data/`.
+   - Os 3 casos correspondentes (`RequestRoute`, `ForwardRoute`, `ReceiveRoute`) removidos de
+     `EventTypeEnum` (model.hybrid) — únicos casos do enum ligados só a essas classes.
+   - As 5 entradas correspondentes removidas da lista `pekko-kryo-serialization.classes` em
+     `application.conf` (adicionadas erroneamente pela recomendação 3, antes desta descoberta).
+   - `KryoEventDataSerializationSpec` deixou de testar `RequestRouteData`; a mesma cobertura
+     (`Identify` aninhado + `ActorRef` cru) passou a usar `BusLoadPassengerData`/
+     `BusRequestUnloadPassengerData` — classes reais e vivas com os mesmos formatos de campo.
+   - Entrada correspondente adicionada em `docs/KNOWN_GAPS.md`, no mesmo padrão usado para a
+     remoção do pacote `model/mobility/actor/`.
+   - `model/mobility/entity/event/data/{RequestRoute,ForwardRoute,ReceiveRoute}Data` **não**
+     foram tocadas — já fora do escopo de otimização (pacote morto, ver topo do documento) e fora
+     do escopo aprovado pelo usuário para esta remoção.
+   Suíte completa: 188 testes verdes.
+5. **Obsoleto — dependia da recomendação 4.** "Parar de retransmitir o `path` inteiro a cada hop
+   de forwarding de rota" não se aplica mais: o forwarding que essa recomendação mirava não
+   existe (nunca existiu em execução — código morto removido pela recomendação 4). Roteamento já
+   é local via A*, sem esse custo.
 
 ### Impacto direto, baixo esforço
 6. **Remover `maxAcceleration`/`maxDeceleration` de `EnterLinkData`** — são constantes do
    veículo, não do evento de entrada; se o Link precisa delas, deveria buscá-las uma vez do
    estado do veículo/ator, não recebê-las em toda entrada de link.
-7. **Remover duplicidade `requesterId: String` vs `requester: ActorRef`** em
-   `RequestRouteData`/`ForwardRouteData` — manter apenas o `ActorRef` (ou apenas o `id` +
-   `shardId`, resolvendo o `ActorRef` no destino via `getShardRef`, como já é feito em
-   `sendMessageToShard`).
-8. **Podar os 15 bindings explícitos redundantes** para classes MICRO/`person` em
-   `application.conf` que já herdam o mesmo `jackson-cbor` via `BaseEventData` — não afeta
-   tamanho de mensagem, mas remove ruído de configuração e é o primeiro lugar a checar quando
-   alguém reintroduzir Kryo (esses bindings hoje "escondem" o fato de que essas classes já
-   cairiam no default de qualquer forma).
+7. **Obsoleto — dependia da recomendação 4.** "Remover duplicidade `requesterId: String` vs
+   `requester: ActorRef`" mirava `RequestRouteData`/`ForwardRouteData`, removidas como código
+   morto pela recomendação 4.
+8. **✅ Implementado como parte da recomendação 3** — os 14 bindings explícitos redundantes para
+   classes MICRO/`person` (que só reafirmavam o binding herdado de `BaseEventData`) foram
+   removidos de `application.conf` quando o binding-pai passou de `jackson-cbor` para `kryo`.
 
 ### A não fazer / falso positivo já descartado
 - **Não é necessário mexer no `StringPool`** para reduzir tamanho de mensagem — ele já cumpre
