@@ -25,6 +25,28 @@ complete, parallel actor package not mentioned anywhere in the README or `docs/`
 `model/mobility/actor/Person.scala` a 15-line stub — consistent with legacy/orphaned code, not an
 active alternate simulation mode.
 
+## [RESOLVED 2026-08-05] Dead Distributed Route-Forwarding Messages in model.hybrid
+
+**Resolution**: `RequestRouteData`, `ForwardRouteData`, `ReceiveRouteData`, `RequestRoute`, and
+`ReceiveRoute` (`model/hybrid/entity/event/data/`) have been deleted, along with the 3
+corresponding `EventTypeEnum` cases (`RequestRoute`, `ForwardRoute`, `ReceiveRoute`) that existed
+only for them. Confirmed dead before removal: a repo-wide grep found these 5 classes constructed
+nowhere in `src/main` — the only references were the classes' own definitions and the unused
+`EventTypeEnum` cases. Routing in the live hybrid model is entirely local and synchronous via
+`GPSUtil.calcRouteCompact` (A*), called directly by `Car`/`Bicycle`/`Motorcycle`/`Movable`/
+`PersonWalkingTripHandler`/`BusStationRouteCalculator`/etc. — there is no distributed hop-by-hop
+route-forwarding protocol between Node/Link actors in the current codebase, though these classes'
+shape (`requester: ActorRef`, an accumulating `path: mutable.Queue[(Identify, Identify)]` grown at
+each "hop") strongly suggests one existed at some point and was replaced by the local A*
+implementation without the messaging code being removed.
+
+Found during the events/messages serialization audit
+(`docs/EVENTS_MESSAGES_ANALYSIS.md`, recommendation 4) while investigating whether to optimize
+the `Identify`-protobuf-nested-in-a-growing-queue shape these classes carried; the optimization
+target turned out not to exist at runtime. `model/mobility/entity/event/data/{RequestRoute,
+ForwardRoute,ReceiveRoute}Data` (the already-dead `model.mobility` package, see the gap above)
+were left untouched — out of scope for this cleanup.
+
 ## Shard Migration Silently Drops Actor-Local Reply State (Currently Latent — Migration Is Disabled)
 
 **[RESOLVED 2026-07-22] Gaps A and B below are fixed.** `PrivateVehicle` gained
