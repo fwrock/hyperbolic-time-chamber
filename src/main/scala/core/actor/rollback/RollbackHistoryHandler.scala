@@ -81,9 +81,9 @@ final class RollbackHistoryHandler(
     event: BaseEvent[?],
     tick: Tick,
     seq: Long,
-    sentMessageIds: Seq[MessageId] = Seq.empty
+    sentMessages: Seq[SentMessage] = Seq.empty
   ): Unit = {
-    log += LoggedEvent(tick = tick, seq = seq, event = event, sentMessageIds = sentMessageIds)
+    log += LoggedEvent(tick = tick, seq = seq, event = event, sentMessages = sentMessages)
     eventsSinceCheckpoint += 1
     if (eventsSinceCheckpoint >= checkpointInterval) {
       checkpoints += Checkpoint(seq = seq, tick = tick, snapshot = captureSnapshotFn())

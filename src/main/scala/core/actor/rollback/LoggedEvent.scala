@@ -15,14 +15,16 @@ import core.types.Tick
   *   for replay, since multiple events can share the same `tick` (e.g. a batch dispatch)
   * @param event
   *   the original event, kept so `replayEventFn` can re-execute it against a restored checkpoint
-  * @param sentMessageIds
-  *   identities of every message this actor sent while processing this event, for §10's
-  *   anti-message cascade to turn into anti-messages once this entry is undone. Empty until §10
-  *   wires up the capture; see [[MessageId]]'s doc for why this field exists ahead of that.
+  * @param sentMessages
+  *   every message this actor sent while processing this event, with enough addressing info
+  *   ([[SentMessage]]) for [[AntiMessageCascade]] to turn each into an anti-message once this
+  *   entry is undone. Empty until live actor wiring captures it — see `docs/TIME_WARP_DESIGN.md`'s
+  *   step-5 log for why that capture (instrumenting `SimulationBaseActor.sendMessageTo`) isn't
+  *   built yet even though the cascade math that consumes it already is.
   */
 final case class LoggedEvent(
   tick: Tick,
   seq: Long,
   event: BaseEvent[?],
-  sentMessageIds: Seq[MessageId] = Seq.empty
+  sentMessages: Seq[SentMessage] = Seq.empty
 )
