@@ -259,6 +259,49 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
 8. **✅ Implementado como parte da recomendação 3** — os 14 bindings explícitos redundantes para
    classes MICRO/`person` (que só reafirmavam o binding herdado de `BaseEventData`) foram
    removidos de `application.conf` quando o binding-pai passou de `jackson-cbor` para `kryo`.
+9. **✅ Implementado — `ActorInteraction.shardRefId` eliminado do wire, 100% redundante com
+   `actorClassType`.** Investigação de uma proposta maior (converter `entityId`/`shardId` de
+   `String` para `Long` para compactar o wire) esbarrou em dois fatos: a API de sharding do
+   próprio Pekko (`ShardRegion.ExtractEntityId`/`ExtractShardId`, ver `ActorCreatorUtil.scala`) é
+   tipada em `String`, e os IDs reais do dataset (`htcaid:car;42_v_car`,
+   `htcaid:subwaystation;station_A` — ver `docs/MATSIM_CONVERSION_GUIDE.md`) não são uniformemente
+   numéricos; uma migração para `Long` exigiria uma camada de ID surrogate tocando dezenas de
+   state classes, fora de escopo. Só que essa investigação achou uma redundância concreta e
+   isolada: `SimulationBaseActor.sendMessageToShard`/`sendMessageToPool` sempre montam
+   `shardRefId = IdUtil.format(getShardId)` (= `getClass.getName` do remetente) **e**
+   `actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName)` — o mesmo
+   `getClass.getName`, duas vezes, uma delas (`actorClassType`) já passando pelo enum protobuf
+   fechado da recomendação 2. Como `StringUtil.getModelClassName` é exatamente a função inversa da
+   que produz `actorClassType`, o receptor sempre consegue reconstruir `shardRefId` a partir do
+   `actorClassType` já decodificado — inclusive no caminho `OTHER`/override. O campo `shardRefId`
+   continua declarado no proto (estabilidade de forma do wire) mas nunca mais é escrito;
+   `EntityEnvelopeSerializer`/`ActorInteractionSerializer` passam a computar
+   `shardRefId = StringUtil.getModelClassName(actorClassType decodificado)` no `fromBinary`. Nenhum
+   consumidor de `event.shardRefId` (`LinkVehicleFlowHandler`, `NodeEventHandler`,
+   `PendingLinkAccessRequest` em `NodeState`, `RailLink`) precisou mudar — a correção acontece
+   inteiramente na construção do `ActorInteractionEvent` pelo deserializer, não nos call sites.
+10. **✅ Implementado — prefixo `"htcaid_<tipo>_"` de `entityId`/`actorRefId` retirado do wire.**
+    No momento em que chegam ao serializer, `entityId`/`getEntityId()` já passaram por
+    `IdUtil.format` (`:`/`;` → `_`), então o formato real é sempre
+    `"htcaid_" + tipoEmMinúsculo + "_" + idLocal` (confirmado contra IDs reais do
+    `MATSIM_CONVERSION_GUIDE.md` e do dataset de teste). Esse prefixo é 100% redundante com o tipo
+    do ator já presente na mensagem: para `actorRefId` (sempre o próprio remetente),
+    `actorClassType` já basta — sem campo novo, só um `bool actorRefIdPrefixStripped` (proto field
+    17) sinalizando se o corte aconteceu, já que (diferente de `entityId`) `actorRefId` não tem um
+    enum sobrando pra também carregar esse sinal. Para `entityId` (o destino, de tipo
+    potencialmente diferente do remetente — ex. Car enviando para Link), o remetente já conhece o
+    tipo-alvo via o parâmetro `shardId` de `sendMessageToShard`, só nunca o tinha colocado no wire
+    de forma compacta; um novo campo `ActorClassType entityClassType` (proto field 16, reaproveita
+    o enum `ActorClassType` da recomendação 2) carrega esse tipo — `UNSPECIFIED` (valor zero, custo
+    de wire nulo) sinaliza "não bateu com o formato esperado, id intocado" (ids de controle como
+    `"creator-load-data"`). Corte/reconstrução é *best-effort*: nunca obrigatório, nunca quebra um
+    id que não segue a convenção. Helpers compartilhados em `ActorInteractionCodec`
+    (`stripIdPrefix`/`rebuildIdPrefix`/`encodeEntityIdPrefix`/`decodeEntityIdPrefix`), usados pelos
+    dois serializers. Cobertura: `ActorInteractionCodecSpec` (corte/reconstrução para todo tipo
+    conhecido, id com underscore no meio, id não-correspondente) e `EntityEnvelopeSerializerSpec`
+    (round-trip completo, derivação de `shardRefId` ignorando valor stale do remetente, id de
+    controle intocado, e um teste comparando `.toByteArray.length` antes/depois confirmando que o
+    payload compactado é estritamente menor). Suíte completa: 198 testes verdes.
 
 ### A não fazer / falso positivo já descartado
 - **Não é necessário mexer no `StringPool`** para reduzir tamanho de mensagem — ele já cumpre
