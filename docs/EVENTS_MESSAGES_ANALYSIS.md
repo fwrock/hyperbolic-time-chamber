@@ -132,7 +132,7 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
 | Mensagem | Campos | Observação |
 |---|---|---|
 | `LinkInfoData` | `linkLength, linkCapacity, linkNumberOfCars, linkFreeSpeed, linkLanes` — 5 `Double`/`Int` | Denso, sem redundância. Bom caso de referência para os demais. |
-| `EnterLinkData` | `shardId, actorId, actorType, actorCreationType, actorSize, maxAcceleration=2.6, maxDeceleration=4.5` | `maxAcceleration`/`maxDeceleration` são quase sempre os defaults (constantes de veículo, não do evento) — **deveriam vir do estado do Link/Veículo já conhecido no destinatário**, não retransmitidos em toda entrada de link. `shardId`+`actorId` já são redundantes com `actorRefId`/`shardRefId` do envelope `ActorInteractionEvent` que os contém — a mesma identidade é escrita duas vezes por mensagem (uma no envelope, outra no payload). |
+| `EnterLinkData` | `shardId, actorId, actorType, actorCreationType, actorSize` | `maxAcceleration`/`maxDeceleration` **removidos (recomendação 6)** — eram função determinística só de `actorType` (já presente na mensagem), não do evento; agora derivados no Link via `actorType.microMaxAcceleration`/`.microMaxDeceleration`. `shardId`+`actorId` ainda são redundantes com `actorRefId`/`shardRefId` do envelope `ActorInteractionEvent` que os contém — a mesma identidade é escrita duas vezes por mensagem (uma no envelope, outra no payload); não endereçado nesta rodada. |
 | ~~`RequestRouteData`~~/~~`ForwardRouteData`~~ | — | **Removidas (recomendação 4) — código morto**, nunca construídas; carregavam `requester: ActorRef` duplicando `requesterId: String`, e um `path: Queue[(Identify,Identify)]` que crescia a cada hop de forwarding — motivo original das recomendações 4/5 abaixo, que perderam o alvo junto com a remoção. |
 | `LinkAccessData` | `phase, nextTick, queuePosition=0, capacityState=Available` | Enxuto; nenhum campo obviamente descartável. |
 | `FinishEvent` | `actorRef, identify: Identify, end, scheduleTick: Option[String], scheduleEvent: Option[ScheduleEvent], timeManager: ActorRef, destruct, eventsAmount, generation` | `actorRef` e `identify.actorRef` (dentro do protobuf `Identify`) frequentemente carregam a mesma referência por dois caminhos — um via Jackson (`ActorRef` nativo), outro via string dentro do protobuf `Identify`. `timeManager: ActorRef` é conhecido estaticamente pelo remetente (é sempre o TM que disparou o `SpontaneousEvent` correspondente) — candidato a eliminar do payload e inferir no receptor por correlação de generation/tick. |
@@ -235,9 +235,24 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
    é local via A*, sem esse custo.
 
 ### Impacto direto, baixo esforço
-6. **Remover `maxAcceleration`/`maxDeceleration` de `EnterLinkData`** — são constantes do
-   veículo, não do evento de entrada; se o Link precisa delas, deveria buscá-las uma vez do
-   estado do veículo/ator, não recebê-las em toda entrada de link.
+6. **✅ Implementado — `maxAcceleration`/`maxDeceleration` removidos de `EnterLinkData`.**
+   Eram constantes por *tipo* de veículo (não por instância nem por evento): cada subclasse de
+   `Movable` (`Bicycle`, `Bus`, `Motorcycle`; `Car`/demais ficavam no default de `Movable`)
+   sobrescrevia `microMaxAcceleration`/`microMaxDeceleration` só para preencher esses dois campos
+   ao montar `EnterLinkData` — e `EnterLinkData` **já carrega `actorType: ActorTypeEnum`**, então
+   o valor era 100% derivável no lado do Link sem precisar viajar na mensagem. Os dois métodos
+   viraram extension methods em `ActorTypeEnum` (mesmo arquivo do enum,
+   `model/hybrid/entity/state/enumeration/ActorTypeEnum.scala`) com os mesmos valores por tipo
+   (Car/default 2.6↑/4.5↓, Bicycle 1.0/3.0, Bus 1.2/3.5, Motorcycle 3.5/5.0);
+   `LinkVehicleFlowHandler.handleEnterLinkMicro` agora lê `data.actorType.microMaxAcceleration`/
+   `.microMaxDeceleration` em vez do campo removido. Os métodos protegidos equivalentes em
+   `Movable`/`Bicycle`/`Bus`/`Motorcycle` (cuja única finalidade era alimentar esses dois campos)
+   foram removidos junto — sem essa mensagem, não tinham mais nenhum uso. Zero mudança de
+   comportamento: é a mesma função determinística de `actorType`, só computada no receptor em vez
+   de transmitida. Cobertura: novo teste em `LinkVehicleFlowHandlerSpec` — para cada `ActorTypeEnum`
+   que tinha override próprio, confirma que o `VehicleInLane` semeado no lado do Link tem
+   exatamente os mesmos `maxAcceleration`/`maxDeceleration` que o vetor de override antigo
+   produzia. Suíte completa: 189 testes verdes.
 7. **Obsoleto — dependia da recomendação 4.** "Remover duplicidade `requesterId: String` vs
    `requester: ActorRef`" mirava `RequestRouteData`/`ForwardRouteData`, removidas como código
    morto pela recomendação 4.

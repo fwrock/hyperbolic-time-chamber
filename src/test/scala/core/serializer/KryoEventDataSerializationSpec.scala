@@ -70,9 +70,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
       actorId = "car-1",
       actorType = ActorTypeEnum.Car,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
-      actorSize = 4.5,
-      maxAcceleration = 2.6,
-      maxDeceleration = 4.5
+      actorSize = 4.5
     )
 
     val bytes = serialization.serialize(original).get

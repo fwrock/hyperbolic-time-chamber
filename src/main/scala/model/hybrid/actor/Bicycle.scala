@@ -367,9 +367,6 @@ class Bicycle(
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
     signalHandler.handleLinkAccess(data, state)
 
-  override protected def microMaxAcceleration: Double = 1.0
-  override protected def microMaxDeceleration: Double = 3.0
-
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
