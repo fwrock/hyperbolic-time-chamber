@@ -31,7 +31,8 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
     weights            = ModeChoiceWeights(),
     ownedVehicles      = Map.empty,
     vehicleCurrentNode = Map.empty,
-    currentTick        = 0L
+    currentTick        = 0L,
+    entityId           = "test-person"
   )
 
   "validateForScenario" should "return Left when transit route data is unavailable" in {

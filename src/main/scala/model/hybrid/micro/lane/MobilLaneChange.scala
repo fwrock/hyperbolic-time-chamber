@@ -53,7 +53,8 @@ case class MobilLaneChange(
     followerInTargetLane: Option[(String, Double, Double)],
     targetLane: Int,
     numberOfLanes: Int,
-    laneRestrictions: Map[Int, String]
+    laneRestrictions: Map[Int, String],
+    randomSeed: Long
   ): LaneChangeDecision = {
 
     if (!isLaneAvailable(vehicleState, targetLane, laneRestrictions)) {
@@ -82,12 +83,14 @@ case class MobilLaneChange(
 
     val currentAccel = calculateAcceleration(
       vehicleState,
-      leaderInCurrentLane
+      leaderInCurrentLane,
+      randomSeed
     )
 
     val targetAccel = calculateAcceleration(
       vehicleState,
-      leaderInTargetLane
+      leaderInTargetLane,
+      randomSeed ^ 0x9E3779B97F4A7C15L // distinct draw from currentAccel's, still deterministic per (entityId, tick)
     )
 
     val followerCurrentAccel = followerInCurrentLane.map {
@@ -140,7 +143,8 @@ case class MobilLaneChange(
     */
   private def calculateAcceleration(
     vehicleState: MicroMovableState,
-    leader: Option[(String, Double, Double)]
+    leader: Option[(String, Double, Double)],
+    randomSeed: Long
   ): Double = {
     val (gap, leaderVel) = leader match {
       case Some((_, g, v)) => (g, v)
@@ -165,7 +169,8 @@ case class MobilLaneChange(
       safeVelocity = safeVel,
       maxAcceleration = vehicleState.maxAcceleration,
       maxDeceleration = vehicleState.maxDeceleration,
-      deltaT = 0.1
+      deltaT = 0.1,
+      randomSeed = randomSeed
     )
   }
 

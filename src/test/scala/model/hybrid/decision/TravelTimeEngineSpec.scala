@@ -26,7 +26,8 @@ class TravelTimeEngineSpec extends AnyFlatSpec with Matchers {
       weights            = ModeChoiceWeights(),
       ownedVehicles      = ownedVehicles,
       vehicleCurrentNode = vehicleCurrentNode,
-      currentTick        = 0L
+      currentTick        = 0L,
+      entityId           = "test-person"
     )
 
   "validateForScenario" should "always be Right" in {
