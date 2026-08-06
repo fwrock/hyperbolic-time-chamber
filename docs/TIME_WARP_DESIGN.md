@@ -1,11 +1,14 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
 Status as of 2026-08-06: **implementation started**. §8 (RNG determinism), §2
-(Conservative/GlobalTimeManagerBase extraction), and §6/§7 (`RollbackHistoryHandler`) are done —
-see "Implementation log" below. Everything else in "Decisions" is still design-only. This document
-is the design log/rationale from the planning conversation that produced it — update it as
-decisions are revisited or implementation diverges, don't treat it as aspirational once code lands
-(same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+(Conservative/GlobalTimeManagerBase extraction), §6/§7 (`RollbackHistoryHandler`), and §2/§3/§11
+(`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`/GVT, scoped — the coordinator layer is
+real and tested, but the actual rollback *trigger* is deliberately not wired live yet, see that
+section's log entry) are done — see "Implementation log" below. Anti-messages (§10) are the one
+remaining "Decisions" item with no code yet. This document is the design log/rationale from the
+planning conversation that produced it — update it as decisions are revisited or implementation
+diverges, don't treat it as aspirational once code lands (same convention as
+`docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -409,6 +412,96 @@ no Pekko — built and tested fully in isolation as §7's suggested step-3 order
   the same way `CarMicroHandler` is wired into `Car`) is step 4's job, once
   `OptimisticLocalTimeManager` exists to actually call `rollbackTo` on a straggler.
 
+### §2/§3/§11 `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT — done, scoped (2026-08-06)
+
+New: `core/actor/manager/time/gvt/{LocalVirtualTimeReport,GVTEstimationStrategy,MarginBasedGVTEstimation,TerminationPlateauDetector}.scala`,
+`core/entity/event/control/execution/LvtReportEvent.scala`, `OptimisticLocalTimeManager.scala`,
+`OptimisticGlobalTimeManager.scala`. Modified: `TimeManagerTypeEnum` gained `TIME_WARP`. 15 new
+tests (11 pure-ScalaTest for the GVT/plateau pieces, 4 TestKit-based for
+`OptimisticLocalTimeManager` mirroring `LocalTimeManagerBatchStallSpec`'s harness) — full suite
+(220 tests) passes.
+
+**What's real and tested:**
+- `OptimisticLocalTimeManager` dispatches whatever's scheduled the moment it's available — no
+  `UpdateGlobalTimeEvent` permission round-trip from a `GlobalTimeManager` the way
+  `ConservativeLocalTimeManager` needs. Verified directly: registering an actor dispatches it
+  immediately with zero messages exchanged with the parent; finishing with a fresh `scheduleTick`
+  redispatches immediately; going idle then receiving a new `ScheduleEvent` redispatches
+  immediately. This realizes §2's actual parallelism win for v1: *different LTM instances* (i.e.
+  different shard/pool routees) now run fully independently of each other and of any global
+  coordinator permission, rather than every LTM being serialized to the same GTM-chosen tick every
+  round the way the `SelectiveBarrier` forces today.
+- Progress reporting is genuinely fire-and-forget: `LvtReportEvent(lvt, isIdle)` sent to the
+  `OptimisticGlobalTimeManager` after every batch resolves, never awaited.
+- `OptimisticGlobalTimeManager` aggregates those reports via the pluggable `GVTEstimationStrategy`
+  (`MarginBasedGVTEstimation` is v1's only implementation, per §3) and declares termination once
+  `TerminationPlateauDetector` confirms every registered LTM is idle *and* the GVT estimate has
+  stopped moving for `plateauRoundsRequired` consecutive rounds (§11) — deliberately waits for
+  every registered LTM to have reported at least once before estimating anything, since an
+  incomplete report set makes "all idle" meaningless.
+- Deliberately does not attempt progressive-loading or migration-pause coordination — neither is
+  designed for optimistic mode anywhere in this document (not even flagged as an open question,
+  just never considered), so adding either now would be a guess, not an implementation of a
+  decision.
+
+**What's real but deliberately not enabled — the actual rollback trigger:**
+
+§2 describes `OptimisticLocalTimeManager` as owning "each actor's rollback trigger point (via
+`highestProcessedTick`)." That mechanism already exists — `LocalTimeManagerBase.scheduleEvent`'s
+stale-tick guard (pre-dating Time Warp entirely) already detects exactly the condition Time Warp
+needs: a request at or behind an actor's own `highestProcessedTick` watermark. Under conservative
+mode this can only happen due to the LTM's own pool-sharing/batch bookkeeping quirks (never a real
+causality violation, since the barrier guarantees no actor ever runs ahead) and is harmlessly
+absorbed by bumping the tick forward. Under optimistic mode, the *same* condition can also mean a
+genuine straggler — but **this implementation still just bumps it forward, identically to
+conservative mode**, rather than calling `RollbackHistoryHandler.rollbackTo` on the actor. This is
+a deliberate scope cut, not an oversight, for two compounding reasons:
+
+1. **`RollbackHistoryHandler` isn't wired into any real actor yet.** Composing it into
+   `BaseActor`/`SimulationBaseActor` needs a `replayEventFn` that can distinguish and re-invoke
+   `actSpontaneous` vs. `actInteractWith`, and `recordProcessedEvent` calls added at the end of
+   both `handleSpontaneous` and `handleInteractWith` (there is no single unified "an event was
+   just processed" point in `SimulationBaseActor` today — confirmed by reading it in full for this
+   step). That's real, substantial, correctness-sensitive work against the actor base class every
+   single actor type in the simulation extends.
+2. **Cross-actor interaction-message stragglers aren't even visible to the LTM at all.**
+   `ActorInteractionEvent`s are peer-to-peer (actor-to-actor, via shard region/`actorSelection`),
+   never routed through the LTM — `SimulationBaseActor.handleInteractWith`'s own tick-monotonic
+   check (`if (event.tick > currentTick) currentTick = event.tick`) currently just silently leaves
+   `currentTick` unchanged on a stale-tick interaction, throwing away exactly the signal Time Warp
+   would need to treat it as a straggler. Fixing that is separate, `SimulationBaseActor`-level work
+   this step didn't touch.
+3. **Enabling a rollback that can't cascade-undo what it already sent is worse than not having
+   Time Warp at all.** An actor that rolls its own state back after having already sent
+   (now-invalid) messages downstream, with no anti-message mechanism (§10, step 5) to retract them,
+   would silently desynchronize the simulation rather than correctly resynchronizing it. This
+   mirrors the project's own existing posture toward shard rebalancing (kept disabled given a
+   similar half-built-migration risk, per `CLAUDE.md`) — a real, dormant gap is safer than a
+   partially-wired "fix."
+
+Wiring the actual rollback trigger — both the LTM-local case above and the
+`SimulationBaseActor.handleInteractWith` case — is deferred to land together with anti-messages
+(§10, step 5), the same dependency ordering already decided for why anti-messages come last.
+
+**Other scope notes:**
+- `OptimisticLocalTimeManager`'s local virtual time is a simple v1 approximation (`localTickOffset`
+  if anything is currently running, else the next scheduled tick) — not specified at this level of
+  detail anywhere in this document; cheap to refine once measured against real GVT behavior.
+- No large-tick batching (`LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE` mechanism) — deferred
+  until measured at scale, same "don't guess a premature optimization" posture as the checkpoint
+  interval and GVT margin.
+- Only one concrete Time Warp LTM strategy exists (no discrete-event/time-stepped split) — Time
+  Warp is inherently episodic/discrete-event-shaped; no time-stepped variant is planned.
+- `OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager` are not reachable from any config —
+  the three hardcode points already flagged in §2's implementation log (`GlobalTimeManagerBase.
+  localTimeManagerProps`, `SimulationManager.createSingletonTimeManager`, and a third one found
+  this step: `SimulationBaseActor.onInitialize` unconditionally sets `currentTimeManagerType =
+  TimeManagerTypeEnum.DISCRETE_EVENT` regardless of what `Properties.defaultTimeManagerType` says)
+  are all still hardcoded to the conservative side. Building the config surface for scenario-level
+  selection is real follow-up work, deliberately not attempted here — it's already an open
+  question below, and doing it before a single one of the three time-manager strategies below it
+  is actually safe to select in production would be building a door to a room that isn't finished.
+
 ## Open questions / not designed yet
 
 - Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
@@ -431,15 +524,16 @@ no Pekko — built and tested fully in isolation as §7's suggested step-3 order
 | File | Role |
 |---|---|
 | `core/actor/manager/time/ConservativeLocalTimeManager.scala` (new) | Extracted barrier logic shared by the two existing LTM subclasses; no behavior change |
-| `core/actor/manager/time/OptimisticLocalTimeManager.scala` (new) | Time Warp LTM: optimistic dispatch, straggler detection via `highestProcessedTick`, drives rollback |
-| `core/actor/manager/time/GlobalTimeManagerBase.scala` (new) | Extracted cluster/registration/migration-pause/progressive-loading plumbing common to both GTM variants |
-| `core/actor/manager/time/ConservativeGlobalTimeManager.scala` (new, renamed from today's `GlobalTimeManager`) | Existing `SelectiveBarrier`/`QueryNextTickEvent` behavior, unchanged |
-| `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (new) | `GVTCoordinator`, termination-plateau detection |
-| `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala` (new) | Pluggable GVT strategy; Mattern-style variant deferred |
+| `core/actor/manager/time/OptimisticLocalTimeManager.scala` (done, scoped) | Time Warp LTM: optimistic dispatch, async LVT reporting done; straggler detection exists but still just bumps forward (rollback trigger deferred to step 5) |
+| `core/actor/manager/time/GlobalTimeManagerBase.scala` (done, partial — see §2 log) | Extracted cluster/registration plumbing common to both GTM variants; migration-pause/progressive-loading stayed Conservative-only |
+| `core/actor/manager/time/ConservativeGlobalTimeManager.scala` (done, renamed from `GlobalTimeManager`) | Existing `SelectiveBarrier`/`QueryNextTickEvent` behavior, unchanged |
+| `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (done) | GVT coordinator + termination-plateau detection |
+| `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala`, `TerminationPlateauDetector.scala`, `LocalVirtualTimeReport.scala` (done) | Pluggable GVT strategy + §11 termination detector; Mattern-style GVT variant still deferred |
+| `core/entity/event/control/execution/LvtReportEvent.scala` (done) | Fire-and-forget LTM→GTM LVT report |
 | `core/actor/rollback/RollbackHistoryHandler.scala` (done, not yet composed into any actor) | Per-actor checkpoint+event-log handler |
 | `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala` (done) | Event-log entry format; message identity for anti-messages (fields exist, unpopulated until step 5) |
 | `core/entity/event/ActorInteractionEvent.scala` (modify) | Add `messageId`, `isAntiMessage` fields |
-| `core/enumeration/TimeManagerTypeEnum.scala` (modify) | Add `TIME_WARP` |
+| `core/enumeration/TimeManagerTypeEnum.scala` (done) | Added `TIME_WARP` — string exists, not yet reachable from config (see §2/§3/§11 log's "Other scope notes") |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
 | `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
 
@@ -449,8 +543,13 @@ Implementation-ready per the decisions above, except for the items in "Open ques
 order: (1) ~~the RNG determinism fix (§8)~~ — done; (2) ~~the `Conservative*`/`GlobalTimeManagerBase`
 extraction (§2)~~ — done (Local side fully split; Global side partially, see caveat above); (3)
 ~~`RollbackHistoryHandler` + checkpoint/replay (§6/§7)~~ — done, built and tested standalone; (4)
-`OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11); (5) anti-messages
-(§10) last, since it depends on the event log's "what did I send" data already being correct from
-step 3.
+~~`OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11)~~ — done, scoped: the
+coordinator layer (dispatch-without-barrier, async LVT/GVT reporting, termination-plateau
+detection) is real and tested; the actual straggler → `RollbackHistoryHandler.rollbackTo` trigger
+is not wired live (see that section's log entry for why); (5) anti-messages (§10) — the remaining
+step, and now also where the deferred rollback-trigger wiring from step 4 belongs, since it
+depends on the event log's "what did I send" data already being correct (true since step 3) and
+enabling rollback without anti-messages to cascade-undo sends would be unsafe on its own.
 
-**Next up: step (4), `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT.**
+**Next up: step (5), anti-messages (§10) — including finally wiring the rollback trigger deferred
+in step 4.**
