@@ -1,8 +1,9 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-Status as of 2026-08-05: **design phase, nothing implemented yet**. This document is the design
-log/rationale from the planning conversation that produced it — update it as decisions are
-revisited or implementation diverges, don't treat it as aspirational once code lands (same
+Status as of 2026-08-06: **implementation started**. §8 (RNG determinism) is done — see
+"Implementation log" below. Everything else in "Decisions" is still design-only. This document is
+the design log/rationale from the planning conversation that produced it — update it as decisions
+are revisited or implementation diverges, don't treat it as aspirational once code lands (same
 convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
@@ -283,6 +284,41 @@ universal idleness is the safe substitute for "GVT caught up exactly," reusing t
 reconfirm-before-declaring-done posture the existing `QueryNextTickEvent` grace-period probe
 already uses in conservative mode — extend that probe rather than inventing a separate protocol.
 
+## Implementation log
+
+### §8 RNG determinism — done (2026-08-06)
+
+- `KraussModel.calculateAcceleration`/`updateState` (and the `CarFollowingModel` trait) dropped the
+  stored mutable `random: Random` field entirely; both now take a `randomSeed: Long` parameter and
+  construct `new Random(randomSeed)` fresh inside the call. `KraussModel.withSeed` was removed
+  (nothing called it, and a per-instance seed no longer means anything once there's no
+  per-instance generator to seed).
+- `LaneChangeModel.evaluateLaneChange` (and `MobilLaneChange`/`SimpleLaneChange`) gained the same
+  `randomSeed: Long` parameter, threaded down to the two internal `calculateAcceleration` calls
+  (current-lane and target-lane) with a distinct derived seed for each so they don't draw
+  identical values.
+  - Caveat found during implementation: `evaluateLaneChange` has **zero callers anywhere in
+    `src/main` or `src/test`** — MOBIL lane-changing is wired as a model but never invoked from any
+    live actor path. The RNG fix landed as designed regardless (dead code still needs a correct
+    contract once someone wires it up), but whoever adds the first caller must also decide what
+    `(entityId, tick)` to hash for the seed at that call site.
+- `TravelTimeLogitEngine.decide` no longer reads `RandomSeedManager.getScalaRandom()` (a single
+  globally-shared generator). It now seeds a fresh `Random` per call from
+  `TravelTimeLogitEngine.seedFor(ctx.entityId, ctx.currentTick)`. This required adding an
+  `entityId: String` field to `DecisionContext` — the only two real construction sites,
+  `PersonPlanManager.resolvePending`/`replanAfterPTTimeout`, already had `personId` in scope, so
+  they pass `entityId = personId`. Three test files construct `DecisionContext` directly and were
+  updated to pass a literal `entityId`.
+- `RandomSeedManager.getJavaRandom`/`getScalaRandom` (and the `createDefaultSimulation` fallback
+  they used) were deleted — `TravelTimeLogitEngine` was their only caller, and nothing else reads
+  the shared generators. `RandomSeedManager.initialize`/`deterministicUUID`/
+  `deterministicSimulationId` are untouched — those aren't simulation-outcome RNG draws, just
+  stable-ID generation, and weren't in §8's scope.
+- Full test suite (198 tests) passes unchanged after these signature changes; no test previously
+  covered `KraussModel`/`MobilLaneChange`/`TravelTimeLogitEngine.sampleLogit`'s RNG behavior
+  directly, so this is a compile-level correctness check, not a behavioral regression check —
+  flagging since `docs/KNOWN_GAPS.md` already notes near-zero coverage on this area.
+
 ## Open questions / not designed yet
 
 - Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
@@ -314,15 +350,17 @@ already uses in conservative mode — extend that probe rather than inventing a 
 | `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala` (new) | Event-log entry format; message identity for anti-messages |
 | `core/entity/event/ActorInteractionEvent.scala` (modify) | Add `messageId`, `isAntiMessage` fields |
 | `core/enumeration/TimeManagerTypeEnum.scala` (modify) | Add `TIME_WARP` |
-| `model/hybrid/micro/model/KraussModel.scala` (modify) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
-| `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (modify) | Replace global shared RNG with per-`(entityId, tick)` seeding |
+| `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
+| `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
 
 ## Next steps
 
 Implementation-ready per the decisions above, except for the items in "Open questions." Suggested
-order: (1) the RNG determinism fix (§8) — independently valuable, unblocks everything relying on
-replay correctness; (2) the `Conservative*`/`GlobalTimeManagerBase` extraction (§2) — pure refactor,
-no behavior change, de-risks the rest; (3) `RollbackHistoryHandler` + checkpoint/replay (§6/§7) in
-isolation, testable without a live optimistic LTM; (4) `OptimisticLocalTimeManager` +
+order: (1) ~~the RNG determinism fix (§8)~~ — done, see "Implementation log"; (2) the
+`Conservative*`/`GlobalTimeManagerBase` extraction (§2) — pure refactor, no behavior change,
+de-risks the rest; (3) `RollbackHistoryHandler` + checkpoint/replay (§6/§7) in isolation, testable
+without a live optimistic LTM; (4) `OptimisticLocalTimeManager` +
 `OptimisticGlobalTimeManager`/GVT (§2/§3/§11); (5) anti-messages (§10) last, since it depends on
 the event log's "what did I send" data already being correct from step 3.
+
+**Next up: step (2), the `Conservative*`/`GlobalTimeManagerBase` extraction.**

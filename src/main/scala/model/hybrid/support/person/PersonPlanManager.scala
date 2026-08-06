@@ -216,7 +216,8 @@ class PersonPlanManager(
           weights = state.modeChoiceWeights,
           ownedVehicles = state.ownedVehicles,
           vehicleCurrentNode = state.vehicleCurrentNode,
-          currentTick = currentTick
+          currentTick = currentTick,
+          entityId = personId
         )
         engine.decide(originNodeId, destinationNodeId, request, ctx) match {
           case Right(legs) =>
@@ -284,7 +285,8 @@ class PersonPlanManager(
               weights = state.modeChoiceWeights,
               ownedVehicles = state.ownedVehicles,
               vehicleCurrentNode = state.vehicleCurrentNode,
-              currentTick = currentTick
+              currentTick = currentTick,
+              entityId = personId
             )
             val request = ModeDecisionRequest(allowedModes = replanAllowedModes, strategyId = replanStrategyId)
             engine.decide(physicalNodeId, destinationNodeId, request, ctx) match {

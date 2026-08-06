@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.hybrid.decision
 
-import core.actor.manager.RandomSeedManager
+import core.types.Tick
 import model.hybrid.entity.state.ArrivalLogistics
 import model.hybrid.entity.state.plan.{ AtomicLeg, ModeDecisionRequest }
 import model.hybrid.util.strategy.TravelTimeModeChoiceStrategy
@@ -45,10 +45,13 @@ import scala.util.Random
   *
   * === Reproducibility is preserved, not sacrificed ===
   *
-  * Sampling draws from `RandomSeedManager.getScalaRandom()` — the same deterministic,
-  * seed-derived generator every other stochastic part of this engine already uses. Same
-  * `randomSeed` in `simulation.json` still reruns to the exact same sequence of choices; it's just
-  * no longer the literal `maxByOption` every time.
+  * Sampling draws from a `Random` seeded fresh per call from `(ctx.entityId, ctx.currentTick)` —
+  * deterministic and reproducible like every other stochastic part of this engine, but *not* the
+  * single globally-shared `RandomSeedManager` generator: a shared mutable generator advanced by
+  * whichever Person happens to decide next has no stable "correct next value" once decisions can be
+  * replayed independently per actor (Time Warp rollback/replay, or simply reordering call sites),
+  * whereas a per-`(entityId, tick)` seed reproduces the same draw regardless of what order other
+  * actors' decisions happen to run in. See `docs/TIME_WARP_DESIGN.md` §8.
   */
 final class TravelTimeLogitEngine(scale: Double = 1.0) extends ModeDecisionEngine {
 
@@ -66,15 +69,26 @@ final class TravelTimeLogitEngine(scale: Double = 1.0) extends ModeDecisionEngin
   ): Either[NoViableJourney, List[AtomicLeg]] =
     TravelTimeChoiceResolution.resolve(
       strategy, originNodeId, destinationNodeId, request, ctx, id,
-      pick = TravelTimeLogitEngine.sampleLogit(_, RandomSeedManager.getScalaRandom(), scale)
+      pick = TravelTimeLogitEngine.sampleLogit(
+        _,
+        new Random(TravelTimeLogitEngine.seedFor(ctx.entityId, ctx.currentTick)),
+        scale
+      )
     )
 }
 
 object TravelTimeLogitEngine {
 
+  /** Deterministic per-`(entityId, tick)` seed for `sampleLogit`'s `rng`, so the same Person
+    * deciding at the same tick always draws the same sample — independent of what order other
+    * Persons' decisions happen to run in, and reproducible after a Time Warp rollback replay.
+    */
+  def seedFor(entityId: String, tick: Tick): Long =
+    (entityId.hashCode.toLong * 0x9E3779B97F4A7C15L) ^ tick
+
   /** Samples one candidate from a multinomial logit distribution over `candidates`' scores. Pure
     * given `rng` (a `scala.util.Random` instance is itself stateful, but deterministic replay only
-    * needs the *same starting state*, which `RandomSeedManager` already guarantees) — so this is
+    * needs the *same starting state*, which `seedFor` already guarantees) — so this is
     * unit-testable by passing a freshly-seeded `Random` and checking either exact behaviour
     * (single candidate, or one candidate scoring `Double.MinValue`) or statistical behaviour over
     * many draws (roughly-equal scores → roughly-even draw counts).

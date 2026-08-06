@@ -65,6 +65,10 @@ trait CarFollowingModel {
     *   Maximum deceleration (m/s²)
     * @param deltaT
     *   Time step duration (seconds)
+    * @param randomSeed
+    *   Seed for this call's driver-variability draw. Callers must derive it from
+    *   `(entityId, tick)` (e.g. a hash of both) rather than reusing a stored generator, so replaying
+    *   the same event after a Time Warp rollback reproduces the same result.
     * @return
     *   Acceleration (m/s²)
     */
@@ -74,7 +78,8 @@ trait CarFollowingModel {
     safeVelocity: Double,
     maxAcceleration: Double,
     maxDeceleration: Double,
-    deltaT: Double
+    deltaT: Double,
+    randomSeed: Long
   ): Double
 
   /** Update vehicle state based on car-following model.
@@ -89,6 +94,8 @@ trait CarFollowingModel {
     *   Leader velocity (m/s)
     * @param deltaT
     *   Time step (seconds)
+    * @param randomSeed
+    *   Seed for this call's driver-variability draw; see `calculateAcceleration`.
     * @return
     *   Updated micro state
     */
@@ -96,7 +103,8 @@ trait CarFollowingModel {
     state: MicroMovableState,
     gap: Double,
     leaderVelocity: Double,
-    deltaT: Double
+    deltaT: Double,
+    randomSeed: Long
   ): (Double, Double, Double)
 
   /** Model name for debugging/logging.
