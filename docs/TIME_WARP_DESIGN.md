@@ -1,11 +1,11 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-Status as of 2026-08-06: **implementation started**. §8 (RNG determinism) and §2
-(Conservative/GlobalTimeManagerBase extraction) are done — see "Implementation log" below.
-Everything else in "Decisions" is still design-only. This document is the design log/rationale
-from the planning conversation that produced it — update it as decisions are revisited or
-implementation diverges, don't treat it as aspirational once code lands (same convention as
-`docs/CONGESTION_PROPAGATION_DESIGN.md`).
+Status as of 2026-08-06: **implementation started**. §8 (RNG determinism), §2
+(Conservative/GlobalTimeManagerBase extraction), and §6/§7 (`RollbackHistoryHandler`) are done —
+see "Implementation log" below. Everything else in "Decisions" is still design-only. This document
+is the design log/rationale from the planning conversation that produced it — update it as
+decisions are revisited or implementation diverges, don't treat it as aspirational once code lands
+(same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -369,6 +369,46 @@ Still not done from the design doc's item 2: the config-driven LTM-strategy fact
 but out of scope for this pure-refactor step; `localTimeManagerProps()` is the extension point
 that fix would hang off of.
 
+### §6/§7 `RollbackHistoryHandler` — done (2026-08-06)
+
+New `core/actor/rollback/` package: `MessageId.scala`, `LoggedEvent.scala`,
+`RollbackHistoryHandler.scala`, plus `RollbackHistoryHandlerSpec.scala` (7 pure-ScalaTest cases,
+no Pekko — built and tested fully in isolation as §7's suggested step-3 order intended, no live
+`OptimisticLocalTimeManager` needed).
+
+- `RollbackHistoryHandler` follows the design sketch closely, with one deliberate deviation and one
+  addition:
+  - **Deviation**: not generic over `T <: BaseState` as originally sketched. `MigrationSnapshot`
+    (the existing `buildMigrationSnapshot`/`applyMigrationSnapshot` primitive it wraps) already
+    serializes state to an opaque `stateJson: String` blob — `T` would never appear anywhere in the
+    class body, so carrying it would be an unused type parameter, not real type safety.
+  - **Addition**: a `replayEventFn: BaseEvent[?] => Unit` constructor param and an `initialize
+    (startTick: Tick)` method, neither present in the original sketch. `replayEventFn` is what
+    actually walks state forward from a checkpoint to an exact log position — the sketch's
+    `rollbackTo` signature implied replay happens somewhere but didn't say how; a checkpoint alone
+    can't reconstruct an arbitrary target tick without re-executing the events between it and the
+    target. `initialize` establishes a "before anything happened" floor checkpoint immediately, so
+    rolling back to undo the actor's very first-ever processed event has a checkpoint to restore
+    from — the periodic-only cadence in the sketch would otherwise have no floor for that case.
+- `recordProcessedEvent`'s ordering key is `seq` (a per-actor monotonic processed-event counter),
+  not `tick` — multiple events can share a tick (batched dispatch), so `tick` alone can't tell
+  replay order. This is a different counter from `MessageId.seq` (§10's per-actor *send* counter);
+  both are monotonic `Long`s but track different things.
+- `rollbackTo(targetTick)` semantics: undoes every logged event with `tick >= targetTick` (Jefferson's
+  "roll back to before the violation"), returning them so a future anti-message cascade (§10) can
+  act on them; everything with `tick < targetTick` survives via restore-then-replay from the
+  nearest earlier checkpoint.
+- `MessageId`/`LoggedEvent.sentMessageIds` exist now (typed, unused) specifically because
+  `docs/TIME_WARP_DESIGN.md`'s own step ordering says anti-messages (step 5) depend on the event
+  log's "what did I send" data "already being correct" from this step — the field is there so step
+  5 has a place to put that data, but nothing populates it yet: no live actor wiring exists to
+  capture "what did this event send" (that requires instrumenting `sendMessageTo`, which needs a
+  live `OptimisticLocalTimeManager` driving real dispatch — step 4's scope, not step 3's).
+- Not yet composed into any actor — this step built and validated the handler as a standalone unit
+  per the suggested order; wiring it into `BaseActor`/`SimulationBaseActor` (as a `private lazy val`
+  the same way `CarMicroHandler` is wired into `Car`) is step 4's job, once
+  `OptimisticLocalTimeManager` exists to actually call `rollbackTo` on a straggler.
+
 ## Open questions / not designed yet
 
 - Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
@@ -396,8 +436,8 @@ that fix would hang off of.
 | `core/actor/manager/time/ConservativeGlobalTimeManager.scala` (new, renamed from today's `GlobalTimeManager`) | Existing `SelectiveBarrier`/`QueryNextTickEvent` behavior, unchanged |
 | `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (new) | `GVTCoordinator`, termination-plateau detection |
 | `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala` (new) | Pluggable GVT strategy; Mattern-style variant deferred |
-| `core/actor/rollback/RollbackHistoryHandler.scala` (new) | Per-actor checkpoint+event-log handler, composed into participating actors |
-| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala` (new) | Event-log entry format; message identity for anti-messages |
+| `core/actor/rollback/RollbackHistoryHandler.scala` (done, not yet composed into any actor) | Per-actor checkpoint+event-log handler |
+| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala` (done) | Event-log entry format; message identity for anti-messages (fields exist, unpopulated until step 5) |
 | `core/entity/event/ActorInteractionEvent.scala` (modify) | Add `messageId`, `isAntiMessage` fields |
 | `core/enumeration/TimeManagerTypeEnum.scala` (modify) | Add `TIME_WARP` |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
@@ -408,9 +448,9 @@ that fix would hang off of.
 Implementation-ready per the decisions above, except for the items in "Open questions." Suggested
 order: (1) ~~the RNG determinism fix (§8)~~ — done; (2) ~~the `Conservative*`/`GlobalTimeManagerBase`
 extraction (§2)~~ — done (Local side fully split; Global side partially, see caveat above); (3)
-`RollbackHistoryHandler` + checkpoint/replay (§6/§7) in isolation, testable without a live
-optimistic LTM; (4) `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11);
-(5) anti-messages (§10) last, since it depends on the event log's "what did I send" data already
-being correct from step 3.
+~~`RollbackHistoryHandler` + checkpoint/replay (§6/§7)~~ — done, built and tested standalone; (4)
+`OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11); (5) anti-messages
+(§10) last, since it depends on the event log's "what did I send" data already being correct from
+step 3.
 
-**Next up: step (3), `RollbackHistoryHandler` + checkpoint/replay.**
+**Next up: step (4), `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT.**
