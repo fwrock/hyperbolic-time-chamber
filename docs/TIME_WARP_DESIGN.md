@@ -4,16 +4,16 @@ Status as of 2026-08-06: **all five "Suggested order" steps below have landed, e
 deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
 §6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
 /GVT), and §10 (anti-message cascade math) — see "Implementation log" below for what's real vs.
-scoped in each. Started on §10's post-suggested-order "not live yet" list too: `RollbackHistoryHandler`
-is now composed into `SimulationBaseActor`, mechanically (logging/checkpointing only) — see that
-section's follow-up log entry for a real design gap found in the process (`actSpontaneous`/
-`actInteractWith` aren't replay-safe) that still blocks `rollbackTo` itself from being callable.
-**Time Warp is not runnable yet**: the coordinator/rollback/cascade *logic* all exists and is
-tested in isolation (or, for the `SimulationBaseActor` wiring, live but fully inert behind a gate
-nothing sets), but the wire protocol (`ActorInteractionEvent`) is untouched and no rollback can
-actually execute. This document is the design log/rationale from the planning conversation that
-produced it — update it as decisions are revisited or implementation diverges, don't treat it as
-aspirational once code lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+scoped in each. Started on §10's post-suggested-order "not live yet" list too: `RollbackHistoryHandler` is now
+composed into `SimulationBaseActor`, and `rollbackTo` is now genuinely safe and correct to call
+(the `actSpontaneous`/`actInteractWith` replay-safety gap found mid-step is solved via an
+`isReplaying` flag) — see that section's two follow-up log entries. **Time Warp is still not
+runnable**: nothing calls `rollbackTo` yet (the straggler trigger itself isn't activated), and the
+wire protocol (`ActorInteractionEvent`'s `messageId`/`isAntiMessage`) is untouched, so even once
+triggered, a rollback's anti-messages have nowhere real to go. This document is the design
+log/rationale from the planning conversation that produced it — update it as decisions are
+revisited or implementation diverges, don't treat it as aspirational once code lands (same
+convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -625,10 +625,69 @@ a separate future decision** — not blocking, since nothing calls `rollbackTo` 
   path independently of the gate specifically so a future typo like this doesn't sit undetected
   again.
 
-**Still not done from §10's "not live yet" list**: `ActorInteractionEvent`'s wire fields
-(item 1, unchanged — still deliberately deferred), the rest of item 2 (`rollbackTo` itself, blocked
-on the replay-safety gap above), item 3 (activating the straggler trigger), item 4 (the
-anti-message-before-original stash edge case).
+**Still not done from §10's "not live yet" list** (as of the entry above): `ActorInteractionEvent`'s
+wire fields (item 1), the rest of item 2 (`rollbackTo` itself, blocked on the replay-safety gap),
+item 3 (activating the straggler trigger), item 4 (the anti-message-before-original stash edge
+case).
+
+### §10 follow-up, continued: replay-safety solved, `rollbackTo` is now real (2026-08-06)
+
+Solved the gap the previous entry left open. New: `SimulationBaseActorTimeWarpReplaySpec.scala`
+(3 TestKit-based tests, driving a minimal concrete actor through its real mailbox — same harness
+style as `LocalTimeManagerBatchStallSpec`/`OptimisticLocalTimeManagerSpec`). Modified:
+`SimulationBaseActor.scala` (the actual fix), `application.conf` untouched this round. Full suite
+(228 tests) passes.
+
+**The fix: an `isReplaying` flag, checked only by the two protocol-signaling methods.**
+`onFinishSpontaneous` and `scheduleEvent(tick)` — the only two places `actSpontaneous`/
+`actInteractWith` talk to the time manager — now check `if (isReplaying) return` as their very
+first line. `sendMessageTo` is deliberately left untouched: §10 wants replay to actually resend
+messages (each getting a fresh identity so the pre-rollback sends can be anti-messaged), so
+suppressing it would be wrong, not just unnecessary. `rollbackHandler`'s `replayEventFn` now
+delegates to a real `replayLoggedEvent(event: AnyRef)` method that sets `isReplaying = true`,
+mirrors `handleSpontaneous`/`handleInteractWith`'s pre-dispatch bookkeeping
+(`currentTick`/`currentTimeManager`/`currentGeneration`, Lamport clock update) for whichever event
+type it's replaying, calls `actSpontaneous`/`actInteractWith` directly, and resets `isReplaying` in
+a `finally`. Deliberately skips both methods' *post*-dispatch bookkeeping (handleSpontaneous's
+"did you call onFinishSpontaneous" safety net, `recordProcessedEvent` itself) — replay isn't a new
+event for the time manager to track, and the event being replayed is already in the log, not a
+fresh one to log again.
+
+Still fully inert for conservative mode by the same argument as before: `isReplaying` only ever
+becomes `true` inside `replayLoggedEvent`, only ever invoked via `rollbackHandler`'s `replayEventFn`,
+only ever reachable from `rollbackTo`, which — even now that it's *safe* to call — still has
+nothing calling it (item 3, the straggler trigger, is still not activated). `rollbackTo` moved from
+"not callable" to "callable and correct, but still not called by anything live."
+
+**Three bugs found and fixed while writing the test, worth recording since they're the kind of
+thing that would have surfaced during real integration otherwise:**
+1. `LoggedEvent`'s original design (step 3) assumed test state types could be freely nested inside
+   spec classes, matching the rest of this test suite's style — but `RollbackHistoryHandler`'s
+   `restoreSnapshotFn` round-trips state through real JSON (`JsonUtil.fromJsonClassName`), and
+   Jackson cannot construct a non-static inner class (needs the enclosing instance, which nothing
+   supplies) — `InvalidDefinitionException` the moment a checkpoint is actually restored. Fixed by
+   declaring the test state type at module level, not nested in the `Spec` class — a test-only
+   fix, but worth noting as a real constraint on any future state type used with rollback tests.
+2. `sendMessageTo`'s `PoolDistributed` path addresses its target by convention at
+   `/user/{entityId}` (`BaseActor.getActorPoolRef`), but a `TestProbe`'s own actor lives under
+   `/system/` (created via `systemActorOf`, confirmed by reading Pekko's own `TestKit.scala`
+   source) — never reachable at `/user/{name}` no matter what name is given. Fixed with a small
+   real `/user/{name}` forwarding actor in the test, standing in for a `PoolDistributed` peer the
+   same way a `TestProbe` alone cannot.
+3. `BaseActor` is a `PersistentActor`; recovery (querying this `persistenceId`'s journal, even an
+   empty in-memory one) is asynchronous regardless of `TestActorRef`'s `CallingThreadDispatcher` —
+   a command sent before `RecoveryCompleted` is stashed by Pekko Persistence itself, not dropped,
+   but the stash only drains once that async round-trip finishes. `PersonMigrationSnapshotSpec`/
+   `PrivateVehicleMigrationSnapshotSpec` never hit this because they call protected methods
+   directly instead of going through the mailbox; this spec's whole point was exercising the real
+   mailbox path (`handleSpontaneous`'s new `recordProcessedEvent` call), so that workaround wasn't
+   available. Fixed with a one-time bounded wait after actor construction, before any real traffic
+   — not a retry loop, a single documented startup synchronization for a known Pekko/Akka
+   PersistentActor-in-tests race.
+
+**Still not done from §10's "not live yet" list**: `ActorInteractionEvent`'s wire fields (item 1),
+item 3 (nothing calls `rollbackTo` yet — the straggler trigger itself is still not activated,
+though it's now safe to activate), item 4 (the anti-message-before-original stash edge case).
 
 ## Open questions / not designed yet
 

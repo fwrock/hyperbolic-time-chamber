@@ -104,30 +104,69 @@ abstract class SimulationBaseActor[T <: BaseState](
   // anything another actor is waiting to hear back about.
   private var processedEventSeq: Long = 0L
 
-  /** Per-actor checkpoint + event-log handler (`docs/TIME_WARP_DESIGN.md` §6/§7), composed the same
-    * lambda-only, no-`ActorRef` way `CarMicroHandler` is. `replayEventFn` deliberately throws
-    * rather than attempting to re-invoke `actSpontaneous`/`actInteractWith`: those methods
-    * interleave state mutation with protocol side effects (`onFinishSpontaneous` signaling the
-    * time manager, real `sendMessageTo` sends) that a replay reconstructing state at an earlier
-    * log position must not repeat the same way a live dispatch does — re-running them verbatim
-    * would resend spurious `FinishEvent`s and corrupt the time manager's `runningEvents`
-    * bookkeeping. Making replay safe needs those side effects to be separable from the state
-    * mutation, which is a real design decision not yet made anywhere in the design doc. Until
-    * that's decided, `rollbackTo` is simply not called by anything — only `initialize`/
-    * `recordProcessedEvent` (pure logging, no replay) are wired below.
+  /** True while [[replayLoggedEvent]] is re-executing an already-processed event's business logic
+    * against a just-restored checkpoint, as opposed to a live dispatch. The one flag that makes
+    * replay safe: [[onFinishSpontaneous]] and [[scheduleEvent]] both check it and skip signaling
+    * the time manager while it's set (see each method's own doc for why), while `sendMessageTo` is
+    * deliberately left unguarded — `docs/TIME_WARP_DESIGN.md` §10 wants replay to actually resend
+    * messages, each getting a fresh `MessageId`, so the *previous* (now-invalidated) sends can be
+    * anti-messaged instead. Never true outside of [[replayLoggedEvent]]'s own call stack, and
+    * [[replayLoggedEvent]] is only ever invoked by [[rollbackHandler]]'s `replayEventFn`, itself
+    * only reachable from `RollbackHistoryHandler.rollbackTo` — which nothing calls yet (see
+    * `docs/TIME_WARP_DESIGN.md`'s implementation log for this step), so this is provably always
+    * `false` today, same as [[isTimeWarp]].
     */
-  private lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
+  private var isReplaying: Boolean = false
+
+  /** Per-actor checkpoint + event-log handler (`docs/TIME_WARP_DESIGN.md` §6/§7), composed the same
+    * lambda-only, no-`ActorRef` way `CarMicroHandler` is. `replayEventFn` delegates to
+    * [[replayLoggedEvent]], which sets [[isReplaying]] around the re-dispatch so the protocol
+    * side effects `actSpontaneous`/`actInteractWith` can trigger (`onFinishSpontaneous`,
+    * `scheduleEvent`) don't repeat during replay the way they would during a live dispatch — see
+    * [[isReplaying]]'s doc for the full reasoning.
+    */
+  protected lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
     checkpointInterval =
       SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
     captureSnapshotFn = () => buildMigrationSnapshot(),
     restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
-    replayEventFn = _ =>
-      throw new UnsupportedOperationException(
-        "RollbackHistoryHandler.rollbackTo is not callable yet: actSpontaneous/actInteractWith " +
-          "aren't replay-safe (see this field's doc). Nothing should be invoking rollbackTo " +
-          "until that's fixed."
-      )
+    replayEventFn = event => replayLoggedEvent(event)
   )
+
+  /** Re-executes one already-logged event's business logic against the actor's current
+    * (just-restored) state, to walk it forward from a checkpoint to an exact log position — see
+    * [[isReplaying]] for why this is safe to do without repeating `onFinishSpontaneous`/
+    * `scheduleEvent`'s time-manager signaling. Mirrors `handleSpontaneous`/`handleInteractWith`'s
+    * own pre-dispatch bookkeeping (`currentTick`/`currentTimeManager`/`currentGeneration`
+    * assignment, Lamport clock update) but deliberately skips their *post*-dispatch bookkeeping
+    * (the safety-net "did you call onFinishSpontaneous" check, `recordProcessedEvent` itself) —
+    * both are meaningless here: nothing is dispatching a *new* event for the time manager to track,
+    * and this event is already in the log being replayed, not a fresh one to log again.
+    */
+  private def replayLoggedEvent(event: AnyRef): Unit = {
+    isReplaying = true
+    try
+      event match {
+        case spontaneous: SpontaneousEvent =>
+          currentTick = spontaneous.tick
+          currentTimeManager = spontaneous.actorRef
+          currentGeneration = spontaneous.generation
+          actSpontaneous(spontaneous)
+        case interaction: ActorInteractionEvent =>
+          updateLamportClock(interaction.lamportTick)
+          if (interaction.tick > currentTick) {
+            currentTick = interaction.tick
+          }
+          actInteractWith(interaction)
+        case other =>
+          logWarn(s"$getEntityId: replayLoggedEvent doesn't know how to replay a ${other.getClass.getName}")
+      }
+    catch
+      case e: Throwable =>
+        logError(s"Exception replaying a logged event for $getEntityId: ${e.getMessage}")
+        e.printStackTrace()
+    finally isReplaying = false
+  }
 
   /** True only under Time Warp — the one gate every new-but-not-yet-safe-to-activate call site
     * below checks before touching [[rollbackHandler]], so conservative mode is provably unaffected.
@@ -780,6 +819,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
+    // Time Warp replay (see isReplaying's doc): actSpontaneous calling this during
+    // replayLoggedEvent must not re-signal the time manager -- that signal already happened, for
+    // real, the first time this event was live-dispatched. Nothing to update here either:
+    // _spontaneousFinishSent's safety-net check only runs inside handleSpontaneous, which replay
+    // never goes through.
+    if (isReplaying) return
     _spontaneousFinishSent = true
     currentTimeManager ! FinishEvent(
       end = currentTick,
@@ -813,6 +858,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The tick at which the event should be scheduled
     */
   protected def scheduleEvent(tick: Tick): Unit = {
+    // Time Warp replay: same reasoning as onFinishSpontaneous's isReplaying guard -- this actor's
+    // real future schedule was already correctly registered with the time manager the first time
+    // this event was live-dispatched; replaying it must not re-register (or double-register) it.
+    if (isReplaying) return
     val tm =
       if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
     tm ! ScheduleEvent(
