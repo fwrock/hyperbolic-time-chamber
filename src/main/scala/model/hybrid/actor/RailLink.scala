@@ -61,7 +61,7 @@ class RailLink(
       logError(s"  Rail type: ${state.railType}")
       logError(s"  Rail link: ${state.from} -> ${state.to}")
       logError(s"  Subway line: ${state.subwayLine}")
-      logError(s"Rejecting vehicle ${data.actorId}")
+      logError(s"Rejecting vehicle ${event.actorRefId}")
 
       val errorInfo = LinkInfoData(
         linkLength = 0,
@@ -84,8 +84,8 @@ class RailLink(
 
     state.registered.add(
       LinkRegister(
-        actorId = data.actorId,
-        shardId = data.shardId,
+        actorId = event.actorRefId,
+        shardId = event.shardRefId,
         actorType = data.actorType,
         actorSize = data.actorSize,
         actorCreationType = data.actorCreationType

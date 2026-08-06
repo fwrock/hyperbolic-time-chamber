@@ -236,11 +236,11 @@ class Link(
 
   private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     metricsReporter.ensureSummaryTick(currentTick)
-    logDebug(s"Vehicle ${data.actorId} entering link (mode=${state.simulationMode})")
+    logDebug(s"Vehicle ${event.actorRefId} entering link (mode=${state.simulationMode})")
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "enter", vehicleId = data.actorId,
+        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
@@ -252,13 +252,13 @@ class Link(
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     metricsReporter.ensureSummaryTick(currentTick)
-    logDebug(s"Vehicle ${data.actorId} leaving link")
-    val wasRegistered     = state.registered.exists(_.actorId == data.actorId)
+    logDebug(s"Vehicle ${event.actorRefId} leaving link")
+    val wasRegistered     = state.registered.exists(_.actorId == event.actorRefId)
     val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "leave", vehicleId = data.actorId,
+        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = vehiclesRemaining
       ),

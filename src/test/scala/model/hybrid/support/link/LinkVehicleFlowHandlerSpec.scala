@@ -107,8 +107,6 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
   private def enterData(carId: String, actorType: ActorTypeEnum = ActorTypeEnum.Car): EnterLinkData =
     EnterLinkData(
-      shardId = "hybrid.actor.Car",
-      actorId = carId,
       actorType = actorType,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
       actorSize = 4.5
@@ -128,8 +126,6 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
   private def leaveData(carId: String): LeaveLinkData =
     LeaveLinkData(
-      shardId = "hybrid.actor.Car",
-      actorId = carId,
       actorType = ActorTypeEnum.Car,
       actorSize = 4.5,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed
