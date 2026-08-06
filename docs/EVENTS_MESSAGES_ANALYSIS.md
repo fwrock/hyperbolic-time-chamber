@@ -132,7 +132,7 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
 | Mensagem | Campos | Observação |
 |---|---|---|
 | `LinkInfoData` | `linkLength, linkCapacity, linkNumberOfCars, linkFreeSpeed, linkLanes` — 5 `Double`/`Int` | Denso, sem redundância. Bom caso de referência para os demais. |
-| `EnterLinkData` | `shardId, actorId, actorType, actorCreationType, actorSize` | `maxAcceleration`/`maxDeceleration` **removidos (recomendação 6)** — eram função determinística só de `actorType` (já presente na mensagem), não do evento; agora derivados no Link via `actorType.microMaxAcceleration`/`.microMaxDeceleration`. `shardId`+`actorId` ainda são redundantes com `actorRefId`/`shardRefId` do envelope `ActorInteractionEvent` que os contém — a mesma identidade é escrita duas vezes por mensagem (uma no envelope, outra no payload); não endereçado nesta rodada. |
+| `EnterLinkData` | `actorType, actorCreationType, actorSize` | `maxAcceleration`/`maxDeceleration` **removidos (recomendação 6)** — eram função determinística só de `actorType` (já presente na mensagem), não do evento; agora derivados no Link via `actorType.microMaxAcceleration`/`.microMaxDeceleration`. `shardId`+`actorId` **removidos (recomendação 11)** — eram sempre idênticos a `actorRefId`/`shardRefId` do envelope `ActorInteractionEvent` que os contém (mesma origem: `getEntityId`/`getShardId` do remetente); consumidores agora leem `event.actorRefId`/`event.shardRefId` diretamente. |
 | ~~`RequestRouteData`~~/~~`ForwardRouteData`~~ | — | **Removidas (recomendação 4) — código morto**, nunca construídas; carregavam `requester: ActorRef` duplicando `requesterId: String`, e um `path: Queue[(Identify,Identify)]` que crescia a cada hop de forwarding — motivo original das recomendações 4/5 abaixo, que perderam o alvo junto com a remoção. |
 | `LinkAccessData` | `phase, nextTick, queuePosition=0, capacityState=Available` | Enxuto; nenhum campo obviamente descartável. |
 | `FinishEvent` | `actorRef, identify: Identify, end, scheduleTick: Option[String], scheduleEvent: Option[ScheduleEvent], timeManager: ActorRef, destruct, eventsAmount, generation` | `actorRef` e `identify.actorRef` (dentro do protobuf `Identify`) frequentemente carregam a mesma referência por dois caminhos — um via Jackson (`ActorRef` nativo), outro via string dentro do protobuf `Identify`. `timeManager: ActorRef` é conhecido estaticamente pelo remetente (é sempre o TM que disparou o `SpontaneousEvent` correspondente) — candidato a eliminar do payload e inferir no receptor por correlação de generation/tick. |
@@ -302,6 +302,31 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
     (round-trip completo, derivação de `shardRefId` ignorando valor stale do remetente, id de
     controle intocado, e um teste comparando `.toByteArray.length` antes/depois confirmando que o
     payload compactado é estritamente menor). Suíte completa: 198 testes verdes.
+
+    **Medição real (recomendações 9+10 juntas):** instrumentação temporária em
+    `sendMessageToShard`/`sendMessageToPool` capturou todo `ActorInteractionEvent` real construído
+    ao rodar o cenário `simulations/input/sqlite_validation_test` (dia inteiro, 86400 ticks) e
+    comparou o tamanho do payload compactado com uma reconstrução fiel do formato antigo para a
+    mesma mensagem. Resultado: **21.637 mensagens, 4.195.672 bytes compactados vs. 5.369.224 bytes
+    no formato antigo — 1.173.552 bytes economizados (21,86%)**, consistente entre quase todas as
+    categorias de `eventType` (`EnterLink`/`LeaveLink` ~22%, `ReceiveEnterLinkInfo`/
+    `ReceiveLeaveLinkInfo` ~22%, `RequestLinkAccess`/`ReceiveLinkAccess` ~22%). Instrumentação
+    removida após a medição (não faz parte do código de produção).
+11. **✅ Implementado — `EnterLinkData.shardId`/`.actorId` removidos, redundantes com o envelope.**
+    `Movable.enterLink`/`leavingLink` (`Movable.scala`) preenchiam `EnterLinkData.actorId =
+    getEntityId` e `.shardId = getShardId` — exatamente os mesmos valores que
+    `SimulationBaseActor.sendMessageToShard` já escreve em `ActorInteractionEvent.actorRefId`/
+    `.shardRefId` para a mesma mensagem (mesma origem: identidade do remetente). Os consumidores
+    (`Link.handleEnterLink`/`handleLeaveLink`, `LinkVehicleFlowHandler` — que já recebiam
+    `event: ActorInteractionEvent` como parâmetro ao lado de `data`, mas liam a identidade errada
+    — e `RailLink.handleEnterLink`) passaram a ler `event.actorRefId`/`event.shardRefId` em vez de
+    `data.actorId`/`data.shardId`, inclusive na hora de popular `LinkRegister`/`VehicleInLane` em
+    `LinkState` — a obrigação de guardar `shardId` para poder responder ao veículo depois (ver
+    disciplina de sincronização do `CLAUDE.md`, "must live in state") continua satisfeita, só a
+    fonte do valor muda. `LeaveLinkData` tinha o mesmo par de campos, removidos junto. Zero mudança
+    de comportamento — mesmo valor, uma fonte a menos. `model/mobility` (pacote morto) não foi
+    tocado. Cobertura: `KryoEventDataSerializationSpec`/`LinkVehicleFlowHandlerSpec` atualizados
+    para o novo formato dos case classes. Suíte completa: 198 testes verdes.
 
 ### A não fazer / falso positivo já descartado
 - **Não é necessário mexer no `StringPool`** para reduzir tamanho de mensagem — ele já cumpre

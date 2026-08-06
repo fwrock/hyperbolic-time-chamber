@@ -67,7 +67,7 @@ class LinkVehicleFlowHandler(
 
   def handleEnterLinkMeso(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     val state = getLinkStateFn()
-    if (state.registered.exists(_.actorId == data.actorId)) {
+    if (state.registered.exists(_.actorId == event.actorRefId)) {
       sendMessageFn(
         event.actorRefId, event.shardRefId,
         LinkInfoData(
@@ -83,12 +83,12 @@ class LinkVehicleFlowHandler(
     }
 
     metricsReporter.onVehicleLoaded(isMicro = false)
-    putVehicleEntryTickFn(data.actorId, currentTickFn())
-    getOrUpdateVehicleWaitingFn(data.actorId)
+    putVehicleEntryTickFn(event.actorRefId, currentTickFn())
+    getOrUpdateVehicleWaitingFn(event.actorRefId)
 
     state.registered.add(LinkRegister(
-      actorId           = data.actorId,
-      shardId           = data.shardId,
+      actorId           = event.actorRefId,
+      shardId           = event.shardRefId,
       actorType         = data.actorType,
       actorSize         = data.actorSize,
       actorCreationType = data.actorCreationType
@@ -109,7 +109,7 @@ class LinkVehicleFlowHandler(
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
-    findVehicleLaneFn(data.actorId) match {
+    findVehicleLaneFn(event.actorRefId) match {
       case Some(existingLane) =>
         sendMicroEnterAck(event, existingLane)
         if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
@@ -118,14 +118,14 @@ class LinkVehicleFlowHandler(
     }
 
     metricsReporter.onVehicleLoaded(isMicro = true)
-    putVehicleEntryTickFn(data.actorId, event.tick)
-    getOrUpdateVehicleWaitingFn(data.actorId)
+    putVehicleEntryTickFn(event.actorRefId, event.tick)
+    getOrUpdateVehicleWaitingFn(event.actorRefId)
 
     val state = getLinkStateFn()
-    if (!state.registered.exists(_.actorId == data.actorId)) {
+    if (!state.registered.exists(_.actorId == event.actorRefId)) {
       state.registered.add(LinkRegister(
-        actorId           = data.actorId,
-        shardId           = data.shardId,
+        actorId           = event.actorRefId,
+        shardId           = event.shardRefId,
         actorType         = data.actorType,
         actorSize         = data.actorSize,
         actorCreationType = data.actorCreationType
@@ -136,8 +136,8 @@ class LinkVehicleFlowHandler(
 
     val assignedLane = findLeastOccupiedLaneFn()
     val vehicle = VehicleInLane(
-      actorId         = data.actorId,
-      shardId         = data.shardId,
+      actorId         = event.actorRefId,
+      shardId         = event.shardRefId,
       position        = 0.0,
       velocity        = 0.0,
       acceleration    = 0.0,
@@ -180,12 +180,12 @@ class LinkVehicleFlowHandler(
     wasRegistered: Boolean
   ): Unit = {
     val state = getLinkStateFn()
-    state.registered.filterInPlace(_.actorId != data.actorId)
+    state.registered.filterInPlace(_.actorId != event.actorRefId)
     recomputeAndPublishMesoDynamics()
 
-    val entryTick = getVehicleEntryTickFn(data.actorId).getOrElse(-1L)
-    removeVehicleEntryTickFn(data.actorId)
-    removeVehicleWaitingFn(data.actorId)
+    val entryTick = getVehicleEntryTickFn(event.actorRefId).getOrElse(-1L)
+    removeVehicleEntryTickFn(event.actorRefId)
+    removeVehicleWaitingFn(event.actorRefId)
 
     if (wasRegistered) {
       val travelTicks = if (entryTick >= 0) (currentTickFn() - entryTick).toDouble else 0.0
@@ -210,21 +210,21 @@ class LinkVehicleFlowHandler(
     entryTick: Long
   ): Unit = {
     val state = getLinkStateFn()
-    val stillInLanes = state.vehiclesByLane.values.exists(_.exists(_.actorId == data.actorId))
+    val stillInLanes = state.vehiclesByLane.values.exists(_.exists(_.actorId == event.actorRefId))
     if (!stillInLanes) {
-      logDebugFn(s"${data.actorId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
+      logDebugFn(s"${event.actorRefId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
       if (state.totalVehiclesInMicro == 0 && isMicroScheduledFn()) setMicroScheduledFn(false)
       return
     }
 
     val vehicleVelocity = state.vehiclesByLane.values
-      .flatMap(_.find(_.actorId == data.actorId))
+      .flatMap(_.find(_.actorId == event.actorRefId))
       .headOption.map(_.velocity).getOrElse(0.0)
 
-    state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == data.actorId) }
+    state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == event.actorRefId) }
 
-    val accWaiting = getVehicleWaitingSecondsFn(data.actorId)
-    removeVehicleWaitingFn(data.actorId)
+    val accWaiting = getVehicleWaitingSecondsFn(event.actorRefId)
+    removeVehicleWaitingFn(event.actorRefId)
 
     val elapsedTicks = math.max(1L, currentTickFn() - entryTick + 1)
     val avgSpeed =

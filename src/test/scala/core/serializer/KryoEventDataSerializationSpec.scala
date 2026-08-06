@@ -54,8 +54,6 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
   "BaseEventData serialization binding" should "resolve to the Kryo serializer, not jackson-cbor" in {
     val serialization = SerializationExtension(system)
     val data: AnyRef = EnterLinkData(
-      shardId = "link-1",
-      actorId = "car-1",
       actorType = ActorTypeEnum.Car,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
       actorSize = 4.5
@@ -66,8 +64,6 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
   it should "round-trip EnterLinkData (plain fields + Scala enums)" in {
     val serialization = SerializationExtension(system)
     val original = EnterLinkData(
-      shardId = "link-1",
-      actorId = "car-1",
       actorType = ActorTypeEnum.Car,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
       actorSize = 4.5
