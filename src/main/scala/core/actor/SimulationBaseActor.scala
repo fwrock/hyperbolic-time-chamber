@@ -104,6 +104,21 @@ abstract class SimulationBaseActor[T <: BaseState](
   // anything another actor is waiting to hear back about.
   private var processedEventSeq: Long = 0L
 
+  // This actor's own monotonically increasing SEND counter (docs/TIME_WARP_DESIGN.md §10's
+  // MessageId.seq — a distinct counter from processedEventSeq above, which orders processed
+  // events, not sends). Deliberately never included in buildMigrationSnapshot/applyMigrationSnapshot
+  // and never touched by rollbackTo/replayLoggedEvent: §10 requires it survive a rollback
+  // untouched, so a resend produced by replay always gets a fresh id rather than reusing one a
+  // still-in-flight anti-message might reference.
+  private var messageSendSeq: Long = 0L
+
+  // Every message sent by sendMessageTo while the CURRENTLY-processing event runs, so it can be
+  // attached to that event's RollbackHistoryHandler log entry (LoggedEvent.sentMessages) once
+  // processing finishes — the data AntiMessageCascade needs to retract them on a future rollback.
+  // Cleared at the start of handleSpontaneous/handleInteractWith; only ever populated when
+  // isTimeWarp (see sendMessageTo), so this stays empty and unused for conservative-mode actors.
+  private val currentEventSentMessages: mutable.ArrayBuffer[core.actor.rollback.SentMessage] = mutable.ArrayBuffer.empty
+
   /** True while [[replayLoggedEvent]] is re-executing an already-processed event's business logic
     * against a just-restored checkpoint, as opposed to a live dispatch. The one flag that makes
     * replay safe: [[onFinishSpontaneous]] and [[scheduleEvent]] both check it and skip signaling
@@ -142,6 +157,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     * (the safety-net "did you call onFinishSpontaneous" check, `recordProcessedEvent` itself) —
     * both are meaningless here: nothing is dispatching a *new* event for the time manager to track,
     * and this event is already in the log being replayed, not a fresh one to log again.
+    *
+    * Known scope limit: `sendMessageTo` calls made during this replay populate
+    * [[currentEventSentMessages]] same as a live dispatch, but nothing here flushes that back onto
+    * the original `LoggedEvent` being replayed (unlike a live dispatch, which flushes it via
+    * `recordProcessedEvent`) — so if *this exact event* is ever rolled back a second time, its
+    * anti-message cascade would use the sends from its *first* dispatch, not this replay's. A real
+    * gap for a repeated-rollback-of-the-same-event edge case, not designed further here; the
+    * common single-rollback path this step's tests exercise is unaffected.
     */
   private def replayLoggedEvent(event: AnyRef): Unit = {
     isReplaying = true
@@ -172,6 +195,59 @@ abstract class SimulationBaseActor[T <: BaseState](
     * below checks before touching [[rollbackHandler]], so conservative mode is provably unaffected.
     */
   private def isTimeWarp: Boolean = currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
+
+  /** The straggler trigger (`docs/TIME_WARP_DESIGN.md` §10): rolls this actor back to before
+    * `targetTick` and sends a real anti-message for every send that gets undone in the process.
+    * Called from [[handleInteractWith]] for both cases that need it — a genuinely causally-earlier
+    * interaction arriving after this actor already ran ahead of it, and an incoming anti-message
+    * itself (whose target tick is looked up via [[findLoggedEventForMessage]]) — since both reduce
+    * to the same "undo back to a tick, cascade what that undoes" operation
+    * `RollbackHistoryHandler.rollbackTo` already implements.
+    */
+  private def rollbackAndCascade(targetTick: Tick): Unit = {
+    val undone = rollbackHandler.rollbackTo(targetTick)
+    core.actor.rollback.AntiMessageCascade.messagesToRetract(undone).foreach(sendAntiMessage)
+  }
+
+  /** Finds the logged event (if any) this actor recorded for processing the interaction identified
+    * by `messageId` — i.e. the original send an incoming anti-message refers to. Matches on the
+    * sender/tick/seq triple `ActorInteractionEvent.messageId` derives, since that's the only event
+    * type [[handleInteractWith]] ever logs whose identity an anti-message could reference.
+    */
+  private def findLoggedEventForMessage(messageId: core.actor.rollback.MessageId): Option[core.actor.rollback.LoggedEvent] =
+    rollbackHandler.findEvent {
+      case interaction: ActorInteractionEvent => interaction.messageId == messageId
+      case _                                  => false
+    }
+
+  /** Sends a real anti-message retracting `sentMessage`'s original send, to the same receiver via
+    * the same routing (`sendMessageToShard`/`sendMessageToPool`) a normal send would use — but
+    * carrying the *original* send's `tick`/`seq` (not this actor's current ones), so the receiver
+    * can find and undo exactly that send in its own log via [[findLoggedEventForMessage]].
+    */
+  private def sendAntiMessage(sentMessage: core.actor.rollback.SentMessage): Unit = {
+    val actorType = CreationTypeEnum.valueOf(sentMessage.receiverActorType)
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(
+        entityId = sentMessage.receiverId,
+        data = core.actor.rollback.AntiMessagePayload,
+        eventType = "anti-message",
+        tick = sentMessage.messageId.tick,
+        seq = sentMessage.messageId.seq,
+        isAntiMessage = true
+      )
+    } else {
+      sendMessageToShard(
+        entityId = sentMessage.receiverId,
+        shardId = sentMessage.receiverShardId,
+        data = core.actor.rollback.AntiMessagePayload,
+        eventType = "anti-message",
+        tick = sentMessage.messageId.tick,
+        seq = sentMessage.messageId.seq,
+        isAntiMessage = true
+      )
+    }
+  }
 
   /** Interns all String fields in the [[relationships]] map to reduce heap duplication.
     * Called once per actor in [[onFinishInitialize]], and again after migration restore.
@@ -526,10 +602,28 @@ abstract class SimulationBaseActor[T <: BaseState](
   ): Unit = {
     lamportClock.increment()
     ActorMetrics.messagesSent.labels(getClass.getSimpleName, eventType).inc()
-    if (actorType == PoolDistributed) {
-      sendMessageToPool(entityId, data, eventType)
+    // Time Warp (docs/TIME_WARP_DESIGN.md §10): a fresh per-actor send identity, generated and
+    // written to the wire ONLY under Time Warp. Deliberately not unconditional: proto3 encodes a
+    // zero field as zero bytes, so an always-incrementing seq would grow every conservative-mode
+    // message's wire size for a field nothing conservative-mode ever reads -- exactly the class of
+    // wire-size regression this codebase has a dedicated history of eliminating (see this file's
+    // git log). Conservative-mode messages keep seq=0, byte-identical to before this field existed.
+    val seq = if (isTimeWarp) {
+      messageSendSeq += 1
+      currentEventSentMessages += core.actor.rollback.SentMessage(
+        messageId = core.actor.rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq),
+        receiverId = entityId,
+        receiverShardId = if (shardId != null) shardId else "",
+        receiverActorType = actorType.toString
+      )
+      messageSendSeq
     } else {
-      sendMessageToShard(entityId, shardId, data, eventType)
+      0L
+    }
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(entityId, data, eventType, seq = seq)
+    } else {
+      sendMessageToShard(entityId, shardId, data, eventType, seq = seq)
     }
   }
 
@@ -537,14 +631,17 @@ abstract class SimulationBaseActor[T <: BaseState](
     entityId: String,
     shardId: String,
     data: AnyRef,
-    eventType: String = "default"
+    eventType: String = "default",
+    tick: Tick = currentTick,
+    seq: Long = 0L,
+    isAntiMessage: Boolean = false
   ): Unit = {
     val shardingRegion = getShardRef(IdUtil.format(StringUtil.getModelClassName(shardId)))
 
     shardingRegion ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(entityId),
       ActorInteractionEvent(
-        tick = currentTick,
+        tick = tick,
         lamportTick = getLamportClock,
         actorRefId = IdUtil.format(getEntityId),
         shardRefId = IdUtil.format(getShardId),
@@ -553,7 +650,9 @@ abstract class SimulationBaseActor[T <: BaseState](
         data = data,
         eventType = eventType,
         actorType = properties.actorType.toString,
-        resourceId = properties.resourceId
+        resourceId = properties.resourceId,
+        seq = seq,
+        isAntiMessage = isAntiMessage
       )
     )
   }
@@ -561,11 +660,14 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def sendMessageToPool(
     entityId: String,
     data: AnyRef,
-    eventType: String = "default"
+    eventType: String = "default",
+    tick: Tick = currentTick,
+    seq: Long = 0L,
+    isAntiMessage: Boolean = false
   ): Unit = {
     val pool = getActorPoolRef(entityId)
     pool ! ActorInteractionEvent(
-      tick = currentTick,
+      tick = tick,
       lamportTick = getLamportClock,
       actorRefId = IdUtil.format(getEntityId),
       shardRefId = IdUtil.format(getShardId),
@@ -574,7 +676,9 @@ abstract class SimulationBaseActor[T <: BaseState](
       data = data,
       eventType = eventType,
       actorType = properties.actorType.toString,
-      resourceId = properties.resourceId
+      resourceId = properties.resourceId,
+      seq = seq,
+      isAntiMessage = isAntiMessage
     )
   }
 
@@ -614,6 +718,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       return
     }
     _spontaneousFinishSent = false
+    if (isTimeWarp) currentEventSentMessages.clear()
     try actSpontaneous(event)
     catch
       case e: Throwable =>
@@ -631,7 +736,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     if (isTimeWarp) {
       processedEventSeq += 1
-      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq)
+      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq, sentMessages = currentEventSentMessages.toSeq)
     }
   }
 
@@ -649,9 +754,34 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     ActorMetrics.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
+
+    // Time Warp anti-message receipt (docs/TIME_WARP_DESIGN.md §10): not a real interaction to
+    // process via actInteractWith at all -- find the original send this retracts and undo back to
+    // it, cascading further anti-messages for whatever that undoes. If the original can't be
+    // found (already fossil-collected below GVT, or this actor was never the receiver -- shouldn't
+    // happen but isn't fatal either way), there's nothing left to undo; log and move on.
+    if (isTimeWarp && event.isAntiMessage) {
+      findLoggedEventForMessage(event.messageId) match {
+        case Some(logged) => rollbackAndCascade(logged.tick)
+        case None =>
+          logWarn(s"$getEntityId: anti-message for unknown/already-pruned messageId=${event.messageId}")
+      }
+      return
+    }
+
+    // Time Warp straggler detection: a real causality violation -- this interaction's tick is
+    // behind what this actor already processed, meaning it ran ahead of where it should have.
+    // Roll back to before it, cascading anti-messages for whatever that undoes, THEN process this
+    // event normally below (now in its causally-correct position) -- Jefferson's "roll back to
+    // before the violation, then process it in order," not a special second code path.
+    if (isTimeWarp && event.tick < currentTick) {
+      rollbackAndCascade(event.tick)
+    }
+
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
+    if (isTimeWarp) currentEventSentMessages.clear()
     try actInteractWith(event)
     catch
       case e: Exception =>
@@ -662,7 +792,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         e.printStackTrace()
     if (isTimeWarp) {
       processedEventSeq += 1
-      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq)
+      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq, sentMessages = currentEventSentMessages.toSeq)
     }
   }
 

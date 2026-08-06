@@ -151,6 +151,14 @@ final class RollbackHistoryHandler(
         log.filterInPlace(_.seq >= floor.seq)
     }
 
+  /** Finds the logged event (if any) matching `predicate` — used to locate the original event an
+    * incoming anti-message refers to, by matching its `MessageId` against each logged event's own
+    * identity. Generic (`AnyRef => Boolean`) because this class doesn't know about
+    * `ActorInteractionEvent`/`MessageId` specifically — the caller (the actor, which does know the
+    * concrete event type) supplies the match logic.
+    */
+  def findEvent(predicate: AnyRef => Boolean): Option[LoggedEvent] = log.find(le => predicate(le.event))
+
   /** Test/diagnostic hook — how many full-copy checkpoints are currently retained. */
   private[rollback] def checkpointCount: Int = checkpoints.size
 
