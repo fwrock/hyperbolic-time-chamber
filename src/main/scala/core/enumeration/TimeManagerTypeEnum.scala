@@ -18,8 +18,19 @@ object TimeManagerTypeEnum {
     */
   val TIME_STEPPED = "time-stepped"
 
+  /** Time Warp (optimistic synchronization with rollback) - actors run ahead without waiting for
+    * a global barrier; causality is restored via checkpoint/replay rollback instead of being
+    * guaranteed up front. See `docs/TIME_WARP_DESIGN.md`. Not yet wired into the config-driven
+    * factories that would let a scenario actually select it (`GlobalTimeManagerBase.
+    * localTimeManagerProps`, `SimulationManager.createSingletonTimeManager`,
+    * `SimulationBaseActor.onInitialize`'s `currentTimeManagerType` assignment all still hardcode
+    * `DISCRETE_EVENT`/`ConservativeGlobalTimeManager`) — added here so `OptimisticLocalTimeManager`/
+    * `OptimisticGlobalTimeManager` have a type string to report themselves under.
+    */
+  val TIME_WARP = "time-warp"
+
   /** All available time manager types */
-  val ALL_TYPES: Set[String] = Set(DISCRETE_EVENT, TIME_STEPPED)
+  val ALL_TYPES: Set[String] = Set(DISCRETE_EVENT, TIME_STEPPED, TIME_WARP)
 
   /** Validates if a time manager type is supported.
     * @param timeManagerType
