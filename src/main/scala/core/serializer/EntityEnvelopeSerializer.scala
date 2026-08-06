@@ -3,51 +3,48 @@ package core.serializer
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.serialization.{ SerializationExtension, Serializer => PekkoSerializer, SerializerWithStringManifest }
-import org.htc.protobuf.core.entity.event.communication.EntityEnvelope
-import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
+import org.apache.pekko.serialization.{ SerializationExtension, SerializerWithStringManifest }
+import org.htc.protobuf.core.entity.event.communication.{ ActorInteraction, EntityEnvelope }
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
 
 import scala.util.{ Failure, Success, Try }
 
+/** Serializes [[EntityEnvelopeEvent]] for cluster-sharded messaging.
+  *
+  * Sharded simulation traffic (`sendMessageToShard`) always wraps an [[ActorInteractionEvent]]:
+  * `EntityEnvelopeEvent(entityId, ActorInteractionEvent(...))`. That case is written as a single
+  * `ActorInteraction` protobuf frame (entityId folded into it, see
+  * `communication.proto#ActorInteraction.entityId`) instead of nesting a second `EntityEnvelope`
+  * frame — with its own manifest/serializer-id bytes — around an already self-describing
+  * `ActorInteraction` blob. See docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 1.
+  *
+  * Any other payload (e.g. `InitializeEvent`, control/load/migration events sent straight to a
+  * shard region) is comparatively rare — setup/rebalance traffic, not the per-tick hot path — and
+  * keeps the original generic two-layer `EntityEnvelope` framing, since it has no fixed shape to
+  * fold into a dedicated proto.
+  */
 class EntityEnvelopeSerializer(
   val system: ExtendedActorSystem
 ) extends SerializerWithStringManifest {
 
-  private val EnvelopeManifest = classOf[EntityEnvelopeEvent].getName
+  private val GenericManifest = classOf[EntityEnvelopeEvent].getName
+  private val ActorInteractionManifest = GenericManifest + "$ActorInteraction"
   private lazy val serialization = SerializationExtension(system)
 
   override def identifier: Int = 10042004
 
-  override def manifest(o: AnyRef): String = o.getClass.getName
+  override def manifest(o: AnyRef): String = o match {
+    case EntityEnvelopeEvent(_, _: ActorInteractionEvent) => ActorInteractionManifest
+    case _                                                => GenericManifest
+  }
 
   override def toBinary(o: AnyRef): Array[Byte] =
     o match {
+      case EntityEnvelopeEvent(entityId, aie: ActorInteractionEvent) =>
+        toBinaryActorInteraction(entityId, aie)
+
       case EntityEnvelopeEvent(entityId, payload) =>
-        val payloadSerializer: PekkoSerializer = serialization.serializerFor(payload.getClass)
-
-        val payloadManifest: String = payloadSerializer match {
-          case s: SerializerWithStringManifest => s.manifest(payload)
-          case _ =>
-            payload.getClass.getName // Store class name for non-manifest serializers (e.g., protobuf)
-        }
-        val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(payload))
-
-        triedSerializedPayload match {
-          case Success(serializedPayloadBytes) =>
-            val proto = EntityEnvelope(
-              entityId = entityId,
-              payload = ByteString.copyFrom(serializedPayloadBytes),
-              payloadSerializerId = payloadSerializer.identifier,
-              payloadManifest = payloadManifest
-            )
-            proto.toByteArray
-          case Failure(exception) =>
-            throw new IllegalArgumentException(
-              s"Cannot serialize nested payload of type [${payload.getClass.getName}] " +
-                s"using serializerId [${payloadSerializer.identifier}] and manifest [$payloadManifest].",
-              exception
-            )
-        }
+        toBinaryGeneric(entityId, payload)
 
       case other =>
         throw new IllegalArgumentException(
@@ -56,30 +53,83 @@ class EntityEnvelopeSerializer(
         )
     }
 
+  private def toBinaryActorInteraction(entityId: String, aie: ActorInteractionEvent): Array[Byte] =
+    NestedPayloadCodec.encode(serialization, aie.data) match {
+      case Success(encoded) =>
+        val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(aie.actorClassType)
+        val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(aie.eventType)
+        ActorInteraction(
+          tick = aie.tick,
+          lamportTick = aie.lamportTick,
+          actorRefId = aie.actorRefId,
+          shardRefId = aie.shardRefId,
+          actorRef = aie.actorPathRef,
+          actorClassType = actorClassTypeProto,
+          eventType = eventTypeProto,
+          data = ByteString.copyFrom(encoded.bytes),
+          payloadSerializerId = encoded.serializerId,
+          payloadManifest = encoded.manifest,
+          actorType = ActorInteractionCodec.encodeCreationType(aie.actorType),
+          resourceId = aie.resourceId,
+          entityId = entityId,
+          actorClassTypeOverride = actorClassTypeOverride,
+          eventTypeOverride = eventTypeOverride
+        ).toByteArray
+      case Failure(exception) =>
+        throw new IllegalArgumentException(
+          s"Cannot serialize nested payload of type [${aie.data.getClass.getName}] " +
+            s"carried by ActorInteractionEvent for entity [$entityId].",
+          exception
+        )
+    }
+
+  private def toBinaryGeneric(entityId: String, payload: AnyRef): Array[Byte] =
+    NestedPayloadCodec.encode(serialization, payload) match {
+      case Success(encoded) =>
+        EntityEnvelope(
+          entityId = entityId,
+          payload = ByteString.copyFrom(encoded.bytes),
+          payloadSerializerId = encoded.serializerId,
+          payloadManifest = if (encoded.manifest.nonEmpty) encoded.manifest else payload.getClass.getName
+        ).toByteArray
+      case Failure(exception) =>
+        throw new IllegalArgumentException(
+          s"Cannot serialize nested payload of type [${payload.getClass.getName}] " +
+            s"for entity [$entityId].",
+          exception
+        )
+    }
+
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef =
+    manifest match {
+      case m if m == ActorInteractionManifest => fromBinaryActorInteraction(bytes)
+      case _                                   => fromBinaryGeneric(bytes)
+    }
+
+  private def fromBinaryActorInteraction(bytes: Array[Byte]): AnyRef =
     Try {
-      val proto: EntityEnvelope = EntityEnvelope.parseFrom(bytes)
-
-      val payloadBytes: Array[Byte] = proto.payload.toByteArray
-      val payloadSerializerId: Int = proto.payloadSerializerId
-      val payloadManifest: String = proto.payloadManifest
-
-      val triedDeserializedPayload: Try[AnyRef] = serialization.deserialize(
-        payloadBytes,
-        payloadSerializerId,
-        payloadManifest
-      )
-      triedDeserializedPayload match {
+      val proto = ActorInteraction.parseFrom(bytes)
+      NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
-          EntityEnvelopeEvent(proto.entityId, deserializedPayload)
-        case Failure(exception) =>
-          system.log.error(
-            exception,
-            s"[DIAG-SER] DESERIALIZATION FAILED for entity=${proto.entityId} manifest=$payloadManifest serializerId=$payloadSerializerId — ${exception.getClass.getName}: ${exception.getMessage}"
+          EntityEnvelopeEvent(
+            proto.entityId,
+            ActorInteractionEvent(
+              tick = proto.tick,
+              lamportTick = proto.lamportTick,
+              actorRefId = proto.actorRefId,
+              shardRefId = proto.shardRefId,
+              actorPathRef = proto.actorRef,
+              actorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride),
+              eventType = ActorInteractionCodec.decodeEventType(proto.eventType, proto.eventTypeOverride),
+              data = deserializedPayload,
+              actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
+              resourceId = proto.resourceId
+            )
           )
+        case Failure(exception) =>
           throw new IllegalArgumentException(
-            s"Failed to deserialize nested payload using serializerId [$payloadSerializerId] " +
-              s"and manifest [$payloadManifest]. Check Pekko serialization configuration for this payload type.",
+            s"Failed to deserialize nested ActorInteraction payload using serializerId [${proto.payloadSerializerId}] " +
+              s"and manifest [${proto.payloadManifest}]. Check Pekko serialization configuration for this payload type.",
             exception
           )
       }
@@ -88,11 +138,40 @@ class EntityEnvelopeSerializer(
       case Failure(ex) =>
         system.log.error(
           ex,
-          s"[DIAG-SER] ENVELOPE DESERIALIZATION FAILED manifest=$manifest — ${ex.getClass.getName}: ${ex.getMessage}"
+          s"[DIAG-SER] ACTOR-INTERACTION ENVELOPE DESERIALIZATION FAILED — ${ex.getClass.getName}: ${ex.getMessage}"
         )
         throw new IllegalArgumentException(
-          s"Failed to deserialize EntityEnvelopeEvent from binary. " +
-            s"Manifest provided was [$manifest]. Error: ${ex.getMessage}",
+          s"Failed to deserialize EntityEnvelopeEvent(ActorInteractionEvent) from binary. Error: ${ex.getMessage}",
+          ex
+        )
+    }
+
+  private def fromBinaryGeneric(bytes: Array[Byte]): AnyRef =
+    Try {
+      val proto: EntityEnvelope = EntityEnvelope.parseFrom(bytes)
+      NestedPayloadCodec.decode(serialization, proto.payload.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
+        case Success(deserializedPayload) =>
+          EntityEnvelopeEvent(proto.entityId, deserializedPayload)
+        case Failure(exception) =>
+          system.log.error(
+            exception,
+            s"[DIAG-SER] DESERIALIZATION FAILED for entity=${proto.entityId} manifest=${proto.payloadManifest} serializerId=${proto.payloadSerializerId} — ${exception.getClass.getName}: ${exception.getMessage}"
+          )
+          throw new IllegalArgumentException(
+            s"Failed to deserialize nested payload using serializerId [${proto.payloadSerializerId}] " +
+              s"and manifest [${proto.payloadManifest}]. Check Pekko serialization configuration for this payload type.",
+            exception
+          )
+      }
+    } match {
+      case Success(event) => event
+      case Failure(ex) =>
+        system.log.error(
+          ex,
+          s"[DIAG-SER] ENVELOPE DESERIALIZATION FAILED — ${ex.getClass.getName}: ${ex.getMessage}"
+        )
+        throw new IllegalArgumentException(
+          s"Failed to deserialize EntityEnvelopeEvent from binary. Error: ${ex.getMessage}",
           ex
         )
     }
