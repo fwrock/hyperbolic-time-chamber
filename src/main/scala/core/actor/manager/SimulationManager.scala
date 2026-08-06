@@ -16,7 +16,7 @@ import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulation
 import org.interscity.htc.core.actor.manager.load.{LoadDataManager, ProgressiveLoadDataManager}
 import org.interscity.htc.core.actor.manager.load.PostLoadRegistrationManager
 import org.interscity.htc.core.actor.manager.report.ReportManager
-import org.interscity.htc.core.actor.manager.time.GlobalTimeManager
+import org.interscity.htc.core.actor.manager.time.ConservativeGlobalTimeManager
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
@@ -377,7 +377,7 @@ class SimulationManager(
 
   private def createSingletonTimeManager(): ActorRef =
     createSingletonManager(
-      manager = GlobalTimeManager.props(
+      manager = ConservativeGlobalTimeManager.props(
         simulationDuration = configuration.duration,
         extendSimulationIfPendingEventsAfterEnd =
           configuration.extendSimulationIfPendingEventsAfterEnd,
