@@ -11,7 +11,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.{
   MicroLeaveLinkData
 }
 import org.interscity.htc.model.hybrid.entity.state.LinkState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, SimulationModeEnum }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.{ EventTypeEnum, SimulationModeEnum, microMaxAcceleration, microMaxDeceleration }
 import org.interscity.htc.model.hybrid.entity.state.model.{ LinkRegister, VehicleInLane }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.hybrid.util.SpeedUtil
@@ -143,8 +143,8 @@ class LinkVehicleFlowHandler(
       acceleration    = 0.0,
       vehicleLength   = data.actorSize,
       entryTick       = event.tick,
-      maxAcceleration = data.maxAcceleration,
-      maxDeceleration = data.maxDeceleration
+      maxAcceleration = data.actorType.microMaxAcceleration,
+      maxDeceleration = data.actorType.microMaxDeceleration
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>
