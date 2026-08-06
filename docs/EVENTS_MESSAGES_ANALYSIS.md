@@ -398,6 +398,23 @@ tráfego de maior volume absoluto do sistema, mesmo sendo mensagens "pequenas" c
     Não é preciso os dois: qualquer um dos dois profilings, isoladamente, já justificaria reabrir
     isso — são motivações independentes com a mesma solução.
 
+    **Veredito: vale a pena hoje? Não.** Os percentuais são bons (41-58% de heap por instância,
+    43% de rede no teto), mas os valores absolutos, na melhor extrapolação possível sem dado real
+    de escala, são pequenos frente ao sistema como um todo:
+    - Heap: mesmo no cenário mais generoso (5M atores, todos simultaneamente registrados num link
+      — irrealista, população em trânsito é sempre uma fração disso) a economia fica em torno de
+      **~720 MB**. Real, mas o resto do `state` de cada ator (rotas, agenda, histórico) provavelmente
+      pesa mais que esses dois campos de ID somados — não é obviamente "a" fatia do orçamento de
+      heap.
+    - Rede: o ganho só se realiza em deployment multi-nó de verdade — mensagens entre atores no
+      mesmo nó nem passam pelo serializer (Pekko despacha local por referência). Enquanto shard
+      migration estiver desligada e o ambiente for majoritariamente single-node/teste, esse ganho
+      fica adormecido.
+
+    O que muda o veredito não é o percentual — é a *fração do total* que só um profiling real
+    resolve (ver gatilho acima). Até lá: documentado, não priorizado. É o tipo de otimização fácil
+    de justificar no papel e difícil de justificar no orçamento de esforço sem esse dado.
+
     **Inventário do escopo, se/quando for aberto:**
     - **Fronteira do Pekko Cluster Sharding continua exigindo `String`.** `ShardRegion.ExtractEntityId`/
       `ExtractShardId` (`ActorCreatorUtil.scala`) são `PartialFunction[Any, (String, Any)]`/
