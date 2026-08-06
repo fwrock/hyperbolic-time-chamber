@@ -10,7 +10,5 @@ final case class EnterLinkData(
   actorId: String,
   actorType: ActorTypeEnum,
   actorCreationType: CreationTypeEnum,
-  actorSize: Double,
-  maxAcceleration: Double = 2.6,
-  maxDeceleration: Double = 4.5
+  actorSize: Double
 ) extends BaseEventData

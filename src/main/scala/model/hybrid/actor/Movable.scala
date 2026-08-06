@@ -137,9 +137,6 @@ abstract class Movable[T <: MovableState](
     onFinishSpontaneous(None, destruct = true)
   }
 
-  protected def microMaxAcceleration: Double = 2.6
-  protected def microMaxDeceleration: Double = 4.5
-
   /** Release the route queue and current path. Called by [[PrivateVehicle]] when parking between
     * trips so the queue is GCed immediately — the route is recalculated on the next StartTrip.
     */
@@ -175,9 +172,7 @@ abstract class Movable[T <: MovableState](
                 shardId = getShardId,
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed,
-                maxAcceleration = microMaxAcceleration,
-                maxDeceleration = microMaxDeceleration
+                actorCreationType = LoadBalancedDistributed
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed

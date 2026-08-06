@@ -105,13 +105,25 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       resourceId = "res-1"
     )
 
-  private def enterData(carId: String): EnterLinkData =
+  private def enterData(carId: String, actorType: ActorTypeEnum = ActorTypeEnum.Car): EnterLinkData =
     EnterLinkData(
       shardId = "hybrid.actor.Car",
       actorId = carId,
-      actorType = ActorTypeEnum.Car,
+      actorType = actorType,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
       actorSize = 4.5
+    )
+
+  private def newMicroState(linkId: String, length: Double = 300.0, lanes: Int = 2, speedLimit: Double = 13.9, capacity: Double = 20.0): LinkState =
+    LinkState.createMicro(
+      startTick = 0L,
+      from = "n1",
+      to = "n2",
+      length = length,
+      lanes = lanes,
+      speedLimit = speedLimit,
+      capacity = capacity,
+      freeSpeed = speedLimit
     )
 
   private def leaveData(carId: String): LeaveLinkData =
@@ -215,5 +227,35 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val published = DynamicWeightCache.getCost(linkId)
     published shouldBe defined
     published.get.currentSpeed shouldBe f.getState().currentSpeed
+  }
+
+  /** Regression coverage for docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 6:
+    * `EnterLinkData.maxAcceleration`/`maxDeceleration` were removed from the wire; the Link now
+    * derives them from `data.actorType` via `ActorTypeEnum.microMaxAcceleration`/
+    * `microMaxDeceleration` instead. This locks in that the per-vehicle-type MICRO car-following
+    * bounds are unchanged from what each vehicle actor used to send explicitly (formerly
+    * `Movable`/`Bicycle`/`Bus`/`Motorcycle.microMaxAcceleration`/`microMaxDeceleration`
+    * overrides).
+    */
+  "handleEnterLinkMicro" should "seed VehicleInLane.maxAcceleration/maxDeceleration from actorType, not a wire field" in {
+    val cases = Seq(
+      ActorTypeEnum.Car -> (2.6, 4.5),
+      ActorTypeEnum.Bicycle -> (1.0, 3.0),
+      ActorTypeEnum.Bus -> (1.2, 3.5),
+      ActorTypeEnum.Motorcycle -> (3.5, 5.0)
+    )
+
+    cases.foreach {
+      case (actorType, (expectedAcceleration, expectedDeceleration)) =>
+        val linkId = s"link_micro_${actorType}"
+        val f = newFixture(linkId, newMicroState(linkId))
+
+        f.handler.handleEnterLinkMicro(event("veh_1", linkId), enterData("veh_1", actorType))
+
+        val vehicle = f.getState().vehiclesByLane.values.flatten.find(_.actorId == "veh_1")
+        vehicle shouldBe defined
+        vehicle.get.maxAcceleration shouldBe expectedAcceleration
+        vehicle.get.maxDeceleration shouldBe expectedDeceleration
+    }
   }
 }
