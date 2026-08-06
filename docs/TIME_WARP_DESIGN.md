@@ -1,14 +1,16 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-Status as of 2026-08-06: **implementation started**. §8 (RNG determinism), §2
-(Conservative/GlobalTimeManagerBase extraction), §6/§7 (`RollbackHistoryHandler`), and §2/§3/§11
-(`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`/GVT, scoped — the coordinator layer is
-real and tested, but the actual rollback *trigger* is deliberately not wired live yet, see that
-section's log entry) are done — see "Implementation log" below. Anti-messages (§10) are the one
-remaining "Decisions" item with no code yet. This document is the design log/rationale from the
-planning conversation that produced it — update it as decisions are revisited or implementation
-diverges, don't treat it as aspirational once code lands (same convention as
-`docs/CONGESTION_PROPAGATION_DESIGN.md`).
+Status as of 2026-08-06: **all five "Suggested order" steps below have landed, each fully or
+deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
+§6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
+/GVT), and §10 (anti-message cascade math) — see "Implementation log" below for what's real vs.
+scoped in each. **Time Warp is not runnable yet**: the coordinator/rollback/cascade *logic* all
+exists and is tested in isolation, but nothing is wired live into `BaseActor`/`SimulationBaseActor`
+or the wire protocol (`ActorInteractionEvent`) — see §10's log entry for the exact four-item list
+of what's left, which is now the actual remaining work, not a "Suggested order" item. This
+document is the design log/rationale from the planning conversation that produced it — update it
+as decisions are revisited or implementation diverges, don't treat it as aspirational once code
+lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -502,6 +504,68 @@ Wiring the actual rollback trigger — both the LTM-local case above and the
   question below, and doing it before a single one of the three time-manager strategies below it
   is actually safe to select in production would be building a door to a room that isn't finished.
 
+### §10 Anti-messages — done, scoped to the pure cascade math (2026-08-06)
+
+New: `core/actor/rollback/{SentMessage,AntiMessageCascade}.scala`, plus
+`AntiMessageCascadeSpec.scala` (4 tests). Modified: `LoggedEvent.sentMessageIds: Seq[MessageId]`
+(step 3, always empty, never populated) → `LoggedEvent.sentMessages: Seq[SentMessage]` — a real
+fix, not a rename, see below. Full suite (224 tests) passes.
+
+**A gap found and fixed from step 3, before building on top of it**: `MessageId(senderId, tick,
+seq)` alone cannot address an anti-message — it identifies *which* send, not *where it went*.
+Checked `SimulationBaseActor.sendMessageTo`/`sendMessageToShard`/`sendMessageToPool`: the
+destination `entityId`/`shardId` passed in are used only for routing (building the envelope /
+selecting the shard region or pool actor) and are never stored on the outgoing `ActorInteractionEvent`
+itself — that event's own `actorRefId`/`shardRefId` fields are the *sender's* identity, not the
+receiver's. So a bare `MessageId` would leave a future rollback knowing a message needs to be
+retracted with nowhere to send the retraction. Fixed by introducing `SentMessage(messageId,
+receiverId, receiverShardId, receiverActorType)` and changing what `LoggedEvent` carries — free to
+fix now since nothing populated the old field yet (step 3 built the type but never wired a real
+caller).
+
+**What's real and tested**: `AntiMessageCascade.messagesToRetract(undone: Seq[LoggedEvent]):
+Seq[SentMessage]` — the actual "aggressive cancellation" math §10 decided: every message any
+undone event sent comes back, unconditionally, no attempt to detect that a subsequent replay
+reproduces an identical send and skip re-cancelling it (that detection is explicitly the *deferred*
+"lazy cancellation" optimization, not this step). Deliberately not a recursive data structure —
+per §10's own design, the cascade recursion happens *across actors*, not within one computation:
+each `SentMessage` becomes a real anti-message sent to its receiver, which reacts by calling
+`RollbackHistoryHandler.rollbackTo` on itself (the same method straggler-driven rollback uses — no
+separate mechanism), producing the next wave. Termination is guaranteed by the GVT bound, per the
+original design; nothing new needed there.
+
+**What's still not live — the actual wire protocol and trigger, now the sum of everything deferred
+across steps 4 and 5**:
+
+1. **`ActorInteractionEvent` doesn't carry `messageId`/`isAntiMessage` yet.** Deliberately not
+   touched this step: this is the hottest message type in the simulator, with its own custom
+   `EntityEnvelopeSerializer`/`ActorInteractionSerializer` and a *recent, dedicated* commit history
+   on this exact struct (`perf: eliminate redundant shardRefId...`, `perf: remove redundant
+   shardId/actorId...` — see `git log` on this file). Adding two fields without updating that
+   serializer in lockstep (and its `EntityEnvelopeSerializerSpec` wire-shape assertions) would
+   either silently break the optimized wire path or bounce onto slower generic Kryo serialization
+   — exactly the class of regression that recent history was written to prevent. This needs its
+   own careful, serializer-aware pass, not a couple of fields tucked into a broader step.
+2. **`RollbackHistoryHandler` is still not composed into `BaseActor`/`SimulationBaseActor`** — same
+   gap flagged in step 4's log, restated here because step 5 doesn't change it: no
+   `recordProcessedEvent`/`replayEventFn` wiring at the two dispatch points
+   (`handleSpontaneous`/`handleInteractWith`), and (now) no `sendMessageTo` instrumentation to
+   actually populate `LoggedEvent.sentMessages` — the cascade math above has nothing real to
+   consume until that capture exists.
+3. **The straggler → rollback trigger is still not activated** — `OptimisticLocalTimeManager`'s
+   `scheduleEvent` guard and `SimulationBaseActor.handleInteractWith`'s tick-monotonic check both
+   still just absorb the stale-tick condition silently, exactly as documented in step 4's log.
+4. **The anti-message-arrives-before-its-original stash edge case (§10's own "not solved yet, not
+   blocking" note)** — still exactly that: named, not designed, not blocking anything since nothing
+   above sends a real anti-message yet either.
+
+None of 1–4 can be done as a side effect of something else — each is real, separable, live-system
+work against the actor base class or the wire protocol, not additional pure logic buildable in
+isolation the way every other piece of Time Warp so far has been. This is where this design's
+"Suggested order" list of five steps ends; what's left is exactly the four items above, in
+roughly that order (1 and 2 can proceed in parallel; 3 depends on both; 4 depends on 3 landing and
+being observed to actually matter in practice).
+
 ## Open questions / not designed yet
 
 - Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
@@ -531,8 +595,9 @@ Wiring the actual rollback trigger — both the LTM-local case above and the
 | `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala`, `TerminationPlateauDetector.scala`, `LocalVirtualTimeReport.scala` (done) | Pluggable GVT strategy + §11 termination detector; Mattern-style GVT variant still deferred |
 | `core/entity/event/control/execution/LvtReportEvent.scala` (done) | Fire-and-forget LTM→GTM LVT report |
 | `core/actor/rollback/RollbackHistoryHandler.scala` (done, not yet composed into any actor) | Per-actor checkpoint+event-log handler |
-| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala` (done) | Event-log entry format; message identity for anti-messages (fields exist, unpopulated until step 5) |
-| `core/entity/event/ActorInteractionEvent.scala` (modify) | Add `messageId`, `isAntiMessage` fields |
+| `core/actor/rollback/LoggedEvent.scala`, `MessageId.scala`, `SentMessage.scala` (done) | Event-log entry format; message identity + addressing for anti-messages (fields exist, unpopulated — no live capture wired yet) |
+| `core/actor/rollback/AntiMessageCascade.scala` (done) | Pure "which sends must be retracted" math over a rollback's undone events |
+| `core/entity/event/ActorInteractionEvent.scala` (not done — see §10 log's item 1) | Needs `messageId`/`isAntiMessage`; deferred, hot-path wire-format change needing its own serializer-aware pass |
 | `core/enumeration/TimeManagerTypeEnum.scala` (done) | Added `TIME_WARP` — string exists, not yet reachable from config (see §2/§3/§11 log's "Other scope notes") |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
 | `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
@@ -546,10 +611,12 @@ extraction (§2)~~ — done (Local side fully split; Global side partially, see 
 ~~`OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11)~~ — done, scoped: the
 coordinator layer (dispatch-without-barrier, async LVT/GVT reporting, termination-plateau
 detection) is real and tested; the actual straggler → `RollbackHistoryHandler.rollbackTo` trigger
-is not wired live (see that section's log entry for why); (5) anti-messages (§10) — the remaining
-step, and now also where the deferred rollback-trigger wiring from step 4 belongs, since it
-depends on the event log's "what did I send" data already being correct (true since step 3) and
-enabling rollback without anti-messages to cascade-undo sends would be unsafe on its own.
+is not wired live (see that section's log entry for why); (5) ~~anti-messages (§10)~~ — done,
+scoped to the pure cascade math (`AntiMessageCascade`) plus a real fix to step 3's `MessageId`
+(it couldn't address a receiver; now `SentMessage` can) — the wire protocol and live trigger are
+not built, see that section's log entry for the exact four-item remaining list.
 
-**Next up: step (5), anti-messages (§10) — including finally wiring the rollback trigger deferred
-in step 4.**
+**Next up: none of the five suggested steps remain — what's left is §10's four-item "not live yet"
+list** (wire fields + serializer, `BaseActor` integration, activating the straggler trigger, the
+anti-message-before-original stash edge case), which is real system-integration work rather than
+another self-contained design decision to implement.
