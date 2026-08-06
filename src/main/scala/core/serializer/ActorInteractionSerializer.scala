@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.serializer
 
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
+import core.util.StringUtil
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
@@ -39,11 +40,12 @@ class ActorInteractionSerializer(
           case Success(encoded) =>
             val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(actorClassType)
             val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(eventType)
+            val actorRefIdStrippedOpt = ActorInteractionCodec.stripIdPrefix(actorRefId, actorClassType)
             val proto = ActorInteraction(
               tick = tick,
               lamportTick = lamportTick,
-              actorRefId = actorRefId,
-              shardRefId = shardRefId,
+              actorRefId = actorRefIdStrippedOpt.getOrElse(actorRefId),
+              // shardRefId no longer written — receiver derives it from actorClassType, see proto comment.
               actorRef = actorRef,
               actorClassType = actorClassTypeProto,
               eventType = eventTypeProto,
@@ -53,7 +55,8 @@ class ActorInteractionSerializer(
               actorType = ActorInteractionCodec.encodeCreationType(actorType),
               resourceId = resourceId,
               actorClassTypeOverride = actorClassTypeOverride,
-              eventTypeOverride = eventTypeOverride
+              eventTypeOverride = eventTypeOverride,
+              actorRefIdPrefixStripped = actorRefIdStrippedOpt.isDefined
             )
             proto.toByteArray
           case Failure(exception) =>
@@ -76,13 +79,17 @@ class ActorInteractionSerializer(
 
       NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
+          val decodedActorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride)
+          val decodedActorRefId =
+            if (proto.actorRefIdPrefixStripped) ActorInteractionCodec.rebuildIdPrefix(proto.actorRefId, decodedActorClassType)
+            else proto.actorRefId
           ActorInteractionEvent(
             tick = proto.tick,
             lamportTick = proto.lamportTick,
-            actorRefId = proto.actorRefId,
-            shardRefId = proto.shardRefId,
+            actorRefId = decodedActorRefId,
+            shardRefId = StringUtil.getModelClassName(decodedActorClassType),
             actorPathRef = proto.actorRef,
-            actorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride),
+            actorClassType = decodedActorClassType,
             eventType = ActorInteractionCodec.decodeEventType(proto.eventType, proto.eventTypeOverride),
             data = deserializedPayload,
             actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),

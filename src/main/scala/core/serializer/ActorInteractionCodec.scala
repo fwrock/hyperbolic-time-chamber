@@ -101,4 +101,43 @@ private[serializer] object ActorInteractionCodec {
 
   def decodeCreationType(proto: ActorCreationType): String =
     creationTypeFromProto.getOrElse(proto, CreationTypeEnum.LoadBalancedDistributed.toString)
+
+  // ---- entityId/actorRefId "htcaid_<type>_" prefix (see docs/EVENTS_MESSAGES_ANALYSIS.md §7
+  // recommendation 10) --------------------------------------------------------------------------
+
+  private def idPrefix(actorClassTypeValue: String): String = s"htcaid_${actorClassTypeValue.toLowerCase}_"
+
+  /** Strips the `"htcaid_<type>_"` prefix off `id` when it matches the shape expected for
+    * `actorClassTypeValue` (e.g. `"Node"` -> `"htcaid_node_"`). Returns `None` when the id doesn't
+    * match — control-plane ids (`"creator-load-data"`) or a type whose id convention doesn't
+    * follow the lowercase-class-name pattern — in which case the caller must leave the id
+    * untouched on the wire; stripping is best-effort, never a required shape.
+    */
+  def stripIdPrefix(id: String, actorClassTypeValue: String): Option[String] = {
+    val prefix = idPrefix(actorClassTypeValue)
+    if (id != null && id.startsWith(prefix)) Some(id.substring(prefix.length)) else None
+  }
+
+  /** Inverse of [[stripIdPrefix]]: rebuilds the full id from a stripped local id and the
+    * actorClassType that was used to strip it.
+    */
+  def rebuildIdPrefix(localId: String, actorClassTypeValue: String): String =
+    idPrefix(actorClassTypeValue) + localId
+
+  /** Encodes a destination `entityId` for the wire: tries every known `ActorClassType` (the sender
+    * doesn't know the target's type as a typed value, only as the `shardId`/class-name String
+    * param already passed to `sendMessageTo*`) and strips the first matching `"htcaid_<type>_"`
+    * prefix. Returns `(ACTOR_CLASS_UNSPECIFIED, entityId)` unchanged when nothing matches (e.g.
+    * control-plane ids) — see [[stripIdPrefix]].
+    */
+  def encodeEntityIdPrefix(entityId: String): (ActorClassType, String) =
+    actorClassTypeToProto.keys.iterator
+      .flatMap(k => stripIdPrefix(entityId, k).map(local => (actorClassTypeToProto(k), local)))
+      .nextOption()
+      .getOrElse((ActorClassType.ACTOR_CLASS_UNSPECIFIED, entityId))
+
+  /** Inverse of [[encodeEntityIdPrefix]]. */
+  def decodeEntityIdPrefix(proto: ActorClassType, localOrFullId: String): String =
+    if (proto == ActorClassType.ACTOR_CLASS_UNSPECIFIED) localOrFullId
+    else rebuildIdPrefix(localOrFullId, actorClassTypeFromProto.getOrElse(proto, ""))
 }

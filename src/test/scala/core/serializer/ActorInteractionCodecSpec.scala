@@ -84,4 +84,39 @@ class ActorInteractionCodecSpec extends AnyFlatSpec with Matchers {
   it should "map the default CreationTypeEnum (LoadBalancedDistributed) to the proto3 zero-value" in {
     ActorInteractionCodec.encodeCreationType(CreationTypeEnum.LoadBalancedDistributed.toString).value shouldBe 0
   }
+
+  "stripIdPrefix/rebuildIdPrefix" should "strip and rebuild the htcaid_<type>_ prefix for every known actor class" in {
+    knownActorClassTypes.foreach { value =>
+      val id = s"htcaid_${value.toLowerCase}_12345"
+      val local = ActorInteractionCodec.stripIdPrefix(id, value)
+      local shouldBe Some("12345")
+      ActorInteractionCodec.rebuildIdPrefix(local.get, value) shouldBe id
+    }
+  }
+
+  it should "not strip an id that doesn't match the expected type's prefix" in {
+    ActorInteractionCodec.stripIdPrefix("creator-load-data", "Car") shouldBe None
+    ActorInteractionCodec.stripIdPrefix("htcaid_link_9001", "Car") shouldBe None
+  }
+
+  it should "preserve a local id that itself contains underscores (e.g. htcaid_car_42_v_car)" in {
+    ActorInteractionCodec.stripIdPrefix("htcaid_car_42_v_car", "Car") shouldBe Some("42_v_car")
+  }
+
+  "encodeEntityIdPrefix/decodeEntityIdPrefix" should "round-trip a destination id whose type is unknown to the sender ahead of time" in {
+    knownActorClassTypes.foreach { value =>
+      val id = s"htcaid_${value.toLowerCase}_9001"
+      val (proto, wireId) = ActorInteractionCodec.encodeEntityIdPrefix(id)
+      proto should not be ActorClassType.ACTOR_CLASS_UNSPECIFIED
+      wireId shouldBe "9001"
+      ActorInteractionCodec.decodeEntityIdPrefix(proto, wireId) shouldBe id
+    }
+  }
+
+  it should "leave a non-matching entityId untouched and mark it UNSPECIFIED" in {
+    val (proto, wireId) = ActorInteractionCodec.encodeEntityIdPrefix("creator-load-data")
+    proto shouldBe ActorClassType.ACTOR_CLASS_UNSPECIFIED
+    wireId shouldBe "creator-load-data"
+    ActorInteractionCodec.decodeEntityIdPrefix(proto, wireId) shouldBe "creator-load-data"
+  }
 }

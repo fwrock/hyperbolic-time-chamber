@@ -102,6 +102,11 @@ message ActorInteraction{
   uint64 tick = 1;
   uint64 lamportTick = 2;
   string actorRefId = 3;
+  // No longer populated on the wire: it's always derivable from actorClassType
+  // (StringUtil.getModelClassName applied to the decoded actorClassType string reconstructs the
+  // sender's own FQCN, which is exactly what this field used to carry — see
+  // docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 9). Field kept declared for wire-shape
+  // stability; readers must derive this value instead of reading it.
   string shardRefId = 4;
   string actorRef = 5;
   ActorClassType actorClassType = 6;
@@ -119,4 +124,18 @@ message ActorInteraction{
   // Only populated when actorClassType == ACTOR_CLASS_OTHER / eventType == EVENT_TYPE_OTHER.
   string actorClassTypeOverride = 14;
   string eventTypeOverride = 15;
+  // Destination entity's actor class (the `shardId`/target-class param already passed to
+  // sendMessageTo* by the caller), used to strip the redundant "htcaid_<type>_" prefix off
+  // `entityId` before writing it — the receiver reconstructs the prefix from this enum instead.
+  // UNSPECIFIED means entityId didn't match the expected "htcaid_<type>_" shape (e.g.
+  // control-plane ids like "creator-load-data") and was left untouched on the wire. Never OTHER:
+  // this is only ever assigned by matching against the known ActorClassType set, not decoded from
+  // a free-form caller string, so there's nothing to fall back for. See
+  // docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 10.
+  ActorClassType entityClassType = 16;
+  // True when actorRefId had its "htcaid_<type>_" prefix stripped (type = the sender's own
+  // actorClassType, field 6) — needed because, unlike entityId/entityClassType, actorRefId has no
+  // spare enum slot to double as a strip/no-strip signal (its type is always actorClassType
+  // itself). Default false = actorRefId is verbatim on the wire.
+  bool actorRefIdPrefixStripped = 17;
 }

@@ -1,6 +1,8 @@
 package org.interscity.htc
 package core.serializer
 
+import core.util.StringUtil
+
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
 import org.apache.pekko.serialization.{ SerializationExtension, SerializerWithStringManifest }
@@ -58,11 +60,13 @@ class EntityEnvelopeSerializer(
       case Success(encoded) =>
         val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(aie.actorClassType)
         val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(aie.eventType)
+        val (entityClassTypeProto, wireEntityId) = ActorInteractionCodec.encodeEntityIdPrefix(entityId)
+        val actorRefIdStrippedOpt = ActorInteractionCodec.stripIdPrefix(aie.actorRefId, aie.actorClassType)
         ActorInteraction(
           tick = aie.tick,
           lamportTick = aie.lamportTick,
-          actorRefId = aie.actorRefId,
-          shardRefId = aie.shardRefId,
+          actorRefId = actorRefIdStrippedOpt.getOrElse(aie.actorRefId),
+          // shardRefId no longer written — receiver derives it from actorClassType, see proto comment.
           actorRef = aie.actorPathRef,
           actorClassType = actorClassTypeProto,
           eventType = eventTypeProto,
@@ -71,9 +75,11 @@ class EntityEnvelopeSerializer(
           payloadManifest = encoded.manifest,
           actorType = ActorInteractionCodec.encodeCreationType(aie.actorType),
           resourceId = aie.resourceId,
-          entityId = entityId,
+          entityId = wireEntityId,
           actorClassTypeOverride = actorClassTypeOverride,
-          eventTypeOverride = eventTypeOverride
+          eventTypeOverride = eventTypeOverride,
+          entityClassType = entityClassTypeProto,
+          actorRefIdPrefixStripped = actorRefIdStrippedOpt.isDefined
         ).toByteArray
       case Failure(exception) =>
         throw new IllegalArgumentException(
@@ -111,15 +117,19 @@ class EntityEnvelopeSerializer(
       val proto = ActorInteraction.parseFrom(bytes)
       NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
+          val decodedActorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride)
+          val decodedActorRefId =
+            if (proto.actorRefIdPrefixStripped) ActorInteractionCodec.rebuildIdPrefix(proto.actorRefId, decodedActorClassType)
+            else proto.actorRefId
           EntityEnvelopeEvent(
-            proto.entityId,
+            ActorInteractionCodec.decodeEntityIdPrefix(proto.entityClassType, proto.entityId),
             ActorInteractionEvent(
               tick = proto.tick,
               lamportTick = proto.lamportTick,
-              actorRefId = proto.actorRefId,
-              shardRefId = proto.shardRefId,
+              actorRefId = decodedActorRefId,
+              shardRefId = StringUtil.getModelClassName(decodedActorClassType),
               actorPathRef = proto.actorRef,
-              actorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride),
+              actorClassType = decodedActorClassType,
               eventType = ActorInteractionCodec.decodeEventType(proto.eventType, proto.eventTypeOverride),
               data = deserializedPayload,
               actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
