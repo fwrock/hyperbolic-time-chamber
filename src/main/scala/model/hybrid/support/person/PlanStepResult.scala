@@ -31,10 +31,4 @@ object PlanStepResult {
   /** The plan has nothing left to run — schedule complete for the day. */
   final case class Finished(state: PersonState) extends PlanStepResult
 
-  // No `Stuck`/permanently-unscheduled case: a `PendingDecision` with no viable journey (unknown
-  // strategyId, or `NoViableJourney`) is handled the same way as any other leg-initiation failure
-  // — see `PersonPlanManager.abortPendingDecision` — aborting just that trip and resuming at the
-  // next `Activity`, always producing one of the cases above. An earlier revision of this phase
-  // had a dedicated `Stuck` case for that failure; it was removed once the user decided to
-  // unify the two failure policies, since no code path produces it anymore.
 }

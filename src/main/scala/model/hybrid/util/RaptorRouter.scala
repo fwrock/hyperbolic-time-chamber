@@ -138,8 +138,6 @@ object RaptorRouter {
     val tau    = mutable.Map[String, Int]().withDefaultValue(INF)
     val parent = mutable.Map[String, Parent]()
 
-    // Seed: for each access stop, τ = walkTime(origin→stop) + expected wait for first vehicle.
-    // We use headway/2 as the expected wait. If multiple routes serve the stop, take the minimum.
     val marked = mutable.Set[String]()
 
     for ((stop, distM) <- accessStops) {

@@ -59,10 +59,6 @@ class BusSignalHandler(
                     RequestLinkAccessData(targetLinkId = linkId),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
-                // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
-                // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
-                // reply as an interaction event; handleLinkAccess re-registers via
-                // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
                 onFinishSpontaneousFn(None)
                 case null =>
                   logWarnFn("No next link available")
@@ -107,16 +103,11 @@ class BusSignalHandler(
         "signal_wait"
       )
 
-      // See CarSignalHandler.handleLinkAccess for why this needs re-verification: capacity
-      // wasn't checked for this Red reply (only matters once Green), so it could still be Full
-      // once this deterministic wait ends.
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(waitUntilTick))
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
-      // Node has buffered this bus (FIFO) for the target link's capacity. Stay genuinely
-      // deregistered and wait purely for the later, unsolicited LinkAccessData grant.
       state.status = WaitingCapacity
     } else {
       // Green + Available: already fully verified at reply time, no re-verification needed.

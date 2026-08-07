@@ -5,10 +5,6 @@ ThisBuild / version := "2.0.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
-// Makes non-exhaustive `match` on sealed traits/enums a compile error rather than a warning.
-// This is the type-level guarantee the plan/cursor model (model.hybrid.entity.state.plan) relies
-// on: exhaustiveness over AdvanceResult/PlanElement must fail the build, not just warn.
-// Scoped to this one warning category so it doesn't turn unrelated existing warnings fatal.
 ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
@@ -146,15 +142,9 @@ lazy val root = (project in file("."))
       // Test
       "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
       "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
-      // Classic TestActorRef — needed to construct/inspect classic (non-typed) actors like
-      // Car/Person directly in unit tests without a full cluster-sharded ActorSystem.
       "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test,
     ),
     
-    // No dependency overrides needed currently
-    // pekko-discovery-kubernetes-api transitively pulls an older pekko-discovery than the rest of
-    // the Pekko modules (1.5.0); left unpinned this becomes a hard startup failure
-    // (fail-mixed-versions) for any ActorSystem created in tests, not just a warning.
     dependencyOverrides ++= Seq(
       "org.apache.pekko" %% "pekko-discovery" % pekkoVersion
     ),
@@ -166,9 +156,4 @@ lazy val root = (project in file("."))
       scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
     ),
     PB.protocVersion := "4.30.2"
-    
-    // TODO: Re-enable when Avro plugin issue is resolved
-    // Avro configuration
-    // Compile / avroSource := baseDirectory.value / "src" / "main" / "avro",
-    // Compile / avroGenerate / target := (Compile / sourceManaged).value / "avro"
   )

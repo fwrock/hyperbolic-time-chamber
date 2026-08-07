@@ -151,14 +151,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "document that signalWaitingCounts has no per-request decrement: N distinct RequestLinkAccessData for the same Red link inflate queuePosition to N-1, N in total" in {
-    // This is the load-bearing invariant behind the vehicle-side fix: signalWaitingCounts only
-    // ever resets in bulk on Green (see handleReceiveSignalChangeStatus below), never per
-    // request. Before the fix, WaitingSignalState retried by resending RequestLinkAccessData
-    // every tick a reply hadn't arrived — each resend landed here and permanently inflated this
-    // count, corrupting queuePosition for the retrying car AND every car queued behind it. The
-    // fix stops the vehicle from ever sending more than one request per approach; this test
-    // exists so that if that discipline is ever violated again, the resulting queuePosition
-    // inflation is visible and expected, not a mystery to re-diagnose from scratch.
     val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
     val signals = mutable.Map("signal_1" -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
     val waitingCounts = mutable.Map.empty[String, Int]
@@ -203,12 +195,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "queue vehicles FIFO by arrival order regardless of which approach link/shard they requested from -- fairness across competing movements comes for free from a single per-destination-link buffer, not from any per-origin logic" in {
-    // See docs/CONGESTION_PROPAGATION_DESIGN.md's Fairness section: capacityWaitQueue is keyed
-    // only by targetLinkId, never by the requester's origin link/shard -- two cars converging on
-    // the same destination link from different approaches are ordered purely by request arrival
-    // order, with no special-casing needed. Priority/right-of-way between movements remains
-    // explicitly deferred; this test locks in that plain FIFO fairness (not starvation, not
-    // origin-based bias) already holds without it.
     val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
     val signals = mutable.Map("signal_1" -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
     val availableCapacity = mutable.Map("link_ab" -> 0)
@@ -220,8 +206,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     def requestFrom(carId: String, shardRefId: String): ActorInteractionEvent =
       requestEvent(carId).copy(shardRefId = shardRefId, actorClassType = shardRefId)
 
-    // car_north approaches via a different shard/actor class than car_west, but both want the
-    // same destination link.
+
     handler.handleRequestLinkAccess(requestFrom("car_north", "hybrid.actor.Car"), RequestLinkAccessData(targetLinkId = "link_ab"))
     handler.handleRequestLinkAccess(requestFrom("car_west", "hybrid.actor.Bus"), RequestLinkAccessData(targetLinkId = "link_ab"))
 
@@ -230,8 +215,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       PendingLinkAccessRequest(actorRefId = "car_west", shardRefId = "hybrid.actor.Bus")
     )
 
-    // One slot frees -- the FIRST arrival (car_north) is granted, not car_west, even though
-    // nothing in the request distinguished their approach direction.
     handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = "link_ab", freedCount = 1))
 
     sent.last shouldBe (("car_north", "hybrid.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
@@ -241,11 +224,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
   // ── Capacity: cancellation (destroyed while buffered) ────────────────────────────────────
 
   "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
-    // Regression coverage for the leak this closes: a car destroyed while WaitingCapacity
-    // (buffered, never granted) used to leave a stale PendingLinkAccessRequest in the queue
-    // forever -- eventually reaching the front and being granted to a dead actor (a dead-letter),
-    // silently losing that capacity slot for the rest of the simulation, since no LeaveLinkData
-    // would ever arrive to compensate. See docs/CONGESTION_PROPAGATION_DESIGN.md.
     val connections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
     val signals = mutable.Map("signal_1" -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
     val availableCapacity = mutable.Map("link_ab" -> 0)
@@ -431,14 +409,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     waitingCounts("link_ab") shouldBe 4
   }
 
-  // ── Regression: docs/KNOWN_GAPS.md "NodeEventHandler Notifies the Wrong Link on Signal
-  // Phase Change" — the connections-keying fix (approach edge -> outgoing edge) that fixed
-  // handleRequestLinkAccess's lookup broke this handler's own use of the same map: it needs the
-  // approach link (what a MICRO vehicle is physically traveling ON), not the outgoing link,
-  // or the virtual stopped leader from DefaultMicroSimulationStrategy's `signalAtExit` gets
-  // planted on the wrong link, braking vehicles already past the intersection mid-transit on a
-  // downstream link with no signal of its own. ─────────────────────────────────────────────────
-
   it should "notify the APPROACH link (from approachConnections), not the outgoing link (from connections), of a phase change" in {
     val connections = mutable.Map("link_bc" -> Identify(id = "signal_1")) // outgoing edge
     val approachConnections = mutable.Map("link_ab" -> Identify(id = "signal_1")) // approach edge
@@ -467,9 +437,6 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "still drain signalWaitingCounts/capacityWaitQueue by the OUTGOING link (connections) even though notification uses approachConnections" in {
-    // The two maps serve genuinely different consumers (queue/capacity bookkeeping mirrors
-    // handleRequestLinkAccess's outgoing-link keying; MICRO notification needs the approach
-    // link) -- this test locks in that the fix didn't accidentally collapse them onto one.
     val connections = mutable.Map("link_bc" -> Identify(id = "signal_1"))
     val approachConnections = mutable.Map("link_ab" -> Identify(id = "signal_1"))
     val signals = mutable.Map.empty[String, SignalState]

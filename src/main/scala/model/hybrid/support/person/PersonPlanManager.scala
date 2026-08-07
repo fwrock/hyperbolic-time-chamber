@@ -105,10 +105,6 @@ class PersonPlanManager(
     activity: Activity,
     currentTick: Tick
   ): PlanStepResult = {
-    // Flush trip bookkeeping (completedTrips + accumulated distance) exactly once, when the
-    // contiguous leg run that led here actually finishes. A plan that starts with back-to-back
-    // Activities (no legs at all — e.g. a same-node "instant" transition) never enters Traveling,
-    // so this is a no-op in that case.
     val baseState = state.tripExecution match {
       case t: TripExecutionState.Traveling => state.completeTrip(t.accumulatedDistance)
       case TripExecutionState.Idle         => state
@@ -179,8 +175,6 @@ class PersonPlanManager(
           replanStrategyId = replanStrategyId,
           replanAllowedModes = replanAllowedModes
         )
-        // Vehicle controls timing; the vehicle actor guarantees a TripCompleted notification on
-        // its own destruction, so Person yields the Time Manager (None) until then.
         LegStarted(state.copy(cursor = next, tripExecution = traveling), None)
 
       case t: TransitLeg =>
@@ -205,8 +199,6 @@ class PersonPlanManager(
 
     ModeDecisionEngineRegistry.get(request.strategyId) match {
       case None =>
-        // Should not happen if ScenarioLoadValidator.validateModeDecisionEngines ran at load time —
-        // kept as a defensive branch, not a silently-swallowed error.
         val reason = s"unknown strategyId ${request.strategyId}"
         logWarn(s"$personId: unknown mode-decision strategyId '${request.strategyId}' — should have failed scenario load validation")
         abortPendingDecision(pr, state, currentTick, reason)
@@ -223,12 +215,6 @@ class PersonPlanManager(
             val expanded = PlanCursor.expandPending(pr, legs)
             step(state.copy(cursor = expanded), currentTick, pendingHint = Some((request.strategyId, request.allowedModes)))
           case Left(NoViableJourney(reason)) =>
-            // Unified with the PT-timeout replan failure policy (see replanAfterPTTimeout): a
-            // PendingDecision with no viable journey aborts just this trip and resumes at the
-            // next Activity, exactly like any other leg-initiation failure — it does not leave
-            // the person permanently unscheduled. (Earlier revisions of this method treated the
-            // two as different failure modes; that asymmetry was a deliberate follow-up question
-            // in the phase brief, since resolved by the user in favor of this uniform behavior.)
             logWarn(s"$personId: no viable journey for pending decision ($reason) — aborting this trip, resuming at the next activity")
             abortPendingDecision(pr, state, currentTick, reason)
         }

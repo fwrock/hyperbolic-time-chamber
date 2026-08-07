@@ -46,15 +46,6 @@ class BusMicroHandler(
 
     // speedLimit from LinkState is stored in km/h; micro physics runs in m/s
     val speedLimitMs = data.speedLimit / 3.6
-    // `state.microState` is always None here: `handleMicroLeaveLink` (below) calls
-    // `state.deactivateMicroMode()` on every link exit, so the `.map(_.velocity)` branch can
-    // never fire -- it silently discarded the bus's real velocity on every micro-link entry and
-    // fell back to a flat `speedLimit * 0.7` regardless of whether the bus had just been
-    // cruising at the end of the previous micro link or had never moved at all. Use
-    // `journeyReporter.sumoArrivalSpeed` instead (0.0 by default, matching a genuinely fresh
-    // trip; kept current by `handleMicroUpdate`/`handleMicroLeaveLink` on every sub-tick/exit) so
-    // chained micro-links carry velocity over correctly. Same fix as CarMicroHandler's, see
-    // docs/KNOWN_GAPS.md.
     val initialMicroState = MicroBusState(
       positionInLink  = 0.0,
       velocity        = journeyReporter.sumoArrivalSpeed,

@@ -44,24 +44,6 @@ object CityMapUtil {
   lazy val nodesById: Map[String, NodeGraph] = loadedCityData.nodesById
   lazy val edgeLabelsById: Map[String, EdgeGraph] = loadedCityData.edgeLabelsById
 
-  // -------------------------------------------------------------------------
-  // Feature flags (read once, with sensible defaults)
-  //
-  // Settings priority: SimulatorSettingsRegistry > env var > default.
-  //
-  //   - htc.mobility.enable-pedestrian-routing  (default: true)
-  //       If false, pedestrian indexes are NEVER built — saves ~one full
-  //       CompactGraph (bidirectional ≈ 2× directed) + ALT landmarks +
-  //       compact ALT. For purely vehicular scenarios with no Person actors
-  //       walking, set to false to drop several GBs of baseline RAM.
-  //
-  //   - htc.mobility.enable-ch                  (default: false)
-  //       If false, contraction-hierarchies index is never built (calls to
-  //       calcRouteCH* will throw / log). Default is false because production
-  //       routing uses calcRouteCompact (CompactGraph + ALT) — CH is opt-in.
-  //
-  //   - htc.mobility.landmark-count             (default: 16)
-  // -------------------------------------------------------------------------
   private lazy val enablePedestrianRouting: Boolean =
     SimulatorSettingsRegistry
       .get("htc.mobility.enable-pedestrian-routing")
@@ -84,10 +66,6 @@ object CityMapUtil {
       .flatMap(s => scala.util.Try(s.toInt).toOption)
       .getOrElse(16)
 
-  // -------------------------------------------------------------------------
-  // Indexes that stay resident for the whole simulation lifetime.
-  // Kept as lazy vals — no need to release them.
-  // -------------------------------------------------------------------------
 
   /** Compact CSR representation of the city graph.
     *
@@ -147,20 +125,6 @@ object CityMapUtil {
     */
   lazy val chIndex: ContractionHierarchiesIndex[NodeGraph, Double, EdgeGraph] =
     cityMap.buildContractionHierarchies
-
-  // -------------------------------------------------------------------------
-  // Transient indexes — heavy Map-based structures used only to BUILD the
-  // compact array-based versions. After warmUp() they are released by
-  // releaseTransientIndexes() to free hundreds of MBs / several GBs of heap.
-  //
-  // Access patterns:
-  //   - compactAltIndex / compactAltIndexPedestrian are kept resident and
-  //     used in production routing (calcRouteCompact, calcRouteCompactWalking).
-  //   - altIndex / altIndexPedestrian are only needed to construct the
-  //     compact versions and for the rarely-used calcRouteALT (which falls
-  //     back to a rebuild if released).
-  //   - pedestrianCityMap is only needed to construct altIndexPedestrian.
-  // -------------------------------------------------------------------------
 
   @volatile private var _altIndex: LandmarkIndex[NodeGraph, Double, EdgeGraph] = null
   @volatile private var _altIndexPedestrian: LandmarkIndex[NodeGraph, Double, EdgeGraph] = null

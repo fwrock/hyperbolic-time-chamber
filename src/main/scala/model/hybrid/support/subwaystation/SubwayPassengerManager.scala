@@ -20,15 +20,6 @@ class SubwayPassengerManager(
   private def state: SubwayStationState = getStateFn()
 
   def handleRegisterPassenger(event: ActorInteractionEvent, line: String): Unit = {
-    // `Identify(id, resourceId, classType, actorRef, actorType, ...)` (protobuf field order) was
-    // being called with 3 positional args assuming an (id, classType, actorRef) shape — that
-    // silently put `actorClassType` into `resourceId` and `actorPathRef` (the person's own
-    // entity id in this codebase, not a real Pekko path) into `classType`. Every later
-    // `sendMessageFn(person.id, person.classType, ...)` to that passenger then resolved to a
-    // cluster-sharding lookup for a nonexistent shard type equal to the person's id, throwing
-    // `IllegalStateException: Shard type [...] must be started first` and leaving the boarded
-    // passenger's PT wait unresolved for the rest of the simulation (see
-    // `BusStop.handleRegisterPassenger`, which already uses this correct helper).
     val person = event.toIdentity
     state.people.get(line) match {
       case Some(people) =>

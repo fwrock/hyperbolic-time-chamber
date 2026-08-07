@@ -46,11 +46,6 @@ class Car(
     copied
   }
 
-  /** Wires PrivateVehicle's reply-linkage fields (ownerPersonRef, tripOrigin, etc. — see
-    * docs/KNOWN_GAPS.md "Shard Migration Silently Drops Actor-Local Reply State") into the
-    * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
-    * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
-    */
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
     captureMigrationFields(super.buildMigrationSnapshot())
 
@@ -68,9 +63,6 @@ class Car(
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private var signalWaitUntilTick: Option[Tick] = None
-  // Set when a WaitingSignal wait was scheduled from a Red reply (capacity wasn't checked then —
-  // only matters once Green). Cleared (false) when scheduled from a direct Green/capacity-granted
-  // reply, which was already fully verified. Consumed by actSpontaneous's WaitingSignal branch.
   private var signalWaitNeedsReverify: Boolean = false
 
   private lazy val journeyReporter = new CarJourneyReporter(
@@ -278,9 +270,6 @@ class Car(
           case _ =>
             signalWaitUntilTick = None
             if (signalWaitNeedsReverify) {
-              // This wait came from a Red reply — capacity wasn't checked then (only matters
-              // once Green), so re-verify signal + capacity together via a fresh request rather
-              // than proceeding unilaterally. See CarSignalHandler.handleLinkAccess.
               signalWaitNeedsReverify = false
               requestSignalState()
             } else {
@@ -289,19 +278,10 @@ class Car(
         }
 
       case WaitingSignalState =>
-        // Should never actually fire: requestSignalState() no longer calls
-        // onFinishSpontaneous after sending RequestLinkAccessData, so the car has no
-        // self-scheduled wake while waiting — only handleLinkAccess (triggered by the
-        // Node's reply as an interaction event) resolves this status. Reaching this branch
-        // means a SpontaneousEvent was dispatched despite that; do not resend the request
-        // (that's what corrupted NodeState.signalWaitingCounts before), just log and wait.
         logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
       case WaitingCapacity =>
-        // Should never actually fire, same reasoning as WaitingSignalState: this car has no
-        // self-scheduled wake while buffered at the Node for downstream link capacity — only a
-        // later, unsolicited LinkAccessData grant (handled via handleLinkAccess) resolves it.
         logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
@@ -493,7 +473,6 @@ class Car(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    // Capture entry tick before linkHandler resets it so emission can compute travel time.
     val entryTick = linkEntryTick
     linkHandler.handleLeaveLink(event.actorRefId, data, state)
     entryTick.foreach { entry =>
@@ -523,9 +502,6 @@ class Car(
   override def onDestruct(event: DestructEvent): Unit = {
     if (state == null) return
 
-    // Before any state clearing below (which erases the link/node info this needs): if this
-    // car was buffered at a Node for downstream link capacity and never got granted, tell the
-    // Node so it doesn't eventually waste a real slot on a dead actor.
     signalHandler.cancelPendingCapacityRequest(state)
 
     if (state.status != Finished) {
@@ -533,7 +509,7 @@ class Car(
         .orElse(state.movableCurrentPath.map(_._2))
         .getOrElse(state.origin)
       journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
-      onFinishPrivateVehicle(fallbackNode)   // notify Person — mirrors Bicycle/Motorcycle
+      onFinishPrivateVehicle(fallbackNode)
     }
     state.movableBestRoute = None
     state.movableCurrentPath = None

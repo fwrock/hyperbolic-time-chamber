@@ -29,14 +29,6 @@ class TrafficSignalPhaseHandler(
   def handlePhaseTransition(currentTick: Tick): Unit = {
     val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
 
-    // Next tick at which ANY phase's state can change: the earliest upcoming transition
-    // boundary (a phase's greenStart or greenStart + greenDuration) across all phases,
-    // wrapping to the next cycle if a boundary has already passed within this one.
-    // The previous formula (`((ticksSinceStart / cycleDuration) + 1) * cycleDuration`) always
-    // jumped to the start of the next FULL cycle, which lands back at cycle-offset 0 — inside
-    // the Green window for a phase with greenStart=0 — so the Red transition at
-    // greenStart + greenDuration was never reached, and the signal reported Green forever
-    // after tick 0. See docs/KNOWN_GAPS.md.
     val transitionPoints = state.phases.flatMap(p => Seq(p.greenStart, p.greenStart + p.greenDuration))
     val nextTickTime = currentTick + transitionPoints.map {
       point =>

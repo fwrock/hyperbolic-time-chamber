@@ -97,8 +97,6 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
     stopType       = "bus",
     lines          = List("L2")
   )
-  // Two distinct stops at the SAME physical interchange but different nodeIds, so a transfer
-  // between them is a genuine (short) walk, not a same-node no-op.
   private val transferAlightStop = transferStop
   private val transferBoardStop = transferStop.copy(
     id      = "stop-transfer-2",

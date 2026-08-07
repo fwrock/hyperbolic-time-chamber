@@ -37,22 +37,12 @@ import scala.compiletime.uninitialized
   */
 class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
-  // Plain local provider — the project's default application.conf enables cluster/remoting
-  // (Artery on a fixed port), which isn't needed here and would collide across parallel suites.
-  // Created in beforeAll (not a field initializer): SBT/ScalaTest instantiate a Suite class an
-  // extra time purely for test-name discovery, and an ActorSystem built as part of that throwaway
-  // instantiation would double-create (and double-bind ports / double-run the mixed-version
-  // check).
   private var _system: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
   override def beforeAll(): Unit =
     _system = ActorSystem(
       "PrivateVehicleMigrationSnapshotSpec",
-      // ActorSystem(name, config) does NOT auto-load application.conf the way ActorSystem(name)
-      // does — only library reference.confs — so the project's own application.conf (which
-      // configures the in-mem persistence journal Car/Person need as PersistentActors) must be
-      // pulled in explicitly via ConfigFactory.load() as the fallback.
       ConfigFactory
         .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
         .withFallback(ConfigFactory.load())
@@ -161,8 +151,6 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
 
     val snapshot = sourceCar.testBuildMigrationSnapshot()
 
-    // Simulates rehydration on the destination node after a shard migration: a brand-new actor
-    // instance restored purely from the snapshot, as BaseActor.restoreMigrationState does.
     val rehydratedCar = newTestCar("car-3")
     rehydratedCar.testApplyMigrationSnapshot(snapshot)
 
@@ -171,9 +159,6 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     rehydratedCar.testGetTripStartTick shouldBe Some(5L)
     rehydratedCar.testIsPersonCentric shouldBe true
 
-    // Round-trip fidelity: rebuilding a snapshot from the rehydrated actor must reproduce the
-    // original owner reply-linkage — this is what makes reportTripCompletion a real send instead
-    // of a silent no-op (PrivateVehicle.scala:205-206) after migration.
     val rebuilt = rehydratedCar.testBuildMigrationSnapshot()
     rebuilt.ownerPersonRefId shouldBe "person-42"
     rebuilt.ownerPersonRefClassType shouldBe "hybrid.actor.Person"
@@ -196,12 +181,7 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     car.testSetState(freshParkedState())
     val (event, data) = startTripEvent("person-7", "hybrid.actor.Person")
     car.testHandleStartTrip(event, data)
-    // handleStartTrip left state.status == Start (not Parked), so the vehicle is "mid-trip" —
-    // handlePersonScheduleComplete (below) must set destroyAfterNextPark instead of destructing.
 
-    // Owner's schedule completed while this vehicle is still mid-trip. handlePersonScheduleComplete
-    // is private to the trait; drive it through the public event API instead, exactly as the real
-    // Person -> Car message path does.
     car.actInteractWith(
       ActorInteractionEvent(
         tick = 6L,
