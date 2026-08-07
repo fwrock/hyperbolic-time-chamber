@@ -1,23 +1,32 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-## Current status (2026-08-07, end of session): ready for the end-to-end scenario run
+## Current status (2026-08-07, end of session): validated end-to-end against a real cluster
 
-Every piece of Time Warp this document describes — the generic infrastructure (§2/§3/§6/§7/§8/§10/
-§11: `RollbackHistoryHandler`, `OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`, GVT,
-anti-messages, config selection) **and** the `model/hybrid` actors it actually runs against — is now
-implemented, unit-tested, and confirmed against both of Time Warp's correctness invariants
-(determinism, checkpoint completeness). Three rounds of audit this session (model-level determinism,
-checkpoint completeness across six actor types, and the TM-communication-protocol layer) each found
-and closed real gaps that the infrastructure-only work in the sections below could not have
-surfaced by itself — see "Model-level compatibility gap," "Checkpoint-completeness gap," and
-"TM-communication-protocol audit" further down, and their implementation log entries, for the full
-history of what was found and fixed. Full suite: 276 tests, 57 suites, 0 failures.
+Time Warp has now been run for real — `Simulation.timeManagerType = "time-warp"` against a live
+local cluster (Redpanda + Redis + the app in Docker), a scenario touching every actor type Time Warp
+participates in — and it **terminated correctly**: `OptimisticGlobalTimeManager` logged `Optimistic
+simulation terminated at GVT=-100`, broadcast `StopSimulationEvent`, and began `CoordinatedShutdown`.
+This followed four rounds of audit (model-level determinism, checkpoint completeness across six actor
+types, the TM-communication-protocol layer, and finally the end-to-end run itself), each finding and
+closing real gaps the previous rounds' unit tests — however thorough — could not have surfaced by
+themselves. See "Model-level compatibility gap," "Checkpoint-completeness gap," "TM-communication-
+protocol audit," and "First real end-to-end scenario run under `TIME_WARP`" further down for the full
+history. Full suite: 278 tests, 57 suites, 0 failures.
 
-**Nothing model-level or infrastructure-level is known to block the end-to-end run anymore.** The
-one remaining gap is that none of it has actually been exercised against a live cluster with real
-multi-actor traffic yet — see "Next steps" item 1. Budget for that run to surface at least one more
-gap the same way the progressive-loading and model-level gaps were found: by reasoning about what a
-real run does, which is exactly what no amount of additional unit testing can substitute for.
+**What the end-to-end run itself found and fixed** (beyond the three earlier audits): `RailLink`
+missing a null-state guard every other link actor already had; `Subway` missing the
+`simulationEndTick` force-finish guard every other vehicle type already had; and two real gaps in
+`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager` themselves — an LTM pool routee that never
+gets any actors assigned never reported its LVT, and once every LTM went idle nothing ever triggered
+`TerminationPlateauDetector` to re-observe and actually reach its required consecutive-rounds
+threshold. All four fixed; see that section for the full mechanism and fixes.
+
+**One residual, likely-unrelated finding, not chased further**: after Time Warp's own termination
+logic completed and `CoordinatedShutdown` began, the JVM process didn't actually exit for several
+minutes in this session's test — looks like a generic single-node dev-cluster shutdown-sequence
+issue (cluster leave / singleton handover / Kafka connector cleanup), not a Time Warp problem — Time
+Warp's own logic had already logged successful completion before this point. Flagged for whoever
+next runs this in a real deployment, not investigated here.
 
 ---
 
@@ -1437,6 +1446,100 @@ specifically. The one real bug found is real but orthogonal (general correctness
 specific) and is tracked separately in `docs/KNOWN_GAPS.md` rather than added to this document's own
 "Next steps." The checkpoint-completeness gap (previous section) remains the actual next blocker.
 
+## First real end-to-end scenario run under `TIME_WARP` — two more infrastructure gaps found and fixed (2026-08-07, later pass)
+
+With every prior audit's findings fixed, ran an actual scenario end-to-end under `TIME_WARP` for the
+first time ever (`Simulation.timeManagerType = "time-warp"` against a real local cluster — Redpanda
++ Redis + the app in Docker, a tiny generated scenario with Node/Link/Car/Person/Bus/Subway/BusStop/
+BusStation/SubwayStation/RailLink — every actor type Time Warp touches). This is "Next steps" item 1
+from every prior pass — the one thing no unit test, however thorough, can substitute for. It found
+two more real gaps, both exactly the kind the earlier "budget for this to reveal at least one more"
+warnings anticipated — one model-level (independent of Time Warp), one squarely in the generic
+infrastructure this document has called "implemented and tested" all along.
+
+**Attempt 1 — model bugs, not Time-Warp-specific, found by the simulation processing real traffic
+for the first time:**
+- `RailLink.actInteractWith` had **no `state == null` guard** at all — unlike every other link actor
+  (`Car`/`Bus`/`Motorcycle`, `Link` itself). A `Subway` entering a rail link before (or after) that
+  `RailLink` actor's own state existed crashed with a `NullPointerException` on every field access,
+  repeating indefinitely as the sender's own stuck-recovery loop kept retrying (14,835 exceptions in
+  the first ~15 seconds of wall-clock time). **Fixed**: added the same discard-on-null-state guard
+  every other actor already has.
+- `Subway.actSpontaneous` had **no `simulationEndTick` force-finish guard** — unlike `Car`/`Bus`/
+  `Motorcycle`, which all have one. A `Subway` stuck in `Movable`'s generic `Waiting`-state recovery
+  loop (exactly the `RailLink` bug above) rescheduled itself forever with no upper bound, racing past
+  tick 1.4 million (the declared scenario duration was 86,400) purely because nothing ever told it to
+  stop. Independently significant for Time Warp: a self-rescheduling-forever actor keeps its
+  `OptimisticLocalTimeManager` permanently non-idle, which alone blocks global termination regardless
+  of the `RailLink` bug. **Fixed**: added the identical guard `Car`/`Bus`/`Motorcycle` already have.
+
+Re-ran after fixing both: `RailLink` exceptions dropped to 0 (812 residual exceptions were unrelated,
+pre-existing `Link` warnings), and both `Bus`/`Subway` now correctly force-finish at tick 86,400. But
+the simulation still never terminated — CPU dropped to ~1.8% (genuinely idle, not busy-looping) and
+the log simply stopped growing. This exposed the deeper gap below.
+
+**Attempt 2 — a real, previously invisible gap in `OptimisticLocalTimeManager`/
+`OptimisticGlobalTimeManager` themselves:** `OptimisticGlobalTimeManager.recomputeGvtAndCheckTermination`
+requires a report from **every** registered LTM before it estimates anything
+(`latestReports.size < registeredManagers.size` bails out unconditionally — §3's own documented,
+deliberate choice). But an `OptimisticLocalTimeManager` only ever calls `reportGlobalTimeManager()`
+from two places: `advanceToNextTick` (only reached after `runningEvents` had something in it to begin
+with) and, before this fix, `startSimulation`'s `dispatchNextAvailable()` path (only conditionally, if
+`nextTick` found something to dispatch). An LTM pool routee that starts with **zero actors ever
+assigned to it** — entirely plausible whenever the pool is sized larger than (or unevenly distributed
+across) the actor population, exactly the case for a tiny scenario with a 16-instance pool — never
+sends a single `LvtReportEvent`, ever. `latestReports.size` can then never reach `registeredManagers.size`,
+GVT is never estimated, and termination detection deadlocks permanently — silently, no error, no log,
+just idle forever. Conservative mode never had this gap: `ConservativeGlobalTimeManager` actively
+pushes `UpdateGlobalTimeEvent` to every pool routee every round regardless of whether it has work, so
+an idle-since-start LTM still participates. Optimistic mode has no equivalent push.
+
+**Fixed**: `OptimisticLocalTimeManager.startSimulation` now calls `reportGlobalTimeManager()`
+unconditionally after `dispatchNextAvailable()`, not only reachable via a conditional dispatch path —
+every LTM instance passes through `startSimulation` exactly once, guaranteed, however much (or
+little) work it ends up with. New test: `OptimisticLocalTimeManagerSpec` — "should report isIdle=true
+at startSimulation even when zero actors are ever registered on it."
+
+**Attempt 3 — re-ran again, hit a second, related infrastructure gap:** even with every LTM
+guaranteed to report at least once, the run *still* didn't terminate. Root cause: once every LTM
+genuinely goes idle, **nothing ever sends another `LvtReportEvent`** (there's no more work to report
+on) — so `recomputeGvtAndCheckTermination` never runs again after the last real report, and
+`TerminationPlateauDetector`'s required `plateau-rounds-required` **consecutive** rounds (default 3)
+can never accumulate past the single round that last report produced. The simulation sits fully idle
+forever, correctly detected as idle exactly once, never re-confirmed. Same root cause as the first
+gap in spirit — optimistic mode has no periodic cadence anywhere, unlike conservative mode's
+inherently-recurring barrier round — but a distinct mechanism (this one is about re-observing an
+already-complete report set, not about completing it in the first place).
+
+**Fixed**: `OptimisticGlobalTimeManager` now self-schedules a periodic heartbeat
+(`context.system.scheduler.scheduleWithFixedDelay`, interval configurable via
+`htc.time-warp.termination-heartbeat-interval-ms`, default 500ms — unmeasured placeholder, same
+"measure before guessing" posture as every other Time Warp tunable) that re-triggers
+`recomputeGvtAndCheckTermination` even with no new report. Started once the simulation actually
+begins dispatching (both the direct-start and post-progressive-window-ready paths), cancelled the
+moment termination is declared or the actor stops, so it can never fire after `CoordinatedShutdown`
+begins. New test: `OptimisticGlobalTimeManagerSpec` — "the termination heartbeat should eventually
+terminate a plateaued-but-not-yet-declared simulation with no further LvtReportEvent ever arriving,"
+using a fast (50ms) heartbeat interval and sending exactly one `LvtReportEvent` then nothing else at
+all, proving only the heartbeat could have produced the second plateau round.
+
+**Result after all four fixes**: re-ran the same scenario. `Bus`/`Subway` force-finish correctly,
+`RailLink` no longer crashes, `OptimisticGlobalTimeManager` logged **`Optimistic simulation terminated
+at GVT=-100`**, broadcast `StopSimulationEvent` to the LTM pool, and began `CoordinatedShutdown` —
+Time Warp's own termination logic worked completely, end to end, for the first time. Full suite: 278
+tests, 0 failures.
+
+**One more thing found, explicitly NOT chased further — likely unrelated to Time Warp**: after
+`CoordinatedShutdown` began (cluster leave, `ClusterSingletonManager` handover, singleton actors
+stopping — all logged as proceeding normally), the JVM process itself never actually exited; the
+Docker container stayed `Up` for several minutes with the process idle at low CPU. This looks like a
+generic single-node dev-cluster shutdown-sequence issue (`CoordinatedShutdown` phase ordering, a
+`ClusterSingletonManager` handover with no partner node, or Kafka/Redpanda connector cleanup) — not
+specific to Time Warp's own termination logic, which had already completed correctly and logged as
+much before this point. Not investigated further in this session; flagged here rather than silently
+ignored, since "does the process actually exit cleanly" is a legitimate open question for whoever
+next runs this in a real (not smoke-test) deployment.
+
 ## Relevant file map (per-row status; see "Next steps" for what's still outstanding)
 
 | File | Role |
@@ -1475,37 +1578,38 @@ fix) and three bugs caught before they could ever surface (a Jackson inner-class
 failure, a `TestProbe`-vs-`/user/` addressing mismatch, and a wrong config path that would have
 thrown the moment Time Warp was first enabled).
 
-**What's actually left**, in the order it makes sense to tackle them. Both audits from 2026-08-07
-are now fully closed: the model-level audit's three determinism gaps (`report()` buffering, the
-route-search wall-clock deadline, dynamic link-cost reads) and the checkpoint-completeness audit's
-five actor-type gaps (`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`) — see each one's
-implementation log entry above. The TM-communication-protocol audit (next section) also confirmed
-the protocol layer itself is sound for both modes. Nothing model-level is known to block the
-end-to-end run anymore:
+**What's actually left**, in the order it makes sense to tackle them. All four audits from
+2026-08-07 are now closed: the model-level audit's three determinism gaps (`report()` buffering, the
+route-search wall-clock deadline, dynamic link-cost reads), the checkpoint-completeness audit's five
+actor-type gaps (`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`), the TM-communication-protocol
+audit (protocol layer confirmed sound), and the end-to-end run itself (`RailLink`'s null-state guard,
+`Subway`'s `simulationEndTick` guard, and the two `OptimisticLocalTimeManager`/
+`OptimisticGlobalTimeManager` termination-detection gaps) — see each section's implementation log
+entries above. **Time Warp has now been proven to actually terminate correctly against a real
+cluster.** What's left is scale-readiness and polish, not correctness:
 
-1. **Run an actual end-to-end multi-actor scenario under `TIME_WARP`.** The highest-value next
-   step, and the only remaining "Open questions" item that isn't a self-contained coding task —
-   every piece so far has been proven with mocks, `TestProbe`s, or direct method calls, never
-   against a live cluster running real actor traffic. This is also the only way left to find gaps
-   like the progressive-loading one (2026-08-07) or the model-level/checkpoint-completeness audits
-   (2026-08-07): all were invisible to unit tests and were only found by reasoning about what a real
-   run would do. Expect this to surface at least one more gap the same way — budget for it, don't
-   treat "the code compiles and unit tests pass" as "Time Warp works."
-2. **`OptimisticLocalTimeManager` large-tick batching.** No equivalent of
-   `LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE`. Likely the first real bottleneck step 1
-   would hit at this project's actual scale (750K+ actors) — but confirm with step 1's findings
-   before designing it, since the right batching strategy under optimistic dispatch may differ from
-   the conservative version's (which batches within an already-synchronized barrier round; Time
-   Warp has no equivalent round to batch within).
-3. **Tune the placeholder config values** (`checkpoint-interval = 50`, `gvt-margin = 100`,
-   `plateau-rounds-required = 3`, and now also `GPSUtil`'s `maxEdgeRelaxations = maxExpansions * 32`)
-   against whatever step 1 reveals — none of these were ever meant to be guessed correctly on the
-   first try, per this document's own "measure before guessing" posture throughout.
-4. **Adaptive progressive-load prefetch for Time Warp** — only worth designing once step 1 shows
-   whether the current purely-reactive window request (only when idle before loading completes) is
-   actually a problem in practice, or whether Time Warp's fundamentally different dispatch model
-   (no per-tick barrier to prefetch ahead of) makes the conservative side's prefetch heuristic
-   unnecessary here.
+1. **`OptimisticLocalTimeManager` large-tick batching.** No equivalent of
+   `LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE`. Likely the first real bottleneck at this
+   project's actual target scale (750K+ actors) — the tiny smoke-test scenario that validated
+   termination doesn't exercise this at all; a larger real scenario run is the next thing to try,
+   and should confirm whether/where this actually bites before designing a fix, since the right
+   batching strategy under optimistic dispatch may differ from the conservative version's (which
+   batches within an already-synchronized barrier round; Time Warp has no equivalent round to batch
+   within).
+2. **Tune the placeholder config values** (`checkpoint-interval = 50`, `gvt-margin = 100`,
+   `plateau-rounds-required = 3`, `termination-heartbeat-interval-ms = 500`, and `GPSUtil`'s
+   `maxEdgeRelaxations = maxExpansions * 32`) against a real scenario run at scale — none of these
+   were ever meant to be guessed correctly on the first try, per this document's own "measure before
+   guessing" posture throughout.
+3. **Adaptive progressive-load prefetch for Time Warp** — only worth designing once a larger run
+   shows whether the current purely-reactive window request (only when idle before loading
+   completes) is actually a problem in practice, or whether Time Warp's fundamentally different
+   dispatch model (no per-tick barrier to prefetch ahead of) makes the conservative side's prefetch
+   heuristic unnecessary here.
+4. **The residual `CoordinatedShutdown` hang** found by the end-to-end run (see that section) — the
+   JVM process didn't exit for several minutes after Time Warp's own termination logic completed
+   successfully. Likely a generic single-node dev-cluster shutdown-sequence issue, not specific to
+   Time Warp, but not root-caused in this session.
 5. **The anti-message-arrives-before-its-original stash edge case (§10)** — still named, not
    designed, still not blocking anything: nothing in real use yet exercises message reordering deep
    enough to hit it. The one item from the original design's four-item "not live yet" list with no

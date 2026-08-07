@@ -38,13 +38,25 @@ class RailLink(
 
   override def onInitialize(event: InitializeEvent): Unit =
     super.onInitialize(event)
-  override def actInteractWith(event: ActorInteractionEvent): Unit =
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    // Found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md):
+    // unlike every other link actor (Car/Bus/Motorcycle's discard-on-null-state pattern, Link
+    // itself), RailLink had no guard here at all -- a stray EnterLink/LeaveLink arriving before
+    // (or after) this actor's own state exists crashed with a NullPointerException on every single
+    // field access below, repeating forever as the sender's own stuck-recovery loop kept retrying.
+    if (state == null) {
+      logWarn(
+        s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}"
+      )
+      return
+    }
     event.data match {
       case d: EnterLinkData => handleEnterLink(event, d)
       case d: LeaveLinkData => handleLeaveLink(event, d)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
+  }
 
   /** Handle vehicle entering rail link.
     *

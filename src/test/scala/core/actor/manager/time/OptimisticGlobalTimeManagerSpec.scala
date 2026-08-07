@@ -37,7 +37,10 @@ class OptimisticGlobalTimeManagerSpec extends AnyFlatSpec with Matchers with Bef
     _system = ActorSystem(
       "OptimisticGlobalTimeManagerSpec",
       ConfigFactory
-        .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
+        .parseString(
+          "pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off\n" +
+            "htc.time-warp.termination-heartbeat-interval-ms = 50"
+        )
         .withFallback(ConfigFactory.load())
     )
 
@@ -135,6 +138,46 @@ class OptimisticGlobalTimeManagerSpec extends AnyFlatSpec with Matchers with Bef
     // The GVT estimate advances on this same round (docs/TIME_WARP_DESIGN.md §4's report-buffer
     // flush signal), broadcast before termination's own StopSimulationEvent broadcast.
     ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[core.entity.event.control.execution.GvtUpdateEvent]
+    ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent]
+  }
+
+  "the termination heartbeat" should "eventually terminate a plateaued-but-not-yet-declared simulation with no further LvtReportEvent ever arriving" in {
+    // Regression coverage for docs/TIME_WARP_DESIGN.md's real end-to-end-run finding:
+    // recomputeGvtAndCheckTermination only used to run reactively off LvtReportEvent/TickWindowReady/
+    // Terminated. Once an LTM's LAST real report already leaves it idle, nothing else ever arrives to
+    // trigger a second recompute -- TerminationPlateauDetector's required consecutive rounds (2 here)
+    // could never accumulate past the 1 the last report produced, and the simulation would sit idle
+    // forever. This test sends exactly ONE LvtReportEvent, then sends nothing else at all -- only the
+    // self-scheduled heartbeat can produce the second round.
+    class TestOptimisticGlobalTimeManagerTwoRounds
+        extends OptimisticGlobalTimeManager(
+          simulationDuration = 100_000L,
+          simulationManager = ActorRef.noSender,
+          gvtEstimationStrategy = new MarginBasedGVTEstimation(margin = 0L),
+          plateauRoundsRequired = 2
+        ) {
+      override def onStart(): Unit = ()
+      def testSetPool(ref: ActorRef): Unit = timeManagersPool = ref
+    }
+
+    val gtm = TestActorRef(new TestOptimisticGlobalTimeManagerTwoRounds)
+    Thread.sleep(1000)
+    val ltmProbe = TestProbe()
+    gtm.underlyingActor.testSetPool(ltmProbe.ref)
+    gtm ! TimeManagerRegisterEvent(actorRef = ltmProbe.ref)
+
+    gtm ! StartSimulationTimeEvent(startTick = 0L, actorRef = "", data = None)
+    ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[StartSimulationTimeEvent]
+
+    gtm.tell(LvtReportEvent(lvt = 5L, isIdle = true), ltmProbe.ref)
+
+    // GVT advances on this same round, broadcast before termination's own StopSimulationEvent (see
+    // the earlier "terminate on a real idle plateau" test's identical ordering). Round 1 of the
+    // plateau (plateauRoundsRequired = 2) is produced by this report, not yet enough to terminate.
+    ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[core.entity.event.control.execution.GvtUpdateEvent]
+
+    // Nothing else is ever sent from here on -- no second LvtReportEvent, no further messages at
+    // all. Only the 50ms self-scheduled heartbeat can produce round 2 and terminate.
     ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent]
   }
 }
