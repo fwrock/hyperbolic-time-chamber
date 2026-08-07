@@ -1,17 +1,23 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-## Current status (2026-08-07, end of session): validated end-to-end against a real cluster
+## Current status (2026-08-07, end of session): terminates correctly, but report output isn't yet at parity with conservative mode
 
-Time Warp has now been run for real — `Simulation.timeManagerType = "time-warp"` against a live
-local cluster (Redpanda + Redis + the app in Docker), a scenario touching every actor type Time Warp
-participates in — and it **terminated correctly**: `OptimisticGlobalTimeManager` logged `Optimistic
-simulation terminated at GVT=-100`, broadcast `StopSimulationEvent`, and began `CoordinatedShutdown`.
-This followed four rounds of audit (model-level determinism, checkpoint completeness across six actor
-types, the TM-communication-protocol layer, and finally the end-to-end run itself), each finding and
-closing real gaps the previous rounds' unit tests — however thorough — could not have surfaced by
-themselves. See "Model-level compatibility gap," "Checkpoint-completeness gap," "TM-communication-
-protocol audit," and "First real end-to-end scenario run under `TIME_WARP`" further down for the full
-history. Full suite: 278 tests, 57 suites, 0 failures.
+Time Warp reliably **terminates** end-to-end against a real cluster — see the sections below for that
+history. A follow-up conservative-vs-optimistic data-parity comparison (same scenario, same cluster,
+row-by-row parquet diff) found the termination-correctness work wasn't the whole story: three more
+gaps surfaced, two fixed this pass, one found and deliberately left open (see "Conservative-vs-
+optimistic report comparison" further down and `docs/KNOWN_GAPS.md`'s "Time Warp: `Movable` Route
+State..." entry). **Parquet parity with conservative mode is not yet achieved** — until the open gap
+is fixed, Time Warp output for scenarios with vehicles that actually roll back should not be trusted
+for anything beyond "did it terminate."
+
+This followed five rounds of audit/validation in total (model-level determinism, checkpoint
+completeness across six actor types, the TM-communication-protocol layer, the end-to-end termination
+run, and finally the data-parity comparison), each finding and closing real gaps the previous rounds'
+unit tests — however thorough — could not have surfaced by themselves. See "Model-level compatibility
+gap," "Checkpoint-completeness gap," "TM-communication-protocol audit," "First real end-to-end
+scenario run under `TIME_WARP`," and "Conservative-vs-optimistic report comparison" further down for
+the full history. Full suite: 280 tests, 57 suites, 0 failures.
 
 **What the end-to-end run itself found and fixed** (beyond the three earlier audits): `RailLink`
 missing a null-state guard every other link actor already had; `Subway` missing the
@@ -1539,6 +1545,83 @@ specific to Time Warp's own termination logic, which had already completed corre
 much before this point. Not investigated further in this session; flagged here rather than silently
 ignored, since "does the process actually exit cleanly" is a legitimate open question for whoever
 next runs this in a real (not smoke-test) deployment.
+
+## Conservative-vs-optimistic report comparison — two real gaps fixed, one bigger one found and deferred (2026-08-07, later pass)
+
+With Time Warp terminating correctly end-to-end (previous section), ran the same tiny scenario twice
+— once with `timeManagerType: "discrete-event"`, once with `"time-warp"` — against the same real
+cluster, then compared parquet report output row-for-row. This is the first time this document's
+claims were checked against actual data parity, not just "did it terminate without crashing."
+Conservative: 285 rows (`enter_link`/`leave_link`/`journey_started`/`bus_created`/`subway_created`/
+`person_schedule_complete`, 279 of them `Subway` enter/leave-link cycling for the full scenario
+duration). Optimistic, before this pass: essentially nothing — earlier smoke-testing had already
+noted the optimistic run producing "2 rows" (just `Person`'s `journey_started`+
+`person_schedule_complete`) against conservative's 287-ish, but this was never chased down; this pass
+did.
+
+**Gap 1 (fixed): `ReportManager` closing its writers before Time-Warp-buffered reports arrive.**
+`OptimisticGlobalTimeManager.terminateSimulation` broadcasts `StopSimulationEvent` to the LTM pool
+(triggering `forceDestructActiveActors`'s async, multi-hop destruct+flush cascade — LTM → actor →
+reporter) and tells `simulationManager` to stop **in the same breath**. `simulationManager`'s path to
+`ReportManager` is a single hop; the destruct cascade is several. `ReportManager` routinely closed its
+parquet writers before the cascade's flush sends had even arrived — confirmed via a real run showing
+the destruct cascade completing with **zero exceptions** yet **zero parquet rows** written.
+
+Fixed with a real acknowledgment handshake, not a delay (this repo's own CLAUDE.md "Synchronization
+Discipline" explicitly calls out "a watchdog/timeout added to 'fix' a hang instead of finding the
+missing reply path" as the anti-pattern to avoid, and the same principle applies to shutdown
+sequencing): `BaseActor.destruct` now sends a `DestructAckEvent` back to the time manager that
+force-destructed it once `onDestruct` (and Time Warp's report flush inside it) has actually run.
+`LocalTimeManagerBase.forceDestructActiveActors` tracks a pending-ack set per force-destruct batch and
+sends `LocalDestructCompleteEvent` up to `parentManager` once every actor it destructed has acked (or,
+for the sub-case of an actor whose `DestructEvent` couldn't even be sent, immediately — no ack will
+ever come for one that was never delivered). `OptimisticGlobalTimeManager.terminateSimulation` now
+waits for `LocalDestructCompleteEvent` from every registered LTM before telling `simulationManager`
+to stop; an LTM that dies mid-shutdown (`Terminated`) is treated the same as having acked, so this
+can't hang on a lost manager. New tests: `LocalTimeManagerBase`/`OptimisticGlobalTimeManager` unit
+coverage plus the existing 279-test suite, all green (280 after the next fix's own new test).
+
+**Gap 2 (fixed): EAGER actors with `scheduleOnTimeManager = true` dispatched their first
+`SpontaneousEvent` before the simulation had actually started.** `LocalTimeManagerBase.scheduleEvent`
+calls `onActorRescheduled` unconditionally, and `OptimisticLocalTimeManager`'s override dispatches
+immediately whenever `runningEvents` is empty — which it always is at registration time. Since
+`registerOnTimeManager()` runs from `proceedNormalInit`/`onInitialize`, both reachable at actor
+*creation* (during the load/warm-up phase), this meant an EAGER, actively-scheduled actor got its
+first tick dispatched **during loading**, before cross-actor infrastructure (`Node`, the
+dynamic-actor-spawn machinery) was ready — and `isRunning` (`!isPaused && !isStopped`) couldn't catch
+this because both flags default `false`, so it already reads `true` from construction, long before
+`startSimulation` ever runs. `SubwayStation`/`BusStation` — EAGER, and the only actors driving
+periodic `Bus`/`Subway` creation — hit exactly this: their first `actSpontaneous` fired instantly at
+load time and silently produced nothing, which is why the "2 rows" baseline was always just `Person`
+(loaded PROGRESSIVELY, correctly late) with zero `Subway`/`Bus` activity ever, even before any of this
+pass's other fixes.
+
+Fixed with a `hasStarted` flag on `LocalTimeManagerBase`, set `true` only inside `startSimulation`.
+`OptimisticLocalTimeManager.onActorRescheduled` now gates its immediate dispatch on it;
+`startSimulation` itself still calls `dispatchNextAvailable()` unconditionally, so anything that
+registered early is picked up the moment the LTM actually starts. New test:
+`OptimisticLocalTimeManagerSpec` — "should not dispatch an EAGER actor registered before
+startSimulation has run, but pick it up once it does." Confirmed live: re-ran the comparison and
+`SubwayStation`/`BusStation` now genuinely run for the first time ever under Time Warp (route
+calculation logged, `Bus`/`Subway` actually spawned, real interaction/rollback traffic where there
+had been none at all before).
+
+**Gap 3 (found, not fixed — see `docs/KNOWN_GAPS.md`): `Movable` route state
+(`movableCurrentPath`/`bestRoute`) isn't correctly reconstructed after a rollback.** With gaps 1-2
+fixed, `Bus`/`Subway` run for real and roll back for real (confirmed via `"anti-message for
+unknown/already-pruned messageId"` log lines — genuine `RollbackHistoryHandler` straggler recovery,
+not a bug in itself). But after a rollback, `BusSignalHandler` starts logging `"No current node"` —
+`getCurrentNode` reads `state.movableCurrentPath`, which `Movable.enterLink()` always sets
+*synchronously* (ruling out the natural first hypothesis, a fire-and-forget `EnterLinkData` exchange
+racing ahead of its reply — no reply is awaited to populate this field at all). The only mechanism
+that can make an already-synchronously-set field come back empty is replay: `RollbackHistoryHandler`'s
+checkpoint-plus-forward-replay not correctly reproducing every mutation `Movable` subclasses make to
+their route-position fields. Conservative mode never surfaces this — it never rolls back, so whatever
+gap exists in replay fidelity for `Movable` state is invisible under the barrier. This is materially
+bigger and riskier than gaps 1-2 (core vehicle movement state across `Car`/`Bus`/`Motorcycle`/
+`Bicycle`/`Subway`, not Time Warp plumbing) — flagged in `docs/KNOWN_GAPS.md` with a concrete starting
+point rather than attempted at the end of this session. Parquet parity with conservative mode (285
+rows) is **still not achieved** — this gap is why.
 
 ## Relevant file map (per-row status; see "Next steps" for what's still outstanding)
 

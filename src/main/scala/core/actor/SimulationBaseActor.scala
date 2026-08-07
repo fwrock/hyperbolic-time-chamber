@@ -473,8 +473,12 @@ abstract class SimulationBaseActor[T <: BaseState](
           startTick = state.getStartTick
         }
         creatorManager ! StartEntityAckEvent(entityId = entityId)
-        if (state != null && state.isSetScheduleOnTimeManager) {
-          registerOnTimeManager()
+        if (state != null) {
+          if (state.isSetScheduleOnTimeManager) {
+            registerOnTimeManager()
+          } else if (isTimeWarp) {
+            registerPassivelyOnTimeManager()
+          }
         }
       } catch {
         case e: Exception =>
@@ -484,6 +488,18 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     onStart()
   }
+
+  /** `Identify` for the shard-routed case (`LoadBalancedDistributed`, e.g. `Node`/`Link`/`RailLink`)
+    * vs. the direct-ref case, shared by [[registerOnTimeManager]] and [[registerPassivelyOnTimeManager]].
+    */
+  private def selfIdentify(): Identify =
+    Identify(
+      id = IdUtil.format(entityId),
+      resourceId = IdUtil.format(properties.resourceId),
+      classType = getClass.getName,
+      actorRef = if (properties.actorType == LoadBalancedDistributed) getSelfShard.path.toString else self.path.toString,
+      actorType = properties.actorType.toString
+    )
 
   private def registerOnTimeManager(): Unit = {
     if (isTimeWarp) {
@@ -498,35 +514,27 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
       return
     }
-    if (properties.actorType == LoadBalancedDistributed) {
-      timeManager ! RegisterActorEvent(
-        startTick = startTick,
-        actorId = entityId,
-        identify = Some(
-          Identify(
-            id = IdUtil.format(entityId),
-            resourceId = IdUtil.format(properties.resourceId),
-            classType = getClass.getName,
-            actorRef = getSelfShard.path.toString,
-            actorType = properties.actorType.toString
-          )
-        )
-      )
-    } else {
-      timeManager ! RegisterActorEvent(
-        startTick = startTick,
-        actorId = entityId,
-        identify = Some(
-          Identify(
-            id = IdUtil.format(entityId),
-            resourceId = IdUtil.format(properties.resourceId),
-            classType = getClass.getName,
-            actorRef = self.path.toString,
-            actorType = properties.actorType.toString
-          )
-        )
-      )
-    }
+    timeManager ! RegisterActorEvent(startTick = startTick, actorId = entityId, identify = Some(selfIdentify()))
+  }
+
+  /** Registers with the time manager WITHOUT causing any `SpontaneousEvent` dispatch — for actors
+    * whose scenario data has `scheduleOnTimeManager = false` (the common case for purely-reactive
+    * infrastructure actors: `Link`/`Node`/`RailLink`/`BusStop`/etc., which never had — and must
+    * never gain — a periodic dispatch). Only relevant under Time Warp: `report()`'s buffering (§4)
+    * means such an actor's reports are otherwise never flushed at all, since `LocalTimeManagerBase.
+    * forceDestructActiveActors` (the mechanism that flushes via `onDestruct`) only reaches actors it
+    * tracks — and an actor that never registers at all isn't tracked. See `docs/TIME_WARP_DESIGN.md`
+    * and [[core.entity.event.control.execution.RegisterPassiveActorEvent]]'s own doc for the full
+    * story, including why this can't just reuse `registerOnTimeManager`'s real registration (that
+    * path always schedules a real dispatch, which an actor with no real `actSpontaneous` override —
+    * e.g. `RailLink` — would mishandle via `handleSpontaneous`'s auto-reschedule safety net,
+    * becoming a permanent busy-loop).
+    */
+  private def registerPassivelyOnTimeManager(): Unit = {
+    rollbackHandler.initialize(startTick)
+    val timeManager = getTimeManager(currentTimeManagerType)
+    if (timeManager == null) return
+    timeManager ! core.entity.event.control.execution.RegisterPassiveActorEvent(actorId = entityId, identify = Some(selfIdentify()))
   }
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
@@ -556,6 +564,16 @@ abstract class SimulationBaseActor[T <: BaseState](
           case e: Exception =>
             logError(
               s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
+              e
+            )
+        }
+      } else if (isTimeWarp) {
+        try
+          registerPassivelyOnTimeManager()
+        catch {
+          case e: Exception =>
+            logError(
+              s"$entityId: registerPassivelyOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
               e
             )
         }
@@ -1041,6 +1059,19 @@ abstract class SimulationBaseActor[T <: BaseState](
     // never goes through.
     if (isReplaying) return
     _spontaneousFinishSent = true
+    // currentTimeManager is only ever set by a real live SpontaneousEvent dispatch (handleSpontaneous/
+    // replayLoggedEvent). Found via the conservative-vs-optimistic comparison run (docs/
+    // TIME_WARP_DESIGN.md): a passively-registered Time Warp actor (RegisterPassiveActorEvent --
+    // never dispatched a SpontaneousEvent by design) can still reach this method indirectly during
+    // onDestruct's business-logic cleanup (e.g. Car.onDestruct -> PrivateVehicle.deactivateVehicle
+    // -> scheduleNextTick -> here), with currentTimeManager still null -- there was never a live TM
+    // turn to "finish." Nothing to legitimately report to in that case; skip the send rather than
+    // NPE or route a FinishEvent to some pool instance that never dispatched this actor in the first
+    // place (which could phantom-schedule it for a future tick it'll never see, since it's mid-destruct).
+    if (currentTimeManager == null) {
+      logDebug(s"$getEntityId: onFinishSpontaneous called with no currentTimeManager (never live-dispatched) -- nothing to report, skipping")
+      return
+    }
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,

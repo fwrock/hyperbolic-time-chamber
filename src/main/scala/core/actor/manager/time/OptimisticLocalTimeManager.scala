@@ -113,15 +113,20 @@ class OptimisticLocalTimeManager(
     isPaused = false
     isStopped = false
     isTerminated = false
+    hasStarted = true
     dispatchNextAvailable()
     reportGlobalTimeManager()
   }
 
   /** New work becoming available while idle is dispatched immediately — there's no barrier to wait
-    * for permission from.
+    * for permission from. Gated on [[hasStarted]] (see its doc): registration can arrive during the
+    * load/warm-up phase, well before this LTM's own `startSimulation` has run, and dispatching then
+    * would hand an EAGER actor its first `SpontaneousEvent` before the infrastructure that event's
+    * handling depends on is ready. `startSimulation` itself calls `dispatchNextAvailable()`
+    * unconditionally once it does fire, picking up anything that queued up early.
     */
   override protected def onActorRescheduled(effectiveTick: Tick, wasIdle: Boolean, isEarlierTick: Boolean): Unit =
-    if (runningEvents.isEmpty) dispatchNextAvailable()
+    if (hasStarted && runningEvents.isEmpty) dispatchNextAvailable()
 
   /** Once a batch fully resolves (`runningEvents` empties), immediately dispatch the next available
     * batch — no permission round-trip — and report this LTM's new LVT.
