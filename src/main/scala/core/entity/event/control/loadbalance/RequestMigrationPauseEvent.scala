@@ -25,19 +25,3 @@ case class RequestMigrationPauseEvent(
   shardIds: Set[String],
   requester: ActorRef
 ) extends BaseEvent[DefaultBaseEventData]
-
-/** Event sent by TimeManager to LoadBalanceManager confirming that the simulation is paused at a
-  * safe tick boundary and migration can proceed.
-  *
-  * @param currentTick
-  *   The tick at which the TimeManager paused
-  */
-case class MigrationSafeEvent(
-  currentTick: Long
-) extends BaseEvent[DefaultBaseEventData]
-
-/** Event sent by LoadBalanceManager to TimeManager after all pending migrations have completed,
-  * indicating that the TimeManager can resume advancing ticks.
-  */
-case class MigrationCompleteNotifyEvent(
-) extends BaseEvent[DefaultBaseEventData]

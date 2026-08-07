@@ -42,17 +42,100 @@ message ActorInteractionEvent {
   string data_class_manifest = 8;
 }
 
+// Closed set of eventType values actually constructed anywhere in the codebase (audited by
+// grepping every `sendMessageTo`/`ActorInteractionEvent` call site — see
+// docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 2). DEFAULT = 0 matches
+// `sendMessageTo`'s own default parameter value, so proto3 skips writing the field entirely for
+// the ~60% of call sites that don't override it. OTHER is a forward-compat escape hatch: a new
+// eventType string introduced later without a matching enum case still round-trips correctly via
+// `ActorInteraction.eventTypeOverride`, just without the wire-size win until the enum catches up.
+enum ActorEventType {
+  EVENT_TYPE_DEFAULT = 0;
+  EVENT_TYPE_ENTER = 1;
+  EVENT_TYPE_LEAVE = 2;
+  EVENT_TYPE_LINE_NOT_OPERATIONAL = 3;
+  EVENT_TYPE_PT_LINE_NOT_OPERATIONAL = 4;
+  EVENT_TYPE_TRIP_COMPLETED = 5;
+  EVENT_TYPE_RECEIVE_ENTER_LINK_INFO = 6;
+  EVENT_TYPE_RECEIVE_LEAVE_LINK_INFO = 7;
+  EVENT_TYPE_REGISTER_LINK_CAPACITY = 8;
+  EVENT_TYPE_DT_UPDATE = 9;
+  EVENT_TYPE_DT_COMMAND = 10;
+  EVENT_TYPE_DT_ANOMALY = 11;
+  EVENT_TYPE_DT_STATE_UPDATE = 12;
+  EVENT_TYPE_OTHER = 13;
+}
+
+// Closed set of actor implementation classes that ever construct an ActorInteractionEvent
+// (audited the same way as ActorEventType above). OTHER + actorClassTypeOverride is the same
+// forward-compat escape hatch for a class added later without a matching enum case.
+enum ActorClassType {
+  ACTOR_CLASS_UNSPECIFIED = 0;
+  ACTOR_CLASS_BICYCLE = 1;
+  ACTOR_CLASS_BUS = 2;
+  ACTOR_CLASS_BUS_STATION = 3;
+  ACTOR_CLASS_BUS_STOP = 4;
+  ACTOR_CLASS_CAR = 5;
+  ACTOR_CLASS_LINK = 6;
+  ACTOR_CLASS_RAIL_LINK = 7;
+  ACTOR_CLASS_MOTORCYCLE = 8;
+  ACTOR_CLASS_NODE = 9;
+  ACTOR_CLASS_PERSON = 10;
+  ACTOR_CLASS_SUBWAY = 11;
+  ACTOR_CLASS_SUBWAY_STATION = 12;
+  ACTOR_CLASS_TRAFFIC_SIGNAL = 13;
+  ACTOR_CLASS_DIGITAL_TWIN_MANAGER = 14;
+  ACTOR_CLASS_OTHER = 15;
+}
+
+// Mirrors core.enumeration.CreationTypeEnum exactly (already a closed Scala enum, no fallback
+// needed). LOAD_BALANCED_DISTRIBUTED = 0 matches CreationTypeEnum's own default, for the same
+// zero-value-skips-encoding reason as ActorEventType.EVENT_TYPE_DEFAULT above.
+enum ActorCreationType {
+  CREATION_TYPE_LOAD_BALANCED_DISTRIBUTED = 0;
+  CREATION_TYPE_SIMPLE = 1;
+  CREATION_TYPE_SINGLETON_DISTRIBUTED = 2;
+  CREATION_TYPE_POOL_DISTRIBUTED = 3;
+}
+
 message ActorInteraction{
   uint64 tick = 1;
   uint64 lamportTick = 2;
   string actorRefId = 3;
+  // No longer populated on the wire: it's always derivable from actorClassType
+  // (StringUtil.getModelClassName applied to the decoded actorClassType string reconstructs the
+  // sender's own FQCN, which is exactly what this field used to carry — see
+  // docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 9). Field kept declared for wire-shape
+  // stability; readers must derive this value instead of reading it.
   string shardRefId = 4;
   string actorRef = 5;
-  string actorClassType = 6;
-  string eventType = 7;
+  ActorClassType actorClassType = 6;
+  ActorEventType eventType = 7;
   bytes data = 8;
   int32 payload_serializer_id = 9;
   string payload_manifest = 10;
-  string actorType = 11;
+  ActorCreationType actorType = 11;
   string resourceId = 12;
+  // Sharding envelope's destination entityId, folded in so EntityEnvelopeEvent(entityId,
+  // ActorInteractionEvent(...)) can be written as a single ActorInteraction frame instead of
+  // nesting a second protobuf envelope (EntityEnvelope) around an already-self-describing
+  // ActorInteraction blob. See docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 1.
+  string entityId = 13;
+  // Only populated when actorClassType == ACTOR_CLASS_OTHER / eventType == EVENT_TYPE_OTHER.
+  string actorClassTypeOverride = 14;
+  string eventTypeOverride = 15;
+  // Destination entity's actor class (the `shardId`/target-class param already passed to
+  // sendMessageTo* by the caller), used to strip the redundant "htcaid_<type>_" prefix off
+  // `entityId` before writing it — the receiver reconstructs the prefix from this enum instead.
+  // UNSPECIFIED means entityId didn't match the expected "htcaid_<type>_" shape (e.g.
+  // control-plane ids like "creator-load-data") and was left untouched on the wire. Never OTHER:
+  // this is only ever assigned by matching against the known ActorClassType set, not decoded from
+  // a free-form caller string, so there's nothing to fall back for. See
+  // docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 10.
+  ActorClassType entityClassType = 16;
+  // True when actorRefId had its "htcaid_<type>_" prefix stripped (type = the sender's own
+  // actorClassType, field 6) — needed because, unlike entityId/entityClassType, actorRefId has no
+  // spare enum slot to double as a strip/no-strip signal (its type is always actorClassType
+  // itself). Default false = actorRefId is verbatim on the wire.
+  bool actorRefIdPrefixStripped = 17;
 }

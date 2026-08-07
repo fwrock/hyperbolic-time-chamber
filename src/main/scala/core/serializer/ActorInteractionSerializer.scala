@@ -2,10 +2,11 @@ package org.interscity.htc
 package core.serializer
 
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent }
+import core.util.StringUtil
 
 import com.google.protobuf.ByteString
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.serialization.{ SerializationExtension, Serializer as PekkoSerializer, SerializerWithStringManifest }
+import org.apache.pekko.serialization.{ SerializationExtension, SerializerWithStringManifest }
 import org.htc.protobuf.core.entity.event.communication.ActorInteraction
 
 import scala.util.{ Failure, Success, Try }
@@ -35,36 +36,32 @@ class ActorInteractionSerializer(
             actorType,
             resourceId
           ) =>
-        val payloadSerializer: PekkoSerializer = serialization.serializerFor(data.getClass)
-
-        val payloadManifest: String = payloadSerializer match {
-          case s: SerializerWithStringManifest => s.manifest(data)
-          case _                               => ""
-        }
-
-        val triedSerializedPayload: Try[Array[Byte]] = Try(payloadSerializer.toBinary(data))
-
-        triedSerializedPayload match {
-          case Success(serializedPayload) =>
+        NestedPayloadCodec.encode(serialization, data) match {
+          case Success(encoded) =>
+            val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(actorClassType)
+            val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(eventType)
+            val actorRefIdStrippedOpt = ActorInteractionCodec.stripIdPrefix(actorRefId, actorClassType)
             val proto = ActorInteraction(
               tick = tick,
               lamportTick = lamportTick,
-              actorRefId = actorRefId,
-              shardRefId = shardRefId,
+              actorRefId = actorRefIdStrippedOpt.getOrElse(actorRefId),
+              // shardRefId no longer written — receiver derives it from actorClassType, see proto comment.
               actorRef = actorRef,
-              actorClassType = actorClassType,
-              eventType = eventType,
-              data = ByteString.copyFrom(serializedPayload),
-              payloadSerializerId = payloadSerializer.identifier,
-              payloadManifest = payloadManifest,
-              actorType = actorType,
-              resourceId = resourceId
+              actorClassType = actorClassTypeProto,
+              eventType = eventTypeProto,
+              data = ByteString.copyFrom(encoded.bytes),
+              payloadSerializerId = encoded.serializerId,
+              payloadManifest = encoded.manifest,
+              actorType = ActorInteractionCodec.encodeCreationType(actorType),
+              resourceId = resourceId,
+              actorClassTypeOverride = actorClassTypeOverride,
+              eventTypeOverride = eventTypeOverride,
+              actorRefIdPrefixStripped = actorRefIdStrippedOpt.isDefined
             )
             proto.toByteArray
           case Failure(exception) =>
             throw new IllegalArgumentException(
-              s"Cannot serialize nested payload of type [${data.getClass.getName}] " +
-                s"using serializerId [${payloadSerializer.identifier}] and manifest [$payloadManifest].",
+              s"Cannot serialize nested payload of type [${data.getClass.getName}] carried by a standalone ActorInteractionEvent.",
               exception
             )
         }
@@ -80,34 +77,28 @@ class ActorInteractionSerializer(
     Try {
       val proto = ActorInteraction.parseFrom(bytes)
 
-      val payloadBytes: Array[Byte] = proto.data.toByteArray
-      val payloadSerializerId: Int = proto.payloadSerializerId
-      val payloadManifest: String = proto.payloadManifest
-
-      val triedDeserializedPayload: Try[AnyRef] = serialization.deserialize(
-        payloadBytes,
-        payloadSerializerId,
-        payloadManifest
-      )
-
-      triedDeserializedPayload match {
+      NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
+          val decodedActorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride)
+          val decodedActorRefId =
+            if (proto.actorRefIdPrefixStripped) ActorInteractionCodec.rebuildIdPrefix(proto.actorRefId, decodedActorClassType)
+            else proto.actorRefId
           ActorInteractionEvent(
             tick = proto.tick,
             lamportTick = proto.lamportTick,
-            actorRefId = proto.actorRefId,
-            shardRefId = proto.shardRefId,
+            actorRefId = decodedActorRefId,
+            shardRefId = StringUtil.getModelClassName(decodedActorClassType),
             actorPathRef = proto.actorRef,
-            actorClassType = proto.actorClassType,
-            eventType = proto.eventType,
+            actorClassType = decodedActorClassType,
+            eventType = ActorInteractionCodec.decodeEventType(proto.eventType, proto.eventTypeOverride),
             data = deserializedPayload,
-            actorType = proto.actorType,
+            actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
             resourceId = proto.resourceId
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(
-            s"Failed to deserialize nested payload using serializerId [$payloadSerializerId] " +
-              s"and manifest [$payloadManifest]. Check Pekko serialization configuration for this payload type.",
+            s"Failed to deserialize nested payload using serializerId [${proto.payloadSerializerId}] " +
+              s"and manifest [${proto.payloadManifest}]. Check Pekko serialization configuration for this payload type.",
             exception
           )
       }

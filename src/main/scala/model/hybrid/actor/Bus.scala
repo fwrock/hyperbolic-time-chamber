@@ -417,9 +417,6 @@ class Bus(
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
     signalHandler.handleLinkAccess(data, state)
 
-  override protected def microMaxAcceleration: Double = 1.2
-  override protected def microMaxDeceleration: Double = 3.5
-
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
