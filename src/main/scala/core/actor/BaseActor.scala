@@ -12,6 +12,7 @@ import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.entity.event.control.execution.DestructAckEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.PostLoadRegistrationEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -199,6 +200,12 @@ abstract class BaseActor[T <: BaseState](
   private def destruct(event: DestructEvent): Unit = {
     ActorMetrics.actorsDestroyed.labels(getClass.getSimpleName).inc()
     onDestruct(event)
+    // Ack back to whoever force-destructed us (see DestructAckEvent's doc): lets the time manager
+    // know this actor's onDestruct -- and under Time Warp, the report-buffer flush it triggers --
+    // has actually been sent, not merely requested.
+    if (event.actorRef != null && event.actorRef.nonEmpty) {
+      context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = entityId)
+    }
     context.stop(self)
   }
 

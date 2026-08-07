@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.entity.event.FinishEvent
-import core.entity.event.control.execution.LvtReportEvent
+import core.entity.event.control.execution.{ LvtReportEvent, RegisterPassiveActorEvent }
 import core.types.Tick
 
 import com.typesafe.config.ConfigFactory
@@ -10,7 +10,7 @@ import org.apache.pekko.actor.{ ActorRef, ActorSystem }
 import org.apache.pekko.testkit.{ TestActorRef, TestProbe }
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ RegisterActorEvent, StartSimulationTimeEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent, StartSimulationTimeEvent, StopSimulationEvent }
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -54,6 +54,8 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
       startSimulation(StartSimulationTimeEvent(startTick = startTick, actorRef = "", data = None))
     def testRegister(identity: Identify, startTick: Tick): Unit =
       registerActor(RegisterActorEvent(startTick = startTick, actorId = identity.id, identify = Some(identity)))
+    def testRegisterPassive(identity: Identify): Unit =
+      registerPassiveActor(RegisterPassiveActorEvent(actorId = identity.id, identify = Some(identity)))
     def testSchedule(identity: Identify, tick: Tick): Unit =
       scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id, identify = Some(identity)))
     def testFinish(finish: FinishEvent): Unit = finishEvent(finish)
@@ -189,5 +191,58 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
       case e: LvtReportEvent => e.isIdle
       case _                 => false
     }
+  }
+
+  it should "not dispatch an EAGER actor registered before startSimulation has run, but pick it up once it does" in {
+    // Regression coverage for docs/TIME_WARP_DESIGN.md's conservative-vs-optimistic comparison
+    // finding: registerActor/scheduleEvent can arrive during the load/warm-up phase, well before
+    // this LTM's own StartSimulationTimeEvent -- registerOnTimeManager is called from
+    // proceedNormalInit/onInitialize, both of which run at actor creation, independent of whether
+    // the simulation has formally started. Dispatching then (as onActorRescheduled used to,
+    // unconditionally) handed EAGER actors like SubwayStation/BusStation their first
+    // SpontaneousEvent before the cross-actor infrastructure their handling depends on was ready,
+    // silently producing zero activity for the rest of the run.
+    val parentProbe = TestProbe()
+    val actorProbe = TestProbe()
+    val ltm = newManager(parentProbe)
+    val identity = identityFor("subwaystation-a", actorProbe)
+
+    // No testStart yet -- this LTM hasn't "started" in the hasStarted sense.
+    ltm.underlyingActor.testRegister(identity, 0L)
+    ltm.underlyingActor.testRunningEventIds shouldBe empty
+    actorProbe.expectNoMessage(200.millis)
+
+    ltm.underlyingActor.testStart(0L)
+
+    actorProbe.expectMsgClass(3.seconds, classOf[core.entity.event.SpontaneousEvent])
+    ltm.underlyingActor.testRunningEventIds shouldBe Set("subwaystation-a")
+  }
+
+  "a passively-registered actor" should "never be dispatched a SpontaneousEvent, but still be destructed (and so flushed) at simulation stop" in {
+    // Regression coverage for docs/TIME_WARP_DESIGN.md's conservative-vs-optimistic comparison
+    // finding: an actor with scheduleOnTimeManager=false (Link/Node/RailLink/BusStop -- the common
+    // case for purely-reactive infrastructure actors) never registered with any time manager at all
+    // before RegisterPassiveActorEvent existed, so LocalTimeManagerBase.forceDestructActiveActors
+    // (the only mechanism that flushes a Time-Warp actor's buffered report() calls via onDestruct)
+    // could never reach it -- 282 of 287 report rows were silently dropped in a real run. Passive
+    // registration must NOT cause any dispatch (an actor with no real actSpontaneous override, like
+    // RailLink, would be caught by handleSpontaneous's auto-reschedule safety net and busy-loop
+    // forever) but MUST still be reachable for a forced destruct once the simulation actually stops.
+    val parentProbe = TestProbe()
+    val actorProbe = TestProbe()
+    val ltm = newManager(parentProbe)
+    val identity = identityFor("raillink-a", actorProbe)
+
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegisterPassive(identity)
+
+    // No dispatch at all -- neither running nor scheduled.
+    ltm.underlyingActor.testRunningEventIds shouldBe empty
+    ltm.underlyingActor.testScheduledTicks shouldBe empty
+    actorProbe.expectNoMessage(200.millis)
+
+    ltm ! StopSimulationEvent()
+
+    actorProbe.expectMsgClass(3.seconds, classOf[DestructEvent])
   }
 }

@@ -3,13 +3,13 @@ package core.actor.manager.time
 
 import core.actor.manager.time.gvt.{ GVTEstimationStrategy, LocalVirtualTimeReport, MarginBasedGVTEstimation, TerminationPlateauDetector }
 import core.api.SimulatorSettingsRegistry
-import core.entity.event.control.execution.{ GvtUpdateEvent, LvtReportEvent, TimeManagerRegisterEvent }
+import core.entity.event.control.execution.{ GvtUpdateEvent, LocalDestructCompleteEvent, LvtReportEvent, TimeManagerRegisterEvent }
 import core.entity.event.control.load.{ ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
 
-import org.apache.pekko.actor.{ ActorRef, Cancellable, CoordinatedShutdown, Props, Terminated }
+import org.apache.pekko.actor.{ ActorRef, Cancellable, Props, Terminated }
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
 
@@ -80,6 +80,13 @@ class OptimisticGlobalTimeManager(
     */
   private var heartbeatCancellable: Option[Cancellable] = None
 
+  /** Populated from `registeredManagers` the moment [[terminateSimulation]] fires, drained as each
+    * LTM's [[LocalDestructCompleteEvent]] arrives. `simulationManager` (and in turn `ReportManager`)
+    * is only told to stop once this is empty -- see that event's doc for the data-loss race this
+    * closes.
+    */
+  private val pendingDestructConfirmations: mutable.Set[ActorRef] = mutable.Set.empty
+
   override def onStart(): Unit = createTimeManagersPool()
 
   /** Found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md):
@@ -134,6 +141,8 @@ class OptimisticGlobalTimeManager(
       handleTimeManagerTerminated(ref)
     case OptimisticGlobalTimeManager.TerminationHeartbeatTick =>
       recomputeGvtAndCheckTermination()
+    case _: LocalDestructCompleteEvent =>
+      handleLocalDestructComplete(sender())
     case event => super.handleEvent(event)
   }
 
@@ -247,8 +256,21 @@ class OptimisticGlobalTimeManager(
         s"Optimistic LocalTimeManager terminated: ${ref.path.name} on ${ref.path.address}. " +
           s"Remaining: ${registeredManagers.size}"
       )
+      // A terminated LTM can never send its LocalDestructCompleteEvent -- don't wait on one that
+      // will never arrive (see terminateSimulation's doc for what this gates).
+      if (pendingDestructConfirmations.remove(ref) && pendingDestructConfirmations.isEmpty && isTerminated) {
+        finalizeSimulationStop()
+      }
       recomputeGvtAndCheckTermination()
     }
+
+  private def handleLocalDestructComplete(manager: ActorRef): Unit =
+    if (pendingDestructConfirmations.remove(manager) && pendingDestructConfirmations.isEmpty) {
+      finalizeSimulationStop()
+    }
+
+  private def finalizeSimulationStop(): Unit =
+    simulationManager ! StopSimulationEvent()
 
   private def handleLvtReport(report: LvtReportEvent): Unit = {
     val manager = sender()
@@ -307,15 +329,48 @@ class OptimisticGlobalTimeManager(
   protected def nextTick: Option[Tick] =
     if (localTickOffset - initialTick >= simulationDuration) None else Some(localTickOffset + 1)
 
+  /** Found comparing conservative-vs-optimistic output on a real run (`docs/TIME_WARP_DESIGN.md`):
+    * this used to call `CoordinatedShutdown(...).run(JvmExitReason)` immediately after broadcasting
+    * `StopSimulationEvent` -- but that broadcast is what triggers each `OptimisticLocalTimeManager`'s
+    * `forceDestructActiveActors()`, which sends every still-live actor a `DestructEvent`, whose
+    * `onDestruct`/`selfDestruct` handling is what actually flushes that actor's buffered `report()`
+    * calls (§4). All of that is asynchronous, mailbox-by-mailbox -- immediately tearing down the
+    * actor system gave that cascade no chance to finish, silently dropping the overwhelming majority
+    * of buffered reports (287 rows under conservative mode vs. 2 under optimistic, same scenario).
+    * `ConservativeGlobalTimeManager.terminateSimulation` never had this problem for two compounding
+    * reasons: it never calls `CoordinatedShutdown` at all (it just stops processing and goes idle,
+    * to be reaped externally, same as this method now does), and conservative-mode `report()` was
+    * never buffered in the first place (sent immediately, so there's nothing to lose regardless of
+    * what happens afterward). Removing the premature shutdown call fixes both this and the
+    * `CoordinatedShutdown` hang the same earlier end-to-end run also found -- they were the same
+    * root cause observed two different ways.
+    *
+    * Removing the immediate `CoordinatedShutdown` call fixed the JVM-level race, but left a second,
+    * subtler one: `notifyLocalManagers(StopSimulationEvent())` triggers each LTM's
+    * `forceDestructActiveActors`, an async, mailbox-by-mailbox, multi-hop cascade (LTM -> actor ->
+    * reporter) -- while `simulationManager ! StopSimulationEvent()` reaches `ReportManager` in a
+    * single hop and used to fire in the very same breath, so `ReportManager` routinely closed its
+    * parquet writers before the cascade's flush sends had even arrived (confirmed via a real
+    * conservative-vs-optimistic run: 0 rows written under optimistic, even with the destruct
+    * cascade itself completing with zero exceptions). Fixed the same way as the JVM-level race:
+    * wait for real confirmation instead of guessing at a delay. Each LTM now acks
+    * ([[LocalDestructCompleteEvent]]) once every actor it force-destructed has itself acked
+    * ([[org.interscity.htc.core.entity.event.control.execution.DestructAckEvent]]) that its
+    * `onDestruct` -- and the report flush it triggers -- has actually been sent; only once every
+    * registered LTM has confirmed does `simulationManager`/`ReportManager` get told to stop.
+    */
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
       isTerminated = true
       stopHeartbeat()
       printSimulationDuration()
       logInfo(s"Optimistic simulation terminated at GVT=$currentGvt")
+      pendingDestructConfirmations.clear()
+      pendingDestructConfirmations ++= registeredManagers
       notifyLocalManagers(StopSimulationEvent())
-      simulationManager ! StopSimulationEvent()
-      CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
+      if (pendingDestructConfirmations.isEmpty) {
+        finalizeSimulationStop()
+      }
     }
   }
 }
