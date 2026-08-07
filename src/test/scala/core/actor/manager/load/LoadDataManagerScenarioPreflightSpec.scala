@@ -88,6 +88,7 @@ class LoadDataManagerScenarioPreflightSpec
       LoadDataManager.props(
         timeSingletonManager = TestProbe().ref,
         poolTimeManager = TestProbe().ref,
+        timeManagerType = "discrete-event",
         simulationManager = simulationManager.ref,
         poolReporters = mutable.Map.empty[ReportTypeEnum, org.apache.pekko.actor.ActorRef]
       )

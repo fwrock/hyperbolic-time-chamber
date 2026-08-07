@@ -19,4 +19,12 @@ class TimeWarpConfigSpec extends AnyFlatSpec with Matchers {
   "htc.time-warp.checkpoint-interval" should "resolve from application.conf" in {
     SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", ConfigFactory.load()) shouldBe 50
   }
+
+  "htc.time-warp.gvt-margin" should "resolve from application.conf" in {
+    SimulatorSettingsRegistry.getInt("htc.time-warp.gvt-margin", ConfigFactory.load()) shouldBe 100
+  }
+
+  "htc.time-warp.plateau-rounds-required" should "resolve from application.conf" in {
+    SimulatorSettingsRegistry.getInt("htc.time-warp.plateau-rounds-required", ConfigFactory.load()) shouldBe 3
+  }
 }

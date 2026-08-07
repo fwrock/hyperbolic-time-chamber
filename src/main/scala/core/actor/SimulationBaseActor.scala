@@ -73,8 +73,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (properties != null && properties.timeManagers != null) properties.timeManagers
     else mutable.Map[String, ActorRef]()
 
+  /** Derived from `timeManagers`' own key rather than `properties.defaultTimeManagerType`, so
+    * `PoolDistributed` actors (constructed with `properties.data` already set, via
+    * `ActorCreatorUtil.createPoolActor` — never routed through `onInitialize`) still pick up the
+    * scenario's chosen strategy at construction time. See `docs/TIME_WARP_DESIGN.md`.
+    */
   protected var currentTimeManagerType: String =
-    if (properties != null) properties.defaultTimeManagerType
+    if (properties != null && properties.timeManagers != null && properties.timeManagers.nonEmpty)
+      properties.timeManagers.keys.head
+    else if (properties != null) properties.defaultTimeManagerType
     else TimeManagerTypeEnum.DISCRETE_EVENT
 
   protected var creatorManager: ActorRef =
@@ -489,7 +496,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     entityId = event.id
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
-      currentTimeManagerType = TimeManagerTypeEnum.DISCRETE_EVENT
+      currentTimeManagerType = timeManagers.keys.headOption.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT)
     } else {
       logWarn(s"onInitialize: timeManagers is NULL for $entityId (class=${getClass.getSimpleName})")
     }

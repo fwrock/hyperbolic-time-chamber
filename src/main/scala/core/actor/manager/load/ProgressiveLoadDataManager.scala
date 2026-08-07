@@ -43,6 +43,7 @@ import scala.util.{ Failure, Success }
   */
 class ProgressiveLoadDataManager(
   val poolTimeManager: ActorRef,
+  val timeManagerType: String,
   val simulationManager: ActorRef,
   val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
 ) extends BaseManager[DefaultState](
@@ -240,7 +241,7 @@ class ProgressiveLoadDataManager(
           Properties(
             entityId = s"progressive-loader-${source.id.hashCode}",
             resourceId = "",
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
             creatorManager = null,
             reporters = mutable.Map.empty
           )
@@ -616,7 +617,7 @@ class ProgressiveLoadDataManager(
           CreatorProperties(
             entityId = "progressive-creator-load-data",
             loadDataManager = self,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
             reporters = poolReporters
           )
         )
@@ -648,7 +649,7 @@ class ProgressiveLoadDataManager(
           CreatorProperties(
             entityId = "progressive-creator-pool-load-data",
             loadDataManager = self,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
             reporters = poolReporters
           )
         )
@@ -671,12 +672,14 @@ object ProgressiveLoadDataManager {
 
   def props(
     poolTimeManager: ActorRef,
+    timeManagerType: String,
     simulationManager: ActorRef,
     poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
   ): Props =
     Props(
       classOf[ProgressiveLoadDataManager],
       poolTimeManager,
+      timeManagerType,
       simulationManager,
       poolReporters
     )
