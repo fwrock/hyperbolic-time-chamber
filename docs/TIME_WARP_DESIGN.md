@@ -11,15 +11,18 @@ straggler trigger is activated in `handleInteractWith` for both real causes (a g
 causally-earlier interaction, and receiving a real anti-message) — see §10's three follow-up log
 entries for the full history, including a reconsideration that dropped the originally-planned
 second trigger point in `OptimisticLocalTimeManager` as not actually a Time-Warp-specific case.
-**Time Warp is implemented and tested end-to-end** (`SimulationBaseActorStragglerTriggerSpec`
-drives a real rollback + real anti-message cascade through real actor mailboxes). What's left: the
-one always-acknowledged "not solved yet, not blocking" edge case (anti-message arriving before its
-original is locatable), and — separately — `OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
-still aren't reachable from any scenario config (three hardcode points, named in §2/§4's log
-entries, still pointing at the conservative side). This document is the design log/rationale from
-the planning conversation that produced it — update it as decisions are revisited or implementation
-diverges, don't treat it as aspirational once code lands (same convention as
-`docs/CONGESTION_PROPAGATION_DESIGN.md`).
+**Time Warp is implemented, tested end-to-end, and now selectable via scenario config**
+(`SimulationBaseActorStragglerTriggerSpec` drives a real rollback + real anti-message cascade
+through real actor mailboxes; setting `Simulation.timeManagerType = "time-warp"` in a scenario now
+actually routes every entity onto the optimistic strategy — the three hardcode points named in
+§2/§4's log entries are all closed, see the dedicated log entry below). What's left: the one
+always-acknowledged "not solved yet, not blocking" edge case (anti-message arriving before its
+original is locatable), and running an actual end-to-end multi-actor scenario under `TIME_WARP`
+(this session proved each piece and each config-derivation point in isolation; `SimulationManager`
+itself has no test coverage of any kind, conservative or optimistic, to extend). This document is
+the design log/rationale from the planning conversation that produced it — update it as decisions
+are revisited or implementation diverges, don't treat it as aspirational once code lands (same
+convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -772,6 +775,50 @@ activate it — is implemented and tested. **`OptimisticLocalTimeManager`/`Optim
 are still not reachable from any config** (the three hardcode points named in the §2 and §4 log
 entries) — that remains the one gap between "Time Warp works" and "a scenario can actually select
 it."
+
+### Time Warp is now selectable via scenario config — the last hardcode point closed (2026-08-07)
+
+New: `SimulationBaseActorTimeManagerTypeSpec.scala` (2 tests). Modified:
+`core/entity/configuration/Simulation.scala` (+`timeManagerType` field), `application.conf`
+(+`gvt-margin`/`plateau-rounds-required`), `SimulationManager.scala`, `LoadDataManager.scala`,
+`ProgressiveLoadDataManager.scala`, `SimulationBaseActor.scala`, `TimeWarpConfigSpec.scala`
+(+2 assertions). Full suite (235 tests) passes.
+
+Closes all three hardcode points named in the §2 and §4 log entries:
+
+1. **`Simulation.timeManagerType: String = TimeManagerTypeEnum.DISCRETE_EVENT`** — the new
+   scenario-level knob. `SimulationManager.createSingletonTimeManager` now branches on it, building
+   `OptimisticGlobalTimeManager.props(...)` (reading `htc.time-warp.gvt-margin`/
+   `plateau-rounds-required`) instead of `ConservativeGlobalTimeManager.props(...)` when set to
+   `TIME_WARP`.
+2. **Every hardcoded `"discrete-event"` map-key literal that fed a `timeManagers: Map[String,
+   ActorRef]` into an actor's `Properties`/`InitializeData`** — traced the full pipeline first
+   (`SimulationManager` → `LoadDataManager`/`ProgressiveLoadDataManager` → `CreatorLoadData`/
+   `CreatorPoolLoadData` → `ActorCreatorUtil`) and found eight literal construction sites, all
+   rooted in the same single `poolTimeManager: ActorRef`. `LoadDataManager`/
+   `ProgressiveLoadDataManager` gained a `timeManagerType: String` constructor param (threaded from
+   `configuration.timeManagerType`), replacing every literal.
+3. **`SimulationBaseActor`'s `currentTimeManagerType` hardcode** — two separate fixes, since actor
+   construction has two independent paths that each set it differently:
+   - `onInitialize` (the shard-entity path, driven by `InitializeEvent`) no longer hardcodes
+     `DISCRETE_EVENT`; it derives the type from whatever key `event.data.timeManagers` was actually
+     registered under.
+   - The `currentTimeManagerType` field's own constructor-time default (used by the
+     `PoolDistributed` path via `ActorCreatorUtil.createPoolActor`, which constructs actors with
+     `properties.data` already set and never routes through `onInitialize` at all) now derives from
+     `properties.timeManagers`' own key instead of the always-unset `properties.defaultTimeManagerType`
+     — found by tracing `createPoolActor`'s construction path specifically, since it's a second,
+     independent actor-initialization route the first fix alone wouldn't have covered.
+
+Both derivations default to `DISCRETE_EVENT` for an empty/absent map — the exact behavior every
+scenario that doesn't set `timeManagerType` already has today, confirmed unchanged by the full
+suite passing throughout.
+
+**Still not attempted**: making `OptimisticLocalTimeManager` batch large ticks the way
+`LocalDiscreteEventTimeManager` does, and an actual end-to-end scenario run under `TIME_WARP` (this
+step wires the selection path and proves each derivation point in isolation via TestKit; it does
+not run a full multi-actor simulation under the optimistic strategy — `SimulationManager` itself has
+no existing test coverage of any kind to extend, conservative or optimistic).
 
 ## Open questions / not designed yet
 
