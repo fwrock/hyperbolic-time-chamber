@@ -15,14 +15,18 @@ second trigger point in `OptimisticLocalTimeManager` as not actually a Time-Warp
 (`SimulationBaseActorStragglerTriggerSpec` drives a real rollback + real anti-message cascade
 through real actor mailboxes; setting `Simulation.timeManagerType = "time-warp"` in a scenario now
 actually routes every entity onto the optimistic strategy — the three hardcode points named in
-§2/§4's log entries are all closed, see the dedicated log entry below). What's left: the one
-always-acknowledged "not solved yet, not blocking" edge case (anti-message arriving before its
-original is locatable), and running an actual end-to-end multi-actor scenario under `TIME_WARP`
-(this session proved each piece and each config-derivation point in isolation; `SimulationManager`
-itself has no test coverage of any kind, conservative or optimistic, to extend). This document is
-the design log/rationale from the planning conversation that produced it — update it as decisions
-are revisited or implementation diverges, don't treat it as aspirational once code lands (same
-convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+§2/§4's log entries are all closed). Making config-selection real immediately exposed a genuine gap
+that had been invisible until then: `OptimisticGlobalTimeManager` never handled progressive loading
+at all, which would have hung any progressive-source scenario at startup — see the dedicated log
+entry for that fix. What's left: the one always-acknowledged "not solved yet, not blocking" edge
+case (anti-message arriving before its original is locatable), adaptive progressive-load window
+sizing for Time Warp (deliberately not attempted — no real signal to size against yet), and running
+an actual end-to-end multi-actor scenario under `TIME_WARP` (this session proved each piece and
+each config-derivation point in isolation; `SimulationManager` itself has no test coverage of any
+kind, conservative or optimistic, to extend). This document is the design log/rationale from the
+planning conversation that produced it — update it as decisions are revisited or implementation
+diverges, don't treat it as aspirational once code lands (same convention as
+`docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -819,6 +823,52 @@ suite passing throughout.
 step wires the selection path and proves each derivation point in isolation via TestKit; it does
 not run a full multi-actor simulation under the optimistic strategy — `SimulationManager` itself has
 no existing test coverage of any kind to extend, conservative or optimistic).
+
+### A real gap found after config-selection landed: `OptimisticGlobalTimeManager` never handled progressive loading (2026-08-07)
+
+New: `OptimisticGlobalTimeManagerSpec.scala` (4 tests). Modified:
+`core/actor/manager/time/OptimisticGlobalTimeManager.scala`. Full suite (239 tests) passes.
+
+Making Time Warp selectable via config (previous entry) exposed a real, previously-invisible gap:
+`SimulationManager.doStartSimulation` sends `RegisterProgressiveLoadManagerEvent` to the GTM
+**unconditionally** whenever a scenario has progressive sources, regardless of which GTM is active,
+and then blocks (`waitingForProgressiveRegistrationAck = true`) until it gets back
+`ProgressiveLoadManagerRegisteredEvent`. `OptimisticGlobalTimeManager` didn't handle that message
+at all — it would have fallen through to the generic "ignoring unhandled message" case, so any
+progressive-source scenario run under `TIME_WARP` would have hung at startup forever, never
+sending the ack `SimulationManager` was blocking on. This was invisible until now because nothing
+could select `TIME_WARP` before the previous entry landed.
+
+Beyond the startup hang, a second, subtler failure mode existed even for a scenario that somehow
+got past startup: `recomputeGvtAndCheckTermination`'s plateau check has no way to distinguish
+"every LTM is idle because the simulation is genuinely done" from "every LTM is idle because
+nothing has been progressively loaded past the current window yet" — both look identical (all
+registered LTMs report `isIdle = true`). Without a fix, Time Warp would have declared victory and
+terminated the moment the *first* progressive window ran dry, having created only a fraction of
+the scenario's actors.
+
+Fixed by porting the relevant subset of `ConservativeGlobalTimeManager`'s progressive-loading state
+machine — `RegisterProgressiveLoadManagerEvent`/`TickWindowReady`/`ProgressiveLoadingCompleteEvent`
+handling, `progressiveLoadedUpToTick`/`waitingForInitialWindow`/`pendingStartEvent` bookkeeping,
+`requestProgressiveLoad` — deliberately simplified since Optimistic mode doesn't need the
+conservative side's per-tick "is this tick's data loaded yet" broadcast gating (`SelectiveBarrier`'s
+own `nextTick > progressiveLoadedUpToTick` check): an `OptimisticLocalTimeManager` only ever
+dispatches actors that already exist, so there's nothing to gate — the only real risk was the
+false-termination case above, fixed with one new flag (`waitingForNextWindow`) that requests the
+next window and resets the plateau detector instead of letting an idle round count toward
+termination while loading isn't complete.
+
+Verified via `OptimisticGlobalTimeManagerSpec`, testing the real handlers directly (`onStart`
+overridden to skip `createTimeManagersPool()`, which needs a real cluster; `timeManagersPool` set
+directly to a `TestProbe` instead): the registration ack arrives instead of the caller hanging;
+`StartSimulationTimeEvent` is held until the initial window is ready, then released; an idle round
+before loading completes requests the next window instead of terminating; a real idle plateau
+*after* loading completes still terminates correctly.
+
+**Not attempted**: adaptive window sizing / proactive prefetch (`ConservativeGlobalTimeManager`'s
+`lastWindowTickRange`/`PREFETCH_RATIO` logic) — Optimistic mode's LTMs aren't gated on load state
+the same way, so there's no equivalent "running low on buffer" signal to prefetch against; revisit
+if a real large progressive-source Time Warp run shows this matters in practice.
 
 ## Open questions / not designed yet
 

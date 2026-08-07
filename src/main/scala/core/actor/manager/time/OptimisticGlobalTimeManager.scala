@@ -3,6 +3,7 @@ package core.actor.manager.time
 
 import core.actor.manager.time.gvt.{ GVTEstimationStrategy, LocalVirtualTimeReport, MarginBasedGVTEstimation, TerminationPlateauDetector }
 import core.entity.event.control.execution.{ LvtReportEvent, TimeManagerRegisterEvent }
+import core.entity.event.control.load.{ ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
@@ -20,10 +21,15 @@ import scala.collection.mutable
   * via a pluggable [[GVTEstimationStrategy]] and declares termination once [[TerminationPlateauDetector]]
   * says every LTM is idle and the GVT has stopped moving for long enough.
   *
-  * Deliberately does not attempt the conservative side's progressive-loading/migration-pause
-  * coordination — neither interaction is designed for optimistic mode anywhere in
-  * `docs/TIME_WARP_DESIGN.md` (both are explicitly absent from its "Open questions," meaning not
-  * even flagged as known-undesigned, just never considered) — adding either now would be a guess.
+  * Handles progressive loading (see [[handleTickWindowReady]]/[[recomputeGvtAndCheckTermination]])
+  * since `SimulationManager` sends `RegisterProgressiveLoadManagerEvent` unconditionally whenever a
+  * scenario has progressive sources, regardless of which GTM is active — without an ack, a
+  * Time Warp run would hang forever waiting for one, and without gating termination on it, an
+  * "idle GVT plateau" caused by nothing having been progressively loaded yet would be
+  * indistinguishable from real completion. Still does not attempt migration-pause coordination —
+  * that interaction genuinely isn't designed for optimistic mode anywhere in
+  * `docs/TIME_WARP_DESIGN.md`, and shard rebalancing is disabled project-wide regardless (see
+  * `CLAUDE.md`).
   *
   * @param simulationDuration
   *   The total duration of the simulation in ticks
@@ -55,6 +61,15 @@ class OptimisticGlobalTimeManager(
   private var simulationStarted: Boolean = false
   @volatile private var isTerminated = false
 
+  private var progressiveLoadManager: ActorRef = _
+  private var progressiveLoadingEnabled: Boolean = false
+  private var progressiveLoadingComplete: Boolean = false
+  private var progressiveLoadedUpToTick: Tick = Long.MaxValue
+  private var maxLookAheadTicks: Tick = 10_000L
+  private var waitingForInitialWindow: Boolean = false
+  private var waitingForNextWindow: Boolean = false
+  private var pendingStartEvent: Option[StartSimulationTimeEvent] = None
+
   override def onStart(): Unit = createTimeManagersPool()
 
   override protected def localTimeManagerProps(): Props =
@@ -67,20 +82,82 @@ class OptimisticGlobalTimeManager(
       registerTimeManager(timeManagerRegisterEvent)
     case report: LvtReportEvent =>
       handleLvtReport(report)
+    case event: RegisterProgressiveLoadManagerEvent =>
+      handleRegisterProgressiveLoadManager(event)
+    case event: TickWindowReady =>
+      handleTickWindowReady(event)
+    case _: ProgressiveLoadingCompleteEvent =>
+      onProgressiveLoadingComplete()
     case Terminated(ref) =>
       handleTimeManagerTerminated(ref)
     case event => super.handleEvent(event)
   }
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
-    simulationStarted = true
     logInfo(s"Optimistic GlobalTimeManager started at tick ${event.startTick}")
     initialTick = event.startTick
     localTickOffset = initialTick
     isPaused = false
     isStopped = false
+
+    if (progressiveLoadingEnabled && !progressiveLoadingComplete) {
+      logInfo(s"Progressive loading enabled — holding simulation start until initial window from tick $initialTick is loaded")
+      pendingStartEvent = Some(event)
+      waitingForInitialWindow = true
+      requestProgressiveLoad(initialTick)
+      return
+    }
+
+    simulationStarted = true
     notifyLocalManagers(event)
     startTime = System.currentTimeMillis()
+  }
+
+  private def handleRegisterProgressiveLoadManager(event: RegisterProgressiveLoadManagerEvent): Unit = {
+    progressiveLoadManager = event.progressiveLoadManager
+    progressiveLoadingEnabled = true
+    progressiveLoadedUpToTick = -1L
+    progressiveLoadingComplete = false
+    maxLookAheadTicks = event.lookAheadTicks
+    logInfo(s"Progressive load manager registered with maxLookAhead=${event.lookAheadTicks}")
+    event.ackTo.foreach(_ ! ProgressiveLoadManagerRegisteredEvent(event.lookAheadTicks))
+  }
+
+  private def requestProgressiveLoad(fromTick: Tick): Unit =
+    if (progressiveLoadManager != null) {
+      progressiveLoadManager ! TickWindowRequest(currentTick = fromTick, horizonTick = fromTick + maxLookAheadTicks)
+    }
+
+  private def handleTickWindowReady(event: TickWindowReady): Unit = {
+    progressiveLoadedUpToTick = event.readyUpToTick
+    if (event.readyUpToTick == Long.MaxValue) {
+      onProgressiveLoadingComplete()
+    }
+
+    if (waitingForInitialWindow) {
+      waitingForInitialWindow = false
+      logInfo(s"Initial progressive window loaded up to tick ${event.readyUpToTick} (${event.actorsCreated} actors) — starting simulation")
+      pendingStartEvent.foreach {
+        startEvent =>
+          pendingStartEvent = None
+          simulationStarted = true
+          startTime = System.currentTimeMillis()
+          notifyLocalManagers(startEvent)
+      }
+      return
+    }
+
+    if (waitingForNextWindow) {
+      waitingForNextWindow = false
+      plateauDetector.reset()
+      recomputeGvtAndCheckTermination()
+    }
+  }
+
+  def onProgressiveLoadingComplete(): Unit = {
+    progressiveLoadingComplete = true
+    progressiveLoadedUpToTick = Long.MaxValue
+    logInfo("Progressive loading complete")
   }
 
   protected def registerActor(event: org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent): Unit = {}
@@ -137,16 +214,31 @@ class OptimisticGlobalTimeManager(
     recomputeGvtAndCheckTermination()
   }
 
+  /** Only estimates once every registered LTM has reported at least once — an incomplete report
+    * set makes "all idle" meaningless, and the GVT strategy's own doc already requires it to
+    * under-, not over-, estimate for a partial set, so waiting for completeness here is the more
+    * conservative (and simpler) choice for v1. Also holds off entirely while a progressive window
+    * request is in flight ([[waitingForNextWindow]]) or [[isTerminated]]/`!simulationStarted`.
+    *
+    * An all-idle round while progressive loading isn't complete yet isn't real termination — it
+    * usually just means nothing has been created past the current window — so it requests the next
+    * window and resets the plateau detector instead of treating idleness as progress toward it.
+    */
   private def recomputeGvtAndCheckTermination(): Unit = {
-    if (isTerminated || !simulationStarted) return
-    // Only estimate once every registered LTM has reported at least once — an incomplete report
-    // set makes "all idle" meaningless (an LTM that hasn't reported yet might not be idle) and the
-    // GVT strategy's own doc already requires it to under-, not over-, estimate for a partial set,
-    // so waiting for completeness here is the more conservative (and simpler) choice for v1.
+    if (isTerminated || !simulationStarted || waitingForNextWindow) return
     if (latestReports.size < registeredManagers.size) return
 
     currentGvt = gvtEstimationStrategy.estimate(latestReports.values.toSeq)
     val allIdle = latestReports.values.forall(_.isIdle)
+
+    if (allIdle && progressiveLoadingEnabled && !progressiveLoadingComplete) {
+      logInfo(s"All LTMs idle but progressive loading not complete (loadedUpTo=$progressiveLoadedUpToTick) — requesting next window")
+      waitingForNextWindow = true
+      requestProgressiveLoad(progressiveLoadedUpToTick + 1)
+      plateauDetector.reset()
+      return
+    }
+
     if (plateauDetector.observe(allIdle = allIdle, gvt = currentGvt)) {
       logInfo(s"GVT plateaued at $currentGvt with all LTMs idle for $plateauRoundsRequired rounds — terminating")
       terminateSimulation()
