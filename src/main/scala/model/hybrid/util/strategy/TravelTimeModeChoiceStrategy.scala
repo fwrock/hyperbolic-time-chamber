@@ -151,10 +151,7 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
               case "motorcycle" => weights.modePrefMotorcycle
               case _            => 0.0
             }
-
-            // A* with live DynamicWeightCache: cost is congestion-weighted distance in metres.
-            // Dividing by typical speed gives a congestion-aware travel time estimate.
-            // The route is stored in logistics so the vehicle reuses it and skips a second A*.
+            
             GPSUtil.calcRouteCompact(originNodeId, destinationNodeId) map { case (dynamicCost, routeQueue) =>
               val travelTimeS = dynamicCost / typicalSpeedMs
               val score = weights.betaMode * modePref - weights.betaTravelTime * travelTimeS

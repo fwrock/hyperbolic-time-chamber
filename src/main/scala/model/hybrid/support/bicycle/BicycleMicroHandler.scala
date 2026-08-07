@@ -37,12 +37,6 @@ class BicycleMicroHandler(
     setLinkEntryTickFn(Some(currentTickFn()))
 
     val bikeLane = if (data.numberOfLanes >= 3) Some(0) else None
-    // Unlike Car/Bus, this didn't even check `state.microState` -- every micro-link entry
-    // unconditionally started the bicycle cruising at a flat 5.0 m/s, discarding both a
-    // genuinely fresh trip's rest-start (SUMO's departSpeed=0) and a chained micro-link's real
-    // carried-over exit velocity. Use `journeyReporter.sumoArrivalSpeed` instead (0.0 by
-    // default; kept current by `handleMicroUpdate`/`handleMicroLeaveLink`), same fix as
-    // CarMicroHandler's/BusMicroHandler's/MotorcycleMicroHandler's -- see docs/KNOWN_GAPS.md.
     val initialMicroState = MicroBicycleState(
       positionInLink   = 0.0,
       velocity         = journeyReporter.sumoArrivalSpeed,

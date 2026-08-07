@@ -149,11 +149,7 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "on Green/Available, re-register via scheduleEvent at the current tick and clear the re-verify flag" in {
-    // The car already fully deregistered (onFinishSpontaneous(None)) when it sent the request —
-    // there's no pending spontaneous event here to resolve, and no runningEvents entry held open
-    // waiting on this reply. handleLinkAccess's job is only to re-register; the actual
-    // leavingLinkFn() call happens later, from a genuine actSpontaneous dispatch driven by the
-    // existing WaitingSignal branch (out of this handler's scope, unchanged).
+
     val f = newFixture(currentTick = 100L)
     val state = newCarState()
 
@@ -181,10 +177,6 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "never call onFinishSpontaneous from handleLinkAccess at all, for any phase/capacity combination" in {
-    // Regression guard for the deferFinishSpontaneous removal: calling onFinishSpontaneous here
-    // would be resolving a spontaneous event this car never has pending at this point (it already
-    // finished with None before the reply could arrive) -- exactly the "silent scheduling add,
-    // no Global TM re-notification" trap scheduleEvent exists to avoid.
     val f = newFixture(currentTick = 100L)
 
     f.handler.handleLinkAccess(LinkAccessData(phase = Red, nextTick = 130L, queuePosition = 83), state = newCarState())

@@ -95,9 +95,6 @@ class LinkMicroSimulationHandler(
       }
     }
 
-    // Recompute currentSpeed/congestionFactor from the vehicles actually present after this
-    // tick's sub-tick update (mean of real per-vehicle velocities, not the frozen 0.0/1.0
-    // defaults LinkState used to carry forever) before publishing the routing cost signal.
     val freshState = getLinkStateFn()
     if (freshState.isMicroMode) {
       val vehicles  = freshState.vehiclesByLane.valuesIterator.flatMap(_.iterator).toVector
@@ -119,11 +116,6 @@ class LinkMicroSimulationHandler(
     removeVehicleWaitingSecondsFn(update.vehicleId)
 
     val entryTick    = getVehicleEntryTickFn(update.vehicleId).getOrElse(currentTickFn())
-    // entryTick/currentTickFn are global ticks (1s each by convention), not sub-ticks —
-    // the elapsed duration is elapsedTicks global ticks, each microTicksPerGlobalTick *
-    // microTimeStep seconds long, not a single microTimeStep. Using microTimeStep alone
-    // here previously understated elapsed time by a factor of microTicksPerGlobalTick,
-    // which is the exact root cause of the average_speed mismatch noted in KNOWN_GAPS.md.
     val elapsedTicks = math.max(1L, currentTickFn() - entryTick + 1)
     val secondsPerGlobalTick = state.microTicksPerGlobalTick * state.microTimeStep
     val avgSpeed =

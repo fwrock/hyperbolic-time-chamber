@@ -85,10 +85,6 @@ class Subway(
         //   s"line=${state.line} origin=${state.origin} destination=${state.destination} capacity=${state.capacity}") // #actor-trace
         enterLink()
       case Ready =>
-        // If movableStatus is already Waiting, enterLink() was already called and we're
-        // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
-        // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
-        // this subway is already registered on. Just poll again next tick instead.
         if (state.movableStatus == Waiting) {
           onFinishSpontaneous(Some(currentTick + 1))
         } else {
@@ -147,18 +143,13 @@ class Subway(
       ),
       label = "leave_link"
     )
-    // Only update status if the subway has not already moved on to the next
-    // link (Waiting) or stopped at a station.  A late-arriving ReceiveLeaveLinkInfo
-    // for a link we already departed must not override the Waiting status set
-    // by enterLink() for the NEXT segment.
+
     import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
     if (state.status == Moving) {
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
     }
-    // If status is already Waiting/Ready/Stopped the subway is managing its
-    // own scheduling; suppress the duplicate FinishEvent to avoid a spurious
-    // extra tick.
+
   }
 
   override def actHandleReceiveEnterLinkInfo(
@@ -166,10 +157,6 @@ class Subway(
     data: LinkInfoData
   ): Unit = {
     
-    // Guard: zero-length / zero-speed response means the RailLink rejected us.
-    // Schedule a retry at the next tick rather than computing time=0 (which
-    // would reschedule at currentTick, potentially looping forever at the
-    // same tick).
     if (data.linkLength <= 0 || data.linkFreeSpeed <= 0) {
       logWarn(
         s"[SUBWAY] REJECTED by RailLink ${event.actorRefId}: zero linkLength=${data.linkLength} or speed=${data.linkFreeSpeed} " +

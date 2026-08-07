@@ -113,9 +113,6 @@ class LoadDataManagerScenarioPreflightSpec
     val source = writePersonSourceFile(strategyId = "raptor")
     loadDataManager ! LoadDataEvent(actorRef = simulationManager.ref, actorsDataSources = List(source))
 
-    // This suite runs with no htc.mobility.transit-routes-file configured, so
-    // TransitRouteUtil.isAvailable is false — exactly the condition RaptorMultiModalEngine's
-    // validateForScenario rejects.
     val failure = simulationManager.expectMsgType[ScenarioPreflightValidationFailedEvent](10.seconds)
     failure.error.message should include("raptor")
 
@@ -126,8 +123,6 @@ class LoadDataManagerScenarioPreflightSpec
     val simulationManager = TestProbe()
     val loadDataManager = newLoadDataManager(simulationManager)
 
-    // No data sources at all: LoadDataManager's early-return path ("no data sources to load")
-    // fires before any pre-flight or actor-creation code runs, and no event is ever sent back.
     loadDataManager ! LoadDataEvent(actorRef = simulationManager.ref, actorsDataSources = List.empty)
 
     simulationManager.expectNoMessage(500.millis)

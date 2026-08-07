@@ -204,11 +204,7 @@ case class Graph[V, W, L] private (
       val (currentFScore, current) = openSet.dequeue() // Pega fScore real da fila
 
       if (currentFScore > fScore(current)) {
-        // Continue para a próxima iteração (em Scala, isso pode ser feito não fazendo nada aqui
-        // e deixando o loop continuar, ou usando uma estrutura de loop que suporte `continue`)
-        // Para este while, podemos apenas deixar o if não ter um else e o loop continua.
       } else if (current == goalNode) {
-        // Objetivo alcançado!
         return reconstructEdgeTargetTuplePath(cameFrom, startNode, goalNode).map(
           path => (gScore(goalNode), path)
         )
