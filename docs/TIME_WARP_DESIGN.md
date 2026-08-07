@@ -1,6 +1,6 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
-Status as of 2026-08-06: **all five "Suggested order" steps below have landed, each fully or
+Status as of 2026-08-07: **all five "Suggested order" steps below have landed, each fully or
 deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
 §6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
 /GVT), and §10 (anti-message cascade math) — see "Implementation log" below for what's real vs.
@@ -18,15 +18,14 @@ actually routes every entity onto the optimistic strategy — the three hardcode
 §2/§4's log entries are all closed). Making config-selection real immediately exposed a genuine gap
 that had been invisible until then: `OptimisticGlobalTimeManager` never handled progressive loading
 at all, which would have hung any progressive-source scenario at startup — see the dedicated log
-entry for that fix. What's left: the one always-acknowledged "not solved yet, not blocking" edge
-case (anti-message arriving before its original is locatable), adaptive progressive-load window
-sizing for Time Warp (deliberately not attempted — no real signal to size against yet), and running
-an actual end-to-end multi-actor scenario under `TIME_WARP` (this session proved each piece and
-each config-derivation point in isolation; `SimulationManager` itself has no test coverage of any
-kind, conservative or optimistic, to extend). This document is the design log/rationale from the
-planning conversation that produced it — update it as decisions are revisited or implementation
-diverges, don't treat it as aspirational once code lands (same convention as
-`docs/CONGESTION_PROPAGATION_DESIGN.md`).
+entry for that fix. **See "Next steps" at the bottom for the current, consolidated list of what's
+actually left** — as of this fix, everything in the original "Suggested order" and everything §10
+named is implemented and tested; what remains is real-scenario validation and scale-readiness work
+(tick-batching, adaptive prefetch) that can only be scoped accurately by running Time Warp for
+real, plus the one always-acknowledged "not solved yet, not blocking" anti-message edge case. This
+document is the design log/rationale from the planning conversation that produced it — update it
+as decisions are revisited or implementation diverges, don't treat it as aspirational once code
+lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
 
 ## Motivation
 
@@ -872,30 +871,57 @@ if a real large progressive-source Time Warp run shows this matters in practice.
 
 ## Open questions / not designed yet
 
-- Exact values for `checkpointInterval` (K) and the GVT margin — no default chosen; needs
-  measurement against a real scenario once implemented, not guessed up front.
-- Config/enum wiring specifics: `TimeManagerTypeEnum` needs a `TIME_WARP` value (or equivalent);
-  the config surface for choosing `checkpointInterval`/margin per scenario is undesigned.
+Updated 2026-08-07 — several items below were resolved by implementation and are marked as such
+rather than deleted, so the history of what was originally unknown stays visible.
+
+- ~~Config/enum wiring specifics: `TimeManagerTypeEnum` needs a `TIME_WARP` value; the config
+  surface for choosing `checkpointInterval`/margin per scenario is undesigned.~~ **Resolved**:
+  `TimeManagerTypeEnum.TIME_WARP` exists and is reachable from `Simulation.timeManagerType`;
+  `application.conf`'s `htc.time-warp` block holds `checkpoint-interval`/`gvt-margin`/
+  `plateau-rounds-required`. See the "Time Warp is now selectable via scenario config" log entry.
+- **Still open**: the *values* in that config surface (`checkpoint-interval = 50`,
+  `gvt-margin = 100`, `plateau-rounds-required = 3`) are placeholders, not measured — the config
+  surface existing doesn't mean the numbers are right. Needs tuning against a real scenario run
+  (see "Next steps" — this is one of the things an actual end-to-end run would reveal).
+- **New, found 2026-08-07**: `OptimisticLocalTimeManager` has no equivalent of
+  `LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE` large-tick batching. Untested at the scale
+  this project actually cares about (the codebase's own comments reference "750K+ actors at
+  tick 0"); likely the first real bottleneck a large Time Warp run would hit. Not designed —
+  batching under optimistic dispatch may need different logic than the conservative version's
+  (which batches within one already-synchronized barrier round; Time Warp has no equivalent round
+  to batch within).
+- **New, found 2026-08-07**: adaptive progressive-load window sizing / proactive prefetch
+  (`ConservativeGlobalTimeManager`'s `lastWindowTickRange`/`PREFETCH_RATIO` logic) has no Time Warp
+  equivalent — `OptimisticGlobalTimeManager` requests a window only reactively (when idle before
+  loading completes), never prefetches ahead of need. Not designed; no signal exists yet to size a
+  prefetch heuristic against.
 - Lazy anti-message cancellation (skip re-sending when replay produces an identical message) —
   deferred optimization, not designed.
 - Exact (Mattern-style) GVT — deferred optimization, not designed beyond naming it as the eventual
   alternative to margin-based estimation.
-- The anti-message-arrives-before-original stash mechanism (§10) — named, not designed.
+- The anti-message-arrives-before-original stash mechanism (§10) — named, not designed. Still the
+  one item from the original four-item "not live yet" list (§10's implementation log) with no code
+  at all, not even a scoped-down version.
 - Federated conservative/optimistic execution in one run — explicitly out of scope for any planned
   phase, not just deferred.
-- Test strategy — none of this has unit/integration test coverage designed yet; `docs/KNOWN_GAPS.md`
-  already flags near-zero coverage on the core mobility actors this would sit alongside, so this
-  lands in a codebase with little regression safety net for the actors it interacts with.
+- **Never validated**: an actual end-to-end multi-actor scenario run under `TIME_WARP`. Every piece
+  described in this document is now implemented and has direct unit/TestKit coverage (`docs/
+  KNOWN_GAPS.md`'s "near-zero coverage" caveat no longer applies to the Time Warp code itself), but
+  no test exercises the full stack together against a live cluster/Redpanda the way a real scenario
+  run would. This is the highest-value next step precisely because it's the only way left to
+  discover gaps like the progressive-loading one found on 2026-08-07 — that gap was invisible to
+  every unit test written before it, and was only found by reasoning about what a real run would
+  do, not by running one.
 
-## Relevant file map (proposed — nothing below exists yet)
+## Relevant file map (per-row status; see "Next steps" for what's still outstanding)
 
 | File | Role |
 |---|---|
-| `core/actor/manager/time/ConservativeLocalTimeManager.scala` (new) | Extracted barrier logic shared by the two existing LTM subclasses; no behavior change |
-| `core/actor/manager/time/OptimisticLocalTimeManager.scala` (done, scoped) | Time Warp LTM: optimistic dispatch, async LVT reporting done; straggler detection exists but still just bumps forward (rollback trigger deferred to step 5) |
-| `core/actor/manager/time/GlobalTimeManagerBase.scala` (done, partial — see §2 log) | Extracted cluster/registration plumbing common to both GTM variants; migration-pause/progressive-loading stayed Conservative-only |
+| `core/actor/manager/time/ConservativeLocalTimeManager.scala` (done) | Extracted barrier logic shared by the two existing LTM subclasses; no behavior change |
+| `core/actor/manager/time/OptimisticLocalTimeManager.scala` (done) | Time Warp LTM: optimistic dispatch, async LVT reporting, no large-tick batching yet (see "Open questions") |
+| `core/actor/manager/time/GlobalTimeManagerBase.scala` (done, partial — see §2 log) | Extracted cluster/registration plumbing common to both GTM variants; migration-pause stayed Conservative-only (progressive-loading is now handled by both, see the 2026-08-07 log entry) |
 | `core/actor/manager/time/ConservativeGlobalTimeManager.scala` (done, renamed from `GlobalTimeManager`) | Existing `SelectiveBarrier`/`QueryNextTickEvent` behavior, unchanged |
-| `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (done) | GVT coordinator + termination-plateau detection |
+| `core/actor/manager/time/OptimisticGlobalTimeManager.scala` (done) | GVT coordinator + termination-plateau detection + progressive-loading handling (registration ack, hold-start, false-termination guard) |
 | `core/actor/manager/time/gvt/GVTEstimationStrategy.scala`, `MarginBasedGVTEstimation.scala`, `TerminationPlateauDetector.scala`, `LocalVirtualTimeReport.scala` (done) | Pluggable GVT strategy + §11 termination detector; Mattern-style GVT variant still deferred |
 | `core/entity/event/control/execution/LvtReportEvent.scala` (done) | Fire-and-forget LTM→GTM LVT report |
 | `core/actor/rollback/RollbackHistoryHandler.scala` (done, composed into `SimulationBaseActor`) | Per-actor checkpoint+event-log handler; `rollbackTo` is live and triggered |
@@ -903,25 +929,60 @@ if a real large progressive-source Time Warp run shows this matters in practice.
 | `core/actor/rollback/AntiMessageCascade.scala` (done) | Pure "which sends must be retracted" math over a rollback's undone events |
 | `core/actor/rollback/AntiMessagePayload.scala` (done) | Marker payload for an anti-message's otherwise-empty `data` field |
 | `core/entity/event/ActorInteractionEvent.scala`, `communication.proto`, `ActorInteractionSerializer.scala`, `EntityEnvelopeSerializer.scala` (done) | `seq`/`isAntiMessage` fields added (proto tags 18/19, zero-cost on the wire when unused) |
-| `core/enumeration/TimeManagerTypeEnum.scala` (done) | Added `TIME_WARP` — string exists, not yet reachable from config (see §2/§3/§11 log's "Other scope notes") |
+| `core/enumeration/TimeManagerTypeEnum.scala` (done) | Added `TIME_WARP`, reachable from `Simulation.timeManagerType` since 2026-08-07 |
+| `core/entity/configuration/Simulation.scala` (done) | `timeManagerType: String` scenario-level knob, defaults to `DISCRETE_EVENT` |
+| `core/actor/manager/SimulationManager.scala` (done) | `createSingletonTimeManager` branches on `configuration.timeManagerType`; threads it through to `LoadDataManager`/`ProgressiveLoadDataManager` and the `RegisterSnapshotContextEvent` map key |
+| `core/actor/manager/load/LoadDataManager.scala`, `ProgressiveLoadDataManager.scala` (done) | Gained a `timeManagerType` constructor param, replacing 6 hardcoded `"discrete-event"` map-key literals |
+| `core/actor/SimulationBaseActor.scala` (done) | `currentTimeManagerType` derived from `timeManagers`' own key (both the `onInitialize` shard-entity path and the `PoolDistributed`/`ActorCreatorUtil.createPoolActor` constructor-time path), not the always-unset `properties.defaultTimeManagerType` |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
 | `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
 
 ## Next steps
 
-Implementation-ready per the decisions above, except for the items in "Open questions." Suggested
-order: (1) ~~the RNG determinism fix (§8)~~ — done; (2) ~~the `Conservative*`/`GlobalTimeManagerBase`
-extraction (§2)~~ — done (Local side fully split; Global side partially, see caveat above); (3)
-~~`RollbackHistoryHandler` + checkpoint/replay (§6/§7)~~ — done, built and tested standalone; (4)
-~~`OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT (§2/§3/§11)~~ — done, scoped: the
-coordinator layer (dispatch-without-barrier, async LVT/GVT reporting, termination-plateau
-detection) is real and tested; the actual straggler → `RollbackHistoryHandler.rollbackTo` trigger
-is not wired live (see that section's log entry for why); (5) ~~anti-messages (§10)~~ — done,
-scoped to the pure cascade math (`AntiMessageCascade`) plus a real fix to step 3's `MessageId`
-(it couldn't address a receiver; now `SentMessage` can) — the wire protocol and live trigger are
-not built, see that section's log entry for the exact four-item remaining list.
+Updated 2026-08-07. The original five-step "Suggested order" is entirely done: (1) RNG determinism
+(§8), (2) `Conservative*`/`GlobalTimeManagerBase` extraction (§2), (3) `RollbackHistoryHandler` +
+checkpoint/replay (§6/§7), (4) `OptimisticLocalTimeManager` + `OptimisticGlobalTimeManager`/GVT
+(§2/§3/§11), (5) anti-messages (§10) — including the wire fields, the live straggler trigger, and
+(found only once config-selection made a real run possible to reason about) progressive-loading
+support in `OptimisticGlobalTimeManager`. See the "Implementation log" section above for the full
+history, in date order, including two deliberate mid-course corrections (dropping the originally-
+planned `OptimisticLocalTimeManager.scheduleEvent` trigger point; the `MessageId` → `SentMessage`
+fix) and three bugs caught before they could ever surface (a Jackson inner-class deserialization
+failure, a `TestProbe`-vs-`/user/` addressing mismatch, and a wrong config path that would have
+thrown the moment Time Warp was first enabled).
 
-**Next up: none of the five suggested steps remain — what's left is §10's four-item "not live yet"
-list** (wire fields + serializer, `BaseActor` integration, activating the straggler trigger, the
-anti-message-before-original stash edge case), which is real system-integration work rather than
-another self-contained design decision to implement.
+**What's actually left**, in the order it makes sense to tackle them:
+
+1. **Run an actual end-to-end multi-actor scenario under `TIME_WARP`.** The highest-value next
+   step, and the only remaining "Open questions" item that isn't a self-contained coding task —
+   every piece so far has been proven with mocks, `TestProbe`s, or direct method calls, never
+   against a live cluster running real actor traffic. This is also the only way left to find gaps
+   like the progressive-loading one (2026-08-07): that gap was invisible to unit tests and was only
+   found by reasoning about what a real run would do. Expect this to surface at least one more gap
+   the same way — budget for it, don't treat "the code compiles and unit tests pass" as "Time Warp
+   works."
+2. **`OptimisticLocalTimeManager` large-tick batching.** No equivalent of
+   `LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE`. Likely the first real bottleneck step 1
+   would hit at this project's actual scale (750K+ actors) — but confirm with step 1's findings
+   before designing it, since the right batching strategy under optimistic dispatch may differ from
+   the conservative version's (which batches within an already-synchronized barrier round; Time
+   Warp has no equivalent round to batch within).
+3. **Tune the placeholder config values** (`checkpoint-interval = 50`, `gvt-margin = 100`,
+   `plateau-rounds-required = 3`) against whatever step 1 reveals — these were never meant to be
+   guessed correctly on the first try, per this document's own "measure before guessing" posture
+   throughout.
+4. **Adaptive progressive-load prefetch for Time Warp** — only worth designing once step 1 shows
+   whether the current purely-reactive window request (only when idle before loading completes) is
+   actually a problem in practice, or whether Time Warp's fundamentally different dispatch model
+   (no per-tick barrier to prefetch ahead of) makes the conservative side's prefetch heuristic
+   unnecessary here.
+5. **The anti-message-arrives-before-its-original stash edge case (§10)** — still named, not
+   designed, still not blocking anything: nothing in real use yet exercises message reordering deep
+   enough to hit it. The one item from the original design's four-item "not live yet" list with no
+   code behind it at all, not even a scoped-down version.
+
+Not on this list because they're explicitly out of scope, not just deferred: federated
+conservative/optimistic execution within one simulation run (§1's scope decision), and exact
+Mattern-style GVT / lazy anti-message cancellation (both named in the original design as
+deferred optimizations, revisit only if margin-based GVT / aggressive cancellation are measured
+and found insufficient).
