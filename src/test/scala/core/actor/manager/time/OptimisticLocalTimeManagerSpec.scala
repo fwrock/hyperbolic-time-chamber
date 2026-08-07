@@ -172,4 +172,22 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     // No permission round-trip needed -- the re-notify hook dispatches straight away.
     ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
   }
+
+  it should "report isIdle=true at startSimulation even when zero actors are ever registered on it" in {
+    // Regression coverage for docs/TIME_WARP_DESIGN.md's real end-to-end-run finding: an LTM pool
+    // routee that starts with nothing scheduled (plausible whenever the pool has more instances
+    // than the scenario has actors, or the distribution across instances is uneven) must still
+    // report once, or OptimisticGlobalTimeManager.recomputeGvtAndCheckTermination -- which requires
+    // a report from EVERY registered LTM before it estimates anything -- waits forever for a report
+    // that never comes, and the simulation can never terminate.
+    val parentProbe = TestProbe()
+    val ltm = newManager(parentProbe)
+
+    ltm.underlyingActor.testStart(0L)
+
+    parentProbe.fishForMessage(200.millis) {
+      case e: LvtReportEvent => e.isIdle
+      case _                 => false
+    }
+  }
 }

@@ -2,17 +2,19 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.actor.manager.time.gvt.{ GVTEstimationStrategy, LocalVirtualTimeReport, MarginBasedGVTEstimation, TerminationPlateauDetector }
+import core.api.SimulatorSettingsRegistry
 import core.entity.event.control.execution.{ GvtUpdateEvent, LvtReportEvent, TimeManagerRegisterEvent }
 import core.entity.event.control.load.{ ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
 
-import org.apache.pekko.actor.{ ActorRef, CoordinatedShutdown, Props, Terminated }
+import org.apache.pekko.actor.{ ActorRef, Cancellable, CoordinatedShutdown, Props, Terminated }
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
 
 import scala.collection.mutable
+import scala.concurrent.duration.DurationInt
 
 /** Time Warp's global-time-manager coordinator (`docs/TIME_WARP_DESIGN.md` §2/§3/§11): a GVT
   * coordinator instead of a `SelectiveBarrier`. Every registered `OptimisticLocalTimeManager`
@@ -70,7 +72,47 @@ class OptimisticGlobalTimeManager(
   private var waitingForNextWindow: Boolean = false
   private var pendingStartEvent: Option[StartSimulationTimeEvent] = None
 
+  /** Self-scheduled heartbeat, started once the simulation actually begins dispatching (see
+    * [[startHeartbeat]]'s doc for why this exists at all — `recomputeGvtAndCheckTermination`
+    * otherwise only runs reactively off `LvtReportEvent`, which stops arriving entirely once
+    * everything goes idle, before `TerminationPlateauDetector` ever accumulates enough consecutive
+    * rounds to declare termination).
+    */
+  private var heartbeatCancellable: Option[Cancellable] = None
+
   override def onStart(): Unit = createTimeManagersPool()
+
+  /** Found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md):
+    * `recomputeGvtAndCheckTermination` only ever runs reactively, triggered by a new
+    * `LvtReportEvent`/`TickWindowReady`/`Terminated` arriving. Once every `OptimisticLocalTimeManager`
+    * genuinely goes idle (all real work finished), nothing ever sends another message that would
+    * trigger a fresh recompute — so `TerminationPlateauDetector`'s `plateau-rounds-required`
+    * consecutive rounds can never accumulate past the single round the *last* real report already
+    * produced. The simulation sits fully idle forever, never terminating, with no error and no log.
+    * Conservative mode never had this gap: `ConservativeGlobalTimeManager`'s own barrier round is
+    * inherently periodic (`UpdateGlobalTimeEvent`/`QueryNextTickEvent` keep cycling regardless of
+    * activity). Optimistic mode has no equivalent built-in cadence, so this timer supplies one —
+    * self-scheduled, not tied to any particular LTM, cancelled the moment the simulation actually
+    * terminates (or this actor stops) so it can never fire after `CoordinatedShutdown` begins.
+    */
+  private def startHeartbeat(): Unit =
+    if (heartbeatCancellable.isEmpty) {
+      val interval =
+        SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", context.system.settings.config).millis
+      heartbeatCancellable = Some(
+        context.system.scheduler.scheduleWithFixedDelay(interval, interval, self, OptimisticGlobalTimeManager.TerminationHeartbeatTick)(context.dispatcher)
+      )
+    }
+
+  private def stopHeartbeat(): Unit = {
+    heartbeatCancellable.foreach(_.cancel())
+    heartbeatCancellable = None
+  }
+
+  override def postStop(): Unit = {
+    stopHeartbeat()
+    super.postStop()
+  }
 
   override protected def localTimeManagerProps(): Props =
     OptimisticLocalTimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))
@@ -90,6 +132,8 @@ class OptimisticGlobalTimeManager(
       onProgressiveLoadingComplete()
     case Terminated(ref) =>
       handleTimeManagerTerminated(ref)
+    case OptimisticGlobalTimeManager.TerminationHeartbeatTick =>
+      recomputeGvtAndCheckTermination()
     case event => super.handleEvent(event)
   }
 
@@ -111,6 +155,7 @@ class OptimisticGlobalTimeManager(
     simulationStarted = true
     notifyLocalManagers(event)
     startTime = System.currentTimeMillis()
+    startHeartbeat()
   }
 
   private def handleRegisterProgressiveLoadManager(event: RegisterProgressiveLoadManagerEvent): Unit = {
@@ -143,6 +188,7 @@ class OptimisticGlobalTimeManager(
           simulationStarted = true
           startTime = System.currentTimeMillis()
           notifyLocalManagers(startEvent)
+          startHeartbeat()
       }
       return
     }
@@ -264,6 +310,7 @@ class OptimisticGlobalTimeManager(
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
       isTerminated = true
+      stopHeartbeat()
       printSimulationDuration()
       logInfo(s"Optimistic simulation terminated at GVT=$currentGvt")
       notifyLocalManagers(StopSimulationEvent())
@@ -274,6 +321,13 @@ class OptimisticGlobalTimeManager(
 }
 
 object OptimisticGlobalTimeManager {
+
+  /** Self-sent by [[OptimisticGlobalTimeManager.startHeartbeat]]'s periodic scheduler — see that
+    * method's doc for why this exists. Not a public protocol message; only this actor ever sends
+    * or handles it.
+    */
+  private case object TerminationHeartbeatTick
+
   def props(
     simulationDuration: Tick,
     simulationManager: ActorRef,

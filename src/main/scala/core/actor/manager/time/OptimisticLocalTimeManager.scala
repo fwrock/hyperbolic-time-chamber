@@ -86,6 +86,24 @@ class OptimisticLocalTimeManager(
   /** Starts immediately dispatching whatever's already scheduled instead of waiting for a
     * `SelectiveBarrier`-style `UpdateGlobalTimeEvent` push — there is no such push under this
     * strategy.
+    *
+    * Always reports afterward, even when `dispatchNextAvailable()` found nothing to dispatch —
+    * found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md): this LTM
+    * pool has `HTC_TIME_MANAGER_INSTANCES` routees, and any instance that starts with zero actors
+    * ever scheduled on it (plausible whenever the actor population is smaller than, or unevenly
+    * distributed across, the pool) previously never sent a single `LvtReportEvent` — the only two
+    * call sites were this method (only reachable via `dispatchNextAvailable`'s `nextTick.foreach`,
+    * i.e. conditional on having work) and `advanceToNextTick` (only reached after `runningEvents`
+    * had something in it to begin with). `OptimisticGlobalTimeManager.recomputeGvtAndCheckTermination`
+    * requires a report from every registered LTM before it estimates anything at all
+    * (`latestReports.size < registeredManagers.size` bails out unconditionally) — an LTM that never
+    * reports means that condition is never satisfied, GVT is never computed, and the simulation can
+    * never terminate, silently (no error, no log, just permanently idle). Conservative mode doesn't
+    * have this gap: `ConservativeGlobalTimeManager` actively pushes `UpdateGlobalTimeEvent` to
+    * every pool routee regardless of whether it has work, so an idle-since-start LTM still
+    * participates in every round. Optimistic mode has no equivalent push — this one unconditional
+    * report closes the gap at the one point every LTM instance is guaranteed to pass through
+    * exactly once, however much (or little) work it ends up with.
     */
   override protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
     logInfo(s"Optimistic LocalTimeManager started at tick ${event.startTick}")
@@ -96,6 +114,7 @@ class OptimisticLocalTimeManager(
     isStopped = false
     isTerminated = false
     dispatchNextAvailable()
+    reportGlobalTimeManager()
   }
 
   /** New work becoming available while idle is dispatched immediately — there's no barrier to wait
