@@ -43,7 +43,7 @@ class RollbackHistoryHandlerSpec extends AnyFlatSpec with Matchers {
       checkpointInterval = checkpointInterval,
       captureSnapshotFn = () => actor.capture(),
       restoreSnapshotFn = snap => actor.restore(snap),
-      replayEventFn = event => actor.apply(event)
+      replayEventFn = logged => actor.apply(logged.event)
     )
 
   /** Simulates real usage: the actor processes the event first (mutating its own state), then

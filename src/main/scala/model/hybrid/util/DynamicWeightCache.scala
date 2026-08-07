@@ -110,11 +110,65 @@ object DynamicWeightCache {
       case _: Exception => 100000L
     }
 
-  def getWeight(linkId: String, staticWeight: Double): Double = {
-    val costOpt = strategy.getCost(linkId)
-    val w       = costOpt.map(_.totalCost).getOrElse(staticWeight)
+  // ---------------------------------------------------------------------------
+  // Time Warp replay-safety (docs/TIME_WARP_DESIGN.md's model-level audit, third finding):
+  // dynamic link costs arrive via Kafka/Distributed-Data pub-sub on a real-time TTL, entirely
+  // outside HTC's deterministic event log. A route computed live (`getWeight` reading whatever the
+  // strategy holds *right now*) and later replayed by `RollbackHistoryHandler.rollbackTo` would read
+  // a DIFFERENT, time-shifted set of costs on replay -- silently reconstructing a different route
+  // than the one that was actually causally communicated to other actors (LinkInfoData already sent
+  // along the ORIGINAL route). Fixed with a ThreadLocal recording/override hook rather than
+  // threading parameters through every call site (CompactGraph's A*, CityMapUtil's congestion
+  // check, and any future caller) -- `SimulationBaseActor` wraps a live dispatch in `withRecording`
+  // and a replay in `withOverride`, transparently covering whatever `getWeight` calls happen inside,
+  // wherever they are, without CompactGraph/GPSUtil/the model actors needing to know Time Warp
+  // exists. Safe across concurrently-running actors on different threads by construction (each
+  // thread's Pekko dispatcher runs one actor's message to completion before picking up the next, so
+  // a ThreadLocal set for the duration of one such call never leaks across actors).
+  // ---------------------------------------------------------------------------
+  private val recordingSink: ThreadLocal[scala.collection.mutable.Map[String, Double]] =
+    new ThreadLocal[scala.collection.mutable.Map[String, Double]]()
+  private val overrideMap: ThreadLocal[Map[String, Double]] =
+    new ThreadLocal[Map[String, Double]]()
 
-    if (costOpt.isDefined) dynHits.incrementAndGet() else staticMisses.incrementAndGet()
+  /** Runs `body` with every `getWeight` read observed during it recorded into `sink` (the caller's
+    * own mutable map — typically an actor's per-event read buffer, flushed into its
+    * `RollbackHistoryHandler` log once the event finishes). Used only for a LIVE dispatch.
+    */
+  def withRecording[A](sink: scala.collection.mutable.Map[String, Double])(body: => A): A = {
+    val previous = recordingSink.get()
+    recordingSink.set(sink)
+    try body
+    finally recordingSink.set(previous)
+  }
+
+  /** Runs `body` with every `getWeight` read forced to come from `overrides` instead of the live
+    * strategy (falling back to the edge's static weight for any link not in the map, same as a
+    * live cache miss would). Used only while replaying an already-processed event, so it reproduces
+    * exactly the reads that event's original live dispatch made, not whatever the cache holds now.
+    */
+  def withOverride[A](overrides: Map[String, Double])(body: => A): A = {
+    val previous = overrideMap.get()
+    overrideMap.set(overrides)
+    try body
+    finally overrideMap.set(previous)
+  }
+
+  def getWeight(linkId: String, staticWeight: Double): Double = {
+    val activeOverride = overrideMap.get()
+    val (w, wasDynamic) =
+      if (activeOverride != null) {
+        val ov = activeOverride.get(linkId)
+        (ov.getOrElse(staticWeight), ov.isDefined)
+      } else {
+        val costOpt = strategy.getCost(linkId)
+        (costOpt.map(_.totalCost).getOrElse(staticWeight), costOpt.isDefined)
+      }
+
+    val activeSink = recordingSink.get()
+    if (activeSink != null) activeSink.update(linkId, w)
+
+    if (wasDynamic) dynHits.incrementAndGet() else staticMisses.incrementAndGet()
 
     val total = totalQueries.incrementAndGet()
     if (LOG_INTERVAL > 0 && total % LOG_INTERVAL == 0L) {

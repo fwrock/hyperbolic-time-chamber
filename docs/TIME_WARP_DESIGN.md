@@ -1,5 +1,26 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
+## Current status (2026-08-07, end of session): ready for the end-to-end scenario run
+
+Every piece of Time Warp this document describes — the generic infrastructure (§2/§3/§6/§7/§8/§10/
+§11: `RollbackHistoryHandler`, `OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`, GVT,
+anti-messages, config selection) **and** the `model/hybrid` actors it actually runs against — is now
+implemented, unit-tested, and confirmed against both of Time Warp's correctness invariants
+(determinism, checkpoint completeness). Three rounds of audit this session (model-level determinism,
+checkpoint completeness across six actor types, and the TM-communication-protocol layer) each found
+and closed real gaps that the infrastructure-only work in the sections below could not have
+surfaced by itself — see "Model-level compatibility gap," "Checkpoint-completeness gap," and
+"TM-communication-protocol audit" further down, and their implementation log entries, for the full
+history of what was found and fixed. Full suite: 276 tests, 57 suites, 0 failures.
+
+**Nothing model-level or infrastructure-level is known to block the end-to-end run anymore.** The
+one remaining gap is that none of it has actually been exercised against a live cluster with real
+multi-actor traffic yet — see "Next steps" item 1. Budget for that run to surface at least one more
+gap the same way the progressive-loading and model-level gaps were found: by reasoning about what a
+real run does, which is exactly what no amount of additional unit testing can substitute for.
+
+---
+
 Status as of 2026-08-07: **all five "Suggested order" steps below have landed, each fully or
 deliberately scoped** — §8 (RNG determinism), §2 (Conservative/GlobalTimeManagerBase extraction),
 §6/§7 (`RollbackHistoryHandler`), §2/§3/§11 (`OptimisticLocalTimeManager`/`OptimisticGlobalTimeManager`
@@ -26,6 +47,19 @@ real, plus the one always-acknowledged "not solved yet, not blocking" anti-messa
 document is the design log/rationale from the planning conversation that produced it — update it
 as decisions are revisited or implementation diverges, don't treat it as aspirational once code
 lands (same convention as `docs/CONGESTION_PROPAGATION_DESIGN.md`).
+
+**Correction, 2026-08-07 (same day, later pass)**: everything above describes the generic
+infrastructure (time managers, rollback/replay, GVT, anti-messages) and is accurate about that
+layer. It does **not** mean the actual `model/hybrid` actors (`Car`, `Link`, route planning, dynamic
+link costs) were ever checked against what Time Warp requires of them. That audit hadn't been done
+— see "Model-level compatibility gap" below, added this pass, which found three concrete violations
+of Time Warp's correctness invariants in real model code, none related to the RNG fix §8 already
+made. A second audit the same day found a larger, separate gap in the other correctness invariant
+(checkpoint completeness — see "Checkpoint-completeness gap" below) affecting six actor types. **As
+of the end of this session, both audits' findings are fixed** — see each finding's own
+implementation log entry for what changed. "Implemented and tested" now accurately describes both
+the infrastructure and the model it runs against; the one remaining gap is that none of it has been
+exercised in a real end-to-end scenario run yet (see "Next steps").
 
 ## Motivation
 
@@ -869,6 +903,168 @@ before loading completes requests the next window instead of terminating; a real
 the same way, so there's no equivalent "running low on buffer" signal to prefetch against; revisit
 if a real large progressive-source Time Warp run shows this matters in practice.
 
+### §4 report buffering — done, one of the three model-level audit gaps closed (2026-08-07)
+
+New: `core/entity/event/control/execution/GvtUpdateEvent.scala`,
+`SimulationBaseActorReportBufferSpec.scala` (3 tests). Modified: `SpontaneousEvent.scala` (+`gvt`
+field), `LocalTimeManagerBase.scala` (+`currentGvt` hook, piggybacked onto every dispatch),
+`OptimisticGlobalTimeManager.scala` (broadcasts `GvtUpdateEvent` on real GVT advancement),
+`OptimisticLocalTimeManager.scala` (caches it, overrides the hook), `SimulationBaseActor.scala`
+(the actual buffer/flush/discard logic). `OptimisticGlobalTimeManagerSpec` updated for the new
+broadcast (expects `GvtUpdateEvent` before `StopSimulationEvent` on the terminating round). Full
+suite (242 tests) passes.
+
+**The mechanism**: `report()` still resolves its target reporter and increments `eventsProcessed`
+immediately (that metric counts this actor processing an event, not data reaching a reporter), but
+under `isTimeWarp` the actual `target ! event` send is deferred into a per-actor `reportBuffer`
+instead of firing right away. Three things drain or prune that buffer:
+
+- **GVT-covered flush**: an `OptimisticGlobalTimeManager` now broadcasts `GvtUpdateEvent` to every
+  registered LTM whenever its GVT estimate actually advances (guarded by `currentGvt >
+  previousGvt`, not every recompute round — recomputation runs on every `LvtReportEvent`, and an
+  unchanged GVT unlocks nothing new to flush, so broadcasting unconditionally would multiply
+  fan-out by the LTM pool size for no benefit). Each `OptimisticLocalTimeManager` caches the latest
+  value and piggybacks it onto its next `SpontaneousEvent` dispatches via `LocalTimeManagerBase`'s
+  new `currentGvt` hook (`None` for every conservative-mode LTM, so conservative dispatch is
+  byte-for-byte unaffected). `SimulationBaseActor.handleSpontaneous` flushes everything buffered
+  with `tick <= gvt` whenever a dispatch carries a `Some` value — deliberately reusing the one
+  channel an LTM already has to reach an actor regularly rather than inventing a second
+  LTM-to-actor broadcast path. An idle actor simply flushes on its next dispatch instead of the
+  instant GVT technically clears it; a bounded delay, not a correctness gap, since nothing buffered
+  is observable by anyone until it's actually sent.
+- **Rollback discard**: `rollbackAndCascade` (the private method both the straggler trigger and
+  incoming anti-messages call) now also drops every buffered report with `tick >= targetTick` in
+  the same pass it undoes the corresponding logged events — a report describing state a rollback
+  just erased must never reach a reporter later, only be forgotten.
+- **Unconditional flush at actor termination**: both real termination paths —
+  `selfDestruct()` (the one `Car`/`Bicycle`/`Motorcycle`/`PrivateVehicle`/`Movable` actually call)
+  and `onDestruct(DestructEvent)` (the forced-destruction path via the time manager) — now flush
+  whatever remains in the buffer unconditionally (`flushBufferedReportsUpTo(Long.MaxValue)`) before
+  the actor stops existing, since nothing can ever roll back an actor that's gone.
+
+**`Option[Tick]`, not a sentinel `Tick` value, for `SpontaneousEvent.gvt`/`currentGvt`**: the
+margin-based GVT estimate (§3: `min(LVTs) - margin`) is routinely negative early in a run, so no
+in-range `Long` could double as "not known yet" without colliding with a real estimate — confirmed
+by walking through `MarginBasedGVTEstimation`'s math before picking the representation, not
+assumed.
+
+**Verified by `SimulationBaseActorReportBufferSpec`**, same real-mailbox `TestActorRef` harness as
+`SimulationBaseActorTimeWarpReplaySpec`/`SimulationBaseActorStragglerTriggerSpec`: conservative mode
+still sends immediately (regression check); Time Warp buffers a report and only releases it once a
+later `SpontaneousEvent` carries a covering `gvt`; a genuine straggler-triggered rollback (driven
+through the real `handleInteractWith` path, not a bypassed test hook) discards both an
+already-buffered original report and its now-invalid duplicate, leaving only the straggler's own
+reprocessed report to eventually flush.
+
+**Still open from the 2026-08-07 model-level audit** (see "Model-level compatibility gap" below):
+the other two findings — `GPSUtil`'s wall-clock route-search deadline and `KafkaCacheStrategy`'s
+out-of-band dynamic link-cost cache — are both still real, unfixed determinism hazards, unrelated
+to this fix and not addressed by it.
+
+### Route-search cap made deterministic — second of three model-level audit gaps closed (2026-08-07)
+
+New: `CompactGraphEdgeRelaxationCapSpec.scala` (3 tests — the first direct test coverage
+`CompactGraph`'s A* has ever had, built via `Graph.loadFromJsonFile` + `CompactGraph.fromLoaded`,
+the same fixture-construction approach `GraphSqliteLoaderSpec` uses). Modified:
+`CompactGraph.scala` (`runAStar`/`aStarEuclidean`/`aStarALT`), `GPSUtil.scala` (the two
+`calcRouteCompact`/`calcRouteCompactWalking` call sites). Full suite (245 tests) passes.
+
+**The fix**: `runAStar`'s `deadlineNanos: Long` parameter (checked via `System.nanoTime() >
+deadlineNanos` every 8192 node expansions) is replaced by `maxEdgeRelaxations: Long` — a counter
+incremented once per inner-loop edge examined (not per node popped), checked every iteration
+(a cheap integer compare, unlike the removed `System.nanoTime()` syscall, so checking every
+iteration instead of every 8192 costs nothing new). This is a pure function of graph topology and
+CSR insertion order: the same source/destination pair, the same graph, the same budget always
+produces the same result, independent of machine speed or concurrent load — exactly what replaying
+an already-processed route-planning event under Time Warp requires.
+
+**Why edges, not nodes, needed their own counter**: `maxExpansions` already bounds node pops
+deterministically and was never the problem. The wall-clock deadline's real (if implicit) purpose
+was insurance against a single node's inner edge-scan loop doing disproportionate work relative to
+`expansions` — a node with unusually high out-degree burns many edge examinations while
+`expansions` increments only once. `maxExpansions` alone can't catch that; `maxEdgeRelaxations`
+directly bounds the thing that actually costs time, deterministically.
+
+**`GPSUtil`'s two call sites** replace the old `maxNanos = 2_000_000_000L` literal with
+`maxEdgeRelaxations = maxExpansions.toLong * 32` — an unmeasured placeholder (same "measure before
+guessing, but placeholders need *a* value to exist at all" posture as `checkpoint-interval`/
+`gvt-margin`), assuming real road-network out-degree stays well under a 32x factor. Not tuned
+against production route-search behavior; flagged in "Next steps" alongside the other two
+placeholder config values already awaiting a real run's data.
+
+**Verified by `CompactGraphEdgeRelaxationCapSpec`**: a small hub-and-spoke fixture graph where the
+real destination is reachable only via the *last* edge in the hub's adjacency list (CSR preserves
+per-source edge order from the JSON edge list) — an unrestricted search finds it; a budget smaller
+than the hub's decoy fan-out aborts before ever reaching that edge, while only 2 nodes have been
+expanded (far under `maxExpansions`), proving the cap is edge-driven, not node-driven; five repeated
+calls with the same restrictive budget return the identical `None` every time, the direct
+determinism property `System.nanoTime()` could never have guaranteed.
+
+`aStarEuclidean` itself still has zero real callers anywhere in the codebase (confirmed while
+touching its signature — same "fix the dead code's contract correctly anyway" posture §8's RNG fix
+took with `LaneChangeModel.evaluateLaneChange`); only `aStarALT` (via `GPSUtil`) is live.
+
+### Dynamic link-cost reads made replay-safe — third and last model-level audit gap closed (2026-08-07)
+
+New: `DynamicWeightCacheReplaySpec.scala` (3 tests). Modified: `DynamicWeightCache.scala` (the
+actual fix), `LoggedEvent.scala` (+`dynamicWeightReads`), `RollbackHistoryHandler.scala`
+(`recordProcessedEvent` gains the same param; `replayEventFn`'s type changes from `AnyRef => Unit`
+to `LoggedEvent => Unit`, since replay now needs more than just the raw event — see below),
+`SimulationBaseActor.scala` (wires live recording and replay override around every dispatch),
+`RollbackHistoryHandlerSpec.scala` (one-line update for the `replayEventFn` signature change). Full
+suite (248 tests) passes.
+
+**Why this one was the largest of the three, and the design choice that kept it small anyway**:
+unlike the wall-clock deadline (one call site) or `report()` (one method), dynamic-weight reads
+happen deep inside route computation (`CompactGraph.runAStar`'s inner loop) and are called from
+several places (`GPSUtil`, `CityMapUtil`'s congestion check) that themselves are called from several
+different model actors (`Car`/`Motorcycle`/`Bicycle`/`Movable`/`TravelTimeModeChoiceStrategy`/
+`BusStationRouteCalculator`). Threading a recorder/override parameter through every one of those
+call chains was the first design considered and rejected — large blast radius, and it would need
+redoing for every future caller of `DynamicWeightCache.getWeight`. Instead, the fix lives entirely
+in `DynamicWeightCache` itself: a `ThreadLocal`-scoped recording sink and override map
+(`withRecording`/`withOverride`), transparent to every caller. `SimulationBaseActor` wraps the
+*entire* `actSpontaneous`/`actInteractWith` call — not any specific route-calc call site — in
+`withRecording` (live dispatch) or `withOverride` (replay), so whatever `getWeight` reads happen
+anywhere inside that call, however deeply nested, are captured or forced without `CompactGraph`,
+`GPSUtil`, or any model actor needing to know Time Warp exists. Safe across actors running
+concurrently on different threads because Pekko's dispatcher runs one actor's message to completion
+before picking up the next — a `ThreadLocal` set for the duration of one such call never leaks
+across actors or interacts with another actor's own recording/override.
+
+**The mechanism, mirroring `sentMessages`' existing pattern**: `SimulationBaseActor` gained
+`currentEventDynamicWeightReads: mutable.Map[String, Double]`, cleared at the start of
+`handleSpontaneous`/`handleInteractWith` (same as `currentEventSentMessages`) and flushed into
+`recordProcessedEvent`'s new `dynamicWeightReads` param when the event finishes. `replayLoggedEvent`
+— now taking the full `LoggedEvent` instead of just its `event` field, since it needs
+`dynamicWeightReads` too — wraps the replayed `actSpontaneous`/`actInteractWith` call in
+`DynamicWeightCache.withOverride(logged.dynamicWeightReads)`, forcing every `getWeight` read during
+that replay to reproduce exactly what the original live dispatch saw (falling back to the edge's
+static weight for any link the original recording never touched, same as a live cache miss would).
+
+**Known scope limit, same shape as `sentMessages`' own documented one**: if this exact event is
+ever rolled back a *second* time after being replayed once, its `dynamicWeightReads` cascade would
+still come from the *first* live dispatch's recording (`logged.dynamicWeightReads`, never updated by
+a replay), not from whatever the replay itself read — the same deeper-nested-rollback edge case
+`replayLoggedEvent`'s existing doc already flags for `sentMessages`, not a new one this step
+introduced.
+
+**`getBatchWeights`, a second `WeightCacheStrategy` entry point, is untouched** — it calls
+`strategy.getBatchWeights` directly, bypassing `getWeight` (and so this fix's hook) entirely. Left
+alone deliberately: grepping confirmed zero callers anywhere in `src/main`, only the strategy
+implementations defining it — same "don't fix dead code speculatively, just don't claim it's fixed"
+posture as `aStarEuclidean`/`evaluateLaneChange`. Flagged here so whoever adds the first real caller
+knows it needs the same `withRecording`/`withOverride` treatment (or must route through `getWeight`
+per-link instead).
+
+**Verified by `DynamicWeightCacheReplaySpec`**, directly against `DynamicWeightCache` (no actor
+harness needed — the fix lives entirely at this layer): a value recorded during a `withRecording`
+block is reproduced exactly by a later `withOverride` block even after a real intervening
+`publishCost` call changes what the live cache holds for that link (the core correctness property);
+a link the recording never saw falls back to the static weight under `withOverride`, not the live
+(and possibly since-changed) dynamic cost; and a plain call made after a wrapped block ends sees live
+behavior again, proving no `ThreadLocal` leakage.
+
 ## Open questions / not designed yet
 
 Updated 2026-08-07 — several items below were resolved by implementation and are marked as such
@@ -913,6 +1109,334 @@ rather than deleted, so the history of what was originally unknown stays visible
   every unit test written before it, and was only found by reasoning about what a real run would
   do, not by running one.
 
+## Model-level compatibility gap: the hybrid model itself was never audited (found 2026-08-07)
+
+Everything above — `RollbackHistoryHandler`, `OptimisticLocalTimeManager`/`GlobalTimeManager`, GVT,
+anti-messages — is generic infrastructure over `SimulationBaseActor`; it treats `Car`/`Bus`/`Link`/
+`Person`/etc. identically and was never checked against what those concrete actors actually do.
+Time Warp correctness rests on two invariants the model must satisfy, both stated in this document
+(§8's motivation, §4) but never verified against `model/hybrid`'s real code:
+
+1. `(state, event) → new state` is a pure function — replaying an already-processed event must
+   reproduce the same result (`RollbackHistoryHandler.rollbackTo`'s whole mechanism depends on this).
+2. Irreversible side effects (`report()`) are held back until GVT confirms the tick they belong to
+   can never be rolled back (§4).
+
+§8's RNG-determinism pass fixed the two sources found by that session's investigation
+(`KraussModel`, `TravelTimeLogitEngine`) — but that investigation was scoped to *RNG* specifically,
+not a general audit of the model for determinism/side-effect hazards. Auditing `model/hybrid` now,
+against the two invariants above, found three real gaps, none previously flagged anywhere in this
+document:
+
+- ~~**§4 (`report()` buffering) was decided but never implemented.**~~ **Fixed 2026-08-07** — see
+  the dedicated implementation log entry below (§4 report buffering). `SimulationBaseActor.report()`
+  now buffers under `isTimeWarp` and flushes once a GVT watermark covers the buffered tick; a
+  rollback discards anything for a tick it undoes instead of letting it flush later.
+- ~~**`GPSUtil.calcRouteCompact`/`calcRouteCompactWalking` always pass `maxNanos =
+  2_000_000_000L`**~~ **Fixed 2026-08-07** — see "route-search cap made deterministic" in the
+  implementation log below. `CompactGraph.runAStar` no longer checks `System.nanoTime()`; it bounds
+  total edges examined instead (`maxEdgeRelaxations`), a pure function of graph topology and CSR
+  insertion order.
+- ~~**`KafkaCacheStrategy`/`DynamicLinkCost`'s dynamic link-cost cache is mutated
+  out-of-band.**~~ **Fixed 2026-08-07** — see "dynamic link-cost reads made replay-safe" in the
+  implementation log below. `DynamicWeightCache.getWeight` reads are now recorded during a live
+  dispatch and forced to the recorded values during replay, via a ThreadLocal hook
+  `SimulationBaseActor` wraps around every dispatch — no change needed to `CompactGraph`/`GPSUtil`/
+  any model actor that calls it.
+
+None of these were visible to the infrastructure-focused investigation and test suite built so far
+(228+ TestKit/ScalaTest cases, all against synthetic minimal actors, none against real `Car`/`Link`/
+route-planning code) — they require reading the model's own logic, not the time-manager/rollback
+machinery, to find. This is a second, model-shaped instance of the same lesson §10's progressive-
+loading gap (2026-08-07 entry above) already taught about the infrastructure side: unit tests
+against synthetic actors can't surface a gap that only exists in what the *real* actors do.
+
+**Status as of 2026-08-07 (later pass): all three fixed.** `report()` buffering (see "§4 report
+buffering"), the route-search wall-clock deadline (see "Route-search cap made deterministic"), and
+the dynamic link-cost cache (see "dynamic link-cost reads made replay-safe") are all done — see the
+implementation log above for each.
+
+**This closed invariant-1 (determinism) gaps found so far — it did NOT close invariant 2
+(checkpoint completeness). See the next section: a follow-up audit found that invariant 2 has a
+second, much larger gap than anything above, unrelated to the three fixes just listed.**
+
+## Checkpoint-completeness gap: vehicle/Bus/Subway/Link actor-local state isn't captured (found 2026-08-07, later pass)
+
+Prompted by a direct challenge to this document's own claim of "model-level compatibility gap...
+closed": the three fixes above were all found by targeted investigation (grepping for
+`System.nanoTime`/`Random`/cache reads), not a systematic pass over the actual participant actors
+against **both** invariants stated at the top of the previous section. A dedicated audit of
+`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`/`Node`/`TrafficSignal`'s real source (not
+grep-only) against invariant 2 — "what must live in `state`, not as an actor-local `var`," CLAUDE.md's
+own documented rule, already known to have bitten `PrivateVehicle`/`Person` once (`docs/KNOWN_GAPS.md`
+Gaps A/B) — found that rule violated again, independently, in a way none of the three fixes above
+touch. This matters specifically for Time Warp because `RollbackHistoryHandler`'s checkpointing
+reuses `BaseActor.buildMigrationSnapshot`/`applyMigrationSnapshot` **verbatim** — any actor-local
+`var` outside what that method captures is invisible to `rollbackTo`'s restore, exactly the Gap A/B
+mechanism, just for a disjoint set of fields Gap A/B's fix never covered.
+
+**`Car`/`Motorcycle`/`Bicycle`** — each declares its own protocol-phase `var`s (`currentLinkId`,
+`linkEntryTick`, `mesoExitTick`, `signalWaitUntilTick`, `signalWaitNeedsReverify`, plus
+`currentLinkLength` on `Car`) directly on the concrete class, not the `PrivateVehicle` trait — so
+`captureMigrationFields`/`restoreMigrationFields` (Gap A/B's fix) never touch them.
+`buildMigrationSnapshot` on all three only adds the trait-level fields. **Failure scenario**: a `Car`
+rolled back to a checkpoint from before a signal reply arrived gets `state.status` correctly restored
+to `Moving`, but `signalWaitUntilTick`/`signalWaitNeedsReverify` keep whatever value live execution
+left them at — replay then takes a `WaitingSignal`-vs-`Moving` branch inconsistent with the restored
+state, potentially double-sending `RequestLinkAccessData` to a `Node` or silently skipping the wait
+that should have happened.
+
+**`Car`/`Motorcycle`/`Bicycle` all fixed 2026-08-07 (later pass)** — see "`Car`'s checkpoint-
+completeness fixed" and "`Motorcycle`/`Bicycle` checkpoint-completeness fixed" in the implementation
+log below.
+
+**`Bus`/`Subway`** — have **no `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all**;
+every actor-local `var` is lost on any restore. Includes `expectedUnloadResponses` — a genuine
+reply-count barrier (waiting on N passenger-unload responses before considering a stop cycle
+complete). **Failure scenario**: rollback to before some of those N responses were processed leaves
+the live counter at its post-rollback-point value, inconsistent with the just-restored state — the
+bus can finish "unloading" prematurely or never satisfy the barrier (stuck waiting on replies already
+counted pre-rollback) — the same deadlock class Gap B fixed for `Person.currentPTVehicleRef`, just
+unaddressed here.
+
+**`Bus`/`Subway` fixed 2026-08-07 (later pass)** — see "`Bus`/`Subway` checkpoint-completeness
+fixed" in the implementation log below.
+
+**`Link`** — also has no `buildMigrationSnapshot` override. `vehicleEntryTick`/`vehicleWaitingSeconds`
+(`mutable.Map[String, ...]`) feed travel-time math sent to departing vehicles
+(`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`). A rollback that undoes
+a vehicle's leave-event without purging its map entry (nothing in `rollbackTo` touches actor-local
+structures) leaves a stale or missing entry for the next real leave — a genuine invariant-1-adjacent
+replay-divergence, not just a lost cache: the same logical event computes a different `avgSpeed`
+after rollback than it did live, because part of the effective input lives outside what's
+checkpointed.
+
+**`Link` fixed 2026-08-07 (later pass)** — see "`Link` checkpoint-completeness fixed" in the
+implementation log below. **This closes the checkpoint-completeness gap entirely — all five actor
+types the original audit named (`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`) are now fixed.**
+
+**`Node`/`TrafficSignal`** — no findings. Their correctness-relevant mutable state
+(`capacityWaitQueue`, `availableCapacity`, `signals`) already lives in `NodeState`/
+`TrafficSignalState`, captured by the default `state` serialization every actor gets for free.
+
+**Micro sub-tick math (§9's "recomputed from scratch, pure function" claim) — verified, holds.**
+`DefaultMicroSimulationStrategy.executeSubTick`/`processMicroLane`, the actual live car-following
+path, is a pure function with no RNG or wall-clock reads; the RNG-bearing `KraussModel` methods §8
+fixed are only reachable from `MobilLaneChange`, which (per §8's own log) has zero live callers.
+Per-lane processing never crosses lanes, so `mutable.Map` iteration order doesn't affect outcomes
+either. §9's decision is validated, not just assumed.
+
+**Overall verdict (from the audit)**: this is a materially bigger gap than the three fixes above
+suggested — not "a few more fields," but every vehicle type's own signal/link-wait bookkeeping, plus
+`Bus`/`Subway`'s passenger-barrier counters, plus `Link`'s per-vehicle timing maps, none of it ever
+exercised against restore because shard migration (the only other consumer of this same snapshot
+machinery) has been kept disabled the entire time these actors were built — so nothing ever forced
+this gap to surface before now. **Not fixed yet, not started** — this needs its own remediation pass
+(one `captureMigrationFields`/`restoreMigrationFields`-style addition per actor type, mirroring how
+Gap A/B was originally fixed for `PrivateVehicle`/`Person`), not spot fixes, before Time Warp is
+exercised against `model.hybrid` for real. Added to "Next steps" below, ahead of the end-to-end
+scenario run — running that scenario before this is fixed would hit exactly this class of bug and
+it would look like a mysterious new one, the same reasoning already applied to the three prior
+findings.
+
+### `Car`'s checkpoint-completeness fixed — first of three actor types (2026-08-07, later pass)
+
+New: `CarLinkWaitMigrationSnapshotSpec.scala` (5 tests). Modified: `MigrationSnapshot.scala`
+(+6 `vehicle*` fields), `Car.scala` (`captureCarMigrationFields`/`restoreCarMigrationFields`, wired
+into `buildMigrationSnapshot`/`applyMigrationSnapshot`; the 6 affected `var`s changed from `private`
+to `protected` so the new spec can drive them directly instead of reverse-engineering
+`LinkInfoData`/`LinkAccessData` payloads). Full suite (253 tests) passes.
+
+**The fix**: mirrors exactly how Gap A/B was originally fixed for `PrivateVehicle`/`Person` —
+`Car.buildMigrationSnapshot` now chains `captureCarMigrationFields(captureMigrationFields(super.
+buildMigrationSnapshot()))`, and `applyMigrationSnapshot` calls both `restoreMigrationFields` (the
+existing trait-level Gap A/B fix) and the new `restoreCarMigrationFields`. `Option[String]`/
+`Option[Tick]` fields flatten to the same sentinel convention already established
+(`""`/`Long.MinValue`), for the same reason: `MigrationSnapshot` must stay a simple,
+Jackson-serializable case class.
+
+**Field naming deliberately generic, not `Car`-specific**: `MigrationSnapshot` gained
+`vehicleCurrentLinkId`/`vehicleCurrentLinkLength`/`vehicleLinkEntryTick`/`vehicleMesoExitTick`/
+`vehicleSignalWaitUntilTick`/`vehicleSignalWaitNeedsReverify` (`vehicle*`, not `car*`) — the audit
+above found `Motorcycle`/`Bicycle` need the identical fields (minus `currentLinkLength`), so these
+are shaped for direct reuse once their own fix lands, not renamed/duplicated per actor type.
+
+**Why the capture/restore logic itself stayed local to `Car.scala`, not lifted into `PrivateVehicle`
+the way `ownerPersonRef` etc. are**: those trait-level fields are declared *in* the `PrivateVehicle`
+trait itself, so its `captureMigrationFields`/`restoreMigrationFields` have direct access. `Car`'s
+link/signal-wait fields are declared on the concrete class (`currentLinkLength` isn't even shared
+with `Motorcycle`/`Bicycle`), so lifting the logic into the trait now — before `Motorcycle`/`Bicycle`
+are actually fixed and their exact shared subset is confirmed by writing the code, not just reading
+it — would be guessing at a shared abstraction ahead of the second and third data points. Each
+vehicle type wiring its own two methods (already the established pattern per `PrivateVehicle`'s own
+doc comment) is deliberately kept for now; revisit consolidating if `Motorcycle`/`Bicycle`'s fixes
+turn out identical enough to be worth it once written.
+
+**Verified by `CarLinkWaitMigrationSnapshotSpec`**, same `TestActorRef`-direct-method-call harness as
+`PrivateVehicleMigrationSnapshotSpec`: capture round-trips link occupancy + MESO exit tick, a pending
+signal-wait re-verification, and the sentinel case (never on a link); restore rehydrates a fresh
+actor's fields correctly, including the negative case (never on a link → no stale link-wait state
+after restore).
+
+**Still open**: `Bus`/`Subway` (no override exists at all yet — needs one built from scratch),
+`Link` (`vehicleEntryTick`/`vehicleWaitingSeconds`).
+
+### `Motorcycle`/`Bicycle` checkpoint-completeness fixed — second and third of three vehicle types (2026-08-07, later pass)
+
+New: `MotorcycleLinkWaitMigrationSnapshotSpec.scala`, `BicycleLinkWaitMigrationSnapshotSpec.scala`
+(5 tests each — same structure as `CarLinkWaitMigrationSnapshotSpec`). Modified: `Motorcycle.scala`
+(`captureMotorcycleMigrationFields`/`restoreMotorcycleMigrationFields`), `Bicycle.scala`
+(`captureBicycleMigrationFields`/`restoreBicycleMigrationFields`) — no changes needed to
+`MigrationSnapshot` itself, since `Car`'s fix already named the `vehicle*` fields generically for
+this exact reuse. Full suite (263 tests) passes.
+
+**Confirms the "identical shape minus `currentLinkLength`" prediction from the original audit was
+exactly right** — both `Motorcycle`/`Bicycle` had the identical `currentLinkId`/`linkEntryTick`/
+`mesoExitTick`/`signalWaitUntilTick`/`signalWaitNeedsReverify` set as `Car`, with no
+`currentLinkLength` equivalent to capture. Same fix shape as `Car`'s: a small
+`capture*MigrationFields`/`restore*MigrationFields` pair per class, chained into
+`buildMigrationSnapshot`/`applyMigrationSnapshot` alongside `PrivateVehicle`'s existing
+`captureMigrationFields`/`restoreMigrationFields`; the affected fields changed from `private` to
+`protected` so each new spec can drive them directly, same rationale as `Car`'s.
+
+**Consolidation into `PrivateVehicle` reconsidered now that all three are written — still not
+done, deliberately**: the three `capture*MigrationFields` methods are now byte-for-byte identical
+(mechanically: same five `.copy(...)` assignments) except `Car`'s extra `vehicleCurrentLinkLength`
+line. This is exactly the "confirmed enough to be worth it" trigger the `Car` entry above named —
+but lifting it into `PrivateVehicle` would require either duplicating the 5-line body once more as
+a shared default method plus per-class field access (the trait doesn't own these `var`s), or moving
+the `var` declarations themselves into the trait, which is a real (if small) design decision about
+where vehicle link-state should live, not a mechanical extraction — left as a follow-up, not bundled
+into this fix, since it's a refactor of already-correct code, not a correctness fix.
+
+**Checkpoint-completeness for the three `PrivateVehicle` types (`Car`/`Motorcycle`/`Bicycle`) is
+now done.**
+
+### `Bus`/`Subway` checkpoint-completeness fixed — a real gap found and fixed along the way (2026-08-07, later pass)
+
+New: `BusMigrationSnapshotSpec.scala`, `SubwayMigrationSnapshotSpec.scala` (4 tests each). Modified:
+`MigrationSnapshot.scala` (+`expectedUnloadResponses`/`currentStopNode`), `Bus.scala` (first-ever
+`buildMigrationSnapshot`/`applyMigrationSnapshot` override), `Subway.scala` (same), `BusStopHandler.scala`
+(the extra fix, see below). Full suite (271 tests) passes.
+
+**`Bus`/`Subway` needed a bigger lift than `Car`/`Motorcycle`/`Bicycle`: no override existed at
+all**, not just an incomplete one — both gained `capture*MigrationFields`/`restore*MigrationFields`
+from scratch, wired into `buildMigrationSnapshot`/`applyMigrationSnapshot` for the first time.
+`Bus` reuses the same `vehicle*` `MigrationSnapshot` fields `Car` already established (identical
+`currentLinkId`/`linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/`signalWaitNeedsReverify` set,
+confirming that reuse was worth designing for), plus two new fields shared with `Subway`:
+`expectedUnloadResponses` (the reply-count barrier) and (`Bus`-only) `currentStopNode`.
+
+**A real bug found and fixed along the way, not just a checkpoint gap**: `Bus`'s
+`expectedUnloadResponses` turned out to be declared in *two places* — a dead, never-referenced
+`private var` on `Bus.scala` itself, and the actually-live one inside `BusStopHandler`
+(`support/bus/BusStopHandler.scala`), mutated directly by the handler's own methods. That's a
+CLAUDE.md rule-3 violation ("Handlers are stateless — helper classes receive only lambdas, hold no
+Pekko refs") that predates this fix and is independent of Time Warp — a stateful handler is just as
+uncapturable by `buildMigrationSnapshot` as a stateful actor field would be, since neither the actor
+nor anything else ever reaches into the handler instance to serialize it. Fixed by converting
+`BusStopHandler`'s internal `expectedUnloadResponses` var into
+`getExpectedUnloadResponsesFn`/`setExpectedUnloadResponsesFn` closures (the same pattern every other
+`Bus*Handler` already uses for `currentLinkId`/`currentStopNode`/etc.), backed by `Bus`'s own
+(previously dead, now real) `var` — restoring both the stateless-handler invariant and, as a direct
+consequence, making the barrier capturable at all.
+
+**`Subway`'s `expectedUnloadResponses` didn't have this problem** — it was already a plain
+actor-local `var` on `Subway.scala` itself, threaded correctly through `SubwayPassengerHandler` as
+an explicit parameter/return value (a stateless handler, correctly, unlike `BusStopHandler`). Its
+gap was purely the missing capture/restore, the simpler fix of the two.
+
+**Verified by `BusMigrationSnapshotSpec`/`SubwayMigrationSnapshotSpec`** (same `TestActorRef`-direct
+harness as the vehicle specs): capture/restore round-trips the reply-count barrier and (`Bus`-only)
+current stop node correctly, including both the active-barrier and no-barrier-in-progress sentinel
+cases.
+
+### `Link` checkpoint-completeness fixed — last of the five actor types (2026-08-07, later pass)
+
+New: `LinkMigrationSnapshotSpec.scala` (5 tests). Modified: `MigrationSnapshot.scala`
+(+`linkVehicleEntryTick`/`linkVehicleWaitingSeconds`), `Link.scala` (first-ever
+`buildMigrationSnapshot`/`applyMigrationSnapshot` override; `vehicleEntryTick`/
+`vehicleWaitingSeconds` changed from `private` to `protected`). Full suite (276 tests) passes.
+
+**Simpler than `Bus`/`Subway`'s fix**: no stateless-handler violation to untangle here — both maps
+were already correctly owned directly by `Link` itself (mutable, keyed by vehicle entity id),
+just never captured. `MigrationSnapshot` gained two new `Map[String, Long]`/`Map[String, Double]`
+fields (`linkVehicleEntryTick`/`linkVehicleWaitingSeconds`) — Jackson-serializable the same way the
+existing `dependencyIds: Map[String, String]` field already is, so no new serialization concerns.
+Restore clears then repopulates the existing mutable maps in place (`vehicleEntryTick`/
+`vehicleWaitingSeconds` are `val`s, not `var`s — only their contents are replaced, not the
+references), which also correctly handles the case a rolled-back `Link` had stale entries a smaller
+restored snapshot doesn't include.
+
+**Verified by `LinkMigrationSnapshotSpec`**: capture round-trips both maps for multiple registered
+vehicles and the empty case; restore rehydrates a fresh actor's maps correctly, including the
+empty case and — the one scenario unique to mutable in-place maps — that restoring a *smaller*
+snapshot onto an actor that already had entries doesn't leave old, now-stale entries behind.
+
+**Checkpoint-completeness gap status: closed.** All five actor types the original 2026-08-07 audit
+named (`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`) now have complete migration-snapshot
+capture/restore. Combined with the earlier confirmation that the TM-communication-protocol layer is
+sound for both modes (next section), nothing model-level is known to block the end-to-end scenario
+run in "Next steps" anymore.
+
+## TM-communication-protocol audit: confirmed sound for both modes, one unrelated bug found (2026-08-07, later pass)
+
+Before starting the checkpoint-completeness remediation, explicitly verified two more things
+requested directly: (1) whether `actSpontaneous`/`actInteractWith`'s communication with the time
+managers is genuinely mode-agnostic, and (2) whether the real `model/hybrid` handlers actually honor
+CLAUDE.md's "Synchronization Discipline" (every consistency-critical request replies on every
+branch) in a way that holds under Time Warp's per-LTM-independent dispatch, not just the
+conservative barrier.
+
+**(1) TM protocol layer — confirmed clean by direct code reading, not just inference.**
+`LocalTimeManagerBase.scheduleEvent`/`finishEvent` (`core/actor/manager/time/LocalTimeManagerBase.scala:101,128`)
+— the methods that receive every `ScheduleEvent`/`FinishEvent` an actor's `onFinishSpontaneous`/
+`scheduleEvent` sends — are **not overridden by either** `ConservativeLocalTimeManager` or
+`OptimisticLocalTimeManager`: literally the same code path for both modes, confirming the §2
+extraction achieved what it set out to. `runningEvents` (how a consistency-critical wait — an actor
+that skips `onFinishSpontaneous` until a reply arrives — actually works) is the same shared
+structure for both. `SimulationBaseActor.onFinishSpontaneous`/`scheduleEvent`'s `isReplaying` guard
+is the only mode-sensitive branch, and it's already covered by
+`SimulationBaseActorTimeWarpReplaySpec`.
+
+**(2) Model handler discipline — mostly clean, one real (but Time-Warp-unrelated) bug found, now
+tracked in `docs/KNOWN_GAPS.md`.** Audited every consistency-critical request/reply exchange found
+in `model/hybrid` (vehicle↔`Node` signal/link-access, `Bus`/`Subway`↔`Person` unload requests,
+`BusStop`↔`Bus` passenger-load requests, `TrafficSignal`→`Node` phase broadcasts). Findings:
+
+- Vehicle↔`Node` signal/link-access (`CarSignalHandler` and its `Motorcycle`/`Bicycle`/`Bus`
+  equivalents, `NodeEventHandler.handleRequestLinkAccess`): **clean** — `Node` replies on every
+  branch (signal-Red, signal-Green/no-signal, capacity-Full/available, even not-yet-initialized
+  state). Worth noting as a documentation nuance, not a bug: the requester actually calls
+  `onFinishSpontaneous(None)` *immediately*, before the reply arrives, then re-enters the schedule
+  via `scheduleEvent` once the reply lands — functionally sound (and arguably safer against ever
+  stalling a TM), but a different shape than CLAUDE.md's literal "withhold `onFinishSpontaneous`
+  until the reply" wording. If a future edit ever did introduce a missing-reply branch here, the
+  failure mode would be a silently-stranded vehicle, not a TM hang — worth keeping in mind.
+- `BusStop`↔`Bus` passenger-load handshake (`BusStop.handleBusRequestPassenger`): clean, replies on
+  both branches.
+- `TrafficSignal`→`Node` phase broadcast: correctly fire-and-forget, no reply expected or sent.
+- **`Bus`/`Subway`↔`Person` unload request (`PersonPlanManager.handlePTUnloadRequest`): a real,
+  reachable missing-reply branch** — see `docs/KNOWN_GAPS.md`'s new "`PersonPlanManager.
+  handlePTUnloadRequest` Silently Drops the Reply..." entry for the full mechanism (a PT-boarding
+  timeout race that never gets cancelled on actual boarding). **Not Time-Warp-specific** — reproduces
+  identically under the conservative barrier, so it belongs in `KNOWN_GAPS.md`, not scoped as a
+  Time-Warp blocker here — but it directly feeds `Bus`/`Subway`'s `expectedUnloadResponses` counter,
+  the same field flagged as an uncaptured-checkpoint hazard in the section above, so whoever fixes
+  the checkpoint-completeness gap for `Bus`/`Subway` should be aware this separate bug exists in the
+  same neighborhood.
+- Also checked Time-Warp-specific ordering: `NodeEventHandler`'s `queuePosition` assignment is
+  arrival-order-based, which could differ across Time Warp's independently-dispatching LTM
+  instances — but `NodeState`'s queue/capacity fields are all properly in `state` (checkpointed), so
+  a rollback-and-replay correctly reconstructs whatever order actually happened; not a distinct gap,
+  just confirms the generic rollback mechanism covers this case as designed.
+
+**Net effect on "what's left"**: no new Time-Warp-specific blocker found by this pass — the TM
+protocol layer and the model's reply discipline are both sound with respect to Time Warp
+specifically. The one real bug found is real but orthogonal (general correctness, not sync-mode-
+specific) and is tracked separately in `docs/KNOWN_GAPS.md` rather than added to this document's own
+"Next steps." The checkpoint-completeness gap (previous section) remains the actual next blocker.
+
 ## Relevant file map (per-row status; see "Next steps" for what's still outstanding)
 
 | File | Role |
@@ -951,16 +1475,22 @@ fix) and three bugs caught before they could ever surface (a Jackson inner-class
 failure, a `TestProbe`-vs-`/user/` addressing mismatch, and a wrong config path that would have
 thrown the moment Time Warp was first enabled).
 
-**What's actually left**, in the order it makes sense to tackle them:
+**What's actually left**, in the order it makes sense to tackle them. Both audits from 2026-08-07
+are now fully closed: the model-level audit's three determinism gaps (`report()` buffering, the
+route-search wall-clock deadline, dynamic link-cost reads) and the checkpoint-completeness audit's
+five actor-type gaps (`Car`/`Motorcycle`/`Bicycle`/`Bus`/`Subway`/`Link`) — see each one's
+implementation log entry above. The TM-communication-protocol audit (next section) also confirmed
+the protocol layer itself is sound for both modes. Nothing model-level is known to block the
+end-to-end run anymore:
 
 1. **Run an actual end-to-end multi-actor scenario under `TIME_WARP`.** The highest-value next
    step, and the only remaining "Open questions" item that isn't a self-contained coding task —
    every piece so far has been proven with mocks, `TestProbe`s, or direct method calls, never
    against a live cluster running real actor traffic. This is also the only way left to find gaps
-   like the progressive-loading one (2026-08-07): that gap was invisible to unit tests and was only
-   found by reasoning about what a real run would do. Expect this to surface at least one more gap
-   the same way — budget for it, don't treat "the code compiles and unit tests pass" as "Time Warp
-   works."
+   like the progressive-loading one (2026-08-07) or the model-level/checkpoint-completeness audits
+   (2026-08-07): all were invisible to unit tests and were only found by reasoning about what a real
+   run would do. Expect this to surface at least one more gap the same way — budget for it, don't
+   treat "the code compiles and unit tests pass" as "Time Warp works."
 2. **`OptimisticLocalTimeManager` large-tick batching.** No equivalent of
    `LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE`. Likely the first real bottleneck step 1
    would hit at this project's actual scale (750K+ actors) — but confirm with step 1's findings
@@ -968,9 +1498,9 @@ thrown the moment Time Warp was first enabled).
    the conservative version's (which batches within an already-synchronized barrier round; Time
    Warp has no equivalent round to batch within).
 3. **Tune the placeholder config values** (`checkpoint-interval = 50`, `gvt-margin = 100`,
-   `plateau-rounds-required = 3`) against whatever step 1 reveals — these were never meant to be
-   guessed correctly on the first try, per this document's own "measure before guessing" posture
-   throughout.
+   `plateau-rounds-required = 3`, and now also `GPSUtil`'s `maxEdgeRelaxations = maxExpansions * 32`)
+   against whatever step 1 reveals — none of these were ever meant to be guessed correctly on the
+   first try, per this document's own "measure before guessing" posture throughout.
 4. **Adaptive progressive-load prefetch for Time Warp** — only worth designing once step 1 shows
    whether the current purely-reactive window request (only when idle before loading completes) is
    actually a problem in practice, or whether Time Warp's fundamentally different dispatch model
@@ -980,6 +1510,10 @@ thrown the moment Time Warp was first enabled).
    designed, still not blocking anything: nothing in real use yet exercises message reordering deep
    enough to hit it. The one item from the original design's four-item "not live yet" list with no
    code behind it at all, not even a scoped-down version.
+6. **`docs/KNOWN_GAPS.md`'s `PersonPlanManager.handlePTUnloadRequest` silent-reply-drop bug** —
+   found during the TM-communication-protocol audit, real but not Time-Warp-specific (reproduces
+   under the conservative barrier too), so tracked there rather than here — not a blocker for
+   anything above, just not forgotten.
 
 Not on this list because they're explicitly out of scope, not just deferred: federated
 conservative/optimistic execution within one simulation run (§1's scope decision), and exact

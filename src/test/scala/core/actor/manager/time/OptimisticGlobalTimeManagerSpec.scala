@@ -132,6 +132,9 @@ class OptimisticGlobalTimeManagerSpec extends AnyFlatSpec with Matchers with Bef
 
     gtm.tell(LvtReportEvent(lvt = 5L, isIdle = true), ltmProbe.ref)
 
+    // The GVT estimate advances on this same round (docs/TIME_WARP_DESIGN.md §4's report-buffer
+    // flush signal), broadcast before termination's own StopSimulationEvent broadcast.
+    ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[core.entity.event.control.execution.GvtUpdateEvent]
     ltmProbe.expectMsgClass(3.seconds, classOf[Broadcast]).message shouldBe a[org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent]
   }
 }

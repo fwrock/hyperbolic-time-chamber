@@ -269,17 +269,24 @@ abstract class LocalTimeManagerBase(
     }
   }
 
+  /** This LTM's last-known GVT estimate, piggybacked onto every `SpontaneousEvent` dispatch (`docs/
+    * TIME_WARP_DESIGN.md` §4) so actors can flush buffered `report()` calls once it's safe. `None`
+    * (meaning "no GVT concept, ignore") for every strategy except [[OptimisticLocalTimeManager]],
+    * which overrides this to return its cached watermark from `GvtUpdateEvent`.
+    */
+  protected def currentGvt: Option[Tick] = None
+
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
     actorRef ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(identity.id),
-      SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
+      SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
     )
   }
 
   private def sendSpontaneousEventPool(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = context.system.actorSelection(identity.actorRef)
-    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
+    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
   }
 
   private def terminateSimulation(): Unit = synchronized {

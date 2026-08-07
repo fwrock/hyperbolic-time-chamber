@@ -92,7 +92,7 @@ final class CompactGraph private (
     altH: (Int, Int) => Double,
     maxExpansions: Int,
     useDynamicWeights: Boolean,
-    deadlineNanos: Long = Long.MaxValue
+    maxEdgeRelaxations: Long = Long.MaxValue
   ): Option[(Double, List[(String, String)])] = {
 
     if (source == target) return Some((0.0, List.empty))
@@ -111,6 +111,7 @@ final class CompactGraph private (
     heap.push(0.0, source)
 
     var expansions = 0
+    var edgeRelaxations = 0L
 
     while (!heap.isEmpty) {
       val (fU, u) = heap.pop()
@@ -132,13 +133,20 @@ final class CompactGraph private (
         visited.set(u)
         expansions += 1
         if (expansions >= maxExpansions) return None
-        // Time-cap: check every 5 000 expansions to limit overhead.
-        // Avoids blocking dispatcher threads for >deadlineNanos on disconnected graphs.
-        if ((expansions & 0x1FFF) == 0 && System.nanoTime() > deadlineNanos) return None
 
         var e = rowPtr(u)
         val end = rowPtr(u + 1)
         while (e < end) {
+          // Work-cap: bounds total edges examined, not just node expansions, so a search that
+          // stays under maxExpansions but hits nodes with unusually high out-degree still has a
+          // hard, deterministic ceiling — a pure function of graph topology and visitation order,
+          // not of wall-clock time (docs/TIME_WARP_DESIGN.md's model-level audit found the previous
+          // System.nanoTime() deadline here made replay non-deterministic: the same event replayed
+          // under different CPU contention, e.g. during a Time Warp rollback cascade, could time
+          // out at a different point and return a different route, or none, than the original run
+          // — this replaces that with a count that reproduces identically every time).
+          edgeRelaxations += 1
+          if (edgeRelaxations >= maxEdgeRelaxations) return None
           val v  = colIdx(e)
           if (!visited.get(v)) {
             val baseW  = edgeWeight(e)
@@ -167,13 +175,12 @@ final class CompactGraph private (
     destinationId: String,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
-    maxNanos: Long = Long.MaxValue
+    maxEdgeRelaxations: Long = Long.MaxValue
   ): Option[(Double, mutable.Queue[(String, String)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
-    runAStar(src, dst, null, maxExpansions, useDynamicWeights, deadline)
+    runAStar(src, dst, null, maxExpansions, useDynamicWeights, maxEdgeRelaxations)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 
@@ -188,13 +195,12 @@ final class CompactGraph private (
     altH: (Int, Int) => Double,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
-    maxNanos: Long = Long.MaxValue
+    maxEdgeRelaxations: Long = Long.MaxValue
   ): Option[(Double, mutable.Queue[(String, String)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
-    runAStar(src, dst, altH, maxExpansions, useDynamicWeights, deadline)
+    runAStar(src, dst, altH, maxExpansions, useDynamicWeights, maxEdgeRelaxations)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 

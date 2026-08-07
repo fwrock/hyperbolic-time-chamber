@@ -1375,6 +1375,69 @@ until this deeper gap is addressed — a genuine `htc-architect`-level design qu
 signal model need turn-movement-aware admission control, and if so what data/format would supply
 it), not a follow-up wiring task. Flagged here, not designed or implemented.
 
+## `PersonPlanManager.handlePTUnloadRequest` Silently Drops the Reply When a PT-Boarding Timeout Races the Real Ride (Found 2026-08-07, Not Fixed)
+
+Found during a `docs/TIME_WARP_DESIGN.md`-driven audit checking whether `model/hybrid`'s
+consistency-critical request/reply handlers actually follow this repo's own CLAUDE.md
+"Synchronization Discipline" (every consistency-critical request handler must reply on *every*
+branch, including no-op ones). **Not Time-Warp-specific** — reproduces identically under the
+conservative barrier; found while looking for Time Warp gaps, but it's a general correctness bug.
+
+**The gap**: `PersonPlanManager.handlePTUnloadRequest` (`support/person/PersonPlanManager.scala:378-419`)
+only sends a reply inside its `case t: Traveling if t.ptWait.isDefined` branch (delegating to
+`PersonPTTripHandler.handlePTUnloadRequest`, itself verified to reply on every branch). The fallback:
+
+```scala
+case _ =>
+  logWarn(s"$personId received PT unload request from ${event.actorRefId} while not waiting on a PT leg — ignoring (already handled)")
+  None
+```
+
+sends **no reply at all** — `Person.actInteractWith` (`actor/Person.scala:228-240`) consumes the
+`Option[PlanStepResult]` via `.foreach`, so a `None` here silently drops the interaction with zero
+message back to the requesting `Bus`/`Subway`.
+
+**Why the fallback branch is actually reachable, not just defensive dead code**: `ptWait`
+(`TripExecutionState.Traveling.ptWait`) is set when a transit leg starts
+(`PersonPlanManager.scala:180-191`), alongside a self-scheduled timeout wake at
+`currentTick + state.ptWaitTimeoutTicks`. Boarding (`Person.actInteractWith`'s
+`PassengerBoardedVehicleData` case, `Person.scala:225-226`) only sets the actor-local
+`currentPTVehicleRef` — it never clears/reschedules that pending timeout, and there's no API in this
+TM to cancel an already-scheduled tick. `ptWait` is only cleared on true arrival
+(`PersonPlanManager.scala:414`, inside the same branch that replies). So if the PT ride itself (after
+boarding) takes longer than `ptWaitTimeoutTicks` — plausible under congestion if that timeout was
+tuned for "wait for the bus to *arrive*," not "wait out the whole ride" — the Person self-wakes
+mid-ride, sees `Traveling(ptWait = Some(...))`, and dispatches `replanAfterPTTimeout`
+(`PersonPlanManager.scala:245-310`), which unconditionally drops the current leg run and replans —
+with no awareness the person is already physically seated on the vehicle. When the real vehicle
+later reaches the alighting stop and sends its unload request, `tripExecution` no longer matches
+`Traveling(ptWait = Some(...))`, so the request falls into the silent-`None` branch above.
+
+**Consequence**: the vehicle's `expectedUnloadResponses` counter (`BusStopHandler.scala:174`,
+`SubwayPassengerHandler`'s equivalent — both actor-local, not part of `BusState`/`SubwayState`)
+never reaches `countUnloadReceived`, so `handleUnloadPassenger`'s completion branch
+(`BusStopHandler.scala:100-147`, gated on `state.countUnloadReceived >= expectedUnloadResponses`)
+never fires — the vehicle is permanently stuck in `WaitingUnloadPassenger` for that stop specifically
+because of this one passenger. No TM-level hang (the vehicle had already called
+`onFinishSpontaneous(None)` before waiting and relies on a later `scheduleEvent` call to re-enter the
+schedule, the same "immediate-`None`-finish + reschedule-on-reply" pattern verified clean everywhere
+else in the vehicle↔`Node` signal/capacity exchange during the same audit) — this manifests as a
+silently-corrupted trip/ridership/completion metric, not a crash.
+
+**Not fixed** — flagged for whoever picks this up. The real fix is upstream of the reply handler
+itself: `PassengerBoardedVehicleData` handling needs to cancel or account for the pending
+`ptWaitTimeoutTicks` wake once boarding actually happens, not patch the fallback branch to
+paper over a still-possible desync between `tripExecution` and physical vehicle occupancy.
+
+**Also surfaced, not a bug**: the vehicle↔`Node` signal/link-access exchange (`CarSignalHandler`
+and its Motorcycle/Bicycle/Bus equivalents) doesn't literally implement CLAUDE.md's "withhold
+`onFinishSpontaneous` until the reply arrives" wording — it finishes with `None` immediately and
+relies on the reply handler's `scheduleEvent` call to re-enter the schedule. Functionally sound today
+(`NodeEventHandler.handleRequestLinkAccess` replies on every branch, verified), but worth noting the
+failure mode differs from CLAUDE.md's literal example: a future missing-reply bug introduced here
+would silently strand a vehicle forever rather than hang the Time Manager, since the requester is
+already unregistered from `runningEvents`/`scheduledActors` by the time it's waiting.
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file

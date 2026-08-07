@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.types.Tick
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, BusRequestUnloadPassengerData, BusUnloadPassengerData }
@@ -70,18 +71,62 @@ class Bus(
     copied
   }
 
+  /** Adds this actor's own link/signal-wait/passenger-barrier bookkeeping to a migration snapshot.
+    * `Bus` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before this
+    * fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07) — every one of
+    * these actor-local `var`s was silently lost on any restore, including `expectedUnloadResponses`,
+    * a genuine reply-count barrier that used to live inside `BusStopHandler` itself (a CLAUDE.md
+    * rule-3 "handlers are stateless" violation, fixed alongside this: `BusStopHandler` now reads/
+    * writes it via `getExpectedUnloadResponsesFn`/`setExpectedUnloadResponsesFn` closures, backed by
+    * this actor's own `var` below). Reuses `MigrationSnapshot`'s `vehicle*` fields (already named
+    * generically for `Car`/`Motorcycle`/`Bicycle` reuse) plus the new `expectedUnloadResponses`/
+    * `currentStopNode` fields added for this fix.
+    */
+  private def captureBusMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify,
+      expectedUnloadResponses = expectedUnloadResponses,
+      currentStopNode = currentStopNode.getOrElse("")
+    )
+
+  /** Restores what [[captureBusMigrationFields]] captured. */
+  private def restoreBusMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+    expectedUnloadResponses = snapshot.expectedUnloadResponses
+    currentStopNode = if (snapshot.currentStopNode.nonEmpty) Some(snapshot.currentStopNode) else None
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureBusMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreBusMigrationFields(snapshot)
+  }
+
   /** Current link being traversed.
     */
-  private var currentLinkId: Option[String] = None
+  // protected, not private: lets BusMigrationSnapshotSpec drive these directly, same rationale as
+  // Car.scala's identical fields.
+  protected var currentLinkId: Option[String] = None
 
   /** Link entry tick.
     */
-  private var linkEntryTick: Option[Tick] = None
+  protected var linkEntryTick: Option[Tick] = None
 
   /** MESO exit tick — the tick at which link traversal completes. Used to prevent stale
     * Waiting-poll ticks from triggering premature requestSignalState.
     */
-  private var mesoExitTick: Option[Tick] = None
+  protected var mesoExitTick: Option[Tick] = None
 
   private lazy val microUpdateLogEvery: Int =
     sys.env
@@ -131,17 +176,19 @@ class Bus(
   /** Expected tick when red signal phase ends. Prevents stale WaitingSignalState poll ticks from
     * triggering premature leavingLink.
     */
-  private var signalWaitUntilTick: Option[Tick] = None
+  protected var signalWaitUntilTick: Option[Tick] = None
   // See Car.scala's signalWaitNeedsReverify for what this flags and why.
-  private var signalWaitNeedsReverify: Boolean = false
+  protected var signalWaitNeedsReverify: Boolean = false
 
   /** Number of passengers asked to unload at current stop. Used to track when all responses
-    * arrived.
+    * arrived. The real backing store for `BusStopHandler`'s `getExpectedUnloadResponsesFn`/
+    * `setExpectedUnloadResponsesFn` closures — see `captureBusMigrationFields`'s doc for why it
+    * moved here instead of living inside the handler.
     */
-  private var expectedUnloadResponses: Int = 0
+  protected var expectedUnloadResponses: Int = 0
 
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
-  private var currentStopNode: Option[String] = None
+  protected var currentStopNode: Option[String] = None
 
   /** Counts every bus stop arrival (for cycle diagnostics). */
   private var stopArrivalCount: Int = 0
@@ -221,7 +268,9 @@ class Bus(
     setCurrentStopNodeFn = node => currentStopNode = node,
     logDebugFn           = msg => logDebug(msg),
     getCurrentLinkIdFn   = () => currentLinkId,
-    busStopProbeLogEvery = busStopProbeLogEvery
+    busStopProbeLogEvery = busStopProbeLogEvery,
+    getExpectedUnloadResponsesFn = () => expectedUnloadResponses,
+    setExpectedUnloadResponsesFn = v => expectedUnloadResponses = v
   )
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {

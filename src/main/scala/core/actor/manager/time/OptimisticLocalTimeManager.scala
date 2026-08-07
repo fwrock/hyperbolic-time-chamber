@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.entity.event.control.execution.LvtReportEvent
+import core.entity.event.control.execution.{ GvtUpdateEvent, LvtReportEvent }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
@@ -66,6 +66,22 @@ class OptimisticLocalTimeManager(
         else
           s"$LOCAL_TIME_MANAGER_ACTOR_NAME-time-warp"
     ) {
+
+  /** Cached from the last `GvtUpdateEvent` broadcast by the `OptimisticGlobalTimeManager` (`docs/
+    * TIME_WARP_DESIGN.md` §4). `None` until the first broadcast arrives, so `currentGvt` correctly
+    * reports "nothing known safe yet" instead of falsely unlocking a flush before any GVT estimate
+    * has ever been computed.
+    */
+  private var lastKnownGvt: Option[Tick] = None
+
+  override protected def currentGvt: Option[Tick] = lastKnownGvt
+
+  override def handleEvent: Receive = {
+    val gvtHandler: PartialFunction[Any, Unit] = {
+      case event: GvtUpdateEvent => lastKnownGvt = Some(event.gvt)
+    }
+    gvtHandler.orElse(super.handleEvent)
+  }
 
   /** Starts immediately dispatching whatever's already scheduled instead of waiting for a
     * `SelectiveBarrier`-style `UpdateGlobalTimeEvent` push — there is no such push under this

@@ -43,11 +43,17 @@ class BusStopHandler(
   private val setCurrentStopNodeFn: Option[String] => Unit,
   private val logDebugFn: String => Unit,
   private val getCurrentLinkIdFn: () => Option[String],
-  private val busStopProbeLogEvery: Int
+  private val busStopProbeLogEvery: Int,
+  // Backed by Bus's own actor-local var, not held here -- CLAUDE.md's "handlers are stateless"
+  // rule (rule 3) means this reply-count barrier must live where BaseActor.buildMigrationSnapshot
+  // can capture it. Found (docs/TIME_WARP_DESIGN.md's checkpoint-completeness audit, 2026-08-07)
+  // holding its own private var here instead, invisible to both shard migration and Time Warp
+  // rollback.
+  private val getExpectedUnloadResponsesFn: () => Int,
+  private val setExpectedUnloadResponsesFn: Int => Unit
 ) {
 
   private var busStopProbeLogCount: Long = 0L
-  private var expectedUnloadResponses: Int = 0
 
   def handleBusLoadPeople(data: BusLoadPassengerData, state: BusState): Unit = {
     val isStaleReply = state.status != WaitingLoadPassenger
@@ -98,7 +104,7 @@ class BusStopHandler(
   }
 
   def handleUnloadPassenger(data: BusUnloadPassengerData, personId: String, state: BusState): Unit = {
-    if (expectedUnloadResponses == 0) return  // no active unload round; ignore spurious/late response
+    if (getExpectedUnloadResponsesFn() == 0) return  // no active unload round; ignore spurious/late response
     state.countUnloadReceived += 1
 
     if (data.isArrival) {
@@ -106,11 +112,11 @@ class BusStopHandler(
       state.countUnloadPassenger += 1
     }
 
-    if (state.countUnloadReceived >= expectedUnloadResponses) {
+    if (state.countUnloadReceived >= getExpectedUnloadResponsesFn()) {
       val unloadedCount = state.countUnloadPassenger
       state.countUnloadReceived  = 0
       state.countUnloadPassenger = 0
-      expectedUnloadResponses    = 0
+      setExpectedUnloadResponsesFn(0)
 
       if (unloadedCount > 0) {
         val tick         = currentTickFn()
@@ -171,7 +177,7 @@ class BusStopHandler(
     }
 
     state.status = WaitingUnloadPassenger
-    expectedUnloadResponses    = state.people.size
+    setExpectedUnloadResponsesFn(state.people.size)
     state.countUnloadReceived  = 0
     state.countUnloadPassenger = 0
 

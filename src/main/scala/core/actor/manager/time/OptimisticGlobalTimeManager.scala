@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.actor.manager.time.gvt.{ GVTEstimationStrategy, LocalVirtualTimeReport, MarginBasedGVTEstimation, TerminationPlateauDetector }
-import core.entity.event.control.execution.{ LvtReportEvent, TimeManagerRegisterEvent }
+import core.entity.event.control.execution.{ GvtUpdateEvent, LvtReportEvent, TimeManagerRegisterEvent }
 import core.entity.event.control.load.{ ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.types.Tick
@@ -228,7 +228,16 @@ class OptimisticGlobalTimeManager(
     if (isTerminated || !simulationStarted || waitingForNextWindow) return
     if (latestReports.size < registeredManagers.size) return
 
+    val previousGvt = currentGvt
     currentGvt = gvtEstimationStrategy.estimate(latestReports.values.toSeq)
+    // Broadcast only on real advancement (docs/TIME_WARP_DESIGN.md §4): recomputeGvtAndCheckTermination
+    // runs on every LvtReportEvent, and an unchanged GVT unlocks nothing new for any LTM to flush —
+    // broadcasting every round regardless would multiply this already-per-report-triggered fan-out
+    // by the LTM pool size for no benefit, the same "cheap and non-blocking, not free" posture §3
+    // already applies to LVT reporting itself.
+    if (currentGvt > previousGvt) {
+      notifyLocalManagers(GvtUpdateEvent(currentGvt))
+    }
     val allIdle = latestReports.values.forall(_.isIdle)
 
     if (allIdle && progressiveLoadingEnabled && !progressiveLoadingComplete) {

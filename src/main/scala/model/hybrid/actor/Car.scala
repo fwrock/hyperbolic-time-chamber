@@ -46,24 +46,62 @@ class Car(
     copied
   }
 
+  /** Adds this class's own link/signal-wait bookkeeping on top of `PrivateVehicle`'s
+    * `captureMigrationFields` (`ownerPersonRef` etc.). Found uncaptured by `docs/
+    * TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07): `currentLinkId`/
+    * `currentLinkLength`/`linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/
+    * `signalWaitNeedsReverify` are all actor-local `var`s driving branches in `actSpontaneous`
+    * (`Moving`'s `mesoExitTick` check, `WaitingSignal`'s `signalWaitUntilTick`/
+    * `signalWaitNeedsReverify` check) — a `RollbackHistoryHandler` restore (same primitive as
+    * shard migration) that skips them leaves `state.status` correctly restored but these fields at
+    * whatever live execution left them, taking a different branch on replay than the original run
+    * did. `Motorcycle`/`Bicycle` share the identical set of fields minus `currentLinkLength`; see
+    * `MigrationSnapshot`'s `vehicle*` fields, which are named generically for that reuse, not
+    * `Car`-specific.
+    */
+  private def captureCarMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleCurrentLinkLength = currentLinkLength,
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify
+    )
+
+  /** Restores what [[captureCarMigrationFields]] captured. */
+  private def restoreCarMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    currentLinkLength = snapshot.vehicleCurrentLinkLength
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+  }
+
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
-    captureMigrationFields(super.buildMigrationSnapshot())
+    captureCarMigrationFields(captureMigrationFields(super.buildMigrationSnapshot()))
 
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     super.applyMigrationSnapshot(snapshot)
     restoreMigrationFields(snapshot)
+    restoreCarMigrationFields(snapshot)
   }
 
-  private var currentLinkId: Option[String] = None
-  private var currentLinkLength: Double = 0.0
-  private var linkEntryTick: Option[Tick] = None
-  private var mesoExitTick: Option[Tick] = None
+  // protected, not private: lets CarLinkWaitMigrationSnapshotSpec drive these directly rather than
+  // reverse-engineering LinkInfoData/LinkAccessData payloads just to exercise the capture/restore
+  // round trip -- same rationale as this class's other test-only protected accessors.
+  protected var currentLinkId: Option[String] = None
+  protected var currentLinkLength: Double = 0.0
+  protected var linkEntryTick: Option[Tick] = None
+  protected var mesoExitTick: Option[Tick] = None
 
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
-  private var signalWaitUntilTick: Option[Tick] = None
-  private var signalWaitNeedsReverify: Boolean = false
+  protected var signalWaitUntilTick: Option[Tick] = None
+  protected var signalWaitNeedsReverify: Boolean = false
 
   private lazy val journeyReporter = new CarJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
