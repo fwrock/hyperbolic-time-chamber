@@ -15,9 +15,7 @@ class LatenessPolicySpec extends AnyFlatSpec with Matchers {
   }
 
   it should "treat arrival exactly on the scheduled tick as late: arrivalTick + 1 wins, not the literal tick" in {
-    // math.max(arrivalTick + 1, tick) = math.max(101, 100) => 101. The +1-tick minimum dwell branch
-    // wins over the literal tick branch at this boundary — arriving exactly on time still forces
-    // at least one tick of dwell before departure, it does not depart in the same tick it arrived.
+
     MinimumDwellLatenessPolicy.resolveDepartureTick(AtTick(100), arrivalTick = 100) shouldBe 101
   }
 
@@ -30,10 +28,7 @@ class LatenessPolicySpec extends AnyFlatSpec with Matchers {
   }
 
   "MinimumDwellLatenessPolicy" should "be a pure function of only (spec, arrivalTick) — no accumulated offset" in {
-    // Design guarantee, not a runtime check: resolveDepartureTick's signature takes exactly
-    // (spec: EndTimeSpec, arrivalTick: Tick) and nothing else — there is no "scheduleDelayOffsetTicks"
-    // or other mutable/accumulated field it reads. Calling it twice with the same arguments, in any
-    // order relative to other calls, must always yield the same result.
+ 
     val first = MinimumDwellLatenessPolicy.resolveDepartureTick(AtTick(500), arrivalTick = 480)
     val second = MinimumDwellLatenessPolicy.resolveDepartureTick(AtTick(500), arrivalTick = 480)
 

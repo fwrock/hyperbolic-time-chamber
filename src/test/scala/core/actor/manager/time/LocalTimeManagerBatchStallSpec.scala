@@ -35,9 +35,6 @@ import scala.concurrent.duration.DurationInt
   */
 class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
-  // Created in beforeAll (not a field initializer) for the same reason
-  // PrivateVehicleMigrationSnapshotSpec does: SBT/ScalaTest's throwaway discovery instantiation
-  // would otherwise double-create the ActorSystem.
   private var _system: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
@@ -98,21 +95,12 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identityA, 0L)
     ltm.underlyingActor.testRegister(identityB, 0L)
-    // registerActor -> scheduleEvent only NOTIFIES the parent that work exists (re-notify on
-    // wasIdle) -- a real GlobalTimeManager would compute the next global tick and broadcast
-    // UpdateGlobalTimeEvent back down to trigger the actual dispatch. Simulate that broadcast
-    // directly (through the real mailbox, not underlyingActor, so handleEvent's own routing is
-    // exercised) since parentProbe isn't a real GlobalTimeManager.
+
     parentProbe.receiveWhile(idle = 200.millis) { case _ => () }
     ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
 
-    // Both actors are dispatched together at tick 0 (LocalDiscreteEventTimeManager's own
-    // processTick, triggered by the UpdateGlobalTimeEvent above, matching a real simulation's
-    // first tick). Both should be in runningEvents.
     ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a", "actor-b")
 
-    // actor-b resolves immediately, asking to run again at tick 5 (an ordinary
-    // onFinishSpontaneous(Some(5))).
     ltm.underlyingActor.testFinish(
       FinishEvent(
         actorRef = actorBProbe.ref,
@@ -123,9 +111,6 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
         generation = 1L
       )
     )
-    // actor-a is still "running" (an unbounded async wait, e.g. a dynamic-actor-spawn ack) --
-    // but critically, using the FIXED pattern (a genuine, immediate disengage FinishEvent with no
-    // scheduleTick, NOT deferFinishSpontaneous()'s "send nothing at all").
     ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
 
     ltm.underlyingActor.testFinish(
@@ -139,15 +124,9 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
       )
     )
 
-    // The batch is no longer held open: runningEvents is empty, and actor-b's tick 5 is visible
-    // as the LTM's next scheduled work -- this is the exact invariant deferFinishSpontaneous()
-    // broke (it never sends a FinishEvent at all, so runningEvents never clears and this next
-    // tick is never reachable until the deferred actor's async wait resolves).
     ltm.underlyingActor.testRunningEventIds shouldBe empty
     ltm.underlyingActor.testScheduledTicks shouldBe Set(5L)
 
-    // advanceToNextTick's reportGlobalTimeManager(hasScheduled = true) must have reached the
-    // parent -- the LTM is not sitting silently idle with real future work unreported.
     parentProbe.fishForMessage(200.millis) {
       case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
         e.hasScheduled && e.tick == 5L
@@ -168,9 +147,6 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
 
     ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
 
-    // Genuine disengage: onFinishSpontaneous(None), no scheduleTick -- the LTM is now fully idle
-    // (no running events, nothing scheduled), matching what a real actor does right before
-    // awaiting an external async event (e.g. a dynamic-actor-spawn ack) it has no bounded ETA for.
     ltm.underlyingActor.testFinish(
       FinishEvent(
         actorRef = actorProbe.ref,
@@ -183,26 +159,15 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     )
     ltm.underlyingActor.testRunningEventIds shouldBe empty
     ltm.underlyingActor.testScheduledTicks shouldBe empty
-    // The idle report reaching the parent here is exactly the moment the original bug's race
-    // window opens: a real GlobalTimeManager sees "no scheduled events" and starts its
-    // termination grace period. Drain it so the assertion below is about the RE-notification,
-    // not this expected idle report.
+
     parentProbe.fishForMessage(200.millis) {
       case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
         !e.hasScheduled
       case _ => false
     }
 
-    // The async event finally arrives (e.g. onDynamicActorInitialized) and the actor
-    // re-registers itself via a fresh ScheduleEvent -- SimulationBaseActor.scheduleEvent(tick),
-    // not onFinishSpontaneous, is required here precisely because there's no in-flight
-    // FinishEvent to attach a scheduleTick to (see CarSignalHandler.requestSignalState's own
-    // comment on this same requirement).
     ltm.underlyingActor.testSchedule(identity, 42L)
 
-    // wasIdle re-notification (LocalTimeManagerBase.scheduleEvent) must fire: this is the exact
-    // mechanism that prevents the GlobalTimeManager from having already terminated the
-    // simulation by the time this actor finally has real work again.
     parentProbe.fishForMessage(200.millis) {
       case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
         e.hasScheduled && e.tick == 42L

@@ -81,14 +81,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (properties != null) properties.creatorManager else null
   private var currentTimeManager: ActorRef = uninitialized
   private var _spontaneousFinishSent     = false
-  // The dispatch generation of the last SpontaneousEvent received (see SpontaneousEvent.scala's
-  // doc). Echoed on every FinishEvent so the TimeManager can drop stale/superseded resolutions.
   private var currentGeneration: Long = 0L
 
-  // Tracks entities spawned via spawnDynamicActor, awaiting ShardRegion.StartEntityAck
-  // Key: entityId, Value: (shardRegion, initEvent)
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
-  // Remembers classType per spawned entity until InitializeEntityAckEvent is received
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
 
   // --- Time Warp (docs/TIME_WARP_DESIGN.md) --- everything below is gated behind

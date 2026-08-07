@@ -53,9 +53,6 @@ class CarSignalHandler(
     }
 
     if (getTripDestinationFn().getOrElse(state.destination) == currentPathNode || routeDepleted) {
-      // NOTE: leavingLink() already calls onFinish(nextNodeId) internally, which invokes
-      // onFinishPrivateVehicle() and finishJourney(). Do NOT duplicate those calls here —
-      // doing so would cause a second TripCompletedData to Person.
       leavingLinkFn()
       if (!isPersonCentricFn()) selfDestructFn()
     } else {
@@ -72,17 +69,6 @@ class CarSignalHandler(
                 RequestLinkAccessData(targetLinkId = linkId),
                 EventTypeEnum.RequestLinkAccess.toString
               )
-              // Consistency-critical: do NOT poll. Node always replies on every branch
-              // (NodeEventHandler.handleRequestLinkAccess) — genuinely deregister from the
-              // TimeManager (onFinishSpontaneous(None), a real FinishEvent, not a deferred
-              // safety-net suppression) and wait for the reply as an interaction event.
-              // handleLinkAccess re-registers via scheduleEvent when the reply lands — the
-              // same disengage-then-scheduleEvent shape already used by Person's StartTrip ->
-              // Car handoff, which correctly re-notifies the Global TM of new work (see
-              // LocalTimeManagerBase.scheduleEvent's wasIdle re-notification). A plain
-              // onFinishSpontaneous(Some(tick)) called later from actInteractWith would NOT
-              // re-notify the Global TM the same way, risking premature termination if this
-              // was the last scheduled work.
               onFinishSpontaneousFn(None)
             } else {
               leavingLinkFn()
@@ -97,8 +83,6 @@ class CarSignalHandler(
   }
 
   def handleLinkAccess(data: LinkAccessData, state: CarState): Unit = {
-    // Guard against stale/duplicate responses. Accepts both the immediate reply
-    // (WaitingSignalState) and a later, unsolicited capacity-freed grant (WaitingCapacity).
     if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
       logStaleEventDebugFn(
         s"${entityIdFn()}: Ignoring stale LinkAccessData " +
@@ -109,7 +93,6 @@ class CarSignalHandler(
 
     if (data.phase == Red) {
       val tick = currentTickFn()
-      // Saturation headway ~2s per vehicle (HCM 6th ed. §19)
       val headwayTicks     = 2L
       val waitUntilTick    = data.nextTick + data.queuePosition.toLong * headwayTicks
       val waitTicks        = math.max(0L, waitUntilTick - tick)
@@ -130,25 +113,13 @@ class CarSignalHandler(
         "signal_wait"
       )
 
-      // Capacity is independent of signal phase and wasn't checked for this Red reply (only
-      // matters once Green — see NodeEventHandler.handleRequestLinkAccess). By the time this
-      // deterministic wait ends, downstream capacity could still be Full, so the WaitingSignal
-      // branch in actSpontaneous must re-verify (call requestSignalState again) rather than
-      // proceed unilaterally — flagged here, consumed there.
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(waitUntilTick))
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
-      // Node has buffered this car (FIFO) for the target link's capacity. Stay genuinely
-      // deregistered — no scheduleEvent call here at all — and wait purely for the later,
-      // unsolicited LinkAccessData grant as an interaction event, exactly like the initial
-      // request. See docs/CONGESTION_PROPAGATION_DESIGN.md.
       state.status = WaitingCapacity
     } else {
-      // Green + Available: proceed. Already fully verified (both signal and capacity) at the
-      // moment this reply was produced — no re-verification needed when the wait (immediate)
-      // resolves.
       val tick = currentTickFn()
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(tick))

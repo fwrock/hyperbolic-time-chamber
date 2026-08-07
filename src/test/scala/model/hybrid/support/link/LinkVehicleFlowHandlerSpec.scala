@@ -213,8 +213,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
     f.setTick(3L)
     f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
-    // state.currentSpeed/congestionFactor are recomputed regardless of the publish gate --
-    // only the DynamicWeightCache write is rate-limited.
+
     f.getState().currentSpeed should not be 13.9
     DynamicWeightCache.getCost(linkId) shouldBe None
 

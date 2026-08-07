@@ -95,10 +95,6 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, journeyReporter) = newHandler(reported)
     val state = newCarState()
 
-    // First link: departs from rest, then exits at 12.5 m/s -- handleMicroLeaveLink both
-    // clears state.microState (deactivateMicroMode) AND records the real exit velocity via
-    // `journeyReporter.sumoArrivalSpeed = data.finalVelocity`, exactly like production traffic
-    // between two chained micro links (e.g. scenario B's link_ab -> link_bc).
     handler.handleMicroEnterLink(enterLinkData("link_ab"), state)
     handler.handleMicroLeaveLink(
       model.hybrid.entity.event.data.MicroLeaveLinkData(
@@ -112,10 +108,6 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       state
     )
 
-    // Second, chained micro link: must resume at the carried-over 12.5 m/s, not reset to
-    // speedLimit * 0.8 (= 11.11 m/s for a 50 km/h limit, which would be wrong either way, but
-    // the point of this test is that it isn't hardcoded to any flat fraction at all -- it
-    // reflects the car's real prior state).
     handler.handleMicroEnterLink(enterLinkData("link_bc"), state)
 
     state.microState.map(_.velocity) shouldBe Some(12.5)

@@ -33,12 +33,6 @@ class SubwayStation(
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSubwayAckCount: Int  = 0
   private var pendingSubwayNextTick: Option[Tick] = None
-  // Bounded poll while pendingSubwayAckCount > 0, replacing deferFinishSpontaneous() — see the
-  // identical rationale on BusStation.awaitingDynamicInit and docs/KNOWN_GAPS.md: deferring holds
-  // this station's TimeManager slot open for the full multi-hop dynamic-Subway-spawn round trip,
-  // stalling every other actor on the same LocalTimeManager instance; a genuine full disengage
-  // was tried instead and reverted after it terminated the 86,400-tick baseline after 0 ticks by
-  // racing the Global TM's one-shot grace period.
   private val dynamicInitPollIntervalTicks: Tick = 1L
 
   private lazy val subwayCreator = new SubwayStationCreator(
@@ -109,10 +103,6 @@ class SubwayStation(
   override protected def onDynamicActorInitialized(entityId: String, classType: String): Unit = {
     pendingSubwayAckCount -= 1
     if (pendingSubwayAckCount < 0) pendingSubwayAckCount = 0
-    // No onFinishSpontaneous/scheduleEvent call here — see actSpontaneous's awaitingDynamicInit
-    // guard (pendingSubwayAckCount > 0) below: this station stayed genuinely registered via the
-    // bounded poll, so its next dispatch — at most dynamicInitPollIntervalTicks away — will see
-    // pendingSubwayAckCount == 0 (once every ack has landed) and proceed to pendingSubwayNextTick.
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =

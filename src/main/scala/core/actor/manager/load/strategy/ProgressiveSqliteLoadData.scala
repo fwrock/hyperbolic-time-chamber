@@ -105,16 +105,8 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
     */
   private def openConnectionIfNeeded(): Connection = {
     if (connection == null) {
-      // Explicit driver registration — DriverManager's JDBC 4 ServiceLoader auto-registration
-      // (META-INF/services/java.sql.Driver) is not reliable inside an sbt-assembly fat jar, where
-      // that services file can be dropped by the merge strategy. Class.forName runs org.sqlite.JDBC's
-      // static initializer, which calls DriverManager.registerDriver itself — independent of
-      // whether the services file survived packaging.
       Class.forName("org.sqlite.JDBC")
 
-      // Read-only is established via the `immutable=1` URI parameter at connect time — sqlite-jdbc
-      // rejects `Connection#setReadOnly` once a connection already exists, so it can't be toggled
-      // afterward. `PRAGMA query_only` is the belt-and-suspenders guard against any accidental write.
       connection = DriverManager.getConnection(s"jdbc:sqlite:file:$sourceDbPath?immutable=1")
       val pragma = connection.createStatement()
       pragma.execute("PRAGMA query_only = ON")

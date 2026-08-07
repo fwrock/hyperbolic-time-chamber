@@ -93,13 +93,6 @@ class PlanCursorSpec extends AnyFlatSpec with Matchers {
     drain(replanned.remaining) shouldBe List(walkToStop, work)
   }
 
-  // Compile-time guarantee, not a runtime assertion: ExecutedElement's definition deliberately
-  // excludes PendingDecision, so the following does not typecheck and is left here only as
-  // documentation (uncommenting it must fail compilation, not a test run):
-  //
-  //   val notAllowed: List[ExecutedElement] = List(pendingDecision)
-  //   //                                            ^ PendingDecision is not an ExecutedElement
-
   private def drain(queue: RemainingQueue): List[PlanElement] =
     queue.dequeue match {
       case None            => Nil

@@ -259,8 +259,6 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     val PlanStepResult.Awaiting(state1, _) = manager.step(state0, currentTick = 0): @unchecked
     val result = manager.step(state1, currentTick = 10)
 
-    // Unified with the PT-timeout replan failure policy: no viable journey aborts just this trip
-    // and resumes at the next Activity — it does not leave the person permanently unscheduled.
     val awaiting = result.asInstanceOf[PlanStepResult.Awaiting]
     awaiting.wakeTick shouldBe 500L
     awaiting.state.cursor.executed.last shouldBe Activity("work", "n2", AtTick(500))

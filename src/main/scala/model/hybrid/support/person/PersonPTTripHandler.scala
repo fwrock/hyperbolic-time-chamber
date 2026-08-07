@@ -47,9 +47,6 @@ class PersonPTTripHandler(
       LoadBalancedDistributed
     )
 
-    // ActorTrace.trace(personId, currentTick, "person_pt_registered",
-    //   s"stop=${leg.boardingStop.actorId} line=${leg.line} alighting=${leg.alightingStop.nodeId} mode=${leg.mode}")
-
     logDebug(s"$personId registered at ${leg.boardingStop.actorId} for ${leg.line}, alighting at ${leg.alightingStop.nodeId}")
 
     reportFn(

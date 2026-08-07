@@ -24,8 +24,6 @@ class LinkMetricsReporter(
   logWarnFn:                  String => Unit
 ) {
 
-  // Matches the pre-existing MICRO-side initial value (not Long.MinValue: `tick -
-  // lastCostPublishTick` would silently overflow/wrap for the first call otherwise).
   private var lastCostPublishTick: Tick  = 0L
   private var summaryTick: Tick          = Long.MinValue
   private var tickLoaded: Int            = 0

@@ -62,8 +62,6 @@ class Motorcycle(
       origin      = StringPool.intern(s.origin),
       destination = StringPool.intern(s.destination)
     )
-    // copy() only replicates MotorcycleState constructor params; restore MovableState vars
-    // that are not in the constructor (otherwise they reset to their defaults).
     copied.movableStatus             = s.movableStatus
     copied.movableBestRoute          = s.movableBestRoute
     copied.movableCurrentPath        = s.movableCurrentPath
@@ -73,11 +71,7 @@ class Motorcycle(
     copied
   }
 
-  /** Wires PrivateVehicle's reply-linkage fields (ownerPersonRef, tripOrigin, etc. — see
-    * docs/KNOWN_GAPS.md "Shard Migration Silently Drops Actor-Local Reply State") into the
-    * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
-    * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
-    */
+
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
     captureMigrationFields(super.buildMigrationSnapshot())
 
@@ -281,10 +275,6 @@ class Motorcycle(
         requestRoute()
 
       case Ready =>
-        // If movableStatus is already Waiting, enterLink() was already called and we're
-        // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
-        // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
-        // this motorcycle is already registered on. Just poll again next tick instead.
         if (state.movableStatus == Waiting) {
           onFinishSpontaneous(Some(currentTick + 1))
         } else {
@@ -322,9 +312,6 @@ class Motorcycle(
         onFinishSpontaneous()
 
       case WaitingSignalState =>
-        // Should never actually fire — requestSignalState() no longer self-schedules
-        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
-        // Do not resend the request if reached anyway (see Car.scala for rationale).
         logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
