@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.actor.manager.loadbalance.migration.MigrationSnapshot
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
@@ -40,7 +41,30 @@ class Subway(
       properties = properties
     ) {
 
-  private var expectedUnloadResponses: Int = 0
+  // protected, not private: lets SubwayMigrationSnapshotSpec drive this directly, same rationale
+  // as Car.scala's link-wait fields.
+  protected var expectedUnloadResponses: Int = 0
+
+  /** `Subway` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07) —
+    * `expectedUnloadResponses` (a genuine reply-count barrier, same mechanism as `Bus`'s) was
+    * silently lost on any restore. Reuses `MigrationSnapshot`'s `expectedUnloadResponses` field,
+    * shared with `Bus`'s identical fix.
+    */
+  private def captureSubwayMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(expectedUnloadResponses = expectedUnloadResponses)
+
+  /** Restores what [[captureSubwayMigrationFields]] captured. */
+  private def restoreSubwayMigrationFields(snapshot: MigrationSnapshot): Unit =
+    expectedUnloadResponses = snapshot.expectedUnloadResponses
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureSubwayMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreSubwayMigrationFields(snapshot)
+  }
 
   private lazy val passengerHandler = new SubwayPassengerHandler(
     getStateFn       = () => state,

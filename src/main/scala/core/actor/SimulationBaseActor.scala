@@ -17,7 +17,8 @@ import core.util.{ IdUtil, JsonUtil, StringPool, StringUtil }
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
@@ -121,6 +122,25 @@ abstract class SimulationBaseActor[T <: BaseState](
   // isTimeWarp (see sendMessageTo), so this stays empty and unused for conservative-mode actors.
   private val currentEventSentMessages: mutable.ArrayBuffer[core.actor.rollback.SentMessage] = mutable.ArrayBuffer.empty
 
+  // Every DynamicWeightCache.getWeight(linkId, ...) result observed while the CURRENTLY-processing
+  // event runs (docs/TIME_WARP_DESIGN.md's model-level audit, third finding) -- flushed into that
+  // event's RollbackHistoryHandler log entry (LoggedEvent.dynamicWeightReads) once processing
+  // finishes, so a future replay of this exact event can force the same reads via
+  // DynamicWeightCache.withOverride instead of hitting the live, real-time-shifted cache. Cleared at
+  // the start of handleSpontaneous/handleInteractWith; only ever populated when isTimeWarp (the
+  // whole event body runs inside DynamicWeightCache.withRecording(this) in that case), so this stays
+  // empty and unused for conservative-mode actors.
+  private val currentEventDynamicWeightReads: mutable.Map[String, Double] = mutable.Map.empty
+
+  // report() calls made while isTimeWarp, held back until the GVT watermark passes their tick
+  // (docs/TIME_WARP_DESIGN.md §4 — decided when the design was written, never actually implemented
+  // until now). Without this, report() emits to the reporter pipeline (ClickHouse/Kafka/Prometheus)
+  // immediately regardless of synchronization strategy, so speculative execution a later rollback
+  // undoes has already reported data for a branch that turns out never to have happened — silently,
+  // since nothing about rollbackTo touches the reporter pipeline. Only ever populated when
+  // isTimeWarp (see report(event)), so this stays empty and unused for conservative-mode actors.
+  private val reportBuffer: mutable.ArrayBuffer[(ReportEvent, ActorRef)] = mutable.ArrayBuffer.empty
+
   /** True while [[replayLoggedEvent]] is re-executing an already-processed event's business logic
     * against a just-restored checkpoint, as opposed to a live dispatch. The one flag that makes
     * replay safe: [[onFinishSpontaneous]] and [[scheduleEvent]] both check it and skip signaling
@@ -147,7 +167,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
     captureSnapshotFn = () => buildMigrationSnapshot(),
     restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
-    replayEventFn = event => replayLoggedEvent(event)
+    replayEventFn = logged => replayLoggedEvent(logged)
   )
 
   /** Re-executes one already-logged event's business logic against the actor's current
@@ -166,25 +186,37 @@ abstract class SimulationBaseActor[T <: BaseState](
     * `recordProcessedEvent`) — so if *this exact event* is ever rolled back a second time, its
     * anti-message cascade would use the sends from its *first* dispatch, not this replay's. A real
     * gap for a repeated-rollback-of-the-same-event edge case, not designed further here; the
-    * common single-rollback path this step's tests exercise is unaffected.
+    * common single-rollback path this step's tests exercise is unaffected. The same caveat applies
+    * to [[currentEventDynamicWeightReads]] below — a second rollback of this same replayed event
+    * would replay it a third time using the ORIGINAL live dispatch's recorded reads (from
+    * `logged.dynamicWeightReads`, untouched here), not this replay's own — same deeper-nested-
+    * rollback edge case, not this event type's own new gap.
+    *
+    * The whole business-logic call is wrapped in `DynamicWeightCache.withOverride(logged.
+    * dynamicWeightReads)` (`docs/TIME_WARP_DESIGN.md`'s model-level audit, third finding) so any
+    * `getWeight` read inside `actSpontaneous`/`actInteractWith` — however deeply nested, e.g. inside
+    * a route calculation — reproduces exactly what the original live dispatch saw, instead of
+    * whatever the live dynamic-weight cache holds by the time this replay runs.
     */
-  private def replayLoggedEvent(event: AnyRef): Unit = {
+  private def replayLoggedEvent(logged: core.actor.rollback.LoggedEvent): Unit = {
     isReplaying = true
     try
-      event match {
-        case spontaneous: SpontaneousEvent =>
-          currentTick = spontaneous.tick
-          currentTimeManager = spontaneous.actorRef
-          currentGeneration = spontaneous.generation
-          actSpontaneous(spontaneous)
-        case interaction: ActorInteractionEvent =>
-          updateLamportClock(interaction.lamportTick)
-          if (interaction.tick > currentTick) {
-            currentTick = interaction.tick
-          }
-          actInteractWith(interaction)
-        case other =>
-          logWarn(s"$getEntityId: replayLoggedEvent doesn't know how to replay a ${other.getClass.getName}")
+      DynamicWeightCache.withOverride(logged.dynamicWeightReads) {
+        logged.event match {
+          case spontaneous: SpontaneousEvent =>
+            currentTick = spontaneous.tick
+            currentTimeManager = spontaneous.actorRef
+            currentGeneration = spontaneous.generation
+            actSpontaneous(spontaneous)
+          case interaction: ActorInteractionEvent =>
+            updateLamportClock(interaction.lamportTick)
+            if (interaction.tick > currentTick) {
+              currentTick = interaction.tick
+            }
+            actInteractWith(interaction)
+          case other =>
+            logWarn(s"$getEntityId: replayLoggedEvent doesn't know how to replay a ${other.getClass.getName}")
+        }
       }
     catch
       case e: Throwable =>
@@ -208,6 +240,11 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def rollbackAndCascade(targetTick: Tick): Unit = {
     val undone = rollbackHandler.rollbackTo(targetTick)
+    // §4: any report() buffered for a tick this rollback just undid must be dropped, not flushed
+    // later — it describes state that turned out never to have happened. Reports already flushed
+    // (tick < targetTick, or a tick that already passed GVT before this rollback) are unaffected;
+    // they were only ever flushed once GVT made them irrevocable in the first place.
+    if (isTimeWarp) reportBuffer.filterInPlace(_._1.tick < targetTick)
     core.actor.rollback.AntiMessageCascade.messagesToRetract(undone).foreach(sendAntiMessage)
   }
 
@@ -706,6 +743,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     currentGeneration = event.generation
+    // §4: this SpontaneousEvent is the one channel an OptimisticLocalTimeManager already has to
+    // reach this actor regularly — piggyback its last-known GVT here rather than inventing a
+    // separate LTM-to-actor broadcast. An idle actor simply flushes on its next dispatch instead of
+    // the instant GVT technically clears it; that's a bounded delay, not a correctness gap (nothing
+    // buffered can be observed as "sent" by anyone until it actually is).
+    if (isTimeWarp) event.gvt.foreach(flushBufferedReportsUpTo)
     if (state == null) {
       ActorMetrics.eventsWhenStateIsNull.labels(
         getClass.getSimpleName,
@@ -720,8 +763,13 @@ abstract class SimulationBaseActor[T <: BaseState](
       return
     }
     _spontaneousFinishSent = false
-    if (isTimeWarp) currentEventSentMessages.clear()
-    try actSpontaneous(event)
+    if (isTimeWarp) {
+      currentEventSentMessages.clear()
+      currentEventDynamicWeightReads.clear()
+    }
+    try
+      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actSpontaneous(event))
+      else actSpontaneous(event)
     catch
       case e: Throwable =>
         logError(
@@ -738,7 +786,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     if (isTimeWarp) {
       processedEventSeq += 1
-      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq, sentMessages = currentEventSentMessages.toSeq)
+      rollbackHandler.recordProcessedEvent(
+        event,
+        tick = currentTick,
+        seq = processedEventSeq,
+        sentMessages = currentEventSentMessages.toSeq,
+        dynamicWeightReads = currentEventDynamicWeightReads.toMap
+      )
     }
   }
 
@@ -783,8 +837,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
-    if (isTimeWarp) currentEventSentMessages.clear()
-    try actInteractWith(event)
+    if (isTimeWarp) {
+      currentEventSentMessages.clear()
+      currentEventDynamicWeightReads.clear()
+    }
+    try
+      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actInteractWith(event))
+      else actInteractWith(event)
     catch
       case e: Exception =>
         logError(
@@ -794,7 +853,13 @@ abstract class SimulationBaseActor[T <: BaseState](
         e.printStackTrace()
     if (isTimeWarp) {
       processedEventSeq += 1
-      rollbackHandler.recordProcessedEvent(event, tick = currentTick, seq = processedEventSeq, sentMessages = currentEventSentMessages.toSeq)
+      rollbackHandler.recordProcessedEvent(
+        event,
+        tick = currentTick,
+        seq = processedEventSeq,
+        sentMessages = currentEventSentMessages.toSeq,
+        dynamicWeightReads = currentEventDynamicWeightReads.toMap
+      )
     }
   }
 
@@ -899,13 +964,31 @@ abstract class SimulationBaseActor[T <: BaseState](
     * entity ID, so stale in-flight messages go to Dead Letters instead of triggering a ghost
     * restart with state == null. Plain context.stop does NOT inform the shard, causing the entity
     * to be recreated on the next incoming message.
+    *
+    * Also the real termination path for Time Warp participants (`Car`/`Bicycle`/`Motorcycle`/
+    * `PrivateVehicle`/`Movable` all call this directly, not `onDestruct`'s `DestructEvent` path) —
+    * so any report() still sitting in [[reportBuffer]] waiting for a GVT that will now never arrive
+    * (this actor is about to stop existing) must flush unconditionally here. §4: nothing can ever
+    * roll back an actor that no longer exists, so every remaining buffered report is safe by
+    * construction at this point, not just the ones already covered by the last GVT this actor saw.
     */
-  override protected def selfDestruct(): Unit =
+  override protected def selfDestruct(): Unit = {
+    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
     if (properties != null && properties.actorType == LoadBalancedDistributed) {
       context.parent ! ShardRegion.Passivate(PoisonPill)
     } else {
       context.stop(self)
     }
+  }
+
+  /** Same unconditional final flush as [[selfDestruct]]'s doc explains, for the other termination
+    * path: forced destruction via a `DestructEvent` from the time manager (`BaseActor.destruct`)
+    * rather than the actor choosing to stop itself.
+    */
+  override protected def onDestruct(event: DestructEvent): Unit = {
+    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
+    super.onDestruct(event)
+  }
 
   private def handleMigrationContext(event: MigrationContextEvent): Unit = {
     logInfo(
@@ -1037,6 +1120,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     catch { case _: Exception => ReportTypeEnum.valueOf("csv") }
 
   /** Reports an event to the reporting system.
+    *
+    * Under Time Warp (`docs/TIME_WARP_DESIGN.md` §4), the actual send to `target` is deferred:
+    * report() may be called by execution that a later rollback undoes, and once sent, a report can
+    * never be un-sent from the reporter pipeline (ClickHouse/Kafka/Prometheus). The target reporter
+    * ref is resolved now (state may look different by flush time) and carried alongside the buffered
+    * event; only the send itself waits for [[flushBufferedReportsUpTo]] to confirm GVT has passed
+    * this event's tick. The `eventsProcessed` metric still increments immediately either way — it
+    * counts this actor processing an event, not data reaching a reporter.
     * @param event
     *   The report event
     */
@@ -1047,12 +1138,29 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     val stateReporter = state.getReporterType
     val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType
-    if (reporters.contains(reportType)) {
-      reporters(reportType) ! event
+    val target = if (reporters.contains(reportType)) reporters(reportType) else reporters(cachedDefaultReportType)
+    if (isTimeWarp) {
+      reportBuffer += ((event, target))
     } else {
-      reporters(cachedDefaultReportType) ! event
+      target ! event
     }
   }
+
+  /** Sends every buffered report whose tick is now covered by `gvt` — §4's "safe, can never be
+    * rolled back" watermark — and leaves everything else buffered for a later call. Called from
+    * [[handleSpontaneous]] whenever a dispatch carries a fresh GVT estimate, and unconditionally
+    * (passing `Long.MaxValue`) from [[selfDestruct]]/`onDestruct` since nothing can roll back an
+    * actor that no longer exists.
+    */
+  private def flushBufferedReportsUpTo(gvt: Tick): Unit =
+    if (reportBuffer.nonEmpty) {
+      val (ready, pending) = reportBuffer.partition(_._1.tick <= gvt)
+      if (ready.nonEmpty) {
+        reportBuffer.clear()
+        reportBuffer ++= pending
+        ready.foreach { case (event, target) => target ! event }
+      }
+    }
 
   /** Reports data without a label.
     * @param data

@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.types.Tick
 import core.entity.event.SpontaneousEvent
 
@@ -74,11 +75,47 @@ class Link(
       to   = StringPool.intern(s.to)
     )
 
-  /** Tracks when each vehicle entered the link (for travel time calculation) */
-  private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+  /** Tracks when each vehicle entered the link (for travel time calculation).
+    * protected, not private: lets LinkMigrationSnapshotSpec drive this directly, same rationale as
+    * the vehicle actors' link-wait fields.
+    */
+  protected val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
 
   /** Accumulated waiting time per vehicle (seconds) */
-  private val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+  protected val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+
+  /** `Link` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07):
+    * `vehicleEntryTick`/`vehicleWaitingSeconds` feed travel-time math sent to a departing vehicle
+    * (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`) but are
+    * actor-local `mutable.Map`s, invisible to a Time Warp rollback restore — a rollback that undoes
+    * a vehicle's leave-event without also purging its now-stale map entry would compute a different
+    * travel time for the same logical leave event on replay than the original live run did.
+    * `microTickScheduled`/`signalAtExit`/`emptyGraceTick` are deliberately NOT captured here — same
+    * audit found them cheap-to-lose scheduling/cache state per CLAUDE.md's own carve-out ("does
+    * losing this value on restart break correctness for someone else, or just cost a recompute").
+    */
+  private def captureLinkMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      linkVehicleEntryTick = vehicleEntryTick.toMap,
+      linkVehicleWaitingSeconds = vehicleWaitingSeconds.toMap
+    )
+
+  /** Restores what [[captureLinkMigrationFields]] captured. */
+  private def restoreLinkMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    vehicleEntryTick.clear()
+    vehicleEntryTick ++= snapshot.linkVehicleEntryTick
+    vehicleWaitingSeconds.clear()
+    vehicleWaitingSeconds ++= snapshot.linkVehicleWaitingSeconds
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureLinkMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreLinkMigrationFields(snapshot)
+  }
 
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false

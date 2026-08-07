@@ -469,7 +469,13 @@ object GPSUtil {
         (u, t) => cli.heuristic(u, t),
         useDynamicWeights,
         maxExpansions,
-        maxNanos = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+        // Deterministic replacement for the old wall-clock (System.nanoTime()) deadline — see
+        // CompactGraph.runAStar's doc on maxEdgeRelaxations. Same insurance-cap intent (bound total
+        // work regardless of maxExpansions alone), but a pure function of graph topology instead of
+        // machine load, so replaying this exact search under Time Warp always returns the same
+        // route. Not independently measured yet (docs/TIME_WARP_DESIGN.md's placeholder-config
+        // posture): 32x maxExpansions assumes a road-network out-degree well under that factor.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
       )
     }
     val elapsed = (System.nanoTime() - t0) / 1e9
@@ -549,7 +555,9 @@ object GPSUtil {
         altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
         useDynamicWeights = false,
         maxExpansions     = maxExpansions,
-        maxNanos          = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+        // See calcRouteCompact's identical maxEdgeRelaxations comment: deterministic replacement
+        // for the old wall-clock deadline, required for Time Warp replay-safety.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
       )
     }
     val elapsed = (System.nanoTime() - t0) / 1e9

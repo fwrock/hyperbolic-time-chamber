@@ -45,13 +45,16 @@ import scala.collection.mutable
   *   `actor.applyMigrationSnapshot(_)` — replaces the actor's live state with a checkpoint's.
   * @param replayEventFn
   *   re-executes one already-processed event's logic against the actor's current (just-restored)
-  *   state, to walk it forward from a checkpoint to an exact target point in the log.
+  *   state, to walk it forward from a checkpoint to an exact target point in the log. Takes the
+  *   full [[LoggedEvent]], not just its `event` field, so the caller can also restore
+  *   `dynamicWeightReads` (or anything else logged alongside the event) for the duration of the
+  *   replay — see `docs/TIME_WARP_DESIGN.md`'s model-level audit, third finding.
   */
 final class RollbackHistoryHandler(
   checkpointInterval: Int,
   captureSnapshotFn: () => MigrationSnapshot,
   restoreSnapshotFn: MigrationSnapshot => Unit,
-  replayEventFn: AnyRef => Unit
+  replayEventFn: LoggedEvent => Unit
 ) {
   require(checkpointInterval >= 1, s"checkpointInterval must be >= 1, got $checkpointInterval")
 
@@ -87,9 +90,16 @@ final class RollbackHistoryHandler(
     event: AnyRef,
     tick: Tick,
     seq: Long,
-    sentMessages: Seq[SentMessage] = Seq.empty
+    sentMessages: Seq[SentMessage] = Seq.empty,
+    dynamicWeightReads: Map[String, Double] = Map.empty
   ): Unit = {
-    log += LoggedEvent(tick = tick, seq = seq, event = event, sentMessages = sentMessages)
+    log += LoggedEvent(
+      tick = tick,
+      seq = seq,
+      event = event,
+      sentMessages = sentMessages,
+      dynamicWeightReads = dynamicWeightReads
+    )
     eventsSinceCheckpoint += 1
     if (eventsSinceCheckpoint >= checkpointInterval) {
       checkpoints += Checkpoint(seq = seq, tick = tick, snapshot = captureSnapshotFn())
@@ -130,7 +140,7 @@ final class RollbackHistoryHandler(
 
     restoreSnapshotFn(floor.snapshot)
     val toReplay = sorted.filter(le => le.seq > floor.seq && le.seq < firstUndoneSeq)
-    toReplay.foreach(le => replayEventFn(le.event))
+    toReplay.foreach(replayEventFn)
 
     log --= undone
     checkpoints.filterInPlace(_.seq < firstUndoneSeq)
