@@ -247,9 +247,6 @@ class Bus(
     }
 
     state.status match {
-      // RouteWaiting is the default movableStatus when Jackson deserializes BusState without
-      // restoring the Start value (movableStatus is not a BusState constructor parameter).
-      // Treat it identically to Start: restore the stored route and begin the journey.
       case Start | RouteWaiting =>
         restoreRouteIfMissing("Start")
         MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
@@ -282,10 +279,6 @@ class Bus(
           requestUnloadPeopleData()
         } else {
           currentStopNode = None
-          // If movableStatus is already Waiting, enterLink() was already called and we're
-          // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
-          // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
-          // this bus is already registered on. Just poll again next tick instead.
           if (state.movableStatus == Waiting) {
             onFinishSpontaneous(Some(currentTick + 1))
           } else {
@@ -338,9 +331,6 @@ class Bus(
         }
 
       case WaitingSignalState =>
-        // Should never actually fire — requestSignalState() no longer self-schedules
-        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
-        // Do not resend the request if reached anyway (see Car.scala for rationale).
         logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 
@@ -352,8 +342,6 @@ class Bus(
       case WaitingLoadPassenger =>
 //        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")
         currentStopNode = None
-        // Same re-entry race as the Ready case above: guard against resending EnterLinkData
-        // if enterLink() was already called and we're still waiting on the Link's reply.
         if (state.movableStatus == Waiting) {
           onFinishSpontaneous(Some(currentTick + 1))
         } else {

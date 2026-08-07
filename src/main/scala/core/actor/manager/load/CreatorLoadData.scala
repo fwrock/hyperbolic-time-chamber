@@ -42,9 +42,6 @@ class CreatorLoadData(
 
   private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
   private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
-  // Memory-optimisation: only the classType is needed after the InitializeEvent has been dispatched
-  // (used to gate post-load registration and for log diagnostics), so store the string instead of
-  // the full Initialization payload — avoids retaining the raw JSON `data.content` per pending entity.
   private val pendingInitAck = mutable.Map[String, String]()
   private var amountActors = 0
 
@@ -106,9 +103,6 @@ class CreatorLoadData(
       .getOrElse(Seq.empty)
       .toList
 
-    // Memory-optimisation: the original Seq from CreateActorsEvent is no longer needed once we
-    // copied it into actorsToCreate. Releasing it here lets the GC reclaim the parsed JSON payload
-    // instead of keeping a duplicate reference until checkAndSendFinish.
     batchesToCreate.remove(event.batchId)
 
     amountActors += actorsToCreate(event.batchId).size

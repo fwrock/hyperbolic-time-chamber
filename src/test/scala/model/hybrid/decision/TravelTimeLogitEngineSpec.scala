@@ -33,7 +33,6 @@ class TravelTimeLogitEngineSpec extends AnyFlatSpec with Matchers {
     val firstRun  = (1 to 20).map(_ => TravelTimeLogitEngine.sampleLogit(candidates, new Random(42L)))
     val secondRun = (1 to 20).map(_ => TravelTimeLogitEngine.sampleLogit(candidates, new Random(42L)))
 
-    // Each call re-seeds fresh (mirrors a fresh RNG per decision) — same seed, same single draw.
     firstRun shouldBe secondRun
   }
 
@@ -45,8 +44,6 @@ class TravelTimeLogitEngineSpec extends AnyFlatSpec with Matchers {
     val draws = (1 to 2000).flatMap(_ => TravelTimeLogitEngine.sampleLogit(List((car, 2.0), (walk, 2.0)), rng))
     val carCount = draws.count(_ == car)
 
-    // Binomial(n=2000, p=0.5): expected 1000, std dev ~22.4 — a 400-count band is generously wide
-    // to avoid flakiness while still catching a sampler that's obviously biased or broken.
     carCount should (be >= 800 and be <= 1200)
   }
 
@@ -55,10 +52,6 @@ class TravelTimeLogitEngineSpec extends AnyFlatSpec with Matchers {
     val worst = logistics("walk")
     val rng   = new Random(13L)
 
-    // gap = 3.0 -> P(worst) = exp(-3)/(1+exp(-3)) ~= 4.7%, ~47 expected hits in 1000 draws: strongly
-    // favors `best` while keeping P(worst) far enough from zero that this isn't a coin-flip-against
-    // a near-impossible event (a gap of 10.0 here gives P(worst) ~= 4.5e-5, ~0.045 expected hits —
-    // "count > 0" on that is itself a near coin flip and made this assertion flaky).
     val draws = (1 to 1000).flatMap(_ => TravelTimeLogitEngine.sampleLogit(List((best, 3.0), (worst, 0.0)), rng))
 
     draws.count(_ == best) should be > (draws.size * 9 / 10) // clear utility gap -> strongly favored

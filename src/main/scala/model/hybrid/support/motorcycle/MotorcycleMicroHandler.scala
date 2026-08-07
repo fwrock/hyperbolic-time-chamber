@@ -38,14 +38,7 @@ class MotorcycleMicroHandler(
     setLinkEntryTickFn(Some(currentTickFn()))
 
     val agg = aggressivenessFn()
-    // speedLimit from LinkState is stored in km/h; micro physics runs in m/s
     val speedLimitMs = data.speedLimit / 3.6
-    // Unlike Car/Bus, this didn't even check `state.microState` -- every micro-link entry
-    // unconditionally started the motorcycle cruising at a flat `speedLimit * 0.9`, discarding
-    // both a genuinely fresh trip's rest-start (SUMO's departSpeed=0) and a chained micro-link's
-    // real carried-over exit velocity. Use `journeyReporter.sumoArrivalSpeed` instead (0.0 by
-    // default; kept current by `handleMicroUpdate`/`handleMicroLeaveLink`), same fix as
-    // CarMicroHandler's/BusMicroHandler's -- see docs/KNOWN_GAPS.md.
     val initialMicroState = MicroMotorcycleState(
       positionInLink       = 0.0,
       velocity             = journeyReporter.sumoArrivalSpeed,

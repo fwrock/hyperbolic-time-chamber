@@ -116,17 +116,12 @@ class NodeEventHandler(
               state.signalWaitingCounts.remove(data.targetLinkId)
               replyGreenOrBufferForCapacity(event, data.targetLinkId)
             case None =>
-              // Signal not registered for this connection — treat as uncontrolled intersection.
-              // Expected for most intersections in a real map, so this is debug-level, not a warning.
               logDebugFn(
                 s"Node ${entityIdFn()}: no signal entry for id=${identify.id} (link=${data.targetLinkId}); assuming Green"
               )
               replyGreenOrBufferForCapacity(event, data.targetLinkId)
           }
         case None =>
-          // No signal for this outgoing link — uncontrolled intersection, pass freely (subject
-          // to capacity, which is orthogonal to signal control).
-          // Expected for most intersections in a real map, so this is debug-level, not a warning.
           logDebugFn(
             s"Node ${entityIdFn()}: no connection entry for link=${data.targetLinkId}; assuming Green"
           )
@@ -225,25 +220,17 @@ class NodeEventHandler(
     if (state != null) {
       state.signals.put(StringPool.intern(data.phaseOrigin), data.signalState)
 
-      // Outgoing links (what CarSignalHandler/handleRequestLinkAccess queries by) — used for
-      // queue-count/capacity-drain bookkeeping, which is keyed the same way as the admission
-      // requests it mirrors.
+
       val outgoingLinksForThisPhase = state.connections.collect {
         case (linkId, identify) if identify.id == data.phaseOrigin => linkId
       }
 
-      // Approach links (what a MICRO vehicle is actually traveling ON as it nears this signal)
-      // — used to tell the correct Link actor to brake vehicles for Red. Sending this to the
-      // outgoing link instead would plant a virtual stopped leader at the END of a downstream
-      // link with no signal of its own, braking vehicles that already passed this intersection.
-      // See docs/KNOWN_GAPS.md, "NodeEventHandler Notifies the Wrong Link on Signal Phase Change".
+
       val approachLinksForThisPhase = state.approachConnections.collect {
         case (linkId, identify) if identify.id == data.phaseOrigin => linkId
       }
 
-      // Drain queue counts when phase turns Green so stale counts don't accumulate, and attempt
-      // to drain any vehicles buffered for capacity on this movement (second drain trigger — see
-      // tryDrainCapacityQueue's doc).
+
       if (data.signalState.state == Green) {
         outgoingLinksForThisPhase.foreach { linkId =>
           state.signalWaitingCounts.remove(linkId)
@@ -251,8 +238,6 @@ class NodeEventHandler(
         }
       }
 
-      // Notify the approach Link so MICRO vehicles traveling toward this signal get the updated
-      // phase and brake at their own link's end, not some other link's.
       approachLinksForThisPhase.foreach { linkId =>
         getLinkDependencyFn(linkId).foreach { dep =>
           sendMessageFn(

@@ -312,9 +312,6 @@ class Bicycle(
         }
 
       case WaitingSignalState =>
-        // Should never actually fire — requestSignalState() no longer self-schedules
-        // after sending; only handleLinkAccess (the Node's reply) resolves this status.
-        // Do not resend the request if reached anyway (see Car.scala for rationale).
         logWarn(s"Bicycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
         onFinishSpontaneous(Some(currentTick + 1))
 

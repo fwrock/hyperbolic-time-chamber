@@ -45,26 +45,12 @@ abstract class LocalTimeManagerBase(
   private var selfProxy: ActorRef = null
   @volatile private var isTerminated = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
-  // Per-actor monotonically increasing dispatch counter. Incremented every time this TM actually
-  // sends an actor a SpontaneousEvent; echoed back by the actor on its FinishEvent so finishEvent
-  // can recognize and drop a FinishEvent belonging to a dispatch cycle already superseded by a
-  // newer one (e.g. a redundant/late "poll again next tick" reschedule racing against the real
-  // reply that resolves the same wait) instead of "rescuing" it into a phantom extra schedule.
-  // See docs/KNOWN_GAPS.md's non-reproducibility investigation.
   private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
-  // Per-actor watermark: the highest tick at which THIS specific actor was actually dispatched
-  // a SpontaneousEvent by this TM. Distinct from the TM-wide `localTickOffset`, which advances
-  // based on every actor sharing this LocalTimeManager pool instance. scheduleEvent's past-tick
-  // guard must compare a request against this per-actor value, not the shared clock — otherwise
-  // a busier sibling actor on the same LTM instance advancing localTickOffset can cause this
-  // actor's own genuinely-future ScheduleEvent to be wrongly treated as stale and lose real
-  // causal time. See docs/KNOWN_GAPS.md ("scheduleEvent's Past-Tick Guard Discards Real Causal
-  // Time When Actors Share an LTM Instance").
+
   private val highestProcessedTick: mutable.Map[String, Tick] = mutable.Map().withDefaultValue(-1L)
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
-      // Register this specific instance with the global manager
       parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
     }
 
@@ -111,19 +97,6 @@ abstract class LocalTimeManagerBase(
 
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
-    // Guard against a genuinely stale request: one for a tick THIS actor has already been
-    // dispatched at (or past). We compare against this actor's own highestProcessedTick
-    // watermark, NOT the shared localTickOffset — localTickOffset advances whenever ANY actor
-    // sharing this LTM pool instance is processed, so using it here would wrongly discard an
-    // actor's real future tick just because a busier sibling actor ran ahead of it on the same
-    // LTM instance (see docs/KNOWN_GAPS.md's past-tick guard gap). A request at or behind this
-    // actor's own watermark is bumped to watermark + 1, guaranteeing future processing without
-    // losing any causal time that genuinely belongs to a still-earlier, not-yet-processed tick.
-    // Key by identity.id (the entity id), NOT event.actorRef: actorRef holds the entity id when
-    // this message originates from registerActor, but holds the actor's Pekko path when it
-    // originates from SimulationBaseActor.scheduleEvent(tick) — the same two-value inconsistency
-    // that sendSpontaneousEvent avoids by always keying dispatchGeneration/highestProcessedTick
-    // off identity.id.
     val actorId = event.identify.map(_.id).getOrElse(event.actorRef)
     val actorWatermark = highestProcessedTick(actorId)
     val effectiveTick = if (event.tick <= actorWatermark) {
@@ -134,24 +107,10 @@ abstract class LocalTimeManagerBase(
     } else {
       event.tick
     }
-    // RACE CONDITION FIX: Track whether this TM was previously idle (no scheduled actors
-    // and no running events) before adding the new actor. When Person sends StartTrip to
-    // Car and calls onFinishSpontaneous(None), the TM reports hasScheduled=false to GlobalTM.
-    // Car then asynchronously calls scheduleEvent. Without re-notification, GlobalTM may decide
-    // "no more events" and terminate before Car's spontaneous event is ever dispatched.
     val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
-    // Capture the LTM's current minimum scheduled tick before we add the new actor.
-    // We need this to detect whether the new actor has an EARLIER tick than whatever
-    // GTM already knows about for this LTM.
     val prevNextTick = nextTick
     val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
-    // Re-notify GTM if:
-    //   1. TM was idle before this actor arrived (existing wasIdle logic), OR
-    //   2. The new actor's tick is EARLIER than the previously reported next-tick.
-    //      Without this, if Car(tick=56) registers first (wasIdle → GTM entry tick=56)
-    //      and SubwayStation(tick=1) registers next (LTM not idle → no report), GTM
-    //      keeps tick=56 for this LTM and never wakes it at tick 1, causing a rewind.
     val isEarlierTick = !wasIdle && prevNextTick.exists(effectiveTick < _)
     if ((wasIdle || isEarlierTick) && runningEvents.isEmpty) {
       logDebug(
@@ -167,15 +126,6 @@ abstract class LocalTimeManagerBase(
 
       val currentGen = dispatchGeneration(finish.identify.id)
       if (!finish.destruct && finish.generation < currentGen) {
-        // Stale FinishEvent: this actor has already been dispatched again under a newer
-        // generation since this resolution was decided — e.g. a redundant/late "poll again next
-        // tick" reschedule (sent alongside another call resolving the very same wait) that only
-        // reaches the TM after the actor's own next dispatch already went out. Left unguarded,
-        // such a straggler would fall into the "arrived too late for its tick" bump below and
-        // create a genuinely extra, unintended schedule entry — the root cause of one class of
-        // non-reproducible duplicate dispatch documented in docs/KNOWN_GAPS.md. Drop it here
-        // instead: don't touch scheduledActors/runningEvents/advanceToNextTick, since those
-        // reflect the actor's current, newer dispatch, which is still legitimately pending.
         logDebug(
           s"Dropping stale FinishEvent for ${finish.identify.id}: generation=${finish.generation} < current=$currentGen"
         )
@@ -187,16 +137,6 @@ abstract class LocalTimeManagerBase(
       finish.scheduleTick.foreach {
         tickStr =>
           val tick = tickStr.toLong
-          // Same past-tick guard as scheduleEvent's handler, and for the same reason: compare
-          // against THIS actor's own highestProcessedTick watermark, not the shared
-          // localTickOffset. This is the far more common re-registration path in practice
-          // (every onFinishSpontaneous(Some(tick)) call goes through here, including e.g. a
-          // Car's mesoExitTick) — using localTickOffset here silently pushes the actor's
-          // legitimately-computed future tick (e.g. a correctly-computed link travel time) even
-          // later, whenever a busier sibling actor on the same LTM instance has advanced
-          // localTickOffset past it in the meantime, with no error or log to reveal the drift.
-          // See docs/KNOWN_GAPS.md's past-tick guard gap — this sibling code path was missed by
-          // that fix.
           val actorWatermark = highestProcessedTick(finish.identify.id)
           val effectiveTick = if (tick <= actorWatermark) {
             logDebug(
@@ -267,10 +207,6 @@ abstract class LocalTimeManagerBase(
         s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
       )
     }
-    // If startSimulation was never called (e.g. LTM joined the pool after the
-    // StartSimulationTimeEvent broadcast), initialise startTime and initialTick lazily
-    // so printSimulationDuration() reports a meaningful wall-clock value instead of
-    // ~Unix-epoch-ms (currentTime - 0).
     if (startTime == 0L) {
       startTime = System.currentTimeMillis()
       initialTick = globalTick
@@ -303,14 +239,6 @@ abstract class LocalTimeManagerBase(
     }
 
   protected def nextTick: Option[Tick] = {
-    // Do NOT filter by `>= localTickOffset` here. A legitimately-preserved earlier tick (an
-    // actor's own request that scheduleEvent correctly left alone because it was still ahead
-    // of THAT actor's highestProcessedTick watermark, even though behind the LTM-wide
-    // localTickOffset) must stay visible to advanceToNextTick/reportGlobalTimeManager, or the
-    // GTM loses track of it and this LTM's entry is silently orphaned. processTick's existing
-    // skip-tick catch-up logic (`scheduledActors.keys.filter(_ <= tick).minOption`) already
-    // knows how to process an entry earlier than localTickOffset once the GTM re-syncs this
-    // LTM to it — see docs/KNOWN_GAPS.md's past-tick guard gap.
     val allTicks = scheduledActors.keys ++ scheduledTicksOnFinish
 
     if (allTicks.nonEmpty) {
@@ -320,10 +248,6 @@ abstract class LocalTimeManagerBase(
     }
   }
 
-  /** Process next scheduled event at given tick. NOTE: This is a utility method not directly used
-    * by current implementations. See LocalDiscreteEventTimeManager and LocalTimeSteppedTimeManager
-    * for actual processTick logic.
-    */
   protected def processNextEventTick(tick: Tick): Unit = {
     localTickOffset = tick
     scheduledActors.get(tick).foreach {
@@ -354,10 +278,8 @@ abstract class LocalTimeManagerBase(
       return
     }
 
-    // Bump this actor's dispatch generation before sending — see dispatchGeneration's doc.
     val generation = dispatchGeneration(identity.id) + 1
     dispatchGeneration(identity.id) = generation
-    // Record this actor's own processed-tick watermark — see highestProcessedTick's doc.
     if (tick > highestProcessedTick(identity.id)) {
       highestProcessedTick(identity.id) = tick
     }

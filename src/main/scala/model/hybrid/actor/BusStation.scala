@@ -35,17 +35,6 @@ class BusStation(
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSpawnTick: Option[Tick] = None
 
-  // True between kicking off a Bus's dynamic spawn and its onDynamicActorInitialized ack.
-  // actSpontaneous polls at a short, bounded interval while this is true instead of using
-  // deferFinishSpontaneous() — deferring sends no FinishEvent, holding this station's slot in
-  // the TimeManager's runningEvents open (and every other actor batched on the same
-  // LocalTimeManager instance with it) for the full multi-hop spawn round trip. A genuine
-  // disengage (onFinishSpontaneous(None)) was tried instead and reverted: it raced the Global
-  // TM's one-shot "no scheduled events" grace period (sized for a single in-flight message, not
-  // a multi-hop actor-spawn protocol) and terminated the whole simulation after 0 ticks in the
-  // 86,400-tick baseline. This bounded poll keeps the station genuinely registered throughout,
-  // so the batch never appears idle, while still resolving each individual tick's FinishEvent
-  // immediately (not holding runningEvents open). See docs/KNOWN_GAPS.md.
   private var awaitingDynamicInit: Boolean = false
   private val dynamicInitPollIntervalTicks: Tick = 1L
 
@@ -72,11 +61,6 @@ class BusStation(
   )
 
   override protected def onDynamicActorInitialized(entityId: String, classType: String): Unit =
-    // Just flip the flag — do NOT call onFinishSpontaneous/scheduleEvent here. This station
-    // stayed genuinely registered via the bounded poll in actSpontaneous below (started when
-    // awaitingDynamicInit was set true), so its very next dispatch — at most
-    // dynamicInitPollIntervalTicks away — will see awaitingDynamicInit == false and proceed
-    // straight to pendingSpawnTick, without a second resolution call racing the poll's own.
     awaitingDynamicInit = false
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {

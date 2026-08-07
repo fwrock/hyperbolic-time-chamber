@@ -66,10 +66,6 @@ class MotorcycleSignalHandler(
                     RequestLinkAccessData(targetLinkId = linkId),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
-                // Consistency-critical: do NOT poll. Genuinely deregister from the TimeManager
-                // (a real FinishEvent, not a deferred safety-net suppression) and wait for the
-                // reply as an interaction event; handleLinkAccess re-registers via
-                // scheduleEvent when it lands (see CarSignalHandler for the full rationale).
                 onFinishSpontaneousFn(None)
                 case null =>
                   leavingLinkFn()

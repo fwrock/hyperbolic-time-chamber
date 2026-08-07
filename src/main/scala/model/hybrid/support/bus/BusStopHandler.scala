@@ -50,17 +50,6 @@ class BusStopHandler(
   private var expectedUnloadResponses: Int = 0
 
   def handleBusLoadPeople(data: BusLoadPassengerData, state: BusState): Unit = {
-    // Stale-reply guard, mirroring the pattern already used elsewhere in this codebase
-    // (BusSignalHandler.handleLinkAccess's `state.status != WaitingSignalState` check;
-    // Car/Motorcycle/Bicycle's `status == Parked || Finished` checks in their own
-    // handleLeaveLink). If the bus has already moved on from this WaitingLoadPassenger cycle
-    // by the time the stop's reply arrives (e.g. the reply was queued behind other messages),
-    // re-setting status back to WaitingLoadPassenger and rescheduling here would make
-    // Bus.actSpontaneous's `case WaitingLoadPassenger => enterLink()` fire a second, spurious
-    // time for a link already entered — confirmed via instrumentation as the dominant
-    // remaining source of duplicate enter_link events. Passengers still board either way (the
-    // stop already committed to handing them over) — only the status/reschedule side effect is
-    // skipped for a stale reply. See docs/KNOWN_GAPS.md.
     val isStaleReply = state.status != WaitingLoadPassenger
     if (data.people.nonEmpty) {
       val tick         = currentTickFn()
@@ -100,11 +89,6 @@ class BusStopHandler(
 
       if (!isStaleReply) {
         state.status = WaitingLoadPassenger
-        // requestLoadPassenger genuinely deregistered (onFinishSpontaneousFn(None)) while
-        // waiting for this reply, so re-register via scheduleEventFn — not a second
-        // onFinishSpontaneousFn(Some(tick)) call, which from an already-resolved context would
-        // silently add to scheduledActors without re-notifying the Global TM. See
-        // CarSignalHandler.requestSignalState's identical rationale and docs/KNOWN_GAPS.md.
         scheduleEventFn(nextTickTime)
       }
     } else if (!isStaleReply) {
@@ -154,8 +138,6 @@ class BusStopHandler(
         )
 
         state.status = WaitingUnloadPassenger
-        // requestUnloadPeopleData genuinely deregistered while waiting for every passenger's
-        // reply — re-register via scheduleEventFn, same rationale as handleBusLoadPeople above.
         scheduleEventFn(nextTickTime)
       } else {
         state.status = WaitingUnloadPassenger
@@ -202,16 +184,6 @@ class BusStopHandler(
         "RequestUnloadPassenger"
       )
     }
-    // Consistency-critical: handleUnloadPassenger resolves this once every passenger has
-    // replied (via scheduleEventFn once countUnloadReceived >= expectedUnloadResponses). Do NOT
-    // defer-and-hold here: deferFinishSpontaneousFn() suppresses the "forgot to resolve" safety
-    // net without sending a FinishEvent, which leaves this actor's slot in the TimeManager's
-    // runningEvents open — blocking every other actor batched on the same LocalTimeManager
-    // instance from its own next-tick dispatch for as long as the *slowest* of N passengers
-    // takes to reply (a fan-out, so this was the most exposed of the three call sites with this
-    // shape — see docs/KNOWN_GAPS.md). Genuinely deregister instead (onFinishSpontaneousFn(None),
-    // a real FinishEvent) — handleUnloadPassenger re-registers via scheduleEventFn when the last
-    // reply lands, same disengage-then-scheduleEvent shape as CarSignalHandler.requestSignalState.
     onFinishSpontaneousFn(None)
   }
 
@@ -229,19 +201,6 @@ class BusStopHandler(
           ),
           "RequestPassenger"
         )
-        // Consistency-critical: handleBusLoadPeople (triggered by the stop's
-        // BusLoadPassengerData reply) is what actually resolves this. Polling again
-        // unconditionally at tick+1 (as before) raced with that reply: BusState.status and
-        // BusState.movableStatus are the *same* field (BusState.status delegates to
-        // movableStatus), so a premature tick+1 wake-up here saw status still ==
-        // WaitingLoadPassenger (indistinguishable from "boarding just finished") and
-        // Bus.actSpontaneous's `case WaitingLoadPassenger => enterLink()` treated it as "ready
-        // to leave", sending a duplicate EnterLinkData for a link it was (or was about to be)
-        // already registered on. Confirmed via direct instrumentation — see docs/KNOWN_GAPS.md.
-        // Genuinely deregister (onFinishSpontaneousFn(None)) rather than deferFinishSpontaneousFn()
-        // — the latter holds this bus's slot in the TimeManager's runningEvents open, stalling
-        // every other actor batched on the same LocalTimeManager instance until the stop
-        // replies. handleBusLoadPeople re-registers via scheduleEventFn once it does.
         onFinishSpontaneousFn(None)
       case None =>
         setCurrentStopNodeFn(None)
