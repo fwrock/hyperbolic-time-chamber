@@ -61,6 +61,48 @@ package core.actor.manager.loadbalance.migration
   * @param currentPTVehicleRefClassType
   *   [[org.interscity.htc.model.hybrid.actor.Person]] only: the boarded Bus/Subway's actor class
   *   type, paired with [[currentPTVehicleRefId]].
+  * @param vehicleCurrentLinkId
+  *   [[org.interscity.htc.model.hybrid.actor.Car]]/`Motorcycle`/`Bicycle`/`Bus` only: the link this
+  *   vehicle currently occupies, empty when not on a link (e.g. still routing). Found uncaptured by
+  *   `docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07) — without this, a Time
+  *   Warp rollback restores `state.status` correctly but leaves this actor-local field at whatever
+  *   value live execution left it at, desynchronizing replay from the original run.
+  * @param vehicleCurrentLinkLength
+  *   Same audit, `Car` only (`Motorcycle`/`Bicycle`/`Bus` don't track this separately): the occupied
+  *   link's length, paired with [[vehicleCurrentLinkId]].
+  * @param vehicleLinkEntryTick
+  *   Same audit: the tick this vehicle entered [[vehicleCurrentLinkId]], `Long.MinValue` when not
+  *   on a link. Feeds travel-time/emission math on leave.
+  * @param vehicleMesoExitTick
+  *   Same audit: the tick a MESO-mode vehicle is scheduled to exit its current link,
+  *   `Long.MinValue` when not mid-MESO-traversal. Gates `actSpontaneous`'s `Moving` branch — see
+  *   `Car.scala`'s `mesoExitTick` match.
+  * @param vehicleSignalWaitUntilTick
+  *   Same audit: the tick a vehicle in `WaitingSignal` is scheduled to re-check, `Long.MinValue`
+  *   when not waiting on a signal.
+  * @param vehicleSignalWaitNeedsReverify
+  *   Same audit: whether the vehicle's signal wait must re-request signal state (vs. proceeding
+  *   directly) once its wait tick arrives.
+  * @param expectedUnloadResponses
+  *   [[org.interscity.htc.model.hybrid.actor.Bus]]/[[org.interscity.htc.model.hybrid.actor.Subway]]
+  *   only: how many onboard-passenger unload responses this vehicle is still waiting for before a
+  *   stop cycle completes (a reply-count barrier), `0` when no unload round is in progress. Same
+  *   audit as the `vehicle*` fields above — losing this on a Time Warp rollback desyncs the barrier
+  *   from `state.countUnloadReceived`, which IS captured (it's a `BusState`/`SubwayState` field).
+  * @param currentStopNode
+  *   [[org.interscity.htc.model.hybrid.actor.Bus]] only: the node ID of the stop this bus is
+  *   currently at, saved before `leavingLink` clears the current path; empty when not at a stop.
+  * @param linkVehicleEntryTick
+  *   [[org.interscity.htc.model.hybrid.actor.Link]] only: tick each currently-registered vehicle
+  *   (keyed by entity id) entered this link, feeding travel-time math sent to the vehicle on leave
+  *   (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`). Same audit as
+  *   the `vehicle*` fields above — uncaptured, this desyncs from `LinkState.registered` (which IS
+  *   captured) after a Time Warp rollback, computing a different travel time for the same logical
+  *   leave event than the original live run did.
+  * @param linkVehicleWaitingSeconds
+  *   [[org.interscity.htc.model.hybrid.actor.Link]] only: accumulated waiting time per
+  *   currently-registered vehicle (keyed by entity id), same audit and same reasoning as
+  *   [[linkVehicleEntryTick]].
   */
 case class MigrationSnapshot(
   stateJson: String,
@@ -83,5 +125,15 @@ case class MigrationSnapshot(
   tripStartDistance: Double = 0.0,
   destroyAfterNextPark: Boolean = false,
   currentPTVehicleRefId: String = "",
-  currentPTVehicleRefClassType: String = ""
+  currentPTVehicleRefClassType: String = "",
+  vehicleCurrentLinkId: String = "",
+  vehicleCurrentLinkLength: Double = 0.0,
+  vehicleLinkEntryTick: Long = Long.MinValue,
+  vehicleMesoExitTick: Long = Long.MinValue,
+  vehicleSignalWaitUntilTick: Long = Long.MinValue,
+  vehicleSignalWaitNeedsReverify: Boolean = false,
+  expectedUnloadResponses: Int = 0,
+  currentStopNode: String = "",
+  linkVehicleEntryTick: Map[String, Long] = Map.empty,
+  linkVehicleWaitingSeconds: Map[String, Double] = Map.empty
 )

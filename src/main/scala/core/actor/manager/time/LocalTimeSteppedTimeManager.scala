@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.LocalTimeManagerBase
+import core.actor.manager.time.ConservativeLocalTimeManager
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
@@ -28,7 +28,7 @@ class LocalTimeSteppedTimeManager(
   simulationManager: ActorRef,
   parentManager: Option[ActorRef],
   val timeStep: Tick = 1
-) extends LocalTimeManagerBase(
+) extends ConservativeLocalTimeManager(
       simulationDuration = simulationDuration,
       simulationManager = simulationManager,
       parentManager = parentManager,

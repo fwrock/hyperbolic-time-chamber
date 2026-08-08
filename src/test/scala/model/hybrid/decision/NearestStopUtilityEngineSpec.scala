@@ -21,7 +21,8 @@ class NearestStopUtilityEngineSpec extends AnyFlatSpec with Matchers {
     weights            = ModeChoiceWeights(),
     ownedVehicles      = Map.empty,
     vehicleCurrentNode = Map.empty,
-    currentTick        = 0L
+    currentTick        = 0L,
+    entityId           = "test-person"
   )
 
   "validateForScenario" should "always be Right, regardless of scenario data availability" in {

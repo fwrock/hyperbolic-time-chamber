@@ -5,6 +5,8 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
+import core.actor.rollback.RollbackHistoryHandler
+import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
 import core.types.Tick
@@ -15,7 +17,8 @@ import core.util.{ IdUtil, JsonUtil, StringPool, StringUtil }
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent
+import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
+import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
@@ -71,8 +74,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (properties != null && properties.timeManagers != null) properties.timeManagers
     else mutable.Map[String, ActorRef]()
 
+  /** Derived from `timeManagers`' own key rather than `properties.defaultTimeManagerType`, so
+    * `PoolDistributed` actors (constructed with `properties.data` already set, via
+    * `ActorCreatorUtil.createPoolActor` — never routed through `onInitialize`) still pick up the
+    * scenario's chosen strategy at construction time. See `docs/TIME_WARP_DESIGN.md`.
+    */
   protected var currentTimeManagerType: String =
-    if (properties != null) properties.defaultTimeManagerType
+    if (properties != null && properties.timeManagers != null && properties.timeManagers.nonEmpty)
+      properties.timeManagers.keys.head
+    else if (properties != null) properties.defaultTimeManagerType
     else TimeManagerTypeEnum.DISCRETE_EVENT
 
   protected var creatorManager: ActorRef =
@@ -83,6 +93,200 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
+
+  // --- Time Warp (docs/TIME_WARP_DESIGN.md) --- everything below is gated behind
+  // `currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, which nothing sets yet (see the
+  // design doc's step-4/5 implementation log) — under every currently reachable configuration
+  // (i.e. conservative mode, always, today) `rollbackHandler` is never touched, so its `lazy`
+  // initializer never runs and this costs conservative-mode actors nothing.
+  //
+  // This actor's own monotonically increasing processed-event counter — the `seq` RollbackHistoryHandler
+  // orders its log by (see LoggedEvent.seq's doc). A plain actor-local `var`, not `state`: safe per
+  // CLAUDE.md's rule for actor-local mutable fields, since it holds no reply obligation and is
+  // cheap to recompute/reset — it only orders this actor's own already-in-memory replay log, not
+  // anything another actor is waiting to hear back about.
+  private var processedEventSeq: Long = 0L
+
+  // This actor's own monotonically increasing SEND counter (docs/TIME_WARP_DESIGN.md §10's
+  // MessageId.seq — a distinct counter from processedEventSeq above, which orders processed
+  // events, not sends). Deliberately never included in buildMigrationSnapshot/applyMigrationSnapshot
+  // and never touched by rollbackTo/replayLoggedEvent: §10 requires it survive a rollback
+  // untouched, so a resend produced by replay always gets a fresh id rather than reusing one a
+  // still-in-flight anti-message might reference.
+  private var messageSendSeq: Long = 0L
+
+  // Every message sent by sendMessageTo while the CURRENTLY-processing event runs, so it can be
+  // attached to that event's RollbackHistoryHandler log entry (LoggedEvent.sentMessages) once
+  // processing finishes — the data AntiMessageCascade needs to retract them on a future rollback.
+  // Cleared at the start of handleSpontaneous/handleInteractWith; only ever populated when
+  // isTimeWarp (see sendMessageTo), so this stays empty and unused for conservative-mode actors.
+  private val currentEventSentMessages: mutable.ArrayBuffer[core.actor.rollback.SentMessage] = mutable.ArrayBuffer.empty
+
+  // Every DynamicWeightCache.getWeight(linkId, ...) result observed while the CURRENTLY-processing
+  // event runs (docs/TIME_WARP_DESIGN.md's model-level audit, third finding) -- flushed into that
+  // event's RollbackHistoryHandler log entry (LoggedEvent.dynamicWeightReads) once processing
+  // finishes, so a future replay of this exact event can force the same reads via
+  // DynamicWeightCache.withOverride instead of hitting the live, real-time-shifted cache. Cleared at
+  // the start of handleSpontaneous/handleInteractWith; only ever populated when isTimeWarp (the
+  // whole event body runs inside DynamicWeightCache.withRecording(this) in that case), so this stays
+  // empty and unused for conservative-mode actors.
+  private val currentEventDynamicWeightReads: mutable.Map[String, Double] = mutable.Map.empty
+
+  // report() calls made while isTimeWarp, held back until the GVT watermark passes their tick
+  // (docs/TIME_WARP_DESIGN.md §4 — decided when the design was written, never actually implemented
+  // until now). Without this, report() emits to the reporter pipeline (ClickHouse/Kafka/Prometheus)
+  // immediately regardless of synchronization strategy, so speculative execution a later rollback
+  // undoes has already reported data for a branch that turns out never to have happened — silently,
+  // since nothing about rollbackTo touches the reporter pipeline. Only ever populated when
+  // isTimeWarp (see report(event)), so this stays empty and unused for conservative-mode actors.
+  private val reportBuffer: mutable.ArrayBuffer[(ReportEvent, ActorRef)] = mutable.ArrayBuffer.empty
+
+  /** True while [[replayLoggedEvent]] is re-executing an already-processed event's business logic
+    * against a just-restored checkpoint, as opposed to a live dispatch. The one flag that makes
+    * replay safe: [[onFinishSpontaneous]] and [[scheduleEvent]] both check it and skip signaling
+    * the time manager while it's set (see each method's own doc for why), while `sendMessageTo` is
+    * deliberately left unguarded — `docs/TIME_WARP_DESIGN.md` §10 wants replay to actually resend
+    * messages, each getting a fresh `MessageId`, so the *previous* (now-invalidated) sends can be
+    * anti-messaged instead. Never true outside of [[replayLoggedEvent]]'s own call stack, and
+    * [[replayLoggedEvent]] is only ever invoked by [[rollbackHandler]]'s `replayEventFn`, itself
+    * only reachable from `RollbackHistoryHandler.rollbackTo` — which nothing calls yet (see
+    * `docs/TIME_WARP_DESIGN.md`'s implementation log for this step), so this is provably always
+    * `false` today, same as [[isTimeWarp]].
+    */
+  private var isReplaying: Boolean = false
+
+  /** Per-actor checkpoint + event-log handler (`docs/TIME_WARP_DESIGN.md` §6/§7), composed the same
+    * lambda-only, no-`ActorRef` way `CarMicroHandler` is. `replayEventFn` delegates to
+    * [[replayLoggedEvent]], which sets [[isReplaying]] around the re-dispatch so the protocol
+    * side effects `actSpontaneous`/`actInteractWith` can trigger (`onFinishSpontaneous`,
+    * `scheduleEvent`) don't repeat during replay the way they would during a live dispatch — see
+    * [[isReplaying]]'s doc for the full reasoning.
+    */
+  protected lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
+    checkpointInterval =
+      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
+    captureSnapshotFn = () => buildMigrationSnapshot(),
+    restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
+    replayEventFn = logged => replayLoggedEvent(logged)
+  )
+
+  /** Re-executes one already-logged event's business logic against the actor's current
+    * (just-restored) state, to walk it forward from a checkpoint to an exact log position — see
+    * [[isReplaying]] for why this is safe to do without repeating `onFinishSpontaneous`/
+    * `scheduleEvent`'s time-manager signaling. Mirrors `handleSpontaneous`/`handleInteractWith`'s
+    * own pre-dispatch bookkeeping (`currentTick`/`currentTimeManager`/`currentGeneration`
+    * assignment, Lamport clock update) but deliberately skips their *post*-dispatch bookkeeping
+    * (the safety-net "did you call onFinishSpontaneous" check, `recordProcessedEvent` itself) —
+    * both are meaningless here: nothing is dispatching a *new* event for the time manager to track,
+    * and this event is already in the log being replayed, not a fresh one to log again.
+    *
+    * Known scope limit: `sendMessageTo` calls made during this replay populate
+    * [[currentEventSentMessages]] same as a live dispatch, but nothing here flushes that back onto
+    * the original `LoggedEvent` being replayed (unlike a live dispatch, which flushes it via
+    * `recordProcessedEvent`) — so if *this exact event* is ever rolled back a second time, its
+    * anti-message cascade would use the sends from its *first* dispatch, not this replay's. A real
+    * gap for a repeated-rollback-of-the-same-event edge case, not designed further here; the
+    * common single-rollback path this step's tests exercise is unaffected. The same caveat applies
+    * to [[currentEventDynamicWeightReads]] below — a second rollback of this same replayed event
+    * would replay it a third time using the ORIGINAL live dispatch's recorded reads (from
+    * `logged.dynamicWeightReads`, untouched here), not this replay's own — same deeper-nested-
+    * rollback edge case, not this event type's own new gap.
+    *
+    * The whole business-logic call is wrapped in `DynamicWeightCache.withOverride(logged.
+    * dynamicWeightReads)` (`docs/TIME_WARP_DESIGN.md`'s model-level audit, third finding) so any
+    * `getWeight` read inside `actSpontaneous`/`actInteractWith` — however deeply nested, e.g. inside
+    * a route calculation — reproduces exactly what the original live dispatch saw, instead of
+    * whatever the live dynamic-weight cache holds by the time this replay runs.
+    */
+  private def replayLoggedEvent(logged: core.actor.rollback.LoggedEvent): Unit = {
+    isReplaying = true
+    try
+      DynamicWeightCache.withOverride(logged.dynamicWeightReads) {
+        logged.event match {
+          case spontaneous: SpontaneousEvent =>
+            currentTick = spontaneous.tick
+            currentTimeManager = spontaneous.actorRef
+            currentGeneration = spontaneous.generation
+            actSpontaneous(spontaneous)
+          case interaction: ActorInteractionEvent =>
+            updateLamportClock(interaction.lamportTick)
+            if (interaction.tick > currentTick) {
+              currentTick = interaction.tick
+            }
+            actInteractWith(interaction)
+          case other =>
+            logWarn(s"$getEntityId: replayLoggedEvent doesn't know how to replay a ${other.getClass.getName}")
+        }
+      }
+    catch
+      case e: Throwable =>
+        logError(s"Exception replaying a logged event for $getEntityId: ${e.getMessage}")
+        e.printStackTrace()
+    finally isReplaying = false
+  }
+
+  /** True only under Time Warp — the one gate every new-but-not-yet-safe-to-activate call site
+    * below checks before touching [[rollbackHandler]], so conservative mode is provably unaffected.
+    */
+  private def isTimeWarp: Boolean = currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
+
+  /** The straggler trigger (`docs/TIME_WARP_DESIGN.md` §10): rolls this actor back to before
+    * `targetTick` and sends a real anti-message for every send that gets undone in the process.
+    * Called from [[handleInteractWith]] for both cases that need it — a genuinely causally-earlier
+    * interaction arriving after this actor already ran ahead of it, and an incoming anti-message
+    * itself (whose target tick is looked up via [[findLoggedEventForMessage]]) — since both reduce
+    * to the same "undo back to a tick, cascade what that undoes" operation
+    * `RollbackHistoryHandler.rollbackTo` already implements.
+    */
+  private def rollbackAndCascade(targetTick: Tick): Unit = {
+    val undone = rollbackHandler.rollbackTo(targetTick)
+    // §4: any report() buffered for a tick this rollback just undid must be dropped, not flushed
+    // later — it describes state that turned out never to have happened. Reports already flushed
+    // (tick < targetTick, or a tick that already passed GVT before this rollback) are unaffected;
+    // they were only ever flushed once GVT made them irrevocable in the first place.
+    if (isTimeWarp) reportBuffer.filterInPlace(_._1.tick < targetTick)
+    core.actor.rollback.AntiMessageCascade.messagesToRetract(undone).foreach(sendAntiMessage)
+  }
+
+  /** Finds the logged event (if any) this actor recorded for processing the interaction identified
+    * by `messageId` — i.e. the original send an incoming anti-message refers to. Matches on the
+    * sender/tick/seq triple `ActorInteractionEvent.messageId` derives, since that's the only event
+    * type [[handleInteractWith]] ever logs whose identity an anti-message could reference.
+    */
+  private def findLoggedEventForMessage(messageId: core.actor.rollback.MessageId): Option[core.actor.rollback.LoggedEvent] =
+    rollbackHandler.findEvent {
+      case interaction: ActorInteractionEvent => interaction.messageId == messageId
+      case _                                  => false
+    }
+
+  /** Sends a real anti-message retracting `sentMessage`'s original send, to the same receiver via
+    * the same routing (`sendMessageToShard`/`sendMessageToPool`) a normal send would use — but
+    * carrying the *original* send's `tick`/`seq` (not this actor's current ones), so the receiver
+    * can find and undo exactly that send in its own log via [[findLoggedEventForMessage]].
+    */
+  private def sendAntiMessage(sentMessage: core.actor.rollback.SentMessage): Unit = {
+    val actorType = CreationTypeEnum.valueOf(sentMessage.receiverActorType)
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(
+        entityId = sentMessage.receiverId,
+        data = core.actor.rollback.AntiMessagePayload,
+        eventType = "anti-message",
+        tick = sentMessage.messageId.tick,
+        seq = sentMessage.messageId.seq,
+        isAntiMessage = true
+      )
+    } else {
+      sendMessageToShard(
+        entityId = sentMessage.receiverId,
+        shardId = sentMessage.receiverShardId,
+        data = core.actor.rollback.AntiMessagePayload,
+        eventType = "anti-message",
+        tick = sentMessage.messageId.tick,
+        seq = sentMessage.messageId.seq,
+        isAntiMessage = true
+      )
+    }
+  }
 
   /** Interns all String fields in the [[relationships]] map to reduce heap duplication.
     * Called once per actor in [[onFinishInitialize]], and again after migration restore.
@@ -269,8 +473,12 @@ abstract class SimulationBaseActor[T <: BaseState](
           startTick = state.getStartTick
         }
         creatorManager ! StartEntityAckEvent(entityId = entityId)
-        if (state != null && state.isSetScheduleOnTimeManager) {
-          registerOnTimeManager()
+        if (state != null) {
+          if (state.isSetScheduleOnTimeManager) {
+            registerOnTimeManager()
+          } else if (isTimeWarp) {
+            registerPassivelyOnTimeManager()
+          }
         }
       } catch {
         case e: Exception =>
@@ -281,7 +489,22 @@ abstract class SimulationBaseActor[T <: BaseState](
     onStart()
   }
 
+  /** `Identify` for the shard-routed case (`LoadBalancedDistributed`, e.g. `Node`/`Link`/`RailLink`)
+    * vs. the direct-ref case, shared by [[registerOnTimeManager]] and [[registerPassivelyOnTimeManager]].
+    */
+  private def selfIdentify(): Identify =
+    Identify(
+      id = IdUtil.format(entityId),
+      resourceId = IdUtil.format(properties.resourceId),
+      classType = getClass.getName,
+      actorRef = if (properties.actorType == LoadBalancedDistributed) getSelfShard.path.toString else self.path.toString,
+      actorType = properties.actorType.toString
+    )
+
   private def registerOnTimeManager(): Unit = {
+    if (isTimeWarp) {
+      rollbackHandler.initialize(startTick)
+    }
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) {
       logWarn(
@@ -291,42 +514,34 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
       return
     }
-    if (properties.actorType == LoadBalancedDistributed) {
-      timeManager ! RegisterActorEvent(
-        startTick = startTick,
-        actorId = entityId,
-        identify = Some(
-          Identify(
-            id = IdUtil.format(entityId),
-            resourceId = IdUtil.format(properties.resourceId),
-            classType = getClass.getName,
-            actorRef = getSelfShard.path.toString,
-            actorType = properties.actorType.toString
-          )
-        )
-      )
-    } else {
-      timeManager ! RegisterActorEvent(
-        startTick = startTick,
-        actorId = entityId,
-        identify = Some(
-          Identify(
-            id = IdUtil.format(entityId),
-            resourceId = IdUtil.format(properties.resourceId),
-            classType = getClass.getName,
-            actorRef = self.path.toString,
-            actorType = properties.actorType.toString
-          )
-        )
-      )
-    }
+    timeManager ! RegisterActorEvent(startTick = startTick, actorId = entityId, identify = Some(selfIdentify()))
+  }
+
+  /** Registers with the time manager WITHOUT causing any `SpontaneousEvent` dispatch — for actors
+    * whose scenario data has `scheduleOnTimeManager = false` (the common case for purely-reactive
+    * infrastructure actors: `Link`/`Node`/`RailLink`/`BusStop`/etc., which never had — and must
+    * never gain — a periodic dispatch). Only relevant under Time Warp: `report()`'s buffering (§4)
+    * means such an actor's reports are otherwise never flushed at all, since `LocalTimeManagerBase.
+    * forceDestructActiveActors` (the mechanism that flushes via `onDestruct`) only reaches actors it
+    * tracks — and an actor that never registers at all isn't tracked. See `docs/TIME_WARP_DESIGN.md`
+    * and [[core.entity.event.control.execution.RegisterPassiveActorEvent]]'s own doc for the full
+    * story, including why this can't just reuse `registerOnTimeManager`'s real registration (that
+    * path always schedules a real dispatch, which an actor with no real `actSpontaneous` override —
+    * e.g. `RailLink` — would mishandle via `handleSpontaneous`'s auto-reschedule safety net,
+    * becoming a permanent busy-loop).
+    */
+  private def registerPassivelyOnTimeManager(): Unit = {
+    rollbackHandler.initialize(startTick)
+    val timeManager = getTimeManager(currentTimeManagerType)
+    if (timeManager == null) return
+    timeManager ! core.entity.event.control.execution.RegisterPassiveActorEvent(actorId = entityId, identify = Some(selfIdentify()))
   }
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
     entityId = event.id
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
-      currentTimeManagerType = TimeManagerTypeEnum.DISCRETE_EVENT
+      currentTimeManagerType = timeManagers.keys.headOption.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT)
     } else {
       logWarn(s"onInitialize: timeManagers is NULL for $entityId (class=${getClass.getSimpleName})")
     }
@@ -349,6 +564,16 @@ abstract class SimulationBaseActor[T <: BaseState](
           case e: Exception =>
             logError(
               s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
+              e
+            )
+        }
+      } else if (isTimeWarp) {
+        try
+          registerPassivelyOnTimeManager()
+        catch {
+          case e: Exception =>
+            logError(
+              s"$entityId: registerPassivelyOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
               e
             )
         }
@@ -434,10 +659,28 @@ abstract class SimulationBaseActor[T <: BaseState](
   ): Unit = {
     lamportClock.increment()
     ActorMetrics.messagesSent.labels(getClass.getSimpleName, eventType).inc()
-    if (actorType == PoolDistributed) {
-      sendMessageToPool(entityId, data, eventType)
+    // Time Warp (docs/TIME_WARP_DESIGN.md §10): a fresh per-actor send identity, generated and
+    // written to the wire ONLY under Time Warp. Deliberately not unconditional: proto3 encodes a
+    // zero field as zero bytes, so an always-incrementing seq would grow every conservative-mode
+    // message's wire size for a field nothing conservative-mode ever reads -- exactly the class of
+    // wire-size regression this codebase has a dedicated history of eliminating (see this file's
+    // git log). Conservative-mode messages keep seq=0, byte-identical to before this field existed.
+    val seq = if (isTimeWarp) {
+      messageSendSeq += 1
+      currentEventSentMessages += core.actor.rollback.SentMessage(
+        messageId = core.actor.rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq),
+        receiverId = entityId,
+        receiverShardId = if (shardId != null) shardId else "",
+        receiverActorType = actorType.toString
+      )
+      messageSendSeq
     } else {
-      sendMessageToShard(entityId, shardId, data, eventType)
+      0L
+    }
+    if (actorType == PoolDistributed) {
+      sendMessageToPool(entityId, data, eventType, seq = seq)
+    } else {
+      sendMessageToShard(entityId, shardId, data, eventType, seq = seq)
     }
   }
 
@@ -445,14 +688,17 @@ abstract class SimulationBaseActor[T <: BaseState](
     entityId: String,
     shardId: String,
     data: AnyRef,
-    eventType: String = "default"
+    eventType: String = "default",
+    tick: Tick = currentTick,
+    seq: Long = 0L,
+    isAntiMessage: Boolean = false
   ): Unit = {
     val shardingRegion = getShardRef(IdUtil.format(StringUtil.getModelClassName(shardId)))
 
     shardingRegion ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(entityId),
       ActorInteractionEvent(
-        tick = currentTick,
+        tick = tick,
         lamportTick = getLamportClock,
         actorRefId = IdUtil.format(getEntityId),
         shardRefId = IdUtil.format(getShardId),
@@ -461,7 +707,9 @@ abstract class SimulationBaseActor[T <: BaseState](
         data = data,
         eventType = eventType,
         actorType = properties.actorType.toString,
-        resourceId = properties.resourceId
+        resourceId = properties.resourceId,
+        seq = seq,
+        isAntiMessage = isAntiMessage
       )
     )
   }
@@ -469,11 +717,14 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def sendMessageToPool(
     entityId: String,
     data: AnyRef,
-    eventType: String = "default"
+    eventType: String = "default",
+    tick: Tick = currentTick,
+    seq: Long = 0L,
+    isAntiMessage: Boolean = false
   ): Unit = {
     val pool = getActorPoolRef(entityId)
     pool ! ActorInteractionEvent(
-      tick = currentTick,
+      tick = tick,
       lamportTick = getLamportClock,
       actorRefId = IdUtil.format(getEntityId),
       shardRefId = IdUtil.format(getShardId),
@@ -482,7 +733,9 @@ abstract class SimulationBaseActor[T <: BaseState](
       data = data,
       eventType = eventType,
       actorType = properties.actorType.toString,
-      resourceId = properties.resourceId
+      resourceId = properties.resourceId,
+      seq = seq,
+      isAntiMessage = isAntiMessage
     )
   }
 
@@ -508,6 +761,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = event.tick
     currentTimeManager = event.actorRef
     currentGeneration = event.generation
+    // §4: this SpontaneousEvent is the one channel an OptimisticLocalTimeManager already has to
+    // reach this actor regularly — piggyback its last-known GVT here rather than inventing a
+    // separate LTM-to-actor broadcast. An idle actor simply flushes on its next dispatch instead of
+    // the instant GVT technically clears it; that's a bounded delay, not a correctness gap (nothing
+    // buffered can be observed as "sent" by anyone until it actually is).
+    if (isTimeWarp) event.gvt.foreach(flushBufferedReportsUpTo)
     if (state == null) {
       ActorMetrics.eventsWhenStateIsNull.labels(
         getClass.getSimpleName,
@@ -522,7 +781,13 @@ abstract class SimulationBaseActor[T <: BaseState](
       return
     }
     _spontaneousFinishSent = false
-    try actSpontaneous(event)
+    if (isTimeWarp) {
+      currentEventSentMessages.clear()
+      currentEventDynamicWeightReads.clear()
+    }
+    try
+      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actSpontaneous(event))
+      else actSpontaneous(event)
     catch
       case e: Throwable =>
         logError(
@@ -536,6 +801,16 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"[BUG] ${getClass.getSimpleName}/${getEntityId} did not call onFinishSpontaneous at tick=$currentTick — auto-recovering"
       )
       onFinishSpontaneous(Some(currentTick + 1))
+    }
+    if (isTimeWarp) {
+      processedEventSeq += 1
+      rollbackHandler.recordProcessedEvent(
+        event,
+        tick = currentTick,
+        seq = processedEventSeq,
+        sentMessages = currentEventSentMessages.toSeq,
+        dynamicWeightReads = currentEventDynamicWeightReads.toMap
+      )
     }
   }
 
@@ -553,10 +828,40 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     ActorMetrics.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
+
+    // Time Warp anti-message receipt (docs/TIME_WARP_DESIGN.md §10): not a real interaction to
+    // process via actInteractWith at all -- find the original send this retracts and undo back to
+    // it, cascading further anti-messages for whatever that undoes. If the original can't be
+    // found (already fossil-collected below GVT, or this actor was never the receiver -- shouldn't
+    // happen but isn't fatal either way), there's nothing left to undo; log and move on.
+    if (isTimeWarp && event.isAntiMessage) {
+      findLoggedEventForMessage(event.messageId) match {
+        case Some(logged) => rollbackAndCascade(logged.tick)
+        case None =>
+          logWarn(s"$getEntityId: anti-message for unknown/already-pruned messageId=${event.messageId}")
+      }
+      return
+    }
+
+    // Time Warp straggler detection: a real causality violation -- this interaction's tick is
+    // behind what this actor already processed, meaning it ran ahead of where it should have.
+    // Roll back to before it, cascading anti-messages for whatever that undoes, THEN process this
+    // event normally below (now in its causally-correct position) -- Jefferson's "roll back to
+    // before the violation, then process it in order," not a special second code path.
+    if (isTimeWarp && event.tick < currentTick) {
+      rollbackAndCascade(event.tick)
+    }
+
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
-    try actInteractWith(event)
+    if (isTimeWarp) {
+      currentEventSentMessages.clear()
+      currentEventDynamicWeightReads.clear()
+    }
+    try
+      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actInteractWith(event))
+      else actInteractWith(event)
     catch
       case e: Exception =>
         logError(
@@ -564,6 +869,16 @@ abstract class SimulationBaseActor[T <: BaseState](
             s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
         )
         e.printStackTrace()
+    if (isTimeWarp) {
+      processedEventSeq += 1
+      rollbackHandler.recordProcessedEvent(
+        event,
+        tick = currentTick,
+        seq = processedEventSeq,
+        sentMessages = currentEventSentMessages.toSeq,
+        dynamicWeightReads = currentEventDynamicWeightReads.toMap
+      )
+    }
   }
 
   /** Called when the actor receives an interaction event from another actor. Override this method
@@ -667,13 +982,31 @@ abstract class SimulationBaseActor[T <: BaseState](
     * entity ID, so stale in-flight messages go to Dead Letters instead of triggering a ghost
     * restart with state == null. Plain context.stop does NOT inform the shard, causing the entity
     * to be recreated on the next incoming message.
+    *
+    * Also the real termination path for Time Warp participants (`Car`/`Bicycle`/`Motorcycle`/
+    * `PrivateVehicle`/`Movable` all call this directly, not `onDestruct`'s `DestructEvent` path) —
+    * so any report() still sitting in [[reportBuffer]] waiting for a GVT that will now never arrive
+    * (this actor is about to stop existing) must flush unconditionally here. §4: nothing can ever
+    * roll back an actor that no longer exists, so every remaining buffered report is safe by
+    * construction at this point, not just the ones already covered by the last GVT this actor saw.
     */
-  override protected def selfDestruct(): Unit =
+  override protected def selfDestruct(): Unit = {
+    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
     if (properties != null && properties.actorType == LoadBalancedDistributed) {
       context.parent ! ShardRegion.Passivate(PoisonPill)
     } else {
       context.stop(self)
     }
+  }
+
+  /** Same unconditional final flush as [[selfDestruct]]'s doc explains, for the other termination
+    * path: forced destruction via a `DestructEvent` from the time manager (`BaseActor.destruct`)
+    * rather than the actor choosing to stop itself.
+    */
+  override protected def onDestruct(event: DestructEvent): Unit = {
+    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
+    super.onDestruct(event)
+  }
 
   private def handleMigrationContext(event: MigrationContextEvent): Unit = {
     logInfo(
@@ -719,7 +1052,26 @@ abstract class SimulationBaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
+    // Time Warp replay (see isReplaying's doc): actSpontaneous calling this during
+    // replayLoggedEvent must not re-signal the time manager -- that signal already happened, for
+    // real, the first time this event was live-dispatched. Nothing to update here either:
+    // _spontaneousFinishSent's safety-net check only runs inside handleSpontaneous, which replay
+    // never goes through.
+    if (isReplaying) return
     _spontaneousFinishSent = true
+    // currentTimeManager is only ever set by a real live SpontaneousEvent dispatch (handleSpontaneous/
+    // replayLoggedEvent). Found via the conservative-vs-optimistic comparison run (docs/
+    // TIME_WARP_DESIGN.md): a passively-registered Time Warp actor (RegisterPassiveActorEvent --
+    // never dispatched a SpontaneousEvent by design) can still reach this method indirectly during
+    // onDestruct's business-logic cleanup (e.g. Car.onDestruct -> PrivateVehicle.deactivateVehicle
+    // -> scheduleNextTick -> here), with currentTimeManager still null -- there was never a live TM
+    // turn to "finish." Nothing to legitimately report to in that case; skip the send rather than
+    // NPE or route a FinishEvent to some pool instance that never dispatched this actor in the first
+    // place (which could phantom-schedule it for a future tick it'll never see, since it's mid-destruct).
+    if (currentTimeManager == null) {
+      logDebug(s"$getEntityId: onFinishSpontaneous called with no currentTimeManager (never live-dispatched) -- nothing to report, skipping")
+      return
+    }
     currentTimeManager ! FinishEvent(
       end = currentTick,
       actorRef = self,
@@ -752,6 +1104,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The tick at which the event should be scheduled
     */
   protected def scheduleEvent(tick: Tick): Unit = {
+    // Time Warp replay: same reasoning as onFinishSpontaneous's isReplaying guard -- this actor's
+    // real future schedule was already correctly registered with the time manager the first time
+    // this event was live-dispatched; replaying it must not re-register (or double-register) it.
+    if (isReplaying) return
     val tm =
       if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
     tm ! ScheduleEvent(
@@ -795,6 +1151,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     catch { case _: Exception => ReportTypeEnum.valueOf("csv") }
 
   /** Reports an event to the reporting system.
+    *
+    * Under Time Warp (`docs/TIME_WARP_DESIGN.md` §4), the actual send to `target` is deferred:
+    * report() may be called by execution that a later rollback undoes, and once sent, a report can
+    * never be un-sent from the reporter pipeline (ClickHouse/Kafka/Prometheus). The target reporter
+    * ref is resolved now (state may look different by flush time) and carried alongside the buffered
+    * event; only the send itself waits for [[flushBufferedReportsUpTo]] to confirm GVT has passed
+    * this event's tick. The `eventsProcessed` metric still increments immediately either way — it
+    * counts this actor processing an event, not data reaching a reporter.
     * @param event
     *   The report event
     */
@@ -805,12 +1169,29 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     val stateReporter = state.getReporterType
     val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType
-    if (reporters.contains(reportType)) {
-      reporters(reportType) ! event
+    val target = if (reporters.contains(reportType)) reporters(reportType) else reporters(cachedDefaultReportType)
+    if (isTimeWarp) {
+      reportBuffer += ((event, target))
     } else {
-      reporters(cachedDefaultReportType) ! event
+      target ! event
     }
   }
+
+  /** Sends every buffered report whose tick is now covered by `gvt` — §4's "safe, can never be
+    * rolled back" watermark — and leaves everything else buffered for a later call. Called from
+    * [[handleSpontaneous]] whenever a dispatch carries a fresh GVT estimate, and unconditionally
+    * (passing `Long.MaxValue`) from [[selfDestruct]]/`onDestruct` since nothing can roll back an
+    * actor that no longer exists.
+    */
+  private def flushBufferedReportsUpTo(gvt: Tick): Unit =
+    if (reportBuffer.nonEmpty) {
+      val (ready, pending) = reportBuffer.partition(_._1.tick <= gvt)
+      if (ready.nonEmpty) {
+        reportBuffer.clear()
+        reportBuffer ++= pending
+        ready.foreach { case (event, target) => target ! event }
+      }
+    }
 
   /** Reports data without a label.
     * @param data

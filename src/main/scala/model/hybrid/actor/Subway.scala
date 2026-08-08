@@ -2,12 +2,14 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.actor.manager.loadbalance.migration.MigrationSnapshot
+import org.interscity.htc.core.types.Tick
 import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.{ SubwayLoadPassengerData, SubwayRequestPassengerData, SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.interscity.htc.model.hybrid.support.subway.SubwayPassengerHandler
 import org.interscity.htc.model.hybrid.entity.state.SubwayState
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Start, Stopped, Waiting }
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Moving, Ready, Start, Stopped, Waiting }
 import org.interscity.htc.model.hybrid.util.SubwayUtil
 import org.interscity.htc.model.hybrid.util.SubwayUtil.timeToNextStation
 import org.interscity.htc.core.metrics.model.hybrid.{ MovableMetrics, SubwayMetrics }
@@ -40,7 +42,41 @@ class Subway(
       properties = properties
     ) {
 
-  private var expectedUnloadResponses: Int = 0
+  // protected, not private: lets SubwayMigrationSnapshotSpec drive this directly, same rationale
+  // as Car.scala's link-wait fields.
+  protected var expectedUnloadResponses: Int = 0
+
+  /** `Subway` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07) —
+    * `expectedUnloadResponses` (a genuine reply-count barrier, same mechanism as `Bus`'s) was
+    * silently lost on any restore. Reuses `MigrationSnapshot`'s `expectedUnloadResponses` field,
+    * shared with `Bus`'s identical fix.
+    */
+  private def captureSubwayMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(expectedUnloadResponses = expectedUnloadResponses)
+
+  /** Restores what [[captureSubwayMigrationFields]] captured. */
+  private def restoreSubwayMigrationFields(snapshot: MigrationSnapshot): Unit =
+    expectedUnloadResponses = snapshot.expectedUnloadResponses
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureSubwayMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreSubwayMigrationFields(snapshot)
+  }
+
+  /** Maximum simulation end tick. Unlike `Car`/`Bus`/`Motorcycle`, `Subway` never had this guard —
+    * found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md): a
+    * `Subway` stuck in `Movable`'s generic `Waiting`-state recovery loop (e.g. because the
+    * `RailLink` it's entering never replies) reschedules itself forever with no upper bound, which
+    * keeps its `OptimisticLocalTimeManager` permanently non-idle -- the simulation can never reach
+    * a GVT plateau and terminate. Every other vehicle type already force-finishes past this tick;
+    * `Subway` needs the identical safety net.
+    */
+  private lazy val simulationEndTick: Tick =
+    model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
   private lazy val passengerHandler = new SubwayPassengerHandler(
     getStateFn       = () => state,
@@ -63,6 +99,17 @@ class Subway(
     Some((linkId, "hybrid.actor.RailLink"))
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    if (
+      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      && currentTick >= simulationEndTick && state.status != Finished
+    ) {
+      logWarn(
+        s"Subway ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
+      )
+      onFinishSpontaneous(None, destruct = true)
+      return
+    }
+
     val routeSize = state.bestRoute.map(_.size).getOrElse(0)
     state.status match
       case Start =>

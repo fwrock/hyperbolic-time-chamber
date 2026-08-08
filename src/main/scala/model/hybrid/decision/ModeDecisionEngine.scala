@@ -30,12 +30,19 @@ final case class ScenarioValidationContext(
   transitMapDataAvailable: Boolean
 )
 
-/** Per-decision inputs an engine needs beyond the origin/destination node pair itself. */
+/** Per-decision inputs an engine needs beyond the origin/destination node pair itself.
+  *
+  * @param entityId the deciding Person's entity id — combined with `currentTick` to seed any
+  *   per-decision RNG draw (e.g. [[TravelTimeLogitEngine]]'s logit sampling) deterministically,
+  *   instead of drawing from a globally shared generator whose "correct" next value would depend
+  *   on cross-actor call order. See `docs/TIME_WARP_DESIGN.md` §8.
+  */
 final case class DecisionContext(
   weights: ModeChoiceWeights,
   ownedVehicles: Map[String, Identify],
   vehicleCurrentNode: Map[String, String],
-  currentTick: Tick
+  currentTick: Tick,
+  entityId: String
 )
 
 /** A pluggable mode-choice algorithm.

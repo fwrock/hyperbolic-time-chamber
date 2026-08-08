@@ -72,26 +72,57 @@ class Motorcycle(
   }
 
 
+  /** Adds this class's own link/signal-wait bookkeeping on top of `PrivateVehicle`'s
+    * `captureMigrationFields`. Same fix as `Car.scala`'s `captureCarMigrationFields`/
+    * `restoreCarMigrationFields` (see that doc for the full rationale) — `docs/
+    * TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07) found `currentLinkId`/
+    * `linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/`signalWaitNeedsReverify` uncaptured here
+    * too. Reuses `MigrationSnapshot`'s `vehicle*` fields (named generically, not `Car`-specific, for
+    * exactly this reuse) — `currentLinkLength` doesn't apply here (Motorcycle doesn't track it), so
+    * that one field is simply left at its default (`0.0`) on capture and ignored on restore.
+    */
+  private def captureMotorcycleMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify
+    )
+
+  /** Restores what [[captureMotorcycleMigrationFields]] captured. */
+  private def restoreMotorcycleMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+  }
+
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
-    captureMigrationFields(super.buildMigrationSnapshot())
+    captureMotorcycleMigrationFields(captureMigrationFields(super.buildMigrationSnapshot()))
 
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     super.applyMigrationSnapshot(snapshot)
     restoreMigrationFields(snapshot)
+    restoreMotorcycleMigrationFields(snapshot)
   }
 
   /** Current link being traversed.
     */
-  private var currentLinkId: Option[String] = None
+  // protected, not private: lets MotorcycleLinkWaitMigrationSnapshotSpec drive these directly,
+  // same rationale as Car.scala's identical fields.
+  protected var currentLinkId: Option[String] = None
 
   /** Link entry tick.
     */
-  private var linkEntryTick: Option[Tick] = None
+  protected var linkEntryTick: Option[Tick] = None
 
   /** MESO exit tick — the tick at which link traversal completes. Used to prevent stale
     * Waiting-poll ticks from triggering premature requestSignalState.
     */
-  private var mesoExitTick: Option[Tick] = None
+  protected var mesoExitTick: Option[Tick] = None
 
   /** Aggressiveness factor [0.0 - 1.0] for motorcycle behavior.
     */
@@ -101,9 +132,9 @@ class Motorcycle(
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
-  private var signalWaitUntilTick: Option[Tick] = None
+  protected var signalWaitUntilTick: Option[Tick] = None
   // See Car.scala's signalWaitNeedsReverify for what this flags and why.
-  private var signalWaitNeedsReverify: Boolean = false
+  protected var signalWaitNeedsReverify: Boolean = false
 
   /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
     * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —

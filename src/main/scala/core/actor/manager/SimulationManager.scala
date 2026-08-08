@@ -4,7 +4,7 @@ package core.actor.manager
 import core.entity.state.DefaultState
 import core.types.Tick
 
-import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.{ ActorRef, Props }
 import org.apache.pekko.cluster.Cluster
 import core.util.SimulationUtil.loadSimulationConfig
 
@@ -16,7 +16,9 @@ import org.htc.protobuf.core.entity.event.control.execution.data.StartSimulation
 import org.interscity.htc.core.actor.manager.load.{LoadDataManager, ProgressiveLoadDataManager}
 import org.interscity.htc.core.actor.manager.load.PostLoadRegistrationManager
 import org.interscity.htc.core.actor.manager.report.ReportManager
-import org.interscity.htc.core.actor.manager.time.GlobalTimeManager
+import org.interscity.htc.core.actor.manager.time.{ ConservativeGlobalTimeManager, OptimisticGlobalTimeManager }
+import org.interscity.htc.core.api.SimulatorSettingsRegistry
+import org.interscity.htc.core.enumeration.TimeManagerTypeEnum
 import org.interscity.htc.core.entity.configuration.Simulation
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.execution.TimeManagerRegisterEvent
@@ -256,7 +258,7 @@ class SimulationManager(
       loadManager = createSingletonLoadManager()
       createSingletonProxy(SNAPSHOT_MANAGER_ACTOR_NAME) ! SnapshotManager
         .RegisterSnapshotContextEvent(
-          timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+          timeManagers = mutable.Map(configuration.timeManagerType -> poolTimeManager),
           reporters = reporters
         )
       logInfo(s"Sending LoadDataEvent with ${configuration.actorsDataSources.size} data sources")
@@ -377,15 +379,28 @@ class SimulationManager(
 
   private def createSingletonTimeManager(): ActorRef =
     createSingletonManager(
-      manager = GlobalTimeManager.props(
+      manager = timeManagerProps(),
+      name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
+    )
+
+  private def timeManagerProps(): Props =
+    if (configuration.timeManagerType == TimeManagerTypeEnum.TIME_WARP) {
+      val config = context.system.settings.config
+      OptimisticGlobalTimeManager.props(
+        simulationDuration = configuration.duration,
+        simulationManager = getSelfProxy,
+        gvtMargin = SimulatorSettingsRegistry.getInt("htc.time-warp.gvt-margin", config).toLong,
+        plateauRoundsRequired = SimulatorSettingsRegistry.getInt("htc.time-warp.plateau-rounds-required", config)
+      )
+    } else {
+      ConservativeGlobalTimeManager.props(
         simulationDuration = configuration.duration,
         extendSimulationIfPendingEventsAfterEnd =
           configuration.extendSimulationIfPendingEventsAfterEnd,
         simulationManager = getSelfProxy
-      ),
-      name = GLOBAL_TIME_MANAGER_ACTOR_NAME,
-      terminateMessage = StopSimulationEvent()
-    )
+      )
+    }
 
   private def createSingletonReportManager(): ActorRef =
     createSingletonManager(
@@ -412,6 +427,7 @@ class SimulationManager(
       manager = LoadDataManager.props(
         timeSingletonManager = timeSingletonManager,
         poolTimeManager = poolTimeManager,
+        timeManagerType = configuration.timeManagerType,
         simulationManager = selfProxy,
         poolReporters = reporters
       ),
@@ -520,6 +536,7 @@ class SimulationManager(
     createSingletonManager(
       manager = ProgressiveLoadDataManager.props(
         poolTimeManager = poolTimeManager,
+        timeManagerType = configuration.timeManagerType,
         simulationManager = getSelfProxy,
         poolReporters = reporters
       ),

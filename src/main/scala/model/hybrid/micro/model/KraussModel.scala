@@ -25,13 +25,10 @@ import scala.util.Random
   *   Randomness factor [0.0 - 1.0] for driver variability
   * @param epsilonAccel
   *   Small acceleration safety margin (m/s²)
-  * @param random
-  *   Random generator for variability
   */
 case class KraussModel(
   randomness: Double = 0.2,
-  epsilonAccel: Double = 0.5,
-  random: Random = new Random()
+  epsilonAccel: Double = 0.5
 ) extends CarFollowingModel {
 
   override def modelName: String = "Krauss"
@@ -73,14 +70,16 @@ case class KraussModel(
     safeVelocity: Double,
     maxAcceleration: Double,
     maxDeceleration: Double,
-    deltaT: Double
+    deltaT: Double,
+    randomSeed: Long
   ): Double = {
 
     val maxPossibleVelocity = currentVelocity + maxAcceleration * deltaT
 
     val targetVelocity = min(desiredVelocity, min(safeVelocity, maxPossibleVelocity))
 
-    val randomFactor = 1.0 - randomness * random.nextDouble()
+    val randomFactor =
+      if (randomness == 0.0) 1.0 else 1.0 - randomness * new Random(randomSeed).nextDouble()
     val randomizedTargetVelocity = targetVelocity * randomFactor
 
     val acceleration = (randomizedTargetVelocity - currentVelocity) / deltaT
@@ -97,7 +96,8 @@ case class KraussModel(
     state: MicroMovableState,
     gap: Double,
     leaderVelocity: Double,
-    deltaT: Double
+    deltaT: Double,
+    randomSeed: Long
   ): (Double, Double, Double) = {
 
     val currentVelocity = state.velocity
@@ -121,7 +121,8 @@ case class KraussModel(
       safeVelocity = safeVelocity,
       maxAcceleration = state.maxAcceleration,
       maxDeceleration = state.maxDeceleration,
-      deltaT = deltaT
+      deltaT = deltaT,
+      randomSeed = randomSeed
     )
 
     val newVelocity = max(0.0, currentVelocity + acceleration * deltaT)
@@ -141,8 +142,7 @@ object KraussModel {
     */
   def apply(): KraussModel = KraussModel(
     randomness = 0.2,
-    epsilonAccel = 0.5,
-    random = new Random()
+    epsilonAccel = 0.5
   )
 
   /** Create Krauss model with custom randomness.
@@ -152,26 +152,13 @@ object KraussModel {
     */
   def withRandomness(randomness: Double): KraussModel = KraussModel(
     randomness = max(0.0, min(1.0, randomness)),
-    epsilonAccel = 0.5,
-    random = new Random()
-  )
-
-  /** Create Krauss model with custom random seed (for reproducibility).
-    *
-    * @param seed
-    *   Random seed
-    */
-  def withSeed(seed: Long): KraussModel = KraussModel(
-    randomness = 0.2,
-    epsilonAccel = 0.5,
-    random = new Random(seed)
+    epsilonAccel = 0.5
   )
 
   /** Create deterministic Krauss model (no randomness).
     */
   def deterministic: KraussModel = KraussModel(
     randomness = 0.0,
-    epsilonAccel = 0.5,
-    random = new Random()
+    epsilonAccel = 0.5
   )
 }

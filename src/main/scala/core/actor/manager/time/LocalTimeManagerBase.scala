@@ -3,6 +3,9 @@ package core.actor.manager.time
 
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.execution.QueryNextTickEvent
+import core.entity.event.control.execution.RegisterPassiveActorEvent
+import core.entity.event.control.execution.DestructAckEvent
+import core.entity.event.control.execution.LocalDestructCompleteEvent
 import core.entity.event.{ EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.enumeration.CreationTypeEnum
 import core.types.Tick
@@ -20,8 +23,13 @@ import java.nio.file.{ Files, Paths, StandardOpenOption }
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-/** Base abstract class for local time managers. Local time managers handle the actual execution of
-  * simulation events and report progress back to the global time manager.
+/** Base abstract class for local time managers, holding only what every synchronization strategy
+  * needs regardless of whether it's conservative (barrier-gated, see [[ConservativeLocalTimeManager]])
+  * or optimistic (Time Warp, see `docs/TIME_WARP_DESIGN.md`): actor registration/dispatch
+  * bookkeeping and the mechanics of actually sending a `SpontaneousEvent`/`DestructEvent`. It does
+  * *not* implement `advanceToNextTick`/`reportGlobalTimeManager` — those encode the barrier
+  * protocol itself and are strategy-specific, left abstract here for the strategy base class to
+  * provide.
   *
   * @param simulationDuration
   *   The total duration of the simulation in ticks
@@ -43,11 +51,43 @@ abstract class LocalTimeManagerBase(
 
   protected var countScheduled = 0
   private var selfProxy: ActorRef = null
-  @volatile private var isTerminated = false
+  @volatile protected var isTerminated = false
+
+  /** True once this LTM's own `startSimulation` has actually run. Registration/scheduling can (and,
+    * for EAGER-loaded actors, routinely does) arrive well before that -- during the load/warm-up/
+    * post-load-registration phases, long before `SimulationManager` sends `StartSimulationTimeEvent`.
+    * `isRunning` (`!isPaused && !isStopped`) can't distinguish "not started yet" from "running": both
+    * flags default false, so it reads `true` from construction, before `startSimulation` ever fires.
+    * `OptimisticLocalTimeManager.onActorRescheduled` gates its immediate dispatch on this -- without
+    * it, an EAGER actor with `scheduleOnTimeManager = true` (e.g. `SubwayStation`/`BusStation`, whose
+    * first `actSpontaneous` depends on cross-actor infrastructure like `Node`/the dynamic-actor-spawn
+    * machinery) gets dispatched mid-load, before that infrastructure is ready, and silently does
+    * nothing useful -- found via a real conservative-vs-optimistic comparison where Subway/Bus never
+    * produced a single report row under Time Warp despite conservative mode running the same
+    * scenario correctly. `ConservativeLocalTimeManager` never had this gap: its `onActorRescheduled`
+    * doesn't dispatch anything itself, only the barrier's own `UpdateGlobalTimeEvent` round (which is
+    * already correctly sequenced after startup) does.
+    */
+  protected var hasStarted = false
   private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
   private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
 
   private val highestProcessedTick: mutable.Map[String, Tick] = mutable.Map().withDefaultValue(-1L)
+
+  /** Actors registered via [[RegisterPassiveActorEvent]] instead of [[RegisterActorEvent]] — see
+    * that event's doc for the full rationale. Never enters `scheduledActors`/`runningEvents`, so
+    * it costs this LTM nothing on the normal dispatch path; its only purpose is being reachable by
+    * [[forceDestructActiveActors]] at simulation end.
+    */
+  private val passivelyRegisteredIdentities: mutable.Map[String, Identify] = mutable.Map()
+
+  /** Populated by [[forceDestructActiveActors]] with every actor id it force-destructed, drained
+    * as each one's [[DestructAckEvent]] arrives. Once empty, this LTM tells `parentManager` via
+    * [[LocalDestructCompleteEvent]] that its whole destruct+flush cascade has actually been sent —
+    * see that event's doc for why `OptimisticGlobalTimeManager` waits on it before letting
+    * `ReportManager` close its writers.
+    */
+  private val pendingDestructAcks: mutable.Set[String] = mutable.Set()
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -57,11 +97,11 @@ abstract class LocalTimeManagerBase(
   override def handleEvent: Receive = {
     case start: StartSimulationTimeEvent => startSimulation(start)
     case register: RegisterActorEvent    => registerActor(register)
+    case passive: RegisterPassiveActorEvent => registerPassiveActor(passive)
+    case ack: DestructAckEvent           => handleDestructAck(ack)
     case schedule: ScheduleEvent         => scheduleEvent(schedule)
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
-    case e: UpdateGlobalTimeEvent        => syncWithGlobalTime(e.tick)
-    case QueryNextTickEvent              => reportGlobalTimeManager(hasScheduled = nextTick.isDefined)
     case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>
       stopSimulation()
       forceDestructActiveActors()
@@ -77,6 +117,7 @@ abstract class LocalTimeManagerBase(
     isPaused = false
     isStopped = false
     isTerminated = false
+    hasStarted = true
     self ! UpdateGlobalTimeEvent(localTickOffset)
   }
 
@@ -95,6 +136,19 @@ abstract class LocalTimeManagerBase(
     )
   }
 
+  /** See [[RegisterPassiveActorEvent]]'s doc: deliberately does NOT call `scheduleEvent` — this
+    * actor must never receive a `SpontaneousEvent` it wasn't already going to get through its own
+    * normal (interaction-driven) activity. Only makes it reachable for [[forceDestructActiveActors]].
+    */
+  protected def registerPassiveActor(event: RegisterPassiveActorEvent): Unit =
+    event.identify.foreach {
+      identity =>
+        passivelyRegisteredIdentities.put(event.actorId, identity)
+        val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
+        ActorMetrics.actorsRegistered.labels(actorType).inc()
+        ActorMetrics.activeActors.labels(actorType).inc()
+    }
+
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
     val actorId = event.identify.map(_.id).getOrElse(event.actorRef)
@@ -112,13 +166,15 @@ abstract class LocalTimeManagerBase(
     val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
     event.identify.foreach(actorsSet.add)
     val isEarlierTick = !wasIdle && prevNextTick.exists(effectiveTick < _)
-    if ((wasIdle || isEarlierTick) && runningEvents.isEmpty) {
-      logDebug(
-        s"scheduleEvent: re-notifying GTM (wasIdle=$wasIdle, isEarlierTick=$isEarlierTick, tick=$effectiveTick, actor=${event.identify.map(_.id).getOrElse("?")})"
-      )
-      reportGlobalTimeManager(hasScheduled = true)
-    }
+    onActorRescheduled(effectiveTick, wasIdle, isEarlierTick)
   }
+
+  /** Called after `scheduleEvent` records a new/updated schedule entry, so a strategy that needs
+    * to re-notify its coordinator of newly-available work (the conservative barrier's re-notify;
+    * see [[ConservativeLocalTimeManager]]) can do so. No-op by default — an optimistic strategy
+    * dispatching without a barrier has nothing to re-notify here.
+    */
+  protected def onActorRescheduled(effectiveTick: Tick, wasIdle: Boolean, isEarlierTick: Boolean): Unit = ()
 
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
@@ -201,42 +257,11 @@ abstract class LocalTimeManagerBase(
       processTick(spontaneous.tick)
     }
 
-  private def syncWithGlobalTime(globalTick: Tick): Unit = {
-    if (globalTick % 1000 == 0) {
-      logInfo(
-        s"[LocalTM] Syncing with global tick $globalTick (previous localTick=$localTickOffset)"
-      )
-    }
-    if (startTime == 0L) {
-      startTime = System.currentTimeMillis()
-      initialTick = globalTick
-      logDebug(s"[LocalTM] startTime lazily initialised at globalTick=$globalTick (StartSimulationTimeEvent may have been missed)")
-    }
-    localTickOffset = globalTick
-    tickOffset = globalTick - initialTick
-    if (isRunning && !isTerminated) {
-      // Trigger micro links before processing regular events
-      triggerMicroLinks(globalTick)
-      processTick(localTickOffset)
-    }
-  }
-
   /** Processes a simulation tick. Subclasses implement specific time management strategies.
     * @param tick
     *   The tick to process
     */
   protected def processTick(tick: Tick): Unit
-
-  /** Advances to the next simulation tick. */
-  protected def advanceToNextTick(): Unit =
-    if (runningEvents.isEmpty) {
-      nextTick match {
-        case Some(tick) =>
-          reportGlobalTimeManager(hasScheduled = true)
-        case None =>
-          reportGlobalTimeManager(hasScheduled = false)
-      }
-    }
 
   protected def nextTick: Option[Tick] = {
     val allTicks = scheduledActors.keys ++ scheduledTicksOnFinish
@@ -295,17 +320,24 @@ abstract class LocalTimeManagerBase(
     }
   }
 
+  /** This LTM's last-known GVT estimate, piggybacked onto every `SpontaneousEvent` dispatch (`docs/
+    * TIME_WARP_DESIGN.md` §4) so actors can flush buffered `report()` calls once it's safe. `None`
+    * (meaning "no GVT concept, ignore") for every strategy except [[OptimisticLocalTimeManager]],
+    * which overrides this to return its cached watermark from `GvtUpdateEvent`.
+    */
+  protected def currentGvt: Option[Tick] = None
+
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
     actorRef ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(identity.id),
-      SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
+      SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
     )
   }
 
   private def sendSpontaneousEventPool(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = context.system.actorSelection(identity.actorRef)
-    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation)
+    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
   }
 
   private def terminateSimulation(): Unit = synchronized {
@@ -331,6 +363,14 @@ abstract class LocalTimeManagerBase(
     runningEvents.foreach {
       identity =>
         identitiesToDestruct.put(identity.id, identity)
+    }
+
+    // §4 report-buffer flush fix (docs/TIME_WARP_DESIGN.md): actors registered passively (never
+    // scheduled -- see RegisterPassiveActorEvent) are otherwise unreachable here entirely, so their
+    // Time-Warp-buffered report() calls would never be flushed at simulation end.
+    passivelyRegisteredIdentities.foreach {
+      case (id, identity) =>
+        identitiesToDestruct.put(id, identity)
     }
 
     if (identitiesToDestruct.nonEmpty) {
@@ -359,19 +399,42 @@ abstract class LocalTimeManagerBase(
       }
     }
 
-    identitiesToDestruct.values.foreach(sendDestructEvent)
+    // Populate the pending-ack set before any DestructEvent is actually sent: this actor is
+    // single-threaded, so no DestructAckEvent can be processed until this method returns, making
+    // the set complete before it can possibly start draining.
+    pendingDestructAcks.clear()
+    pendingDestructAcks ++= identitiesToDestruct.keys
+
+    identitiesToDestruct.values.foreach {
+      identity =>
+        if (!sendDestructEvent(identity)) {
+          // Message could never be sent (unroutable/unknown actor type) -- no ack will ever come,
+          // so don't wait on one.
+          pendingDestructAcks -= identity.id
+        }
+    }
+
+    if (pendingDestructAcks.isEmpty) {
+      notifyDestructComplete()
+    }
   }
 
-  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit =
-    if (parentManager.nonEmpty) {
-      // Report the NEXT tick we want to process (not current tick)
-      val reportTick = if (hasScheduled) nextTick.getOrElse(localTickOffset) else localTickOffset
-      parentManager.get ! LocalTimeReportEvent(
-        tick = reportTick,
-        hasScheduled = hasScheduled,
-        actorRef = self.path.toString
-      )
+  private def handleDestructAck(event: DestructAckEvent): Unit = {
+    pendingDestructAcks -= event.actorId
+    if (pendingDestructAcks.isEmpty) {
+      notifyDestructComplete()
     }
+  }
+
+  private def notifyDestructComplete(): Unit =
+    parentManager.foreach(_ ! LocalDestructCompleteEvent())
+
+  /** Reports this LTM's progress to its coordinator. What "reports" means is strategy-specific —
+    * the conservative barrier's blocking `LocalTimeReportEvent` handshake
+    * (see [[ConservativeLocalTimeManager]]) vs. an eventual optimistic strategy's non-blocking LVT
+    * report to a GVT coordinator (`docs/TIME_WARP_DESIGN.md` §3) — so it's left abstract here.
+    */
+  protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit
 
   private def sendDestructEvent(finishEvent: FinishEvent): Unit = {
     val actorRef = getActorRef(finishEvent.identify.actorRef)
@@ -380,10 +443,13 @@ abstract class LocalTimeManagerBase(
     }
   }
 
-  private def sendDestructEvent(identity: Identify): Unit = {
+  /** @return whether a `DestructEvent` was actually sent -- callers use this to know whether a
+    * [[DestructAckEvent]] can ever arrive for this actor (see [[forceDestructActiveActors]]).
+    */
+  private def sendDestructEvent(identity: Identify): Boolean = {
     if (identity.actorType.isEmpty) {
       logWarn(s"Cannot destruct actor with empty actorType: ${identity.id}")
-      return
+      return false
     }
 
     CreationTypeEnum.valueOf(identity.actorType) match {
@@ -393,15 +459,20 @@ abstract class LocalTimeManagerBase(
           IdUtil.format(identity.id),
           DestructEvent(actorRef = self.path.toString)
         )
+        true
       case CreationTypeEnum.PoolDistributed =>
         val actorRef = getActorRef(identity.actorRef)
         if (actorRef != null) {
           actorRef ! DestructEvent(actorRef = self.path.toString)
+          true
+        } else {
+          false
         }
       case _ =>
         logWarn(
           s"Unknown creation type on force-destruct: ${identity.actorType} for actor ${identity.id}"
         )
+        false
     }
   }
 
