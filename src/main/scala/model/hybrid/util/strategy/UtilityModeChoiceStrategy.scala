@@ -51,9 +51,6 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
   ): ModeChoiceResult = {
     val included = weights.includedModes.map(_.toLowerCase)
 
-    // --- Transit + walking candidates ---
-    // When TransitRouteUtil is available, use RAPTOR for multi-leg routing.
-    // Otherwise fall back to the single-leg ModeChoiceUtil.
     val transitIncluded = included.intersect(Set("bus", "subway", "walk"))
 
     val (transitAndWalk: List[(ModeChoiceResult, Double)]) =

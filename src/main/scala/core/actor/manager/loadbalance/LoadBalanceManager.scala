@@ -875,7 +875,7 @@ class LoadBalanceManager(
     *      Monitor completion via a periodic check
     *
     * Static shards (Links, Nodes, TrafficSignals) are skipped because they anchor the spatial
-    * partition and should not move.
+    * partition and should no//t move.
     *
     * NOTE: For dynamic shards use [[triggerPekkoHandoff]] after the migration window is open. This
     * method is kept for static shard handling.

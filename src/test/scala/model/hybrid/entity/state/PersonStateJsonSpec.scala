@@ -72,10 +72,6 @@ class PersonStateJsonSpec extends AnyFlatSpec with Matchers {
   }
 
   "JsonUtil.convertValue" should "deserialize a scenario-shaped payload (originalPlan set, cursor/tripExecution at their scenario-load defaults) via the same path core.actor.BaseActor.onInitialize uses" in {
-    // A freshly-loaded scenario state never has a real `cursor` yet (there is nothing to resume) —
-    // this mirrors that by only setting `originalPlan`, leaving `cursor`/`tripExecution` at their
-    // defaults. Person.internStateStrings is what seeds `cursor` from `originalPlan` on first
-    // load; that seeding is exercised at the actor level, not here.
     val scenarioState = PersonState(originalPlan = fullPlan)
     val json = JsonUtil.toJson(scenarioState)
 
