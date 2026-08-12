@@ -32,22 +32,13 @@ import scala.compiletime.uninitialized
   */
 class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
-  // Plain local provider — the project's default application.conf enables cluster/remoting
-  // (Artery on a fixed port), which isn't needed here and would collide across parallel suites.
-  // Created in beforeAll (not a field initializer): SBT/ScalaTest instantiate a Suite class an
-  // extra time purely for test-name discovery, and an ActorSystem built as part of that throwaway
-  // instantiation would double-create (and double-bind ports / double-run the mixed-version
-  // check).
+
   private var _system: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
   override def beforeAll(): Unit =
     _system = ActorSystem(
       "PersonMigrationSnapshotSpec",
-      // ActorSystem(name, config) does NOT auto-load application.conf the way ActorSystem(name)
-      // does — only library reference.confs — so the project's own application.conf (which
-      // configures the in-mem persistence journal Car/Person need as PersistentActors) must be
-      // pulled in explicitly via ConfigFactory.load() as the fallback.
       ConfigFactory
         .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
         .withFallback(ConfigFactory.load())
@@ -112,13 +103,9 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
 
     val snapshot = sourcePerson.testBuildMigrationSnapshot()
 
-    // Simulates rehydration on the destination node after a shard migration: a brand-new actor
-    // instance restored purely from the snapshot, as BaseActor.restoreMigrationState does.
     val rehydratedPerson = newTestPerson("person-3")
     rehydratedPerson.testApplyMigrationSnapshot(snapshot)
 
-    // Round-trip fidelity proves the field survived internally (no public getter exists — the
-    // real consumer is Person.onDestruct, which sends a reply using exactly this pair).
     val rebuilt = rehydratedPerson.testBuildMigrationSnapshot()
     rebuilt.currentPTVehicleRefId shouldBe "subway-9"
     rebuilt.currentPTVehicleRefClassType shouldBe "hybrid.actor.Subway"
