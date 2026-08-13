@@ -204,7 +204,13 @@ abstract class BaseActor[T <: BaseState](
     // know this actor's onDestruct -- and under Time Warp, the report-buffer flush it triggers --
     // has actually been sent, not merely requested.
     if (event.actorRef != null && event.actorRef.nonEmpty) {
-      context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = entityId.toLong)
+      // entityId is only guaranteed numeric for sharded simulation entities the time manager
+      // actually tracks (registered via a Long actorId); infra actors (loaders, managers) use
+      // arbitrary String ids like "loader-<hash>" and were never registered, so there's no
+      // pendingDestructAcks entry to clear for them -- skip rather than crash on parse.
+      entityId.toLongOption.foreach {
+        id => context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = id)
+      }
     }
     context.stop(self)
   }

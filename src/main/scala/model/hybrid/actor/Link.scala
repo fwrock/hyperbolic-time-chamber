@@ -195,16 +195,36 @@ class Link(
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
     metricsReporter.publishDynamicCost()
-    // One-time report so the entry Node can seed its availableCapacity counter before any
-    // vehicle ever requests access to this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+  }
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  /** Seeds the entry Node's availableCapacity counter for this link, before any vehicle ever
+    * requests access to it. See docs/CONGESTION_PROPAGATION_DESIGN.md. Deferred to the post-load
+    * registration phase (rather than sent from onInitialize) because EAGER sources of different
+    * classTypes load concurrently (LoadDataManager.handleLoadNext groups sources by classType and
+    * advances every queue each round) — a Link can otherwise initialize and message its Node
+    * before that Node exists yet. Post-load registration only fires once every EAGER source has
+    * finished loading, so the target Node is guaranteed to be initialized here.
+    */
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(IdUtil.format(state.from)).orElse(
+        relationships
+          .get(IdUtil.format(state.from))
+          .orElse(
+            relationships.values.find(_.classType == "hybrid.actor.Node")
+          )
+      )
+    val nodeId = dependencyOpt.map(_.id).getOrElse(state.from)
     sendMessageTo(
-      entityId  = state.from,
+      entityId  = nodeId,
       shardId   = "hybrid.actor.Node",
       data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
       eventType = EventTypeEnum.RegisterLinkCapacity.toString,
       actorType = LoadBalancedDistributed
     )
-    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
