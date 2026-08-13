@@ -45,8 +45,8 @@ final class NearestStopUtilityEngine extends ModeDecisionEngine {
   override def validateForScenario(ctx: ScenarioValidationContext): Either[EngineUnavailable, Unit] = Right(())
 
   override def decide(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     request: ModeDecisionRequest,
     ctx: DecisionContext
   ): Either[NoViableJourney, List[AtomicLeg]] = {

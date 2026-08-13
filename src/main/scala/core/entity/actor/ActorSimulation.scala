@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 
 case class ActorSimulation @JsonCreator() (
-  @JsonProperty("id") id: String,
+  @JsonProperty("id") id: Long,
   @JsonProperty("name") name: String,
   @JsonProperty("typeActor") typeActor: String,
   @JsonProperty("creationType") creationType: CreationTypeEnum = LoadBalancedDistributed,

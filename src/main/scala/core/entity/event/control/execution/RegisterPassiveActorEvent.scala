@@ -28,4 +28,4 @@ import org.htc.protobuf.core.entity.actor.Identify
   *   full identity (class type, actor ref/shard routing info) — same shape `RegisterActorEvent`
   *   carries, needed for `sendDestructEvent` to route the eventual `DestructEvent` correctly
   */
-case class RegisterPassiveActorEvent(actorId: String, identify: Option[Identify])
+case class RegisterPassiveActorEvent(actorId: Long, identify: Option[Identify])

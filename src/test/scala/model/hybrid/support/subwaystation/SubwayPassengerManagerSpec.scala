@@ -29,7 +29,7 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
     SubwayStationState(
       startTick = 0L,
       name = "station-1",
-      nodeId = "n1",
+      nodeId = 1L,
       terminal = false,
       garage = false,
       lines = mutable.Map.empty,
@@ -38,13 +38,13 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
       status = SubwayStationStateEnum.Start
     )
 
-  private def registerEvent(personId: String): ActorInteractionEvent =
+  private def registerEvent(personId: Long): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = 300L,
       lamportTick = 300L,
       actorRefId = personId,
       shardRefId = "hybrid.actor.Person",
-      actorPathRef = personId,
+      actorPathRef = personId.toString,
       actorClassType = "hybrid.actor.Person",
       data = "unused",
       resourceId = "res-1"
@@ -61,11 +61,11 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (_, _, _) => ()
     )
 
-    manager.handleRegisterPassenger(registerEvent("htcaid:person;grid_5"), line = "mini_subway_line_0")
+    manager.handleRegisterPassenger(registerEvent(5L), line = "mini_subway_line_0")
 
     val queued = state.people("mini_subway_line_0")
     queued should have size 1
-    queued.head.id shouldBe "htcaid:person;grid_5"
+    queued.head.id shouldBe 5L
     queued.head.classType shouldBe "hybrid.actor.Person"
   }
 
@@ -79,11 +79,11 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (_, _, _) => ()
     )
 
-    manager.handleRegisterPassenger(registerEvent("htcaid:person;grid_1"), line = "mini_subway_line_0")
-    manager.handleRegisterPassenger(registerEvent("htcaid:person;grid_2"), line = "mini_subway_line_0")
+    manager.handleRegisterPassenger(registerEvent(1L), line = "mini_subway_line_0")
+    manager.handleRegisterPassenger(registerEvent(2L), line = "mini_subway_line_0")
 
     val queued = state.people("mini_subway_line_0")
-    queued.map(_.id) shouldBe Seq("htcaid:person;grid_1", "htcaid:person;grid_2")
+    queued.map(_.id) shouldBe Seq(1L, 2L)
     all(queued.map(_.classType)) shouldBe "hybrid.actor.Person"
   }
 
@@ -97,10 +97,10 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (_, _, _) => ()
     )
 
-    manager.handleRegisterPassenger(registerEvent("htcaid:person;grid_1"), line = "line-a")
-    manager.handleRegisterPassenger(registerEvent("htcaid:person;grid_2"), line = "line-b")
+    manager.handleRegisterPassenger(registerEvent(1L), line = "line-a")
+    manager.handleRegisterPassenger(registerEvent(2L), line = "line-b")
 
-    state.people("line-a").map(_.id) shouldBe Seq("htcaid:person;grid_1")
-    state.people("line-b").map(_.id) shouldBe Seq("htcaid:person;grid_2")
+    state.people("line-a").map(_.id) shouldBe Seq(1L)
+    state.people("line-b").map(_.id) shouldBe Seq(2L)
   }
 }

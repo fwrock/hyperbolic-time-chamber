@@ -54,9 +54,9 @@ class InMemoryCacheStrategy extends WeightCacheStrategy {
   override def publishCost(cost: DynamicLinkCost, ttlSeconds: Int): Try[Unit] =
     Try {
       val expiryTime = System.currentTimeMillis() + (ttlSeconds * 1000)
-      localCache.put(cost.linkId, (cost, expiryTime))
+      localCache.put(cost.linkId.toString, (cost, expiryTime))
 
-      scheduleExpiration(cost.linkId, ttlSeconds)
+      scheduleExpiration(cost.linkId.toString, ttlSeconds)
     } match {
       case Success(_) => Success(())
       case Failure(e) =>

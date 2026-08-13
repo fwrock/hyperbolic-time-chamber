@@ -57,8 +57,8 @@ class Bicycle(
 
   override protected def internStateStrings(s: BicycleState): BicycleState = {
     val copied = s.copy(
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
     // copy() only replicates BicycleState constructor params; restore MovableState vars
     // that are not in the constructor (otherwise they reset to their defaults).
@@ -87,7 +87,7 @@ class Bicycle(
     */
   private def captureBicycleMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
-      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
       vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
       vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
       vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
@@ -96,7 +96,7 @@ class Bicycle(
 
   /** Restores what [[captureBicycleMigrationFields]] captured. */
   private def restoreBicycleMigrationFields(snapshot: MigrationSnapshot): Unit = {
-    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
     linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
     mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
     signalWaitUntilTick =
@@ -117,7 +117,7 @@ class Bicycle(
     */
   // protected, not private: lets BicycleLinkWaitMigrationSnapshotSpec drive these directly,
   // same rationale as Car.scala's identical fields.
-  protected var currentLinkId: Option[String] = None
+  protected var currentLinkId: Option[Long] = None
 
   /** Link entry tick.
     */
@@ -230,7 +230,7 @@ class Bicycle(
   override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = state.distance
   override protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -253,7 +253,7 @@ class Bicycle(
     */
   /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
     */
-  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+  override protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit =
     state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
 
   override protected def resetTripState(): Unit = {
@@ -443,7 +443,10 @@ class Bicycle(
       journeyReporter.sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
+      GPSUtil
+        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+
+        match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
@@ -510,7 +513,7 @@ class Bicycle(
     data: LinkInfoData
   ): Unit = linkHandler.handleLeaveLink(event.actorRefId, data, state)
 
-  private def finishJourney(reason: String, finalNode: String): Unit =
+  private def finishJourney(reason: String, finalNode: Long): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
@@ -524,7 +527,7 @@ class Bicycle(
     }
   }
 
-  override protected def onFinish(nodeId: String): Unit = {
+  override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
     onFinishPrivateVehicle(nodeId)
   }
@@ -534,7 +537,7 @@ class Bicycle(
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
-        .getOrElse("unknown")
+        .getOrElse(0L)
       journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
       onFinishPrivateVehicle(fallbackNode)
     }

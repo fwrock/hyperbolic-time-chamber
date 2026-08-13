@@ -51,11 +51,11 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Current trip origin (override state's immutable origin).
     */
-  private var tripOrigin: Option[String] = None
+  private var tripOrigin: Option[Long] = None
 
   /** Current trip destination (override state's immutable destination).
     */
-  private var tripDestination: Option[String] = None
+  private var tripDestination: Option[Long] = None
 
   /** Current trip driver attributes (overrides defaults).
     */
@@ -85,7 +85,7 @@ trait PrivateVehicle[T <: MovableState] {
   protected def selfDestructVehicle(): Unit
   protected def isVehicleStateNull: Boolean
   protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -115,7 +115,7 @@ trait PrivateVehicle[T <: MovableState] {
     *
     * Subclasses must set the appropriate route field on their state object.
     */
-  protected def applyPrecomputedRoute(route: List[(String, String)]): Unit
+  protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit
 
   /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
     * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
@@ -175,11 +175,11 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Get current trip origin (for route calculation).
     */
-  protected def getTripOrigin: Option[String] = tripOrigin
+  protected def getTripOrigin: Option[Long] = tripOrigin
 
   /** Get current trip destination (for route calculation).
     */
-  protected def getTripDestination: Option[String] = tripDestination
+  protected def getTripDestination: Option[Long] = tripDestination
 
   /** Get current trip start tick (for trip metrics).
     */
@@ -203,7 +203,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Report trip completion back to Person.
     */
-  protected def reportTripCompletion(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit =
+  protected def reportTripCompletion(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit =
     ownerPersonRef.foreach {
       personRef =>
         val travelTime = tripStartTick
@@ -217,7 +217,7 @@ trait PrivateVehicle[T <: MovableState] {
           entityId = personRef.id,
           shardId = personRef.classType,
           data = TripCompletedData(
-            vehicleId = getActorEntityId,
+            vehicleId = getActorEntityId.toLong,
             personId = personRef.id,
             distanceTraveled = distanceTraveled,
             travelTime = travelTime,
@@ -270,7 +270,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Override onFinish to report trip completion.
     */
-  protected def onFinishPrivateVehicle(nodeId: String, wasTeleported: Boolean = false): Unit = {
+  protected def onFinishPrivateVehicle(nodeId: Long, wasTeleported: Boolean = false): Unit = {
     val reason =
       if (wasTeleported) "teleported"
       else if (tripDestination.contains(nodeId)) "reached_destination"
@@ -309,11 +309,11 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def captureMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
-      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(""),
+      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(0L),
       ownerPersonRefClassType = ownerPersonRef.map(_.classType).getOrElse(""),
       personCentric = personCentric,
-      tripOrigin = tripOrigin.getOrElse(""),
-      tripDestination = tripDestination.getOrElse(""),
+      tripOrigin = tripOrigin.getOrElse(0L),
+      tripDestination = tripDestination.getOrElse(0L),
       tripStartTick = tripStartTick.getOrElse(Long.MinValue),
       tripStartDistance = tripStartDistance,
       destroyAfterNextPark = destroyAfterNextPark
@@ -324,12 +324,12 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def restoreMigrationFields(snapshot: MigrationSnapshot): Unit = {
     ownerPersonRef =
-      if (snapshot.ownerPersonRefId.nonEmpty)
+      if (snapshot.ownerPersonRefId != 0L)
         Some(Identify(id = snapshot.ownerPersonRefId, classType = snapshot.ownerPersonRefClassType))
       else None
     personCentric = snapshot.personCentric
-    tripOrigin = if (snapshot.tripOrigin.nonEmpty) Some(snapshot.tripOrigin) else None
-    tripDestination = if (snapshot.tripDestination.nonEmpty) Some(snapshot.tripDestination) else None
+    tripOrigin = if (snapshot.tripOrigin != 0L) Some(snapshot.tripOrigin) else None
+    tripDestination = if (snapshot.tripDestination != 0L) Some(snapshot.tripDestination) else None
     tripStartTick = if (snapshot.tripStartTick != Long.MinValue) Some(snapshot.tripStartTick) else None
     tripStartDistance = snapshot.tripStartDistance
     destroyAfterNextPark = snapshot.destroyAfterNextPark

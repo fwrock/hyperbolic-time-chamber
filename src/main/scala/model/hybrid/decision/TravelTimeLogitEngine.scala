@@ -62,8 +62,8 @@ final class TravelTimeLogitEngine(scale: Double = 1.0) extends ModeDecisionEngin
   override def validateForScenario(ctx: ScenarioValidationContext): Either[EngineUnavailable, Unit] = Right(())
 
   override def decide(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     request: ModeDecisionRequest,
     ctx: DecisionContext
   ): Either[NoViableJourney, List[AtomicLeg]] =

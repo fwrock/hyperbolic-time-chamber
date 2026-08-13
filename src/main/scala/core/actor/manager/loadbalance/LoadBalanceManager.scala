@@ -237,7 +237,7 @@ class LoadBalanceManager(
           s"Entity '${event.entity.spatialEntityId}' mapped to shard '$shardId' (logical assignment)"
         )
 
-        val entityType = classifyEntityType(event.entity.spatialEntityId)
+        val entityType = classifyEntityType(event.entity)
         shardTypes.get(shardId) match {
           case Some(existing) if existing != entityType =>
             shardTypes.put(shardId, ShardTypeEnum.Mixed)
@@ -273,7 +273,7 @@ class LoadBalanceManager(
             val pos = entity.position
             positions.put(entity.spatialEntityId, Array(pos._1, pos._2))
 
-            val entityType = classifyEntityType(entity.spatialEntityId)
+            val entityType = classifyEntityType(entity)
             shardTypes.get(shardId) match {
               case Some(existing) if existing != entityType =>
                 shardTypes.put(shardId, ShardTypeEnum.Mixed)
@@ -977,15 +977,33 @@ class LoadBalanceManager(
       }
     }
 
-  /** Classifies an entity as Static or Dynamic based on its actor ID convention.
+  /** Classifies an entity as Static or Dynamic based on its actor `classType` (not the id string,
+    * which is now an opaque `Long`).
     *
-    * Entity IDs follow the pattern `htcaid:type;id` where type indicates the actor class:
-    *   - Static: `node`, `link`, `traffic_signal`
-    *   - Dynamic: `car`, `bus`, `bicycle`, `motorcycle`, `person`, `subway`
+    *   - Static: `node`, `link`, `rail_link`, `traffic_signal`
+    *   - Dynamic: everything else (`car`, `bus`, `bicycle`, `motorcycle`, `person`, `subway`)
     *
     * The classification determines whether the shard is eligible for migration.
     */
-  private def classifyEntityType(entityId: String): ShardTypeEnum = {
+  private def classifyEntityType(entity: SpatialEntity): ShardTypeEnum = {
+    val ct = entity.entityClassType
+    if (ct != null && ct.nonEmpty) {
+      val lower = ct.toLowerCase
+      if (
+        lower.contains("node") || lower.contains("link") ||
+        lower.contains("trafficsignal") || lower.contains("signal")
+      ) {
+        ShardTypeEnum.Static
+      } else {
+        ShardTypeEnum.Dynamic
+      }
+    } else {
+      classifyEntityTypeFromId(entity.spatialEntityId)
+    }
+  }
+
+  /** Legacy fallback: classifies from the `htcaid:{type};{id}` convention. */
+  private def classifyEntityTypeFromId(entityId: String): ShardTypeEnum = {
     val entityType = entityId.toLowerCase
     if (
       entityType.contains(":node;") || entityType.contains(":link;") ||

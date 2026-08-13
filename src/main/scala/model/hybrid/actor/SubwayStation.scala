@@ -61,7 +61,7 @@ class SubwayStation(
   override def requiresPostLoadRegistration: Boolean = true
 
   override def handlePostLoadRegistration(): Unit = {
-    val nodeOpt = getDependencyOption(state.nodeId).orElse(
+    val nodeOpt = getDependencyOption(state.nodeId.toString).orElse(
       relationships.values.find(
         d => d.classType != null && d.classType.endsWith("Node")
       )
@@ -78,7 +78,7 @@ class SubwayStation(
           LoadBalancedDistributed
         )
         logDebug(s"SubwayStation ${getEntityId} registered with node ${node.id}")
-      case None if state.nodeId != null && state.nodeId.nonEmpty =>
+      case None if state.nodeId != 0L =>
         logWarn(
           s"SubwayStation ${getEntityId}: relationships map empty (available keys: [${relationships.keys
               .mkString(", ")}]). " +

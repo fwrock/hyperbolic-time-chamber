@@ -35,8 +35,8 @@ import scala.collection.mutable
   */
 case class BicycleState(
   override val startTick: Tick,
-  override val origin: String,
-  override val destination: String,
+  override val origin: Long,
+  override val destination: Long,
   var distance: Double = 0,
   override val actorType: ActorTypeEnum,
   override val size: Double,
@@ -50,17 +50,17 @@ case class BicycleState(
       size = size
     ) {
 
-  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
-  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
 
   def bestCost: Double = movableBestCost
   def bestCost_=(v: Double): Unit = movableBestCost = v
 
-  def currentNode: String = movableCurrentNode
-  def currentNode_=(v: String): Unit = movableCurrentNode = v
+  def currentNode: Long = movableCurrentNode
+  def currentNode_=(v: Long): Unit = movableCurrentNode = v
 
-  def currentPath: Option[(String, String)] = movableCurrentPath
-  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
 
   def status: MovableStatusEnum = movableStatus
   def status_=(v: MovableStatusEnum): Unit = movableStatus = v

@@ -57,13 +57,13 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     def testRegisterPassive(identity: Identify): Unit =
       registerPassiveActor(RegisterPassiveActorEvent(actorId = identity.id, identify = Some(identity)))
     def testSchedule(identity: Identify, tick: Tick): Unit =
-      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id, identify = Some(identity)))
+      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id.toString, identify = Some(identity)))
     def testFinish(finish: FinishEvent): Unit = finishEvent(finish)
-    def testRunningEventIds: Set[String] = runningEvents.map(_.id).toSet
+    def testRunningEventIds: Set[Long] = runningEvents.map(_.id).toSet
     def testScheduledTicks: Set[Tick] = scheduledActors.keySet.toSet
   }
 
-  private def identityFor(id: String, probe: TestProbe): Identify =
+  private def identityFor(id: Long, probe: TestProbe): Identify =
     Identify(
       id = id,
       resourceId = "",
@@ -79,25 +79,25 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
 
     // No UpdateGlobalTimeEvent sent at all -- unlike ConservativeLocalTimeManager, dispatch must
     // have already happened purely from registerActor/scheduleEvent's own re-notify hook.
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
   }
 
   it should "report LVT via a fire-and-forget LvtReportEvent once the batch resolves, not a blocking LocalTimeReportEvent" in {
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -111,7 +111,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     )
 
     // The actor was immediately redispatched for tick 5 -- no waiting for anything from the parent.
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
     ltm.underlyingActor.testScheduledTicks shouldBe empty
 
     parentProbe.fishForMessage(200.millis) {
@@ -124,11 +124,11 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -153,7 +153,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
@@ -172,7 +172,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     ltm.underlyingActor.testSchedule(identity, 42L)
 
     // No permission round-trip needed -- the re-notify hook dispatches straight away.
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
   }
 
   it should "report isIdle=true at startSimulation even when zero actors are ever registered on it" in {
@@ -205,7 +205,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("subwaystation-a", actorProbe)
+    val identity = identityFor(2L, actorProbe)
 
     // No testStart yet -- this LTM hasn't "started" in the hasStarted sense.
     ltm.underlyingActor.testRegister(identity, 0L)
@@ -215,7 +215,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     ltm.underlyingActor.testStart(0L)
 
     actorProbe.expectMsgClass(3.seconds, classOf[core.entity.event.SpontaneousEvent])
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("subwaystation-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(2L)
   }
 
   "a passively-registered actor" should "never be dispatched a SpontaneousEvent, but still be destructed (and so flushed) at simulation stop" in {
@@ -231,7 +231,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("raillink-a", actorProbe)
+    val identity = identityFor(3L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegisterPassive(identity)

@@ -28,7 +28,7 @@ trait MicroMovableState {
   def currentLane: Int
 
   /** ID of the vehicle ahead in the same lane */
-  def leaderVehicle: Option[String]
+  def leaderVehicle: Option[Long]
 
   /** Gap to the leader vehicle (meters, bumper-to-bumper) */
   def gapToLeader: Double

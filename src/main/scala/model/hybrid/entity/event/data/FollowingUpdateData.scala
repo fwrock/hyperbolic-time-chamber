@@ -26,7 +26,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   */
 case class FollowingUpdateData(
   vehicleId: String,
-  leaderVehicleId: Option[String],
+  leaderVehicleId: Option[Long],
   gap: Double,
   leaderVelocity: Double,
   safeVelocity: Double,

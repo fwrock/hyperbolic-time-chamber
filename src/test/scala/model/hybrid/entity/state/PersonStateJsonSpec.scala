@@ -22,17 +22,17 @@ import org.scalatest.matchers.should.Matchers
 class PersonStateJsonSpec extends AnyFlatSpec with Matchers {
 
   private val fullPlan: List[PlanElement] = List(
-    Activity("home", "n1", AtTick(100)),
-    WalkLeg("n1", "n3", precomputedRoute = Some(List(("link-1", "n2")))),
+    Activity("home", 1L, AtTick(100)),
+    WalkLeg(1L, 3L, precomputedRoute = Some(List((11L, 2L)))),
     TransitLeg(
       ConcreteMode.Subway,
       "Line-4",
-      boardingStop = StopRef("stop-1", "hybrid.actor.SubwayStation", "n3"),
-      alightingStop = StopRef("stop-2", "hybrid.actor.SubwayStation", "n8")
+      boardingStop = StopRef(101L, "hybrid.actor.SubwayStation", 3L),
+      alightingStop = StopRef(102L, "hybrid.actor.SubwayStation", 8L)
     ),
-    PrivateVehicleLeg(ConcreteMode.Car, Identify(id = "car-1", classType = "hybrid.actor.Car")),
+    PrivateVehicleLeg(ConcreteMode.Car, Identify(id = 201L, classType = "hybrid.actor.Car")),
     PendingDecision(ModeDecisionRequest(allowedModes = Set(ConcreteMode.Bus, ConcreteMode.Walk), strategyId = "travel-time")),
-    Activity("work", "n8", Duration(3600L))
+    Activity("work", 8L, Duration(3600L))
   )
 
   "PersonState JSON round trip" should "preserve every PlanElement/EndTimeSpec leaf through toJson/fromJson" in {
@@ -51,10 +51,10 @@ class PersonStateJsonSpec extends AnyFlatSpec with Matchers {
   it should "preserve a Traveling tripExecution with an active PT wait" in {
     val state = PersonState(
       tripExecution = TripExecutionState.Traveling(
-        physicalNodeId = "n3",
+        physicalNodeId = 3L,
         tripId = "person-1:trip:1",
         legStartTick = 42L,
-        ptWait = Some(PTWaitState(waitingSinceTick = 42L, timeoutTick = 142L, alightingNodeId = "n8", line = "Line-4")),
+        ptWait = Some(PTWaitState(waitingSinceTick = 42L, timeoutTick = 142L, alightingNodeId = 8L, line = "Line-4")),
         replanStrategyId = "travel-time",
         replanAllowedModes = Set(ConcreteMode.Bus, ConcreteMode.Subway)
       )

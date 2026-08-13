@@ -17,16 +17,16 @@ class MotorcycleMicroHandler(
   journeyReporter:         MotorcycleJourneyReporter,
   requestSignalStateFn:    () => Unit,
   onFinishSpontaneousFn:   Option[Tick] => Unit,
-  onFinishPrivateVehicleFn: String => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   selfDestructFn:          () => Unit,
   isPersonCentricFn:       () => Boolean,
-  finishJourneyFn:         (String, String) => Unit,
+  finishJourneyFn: (String, Long) => Unit,
   logDebugFn:              String => Unit,
   aggressivenessFn:        () => Double,
-  setCurrentLinkIdFn:      Option[String] => Unit,
+  setCurrentLinkIdFn:      Option[Long] => Unit,
   setLinkEntryTickFn:      Option[Tick] => Unit,
   getLinkEntryTickFn:      () => Option[Tick],
-  getCurrentLinkIdFn:      () => Option[String],
+  getCurrentLinkIdFn:      () => Option[Long],
   microUpdateReportEvery:  Int = 0
 ) {
 
@@ -119,7 +119,7 @@ class MotorcycleMicroHandler(
           Map(
             "event_type"    -> "micro_update",
             "motorcycle_id" -> entityIdFn(),
-            "link_id"       -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"       -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"          -> "MICRO",
             "position"      -> data.position,
             "velocity"      -> data.velocity,

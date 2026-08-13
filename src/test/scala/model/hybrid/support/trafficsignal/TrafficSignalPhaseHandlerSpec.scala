@@ -25,8 +25,8 @@ import scala.collection.mutable
   */
 class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
 
-  private val phaseOrigin    = "sig_b_phase"
-  private val nodeId         = "n_b"
+  private val phaseOrigin    = 900L
+  private val nodeId         = 901L
   private val cycleDuration  = 60L
   private val greenStart     = 0L
   private val greenDuration  = 30L

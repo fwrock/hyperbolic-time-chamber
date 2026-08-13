@@ -34,8 +34,8 @@ class Car(
 
   override protected def internStateStrings(s: CarState): CarState = {
     val copied = s.copy(
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
     copied.movableStatus             = s.movableStatus
     copied.movableBestRoute          = s.movableBestRoute
@@ -61,7 +61,7 @@ class Car(
     */
   private def captureCarMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
-      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
       vehicleCurrentLinkLength = currentLinkLength,
       vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
       vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
@@ -71,7 +71,7 @@ class Car(
 
   /** Restores what [[captureCarMigrationFields]] captured. */
   private def restoreCarMigrationFields(snapshot: MigrationSnapshot): Unit = {
-    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
     currentLinkLength = snapshot.vehicleCurrentLinkLength
     linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
     mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
@@ -92,7 +92,7 @@ class Car(
   // protected, not private: lets CarLinkWaitMigrationSnapshotSpec drive these directly rather than
   // reverse-engineering LinkInfoData/LinkAccessData payloads just to exercise the capture/restore
   // round trip -- same rationale as this class's other test-only protected accessors.
-  protected var currentLinkId: Option[String] = None
+  protected var currentLinkId: Option[Long] = None
   protected var currentLinkLength: Double = 0.0
   protected var linkEntryTick: Option[Tick] = None
   protected var mesoExitTick: Option[Tick] = None
@@ -224,7 +224,7 @@ class Car(
   override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = if (state == null) 0.0 else state.distance
   override protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -244,7 +244,7 @@ class Car(
 
   /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
     */
-  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+  override protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit =
     state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
 
   /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
@@ -370,9 +370,7 @@ class Car(
     val precomputedPathQueue = state.precomputedRoute
       .map { items =>
         items.flatMap { item =>
-          if (item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty) {
-            Some((item.linkId, item.nodeId))
-          } else None
+          Some((item.linkId, item.nodeId))
         }
       }
       .filter(_.nonEmpty)
@@ -422,14 +420,16 @@ class Car(
     val origin = getTripOrigin.getOrElse(state.origin)
     val destination = getTripDestination.getOrElse(state.destination)
 
-    if (origin == null || destination == null) {
+    if (origin == 0L || destination == 0L) {
       val tripOrigin = getTripOrigin.getOrElse(state.origin)
       finishAndCleanup("null_origin_or_destination", tripOrigin)
       return
     }
 
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
+      GPSUtil
+        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+        match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           state.bestCost = cost
@@ -457,7 +457,7 @@ class Car(
     }
   }
 
-  private def finishAndCleanup(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit = {
+  private def finishAndCleanup(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit = {
     finishJourney(reason, finalNode)
     onFinishPrivateVehicle(finalNode, wasTeleported)
     onFinishSpontaneous(None)
@@ -477,7 +477,7 @@ class Car(
     super.leavingLink()
   }
 
-  override protected def onFinish(nodeId: String): Unit = {
+  override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
     onFinishPrivateVehicle(nodeId)
     if (!isPersonCentric) {
@@ -519,7 +519,7 @@ class Car(
     }
   }
 
-  private def finishJourney(reason: String, finalNode: String): Unit =
+  private def finishJourney(reason: String, finalNode: Long): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {

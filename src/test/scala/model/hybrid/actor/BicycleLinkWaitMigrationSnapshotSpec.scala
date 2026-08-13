@@ -47,7 +47,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
     def testSetLinkWaitFields(
-      linkId: Option[String],
+      linkId: Option[Long],
       entryTick: Option[Tick],
       exitTick: Option[Tick],
       waitUntil: Option[Tick],
@@ -60,7 +60,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
       signalWaitNeedsReverify = needsReverify
     }
 
-    def testCurrentLinkId: Option[String] = currentLinkId
+    def testCurrentLinkId: Option[Long] = currentLinkId
     def testLinkEntryTick: Option[Tick] = linkEntryTick
     def testMesoExitTick: Option[Tick] = mesoExitTick
     def testSignalWaitUntilTick: Option[Tick] = signalWaitUntilTick
@@ -70,8 +70,8 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
   private def freshState(): BicycleState = {
     val s = BicycleState(
       startTick = 0L,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       actorType = ActorTypeEnum.Bicycle,
       size = 2.0
     )
@@ -90,7 +90,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     val bike = newTestBicycle("bike-1")
     bike.testSetState(freshState())
     bike.testSetLinkWaitFields(
-      linkId = Some("link-42"),
+      linkId = Some(42L),
       entryTick = Some(10L),
       exitTick = Some(37L),
       waitUntil = None,
@@ -99,7 +99,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
 
     val snapshot = bike.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe "link-42"
+    snapshot.vehicleCurrentLinkId shouldBe 42L
     snapshot.vehicleLinkEntryTick shouldBe 10L
     snapshot.vehicleMesoExitTick shouldBe 37L
     snapshot.vehicleSignalWaitUntilTick shouldBe Long.MinValue
@@ -110,7 +110,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     val bike = newTestBicycle("bike-2")
     bike.testSetState(freshState())
     bike.testSetLinkWaitFields(
-      linkId = Some("link-7"),
+      linkId = Some(7L),
       entryTick = Some(5L),
       exitTick = None,
       waitUntil = Some(120L),
@@ -130,7 +130,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
 
     val snapshot = bike.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe ""
+    snapshot.vehicleCurrentLinkId shouldBe 0L
     snapshot.vehicleLinkEntryTick shouldBe Long.MinValue
     snapshot.vehicleMesoExitTick shouldBe Long.MinValue
     snapshot.vehicleSignalWaitUntilTick shouldBe Long.MinValue
@@ -141,7 +141,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     val sourceBike = newTestBicycle("bike-4")
     sourceBike.testSetState(freshState())
     sourceBike.testSetLinkWaitFields(
-      linkId = Some("link-99"),
+      linkId = Some(99L),
       entryTick = Some(50L),
       exitTick = None,
       waitUntil = Some(75L),
@@ -153,7 +153,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     val rehydratedBike = newTestBicycle("bike-4")
     rehydratedBike.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedBike.testCurrentLinkId shouldBe Some("link-99")
+    rehydratedBike.testCurrentLinkId shouldBe Some(99L)
     rehydratedBike.testLinkEntryTick shouldBe Some(50L)
     rehydratedBike.testMesoExitTick shouldBe None
     rehydratedBike.testSignalWaitUntilTick shouldBe Some(75L)

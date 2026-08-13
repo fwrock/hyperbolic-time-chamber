@@ -8,6 +8,6 @@ import core.entity.event.data.BaseEventData
   * to it. See docs/CONGESTION_PROPAGATION_DESIGN.md.
   */
 case class RegisterLinkCapacityData(
-  linkId: String,
+  linkId: Long,
   capacity: Int
 ) extends BaseEventData

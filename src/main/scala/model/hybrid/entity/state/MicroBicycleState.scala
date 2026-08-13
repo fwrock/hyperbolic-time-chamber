@@ -54,7 +54,7 @@ case class MicroBicycleState(
   velocity: Double,
   acceleration: Double,
   currentLane: Int,
-  leaderVehicle: Option[String] = None,
+  leaderVehicle: Option[Long] = None,
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
   maxAcceleration: Double = 1.0,
@@ -83,7 +83,7 @@ case class MicroBicycleState(
 
   /** Create a copy with updated leader information */
   def withUpdatedLeader(
-    leaderId: Option[String],
+    leaderId: Option[Long],
     gap: Double,
     leaderVel: Double
   ): MicroBicycleState =

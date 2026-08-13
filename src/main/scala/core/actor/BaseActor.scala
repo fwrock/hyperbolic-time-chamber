@@ -204,7 +204,7 @@ abstract class BaseActor[T <: BaseState](
     // know this actor's onDestruct -- and under Time Warp, the report-buffer flush it triggers --
     // has actually been sent, not merely requested.
     if (event.actorRef != null && event.actorRef.nonEmpty) {
-      context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = entityId)
+      context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = entityId.toLong)
     }
     context.stop(self)
   }
@@ -240,7 +240,7 @@ abstract class BaseActor[T <: BaseState](
       MigrationStateStoreRegistry.getSnapshotManager match {
         case Some(smRef) =>
           smRef ! SaveMigrationSnapshotEvent(
-            entityId = IdUtil.format(entityId),
+            entityId = entityId,
             batchId = event.batchId,
             snapshot = snapshot
           )

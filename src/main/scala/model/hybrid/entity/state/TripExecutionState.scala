@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.{ JsonSubTypes, JsonTypeInfo }
 final case class PTWaitState(
   waitingSinceTick: Tick,
   timeoutTick: Tick,
-  alightingNodeId: String,
+  alightingNodeId: Long,
   line: String
 )
 
@@ -74,7 +74,7 @@ object TripExecutionState {
     *                           `replanStrategyId`.
     */
   final case class Traveling(
-    physicalNodeId: String,
+    physicalNodeId: Long,
     tripId: String,
     legStartTick: Tick,
     ptWait: Option[PTWaitState] = None,

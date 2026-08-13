@@ -55,7 +55,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
     def testSetLinkWaitFields(
-      linkId: Option[String],
+      linkId: Option[Long],
       linkLength: Double,
       entryTick: Option[Tick],
       exitTick: Option[Tick],
@@ -70,7 +70,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
       signalWaitNeedsReverify = needsReverify
     }
 
-    def testCurrentLinkId: Option[String] = currentLinkId
+    def testCurrentLinkId: Option[Long] = currentLinkId
     def testCurrentLinkLength: Double = currentLinkLength
     def testLinkEntryTick: Option[Tick] = linkEntryTick
     def testMesoExitTick: Option[Tick] = mesoExitTick
@@ -81,8 +81,8 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
   private def freshState(): CarState = {
     val s = CarState(
       startTick = 0L,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
@@ -101,7 +101,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     val car = newTestCar("car-1")
     car.testSetState(freshState())
     car.testSetLinkWaitFields(
-      linkId = Some("link-42"),
+      linkId = Some(42L),
       linkLength = 250.5,
       entryTick = Some(10L),
       exitTick = Some(37L),
@@ -111,7 +111,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
 
     val snapshot = car.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe "link-42"
+    snapshot.vehicleCurrentLinkId shouldBe 42L
     snapshot.vehicleCurrentLinkLength shouldBe 250.5
     snapshot.vehicleLinkEntryTick shouldBe 10L
     snapshot.vehicleMesoExitTick shouldBe 37L
@@ -123,7 +123,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     val car = newTestCar("car-2")
     car.testSetState(freshState())
     car.testSetLinkWaitFields(
-      linkId = Some("link-7"),
+      linkId = Some(7L),
       linkLength = 80.0,
       entryTick = Some(5L),
       exitTick = None,
@@ -145,7 +145,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
 
     val snapshot = car.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe ""
+    snapshot.vehicleCurrentLinkId shouldBe 0L
     snapshot.vehicleCurrentLinkLength shouldBe 0.0
     snapshot.vehicleLinkEntryTick shouldBe Long.MinValue
     snapshot.vehicleMesoExitTick shouldBe Long.MinValue
@@ -157,7 +157,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     val sourceCar = newTestCar("car-4")
     sourceCar.testSetState(freshState())
     sourceCar.testSetLinkWaitFields(
-      linkId = Some("link-99"),
+      linkId = Some(99L),
       linkLength = 400.0,
       entryTick = Some(50L),
       exitTick = None,
@@ -170,7 +170,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     val rehydratedCar = newTestCar("car-4")
     rehydratedCar.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedCar.testCurrentLinkId shouldBe Some("link-99")
+    rehydratedCar.testCurrentLinkId shouldBe Some(99L)
     rehydratedCar.testCurrentLinkLength shouldBe 400.0
     rehydratedCar.testLinkEntryTick shouldBe Some(50L)
     rehydratedCar.testMesoExitTick shouldBe None

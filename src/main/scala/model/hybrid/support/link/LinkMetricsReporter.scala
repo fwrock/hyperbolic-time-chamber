@@ -18,9 +18,9 @@ class LinkMetricsReporter(
   cacheTtl:                   Int,
   costPublishInterval:        Int,
   getLinkStateFn:             () => LinkState,
-  getVehicleEntryTickFn:      String => Option[Tick],
-  getVehicleWaitingSecondsFn: String => Double,
-  getRegisteredVehicleIdsFn:  () => Iterable[String],
+  getVehicleEntryTickFn:      Long => Option[Tick],
+  getVehicleWaitingSecondsFn: Long => Double,
+  getRegisteredVehicleIdsFn:  () => Iterable[Long],
   logWarnFn:                  String => Unit
 ) {
 
@@ -133,7 +133,7 @@ class LinkMetricsReporter(
   def publishDynamicCost(): Unit = {
     val state       = getLinkStateFn()
     val dynamicCost = DynamicLinkCost.fromLinkState(
-      linkId          = entityIdFn(),
+      linkId          = entityIdFn().toLong,
       length          = state.length,
       currentSpeed    = state.currentSpeed,
       freeFlowSpeed   = state.freeSpeed,

@@ -93,7 +93,7 @@ class DigitalTwinManager(timeManager: ActorRef)
           event = ActorInteractionEvent(
             tick          = 0L,
             lamportTick   = 0L,
-            actorRefId    = entityId,
+            actorRefId    = entityId.toLong,
             shardRefId    = entityId,
             actorPathRef  = self.path.name,
             actorClassType = getClass.getSimpleName,

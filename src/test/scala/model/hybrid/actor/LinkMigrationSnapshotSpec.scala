@@ -44,18 +44,18 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
-    def testPutVehicleEntryTick(vehicleId: String, tick: Tick): Unit = vehicleEntryTick.put(vehicleId, tick)
-    def testPutVehicleWaitingSeconds(vehicleId: String, seconds: Double): Unit = vehicleWaitingSeconds.put(vehicleId, seconds)
+    def testPutVehicleEntryTick(vehicleId: Long, tick: Tick): Unit = vehicleEntryTick.put(vehicleId, tick)
+    def testPutVehicleWaitingSeconds(vehicleId: Long, seconds: Double): Unit = vehicleWaitingSeconds.put(vehicleId, seconds)
 
-    def testVehicleEntryTick: Map[String, Tick] = vehicleEntryTick.toMap
-    def testVehicleWaitingSeconds: Map[String, Double] = vehicleWaitingSeconds.toMap
+    def testVehicleEntryTick: Map[Long, Tick] = vehicleEntryTick.toMap
+    def testVehicleWaitingSeconds: Map[Long, Double] = vehicleWaitingSeconds.toMap
   }
 
   private def freshState(): LinkState =
     LinkState(
       startTick = 0L,
-      from = "nodeA",
-      to = "nodeB",
+      from = 1001L,
+      to = 1002L,
       length = 250.0,
       lanes = 2,
       speedLimit = 13.9,
@@ -73,14 +73,14 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
   "Link.buildMigrationSnapshot" should "capture entry ticks and waiting seconds for every registered vehicle" in {
     val link = newTestLink("link-1")
     link.testSetState(freshState())
-    link.testPutVehicleEntryTick("car-1", 10L)
-    link.testPutVehicleEntryTick("car-2", 15L)
-    link.testPutVehicleWaitingSeconds("car-1", 3.5)
+    link.testPutVehicleEntryTick(1L, 10L)
+    link.testPutVehicleEntryTick(2L, 15L)
+    link.testPutVehicleWaitingSeconds(1L, 3.5)
 
     val snapshot = link.testBuildMigrationSnapshot()
 
-    snapshot.linkVehicleEntryTick shouldBe Map("car-1" -> 10L, "car-2" -> 15L)
-    snapshot.linkVehicleWaitingSeconds shouldBe Map("car-1" -> 3.5)
+    snapshot.linkVehicleEntryTick shouldBe Map(1L -> 10L, 2L -> 15L)
+    snapshot.linkVehicleWaitingSeconds shouldBe Map(1L -> 3.5)
   }
 
   it should "produce empty maps for a link with no registered vehicles" in {
@@ -96,16 +96,16 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
   "Link.applyMigrationSnapshot" should "restore entry ticks and waiting seconds onto a freshly-constructed actor" in {
     val sourceLink = newTestLink("link-3")
     sourceLink.testSetState(freshState())
-    sourceLink.testPutVehicleEntryTick("car-9", 42L)
-    sourceLink.testPutVehicleWaitingSeconds("car-9", 7.0)
+    sourceLink.testPutVehicleEntryTick(9L, 42L)
+    sourceLink.testPutVehicleWaitingSeconds(9L, 7.0)
 
     val snapshot = sourceLink.testBuildMigrationSnapshot()
 
     val rehydratedLink = newTestLink("link-3")
     rehydratedLink.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedLink.testVehicleEntryTick shouldBe Map("car-9" -> 42L)
-    rehydratedLink.testVehicleWaitingSeconds shouldBe Map("car-9" -> 7.0)
+    rehydratedLink.testVehicleEntryTick shouldBe Map(9L -> 42L)
+    rehydratedLink.testVehicleWaitingSeconds shouldBe Map(9L -> 7.0)
   }
 
   it should "leave a rehydrated link with empty maps when none were registered" in {
@@ -123,7 +123,7 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
   it should "not leave stale entries from a pre-existing actor when restoring a smaller snapshot" in {
     val link = newTestLink("link-5")
     link.testSetState(freshState())
-    link.testPutVehicleEntryTick("stale-car", 1L)
+    link.testPutVehicleEntryTick(99L, 1L)
 
     val otherLink = newTestLink("link-6")
     otherLink.testSetState(freshState())

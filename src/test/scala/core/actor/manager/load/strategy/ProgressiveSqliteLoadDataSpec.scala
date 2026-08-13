@@ -100,9 +100,9 @@ class ProgressiveSqliteLoadDataSpec
     "build a tick index, then load only the actors whose start_tick falls in the requested window" in {
       val dbPath = buildDb(
         List(
-          ("p1", "P1", 10L),
-          ("p2", "P2", 20L),
-          ("p3", "P3", 500L) // deliberately outside the first window requested below
+          ("1", "P1", 10L),
+          ("2", "P2", 20L),
+          ("3", "P3", 500L) // deliberately outside the first window requested below
         )
       )
 
@@ -142,7 +142,7 @@ class ProgressiveSqliteLoadDataSpec
       loader ! LoadActorsForTickRange(fromTick = 0L, toTick = 100L)
 
       val createEvent = creatorProbe.expectMsgType[CreateActorsEvent](10.seconds)
-      createEvent.actors.map(_.actor.id).toSet shouldBe Set("p1", "p2")
+      createEvent.actors.map(_.actor.id).toSet shouldBe Set(1L, 2L)
 
       creatorProbe.reply(
         FinishCreationEvent(actorRef = creatorProbe.ref, batchId = createEvent.id, amount = 2)
@@ -157,7 +157,7 @@ class ProgressiveSqliteLoadDataSpec
       loader ! LoadActorsForTickRange(fromTick = 101L, toTick = 500L)
 
       val secondCreateEvent = creatorProbe.expectMsgType[CreateActorsEvent](10.seconds)
-      secondCreateEvent.actors.map(_.actor.id).toSet shouldBe Set("p3")
+      secondCreateEvent.actors.map(_.actor.id).toSet shouldBe Set(3L)
 
       creatorProbe.reply(
         FinishCreationEvent(actorRef = creatorProbe.ref, batchId = secondCreateEvent.id, amount = 1)

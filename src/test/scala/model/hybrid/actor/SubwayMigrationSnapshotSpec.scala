@@ -54,8 +54,8 @@ class SubwayMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
       numberOfPorts = 4,
       velocity = 20.0,
       stopTime = 30L,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       line = "line-1"
     )
 

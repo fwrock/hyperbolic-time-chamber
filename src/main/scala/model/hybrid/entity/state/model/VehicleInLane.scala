@@ -21,7 +21,7 @@ import core.types.Tick
   *   Reference to the full micro state of the vehicle
   */
 case class VehicleInLane(
-  actorId: String,
+  actorId: Long,
   shardId: String,
   position: Double,
   velocity: Double,

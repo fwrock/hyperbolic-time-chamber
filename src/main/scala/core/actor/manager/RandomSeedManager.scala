@@ -33,7 +33,7 @@ object RandomSeedManager {
     println(s"Random seed $seed configurado para reprodutibilidade")
   }
 
-  /** Gera UUID determinístico baseado no seed + contador
+  /** Gera ID determinístico baseado no seed + contador
     */
   private var uuidCounter: Long = 0
 
@@ -42,6 +42,12 @@ object RandomSeedManager {
     val seedPart = currentSeed.getOrElse(0L)
     val uuidValue = seedPart + uuidCounter
     f"htc-$uuidValue%016x-$uuidCounter%08x"
+  }
+
+  /** Gera um entity id `Long` determinístico baseado no seed + contador. */
+  def deterministicId(): Long = {
+    uuidCounter += 1
+    currentSeed.getOrElse(0L) + uuidCounter
   }
 
   /** Gera ID determinístico para simulação

@@ -24,7 +24,7 @@ class BusStop(
 
   override protected def internStateStrings(s: BusStopState): BusStopState =
     s.copy(
-      nodeId = StringPool.intern(s.nodeId),
+      nodeId = s.nodeId,
       label  = StringPool.intern(s.label)
     )
 
@@ -53,7 +53,7 @@ class BusStop(
           )
         )
         logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
-      case None if state.nodeId != null && state.nodeId.nonEmpty =>
+      case None if state.nodeId != 0L =>
         logWarn(
           s"BusStop ${getEntityId}: relationships map empty (available keys: [${relationships.keys
               .mkString(", ")}]). " +

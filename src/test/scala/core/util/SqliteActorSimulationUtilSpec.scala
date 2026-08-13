@@ -68,7 +68,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
         |   pool_allow_local_routes, pool_use_roles, data_type, data_content, relationships)
         |VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
     )
-    insert.setString(1, "person-1")
+    insert.setString(1, "1")
     insert.setString(2, "Person 1")
     insert.setString(3, "person")
     insert.setString(4, "PoolDistributed")
@@ -80,7 +80,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
     insert.setString(10, """["worker"]""")
     insert.setString(11, "PersonData")
     insert.setString(12, """{"startTick":120,"home":"node-1","work":"node-2"}""")
-    insert.setString(13, """{"vehicle":{"id":"car-1","classType":"Car","resourceId":"shard-1"}}""")
+    insert.setString(13, """{"vehicle":{"id":1,"classType":"Car","resourceId":"shard-1"}}""")
     insert.executeUpdate()
     insert.close()
 
@@ -89,7 +89,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
 
     val actor = SqliteActorSimulationUtil.fromResultSet(rs)
 
-    actor.id shouldBe "person-1"
+    actor.id shouldBe 1L
     actor.name shouldBe "Person 1"
     actor.typeActor shouldBe "person"
     actor.creationType shouldBe CreationTypeEnum.PoolDistributed
@@ -105,7 +105,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
     normalizedContent.get("startTick") shouldBe 120
     normalizedContent.get("home") shouldBe "node-1"
     actor.relationships should not be null
-    actor.relationships("vehicle") shouldBe ShardActorId(entityId = "car-1", classType = "Car", shardBucket = "shard-1")
+    actor.relationships("vehicle") shouldBe ShardActorId(entityId = 1L, classType = "Car", shardBucket = "shard-1")
   }
 
   it should "default poolConfiguration and relationships when the columns are NULL" in {
@@ -114,7 +114,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
         |  (id, name, type_actor, creation_type, start_tick, data_type, data_content, relationships)
         |VALUES (?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
     )
-    insert.setString(1, "node-1")
+    insert.setString(1, "2")
     insert.setString(2, "Node 1")
     insert.setString(3, "node")
     insert.setString(4, "LoadBalancedDistributed")

@@ -17,7 +17,7 @@ class BusStationBusCreator(
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
   reportFn:            (Map[String, Any], String) => Unit,
-  spawnDynamicActorFn: (String, String, String) => Unit,
+  spawnDynamicActorFn: (String, Long, String) => Unit,
   routeCalculator:     BusStationRouteCalculator,
   logInfoFn:           String => Unit,
   logWarnFn:           String => Unit,
@@ -72,11 +72,11 @@ class BusStationBusCreator(
     )
 
     BusStationMetrics.busesCreated.labels(bus.label).inc()
-    spawnDynamicActorFn("hybrid.actor.Bus", IdUtil.format(bus.actorId), toJson(busState))
+    spawnDynamicActorFn("hybrid.actor.Bus", bus.actorId, toJson(busState))
   }
 
-  private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
-    val bestRoute = mutable.Queue[(String, String)]()
+  private def calcBusBestRoute(): mutable.Queue[(Long, Long)] = {
+    val bestRoute = mutable.Queue[(Long, Long)]()
 
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get, routeCalculator.orderedBusStopIds)
@@ -100,7 +100,7 @@ class BusStationBusCreator(
 
   private def getTotalRoute(
     route:        mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]],
-    orderedStops: List[String]
+    orderedStops: List[Long]
   ): mutable.Queue[(Identify, Identify)] = {
     val totalRoute = mutable.Queue[(Identify, Identify)]()
     for (pair <- orderedStops.sliding(2)) {

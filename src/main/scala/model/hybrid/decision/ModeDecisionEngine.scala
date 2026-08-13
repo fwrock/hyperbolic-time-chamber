@@ -40,7 +40,7 @@ final case class ScenarioValidationContext(
 final case class DecisionContext(
   weights: ModeChoiceWeights,
   ownedVehicles: Map[String, Identify],
-  vehicleCurrentNode: Map[String, String],
+  vehicleCurrentNode: Map[String, Long],
   currentTick: Tick,
   entityId: String
 )
@@ -72,8 +72,8 @@ trait ModeDecisionEngine {
     * `Left(NoViableJourney(...))`, never an exception.
     */
   def decide(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     request: ModeDecisionRequest,
     ctx: DecisionContext
   ): Either[NoViableJourney, List[AtomicLeg]]

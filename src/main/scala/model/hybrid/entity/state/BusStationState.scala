@@ -13,9 +13,9 @@ import scala.collection.mutable
 case class BusStationState(
   startTick: Long,
   name: String,
-  origin: String,
-  destination: String = null,
-  busStops: mutable.LinkedHashMap[String, String],
+  origin: Long,
+  destination: Long = 0L,
+  busStops: mutable.LinkedHashMap[Long, Long],
   interval: Tick,
   buses: mutable.Queue[BusInformation],
   goingRoute: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]] = Some(

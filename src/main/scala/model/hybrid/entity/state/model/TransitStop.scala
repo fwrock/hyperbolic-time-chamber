@@ -27,9 +27,9 @@ package model.hybrid.entity.state.model
   */
 case class TransitStop(
   id: String,
-  actorId: String,
+  actorId: Long,
   actorClassType: String,
-  nodeId: String,
+  nodeId: Long,
   latitude: Double,
   longitude: Double,
   stopType: String,

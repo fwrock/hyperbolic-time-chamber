@@ -65,13 +65,13 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     def testRegister(identity: Identify, startTick: Tick): Unit =
       registerActor(RegisterActorEvent(startTick = startTick, actorId = identity.id, identify = Some(identity)))
     def testSchedule(identity: Identify, tick: Tick): Unit =
-      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id, identify = Some(identity)))
+      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id.toString, identify = Some(identity)))
     def testFinish(finish: FinishEvent): Unit = finishEvent(finish)
-    def testRunningEventIds: Set[String] = runningEvents.map(_.id).toSet
+    def testRunningEventIds: Set[Long] = runningEvents.map(_.id).toSet
     def testScheduledTicks: Set[Tick] = scheduledActors.keySet.toSet
   }
 
-  private def identityFor(id: String, probe: TestProbe): Identify =
+  private def identityFor(id: Long, probe: TestProbe): Identify =
     Identify(
       id = id,
       resourceId = "",
@@ -89,8 +89,8 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     val actorBProbe = TestProbe()
     val ltm = newManager(parentProbe)
 
-    val identityA = identityFor("actor-a", actorAProbe)
-    val identityB = identityFor("actor-b", actorBProbe)
+    val identityA = identityFor(1L, actorAProbe)
+    val identityB = identityFor(2L, actorBProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identityA, 0L)
@@ -99,7 +99,7 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     parentProbe.receiveWhile(idle = 200.millis) { case _ => () }
     ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
 
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a", "actor-b")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L, 2L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -111,7 +111,7 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
         generation = 1L
       )
     )
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -138,14 +138,14 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
     parentProbe.receiveWhile(idle = 200.millis) { case _ => () }
     ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
 
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(

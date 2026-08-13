@@ -44,7 +44,7 @@ class ScenarioPreflightValidatorSpec extends AnyFlatSpec with Matchers with Befo
 
   private def personPlan(strategyId: String): List[PlanElement] =
     List(
-      Activity("home", "n1", AtTick(0L)),
+      Activity("home", 1L, AtTick(0L)),
       PendingDecision(
         ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk), strategyId = strategyId)
       )
@@ -62,7 +62,7 @@ class ScenarioPreflightValidatorSpec extends AnyFlatSpec with Matchers with Befo
       i =>
         val state = PersonState(originalPlan = personPlan(strategyId))
         val contentJson = JsonUtil.toJson(state)
-        s"""{"id":"person-$i","typeActor":"hybrid.actor.Person","data":{"dataType":"model.hybrid.entity.state.PersonState","content":$contentJson}}"""
+        s"""{"id":"$i","typeActor":"hybrid.actor.Person","data":{"dataType":"model.hybrid.entity.state.PersonState","content":$contentJson}}"""
     }
     val fileContent = entries.mkString("[", ",", "]")
 
@@ -119,7 +119,7 @@ class ScenarioPreflightValidatorSpec extends AnyFlatSpec with Matchers with Befo
       (1 to personCount).foreach {
         i =>
           val state = PersonState(originalPlan = personPlan(strategyId))
-          insert.setString(1, s"person-$i")
+          insert.setString(1, s"$i")
           insert.setString(2, JsonUtil.toJson(state))
           insert.executeUpdate()
       }

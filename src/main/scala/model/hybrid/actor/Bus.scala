@@ -54,11 +54,10 @@ class Bus(
     ) {
 
   override protected def internStateStrings(s: BusState): BusState = {
-    s.busStops = s.busStops.map { case (k, v) => StringPool.intern(k) -> StringPool.intern(v) }
     val copied = s.copy(
       label       = StringPool.intern(s.label),
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
     // copy() only replicates BusState constructor params; restore MovableState vars
     // that are not in the constructor (otherwise they reset to their defaults).
@@ -84,25 +83,25 @@ class Bus(
     */
   private def captureBusMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
-      vehicleCurrentLinkId = currentLinkId.getOrElse(""),
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
       vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
       vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
       vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
       vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify,
       expectedUnloadResponses = expectedUnloadResponses,
-      currentStopNode = currentStopNode.getOrElse("")
+      currentStopNode = currentStopNode.getOrElse(0L)
     )
 
   /** Restores what [[captureBusMigrationFields]] captured. */
   private def restoreBusMigrationFields(snapshot: MigrationSnapshot): Unit = {
-    currentLinkId = if (snapshot.vehicleCurrentLinkId.nonEmpty) Some(snapshot.vehicleCurrentLinkId) else None
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
     linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
     mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
     signalWaitUntilTick =
       if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
     signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
     expectedUnloadResponses = snapshot.expectedUnloadResponses
-    currentStopNode = if (snapshot.currentStopNode.nonEmpty) Some(snapshot.currentStopNode) else None
+    currentStopNode = if (snapshot.currentStopNode != 0L) Some(snapshot.currentStopNode) else None
   }
 
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
@@ -117,7 +116,7 @@ class Bus(
     */
   // protected, not private: lets BusMigrationSnapshotSpec drive these directly, same rationale as
   // Car.scala's identical fields.
-  protected var currentLinkId: Option[String] = None
+  protected var currentLinkId: Option[Long] = None
 
   /** Link entry tick.
     */
@@ -188,7 +187,7 @@ class Bus(
   protected var expectedUnloadResponses: Int = 0
 
   /** Node ID of the stop the bus just arrived at (saved before leavingLink clears currentPath). */
-  protected var currentStopNode: Option[String] = None
+  protected var currentStopNode: Option[Long] = None
 
   /** Counts every bus stop arrival (for cycle diagnostics). */
   private var stopArrivalCount: Int = 0
@@ -317,8 +316,8 @@ class Bus(
         enterLink()
 
       case Ready =>
-        val nodeId = currentStopNode.orNull
-        if (nodeId != null && findBusStopAtNode(nodeId).isDefined) {
+        val nodeId = currentStopNode.getOrElse(0L)
+        if (findBusStopAtNode(nodeId).isDefined) {
           stopArrivalCount += 1
           // ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
           //   s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
@@ -490,7 +489,7 @@ class Bus(
     super.enterLink()
   }
 
-  override def getNextPath: Option[(String, String)] =
+  override def getNextPath: Option[(Long, Long)] =
     state.bestRoute match {
       case Some(path) =>
         if (state.currentPathPosition < path.size) {
@@ -508,13 +507,13 @@ class Bus(
   /** Check if bus is at a bus stop (for MICRO mode).
     */
   private def checkBusStopAtPosition(position: Double): Unit = stopHandler.checkBusStopAtPosition(position, state)
-  private def findNextBusStop(): Option[String] = stopHandler.findNextBusStop(state)
-  private def findBusStopAtNode(nodeId: String): Option[String] = stopHandler.findBusStopAtNode(nodeId, state)
+  private def findNextBusStop(): Option[Long] = stopHandler.findNextBusStop(state)
+  private def findBusStopAtNode(nodeId: Long): Option[Long] = stopHandler.findBusStopAtNode(nodeId, state)
   private def requestUnloadPeopleData(): Unit = stopHandler.requestUnloadPeopleData(state)
   private def requestLoadPassenger(): Unit = stopHandler.requestLoadPassenger(state)
   private def getCurrentLinkLength: Double = stopHandler.getCurrentLinkLength
 
-  private def finishJourney(reason: String, finalNode: String): Unit =
+  private def finishJourney(reason: String, finalNode: Long): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override def onDestruct(event: DestructEvent): Unit = {
@@ -522,7 +521,7 @@ class Bus(
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
-        .getOrElse("unknown")
+        .getOrElse(0L)
       journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
     }
     if (state != null) {

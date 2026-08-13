@@ -34,15 +34,15 @@ class BusStopHandler(
   private val entityIdFn: () => String,
   private val currentTickFn: () => Tick,
   private val journeyReporter: BusJourneyReporter,
-  private val sendMessageFn: (String, String, AnyRef, String) => Unit,
+  private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val scheduleEventFn: Tick => Unit,
   private val enterLinkFn: () => Unit,
   private val selfRefFn: () => ActorRef,
-  private val getCurrentStopNodeFn: () => Option[String],
-  private val setCurrentStopNodeFn: Option[String] => Unit,
+  private val getCurrentStopNodeFn: () => Option[Long],
+  private val setCurrentStopNodeFn: Option[Long] => Unit,
   private val logDebugFn: String => Unit,
-  private val getCurrentLinkIdFn: () => Option[String],
+  private val getCurrentLinkIdFn: () => Option[Long],
   private val busStopProbeLogEvery: Int,
   // Backed by Bus's own actor-local var, not held here -- CLAUDE.md's "handlers are stateless"
   // rule (rule 3) means this reply-count barrier must live where BaseActor.buildMigrationSnapshot
@@ -72,7 +72,7 @@ class BusStopHandler(
         sendMessageFn(
           person.id,
           person.classType,
-          PassengerBoardedVehicleData(vehicleId = entityIdFn(), vehicleClassType = "hybrid.actor.Bus"),
+          PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Bus"),
           "PassengerBoardedVehicle"
         )
 
@@ -103,7 +103,7 @@ class BusStopHandler(
     }
   }
 
-  def handleUnloadPassenger(data: BusUnloadPassengerData, personId: String, state: BusState): Unit = {
+  def handleUnloadPassenger(data: BusUnloadPassengerData, personId: Long, state: BusState): Unit = {
     if (getExpectedUnloadResponsesFn() == 0) return  // no active unload round; ignore spurious/late response
     state.countUnloadReceived += 1
 
@@ -164,10 +164,10 @@ class BusStopHandler(
       }
     }
 
-  def findNextBusStop(state: BusState): Option[String] =
+  def findNextBusStop(state: BusState): Option[Long] =
     state.busStops.headOption.map(_._1)
 
-  def findBusStopAtNode(nodeId: String, state: BusState): Option[String] =
+  def findBusStopAtNode(nodeId: Long, state: BusState): Option[Long] =
     state.busStops.find { case (_, stopNodeId) => stopNodeId == nodeId }.map(_._1)
 
   def requestUnloadPeopleData(state: BusState): Unit = {
@@ -181,7 +181,7 @@ class BusStopHandler(
     state.countUnloadReceived  = 0
     state.countUnloadPassenger = 0
 
-    val nodeId = getCurrentStopNodeFn().getOrElse("unknown")
+    val nodeId = getCurrentStopNodeFn().getOrElse(0L)
     state.people.foreach { case (_, person) =>
       sendMessageFn(
         person.id,
@@ -194,7 +194,7 @@ class BusStopHandler(
   }
 
   def requestLoadPassenger(state: BusState): Unit = {
-    val nodeId = getCurrentStopNodeFn().getOrElse("unknown")
+    val nodeId = getCurrentStopNodeFn().getOrElse(0L)
     findBusStopAtNode(nodeId, state) match {
       case Some(busStopId) =>
         state.status = WaitingLoadPassenger

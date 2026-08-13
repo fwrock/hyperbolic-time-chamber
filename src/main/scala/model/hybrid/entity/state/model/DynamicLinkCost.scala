@@ -34,7 +34,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
   *   System time when this was last updated (for debugging)
   */
 case class DynamicLinkCost(
-  @JsonProperty("linkId") linkId: String,
+  @JsonProperty("linkId") linkId: Long,
   @JsonProperty("baseCost") baseCost: Double,
   @JsonProperty("congestionFactor") congestionFactor: Double,
   @JsonProperty("currentSpeed") currentSpeed: Double,
@@ -87,7 +87,7 @@ object DynamicLinkCost {
   /** Create from link state with default values.
     */
   def fromLinkState(
-    linkId: String,
+    linkId: Long,
     length: Double,
     currentSpeed: Double,
     freeFlowSpeed: Double,

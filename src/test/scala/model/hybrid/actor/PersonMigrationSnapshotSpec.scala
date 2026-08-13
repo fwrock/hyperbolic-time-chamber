@@ -63,13 +63,13 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
     TestActorRef(new TestPerson(Properties(entityId = entityId)), s"$entityId-$nextEntitySuffix").underlyingActor
   }
 
-  private def boardedEvent(vehicleId: String, vehicleClassType: String): ActorInteractionEvent =
+  private def boardedEvent(vehicleId: Long, vehicleClassType: String): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = 3L,
       lamportTick = 3L,
       actorRefId = vehicleId,
       shardRefId = vehicleClassType,
-      actorPathRef = s"/user/$vehicleId",
+      actorPathRef = s"/user/vehicle-$vehicleId",
       actorClassType = vehicleClassType,
       data = PassengerBoardedVehicleData(vehicleId = vehicleId, vehicleClassType = vehicleClassType),
       resourceId = "res-1"
@@ -78,11 +78,11 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
   "Person.buildMigrationSnapshot" should "capture currentPTVehicleRef after boarding a Bus/Subway" in {
     val person = newTestPerson("person-1")
     person.testSetState(PersonState())
-    person.actInteractWith(boardedEvent("bus-1", "hybrid.actor.Bus"))
+    person.actInteractWith(boardedEvent(1L, "hybrid.actor.Bus"))
 
     val snapshot = person.testBuildMigrationSnapshot()
 
-    snapshot.currentPTVehicleRefId shouldBe "bus-1"
+    snapshot.currentPTVehicleRefId shouldBe 1L
     snapshot.currentPTVehicleRefClassType shouldBe "hybrid.actor.Bus"
   }
 
@@ -92,14 +92,14 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
 
     val snapshot = person.testBuildMigrationSnapshot()
 
-    snapshot.currentPTVehicleRefId shouldBe ""
+    snapshot.currentPTVehicleRefId shouldBe 0L
     snapshot.currentPTVehicleRefClassType shouldBe ""
   }
 
   "Person.applyMigrationSnapshot" should "restore currentPTVehicleRef on a freshly-constructed actor so onDestruct can still answer the boarding barrier" in {
     val sourcePerson = newTestPerson("person-3")
     sourcePerson.testSetState(PersonState())
-    sourcePerson.actInteractWith(boardedEvent("subway-9", "hybrid.actor.Subway"))
+    sourcePerson.actInteractWith(boardedEvent(9L, "hybrid.actor.Subway"))
 
     val snapshot = sourcePerson.testBuildMigrationSnapshot()
 
@@ -107,7 +107,7 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
     rehydratedPerson.testApplyMigrationSnapshot(snapshot)
 
     val rebuilt = rehydratedPerson.testBuildMigrationSnapshot()
-    rebuilt.currentPTVehicleRefId shouldBe "subway-9"
+    rebuilt.currentPTVehicleRefId shouldBe 9L
     rebuilt.currentPTVehicleRefClassType shouldBe "hybrid.actor.Subway"
   }
 
@@ -119,6 +119,6 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
     val rehydratedPerson = newTestPerson("person-4")
     rehydratedPerson.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedPerson.testBuildMigrationSnapshot().currentPTVehicleRefId shouldBe ""
+    rehydratedPerson.testBuildMigrationSnapshot().currentPTVehicleRefId shouldBe 0L
   }
 }

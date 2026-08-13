@@ -6,16 +6,16 @@ import org.scalatest.matchers.should.Matchers
 
 class PlanCursorSpec extends AnyFlatSpec with Matchers {
 
-  private val home = Activity("home", nodeId = "n1", endTime = AtTick(100))
-  private val work = Activity("work", nodeId = "n2", endTime = AtTick(200))
-  private val walkToStop = WalkLeg(originNodeId = "n1", destinationNodeId = "n3")
+  private val home = Activity("home", nodeId = 1L, endTime = AtTick(100))
+  private val work = Activity("work", nodeId = 2L, endTime = AtTick(200))
+  private val walkToStop = WalkLeg(originNodeId = 1L, destinationNodeId = 3L)
   private val transit = TransitLeg(
     mode = ConcreteMode.Bus,
     line = "L42",
-    boardingStop = StopRef(actorId = "stop-1", actorClassType = "BusStop", nodeId = "n3"),
-    alightingStop = StopRef(actorId = "stop-2", actorClassType = "BusStop", nodeId = "n4")
+    boardingStop = StopRef(actorId = 101L, actorClassType = "BusStop", nodeId = 3L),
+    alightingStop = StopRef(actorId = 102L, actorClassType = "BusStop", nodeId = 4L)
   )
-  private val walkFromStop = WalkLeg(originNodeId = "n4", destinationNodeId = "n2")
+  private val walkFromStop = WalkLeg(originNodeId = 4L, destinationNodeId = 2L)
   private val pendingDecision = PendingDecision(
     ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk, ConcreteMode.Bus), strategyId = "default")
   )
@@ -78,7 +78,7 @@ class PlanCursorSpec extends AnyFlatSpec with Matchers {
       executed = Nil,
       remaining = RemainingQueue(List(walkToStop, transit, walkFromStop, work))
     )
-    val replacementWalk = WalkLeg(originNodeId = "n1", destinationNodeId = "n2")
+    val replacementWalk = WalkLeg(originNodeId = 1L, destinationNodeId = 2L)
 
     val replanned = PlanCursor.expandReplan(cursor, newLegs = List(replacementWalk))
 

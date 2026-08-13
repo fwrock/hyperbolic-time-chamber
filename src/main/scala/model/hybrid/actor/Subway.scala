@@ -95,7 +95,7 @@ class Subway(
    *  Rail link IDs are resolved directly to their actor reference, bypassing
    *  the city-map lookup used by road-based movables.
    */
-  override protected def resolveLink(linkId: String): Option[(String, String)] =
+  override protected def resolveLink(linkId: Long): Option[(Long, String)] =
     Some((linkId, "hybrid.actor.RailLink"))
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
@@ -139,7 +139,7 @@ class Subway(
         }
       case Moving =>
         val nodeId = getCurrentNode
-        val stationOpt = if (nodeId != null) retrieveSubwayStationFromNodeId(nodeId) else None
+        val stationOpt = retrieveSubwayStationFromNodeId(nodeId)
         stationOpt match {
           case Some(stationId) =>
             state.status = Stopped
@@ -168,7 +168,7 @@ class Subway(
       case _                            => super.actInteractWith(event)
     }
 
-  private def retrieveSubwayStationFromNodeId(value: String): Option[String] =
+  private def retrieveSubwayStationFromNodeId(value: Long): Option[Long] =
     state.subwayStations.find {
       case (_, v) => v == value
     }.map(_._1)
@@ -236,7 +236,7 @@ class Subway(
     onFinishSpontaneous(Some(currentTick + time.toLong))
   }
 
-  override def getNextPath: Option[(String, String)] =
+  override def getNextPath: Option[(Long, Long)] =
     state.bestRoute match
       case Some(routePath) =>
         if state.currentPathPosition < routePath.size then

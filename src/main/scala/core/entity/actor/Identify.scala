@@ -4,7 +4,7 @@ package core.entity.actor
 import org.apache.pekko.actor.ActorRef
 
 case class Identify(
-  id: String,
+  id: Long,
   shardId: String,
   classType: String,
   actorRef: ActorRef

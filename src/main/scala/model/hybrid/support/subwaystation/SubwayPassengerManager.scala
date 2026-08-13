@@ -14,7 +14,7 @@ class SubwayPassengerManager(
   entityIdFn:      () => String,
   currentTickFn:   () => Tick,
   reportFn:        (Map[String, Any], String) => Unit,
-  sendMessageFn:   (String, String, AnyRef) => Unit
+  sendMessageFn: (Long, String, AnyRef) => Unit
 ) {
 
   private def state: SubwayStationState = getStateFn()

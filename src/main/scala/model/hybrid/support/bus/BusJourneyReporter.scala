@@ -69,7 +69,7 @@ class BusJourneyReporter(
     sumoIsHalting = isHaltingNow
   }
 
-  def finishJourney(reason: String, finalNode: String, state: BusState): Unit = {
+  def finishJourney(reason: String, finalNode: Long, state: BusState): Unit = {
     if (journeyFinishedReported) return
     journeyFinishedReported = true
 
@@ -101,7 +101,7 @@ class BusJourneyReporter(
     state.status = Finished
   }
 
-  private def reportSumoTripInfo(reason: String, finalNode: String, state: BusState): Unit = {
+  private def reportSumoTripInfo(reason: String, finalNode: Long, state: BusState): Unit = {
     if (sumoTripInfoReported) return
     val entityId       = entityIdFn()
     val tick           = currentTickFn()
