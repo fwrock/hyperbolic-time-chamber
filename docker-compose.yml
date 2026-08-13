@@ -5,7 +5,13 @@ services:
   # Replaces Confluent Kafka + Zookeeper + separate Schema Registry.
   # Bootstrap: localhost:9092  |  Schema Registry: http://localhost:8081
   redpanda:
-    image: redpandadata/redpanda:latest
+    # Pinned, not :latest -- a `:latest` pull on 2026-08-13 silently jumped to a version whose
+    # default cluster config enables continuous partition/core balancing behind an Enterprise
+    # license, which then failed to start against the persisted volume's cluster state ("A
+    # Redpanda Enterprise Edition license is required to use the currently enabled feature(s):
+    # partition_auto_balancing_continuous, core_balancing_continuous"). Pin so a routine pull
+    # can't do that again unnoticed; bump deliberately.
+    image: redpandadata/redpanda:v26.2.1
     container_name: htc-redpanda
     hostname: redpanda
     network_mode: host
@@ -123,9 +129,9 @@ services:
       HTC_API_PORT: 9804
 
       # Simulation Configuration
-      HTC_SCENARIO_NAME: tl_1pct
-      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/tl_1pct/simulation.json
-      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/tl_1pct/data/city_map.json
+      HTC_SCENARIO_NAME: tls_test
+      HTC_SIMULATION_CONFIG_FILE: /app/hyperbolic-time-chamber/simulations/input/tls_test/simulation.json
+      HTC_MOBILITY_CITY_MAP_FILE: /app/hyperbolic-time-chamber/simulations/input/tls_test/data/city_map.json
       HTC_PERSON_TRUNCATE_SCHEDULE: "true"
 
       HTC_ACTOR_TRACE_ENABLED: "true"

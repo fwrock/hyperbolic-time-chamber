@@ -93,7 +93,7 @@ class DigitalTwinManager(timeManager: ActorRef)
           event = ActorInteractionEvent(
             tick          = 0L,
             lamportTick   = 0L,
-            actorRefId    = entityId.toLong,
+            actorRefId    = DigitalTwinManager.SentinelActorRefId,
             shardRefId    = entityId,
             actorPathRef  = self.path.name,
             actorClassType = getClass.getSimpleName,
@@ -195,6 +195,14 @@ object DigitalTwinManager {
 
   /** Trigger an eager drain when the queue exceeds this size to bound memory usage. */
   val MaxQueueSizeBeforeEagerDrain: Int = 500
+
+  /** `ActorInteractionEvent.actorRefId` for twin-update messages this manager routes in. It isn't
+    * itself a sharded simulation entity (its BaseActor `entityId` is the fixed String
+    * "digital-twin-manager", not a Long id), and no current handler reads `actorRefId` back off a
+    * Dt* event to reply to the sender, so a real id was never needed here — this sentinel just
+    * documents that explicitly instead of crashing on `entityId.toLong`.
+    */
+  val SentinelActorRefId: Long = -1L
 
   def props(timeManager: ActorRef): Props =
     Props(classOf[DigitalTwinManager], timeManager)
