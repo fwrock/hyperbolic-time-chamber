@@ -18,7 +18,7 @@ object DynamicLinkCostAvro {
   def toAvro(cost: DynamicLinkCost): DynamicLinkCostEvent =
     DynamicLinkCostEvent
       .newBuilder()
-      .setLinkId(cost.linkId)
+      .setLinkId(cost.linkId.toString)
       .setStaticCost(cost.baseCost)
       .setCongestionFactor(cost.congestionFactor)
       .setIncidentPenalty(cost.incidentFactor)
@@ -40,7 +40,7 @@ object DynamicLinkCostAvro {
     */
   def fromAvro(event: DynamicLinkCostEvent): DynamicLinkCost =
     DynamicLinkCost(
-      linkId = event.linkId,
+      linkId = event.linkId.toLong,
       baseCost = event.staticCost,
       congestionFactor = event.congestionFactor,
       currentSpeed = event.currentSpeed,
@@ -94,7 +94,7 @@ object DynamicLinkCostAvroExample {
     println("=" * 50)
 
     val testCost = DynamicLinkCost(
-      linkId = "htcaid:link;test_link_123",
+      linkId = 123L,
       baseCost = 100.0,
       congestionFactor = 2.5,
       currentSpeed = 30.0,

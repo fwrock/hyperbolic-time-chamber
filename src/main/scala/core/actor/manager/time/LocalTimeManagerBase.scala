@@ -69,17 +69,17 @@ abstract class LocalTimeManagerBase(
     * already correctly sequenced after startup) does.
     */
   protected var hasStarted = false
-  private val registeredIdentities: mutable.Map[String, Identify] = mutable.Map()
-  private val dispatchGeneration: mutable.Map[String, Long] = mutable.Map().withDefaultValue(0L)
+  private val registeredIdentities: mutable.Map[Long, Identify] = mutable.Map()
+  private val dispatchGeneration: mutable.Map[Long, Long] = mutable.Map().withDefaultValue(0L)
 
-  private val highestProcessedTick: mutable.Map[String, Tick] = mutable.Map().withDefaultValue(-1L)
+  private val highestProcessedTick: mutable.Map[Long, Tick] = mutable.Map().withDefaultValue(-1L)
 
   /** Actors registered via [[RegisterPassiveActorEvent]] instead of [[RegisterActorEvent]] — see
     * that event's doc for the full rationale. Never enters `scheduledActors`/`runningEvents`, so
     * it costs this LTM nothing on the normal dispatch path; its only purpose is being reachable by
     * [[forceDestructActiveActors]] at simulation end.
     */
-  private val passivelyRegisteredIdentities: mutable.Map[String, Identify] = mutable.Map()
+  private val passivelyRegisteredIdentities: mutable.Map[Long, Identify] = mutable.Map()
 
   /** Populated by [[forceDestructActiveActors]] with every actor id it force-destructed, drained
     * as each one's [[DestructAckEvent]] arrives. Once empty, this LTM tells `parentManager` via
@@ -87,7 +87,7 @@ abstract class LocalTimeManagerBase(
     * see that event's doc for why `OptimisticGlobalTimeManager` waits on it before letting
     * `ReportManager` close its writers.
     */
-  private val pendingDestructAcks: mutable.Set[String] = mutable.Set()
+  private val pendingDestructAcks: mutable.Set[Long] = mutable.Set()
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -132,7 +132,7 @@ abstract class LocalTimeManagerBase(
         ActorMetrics.activeActors.labels(actorType).inc()
     }
     scheduleEvent(
-      ScheduleEvent(tick = event.startTick, actorRef = event.actorId, identify = event.identify)
+      ScheduleEvent(tick = event.startTick, actorRef = IdUtil.format(event.actorId), identify = event.identify)
     )
   }
 
@@ -151,7 +151,7 @@ abstract class LocalTimeManagerBase(
 
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
-    val actorId = event.identify.map(_.id).getOrElse(event.actorRef)
+    val actorId = event.identify.map(_.id).getOrElse(event.actorRef.toLong)
     val actorWatermark = highestProcessedTick(actorId)
     val effectiveTick = if (event.tick <= actorWatermark) {
       logDebug(
@@ -350,7 +350,7 @@ abstract class LocalTimeManagerBase(
   }
 
   private def forceDestructActiveActors(): Unit = {
-    val identitiesToDestruct = mutable.Map[String, Identify]()
+    val identitiesToDestruct = mutable.Map[Long, Identify]()
 
     scheduledActors.foreach {
       case (tick, identities) =>

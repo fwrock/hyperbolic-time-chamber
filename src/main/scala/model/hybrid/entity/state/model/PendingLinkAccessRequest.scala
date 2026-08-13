@@ -6,6 +6,6 @@ package model.hybrid.entity.state.model
   * docs/CONGESTION_PROPAGATION_DESIGN.md.
   */
 case class PendingLinkAccessRequest(
-  actorRefId: String,
+  actorRefId: Long,
   shardRefId: String
 )

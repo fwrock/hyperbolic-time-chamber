@@ -12,9 +12,9 @@ case class TrafficSignalState(
   startTick: Tick,
   cycleDuration: Tick,
   offset: Tick,
-  nodes: List[String],
+  nodes: List[Long],
   phases: List[Phase],
-  signalStates: mutable.Map[String, SignalState]
+  signalStates: mutable.Map[Long, SignalState]
 ) extends BaseState(startTick = startTick) {
   override def getStartTick: Tick = startTick + offset
 }

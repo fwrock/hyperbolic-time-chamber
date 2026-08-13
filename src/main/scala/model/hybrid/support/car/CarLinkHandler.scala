@@ -19,17 +19,17 @@ class CarLinkHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: CarJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val finishAndCleanupFn: (String, String) => Unit,
+  private val finishAndCleanupFn: (String, Long) => Unit,
   private val logStaleEventDebugFn: String => Unit,
-  private val setCurrentLinkIdFn: Option[String] => Unit,
+  private val setCurrentLinkIdFn: Option[Long] => Unit,
   private val setCurrentLinkLengthFn: Double => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
   private val setMesoExitTickFn: Option[Tick] => Unit,
-  private val getTripDestinationFn: () => Option[String]
+  private val getTripDestinationFn: () => Option[Long]
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: CarState): Unit = {
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: CarState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
 
@@ -80,7 +80,7 @@ class CarLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: CarState): Unit = {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: CarState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
 

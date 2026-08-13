@@ -21,10 +21,10 @@ class NodeEventHandler(
   getStateFn:          () => NodeState,
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
-  pendingSignals:      mutable.Map[String, SignalState],
+  pendingSignals:      mutable.Map[Long, SignalState],
   reportFn:            (Map[String, Any], String) => Unit,
-  sendMessageFn:       (String, String, AnyRef, String) => Unit,
-  getLinkDependencyFn: String => Option[ShardActorId],
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getLinkDependencyFn: Long => Option[ShardActorId],
   logWarnFn:           String => Unit,
   logDebugFn:          String => Unit
 ) {
@@ -145,7 +145,7 @@ class NodeEventHandler(
     * `availableCapacity`'s doc on `NodeState`), decrementing Node's own counter; otherwise
     * buffers the requester FIFO and replies with `capacityState = Full`.
     */
-  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: String): Unit = {
+  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: Long): Unit = {
     val capacityKnown = state.availableCapacity.contains(targetLinkId)
     val hasCapacity   = !capacityKnown || state.availableCapacity(targetLinkId) > 0
     if (hasCapacity) {
@@ -191,7 +191,7 @@ class NodeEventHandler(
     * next time `handleReceiveSignalChangeStatus` sees this movement turn Green. See
     * docs/CONGESTION_PROPAGATION_DESIGN.md.
     */
-  private def tryDrainCapacityQueue(linkId: String): Unit = {
+  private def tryDrainCapacityQueue(linkId: Long): Unit = {
     val signalCurrentlyGreen: Boolean =
       state.connections.get(linkId).flatMap(identify => state.signals.get(identify.id)) match {
         case Some(sig) => sig.state == Green
@@ -218,7 +218,7 @@ class NodeEventHandler(
 
   def handleReceiveSignalChangeStatus(event: ActorInteractionEvent, data: TrafficSignalChangeStatusData): Unit =
     if (state != null) {
-      state.signals.put(StringPool.intern(data.phaseOrigin), data.signalState)
+      state.signals.put(data.phaseOrigin, data.signalState)
 
 
       val outgoingLinksForThisPhase = state.connections.collect {

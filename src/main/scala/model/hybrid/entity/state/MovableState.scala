@@ -12,11 +12,11 @@ abstract class MovableState(
   val startTick: Long,
   val reporterType: ReportTypeEnum = null,
   val scheduleOnTimeManager: Boolean = true,
-  var movableBestRoute: Option[mutable.Queue[(String, String)]] = None,
-  var movableCurrentPath: Option[(String, String)] = None,
-  var movableCurrentNode: String = null,
-  val origin: String,
-  val destination: String,
+  var movableBestRoute: Option[mutable.Queue[(Long, Long)]] = None,
+  var movableCurrentPath: Option[(Long, Long)] = None,
+  var movableCurrentNode: Long = 0L,
+  val origin: Long,
+  val destination: Long,
   var movableBestCost: Double = Double.MaxValue,
   var movableStatus: MovableStatusEnum = RouteWaiting,
   var movableReachedDestination: Boolean = false,
@@ -32,19 +32,19 @@ abstract class MovableState(
 
   def updateStatus(newStatus: MovableStatusEnum): Unit = movableStatus = newStatus
 
-  def getBestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
+  def getBestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
 
-  def updateBestRoute(newBestRoute: Option[mutable.Queue[(String, String)]]): Unit =
+  def updateBestRoute(newBestRoute: Option[mutable.Queue[(Long, Long)]]): Unit =
     movableBestRoute = newBestRoute
 
-  def getCurrentPath: Option[(String, String)] = movableCurrentPath
+  def getCurrentPath: Option[(Long, Long)] = movableCurrentPath
 
-  def updateCurrentPath(newCurrentPath: Option[(String, String)]): Unit =
+  def updateCurrentPath(newCurrentPath: Option[(Long, Long)]): Unit =
     movableCurrentPath = newCurrentPath
 
-  def getCurrentNode: String = movableCurrentNode
+  def getCurrentNode: Long = movableCurrentNode
 
-  def updateCurrentNode(newCurrentNode: String): Unit = movableCurrentNode = newCurrentNode
+  def updateCurrentNode(newCurrentNode: Long): Unit = movableCurrentNode = newCurrentNode
 
   def getBestCost: Double = movableBestCost
 
@@ -55,9 +55,9 @@ abstract class MovableState(
   def updateReachedDestination(newReachedDestination: Boolean): Unit = movableReachedDestination =
     newReachedDestination
 
-  def getOrigin: String = origin
+  def getOrigin: Long = origin
 
-  def getDestination: String = destination
+  def getDestination: Long = destination
 
   def getActorType: ActorTypeEnum = actorType
 

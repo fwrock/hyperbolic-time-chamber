@@ -16,10 +16,24 @@ import scala.collection.mutable
   * interfere with each other) close that gap without `CompactGraph`/`GPSUtil`/any model actor
   * needing to know Time Warp exists -- `SimulationBaseActor` wraps a live dispatch in
   * `withRecording` and a replay in `withOverride`.
+  *
+  * `getWeight` takes a Long `linkId` (like every other migrated actor/entity id), but the
+  * recording/override maps it exchanges with `withRecording`/`withOverride` are still keyed by the
+  * link id's *String* form internally (`linkId.toString`) -- that's an implementation detail of
+  * the cache's ThreadLocal plumbing, not something callers normally see, but this spec reaches
+  * into `recorded`/builds `withOverride`'s map directly, so it has to match that internal key
+  * shape.
   */
 class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
 
-  private def costFor(linkId: String, congestionFactor: Double): DynamicLinkCost =
+  private var nextLinkId = 0L
+
+  private def freshLinkId(): Long = {
+    nextLinkId += 1
+    nextLinkId
+  }
+
+  private def costFor(linkId: Long, congestionFactor: Double): DynamicLinkCost =
     DynamicLinkCost(
       linkId = linkId,
       baseCost = 100.0,
@@ -32,7 +46,7 @@ class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
     )
 
   "withOverride" should "reproduce the exact value withRecording captured, even after the live cache changes underneath it" in {
-    val linkId = s"link-${java.util.UUID.randomUUID()}"
+    val linkId = freshLinkId()
     DynamicWeightCache.publishCost(costFor(linkId, congestionFactor = 1.0), ttlSeconds = 60)
 
     // Live dispatch: record whatever getWeight actually returns right now.
@@ -40,7 +54,7 @@ class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
     val liveWeight = DynamicWeightCache.withRecording(recorded) {
       DynamicWeightCache.getWeight(linkId, staticWeight = 999.0)
     }
-    recorded(linkId) shouldBe liveWeight
+    recorded(linkId.toString) shouldBe liveWeight
 
     // Time passes; a real Kafka update (or this test standing in for one) changes the live cache.
     DynamicWeightCache.publishCost(costFor(linkId, congestionFactor = 3.0), ttlSeconds = 60)
@@ -55,7 +69,7 @@ class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
   }
 
   it should "fall back to the edge's static weight, not the live cache, for a link the recording never saw" in {
-    val linkId = s"link-${java.util.UUID.randomUUID()}"
+    val linkId = freshLinkId()
     DynamicWeightCache.publishCost(costFor(linkId, congestionFactor = 5.0), ttlSeconds = 60)
 
     // Override map from a DIFFERENT event that never touched this link at all.
@@ -66,12 +80,12 @@ class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
   }
 
   it should "not leak into a plain call made after the wrapped block ends" in {
-    val linkId = s"link-${java.util.UUID.randomUUID()}"
+    val linkId = freshLinkId()
     DynamicWeightCache.publishCost(costFor(linkId, congestionFactor = 2.0), ttlSeconds = 60)
 
     val liveWeight = DynamicWeightCache.getWeight(linkId, staticWeight = 999.0)
 
-    DynamicWeightCache.withOverride(Map(linkId -> 12345.0)) {
+    DynamicWeightCache.withOverride(Map(linkId.toString -> 12345.0)) {
       DynamicWeightCache.getWeight(linkId, staticWeight = 999.0) shouldBe 12345.0
     }
 

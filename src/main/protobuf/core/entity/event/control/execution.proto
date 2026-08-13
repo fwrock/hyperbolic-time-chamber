@@ -40,7 +40,7 @@ message PrepareSimulationEvent {
 
 message RegisterActorEvent {
   uint64 startTick = 1;
-  string actorId = 2;
+  int64 actorId = 2;
   Identify identify = 3;
 }
 

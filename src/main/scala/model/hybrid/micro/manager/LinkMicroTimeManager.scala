@@ -63,7 +63,7 @@ class LinkMicroTimeManager(
 
   /** Vehicle actor references for sending updates. Key: vehicle ID Value: actor reference
     */
-  private val vehicleActors: mutable.Map[String, ActorRef[MicroUpdateData]] = mutable.Map.empty
+  private val vehicleActors: mutable.Map[Long, ActorRef[MicroUpdateData]] = mutable.Map.empty
 
   /** Current global tick being executed.
     */
@@ -99,7 +99,7 @@ class LinkMicroTimeManager(
   /** Register vehicle entering link.
     */
   private def registerVehicle(
-    vehicleId: String,
+    vehicleId: Long,
     lane: Int,
     position: Double,
     velocity: Double,
@@ -138,7 +138,7 @@ class LinkMicroTimeManager(
   /** Unregister vehicle leaving link.
     */
   private def unregisterVehicle(
-    vehicleId: String
+    vehicleId: Long
   )(implicit context: ActorContext[Command]): Unit = {
     context.log.debug(s"[$linkId] Unregistering vehicle $vehicleId")
 
@@ -243,7 +243,7 @@ class LinkMicroTimeManager(
   /** Update vehicle state from external source.
     */
   private def updateVehicleState(
-    vehicleId: String,
+    vehicleId: Long,
     position: Double,
     velocity: Double,
     lane: Int
@@ -261,7 +261,7 @@ class LinkMicroTimeManager(
   /** Process lane change request.
     */
   private def processLaneChangeRequest(
-    vehicleId: String,
+    vehicleId: Long,
     fromLane: Int,
     toLane: Int
   )(implicit context: ActorContext[Command]): Unit = {
@@ -304,7 +304,7 @@ object LinkMicroTimeManager {
   sealed trait Command
 
   case class RegisterVehicle(
-    vehicleId: String,
+    vehicleId: Long,
     lane: Int,
     position: Double,
     velocity: Double,
@@ -312,19 +312,19 @@ object LinkMicroTimeManager {
     actor: ActorRef[MicroUpdateData]
   ) extends Command
 
-  case class UnregisterVehicle(vehicleId: String) extends Command
+  case class UnregisterVehicle(vehicleId: Long) extends Command
 
   case class ExecuteGlobalTick(globalTick: Tick) extends Command
 
   case class UpdateVehicleState(
-    vehicleId: String,
+    vehicleId: Long,
     position: Double,
     velocity: Double,
     lane: Int
   ) extends Command
 
   case class RequestLaneChange(
-    vehicleId: String,
+    vehicleId: Long,
     fromLane: Int,
     toLane: Int
   ) extends Command

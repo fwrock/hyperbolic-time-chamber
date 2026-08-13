@@ -4,5 +4,5 @@ package model.hybrid.entity.event.data.vehicle
 import org.interscity.htc.core.entity.event.data.BaseEventData
 
 case class RequestLinkAccessData(
-  targetLinkId: String
+  targetLinkId: Long
 ) extends BaseEventData

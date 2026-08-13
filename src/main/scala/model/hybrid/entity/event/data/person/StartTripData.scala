@@ -21,10 +21,10 @@ import model.hybrid.entity.state.DriverAttributes
   *   Tick when trip starts
   */
 case class StartTripData(
-  personId: String,
-  origin: String,
-  destination: String,
+  personId: Long,
+  origin: Long,
+  destination: Long,
   driverAttributes: DriverAttributes,
   startTick: Tick,
-  precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
+  precomputedRoute: Option[List[(Long, Long)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
 ) extends BaseEventData

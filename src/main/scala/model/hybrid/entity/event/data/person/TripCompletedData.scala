@@ -24,11 +24,11 @@ import core.types.Tick
   *   Why the trip ended ("reached_destination", "error", etc.)
   */
 case class TripCompletedData(
-  vehicleId: String,
-  personId: String,
+  vehicleId: Long,
+  personId: Long,
   distanceTraveled: Double,
   travelTime: Long,
-  finalNode: String,
+  finalNode: Long,
   completionTick: Tick,
   completionReason: String,
   wasTeleported: Boolean = false

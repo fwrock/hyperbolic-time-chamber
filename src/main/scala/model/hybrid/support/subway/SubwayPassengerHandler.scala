@@ -18,10 +18,10 @@ class SubwayPassengerHandler(
   getStateFn:        () => SubwayState,
   entityIdFn:        () => String,
   currentTickFn:     () => Tick,
-  getCurrentNodeFn:  () => String,
+  getCurrentNodeFn: () => Long,
   selfRefFn:         () => ActorRef,
   reportFn:          (Map[String, Any], String) => Unit,
-  sendMessageFn:     (String, String, AnyRef) => Unit,
+  sendMessageFn: (Long, String, AnyRef) => Unit,
   scheduleEventFn:   Tick => Unit,
   logInfoFn:         String => Unit,
   logWarnFn:         String => Unit
@@ -29,7 +29,7 @@ class SubwayPassengerHandler(
 
   private def state: SubwayState = getStateFn()
 
-  def requestLoadPassenger(stationOpt: Option[String]): Unit =
+  def requestLoadPassenger(stationOpt: Option[Long]): Unit =
     stationOpt match {
       case Some(stationId) =>
         import org.interscity.htc.model.hybrid.util.SubwayUtil
@@ -84,7 +84,7 @@ class SubwayPassengerHandler(
       sendMessageFn(
         person.id,
         person.classType,
-        PassengerBoardedVehicleData(vehicleId = entityIdFn(), vehicleClassType = "hybrid.actor.Subway")
+        PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Subway")
       )
 
     if (data.people.nonEmpty) {

@@ -68,7 +68,7 @@ class SimulationBaseActorTimeWarpReplaySpec extends AnyFlatSpec with Matchers wi
     * value to a peer, and reschedules itself — the same "mutate state + send + reschedule" shape
     * every real `actSpontaneous` override has, just stripped of unrelated business logic.
     */
-  private class TestReplayActor(properties: Properties, peerEntityId: String)
+  private class TestReplayActor(properties: Properties, peerEntityId: Long)
       extends SimulationBaseActor[CounterState](properties) {
 
     var spontaneousDispatches: Int = 0
@@ -78,7 +78,7 @@ class SimulationBaseActorTimeWarpReplaySpec extends AnyFlatSpec with Matchers wi
       state = state.copy(counter = state.counter + 1)
       sendMessageTo(
         entityId = peerEntityId,
-        shardId = peerEntityId,
+        shardId = peerEntityId.toString,
         data = CounterTickData(state.counter),
         eventType = "counter-tick",
         actorType = CreationTypeEnum.PoolDistributed
@@ -103,21 +103,33 @@ class SimulationBaseActorTimeWarpReplaySpec extends AnyFlatSpec with Matchers wi
     * addressing convention `sendMessageTo` depends on — the same convention every real
     * `PoolDistributed` actor (e.g. a `Car`) is reached by in production.
     */
-  private def newPeer(): (TestProbe, String) = {
+  private var nextPeerId = 0L
+
+  private def newPeer(): (TestProbe, Long) = {
     val probe = TestProbe()
-    val name = probe.ref.path.name
-    system.actorOf(Props(new Actor { def receive: Receive = { case msg => probe.ref.forward(msg) } }), name)
-    (probe, name)
+    nextPeerId += 1
+    val id = nextPeerId
+    // sendMessageTo(entityId = id, ...) resolves the target path via IdUtil.format(id) (plain
+    // toString), so the forwarding actor must be registered under that exact numeric name --
+    // Pekko's auto-generated probe name won't match a Long id.
+    system.actorOf(Props(new Actor { def receive: Receive = { case msg => probe.ref.forward(msg) } }), id.toString)
+    (probe, id)
   }
 
-  private def newActor(timeManagerProbe: TestProbe, peerEntityId: String): TestActorRef[TestReplayActor] = {
+  private def newActor(timeManagerProbe: TestProbe, peerEntityId: Long): TestActorRef[TestReplayActor] = {
+    nextPeerId += 1
+    val ownEntityId = nextPeerId
     val properties = Properties(
-      entityId = "replay-actor-1",
+      entityId = ownEntityId.toString,
       resourceId = "res-1",
       timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> timeManagerProbe.ref),
       defaultTimeManagerType = TimeManagerTypeEnum.TIME_WARP
     )
-    val ref = TestActorRef(new TestReplayActor(properties, peerEntityId))
+    // LoadBalancedDistributed actors overwrite entityId with self.path.name in preStart -- give
+    // TestActorRef an explicit numeric name (matching production's real Pekko-assigned entityId
+    // shape) instead of Pekko's auto-generated ("$a"-style) default, which
+    // onFinishSpontaneous's Identify(id = getEntityId.toLong, ...) can't parse.
+    val ref = TestActorRef(new TestReplayActor(properties, peerEntityId), ownEntityId.toString)
     // BaseActor is a PersistentActor: recovery (reading this persistenceId's journal, even an
     // empty in-memory one) is asynchronous regardless of TestActorRef's CallingThreadDispatcher,
     // and any command sent before RecoveryCompleted is internally stashed by Pekko Persistence,

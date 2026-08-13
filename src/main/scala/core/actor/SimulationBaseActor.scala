@@ -297,7 +297,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       val interned = relationships.iterator.map {
         case (k, v) =>
           StringPool.intern(k) -> ShardActorId(
-            entityId    = StringPool.intern(v.entityId),
+            entityId    = v.entityId,
             classType   = StringPool.intern(v.classType),
             shardBucket = StringPool.intern(v.shardBucket)
           )
@@ -374,7 +374,7 @@ abstract class SimulationBaseActor[T <: BaseState](
 
     // Convert relationships to simple string maps for safe serialization
     val depIds = relationships.map {
-      case (k, r) => k -> r.entityId
+      case (k, r) => k -> r.entityId.toString
     }.toMap
     val depTypes = relationships.map {
       case (k, r) => k -> r.classType
@@ -426,7 +426,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           val shardBucket = snapshot.dependencyResourceIds.getOrElse(key, "")
           relationships.put(
             key,
-            ShardActorId(entityId = id, classType = classType, shardBucket = shardBucket)
+            ShardActorId(entityId = id.toLong, classType = classType, shardBucket = shardBucket)
           )
       }
     }
@@ -494,7 +494,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def selfIdentify(): Identify =
     Identify(
-      id = IdUtil.format(entityId),
+      id = entityId.toLong,
       resourceId = IdUtil.format(properties.resourceId),
       classType = getClass.getName,
       actorRef = if (properties.actorType == LoadBalancedDistributed) getSelfShard.path.toString else self.path.toString,
@@ -514,7 +514,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
       return
     }
-    timeManager ! RegisterActorEvent(startTick = startTick, actorId = entityId, identify = Some(selfIdentify()))
+    timeManager ! RegisterActorEvent(startTick = startTick, actorId = entityId.toLong, identify = Some(selfIdentify()))
   }
 
   /** Registers with the time manager WITHOUT causing any `SpontaneousEvent` dispatch — for actors
@@ -534,7 +534,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     rollbackHandler.initialize(startTick)
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) return
-    timeManager ! core.entity.event.control.execution.RegisterPassiveActorEvent(actorId = entityId, identify = Some(selfIdentify()))
+    timeManager ! core.entity.event.control.execution.RegisterPassiveActorEvent(actorId = entityId.toLong, identify = Some(selfIdentify()))
   }
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
@@ -651,7 +651,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The creation type of the target actor
     */
   protected def sendMessageTo(
-    entityId: String,
+    entityId: Long,
     shardId: String = null,
     data: AnyRef,
     eventType: String = "default",
@@ -685,7 +685,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   private def sendMessageToShard(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String = "default",
@@ -700,7 +700,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       ActorInteractionEvent(
         tick = tick,
         lamportTick = getLamportClock,
-        actorRefId = IdUtil.format(getEntityId),
+        actorRefId = getEntityId.toLong,
         shardRefId = IdUtil.format(getShardId),
         actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
         actorPathRef = self.path.name,
@@ -715,18 +715,18 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   private def sendMessageToPool(
-    entityId: String,
+    entityId: Long,
     data: AnyRef,
     eventType: String = "default",
     tick: Tick = currentTick,
     seq: Long = 0L,
     isAntiMessage: Boolean = false
   ): Unit = {
-    val pool = getActorPoolRef(entityId)
+    val pool = getActorPoolRef(entityId.toString)
     pool ! ActorInteractionEvent(
       tick = tick,
       lamportTick = getLamportClock,
-      actorRefId = IdUtil.format(getEntityId),
+      actorRefId = getEntityId.toLong,
       shardRefId = IdUtil.format(getShardId),
       actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
       actorPathRef = self.path.name,
@@ -929,12 +929,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def spawnDynamicActor(
     classType: String,
-    entityId: String,
+    entityId: Long,
     stateData: Any,
     relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
   ): Unit = {
     val initEvent = InitializeEvent(
-      id = entityId,
+      id = entityId.toString,
       actorRef = self,
       data = InitializeData(
         data = stateData,
@@ -948,15 +948,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     val shardRegion = createShardRegion(
       system = context.system,
       actorClassName = classType,
-      entityId = entityId,
+      entityId = entityId.toString,
       resourceId = properties.resourceId,
       timeManagers = timeManagers,
       creatorManager = creatorManager,
       reporters = reporters
     )
-    pendingDynamicInits.put(entityId, (shardRegion, initEvent))
-    dynamicActorClassTypes.put(entityId, classType)
-    shardRegion ! ShardRegion.StartEntity(entityId)
+    pendingDynamicInits.put(entityId.toString, (shardRegion, initEvent))
+    dynamicActorClassTypes.put(entityId.toString, classType)
+    shardRegion ! ShardRegion.StartEntity(entityId.toString)
   }
 
   /** Called when a dynamically spawned actor has finished initialization (received
@@ -1076,7 +1076,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       end = currentTick,
       actorRef = self,
       identify = Identify(
-        id = IdUtil.format(getEntityId),
+        id = getEntityId.toLong,
         resourceId = IdUtil.format(properties.resourceId),
         classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
         actorRef = getPath,
@@ -1115,7 +1115,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       actorRef = getPath,
       identify = Some(
         Identify(
-          id = getEntityId,
+          id = getEntityId.toLong,
           resourceId = IdUtil.format(properties.resourceId),
           classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
           actorRef = getPath,

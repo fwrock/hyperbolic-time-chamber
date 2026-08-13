@@ -5,7 +5,7 @@ import core.types.Tick
 
 case class SubwayInformation(
   line: String,
-  actorId: String,
+  actorId: Long,
   capacity: Int,
   numberOfPorts: Int,
   velocity: Double,

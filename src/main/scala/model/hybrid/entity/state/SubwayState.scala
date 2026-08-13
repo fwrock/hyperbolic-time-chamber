@@ -17,13 +17,13 @@ case class SubwayState(
   var distance: Double = 0.0,
   boardingTimeByPassenger: Double = 1.5,
   stopTime: Tick,
-  subwayStations: mutable.Map[String, String] = mutable.Map.empty,
+  subwayStations: mutable.Map[Long, Long] = mutable.Map.empty,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
-  override val origin: String,
-  override val destination: String,
+  override val origin: Long,
+  override val destination: Long,
   nodeState: SubwayNodeState = SubwayNodeState(),
-  passengers: mutable.Map[String, Identify] = mutable.Map.empty,
+  passengers: mutable.Map[Long, Identify] = mutable.Map.empty,
   var currentPathPosition: Int = 0,
   line: String,
   override val actorType: ActorTypeEnum = Subway,
@@ -40,11 +40,11 @@ case class SubwayState(
       size = -1
     ) {
 
-  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
-  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
 
-  def currentPath: Option[(String, String)] = movableCurrentPath
-  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
 
   def bestCost: Double = movableBestCost
   def bestCost_=(v: Double): Unit = movableBestCost = v

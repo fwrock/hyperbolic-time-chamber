@@ -35,8 +35,11 @@ import scala.collection.mutable
   */
 class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
 
-  private val targetLinkId = "link_bc"
-  private val signalId     = "signal_bc"
+  private val targetLinkId = 200L
+  private val signalId     = 700L
+  private val currentNodeId = 50L
+  private val originNodeId = 60L
+  private val destNodeId = 61L
 
   private def newNodeState(): NodeState =
     NodeState(
@@ -48,11 +51,11 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
       signals = mutable.Map(signalId -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
     )
 
-  private case class NodeFixture(handler: NodeEventHandler, sent: mutable.ArrayBuffer[(String, String, AnyRef, String)], state: NodeState)
+  private case class NodeFixture(handler: NodeEventHandler, sent: mutable.ArrayBuffer[(Long, String, AnyRef, String)], state: NodeState)
 
   private def newNodeFixture(): NodeFixture = {
     val state = newNodeState()
-    val sent  = mutable.ArrayBuffer.empty[(String, String, AnyRef, String)]
+    val sent  = mutable.ArrayBuffer.empty[(Long, String, AnyRef, String)]
     val handler = new NodeEventHandler(
       getStateFn = () => state,
       entityIdFn = () => "htcaid:node;n_bc",
@@ -67,13 +70,13 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
     NodeFixture(handler, sent, state)
   }
 
-  private def requestEvent(carId: String): ActorInteractionEvent =
+  private def requestEvent(carId: Long): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = 100L,
       lamportTick = 100L,
       actorRefId = carId,
       shardRefId = "hybrid.actor.Car",
-      actorPathRef = carId,
+      actorPathRef = carId.toString,
       actorClassType = "hybrid.actor.Car",
       data = "unused",
       resourceId = "res-1"
@@ -86,11 +89,11 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
     leavingLinkCalls: mutable.ArrayBuffer[Unit]
   )
 
-  private def newCarFixture(carId: String): CarFixture = {
+  private def newCarFixture(carId: Long): CarFixture = {
     val state = CarState(
       startTick = 0L,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = originNodeId,
+      destination = destNodeId,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
@@ -101,17 +104,17 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
 
     val journeyReporter = new CarJourneyReporter(
       reportFn = (_, _) => (),
-      entityIdFn = () => carId,
+      entityIdFn = () => carId.toString,
       currentTickFn = () => 100L,
-      tripOriginFn = () => Some("n_origin"),
-      tripDestFn = () => Some("n_dest"),
+      tripOriginFn = () => Some(originNodeId),
+      tripDestFn = () => Some(destNodeId),
       tripStartTickFn = () => Some(0L),
       driverAttrsFn = () => DriverAttributes()
     )
 
     val handler = new CarSignalHandler(
       reportFn = (_, _) => (),
-      entityIdFn = () => carId,
+      entityIdFn = () => carId.toString,
       currentTickFn = () => 100L,
       journeyReporter = journeyReporter,
       onFinishSpontaneousFn = _ => (),
@@ -122,9 +125,9 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
       logWarnFn = _ => (),
       logStaleEventDebugFn = _ => (),
       sendMessageFn = (_, _, _, _) => (),
-      getCurrentNodeFn = () => "n_bc",
+      getCurrentNodeFn = () => currentNodeId,
       getNextLinkFn = () => targetLinkId,
-      getTripDestinationFn = () => Some("n_dest"),
+      getTripDestinationFn = () => Some(destNodeId),
       setSignalWaitUntilTickFn = _ => (),
       setSignalWaitNeedsReverifyFn = _ => (),
       onSignalWaitFn = _ => ()
@@ -137,11 +140,11 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
     val node = newNodeFixture()
     node.handler.handleRegisterLinkCapacity(RegisterLinkCapacityData(linkId = targetLinkId, capacity = 1))
 
-    val car1 = newCarFixture("car_1")
-    val car2 = newCarFixture("car_2")
+    val car1 = newCarFixture(1L)
+    val car2 = newCarFixture(2L)
 
     // --- Fase 1: car_1 requests and is granted immediately (capacity 1 -> 0) ---
-    node.handler.handleRequestLinkAccess(requestEvent("car_1"), RequestLinkAccessData(targetLinkId = targetLinkId))
+    node.handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = targetLinkId))
     val car1Reply = node.sent.last._3.asInstanceOf[LinkAccessData]
     car1Reply shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available)
 
@@ -150,7 +153,7 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
     car1.scheduleEventCalls shouldBe mutable.ArrayBuffer(100L)
 
     // --- Fase 1: car_2 requests next, link is now full (capacity 0) -> buffered ---
-    node.handler.handleRequestLinkAccess(requestEvent("car_2"), RequestLinkAccessData(targetLinkId = targetLinkId))
+    node.handler.handleRequestLinkAccess(requestEvent(2L), RequestLinkAccessData(targetLinkId = targetLinkId))
     val car2Reply = node.sent.last._3.asInstanceOf[LinkAccessData]
     car2Reply shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full)
 
@@ -164,7 +167,7 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
     node.handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = targetLinkId, freedCount = 1))
 
     val grantMessage = node.sent.last
-    grantMessage._1 shouldBe "car_2"
+    grantMessage._1 shouldBe 2L
     val car2Grant = grantMessage._3.asInstanceOf[LinkAccessData]
     car2Grant shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available)
 

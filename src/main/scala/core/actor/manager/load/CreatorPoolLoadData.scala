@@ -99,7 +99,7 @@ class CreatorPoolLoadData(
           val actor = createPoolActor(
             system = context.system,
             actorClassName = actorCreation.actor.typeActor,
-            entityId = IdUtil.format(actorCreation.actor.id),
+            entityId = IdUtil.format(actorCreation.actor.id.toString),
             poolConfiguration = actorCreation.actor.poolConfiguration,
             resourceId = IdUtil.format(actorCreation.resourceId),
             timeManagers = timeManagers,
@@ -110,7 +110,7 @@ class CreatorPoolLoadData(
             creationType = PoolDistributed
           )
 
-          addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+          addToInitializedAcknowledges(batchId, actorCreation.actor.id.toString)
       }
 
       actorsToCreate(batchId) = actorsToCreate(batchId).drop(chunk.size)

@@ -28,14 +28,14 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
       capacity = 40,
       busStops = Map.empty,
       numberOfPorts = 2,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Bus,
       size = 12.0
     )
 
   private def newHandler(reported: mutable.ArrayBuffer[Map[String, Any]]): (BusMicroHandler, BusJourneyReporter) = {
-    var currentLinkId: Option[String] = None
+    var currentLinkId: Option[Long] = None
     var linkEntryTick: Option[Tick] = None
 
     val journeyReporter = new BusJourneyReporter(
@@ -64,7 +64,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     (handler, journeyReporter)
   }
 
-  private def enterLinkData(linkId: String, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
+  private def enterLinkData(linkId: Long, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
     MicroEnterLinkData(
       linkId = linkId,
       mode = SimulationModeEnum.MICRO,
@@ -81,7 +81,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     state.microState.map(_.velocity) shouldBe Some(0.0)
   }
@@ -91,10 +91,10 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_ab"), state)
+    handler.handleMicroEnterLink(enterLinkData(101L), state)
     handler.handleMicroLeaveLink(
       MicroLeaveLinkData(
-        linkId = "link_ab",
+        linkId = 101L,
         finalPosition = 300.0,
         finalVelocity = 9.5,
         travelTime = 30.0,
@@ -104,7 +104,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
       state
     )
 
-    handler.handleMicroEnterLink(enterLinkData("link_bc"), state)
+    handler.handleMicroEnterLink(enterLinkData(102L), state)
 
     state.microState.map(_.velocity) shouldBe Some(9.5)
   }
@@ -114,7 +114,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     val enterEvent = reported.find(_.get("event_type").contains("enter_micro_link"))
     enterEvent shouldBe defined

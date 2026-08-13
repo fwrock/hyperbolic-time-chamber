@@ -26,8 +26,8 @@ class CarJourneyReporter(
   private val reportFn: (Map[String, Any], String) => Unit,
   private val entityIdFn: () => String,
   private val currentTickFn: () => Tick,
-  private val tripOriginFn: () => Option[String],
-  private val tripDestFn: () => Option[String],
+  private val tripOriginFn: () => Option[Long],
+  private val tripDestFn: () => Option[Long],
   private val tripStartTickFn: () => Option[Tick],
   private val driverAttrsFn: () => DriverAttributes
 ) {
@@ -80,10 +80,10 @@ class CarJourneyReporter(
   }
 
   def reportRouteEvents(
-    route: mutable.Queue[(String, String)],
+    route: mutable.Queue[(Long, Long)],
     source: String,
-    origin: String,
-    destination: String,
+    origin: Long,
+    destination: Long,
     bestCost: Double = 0.0,
     cost: Double = 0.0
   ): Unit = {
@@ -119,7 +119,7 @@ class CarJourneyReporter(
     )
   }
 
-  def finishJourney(reason: String, finalNode: String, state: CarState): Unit = {
+  def finishJourney(reason: String, finalNode: Long, state: CarState): Unit = {
     if (journeyFinishedReported) return
     journeyFinishedReported = true
 
@@ -163,7 +163,7 @@ class CarJourneyReporter(
     state.status = Finished
   }
 
-  private def reportSumoTripInfo(reason: String, finalNode: String, state: CarState): Unit = {
+  private def reportSumoTripInfo(reason: String, finalNode: Long, state: CarState): Unit = {
     if (sumoTripInfoReported) return
     val entityId      = entityIdFn()
     val tick          = currentTickFn()

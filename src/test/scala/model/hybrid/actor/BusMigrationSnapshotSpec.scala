@@ -45,13 +45,13 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
     def testSetFields(
-      linkId: Option[String],
+      linkId: Option[Long],
       entryTick: Option[Tick],
       exitTick: Option[Tick],
       waitUntil: Option[Tick],
       needsReverify: Boolean,
       unloadResponses: Int,
-      stopNode: Option[String]
+      stopNode: Option[Long]
     ): Unit = {
       currentLinkId = linkId
       linkEntryTick = entryTick
@@ -62,13 +62,13 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
       currentStopNode = stopNode
     }
 
-    def testCurrentLinkId: Option[String] = currentLinkId
+    def testCurrentLinkId: Option[Long] = currentLinkId
     def testLinkEntryTick: Option[Tick] = linkEntryTick
     def testMesoExitTick: Option[Tick] = mesoExitTick
     def testSignalWaitUntilTick: Option[Tick] = signalWaitUntilTick
     def testSignalWaitNeedsReverify: Boolean = signalWaitNeedsReverify
     def testExpectedUnloadResponses: Int = expectedUnloadResponses
-    def testCurrentStopNode: Option[String] = currentStopNode
+    def testCurrentStopNode: Option[Long] = currentStopNode
   }
 
   private def freshState(): BusState = {
@@ -76,10 +76,10 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
       startTick = 0L,
       label = "line-1",
       capacity = 40,
-      busStops = Map("stop-1" -> "nodeA", "stop-2" -> "nodeB"),
+      busStops = Map(1L -> 2001L, 2L -> 2002L),
       numberOfPorts = 2,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 2001L,
+      destination = 2002L,
       size = 12.0
     )
     s.status = MovableStatusEnum.Moving
@@ -97,22 +97,22 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     val bus = newTestBus("bus-1")
     bus.testSetState(freshState())
     bus.testSetFields(
-      linkId = Some("link-42"),
+      linkId = Some(42L),
       entryTick = Some(10L),
       exitTick = Some(37L),
       waitUntil = None,
       needsReverify = false,
       unloadResponses = 3,
-      stopNode = Some("nodeA")
+      stopNode = Some(2001L)
     )
 
     val snapshot = bus.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe "link-42"
+    snapshot.vehicleCurrentLinkId shouldBe 42L
     snapshot.vehicleLinkEntryTick shouldBe 10L
     snapshot.vehicleMesoExitTick shouldBe 37L
     snapshot.expectedUnloadResponses shouldBe 3
-    snapshot.currentStopNode shouldBe "nodeA"
+    snapshot.currentStopNode shouldBe 2001L
   }
 
   it should "produce sentinel values for a bus not currently at a stop or on a link" in {
@@ -121,11 +121,11 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
 
     val snapshot = bus.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe ""
+    snapshot.vehicleCurrentLinkId shouldBe 0L
     snapshot.vehicleLinkEntryTick shouldBe Long.MinValue
     snapshot.vehicleMesoExitTick shouldBe Long.MinValue
     snapshot.expectedUnloadResponses shouldBe 0
-    snapshot.currentStopNode shouldBe ""
+    snapshot.currentStopNode shouldBe 0L
   }
 
   "Bus.applyMigrationSnapshot" should "restore the reply-count barrier and stop node onto a freshly-constructed actor" in {
@@ -138,7 +138,7 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
       waitUntil = None,
       needsReverify = false,
       unloadResponses = 5,
-      stopNode = Some("nodeB")
+      stopNode = Some(2002L)
     )
 
     val snapshot = sourceBus.testBuildMigrationSnapshot()
@@ -147,7 +147,7 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     rehydratedBus.testApplyMigrationSnapshot(snapshot)
 
     rehydratedBus.testExpectedUnloadResponses shouldBe 5
-    rehydratedBus.testCurrentStopNode shouldBe Some("nodeB")
+    rehydratedBus.testCurrentStopNode shouldBe Some(2002L)
   }
 
   it should "leave a rehydrated bus with no stale unload barrier when none was in progress" in {

@@ -25,7 +25,7 @@ case class Initialization(
       creatorManager = creatorManager,
       reporters = reporters,
       relationships = relationships.map {
-        case (label, rel) => rel.entityId -> rel
+        case (label, rel) => rel.entityId.toString -> rel
       },
       timeManagers = timeManagers
     )

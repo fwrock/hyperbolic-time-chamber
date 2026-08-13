@@ -76,8 +76,8 @@ object CompactLandmarkIndex {
     */
   def fromLandmarkIndex(
     index:     LandmarkIndex[NodeGraph, Double, ?],
-    nodeIndex: java.util.HashMap[String, Int],
-    nodeIdOf:  NodeGraph => String,
+    nodeIndex: java.util.HashMap[Long, Int],
+    nodeIdOf:  NodeGraph => Long,
     n:         Int
   ): CompactLandmarkIndex = {
     val k = index.distFrom.length

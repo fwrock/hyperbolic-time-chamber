@@ -71,18 +71,18 @@ class Link(
 
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
-      from = StringPool.intern(s.from),
-      to   = StringPool.intern(s.to)
+      from = s.from,
+      to   = s.to
     )
 
   /** Tracks when each vehicle entered the link (for travel time calculation).
     * protected, not private: lets LinkMigrationSnapshotSpec drive this directly, same rationale as
     * the vehicle actors' link-wait fields.
     */
-  protected val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+  protected val vehicleEntryTick: mutable.Map[Long, Tick] = mutable.Map.empty
 
   /** Accumulated waiting time per vehicle (seconds) */
-  protected val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+  protected val vehicleWaitingSeconds: mutable.Map[Long, Double] = mutable.Map.empty
 
   /** `Link` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
     * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07):
@@ -200,7 +200,7 @@ class Link(
     sendMessageTo(
       entityId  = state.from,
       shardId   = "hybrid.actor.Node",
-      data      = RegisterLinkCapacityData(linkId = getEntityId, capacity = state.capacity.toInt),
+      data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
       eventType = EventTypeEnum.RegisterLinkCapacity.toString,
       actorType = LoadBalancedDistributed
     )
@@ -277,7 +277,7 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
@@ -295,7 +295,7 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = vehiclesRemaining
       ),

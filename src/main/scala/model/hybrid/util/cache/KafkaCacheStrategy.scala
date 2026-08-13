@@ -93,7 +93,7 @@ class KafkaCacheStrategy(implicit ec: ExecutionContext) extends WeightCacheStrat
   override def publishCost(cost: DynamicLinkCost, ttlSeconds: Int): Try[Unit] =
     Try {
       val costJson = JsonUtil.toJson(cost)
-      val record = new ProducerRecord[String, String](TOPIC_NAME, cost.linkId, costJson)
+      val record = new ProducerRecord[String, String](TOPIC_NAME, cost.linkId.toString, costJson)
 
       producer.send(
         record,
@@ -107,7 +107,7 @@ class KafkaCacheStrategy(implicit ec: ExecutionContext) extends WeightCacheStrat
           }
       )
 
-      localCache.put(cost.linkId, cost)
+      localCache.put(cost.linkId.toString, cost)
     }
 
   override def getCost(linkId: String): Option[DynamicLinkCost] =
@@ -160,7 +160,7 @@ class KafkaCacheStrategy(implicit ec: ExecutionContext) extends WeightCacheStrat
             record =>
               Try {
                 val cost = JsonUtil.fromJson[DynamicLinkCost](record.value())
-                localCache.put(cost.linkId, cost)
+                localCache.put(cost.linkId.toString, cost)
                 consumeCount += 1
                 lastUpdateTime = System.currentTimeMillis()
               } match {

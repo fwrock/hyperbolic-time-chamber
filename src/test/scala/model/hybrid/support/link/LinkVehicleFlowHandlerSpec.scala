@@ -38,8 +38,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
   private def newMesoState(linkId: String, length: Double = 300.0, capacity: Double = 20.0, freeSpeed: Double = 13.9, lanes: Int = 1): LinkState =
     LinkState.createMeso(
       startTick = 0L,
-      from = "n1",
-      to = "n2",
+      from = 1L,
+      to = 2L,
       length = length,
       lanes = lanes,
       speedLimit = freeSpeed,
@@ -53,8 +53,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
-    val vehicleEntryTick = mutable.Map.empty[String, Tick]
-    val vehicleWaiting    = mutable.Map.empty[String, Double]
+    val vehicleEntryTick = mutable.Map.empty[Long, Tick]
+    val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
     val metricsReporter = new LinkMetricsReporter(
       reportFn = (_, _) => (),
@@ -93,19 +93,19 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     Fixture(handler, () => state, linkId, t => tick = t)
   }
 
-  private def event(carId: String, linkId: String): ActorInteractionEvent =
+  private def event(carId: Long, linkId: String): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = 0L,
       lamportTick = 0L,
       actorRefId = carId,
       shardRefId = "hybrid.actor.Car",
-      actorPathRef = carId,
+      actorPathRef = carId.toString,
       actorClassType = "hybrid.actor.Car",
       data = "unused",
       resourceId = "res-1"
     )
 
-  private def enterData(carId: String, actorType: ActorTypeEnum = ActorTypeEnum.Car): EnterLinkData =
+  private def enterData(carId: Long, actorType: ActorTypeEnum = ActorTypeEnum.Car): EnterLinkData =
     EnterLinkData(
       actorType = actorType,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
@@ -115,8 +115,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
   private def newMicroState(linkId: String, length: Double = 300.0, lanes: Int = 2, speedLimit: Double = 13.9, capacity: Double = 20.0): LinkState =
     LinkState.createMicro(
       startTick = 0L,
-      from = "n1",
-      to = "n2",
+      from = 1L,
+      to = 2L,
       length = length,
       lanes = lanes,
       speedLimit = speedLimit,
@@ -124,7 +124,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       freeSpeed = speedLimit
     )
 
-  private def leaveData(carId: String): LeaveLinkData =
+  private def leaveData(carId: Long): LeaveLinkData =
     LeaveLinkData(
       actorType = ActorTypeEnum.Car,
       actorSize = 4.5,
@@ -132,49 +132,49 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     )
 
   "handleEnterLinkMeso" should "start currentSpeed at freeSpeed and congestionFactor at 1.0 on an empty link" in {
-    val linkId = "link_meso_empty"
+    val linkId = "301"
     val f = newFixture(linkId, newMesoState(linkId))
 
-    f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
 
     f.getState().currentSpeed shouldBe SpeedUtil.linkDensitySpeed(300.0, 20.0, 1L, 13.9)
     f.getState().congestionFactor shouldBe SpeedUtil.bprCongestionFactor(1.0, 20.0)
   }
 
   it should "lower currentSpeed and raise congestionFactor as more distinct vehicles register" in {
-    val linkId = "link_meso_fill"
+    val linkId = "302"
     val f = newFixture(linkId, newMesoState(linkId, capacity = 10.0))
 
-    (1 to 9).foreach(i => f.handler.handleEnterLinkMeso(event(s"car_$i", linkId), enterData(s"car_$i")))
+    (1 to 9).foreach(i => f.handler.handleEnterLinkMeso(event(i.toLong, linkId), enterData(i.toLong)))
     val speedAt9 = f.getState().currentSpeed
     val congestionAt9 = f.getState().congestionFactor
 
-    f.handler.handleEnterLinkMeso(event("car_10", linkId), enterData("car_10"))
+    f.handler.handleEnterLinkMeso(event(10L, linkId), enterData(10L))
 
     f.getState().currentSpeed should be < speedAt9
     f.getState().congestionFactor should be > congestionAt9
   }
 
   it should "not double-count or recompute for a duplicate EnterLinkData from the same vehicle" in {
-    val linkId = "link_meso_dup"
+    val linkId = "303"
     val f = newFixture(linkId, newMesoState(linkId))
 
-    f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
     val speedAfterFirst = f.getState().currentSpeed
 
-    f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
 
     f.getState().registered should have size 1
     f.getState().currentSpeed shouldBe speedAfterFirst
   }
 
   "handleLeaveLink" should "recompute back toward freeSpeed/1.0 as vehicles leave a MESO link" in {
-    val linkId = "link_meso_leave"
+    val linkId = "304"
     val f = newFixture(linkId, newMesoState(linkId, capacity = 10.0))
-    (1 to 5).foreach(i => f.handler.handleEnterLinkMeso(event(s"car_$i", linkId), enterData(s"car_$i")))
+    (1 to 5).foreach(i => f.handler.handleEnterLinkMeso(event(i.toLong, linkId), enterData(i.toLong)))
     val speedAt5 = f.getState().currentSpeed
 
-    (1 to 4).foreach(i => f.handler.handleLeaveLink(event(s"car_$i", linkId), leaveData(s"car_$i"), wasRegistered = true))
+    (1 to 4).foreach(i => f.handler.handleLeaveLink(event(i.toLong, linkId), leaveData(i.toLong), wasRegistered = true))
 
     f.getState().registered should have size 1
     f.getState().currentSpeed should be > speedAt5
@@ -182,24 +182,24 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
   }
 
   it should "leave currentSpeed/congestionFactor untouched on a MICRO-mode link (owned by the per-tick MICRO recompute instead)" in {
-    val linkId = "link_micro_leave"
+    val linkId = "305"
     val microState = LinkState.createMicro(
-      startTick = 0L, from = "n1", to = "n2", length = 300.0, lanes = 1,
+      startTick = 0L, from = 1L, to = 2L, length = 300.0, lanes = 1,
       speedLimit = 13.9, capacity = 20.0, freeSpeed = 13.9
     ).copy(currentSpeed = 7.0, congestionFactor = 1.42)
     val f = newFixture(linkId, microState)
 
-    f.handler.handleLeaveLink(event("car_1", linkId), leaveData("car_1"), wasRegistered = false)
+    f.handler.handleLeaveLink(event(1L, linkId), leaveData(1L), wasRegistered = false)
 
     f.getState().currentSpeed shouldBe 7.0
     f.getState().congestionFactor shouldBe 1.42
   }
 
   "recomputeAndPublishMesoDynamics (via handleEnterLinkMeso)" should "publish the recomputed cost to DynamicWeightCache when costPublishInterval is 0 (always publish)" in {
-    val linkId = "link_meso_publish"
+    val linkId = "306"
     val f = newFixture(linkId, newMesoState(linkId), costPublishInterval = 0)
 
-    f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
 
     val published = DynamicWeightCache.getCost(linkId)
     published shouldBe defined
@@ -208,17 +208,17 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
   }
 
   it should "respect costPublishInterval: skip the Kafka/cache publish for an enter before the interval elapses, then publish once it has" in {
-    val linkId = "link_meso_rate_limit"
+    val linkId = "307"
     val f = newFixture(linkId, newMesoState(linkId), costPublishInterval = 10)
 
     f.setTick(3L)
-    f.handler.handleEnterLinkMeso(event("car_1", linkId), enterData("car_1"))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
 
     f.getState().currentSpeed should not be 13.9
     DynamicWeightCache.getCost(linkId) shouldBe None
 
     f.setTick(10L)
-    f.handler.handleEnterLinkMeso(event("car_2", linkId), enterData("car_2"))
+    f.handler.handleEnterLinkMeso(event(2L, linkId), enterData(2L))
     val published = DynamicWeightCache.getCost(linkId)
     published shouldBe defined
     published.get.currentSpeed shouldBe f.getState().currentSpeed
@@ -242,12 +242,12 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
     cases.foreach {
       case (actorType, (expectedAcceleration, expectedDeceleration)) =>
-        val linkId = s"link_micro_${actorType}"
+        val linkId = s"${400 + cases.indexWhere(_._1 == actorType)}"
         val f = newFixture(linkId, newMicroState(linkId))
 
-        f.handler.handleEnterLinkMicro(event("veh_1", linkId), enterData("veh_1", actorType))
+        f.handler.handleEnterLinkMicro(event(1L, linkId), enterData(1L, actorType))
 
-        val vehicle = f.getState().vehiclesByLane.values.flatten.find(_.actorId == "veh_1")
+        val vehicle = f.getState().vehiclesByLane.values.flatten.find(_.actorId == 1L)
         vehicle shouldBe defined
         vehicle.get.maxAcceleration shouldBe expectedAcceleration
         vehicle.get.maxDeceleration shouldBe expectedDeceleration

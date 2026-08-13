@@ -26,7 +26,7 @@ import scala.collection.mutable
   */
 class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
 
-  private val sentMessages = mutable.Buffer.empty[(String, String, Any, String, Any)]
+  private val sentMessages = mutable.Buffer.empty[(Long, String, Any, String, Any)]
   private val reports = mutable.Buffer.empty[(Map[String, Any], String)]
 
   private def resetCapture(): Unit = {
@@ -38,7 +38,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
   private val noop: String => Unit = _ => ()
 
-  private def newManager(personId: String = "person-1"): PersonPlanManager = {
+  private def newManager(personId: String = "1"): PersonPlanManager = {
     val metricsReporter = new PersonMetricsReporter(personId, (m, l) => reports += ((m, l)), noop)
     val walkingHandler = new PersonWalkingTripHandler(personId, (m, l) => reports += ((m, l)), noop, noop)
     val ptHandler = new PersonPTTripHandler(
@@ -84,21 +84,21 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       override val id: String = testEngineId
       override def validateForScenario(ctx: ScenarioValidationContext): Either[model.hybrid.decision.EngineUnavailable, Unit] = Right(())
       override def decide(
-        originNodeId: String,
-        destinationNodeId: String,
+        originNodeId: Long,
+        destinationNodeId: Long,
         request: ModeDecisionRequest,
         ctx: DecisionContext
       ): Either[NoViableJourney, List[AtomicLeg]] =
         Right(List(WalkLeg(originNodeId, destinationNodeId, precomputedRoute = Some(Nil))))
     })
 
-    val vehicle = Identify(id = "car-1", classType = "hybrid.actor.Car")
+    val vehicle = Identify(id = 501L, classType = "hybrid.actor.Car")
     val plan: List[PlanElement] = List(
-      Activity("home", "n1", AtTick(100)),
+      Activity("home", 1L, AtTick(100)),
       PrivateVehicleLeg(ConcreteMode.Car, vehicle),
-      Activity("work", "n2", AtTick(500)),
+      Activity("work", 2L, AtTick(500)),
       PendingDecision(ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk), strategyId = testEngineId)),
-      Activity("home", "n3", AtTick(900))
+      Activity("home", 3L, AtTick(900))
     )
     val manager = newManager()
     val state0 = stateWithPlan(plan, ownedVehicles = Map("car" -> vehicle))
@@ -106,21 +106,21 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     // Advance into the first Activity.
     val PlanStepResult.Awaiting(state1, wake1) = manager.step(state0, currentTick = 0): @unchecked
     wake1 shouldBe 100L
-    state1.cursor.executed shouldBe List(Activity("home", "n1", AtTick(100)))
+    state1.cursor.executed shouldBe List(Activity("home", 1L, AtTick(100)))
 
     // Departure: start the fixed car leg.
     val PlanStepResult.LegStarted(state2, nextTick2) = manager.step(state1, currentTick = 100): @unchecked
     nextTick2 shouldBe None // vehicle-controlled timing
     state2.tripExecution shouldBe a[TripExecutionState.Traveling]
-    sentMessages.exists { case (id, _, _, eventType, _) => id == "car-1" && eventType == "StartTrip" } shouldBe true
+    sentMessages.exists { case (id, _, _, eventType, _) => id == 501L && eventType == "StartTrip" } shouldBe true
 
     // Vehicle reports trip completion with real distance traveled.
     val completed = TripCompletedData(
-      vehicleId = "car-1",
-      personId = "person-1",
+      vehicleId = 501L,
+      personId = 1L,
       distanceTraveled = 1234.0,
       travelTime = 50L,
-      finalNode = "n2",
+      finalNode = 2L,
       completionTick = 150L,
       completionReason = "reached_destination"
     )
@@ -134,7 +134,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     val PlanStepResult.LegStarted(state4, nextTick4) = manager.step(state3, currentTick = 500): @unchecked
     nextTick4 shouldBe Some(500L) // zero-distance precomputed walk arrives instantly
     state4.cursor.executed.exists {
-      case WalkLeg("n2", "n3", _) => true
+      case WalkLeg(2L, 3L, _) => true
       case _                      => false
     } shouldBe true
 
@@ -161,8 +161,8 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       override val id: String = testEngineId
       override def validateForScenario(ctx: ScenarioValidationContext): Either[model.hybrid.decision.EngineUnavailable, Unit] = Right(())
       override def decide(
-        originNodeId: String,
-        destinationNodeId: String,
+        originNodeId: Long,
+        destinationNodeId: Long,
         request: ModeDecisionRequest,
         ctx: DecisionContext
       ): Either[NoViableJourney, List[AtomicLeg]] = {
@@ -171,8 +171,8 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
           Right(List(TransitLeg(
             ConcreteMode.Bus,
             "L1",
-            boardingStop = StopRef("stop-1", "hybrid.actor.BusStop", originNodeId),
-            alightingStop = StopRef("stop-2", "hybrid.actor.BusStop", destinationNodeId)
+            boardingStop = StopRef(801L, "hybrid.actor.BusStop", originNodeId),
+            alightingStop = StopRef(802L, "hybrid.actor.BusStop", destinationNodeId)
           )))
         else
           Right(List(WalkLeg(originNodeId, destinationNodeId, precomputedRoute = Some(Nil))))
@@ -180,9 +180,9 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     })
 
     val plan: List[PlanElement] = List(
-      Activity("home", "n1", AtTick(10)),
+      Activity("home", 1L, AtTick(10)),
       PendingDecision(ModeDecisionRequest(allowedModes = Set(ConcreteMode.Bus, ConcreteMode.Walk), strategyId = testEngineId)),
-      Activity("work", "n5", AtTick(1000))
+      Activity("work", 5L, AtTick(1000))
     )
     val manager = newManager()
     val state0 = stateWithPlan(plan, ptWaitTimeoutTicks = 50L)
@@ -194,9 +194,9 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     val PlanStepResult.LegStarted(state2, nextTick2) = manager.step(state1, currentTick = 10): @unchecked
     nextTick2 shouldBe Some(60L) // 10 + ptWaitTimeoutTicks
     val traveling2 = state2.tripExecution.asInstanceOf[TripExecutionState.Traveling]
-    traveling2.ptWait.map(_.alightingNodeId) shouldBe Some("n5")
+    traveling2.ptWait.map(_.alightingNodeId) shouldBe Some(5L)
     traveling2.replanStrategyId shouldBe testEngineId
-    sentMessages.exists { case (id, _, _, eventType, _) => id == "stop-1" && eventType == "RegisterPassenger" } shouldBe true
+    sentMessages.exists { case (id, _, _, eventType, _) => id == 801L && eventType == "RegisterPassenger" } shouldBe true
 
     // The bus never arrives: timeout fires, triggers a replan to a walk leg reaching the same
     // destination — proving the rest of the trip survives rather than being silently skipped.
@@ -204,7 +204,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     nextTick3 shouldBe Some(60L)
     decideCallCount shouldBe 2
     state3.cursor.executed.exists {
-      case WalkLeg("n1", "n5", _) => true
+      case WalkLeg(1L, 5L, _) => true
       case _                      => false
     } shouldBe true
     state3.tripExecution.asInstanceOf[TripExecutionState.Traveling].ptWait shouldBe None
@@ -213,7 +213,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     val PlanStepResult.Awaiting(state4, wake4) = manager.continueAfterWalkArrival(state3, currentTick = 60): @unchecked
     wake4 shouldBe 1000L
     state4.completedTrips shouldBe 1
-    state4.cursor.executed.last shouldBe Activity("work", "n5", AtTick(1000))
+    state4.cursor.executed.last shouldBe Activity("work", 5L, AtTick(1000))
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -222,7 +222,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
   it should "report ScheduleComplete once the plan cursor has nothing left to run" in {
     val manager = newManager()
-    val plan: List[PlanElement] = List(Activity("home", "n1", AtTick(5)))
+    val plan: List[PlanElement] = List(Activity("home", 1L, AtTick(5)))
     val state0 = stateWithPlan(plan)
 
     val PlanStepResult.Awaiting(state1, wake1) = manager.step(state0, currentTick = 0): @unchecked
@@ -241,17 +241,17 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       override val id: String = testEngineId
       override def validateForScenario(ctx: ScenarioValidationContext): Either[model.hybrid.decision.EngineUnavailable, Unit] = Right(())
       override def decide(
-        originNodeId: String,
-        destinationNodeId: String,
+        originNodeId: Long,
+        destinationNodeId: Long,
         request: ModeDecisionRequest,
         ctx: DecisionContext
       ): Either[NoViableJourney, List[AtomicLeg]] = Left(NoViableJourney("no candidate available"))
     })
 
     val plan: List[PlanElement] = List(
-      Activity("home", "n1", AtTick(10)),
+      Activity("home", 1L, AtTick(10)),
       PendingDecision(ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk), strategyId = testEngineId)),
-      Activity("work", "n2", AtTick(500))
+      Activity("work", 2L, AtTick(500))
     )
     val manager = newManager()
     val state0 = stateWithPlan(plan)
@@ -261,7 +261,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
     val awaiting = result.asInstanceOf[PlanStepResult.Awaiting]
     awaiting.wakeTick shouldBe 500L
-    awaiting.state.cursor.executed.last shouldBe Activity("work", "n2", AtTick(500))
+    awaiting.state.cursor.executed.last shouldBe Activity("work", 2L, AtTick(500))
     awaiting.state.tripExecution shouldBe TripExecutionState.Idle
     reports.exists { case (_, label) => label == "person_trip_aborted" } shouldBe true
   }

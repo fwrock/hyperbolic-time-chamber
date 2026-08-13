@@ -11,8 +11,8 @@ class BicycleJourneyReporter(
   reportFn:        (Map[String, Any], String) => Unit,
   entityIdFn:      () => String,
   currentTickFn:   () => Tick,
-  tripOriginFn:    () => Option[String],
-  tripDestFn:      () => Option[String],
+  tripOriginFn: () => Option[Long],
+  tripDestFn: () => Option[Long],
   tripStartTickFn: () => Option[Tick],
   driverAttrsFn:   () => DriverAttributes
 ) {
@@ -60,7 +60,7 @@ class BicycleJourneyReporter(
     sumoIsHalting = isHaltingNow
   }
 
-  def finishJourney(reason: String, finalNode: String, state: BicycleState): Unit = {
+  def finishJourney(reason: String, finalNode: Long, state: BicycleState): Unit = {
     if (journeyFinishedReported) return
     journeyFinishedReported = true
     val destination = tripDestFn().getOrElse(state.destination)
@@ -94,7 +94,7 @@ class BicycleJourneyReporter(
 
   private def reportSumoTripInfo(
     reason: String,
-    finalNode: String,
+    finalNode: Long,
     state: BicycleState
   ): Unit = {
     val destination   = tripDestFn().getOrElse(state.destination)

@@ -20,15 +20,15 @@ class BusMicroHandler(
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val logDebugFn: String => Unit,
-  private val setCurrentLinkIdFn: Option[String] => Unit,
+  private val setCurrentLinkIdFn: Option[Long] => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
-  private val setCurrentStopNodeFn: Option[String] => Unit,
+  private val setCurrentStopNodeFn: Option[Long] => Unit,
   private val getCurrentLinkLengthFn: () => Double,
-  private val findNextBusStopFn: () => Option[String],
+  private val findNextBusStopFn: () => Option[Long],
   private val checkBusStopAtPositionFn: Double => Unit,
   private val microUpdateLogEvery: Int,
-  private val getCurrentLinkIdFn: () => Option[String] = () => None,
+  private val getCurrentLinkIdFn: () => Option[Long] = () => None,
   private val microUpdateReportEvery: Int = 0
 ) {
 
@@ -128,7 +128,7 @@ class BusMicroHandler(
           Map(
             "event_type" -> "micro_update",
             "bus_id"     -> entityIdFn(),
-            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"       -> "MICRO",
             "position"   -> data.position,
             "velocity"   -> data.velocity,

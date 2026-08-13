@@ -26,7 +26,7 @@ package core.actor.rollback
   */
 final case class SentMessage(
   messageId: MessageId,
-  receiverId: String,
+  receiverId: Long,
   receiverShardId: String,
   receiverActorType: String
 )

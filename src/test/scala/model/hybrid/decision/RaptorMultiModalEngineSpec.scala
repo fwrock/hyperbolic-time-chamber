@@ -50,7 +50,7 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
   "decide" should "report NoViableJourney when transit route/map data is unavailable, without touching CityMapUtil" in {
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Bus, ConcreteMode.Subway), strategyId = "raptor")
 
-    val result = engine.decide("n1", "n2", request, ctx)
+    val result = engine.decide(1L, 2L, request, ctx)
 
     result shouldBe a[Left[_, _]]
   }
@@ -58,7 +58,7 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
   it should "report NoViableJourney when allowedModes contains no transit mode" in {
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk), strategyId = "raptor")
 
-    val result = engine.decide("n1", "n2", request, ctx)
+    val result = engine.decide(1L, 2L, request, ctx)
 
     result match {
       case Left(NoViableJourney(reason)) => reason should include("no transit mode allowed")
@@ -70,9 +70,9 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
 
   private val originStop = TransitStop(
     id             = "stop-origin",
-    actorId        = "busstop-origin",
+    actorId        = 1L,
     actorClassType = "hybrid.actor.BusStop",
-    nodeId         = "n-boarding",
+    nodeId         = 10L,
     latitude       = -23.55,
     longitude      = -46.63,
     stopType       = "bus",
@@ -80,9 +80,9 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
   )
   private val transferStop = TransitStop(
     id             = "stop-transfer",
-    actorId        = "busstop-transfer",
+    actorId        = 2L,
     actorClassType = "hybrid.actor.BusStop",
-    nodeId         = "n-transfer",
+    nodeId         = 20L,
     latitude       = -23.56,
     longitude      = -46.64,
     stopType       = "bus",
@@ -90,9 +90,9 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
   )
   private val destStop = TransitStop(
     id             = "stop-dest",
-    actorId        = "busstop-dest",
+    actorId        = 3L,
     actorClassType = "hybrid.actor.BusStop",
-    nodeId         = "n-alighting",
+    nodeId         = 30L,
     latitude       = -23.57,
     longitude      = -46.65,
     stopType       = "bus",
@@ -101,8 +101,8 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
   private val transferAlightStop = transferStop
   private val transferBoardStop = transferStop.copy(
     id      = "stop-transfer-2",
-    actorId = "busstop-transfer-2",
-    nodeId  = "n-transfer-2"
+    actorId = 4L,
+    nodeId  = 21L
   )
 
   "translateResult" should "build access walk + transit leg + egress walk for a single-leg trip" in {
@@ -113,17 +113,17 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
       egressTimeSecs = 100
     )
 
-    val legs = RaptorMultiModalEngine.translateResult("n-origin", "n-destination", result)
+    val legs = RaptorMultiModalEngine.translateResult(100L, 101L, result)
 
     legs shouldBe List(
-      WalkLeg("n-origin", "n-boarding"),
+      WalkLeg(100L, 10L),
       TransitLeg(
         mode          = ConcreteMode.Bus,
         line          = "L1",
-        boardingStop  = model.hybrid.entity.state.plan.StopRef("busstop-origin", "hybrid.actor.BusStop", "n-boarding"),
-        alightingStop = model.hybrid.entity.state.plan.StopRef("busstop-dest", "hybrid.actor.BusStop", "n-alighting")
+        boardingStop  = model.hybrid.entity.state.plan.StopRef(1L, "hybrid.actor.BusStop", 10L),
+        alightingStop = model.hybrid.entity.state.plan.StopRef(3L, "hybrid.actor.BusStop", 30L)
       ),
-      WalkLeg("n-alighting", "n-destination")
+      WalkLeg(30L, 101L)
     )
   }
 
@@ -135,7 +135,7 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
       egressTimeSecs = 0
     )
 
-    val legs = RaptorMultiModalEngine.translateResult("n-boarding", "n-alighting", result)
+    val legs = RaptorMultiModalEngine.translateResult(10L, 30L, result)
 
     legs.map(_.mode) shouldBe List(ConcreteMode.Bus)
   }
@@ -150,21 +150,21 @@ class RaptorMultiModalEngineSpec extends AnyFlatSpec with Matchers {
       egressTimeSecs = 0
     )
 
-    val legs = RaptorMultiModalEngine.translateResult("n-boarding", "n-alighting", result)
+    val legs = RaptorMultiModalEngine.translateResult(10L, 30L, result)
 
     legs shouldBe List(
       TransitLeg(
         ConcreteMode.Bus,
         "L1",
-        model.hybrid.entity.state.plan.StopRef("busstop-origin", "hybrid.actor.BusStop", "n-boarding"),
-        model.hybrid.entity.state.plan.StopRef("busstop-transfer", "hybrid.actor.BusStop", "n-transfer")
+        model.hybrid.entity.state.plan.StopRef(1L, "hybrid.actor.BusStop", 10L),
+        model.hybrid.entity.state.plan.StopRef(2L, "hybrid.actor.BusStop", 20L)
       ),
-      WalkLeg("n-transfer", "n-transfer-2"),
+      WalkLeg(20L, 21L),
       TransitLeg(
         ConcreteMode.Subway,
         "L2",
-        model.hybrid.entity.state.plan.StopRef("busstop-transfer-2", "hybrid.actor.BusStop", "n-transfer-2"),
-        model.hybrid.entity.state.plan.StopRef("busstop-dest", "hybrid.actor.BusStop", "n-alighting")
+        model.hybrid.entity.state.plan.StopRef(4L, "hybrid.actor.BusStop", 21L),
+        model.hybrid.entity.state.plan.StopRef(3L, "hybrid.actor.BusStop", 30L)
       )
     )
   }

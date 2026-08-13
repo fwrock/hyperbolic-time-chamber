@@ -19,9 +19,9 @@ import org.scalatest.matchers.should.Matchers
 class TravelTimeEngineSpec extends AnyFlatSpec with Matchers {
 
   private val engine = new TravelTimeEngine()
-  private val sameNode = "n1"
+  private val sameNode = 1L
 
-  private def ctx(ownedVehicles: Map[String, Identify] = Map.empty, vehicleCurrentNode: Map[String, String] = Map.empty) =
+  private def ctx(ownedVehicles: Map[String, Identify] = Map.empty, vehicleCurrentNode: Map[String, Long] = Map.empty) =
     DecisionContext(
       weights            = ModeChoiceWeights(),
       ownedVehicles      = ownedVehicles,
@@ -54,7 +54,7 @@ class TravelTimeEngineSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "prefer a car parked at the origin over walking (higher modePref, same zero travel time)" in {
-    val car = Identify(id = "car-1")
+    val car = Identify(id = 501L)
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Car, ConcreteMode.Walk), strategyId = "travel-time")
     val context = ctx(ownedVehicles = Map("car" -> car), vehicleCurrentNode = Map("car" -> sameNode))
 
@@ -64,9 +64,9 @@ class TravelTimeEngineSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "fall back to walking when the owned car is parked away from the origin" in {
-    val car = Identify(id = "car-1")
+    val car = Identify(id = 501L)
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Car, ConcreteMode.Walk), strategyId = "travel-time")
-    val context = ctx(ownedVehicles = Map("car" -> car), vehicleCurrentNode = Map("car" -> "n-elsewhere"))
+    val context = ctx(ownedVehicles = Map("car" -> car), vehicleCurrentNode = Map("car" -> 999L))
 
     val result = engine.decide(sameNode, sameNode, request, context)
 

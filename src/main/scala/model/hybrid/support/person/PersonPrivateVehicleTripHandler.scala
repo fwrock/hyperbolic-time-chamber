@@ -24,7 +24,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
   */
 class PersonPrivateVehicleTripHandler(
   personId: String,
-  sendMessageFn: (String, String, Any, String, Any) => Unit,
+  sendMessageFn: (Long, String, Any, String, Any) => Unit,
   logDebug: String => Unit
 ) {
 
@@ -36,13 +36,13 @@ class PersonPrivateVehicleTripHandler(
     * @param currentTick Current simulation tick
     */
   def initiatePrivateVehicleTrip(
-    origin: String,
-    destination: String,
+    origin: Long,
+    destination: Long,
     leg: PrivateVehicleLeg,
     currentTick: Tick
   ): Unit = {
     val startTripData = StartTripData(
-      personId = personId,
+      personId = personId.toLong,
       origin = origin,
       destination = destination,
       driverAttributes = leg.driverAttributes,
@@ -82,11 +82,8 @@ class PersonPrivateVehicleTripHandler(
     */
   def updateVehicleLocation(
     mode: ConcreteMode,
-    destinationNodeId: String,
+    destinationNodeId: Long,
     state: PersonState
   ): PersonState =
-    if (destinationNodeId.nonEmpty)
-      state.copy(vehicleCurrentNode = state.vehicleCurrentNode + (vehicleModeKey(mode) -> destinationNodeId))
-    else
-      state
+    state.copy(vehicleCurrentNode = state.vehicleCurrentNode + (vehicleModeKey(mode) -> destinationNodeId))
 }

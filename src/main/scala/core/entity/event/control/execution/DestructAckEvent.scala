@@ -13,4 +13,4 @@ package core.entity.event.control.execution
   * @param actorId
   *   the destructed actor's entity id, matched back against `LocalTimeManagerBase`'s pending set
   */
-case class DestructAckEvent(actorId: String)
+case class DestructAckEvent(actorId: Long)

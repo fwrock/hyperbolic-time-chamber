@@ -69,13 +69,13 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     def testInitializeRollback(): Unit = rollbackHandler.initialize(startTick)
   }
 
-  private def interaction(tick: Tick, senderId: String, seq: Long): ActorInteractionEvent =
+  private def interaction(tick: Tick, senderId: Long, seq: Long): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = tick,
       lamportTick = tick,
       actorRefId = senderId,
       shardRefId = "test.Sender",
-      actorPathRef = s"/user/$senderId",
+      actorPathRef = s"/user/sender-$senderId",
       actorClassType = "test.Sender",
       eventType = "ping",
       data = "ping",
@@ -83,15 +83,23 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
       seq = seq
     )
 
+  private var nextOwnEntityId = 0L
+
   private def newActor(timeManagerType: String, timeManagerProbe: TestProbe, reporterProbe: TestProbe): TestActorRef[TestReportActor] = {
+    nextOwnEntityId += 1
+    val ownEntityId = nextOwnEntityId
     val properties = Properties(
-      entityId = "report-buffer-actor-1",
+      entityId = ownEntityId.toString,
       resourceId = "res-1",
       timeManagers = mutable.Map(timeManagerType -> timeManagerProbe.ref),
       defaultTimeManagerType = timeManagerType,
       reporters = mutable.Map(ReportTypeEnum.parquet -> reporterProbe.ref)
     )
-    val ref = TestActorRef(new TestReportActor(properties))
+    // LoadBalancedDistributed actors overwrite entityId with self.path.name in preStart -- give
+    // TestActorRef an explicit numeric name (matching production's real Pekko-assigned entityId
+    // shape) instead of Pekko's auto-generated ("$a"-style) default, which
+    // onFinishSpontaneous's Identify(id = getEntityId.toLong, ...) can't parse.
+    val ref = TestActorRef(new TestReportActor(properties), ownEntityId.toString)
     // See SimulationBaseActorTimeWarpReplaySpec's newActor doc: PersistentActor recovery is
     // asynchronous even under TestActorRef's CallingThreadDispatcher.
     Thread.sleep(1000)
@@ -132,8 +140,8 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     val actor = newActor(TimeManagerTypeEnum.TIME_WARP, timeManagerProbe, reporterProbe)
 
     // Two live interactions, processed in order: reports for tick 1 and tick 2 both buffered.
-    actor ! interaction(tick = 1L, senderId = "sender-a", seq = 1L)
-    actor ! interaction(tick = 2L, senderId = "sender-a", seq = 2L)
+    actor ! interaction(tick = 1L, senderId = 101L, seq = 1L)
+    actor ! interaction(tick = 2L, senderId = 101L, seq = 2L)
     reporterProbe.expectNoMessage(500.millis) // both still buffered, no GVT has covered either yet
 
     // A straggler for tick=1 arrives after -- causally earlier than what this actor already
@@ -141,7 +149,7 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     // (docs/TIME_WARP_DESIGN.md §10), which rolls back to before it via rollbackAndCascade. That
     // undoes both the original tick=1 and tick=2 processing (rollbackTo(1) undoes everything with
     // tick >= 1), discarding both buffered reports, before reprocessing this straggler for real.
-    actor ! interaction(tick = 1L, senderId = "sender-b", seq = 1L)
+    actor ! interaction(tick = 1L, senderId = 102L, seq = 1L)
 
     // Advance GVT far enough to cover everything. Only the straggler's own reprocessed tick=1
     // report should ever reach the reporter -- the original tick=1 and tick=2 reports were

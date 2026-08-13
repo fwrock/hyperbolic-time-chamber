@@ -18,7 +18,7 @@ class SubwayStationCreator(
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
   reportFn:            (Map[String, Any], String) => Unit,
-  spawnDynamicActorFn: (String, String, String) => Unit,
+  spawnDynamicActorFn: (String, Long, String) => Unit,
   addDependencyFn:     (String, ShardActorId) => Unit,
   logWarnFn:           String => Unit,
   logDebugFn:          String => Unit,
@@ -40,7 +40,7 @@ class SubwayStationCreator(
               spawned += 1
               // ActorTrace.trace(entityIdFn(), currentTickFn(), "subway_station_train_created", // #actor-trace
               //   s"trainId=${subway.actorId} line=$line nextTick=$subwayStartTick") // #actor-trace
-              addDependencyFn(subway.actorId, ShardActorId(subway.actorId, "hybrid.actor.Subway"))
+              addDependencyFn(subway.actorId.toString, ShardActorId(subway.actorId, "hybrid.actor.Subway"))
               lines(line).nextTick = subwayStartTick
             } catch {
               case e: IllegalStateException =>
@@ -120,19 +120,19 @@ class SubwayStationCreator(
     )
 
     SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
-    spawnDynamicActorFn("hybrid.actor.Subway", IdUtil.format(subway.actorId), toJson(subwayState))
+    spawnDynamicActorFn("hybrid.actor.Subway", subway.actorId, toJson(subwayState))
   }
 
-  private def convertLineToSubwayStations(line: String): mutable.Map[String, String] = {
+  private def convertLineToSubwayStations(line: String): mutable.Map[Long, Long] = {
     val lineRoute     = state.linesRoute(line)
-    val subwayStations = mutable.Map[String, String]()
+    val subwayStations = mutable.Map[Long, Long]()
     for (i <- lineRoute.indices)
-      subwayStations.put(lineRoute(i)._1.stationId, lineRoute(i)._1.nodeId)
+      subwayStations.put(lineRoute(i).stationNode.stationId, lineRoute(i).stationNode.nodeId)
     subwayStations
   }
 
-  private def convertLineRouteToPath(line: String): mutable.Queue[(String, String)] = {
-    val route     = mutable.Queue[(String, String)]()
+  private def convertLineRouteToPath(line: String): mutable.Queue[(Long, Long)] = {
+    val route     = mutable.Queue[(Long, Long)]()
     val lineRoute = state.linesRoute.get(line)
     lineRoute match {
       case Some(routeQueue) =>

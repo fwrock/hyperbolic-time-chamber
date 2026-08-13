@@ -49,9 +49,9 @@ final class CompactGraph private (
   private val edgeIdx: Array[Int],
   private val nodeLat: Array[Float],
   private val nodeLon: Array[Float],
-  val nodeIds: Array[String],
-  val edgeIds: Array[String],
-  val nodeIndex: java.util.HashMap[String, Int],
+  val nodeIds: Array[Long],
+  val edgeIds: Array[Long],
+  val nodeIndex: java.util.HashMap[Long, Int],
   /** NodeGraph objects parallel to nodeIds — used to bridge into the LandmarkIndex heuristic. */
   val nodeGraphs: Array[NodeGraph]
 ) {
@@ -93,7 +93,7 @@ final class CompactGraph private (
     maxExpansions: Int,
     useDynamicWeights: Boolean,
     maxEdgeRelaxations: Long = Long.MaxValue
-  ): Option[(Double, List[(String, String)])] = {
+  ): Option[(Double, List[(Long, Long)])] = {
 
     if (source == target) return Some((0.0, List.empty))
 
@@ -120,7 +120,7 @@ final class CompactGraph private (
         // stale entry — skip
       } else if (u == target) {
         // Reconstruct path
-        val path = mutable.ArrayBuffer[(String, String)]()
+        val path = mutable.ArrayBuffer[(Long, Long)]()
         var cur  = target
         while (cur != source) {
           val e = prevEdg(cur)
@@ -171,12 +171,12 @@ final class CompactGraph private (
 
   /** A* search using built-in Euclidean heuristic (fast, no precomputed index). */
   def aStarEuclidean(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
     maxEdgeRelaxations: Long = Long.MaxValue
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
@@ -190,13 +190,13 @@ final class CompactGraph private (
     *              Build it from [[CompactLandmarkIndex]] for best results.
     */
   def aStarALT(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     altH: (Int, Int) => Double,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
     maxEdgeRelaxations: Long = Long.MaxValue
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
@@ -205,7 +205,7 @@ final class CompactGraph private (
   }
 
   /** Node index for a given node ID string, or -1 if not found. */
-  def indexOf(nodeId: String): Int = nodeIndex.getOrDefault(nodeId, -1)
+  def indexOf(nodeId: Long): Int = nodeIndex.getOrDefault(nodeId, -1)
 }
 
 // ── Companion object ──────────────────────────────────────────────────────────
@@ -353,15 +353,15 @@ object CompactGraph {
     * This is called once at startup (lazy) and does not change the JSON-loading pipeline.
     */
   def fromLoaded(
-    data: LoadedGraphData[NodeGraph, String, Double, EdgeGraph]
+    data: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]
   ): CompactGraph = {
 
     val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
     val n                         = nodeList.length
 
     // Assign a stable Int index to each NodeGraph
-    val nodeIdxMap = new java.util.HashMap[String, Int](n * 2)
-    val nodeIdArr  = new Array[String](n)
+    val nodeIdxMap = new java.util.HashMap[Long, Int](n * 2)
+    val nodeIdArr  = new Array[Long](n)
     val latArr     = new Array[Float](n)
     val lonArr     = new Array[Float](n)
 
@@ -394,8 +394,8 @@ object CompactGraph {
     }
 
     // Collect edge label IDs (deduplicated, assign edge-label index)
-    val edgeLabelIdxMap = new java.util.HashMap[String, Int](m * 2)
-    val edgeLabelIdList = mutable.ArrayBuffer[String]()
+    val edgeLabelIdxMap = new java.util.HashMap[Long, Int](m * 2)
+    val edgeLabelIdList = mutable.ArrayBuffer[Long]()
     data.edgeLabelsById.foreachEntry { (id, _) =>
       if (!edgeLabelIdxMap.containsKey(id)) {
         edgeLabelIdxMap.put(id, edgeLabelIdList.size)
@@ -457,14 +457,14 @@ object CompactGraph {
     * admissible) rather than [[aStarALT]] for pedestrian searches.
     */
   def fromLoadedBidirectional(
-    data: LoadedGraphData[NodeGraph, String, Double, EdgeGraph]
+    data: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]
   ): CompactGraph = {
 
     val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
     val n                         = nodeList.length
 
-    val nodeIdxMap = new java.util.HashMap[String, Int](n * 2)
-    val nodeIdArr  = new Array[String](n)
+    val nodeIdxMap = new java.util.HashMap[Long, Int](n * 2)
+    val nodeIdArr  = new Array[Long](n)
     val latArr     = new Array[Float](n)
     val lonArr     = new Array[Float](n)
 
@@ -480,8 +480,8 @@ object CompactGraph {
 
     // Edge label index (same as directed builder)
     val m               = data.graph.edges.size
-    val edgeLabelIdxMap = new java.util.HashMap[String, Int](m * 2)
-    val edgeLabelIdList = mutable.ArrayBuffer[String]()
+    val edgeLabelIdxMap = new java.util.HashMap[Long, Int](m * 2)
+    val edgeLabelIdList = mutable.ArrayBuffer[Long]()
     data.edgeLabelsById.foreachEntry { (id, _) =>
       if (!edgeLabelIdxMap.containsKey(id)) {
         edgeLabelIdxMap.put(id, edgeLabelIdList.size)

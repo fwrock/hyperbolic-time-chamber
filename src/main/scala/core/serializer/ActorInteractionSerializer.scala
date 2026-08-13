@@ -42,11 +42,10 @@ class ActorInteractionSerializer(
           case Success(encoded) =>
             val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(actorClassType)
             val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(eventType)
-            val actorRefIdStrippedOpt = ActorInteractionCodec.stripIdPrefix(actorRefId, actorClassType)
             val proto = ActorInteraction(
               tick = tick,
               lamportTick = lamportTick,
-              actorRefId = actorRefIdStrippedOpt.getOrElse(actorRefId),
+              actorRefId = actorRefId,
               // shardRefId no longer written — receiver derives it from actorClassType, see proto comment.
               actorRef = actorRef,
               actorClassType = actorClassTypeProto,
@@ -58,7 +57,6 @@ class ActorInteractionSerializer(
               resourceId = resourceId,
               actorClassTypeOverride = actorClassTypeOverride,
               eventTypeOverride = eventTypeOverride,
-              actorRefIdPrefixStripped = actorRefIdStrippedOpt.isDefined,
               seq = seq,
               isAntiMessage = isAntiMessage
             )
@@ -84,13 +82,10 @@ class ActorInteractionSerializer(
       NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
           val decodedActorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride)
-          val decodedActorRefId =
-            if (proto.actorRefIdPrefixStripped) ActorInteractionCodec.rebuildIdPrefix(proto.actorRefId, decodedActorClassType)
-            else proto.actorRefId
           ActorInteractionEvent(
             tick = proto.tick,
             lamportTick = proto.lamportTick,
-            actorRefId = decodedActorRefId,
+            actorRefId = proto.actorRefId,
             shardRefId = StringUtil.getModelClassName(decodedActorClassType),
             actorPathRef = proto.actorRef,
             actorClassType = decodedActorClassType,

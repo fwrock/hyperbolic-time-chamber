@@ -47,7 +47,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
     def testSetLinkWaitFields(
-      linkId: Option[String],
+      linkId: Option[Long],
       entryTick: Option[Tick],
       exitTick: Option[Tick],
       waitUntil: Option[Tick],
@@ -60,7 +60,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
       signalWaitNeedsReverify = needsReverify
     }
 
-    def testCurrentLinkId: Option[String] = currentLinkId
+    def testCurrentLinkId: Option[Long] = currentLinkId
     def testLinkEntryTick: Option[Tick] = linkEntryTick
     def testMesoExitTick: Option[Tick] = mesoExitTick
     def testSignalWaitUntilTick: Option[Tick] = signalWaitUntilTick
@@ -70,8 +70,8 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
   private def freshState(): MotorcycleState = {
     val s = MotorcycleState(
       startTick = 0L,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       actorType = ActorTypeEnum.Motorcycle,
       size = 2.5
     )
@@ -90,7 +90,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
     val moto = newTestMotorcycle("moto-1")
     moto.testSetState(freshState())
     moto.testSetLinkWaitFields(
-      linkId = Some("link-42"),
+      linkId = Some(42L),
       entryTick = Some(10L),
       exitTick = Some(37L),
       waitUntil = None,
@@ -99,7 +99,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
 
     val snapshot = moto.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe "link-42"
+    snapshot.vehicleCurrentLinkId shouldBe 42L
     snapshot.vehicleLinkEntryTick shouldBe 10L
     snapshot.vehicleMesoExitTick shouldBe 37L
     snapshot.vehicleSignalWaitUntilTick shouldBe Long.MinValue
@@ -110,7 +110,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
     val moto = newTestMotorcycle("moto-2")
     moto.testSetState(freshState())
     moto.testSetLinkWaitFields(
-      linkId = Some("link-7"),
+      linkId = Some(7L),
       entryTick = Some(5L),
       exitTick = None,
       waitUntil = Some(120L),
@@ -130,7 +130,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
 
     val snapshot = moto.testBuildMigrationSnapshot()
 
-    snapshot.vehicleCurrentLinkId shouldBe ""
+    snapshot.vehicleCurrentLinkId shouldBe 0L
     snapshot.vehicleLinkEntryTick shouldBe Long.MinValue
     snapshot.vehicleMesoExitTick shouldBe Long.MinValue
     snapshot.vehicleSignalWaitUntilTick shouldBe Long.MinValue
@@ -141,7 +141,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
     val sourceMoto = newTestMotorcycle("moto-4")
     sourceMoto.testSetState(freshState())
     sourceMoto.testSetLinkWaitFields(
-      linkId = Some("link-99"),
+      linkId = Some(99L),
       entryTick = Some(50L),
       exitTick = None,
       waitUntil = Some(75L),
@@ -153,7 +153,7 @@ class MotorcycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers 
     val rehydratedMoto = newTestMotorcycle("moto-4")
     rehydratedMoto.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedMoto.testCurrentLinkId shouldBe Some("link-99")
+    rehydratedMoto.testCurrentLinkId shouldBe Some(99L)
     rehydratedMoto.testLinkEntryTick shouldBe Some(50L)
     rehydratedMoto.testMesoExitTick shouldBe None
     rehydratedMoto.testSignalWaitUntilTick shouldBe Some(75L)

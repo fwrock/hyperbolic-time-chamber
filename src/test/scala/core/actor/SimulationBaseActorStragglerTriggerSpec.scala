@@ -55,14 +55,14 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     * enough surface to prove both a rollback restores `counter` and that the resulting cascade
     * produces a real anti-message for the relay a rolled-back interaction made.
     */
-  private class RelayActor(properties: Properties, peerEntityId: String)
+  private class RelayActor(properties: Properties, peerEntityId: Long)
       extends SimulationBaseActor[RelayState](properties) {
 
     override def actInteractWith(event: ActorInteractionEvent): Unit = {
       state = state.copy(counter = state.counter + 1)
       sendMessageTo(
         entityId = peerEntityId,
-        shardId = peerEntityId,
+        shardId = peerEntityId.toString,
         data = RelayData(state.counter),
         eventType = "relay",
         actorType = CreationTypeEnum.PoolDistributed
@@ -77,24 +77,37 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     def testCounter: Int = state.counter
     // LoadBalancedDistributed actors (the default actorType) have preStart() overwrite entityId
     // with self.path.name -- the Properties.entityId passed in is not what ends up on the wire.
-    def testEntityId: String = getEntityId
+    def testEntityId: Long = getEntityId.toLong
   }
 
-  private def newPeer(): (TestProbe, String) = {
+  private var nextPeerId = 0L
+
+  private def newPeer(): (TestProbe, Long) = {
     val probe = TestProbe()
-    val name = probe.ref.path.name
-    system.actorOf(Props(new Actor { def receive: Receive = { case msg => probe.ref.forward(msg) } }), name)
-    (probe, name)
+    nextPeerId += 1
+    val id = nextPeerId
+    // The PoolDistributed router resolves entityId -> actor path via IdUtil.format(entityId), a
+    // plain toString -- the forwarding actor must be registered under that exact numeric name for
+    // sendMessageTo(entityId = id, ...) to find it, rather than Pekko's auto-generated probe name.
+    system.actorOf(Props(new Actor { def receive: Receive = { case msg => probe.ref.forward(msg) } }), id.toString)
+    (probe, id)
   }
 
-  private def newActor(peerEntityId: String): TestActorRef[RelayActor] = {
+  private def newActor(peerEntityId: Long): TestActorRef[RelayActor] = {
+    nextPeerId += 1
+    val ownEntityId = nextPeerId
     val properties = Properties(
-      entityId = "relay-actor-1",
+      entityId = ownEntityId.toString,
       resourceId = "res-1",
       timeManagers = mutable.Map.empty,
       defaultTimeManagerType = TimeManagerTypeEnum.TIME_WARP
     )
-    val ref = TestActorRef(new RelayActor(properties, peerEntityId))
+    // LoadBalancedDistributed actors (the default actorType) have preStart() overwrite entityId
+    // with self.path.name -- so the actor must be given an explicit numeric TestActorRef name
+    // matching production's real convention (Pekko-assigned entityId is always a Long's string
+    // form), not Pekko's default auto-generated ("$a"-style) name, which onFinishSpontaneous's
+    // Identify(id = getEntityId.toLong, ...) can't parse.
+    val ref = TestActorRef(new RelayActor(properties, peerEntityId), ownEntityId.toString)
     // See SimulationBaseActorTimeWarpReplaySpec's newActor for why: BaseActor is a
     // PersistentActor, recovery is asynchronous regardless of CallingThreadDispatcher, and a
     // command sent before it completes is stashed until it does.
@@ -104,13 +117,13 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     ref
   }
 
-  private def interaction(tick: Tick, senderId: String, seq: Long, isAntiMessage: Boolean = false): ActorInteractionEvent =
+  private def interaction(tick: Tick, senderId: Long, seq: Long, isAntiMessage: Boolean = false): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = tick,
       lamportTick = tick,
       actorRefId = senderId,
       shardRefId = "test.Sender",
-      actorPathRef = s"/user/$senderId",
+      actorPathRef = s"/user/sender-$senderId",
       actorClassType = "test.Sender",
       eventType = "ping",
       data = RelayData(0),
@@ -124,14 +137,14 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     val actor = newActor(peerName)
 
     // tick=5 arrives first and is processed live: counter -> 1, a real relay sent downstream.
-    actor ! interaction(tick = 5L, senderId = "sender-a", seq = 1L)
+    actor ! interaction(tick = 5L, senderId = 101L, seq = 1L)
     peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent]).data shouldBe RelayData(1)
     actor.underlyingActor.testCounter shouldBe 1
 
     // A straggler for tick=3 arrives after -- causally earlier than what this actor already
     // processed. It must roll back (undoing tick=5's relay), anti-message it, THEN process
     // itself normally.
-    actor ! interaction(tick = 3L, senderId = "sender-b", seq = 1L)
+    actor ! interaction(tick = 3L, senderId = 102L, seq = 1L)
 
     val antiMessage = peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
     antiMessage.isAntiMessage shouldBe true
@@ -150,12 +163,12 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     val (peerProbe, peerName) = newPeer()
     val actor = newActor(peerName)
 
-    actor ! interaction(tick = 5L, senderId = "sender-a", seq = 7L)
+    actor ! interaction(tick = 5L, senderId = 101L, seq = 7L)
     peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent]).data shouldBe RelayData(1)
     actor.underlyingActor.testCounter shouldBe 1
 
     // sender-a itself rolled back and is retracting the tick=5/seq=7 send it made to this actor.
-    actor ! interaction(tick = 5L, senderId = "sender-a", seq = 7L, isAntiMessage = true)
+    actor ! interaction(tick = 5L, senderId = 101L, seq = 7L, isAntiMessage = true)
 
     val cascadedAntiMessage = peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
     cascadedAntiMessage.isAntiMessage shouldBe true
@@ -170,7 +183,7 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     val actor = newActor(peerName)
 
     noException should be thrownBy {
-      actor ! interaction(tick = 5L, senderId = "sender-unknown", seq = 99L, isAntiMessage = true)
+      actor ! interaction(tick = 5L, senderId = 999L, seq = 99L, isAntiMessage = true)
       Thread.sleep(200)
     }
     actor.underlyingActor.testCounter shouldBe 0

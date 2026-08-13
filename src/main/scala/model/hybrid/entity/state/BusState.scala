@@ -61,17 +61,17 @@ case class BusState(
   var distance: Double = 0.0,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
-  var busStops: Map[String, String],
+  var busStops: Map[Long, Long],
   val numberOfPorts: Int,
-  val people: mutable.Map[String, Identify] = mutable.Map[String, Identify](),
+  val people: mutable.Map[Long, Identify] = mutable.Map[Long, Identify](),
   var currentPathPosition: Int = 0,
-  override val origin: String,
-  override val destination: String,
+  override val origin: Long,
+  override val destination: Long,
   override val actorType: ActorTypeEnum = Bus,
   override val size: Double,
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   var microState: Option[MicroBusState] = None,
-  var storedBestRoute: Option[List[(String, String)]] = None,
+  var storedBestRoute: Option[List[(Long, Long)]] = None,
   /** Speed factor applied in MICRO mode. Values < 1.0 = conservative; > 1.0 = aggressive.
     * Clamped to [0.5, 1.5] on use. Default: 1.0.
     */
@@ -84,11 +84,11 @@ case class BusState(
       size = size
     ) {
 
-  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
-  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
 
-  def currentPath: Option[(String, String)] = movableCurrentPath
-  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
 
   def bestCost: Double = movableBestCost
   def bestCost_=(v: Double): Unit = movableBestCost = v

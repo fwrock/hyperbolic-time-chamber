@@ -13,16 +13,16 @@ class MotorcycleLinkHandler(
   currentTickFn:           () => Tick,
   journeyReporter:         MotorcycleJourneyReporter,
   onFinishSpontaneousFn:   Option[Tick] => Unit,
-  onFinishPrivateVehicleFn: String => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   selfDestructFn:          () => Unit,
   isPersonCentricFn:       () => Boolean,
-  finishJourneyFn:         (String, String) => Unit,
+  finishJourneyFn: (String, Long) => Unit,
   setMesoExitTickFn:       Option[Tick] => Unit,
-  getTripDestinationFn:    () => Option[String],
+  getTripDestinationFn: () => Option[Long],
   logDebugFn:              String => Unit
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: MotorcycleState): Unit = {
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
     val baseSpeed       = linkDensitySpeed(
       length        = data.linkLength,
       capacity      = data.linkCapacity,
@@ -63,7 +63,7 @@ class MotorcycleLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: MotorcycleState): Unit = {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
     if (state.status == Parked || state.status == Finished) {
       logDebugFn(
         s"${entityIdFn()}: Discarding stale ReceiveLeaveLinkInfo for link $linkId " +

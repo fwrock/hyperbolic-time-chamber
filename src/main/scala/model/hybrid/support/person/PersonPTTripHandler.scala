@@ -29,7 +29,7 @@ import core.actor.trace.ActorTrace
 class PersonPTTripHandler(
   personId: String,
   reportFn: (Map[String, Any], String) => Unit,
-  sendMessageFn: (String, String, Any, String, Any) => Unit,
+  sendMessageFn: (Long, String, Any, String, Any) => Unit,
   logDebug: String => Unit
 ) {
 
@@ -75,9 +75,9 @@ class PersonPTTripHandler(
     */
   def handlePTUnloadRequest(
     event: ActorInteractionEvent,
-    nodeId: String,
+    nodeId: Long,
     mode: ConcreteMode,
-    alightingNodeId: String
+    alightingNodeId: Long
   ): Boolean = {
     val isArrival = alightingNodeId == nodeId
 

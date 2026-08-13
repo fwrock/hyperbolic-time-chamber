@@ -25,8 +25,8 @@ private[decision] object TravelTimeChoiceResolution {
     */
   def resolve(
     strategy: TravelTimeModeChoiceStrategy,
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     request: ModeDecisionRequest,
     ctx: DecisionContext,
     engineId: String,
@@ -77,8 +77,8 @@ private[decision] object TravelTimeChoiceResolution {
   }
 
   private def raptorItinerary(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights,
     includedStopTypes: Set[String]
   ): Option[List[AtomicLeg]] =
@@ -98,8 +98,8 @@ private[decision] object TravelTimeChoiceResolution {
     } yield RaptorMultiModalEngine.translateResult(originNodeId, destinationNodeId, result)
 
   private def translateSingleLeg(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     logistics: ArrivalLogistics,
     request: ModeDecisionRequest,
     engineId: String

@@ -23,17 +23,17 @@ class ArrivalLogisticsTranslationSpec extends AnyFlatSpec with Matchers {
   }
 
   "buildWalkLeg" should "carry the origin, destination and precomputed route through unchanged" in {
-    val logistics = ArrivalLogistics(mode = "walk", precomputedRoute = Some(List(("l1", "n2"))))
+    val logistics = ArrivalLogistics(mode = "walk", precomputedRoute = Some(List((11L, 2L))))
 
-    val leg = ArrivalLogisticsTranslation.buildWalkLeg("n1", "n3", logistics)
+    val leg = ArrivalLogisticsTranslation.buildWalkLeg(1L, 3L, logistics)
 
-    leg.originNodeId shouldBe "n1"
-    leg.destinationNodeId shouldBe "n3"
-    leg.precomputedRoute shouldBe Some(List(("l1", "n2")))
+    leg.originNodeId shouldBe 1L
+    leg.destinationNodeId shouldBe 3L
+    leg.precomputedRoute shouldBe Some(List((11L, 2L)))
   }
 
   "buildPrivateVehicleLeg" should "build a leg when a vehicle is present" in {
-    val vehicle = Identify(id = "car-1")
+    val vehicle = Identify(id = 201L)
     val logistics = ArrivalLogistics(mode = "car", vehicle = Some(vehicle))
 
     val leg = ArrivalLogisticsTranslation.buildPrivateVehicleLeg(ConcreteMode.Car, logistics)
@@ -49,8 +49,8 @@ class ArrivalLogisticsTranslationSpec extends AnyFlatSpec with Matchers {
   }
 
   "buildTransitLeg" should "assemble a TransitLeg from already-resolved stop refs" in {
-    val boarding = StopRef("busstop-1", "hybrid.actor.BusStop", "n2")
-    val alighting = StopRef("busstop-2", "hybrid.actor.BusStop", "n4")
+    val boarding = StopRef(301L, "hybrid.actor.BusStop", 2L)
+    val alighting = StopRef(302L, "hybrid.actor.BusStop", 4L)
 
     val leg = ArrivalLogisticsTranslation.buildTransitLeg(ConcreteMode.Bus, "L1", boarding, alighting)
 
@@ -64,9 +64,9 @@ class ArrivalLogisticsTranslationSpec extends AnyFlatSpec with Matchers {
     val logistics = ArrivalLogistics(
       mode                  = "bus",
       line                  = Some("L1"),
-      boardingStopId        = Some("busstop-1"),
+      boardingStopId        = Some(301L),
       boardingStopClassType = Some("hybrid.actor.BusStop"),
-      alightingNodeId       = Some("n4")
+      alightingNodeId       = Some(4L)
     )
 
     ArrivalLogisticsTranslation.resolveTransitLeg(ConcreteMode.Bus, logistics) shouldBe None
@@ -75,25 +75,25 @@ class ArrivalLogisticsTranslationSpec extends AnyFlatSpec with Matchers {
   "translate" should "produce a WalkLeg for mode walk" in {
     val logistics = ArrivalLogistics(mode = "walk")
 
-    ArrivalLogisticsTranslation.translate("n1", "n2", logistics).map(_.mode) shouldBe Some(ConcreteMode.Walk)
+    ArrivalLogisticsTranslation.translate(1L, 2L, logistics).map(_.mode) shouldBe Some(ConcreteMode.Walk)
   }
 
   it should "produce a PrivateVehicleLeg for a private mode with a vehicle" in {
-    val vehicle = Identify(id = "bike-1")
+    val vehicle = Identify(id = 401L)
     val logistics = ArrivalLogistics(mode = "bicycle", vehicle = Some(vehicle))
 
-    ArrivalLogisticsTranslation.translate("n1", "n2", logistics).map(_.mode) shouldBe Some(ConcreteMode.Bicycle)
+    ArrivalLogisticsTranslation.translate(1L, 2L, logistics).map(_.mode) shouldBe Some(ConcreteMode.Bicycle)
   }
 
   it should "return None for the unresolved 'auto' mode" in {
     val logistics = ArrivalLogistics(mode = "auto")
 
-    ArrivalLogisticsTranslation.translate("n1", "n2", logistics) shouldBe None
+    ArrivalLogisticsTranslation.translate(1L, 2L, logistics) shouldBe None
   }
 
   it should "return None for a transit mode when the stop cannot be resolved" in {
-    val logistics = ArrivalLogistics(mode = "bus", line = Some("L1"), boardingStopId = Some("busstop-1"), alightingNodeId = Some("n4"))
+    val logistics = ArrivalLogistics(mode = "bus", line = Some("L1"), boardingStopId = Some(301L), alightingNodeId = Some(4L))
 
-    ArrivalLogisticsTranslation.translate("n1", "n2", logistics) shouldBe None
+    ArrivalLogisticsTranslation.translate(1L, 2L, logistics) shouldBe None
   }
 }

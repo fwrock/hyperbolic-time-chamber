@@ -154,19 +154,20 @@ object DynamicWeightCache {
     finally overrideMap.set(previous)
   }
 
-  def getWeight(linkId: String, staticWeight: Double): Double = {
+  def getWeight(linkId: Long, staticWeight: Double): Double = {
+    val linkIdKey = linkId.toString
     val activeOverride = overrideMap.get()
     val (w, wasDynamic) =
       if (activeOverride != null) {
-        val ov = activeOverride.get(linkId)
+        val ov = activeOverride.get(linkIdKey)
         (ov.getOrElse(staticWeight), ov.isDefined)
       } else {
-        val costOpt = strategy.getCost(linkId)
+        val costOpt = strategy.getCost(linkIdKey)
         (costOpt.map(_.totalCost).getOrElse(staticWeight), costOpt.isDefined)
       }
 
     val activeSink = recordingSink.get()
-    if (activeSink != null) activeSink.update(linkId, w)
+    if (activeSink != null) activeSink.update(linkIdKey, w)
 
     if (wasDynamic) dynHits.incrementAndGet() else staticMisses.incrementAndGet()
 

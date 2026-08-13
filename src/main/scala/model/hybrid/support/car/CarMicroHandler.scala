@@ -22,17 +22,17 @@ class CarMicroHandler(
   private val journeyReporter: CarJourneyReporter,
   private val requestSignalStateFn: () => Unit,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val finishAndCleanupFn: (String, String) => Unit,
-  private val onFinishPrivateVehicleFn: String => Unit,
+  private val finishAndCleanupFn: (String, Long) => Unit,
+  private val onFinishPrivateVehicleFn: Long => Unit,
   private val selfDestructFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
-  private val setCurrentLinkIdFn: Option[String] => Unit,
+  private val setCurrentLinkIdFn: Option[Long] => Unit,
   private val setCurrentLinkLengthFn: Double => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
-  private val getCurrentLinkIdFn: () => Option[String],
+  private val getCurrentLinkIdFn: () => Option[Long],
   private val microUpdateReportEvery: Int = 0
 ) {
 
@@ -126,7 +126,7 @@ class CarMicroHandler(
           Map(
             "event_type" -> "micro_update",
             "car_id"     -> entityIdFn(),
-            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"       -> "MICRO",
             "position"   -> data.position,
             "velocity"   -> data.velocity,
@@ -145,7 +145,7 @@ class CarMicroHandler(
     if (!currentLinkId.contains(data.linkId)) {
       logWarnFn(
         s"${entityIdFn()}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
-          s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded."
+          s"(car is on link ${currentLinkId.getOrElse(0L)}). Discarded."
       )
       return
     }
