@@ -14,6 +14,6 @@ import core.entity.event.data.BaseEventData
   *   Node where vehicle should park
   */
 case class ParkVehicleData(
-  personId: String,
-  parkingNodeId: String
+  personId: Long,
+  parkingNodeId: Long
 ) extends BaseEventData

@@ -44,16 +44,13 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
   private val PrivateModes: Set[String] = Set("car", "bicycle", "motorcycle")
 
   override def choose(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights,
     ownedVehicles: Map[String, Identify] = Map.empty
   ): ModeChoiceResult = {
     val included = weights.includedModes.map(_.toLowerCase)
 
-    // --- Transit + walking candidates ---
-    // When TransitRouteUtil is available, use RAPTOR for multi-leg routing.
-    // Otherwise fall back to the single-leg ModeChoiceUtil.
     val transitIncluded = included.intersect(Set("bus", "subway", "walk"))
 
     val (transitAndWalk: List[(ModeChoiceResult, Double)]) =
@@ -159,8 +156,8 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
     * can route to the correct node without an activity-index advance.
     */
   private def buildFullLegChain(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     legs: List[RaptorRouter.RaptorLeg]
   ): List[ArrivalLogistics] = {
     var result = List.empty[ArrivalLogistics]
@@ -195,7 +192,7 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
     result
   }
 
-  private def directDistanceM(originNodeId: String, destinationNodeId: String): Double =
+  private def directDistanceM(originNodeId: Long, destinationNodeId: Long): Double =
     (for {
       o <- CityMapUtil.nodesById.get(originNodeId)
       d <- CityMapUtil.nodesById.get(destinationNodeId)
@@ -203,8 +200,8 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
       .getOrElse(Double.MaxValue)
 
   private def scoreWalk(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights
   ): Double = {
     val dist = directDistanceM(originNodeId, destinationNodeId)
@@ -214,8 +211,8 @@ class UtilityModeChoiceStrategy extends ModeChoiceStrategy {
 
   private def scorePT(
     logistics: ArrivalLogistics,
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     mode: String,
     weights: ModeChoiceWeights
   ): Double = {

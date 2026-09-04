@@ -20,12 +20,12 @@ class BusLinkHandler(
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val onFinishDestructFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
   private val setMesoExitTickFn: Option[Tick] => Unit,
   private val restoreRouteIfMissingFn: String => Unit
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: BusState): Unit = {
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
 
@@ -70,7 +70,7 @@ class BusLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: BusState): Unit = {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
 

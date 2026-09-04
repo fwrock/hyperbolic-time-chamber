@@ -22,14 +22,14 @@ import scala.collection.mutable
 class LinkMicroSimulationHandler(
   entityIdFn:                  () => String,
   currentTickFn:               () => Tick,
-  sendMessageFn:               (String, String, AnyRef, String) => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
   getLinkStateFn:              () => LinkState,
   setLinkStateFn:              LinkState => Unit,
-  getVehicleEntryTickFn:       String => Option[Tick],
-  removeVehicleEntryTickFn:    String => Unit,
-  getVehicleWaitingSecondsFn:  String => Double,
-  removeVehicleWaitingSecondsFn: String => Unit,
-  vehicleWaitingSeconds:       mutable.Map[String, Double],
+  getVehicleEntryTickFn:       Long => Option[Tick],
+  removeVehicleEntryTickFn:    Long => Unit,
+  getVehicleWaitingSecondsFn:  Long => Double,
+  removeVehicleWaitingSecondsFn: Long => Unit,
+  vehicleWaitingSeconds:       mutable.Map[Long, Double],
   isMicroScheduledFn:          () => Boolean,
   setMicroScheduledFn:         Boolean => Unit,
   getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
@@ -60,7 +60,7 @@ class LinkMicroSimulationHandler(
     logDebugFn(s"✓ MICRO mode initialized: id=${entityIdFn()} lanes=${s.lanes} length=${s.length}m timeStep=${s.microTimeStep}s")
   }
 
-  def findVehicleLane(actorId: String): Option[Int] =
+  def findVehicleLane(actorId: Long): Option[Int] =
     getLinkStateFn().vehiclesByLane.collectFirst {
       case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
     }
@@ -68,7 +68,7 @@ class LinkMicroSimulationHandler(
   def findLeastOccupiedLane(): Int =
     microSimulationStrategy.selectEntryLane(
       vehiclesByLane = mutable.Map.from(getLinkStateFn().vehiclesByLane),
-      vehicleId      = "",
+      vehicleId      = 0L,
       vehicleLength  = 4.5
     )
 
@@ -127,7 +127,7 @@ class LinkMicroSimulationHandler(
       update.vehicleId,
       update.shardId,
       MicroLeaveLinkData(
-        linkId             = entityIdFn(),
+        linkId             = entityIdFn().toLong,
         finalPosition      = update.position,
         finalVelocity      = update.velocity,
         travelTime         = elapsedTicks,

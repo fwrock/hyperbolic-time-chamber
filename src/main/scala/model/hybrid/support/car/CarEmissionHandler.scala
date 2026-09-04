@@ -26,7 +26,7 @@ class CarEmissionHandler(
   private var accumulated: EmissionResult = EmissionResult.zero
   private var subTickCount: Int           = 0
 
-  def onMicroEnterLink(linkId: String, microTimeStepSeconds: Double): Unit = {
+  def onMicroEnterLink(linkId: Long, microTimeStepSeconds: Double): Unit = {
     microTimeStep = math.max(0.001, microTimeStepSeconds)
     accumulated   = EmissionResult.zero
     subTickCount  = 0
@@ -37,7 +37,7 @@ class CarEmissionHandler(
     subTickCount += 1
   }
 
-  def onMicroLeaveLink(linkId: String, distanceTraveled: Double, travelTimeSeconds: Double): Unit = {
+  def onMicroLeaveLink(linkId: Long, distanceTraveled: Double, travelTimeSeconds: Double): Unit = {
     if (accumulated == EmissionResult.zero) return
 
     reportFn(
@@ -62,7 +62,7 @@ class CarEmissionHandler(
     subTickCount = 0
   }
 
-  def onLeaveLink(linkId: String, distanceMeters: Double, travelTimeSeconds: Double): Unit = {
+  def onLeaveLink(linkId: Long, distanceMeters: Double, travelTimeSeconds: Double): Unit = {
     val result = mesoStrategy.computeMeso(distanceMeters, travelTimeSeconds)
     if (result == EmissionResult.zero) return
 

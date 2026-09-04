@@ -25,12 +25,12 @@ class BicycleSignalHandler(
   selfDestructFn:              () => Unit,
   isPersonCentricFn:           () => Boolean,
   logDebugFn:                  String => Unit,
-  sendMessageFn:               (String, String, AnyRef, String) => Unit,
-  getCurrentNodeFn:            () => String,
-  getNextLinkFn:               () => String,
-  getTripDestinationFn:        () => Option[String],
-  finishJourneyFn:             (String, String) => Unit,
-  onFinishPrivateVehicleFn:    String => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getCurrentNodeFn: () => Long,
+  getNextLinkFn: () => Long,
+  getTripDestinationFn: () => Option[Long],
+  finishJourneyFn: (String, Long) => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   setSignalWaitUntilTickFn:    Option[Tick] => Unit,
   setSignalWaitNeedsReverifyFn: Boolean => Unit
 ) {
@@ -41,12 +41,12 @@ class BicycleSignalHandler(
     val tripDest        = getTripDestinationFn().getOrElse(state.destination)
     if (tripDest == currentPathNode || routeDepleted) {
       val nodeId = getCurrentNodeFn()
-      if (nodeId != null) {
+      if (nodeId != 0L) {
         finishJourneyFn("reached_destination", nodeId)
         onFinishPrivateVehicleFn(nodeId)
       } else {
-        finishJourneyFn("no_current_node", "unknown")
-        onFinishPrivateVehicleFn("unknown")
+        finishJourneyFn("no_current_node", 0L)
+        onFinishPrivateVehicleFn(0L)
       }
       onFinishSpontaneousFn(None)
       if (!isPersonCentricFn()) selfDestructFn()
@@ -54,11 +54,11 @@ class BicycleSignalHandler(
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
       nodeId match {
-        case nid if nid != null =>
+        case nid if nid != 0L =>
           CityMapUtil.nodesById.get(nid) match {
             case Some(node) =>
               getNextLinkFn() match {
-                case linkId if linkId != null =>
+                case linkId if linkId != 0L =>
                   sendMessageFn(
                     node.id,
                     node.classType,
@@ -66,13 +66,13 @@ class BicycleSignalHandler(
                     EventTypeEnum.RequestLinkAccess.toString
                   )
                 onFinishSpontaneousFn(None)
-                case null =>
+                case 0L =>
                   leavingLinkFn()
               }
             case None =>
               leavingLinkFn()
           }
-        case null =>
+        case 0L =>
           leavingLinkFn()
       }
     }
@@ -128,7 +128,7 @@ class BicycleSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

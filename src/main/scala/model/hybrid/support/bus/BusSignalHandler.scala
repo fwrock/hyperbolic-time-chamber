@@ -26,10 +26,10 @@ class BusSignalHandler(
   private val scheduleEventFn: Tick => Unit,
   private val onFinishDestructFn: () => Unit,
   private val leavingLinkFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
-  private val getCurrentNodeFn: () => String,
-  private val getNextLinkFn: () => String,
-  private val sendMessageFn: (String, String, AnyRef, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
+  private val getCurrentNodeFn: () => Long,
+  private val getNextLinkFn: () => Long,
+  private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
@@ -43,16 +43,16 @@ class BusSignalHandler(
     if (routeDepleted) {
       val currentNodeId = getCurrentNodeFn()
       logDebugFn(s"Bus ${entityIdFn()} reached destination: $currentNodeId")
-      finishJourneyFn("reached_destination", Option(currentNodeId).getOrElse("unknown"))
+      finishJourneyFn("reached_destination", Option(currentNodeId).getOrElse(0L))
       onFinishDestructFn()
     } else {
       state.status = WaitingSignalState
       getCurrentNodeFn() match {
-        case nodeId if nodeId != null =>
+        case nodeId if nodeId != 0L =>
           CityMapUtil.nodesById.get(nodeId) match {
             case Some(node) =>
               getNextLinkFn() match {
-                case linkId if linkId != null =>
+                case linkId if linkId != 0L =>
                   sendMessageFn(
                     node.id,
                     node.classType,
@@ -60,7 +60,7 @@ class BusSignalHandler(
                     EventTypeEnum.RequestLinkAccess.toString
                   )
                 onFinishSpontaneousFn(None)
-                case null =>
+                case 0L =>
                   logWarnFn("No next link available")
                   leavingLinkFn()
               }
@@ -68,7 +68,7 @@ class BusSignalHandler(
               logWarnFn(s"Node $nodeId not found")
               leavingLinkFn()
           }
-        case null =>
+        case 0L =>
           logWarnFn("No current node")
           leavingLinkFn()
       }
@@ -127,7 +127,7 @@ class BusSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

@@ -4,6 +4,6 @@ package model.hybrid.entity.state.model
 import com.fasterxml.jackson.annotation.JsonProperty
 
 case class PrecomputedRouteItem(
-  @JsonProperty("linkId") linkId: String,
-  @JsonProperty("nodeId") nodeId: String
+  @JsonProperty("linkId") linkId: Long,
+  @JsonProperty("nodeId") nodeId: Long
 )

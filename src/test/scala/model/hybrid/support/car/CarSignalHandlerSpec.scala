@@ -41,8 +41,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
   private def newCarState(status: model.hybrid.entity.state.enumeration.MovableStatusEnum = WaitingSignalState): CarState = {
     val s = CarState(
       startTick = 0L,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
@@ -72,8 +72,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       reportFn = (data, _) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
       currentTickFn = () => currentTick,
-      tripOriginFn = () => Some("n_origin"),
-      tripDestFn = () => Some("n_dest"),
+      tripOriginFn = () => Some(1L),
+      tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
       driverAttrsFn = () => DriverAttributes()
     )
@@ -91,9 +91,9 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       logWarnFn = _ => (),
       logStaleEventDebugFn = _ => (),
       sendMessageFn = (_, _, _, _) => (),
-      getCurrentNodeFn = () => "n_current",
-      getNextLinkFn = () => "link_next",
-      getTripDestinationFn = () => Some("n_dest"),
+      getCurrentNodeFn = () => 3L,
+      getNextLinkFn = () => 100L,
+      getTripDestinationFn = () => Some(2L),
       setSignalWaitUntilTickFn = tick => waitUntilTicks += tick,
       setSignalWaitNeedsReverifyFn = v => needsReverifyCalls += v,
       onSignalWaitFn = _ => ()

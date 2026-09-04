@@ -134,9 +134,10 @@ class CreatorLoadData(
           actorCreation =>
             val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
             SpatialEntityData(
-              spatialEntityId = actorCreation.actor.id,
+              spatialEntityId = actorCreation.actor.id.toString,
               lon = position._1,
-              lat = position._2
+              lat = position._2,
+              entityClassType = actorCreation.actor.typeActor
             )
         }
 
@@ -206,7 +207,7 @@ class CreatorLoadData(
     chunk.foreach {
       actorCreation =>
         val initialization = Initialization(
-          id = actorCreation.actor.id,
+          id = actorCreation.actor.id.toString,
           resourceId = actorCreation.resourceId,
           classType = actorCreation.actor.typeActor,
           data = actorCreation.actor.data.content,
@@ -221,29 +222,29 @@ class CreatorLoadData(
               case (label, rel) =>
                 val bucket =
                   if (rel.shardBucket.nonEmpty) rel.shardBucket
-                  else SpatialShardIdRegistry.getShardId(rel.entityId).getOrElse("")
+                  else SpatialShardIdRegistry.getShardId(rel.entityId.toString).getOrElse("")
                 label -> rel.copy(shardBucket = bucket)
             }
           }
         )
 
-        addInitializeData(actorCreation.actor.id, batchId, initialization)
-        addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+        addInitializeData(actorCreation.actor.id.toString, batchId, initialization)
+        addToInitializedAcknowledges(batchId, actorCreation.actor.id.toString)
 
         val fullClassName = StringUtil.getModelClassName(actorCreation.actor.typeActor)
-        SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id, fullClassName)
+        SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id.toString, fullClassName)
 
         val shardRegion = createShardRegion(
           system = context.system,
           resourceId = actorCreation.resourceId,
           actorClassName = actorCreation.actor.typeActor,
-          entityId = actorCreation.actor.id,
+          entityId = actorCreation.actor.id.toString,
           timeManagers = timeManagers,
           creatorManager = self,
           reporters = reporters
         )
 
-        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id.toString)
     }
 
   /** Advances to the next chunk or finishes if no more actors remain. */

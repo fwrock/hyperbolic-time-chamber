@@ -61,11 +61,10 @@ class EntityEnvelopeSerializer(
         val (actorClassTypeProto, actorClassTypeOverride) = ActorInteractionCodec.encodeActorClassType(aie.actorClassType)
         val (eventTypeProto, eventTypeOverride) = ActorInteractionCodec.encodeEventType(aie.eventType)
         val (entityClassTypeProto, wireEntityId) = ActorInteractionCodec.encodeEntityIdPrefix(entityId)
-        val actorRefIdStrippedOpt = ActorInteractionCodec.stripIdPrefix(aie.actorRefId, aie.actorClassType)
         ActorInteraction(
           tick = aie.tick,
           lamportTick = aie.lamportTick,
-          actorRefId = actorRefIdStrippedOpt.getOrElse(aie.actorRefId),
+          actorRefId = aie.actorRefId,
           // shardRefId no longer written — receiver derives it from actorClassType, see proto comment.
           actorRef = aie.actorPathRef,
           actorClassType = actorClassTypeProto,
@@ -79,7 +78,8 @@ class EntityEnvelopeSerializer(
           actorClassTypeOverride = actorClassTypeOverride,
           eventTypeOverride = eventTypeOverride,
           entityClassType = entityClassTypeProto,
-          actorRefIdPrefixStripped = actorRefIdStrippedOpt.isDefined
+          seq = aie.seq,
+          isAntiMessage = aie.isAntiMessage
         ).toByteArray
       case Failure(exception) =>
         throw new IllegalArgumentException(
@@ -118,22 +118,21 @@ class EntityEnvelopeSerializer(
       NestedPayloadCodec.decode(serialization, proto.data.toByteArray, proto.payloadSerializerId, proto.payloadManifest) match {
         case Success(deserializedPayload) =>
           val decodedActorClassType = ActorInteractionCodec.decodeActorClassType(proto.actorClassType, proto.actorClassTypeOverride)
-          val decodedActorRefId =
-            if (proto.actorRefIdPrefixStripped) ActorInteractionCodec.rebuildIdPrefix(proto.actorRefId, decodedActorClassType)
-            else proto.actorRefId
           EntityEnvelopeEvent(
             ActorInteractionCodec.decodeEntityIdPrefix(proto.entityClassType, proto.entityId),
             ActorInteractionEvent(
               tick = proto.tick,
               lamportTick = proto.lamportTick,
-              actorRefId = decodedActorRefId,
+              actorRefId = proto.actorRefId,
               shardRefId = StringUtil.getModelClassName(decodedActorClassType),
               actorPathRef = proto.actorRef,
               actorClassType = decodedActorClassType,
               eventType = ActorInteractionCodec.decodeEventType(proto.eventType, proto.eventTypeOverride),
               data = deserializedPayload,
               actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
-              resourceId = proto.resourceId
+              resourceId = proto.resourceId,
+              seq = proto.seq,
+              isAntiMessage = proto.isAntiMessage
             )
           )
         case Failure(exception) =>

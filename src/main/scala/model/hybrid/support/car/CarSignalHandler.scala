@@ -29,10 +29,10 @@ class CarSignalHandler(
   private val isPersonCentricFn: () => Boolean,
   private val logWarnFn: String => Unit,
   private val logStaleEventDebugFn: String => Unit,
-  private val sendMessageFn: (String, String, AnyRef, String) => Unit,
-  private val getCurrentNodeFn: () => String,
-  private val getNextLinkFn: () => String,
-  private val getTripDestinationFn: () => Option[String],
+  private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  private val getCurrentNodeFn: () => Long,
+  private val getNextLinkFn: () => Long,
+  private val getTripDestinationFn: () => Option[Long],
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val setSignalWaitNeedsReverifyFn: Boolean => Unit,
   private val onSignalWaitFn: Long => Unit
@@ -58,11 +58,11 @@ class CarSignalHandler(
     } else {
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
-      if (nodeId != null) {
+      if (nodeId != 0L) {
         CityMapUtil.nodesById.get(nodeId) match {
           case Some(node) =>
             val linkId = getNextLinkFn()
-            if (linkId != null) {
+            if (linkId != 0L) {
               sendMessageFn(
                 node.id,
                 node.classType,
@@ -137,7 +137,7 @@ class CarSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

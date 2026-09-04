@@ -12,16 +12,16 @@ class BicycleLinkHandler(
   currentTickFn:           () => Tick,
   journeyReporter:         BicycleJourneyReporter,
   onFinishSpontaneousFn:   Option[Tick] => Unit,
-  onFinishPrivateVehicleFn: String => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   selfDestructFn:          () => Unit,
   isPersonCentricFn:       () => Boolean,
-  finishJourneyFn:         (String, String) => Unit,
+  finishJourneyFn: (String, Long) => Unit,
   setMesoExitTickFn:       Option[Tick] => Unit,
-  getTripDestinationFn:    () => Option[String],
+  getTripDestinationFn: () => Option[Long],
   logDebugFn:              String => Unit
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: BicycleState): Unit = {
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
     val bicycleSpeed = 5.56
     val time         = data.linkLength / bicycleSpeed
     state.status = Moving
@@ -52,7 +52,7 @@ class BicycleLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: BicycleState): Unit = {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
     if (state.status == Parked || state.status == Finished) {
       logDebugFn(
         s"${entityIdFn()}: Discarding stale ReceiveLeaveLinkInfo for link $linkId " +

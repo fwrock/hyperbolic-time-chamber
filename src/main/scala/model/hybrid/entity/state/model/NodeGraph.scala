@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.entity.state.model
 
 case class NodeGraph(
-  id: String,
+  id: Long,
   resourceId: String,
   classType: String,
   latitude: Double,

@@ -23,9 +23,9 @@ import org.htc.protobuf.core.entity.actor.Identify
 object PrivateVehicleCandidates {
 
   def available(
-    originNodeId: String,
+    originNodeId: Long,
     ownedVehicles: Map[String, Identify],
-    vehicleCurrentNode: Map[String, String]
+    vehicleCurrentNode: Map[String, Long]
   ): Map[String, Identify] =
     ownedVehicles.filter {
       case (mode, _) => vehicleCurrentNode.get(mode).forall(_ == originNodeId)

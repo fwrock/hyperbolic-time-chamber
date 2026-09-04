@@ -9,6 +9,6 @@ import core.entity.event.data.BaseEventData
   * for capacity, to drain up to that many of them. See docs/CONGESTION_PROPAGATION_DESIGN.md.
   */
 case class LinkCapacityFreedData(
-  linkId: String,
+  linkId: Long,
   freedCount: Int
 ) extends BaseEventData

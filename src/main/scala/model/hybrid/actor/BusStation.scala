@@ -28,8 +28,8 @@ class BusStation(
   override protected def internStateStrings(s: BusStationState): BusStationState =
     s.copy(
       name        = StringPool.intern(s.name),
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
@@ -85,7 +85,7 @@ class BusStation(
             val bus = state.buses.dequeue()
             try {
               busCreator.createBus(bus)
-              dependencies(bus.actorId) = ShardActorId(
+              dependencies(bus.actorId.toString) = ShardActorId(
                 entityId = bus.actorId,
                 classType = classOf[Bus].getName
               )
@@ -125,7 +125,7 @@ class BusStation(
         val bus = state.buses.dequeue()
         try {
           busCreator.createBus(bus)
-          dependencies(bus.actorId) = ShardActorId(
+          dependencies(bus.actorId.toString) = ShardActorId(
             entityId = bus.actorId,
             classType = classOf[Bus].getName
           )
@@ -152,7 +152,7 @@ class BusStation(
     } else if (routeCalculator.hasAnyRouteSegment) {
       def badSegments(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
-        stops: List[String]
+        stops: List[Long]
       ): String =
         stops.sliding(2).filterNot { pair =>
           route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
@@ -167,8 +167,8 @@ class BusStation(
 
       def skippedDestinations(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
-        stops: List[String]
-      ): Set[String] =
+        stops: List[Long]
+      ): Set[Long] =
         stops.sliding(2).filterNot { pair =>
           route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
         }.map(_.last).toSet
@@ -197,7 +197,7 @@ class BusStation(
         val bus = state.buses.dequeue()
         try {
           busCreator.createBus(bus)
-          dependencies(bus.actorId) = ShardActorId(
+          dependencies(bus.actorId.toString) = ShardActorId(
             entityId = bus.actorId,
             classType = classOf[Bus].getName
           )

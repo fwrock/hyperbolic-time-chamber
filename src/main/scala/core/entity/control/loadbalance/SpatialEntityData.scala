@@ -19,7 +19,8 @@ case class SpatialEntityData(
   spatialEntityId: String,
   lon: Double,
   lat: Double,
-  override val computationalWeight: Double = 1.0
+  override val computationalWeight: Double = 1.0,
+  override val entityClassType: String = ""
 ) extends SpatialEntity {
   override def position: (Double, Double) = (lon, lat)
 }

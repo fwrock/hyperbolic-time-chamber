@@ -27,7 +27,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEn
   *   Sub-ticks per global tick
   */
 case class MicroEnterLinkData(
-  linkId: String,
+  linkId: Long,
   mode: SimulationModeEnum,
   assignedLane: Int,
   linkLength: Double,

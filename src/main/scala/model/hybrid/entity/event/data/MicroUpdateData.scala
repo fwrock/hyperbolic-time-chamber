@@ -33,7 +33,7 @@ case class MicroUpdateData(
   velocity: Double,
   acceleration: Double,
   currentLane: Int,
-  leaderVehicle: Option[String],
+  leaderVehicle: Option[Long],
   gapToLeader: Double,
   leaderVelocity: Double,
   safeVelocity: Double

@@ -36,7 +36,7 @@ class PersonWalkingTripHandler(
     * @param logWarn Warning logging function
     * @return Total distance in meters
     */
-  def calculateRouteDistance(routeQueue: mutable.Queue[(String, String)], logWarn: String => Unit): Double = {
+  def calculateRouteDistance(routeQueue: mutable.Queue[(Long, Long)], logWarn: String => Unit): Double = {
     var totalDistance = 0.0
     val routeCopy = routeQueue.clone()
 
@@ -70,7 +70,7 @@ class PersonWalkingTripHandler(
     currentTick: Tick,
     logWarn: String => Unit
   ): Option[Tick] = {
-    val routeResult: Option[(Double, mutable.Queue[(String, String)])] =
+    val routeResult: Option[(Double, mutable.Queue[(Long, Long)])] =
       leg.precomputedRoute match {
         case Some(route) => Some((0.0, mutable.Queue(route: _*)))
         case None => GPSUtil.calcRouteCompactWalking(

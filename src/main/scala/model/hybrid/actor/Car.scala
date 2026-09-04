@@ -34,8 +34,8 @@ class Car(
 
   override protected def internStateStrings(s: CarState): CarState = {
     val copied = s.copy(
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
     copied.movableStatus             = s.movableStatus
     copied.movableBestRoute          = s.movableBestRoute
@@ -46,24 +46,62 @@ class Car(
     copied
   }
 
+  /** Adds this class's own link/signal-wait bookkeeping on top of `PrivateVehicle`'s
+    * `captureMigrationFields` (`ownerPersonRef` etc.). Found uncaptured by `docs/
+    * TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07): `currentLinkId`/
+    * `currentLinkLength`/`linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/
+    * `signalWaitNeedsReverify` are all actor-local `var`s driving branches in `actSpontaneous`
+    * (`Moving`'s `mesoExitTick` check, `WaitingSignal`'s `signalWaitUntilTick`/
+    * `signalWaitNeedsReverify` check) — a `RollbackHistoryHandler` restore (same primitive as
+    * shard migration) that skips them leaves `state.status` correctly restored but these fields at
+    * whatever live execution left them, taking a different branch on replay than the original run
+    * did. `Motorcycle`/`Bicycle` share the identical set of fields minus `currentLinkLength`; see
+    * `MigrationSnapshot`'s `vehicle*` fields, which are named generically for that reuse, not
+    * `Car`-specific.
+    */
+  private def captureCarMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
+      vehicleCurrentLinkLength = currentLinkLength,
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify
+    )
+
+  /** Restores what [[captureCarMigrationFields]] captured. */
+  private def restoreCarMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
+    currentLinkLength = snapshot.vehicleCurrentLinkLength
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+  }
+
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
-    captureMigrationFields(super.buildMigrationSnapshot())
+    captureCarMigrationFields(captureMigrationFields(super.buildMigrationSnapshot()))
 
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     super.applyMigrationSnapshot(snapshot)
     restoreMigrationFields(snapshot)
+    restoreCarMigrationFields(snapshot)
   }
 
-  private var currentLinkId: Option[String] = None
-  private var currentLinkLength: Double = 0.0
-  private var linkEntryTick: Option[Tick] = None
-  private var mesoExitTick: Option[Tick] = None
+  // protected, not private: lets CarLinkWaitMigrationSnapshotSpec drive these directly rather than
+  // reverse-engineering LinkInfoData/LinkAccessData payloads just to exercise the capture/restore
+  // round trip -- same rationale as this class's other test-only protected accessors.
+  protected var currentLinkId: Option[Long] = None
+  protected var currentLinkLength: Double = 0.0
+  protected var linkEntryTick: Option[Tick] = None
+  protected var mesoExitTick: Option[Tick] = None
 
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
-  private var signalWaitUntilTick: Option[Tick] = None
-  private var signalWaitNeedsReverify: Boolean = false
+  protected var signalWaitUntilTick: Option[Tick] = None
+  protected var signalWaitNeedsReverify: Boolean = false
 
   private lazy val journeyReporter = new CarJourneyReporter(
     reportFn        = (data, label) => report(data = data, label = label),
@@ -186,7 +224,7 @@ class Car(
   override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = if (state == null) 0.0 else state.distance
   override protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -206,7 +244,7 @@ class Car(
 
   /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
     */
-  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+  override protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit =
     state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
 
   /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
@@ -332,9 +370,7 @@ class Car(
     val precomputedPathQueue = state.precomputedRoute
       .map { items =>
         items.flatMap { item =>
-          if (item.linkId != null && item.linkId.nonEmpty && item.nodeId != null && item.nodeId.nonEmpty) {
-            Some((item.linkId, item.nodeId))
-          } else None
+          Some((item.linkId, item.nodeId))
         }
       }
       .filter(_.nonEmpty)
@@ -384,14 +420,16 @@ class Car(
     val origin = getTripOrigin.getOrElse(state.origin)
     val destination = getTripDestination.getOrElse(state.destination)
 
-    if (origin == null || destination == null) {
+    if (origin == 0L || destination == 0L) {
       val tripOrigin = getTripOrigin.getOrElse(state.origin)
       finishAndCleanup("null_origin_or_destination", tripOrigin)
       return
     }
 
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
+      GPSUtil
+        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+        match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           state.bestCost = cost
@@ -419,7 +457,7 @@ class Car(
     }
   }
 
-  private def finishAndCleanup(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit = {
+  private def finishAndCleanup(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit = {
     finishJourney(reason, finalNode)
     onFinishPrivateVehicle(finalNode, wasTeleported)
     onFinishSpontaneous(None)
@@ -439,7 +477,7 @@ class Car(
     super.leavingLink()
   }
 
-  override protected def onFinish(nodeId: String): Unit = {
+  override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
     onFinishPrivateVehicle(nodeId)
     if (!isPersonCentric) {
@@ -481,7 +519,7 @@ class Car(
     }
   }
 
-  private def finishJourney(reason: String, finalNode: String): Unit =
+  private def finishJourney(reason: String, finalNode: Long): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {

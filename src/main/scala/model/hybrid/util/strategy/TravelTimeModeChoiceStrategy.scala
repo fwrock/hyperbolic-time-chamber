@@ -46,8 +46,8 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
   private val PrivateModes: Set[String] = Set("car", "bicycle", "motorcycle")
 
   override def choose(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights,
     ownedVehicles: Map[String, Identify] = Map.empty
   ): ModeChoiceResult =
@@ -66,8 +66,8 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
     * McFadden 1974); `choose`'s `maxByOption` is the simplification, not the ground truth.
     */
   def scoredCandidates(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights,
     ownedVehicles: Map[String, Identify] = Map.empty
   ): List[(ArrivalLogistics, Double)] = {

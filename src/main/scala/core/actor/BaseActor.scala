@@ -12,6 +12,7 @@ import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.entity.event.control.execution.DestructAckEvent
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.PostLoadRegistrationEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
@@ -199,6 +200,18 @@ abstract class BaseActor[T <: BaseState](
   private def destruct(event: DestructEvent): Unit = {
     ActorMetrics.actorsDestroyed.labels(getClass.getSimpleName).inc()
     onDestruct(event)
+    // Ack back to whoever force-destructed us (see DestructAckEvent's doc): lets the time manager
+    // know this actor's onDestruct -- and under Time Warp, the report-buffer flush it triggers --
+    // has actually been sent, not merely requested.
+    if (event.actorRef != null && event.actorRef.nonEmpty) {
+      // entityId is only guaranteed numeric for sharded simulation entities the time manager
+      // actually tracks (registered via a Long actorId); infra actors (loaders, managers) use
+      // arbitrary String ids like "loader-<hash>" and were never registered, so there's no
+      // pendingDestructAcks entry to clear for them -- skip rather than crash on parse.
+      entityId.toLongOption.foreach {
+        id => context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = id)
+      }
+    }
     context.stop(self)
   }
 
@@ -233,7 +246,7 @@ abstract class BaseActor[T <: BaseState](
       MigrationStateStoreRegistry.getSnapshotManager match {
         case Some(smRef) =>
           smRef ! SaveMigrationSnapshotEvent(
-            entityId = IdUtil.format(entityId),
+            entityId = entityId,
             batchId = event.batchId,
             snapshot = snapshot
           )

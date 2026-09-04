@@ -7,11 +7,9 @@ import core.entity.event.control.execution.QueryNextTickEvent
 import core.entity.event.control.load.{ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.types.Tick
-import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
+import core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
 
 import org.apache.pekko.actor.{ActorRef, CoordinatedShutdown, Props, Terminated}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{LocalTimeReportEvent, RegisterActorEvent, StartSimulationTimeEvent, StopSimulationEvent, UpdateGlobalTimeEvent}
@@ -23,26 +21,26 @@ import org.interscity.htc.core.metrics.core.PhaseMetrics
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-/** Global Time Manager that coordinates all local time managers. This manager acts as a central
-  * coordinator, synchronizing time across distributed local time managers and ensuring consistent
-  * simulation progress.
+/** Conservative (`SelectiveBarrier`) global time-manager coordinator: an LTM is only told to
+  * advance once every LTM registered here has reported the current tick as fully processed. This
+  * is today's (and, before `docs/TIME_WARP_DESIGN.md` §2's split, the only) `GlobalTimeManager`
+  * behavior — renamed and rebased onto [[GlobalTimeManagerBase]], no behavior change.
   *
   * @param simulationDuration
   *   The total duration of the simulation in ticks
   * @param simulationManager
   *   Reference to the simulation manager
   */
-class GlobalTimeManager(
-  val simulationDuration: Tick,
+class ConservativeGlobalTimeManager(
+  simulationDuration: Tick,
   val extendSimulationIfPendingEventsAfterEnd: Boolean,
-  val simulationManager: ActorRef
-) extends TimeManagerBase(
-      timeManager = null,
+  simulationManager: ActorRef
+) extends GlobalTimeManagerBase(
+      simulationDuration = simulationDuration,
+      simulationManager = simulationManager,
       actorId = GLOBAL_TIME_MANAGER_ACTOR_NAME
     ) {
 
-  private var selfProxy: ActorRef = null
-  private var timeManagersPool: ActorRef = _
   private val localTimeManagers: mutable.Map[ActorRef, LocalTimeManagerTickInfo] = mutable.Map()
   @volatile private var isTerminated = false
 
@@ -112,15 +110,8 @@ class GlobalTimeManager(
     )(context.dispatcher)
   }
 
-  override def onStart(): Unit =
-    createTimeManagersPool()
-
-  private def createTimeManagersPool(): Unit = {
+  override def onStart(): Unit = {
     val config = context.system.settings.config
-    val totalInstances =
-      SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
-    val maxInstancesPerNode =
-      SimulatorSettingsRegistry.getInt("htc.time-manager.max-instances-per-node", config)
     metricsLogInterval =
       SimulatorSettingsRegistry.getInt("htc.time-manager.metrics-log-interval", config).toLong
     selectiveBarrierLogInterval =
@@ -131,29 +122,15 @@ class GlobalTimeManager(
       SimulatorSettingsRegistry
         .getInt("htc.time-manager.local-report-wait-log-interval", config)
         .toLong
-    logInfo(
-      s"Creating LocalTM pool: totalInstances=$totalInstances, " +
-        s"maxInstancesPerNode=$maxInstancesPerNode"
-    )
-    timeManagersPool = context.actorOf(
-      ClusterRouterPool(
-        RoundRobinPool(0),
-        ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(
-        LocalDiscreteEventTimeManager.props(
-          simulationDuration,
-          simulationManager,
-          Some(getSelfProxy)
-        )
-      ),
-      name = POOL_TIME_MANAGER_ACTOR_NAME
-    )
-    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+    createTimeManagersPool()
   }
+
+  override protected def localTimeManagerProps(): Props =
+    LocalDiscreteEventTimeManager.props(
+      simulationDuration,
+      simulationManager,
+      Some(getSelfProxy)
+    )
 
   override def handleEvent: Receive = {
     case GTMStallCheck                   => logGTMStallIfNeeded()
@@ -258,7 +235,7 @@ class GlobalTimeManager(
       waitingForInitialWindow = true
       logInfo(s"[StartupPhase] progressive_first_window_request: fromTick=$initialTick")
       requestProgressiveLoad(initialTick)
-      return 
+      return
     }
 
     PhaseMetrics.recordPhaseStart("simulation")
@@ -378,7 +355,7 @@ class GlobalTimeManager(
       logDebug("Waiting for initial progressive window — suppressing tick advancement")
       return
     }
-    
+
     if (migrationPauseRequested) {
       logInfo(
         s"Migration pause active — holding at tick $localTickOffset until migration completes"
@@ -503,9 +480,6 @@ class GlobalTimeManager(
       calculateAndBroadcastNextGlobalTick()
     }
   }
-
-  private def notifyLocalManagers(event: Any): Unit =
-    timeManagersPool ! org.apache.pekko.routing.Broadcast(event)
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
   }
@@ -681,24 +655,16 @@ class GlobalTimeManager(
       CoordinatedShutdown(context.system).run(CoordinatedShutdown.JvmExitReason)
     }
   }
-
-  private def getSelfProxy: ActorRef =
-    if (selfProxy == null) {
-      selfProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
-      selfProxy
-    } else {
-      selfProxy
-    }
 }
 
-object GlobalTimeManager {
+object ConservativeGlobalTimeManager {
   def props(
     simulationDuration: Tick,
     extendSimulationIfPendingEventsAfterEnd: Boolean,
     simulationManager: ActorRef
   ): Props =
     Props(
-      classOf[GlobalTimeManager],
+      classOf[ConservativeGlobalTimeManager],
       simulationDuration,
       extendSimulationIfPendingEventsAfterEnd,
       simulationManager

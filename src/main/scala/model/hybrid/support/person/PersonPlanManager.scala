@@ -39,7 +39,7 @@ class PersonPlanManager(
   privateVehicleHandler: PersonPrivateVehicleTripHandler,
   metricsReporter: PersonMetricsReporter,
   reportFn: (Map[String, Any], String) => Unit,
-  sendMessageFn: (String, String, Any, String, Any) => Unit,
+  sendMessageFn: (Long, String, Any, String, Any) => Unit,
   logDebug: String => Unit,
   logWarn: String => Unit
 ) {
@@ -59,10 +59,10 @@ class PersonPlanManager(
   private def nextTripId(state: PersonState): String =
     s"$personId:trip:${state.completedTrips + 1}"
 
-  private def physicalNodeIdBefore(state: PersonState): String =
+  private def physicalNodeIdBefore(state: PersonState): Long =
     state.currentPhysicalNodeId.getOrElse {
-      logWarn(s"$personId has no resolvable physical node (empty plan?) — using empty origin")
-      ""
+      logWarn(s"$personId has no resolvable physical node (empty plan?) — using sentinel origin 0")
+      0L
     }
 
   /** Looks (without consuming) for the next [[Activity]] at the head of `remaining` — this is
@@ -208,7 +208,8 @@ class PersonPlanManager(
           weights = state.modeChoiceWeights,
           ownedVehicles = state.ownedVehicles,
           vehicleCurrentNode = state.vehicleCurrentNode,
-          currentTick = currentTick
+          currentTick = currentTick,
+          entityId = personId
         )
         engine.decide(originNodeId, destinationNodeId, request, ctx) match {
           case Right(legs) =>
@@ -270,7 +271,8 @@ class PersonPlanManager(
               weights = state.modeChoiceWeights,
               ownedVehicles = state.ownedVehicles,
               vehicleCurrentNode = state.vehicleCurrentNode,
-              currentTick = currentTick
+              currentTick = currentTick,
+              entityId = personId
             )
             val request = ModeDecisionRequest(allowedModes = replanAllowedModes, strategyId = replanStrategyId)
             engine.decide(physicalNodeId, destinationNodeId, request, ctx) match {
@@ -375,7 +377,7 @@ class PersonPlanManager(
     */
   def handlePTUnloadRequest(
     event: ActorInteractionEvent,
-    nodeId: String,
+    nodeId: Long,
     mode: ConcreteMode,
     state: PersonState,
     currentTick: Tick

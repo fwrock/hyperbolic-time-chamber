@@ -29,7 +29,13 @@ abstract class Movable[T <: MovableState](
   protected def requestRoute(): Unit = {
     logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
     try
-      GPSUtil.calcRouteCompact(originId = state.origin, destinationId = state.destination, maxExpansions = 500_000) match {
+      GPSUtil
+        .calcRouteCompact(
+          originId = state.origin,
+          destinationId = state.destination,
+          maxExpansions = 500_000
+        )
+        match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
@@ -124,7 +130,7 @@ abstract class Movable[T <: MovableState](
     data: LinkInfoData
   ): Unit = {}
 
-  protected def onFinish(nodeId: String): Unit = {
+  protected def onFinish(nodeId: Long): Unit = {
     if (state.destination == nodeId) {
       state.movableReachedDestination = true
       state.movableStatus = Finished
@@ -153,7 +159,7 @@ abstract class Movable[T <: MovableState](
    * infrastructure (e.g. [[Subway]] on rail links) override this to bypass
    * the city-map lookup and return the actor reference directly.
    */
-  protected def resolveLink(linkId: String): Option[(String, String)] =
+  protected def resolveLink(linkId: Long): Option[(Long, String)] =
     CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
 
   protected def enterLink(): Unit =
@@ -248,7 +254,7 @@ abstract class Movable[T <: MovableState](
         }
     }
 
-  protected def getNextPath: Option[(String, String)] =
+  protected def getNextPath: Option[(Long, Long)] =
     if (state == null) None
     else {
       state.movableBestRoute match {
@@ -258,7 +264,7 @@ abstract class Movable[T <: MovableState](
       }
     }
 
-  protected def viewNextPath: Option[(String, String)] =
+  protected def viewNextPath: Option[(Long, Long)] =
     if (state == null) None
     else {
       state.movableBestRoute match {
@@ -268,11 +274,11 @@ abstract class Movable[T <: MovableState](
       }
     }
 
-  protected def getCurrentNode: String =
-    if (state == null) null
-    else state.movableCurrentPath.map(_._2).orNull
+  protected def getCurrentNode: Long =
+    if (state == null) 0L
+    else state.movableCurrentPath.map(_._2).getOrElse(0L)
 
-  protected def getNextLink: String =
-    if (state == null) null
-    else viewNextPath.map(_._1).orNull
+  protected def getNextLink: Long =
+    if (state == null) 0L
+    else viewNextPath.map(_._1).getOrElse(0L)
 }

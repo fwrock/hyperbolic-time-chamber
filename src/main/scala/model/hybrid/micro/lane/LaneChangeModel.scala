@@ -54,6 +54,10 @@ trait LaneChangeModel {
     *   Total lanes available
     * @param laneRestrictions
     *   Lane restrictions (e.g., bus lane)
+    * @param randomSeed
+    *   Seed for any driver-variability draw made while evaluating this decision. Callers must
+    *   derive it from `(entityId, tick)` rather than a stored generator, so replay after a Time
+    *   Warp rollback reproduces the same decision; see `CarFollowingModel.calculateAcceleration`.
     * @return
     *   Lane change decision
     */
@@ -66,7 +70,8 @@ trait LaneChangeModel {
     followerInTargetLane: Option[(String, Double, Double)],
     targetLane: Int,
     numberOfLanes: Int,
-    laneRestrictions: Map[Int, String] = Map.empty
+    laneRestrictions: Map[Int, String] = Map.empty,
+    randomSeed: Long
   ): LaneChangeDecision
 
   /** Check if lane is available for vehicle.
@@ -156,7 +161,8 @@ case class SimpleLaneChange(
     followerInTargetLane: Option[(String, Double, Double)],
     targetLane: Int,
     numberOfLanes: Int,
-    laneRestrictions: Map[Int, String]
+    laneRestrictions: Map[Int, String],
+    randomSeed: Long
   ): LaneChangeDecision = {
 
     if (!isLaneAvailable(vehicleState, targetLane, laneRestrictions)) {

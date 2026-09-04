@@ -28,7 +28,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   Vehicle physical length
   */
 case class MicroStepData(
-  vehicleId: String,
+  vehicleId: Long,
   currentPosition: Double,
   currentVelocity: Double,
   currentLane: Int,

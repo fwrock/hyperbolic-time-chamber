@@ -5,6 +5,6 @@ import org.apache.pekko.actor.ActorRef
 import org.interscity.htc.core.entity.event.data.BaseEventData
 
 case class BusRequestUnloadPassengerData(
-  nodeId: String,
+  nodeId: Long,
   nodeRef: ActorRef
 ) extends BaseEventData

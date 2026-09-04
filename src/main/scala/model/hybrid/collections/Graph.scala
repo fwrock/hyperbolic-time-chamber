@@ -814,7 +814,7 @@ object Graph {
   def loadFromSqliteFile(
     dbPath: String,
     defaultWeightForUnweighted: Double = 0.0
-  ): Try[LoadedGraphData[NodeGraph, String, Double, EdgeGraph]] =
+  ): Try[LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]] =
     Try {
       Class.forName("org.sqlite.JDBC")
       val conn = DriverManager.getConnection(s"jdbc:sqlite:file:$dbPath?immutable=1")
@@ -834,7 +834,7 @@ object Graph {
           } finally stmt.close()
         }
 
-        val nodeMapBuilder = Map.newBuilder[String, NodeGraph]
+        val nodeMapBuilder = Map.newBuilder[Long, NodeGraph]
         val nodeStmt = conn.createStatement()
         try {
           val nodeRs = nodeStmt.executeQuery(
@@ -843,7 +843,7 @@ object Graph {
           try
             while (nodeRs.next()) {
               val node = NodeGraph(
-                id = nodeRs.getString("id"),
+                id = nodeRs.getLong("id"),
                 resourceId = nodeRs.getString("resource_id"),
                 classType = nodeRs.getString("class_type"),
                 latitude = nodeRs.getDouble("latitude"),
@@ -853,11 +853,11 @@ object Graph {
             }
           finally nodeRs.close()
         } finally nodeStmt.close()
-        val nodesByIdMap: Map[String, NodeGraph] = nodeMapBuilder.result()
+        val nodesByIdMap: Map[Long, NodeGraph] = nodeMapBuilder.result()
 
         var graph = Graph.empty[NodeGraph, Double, EdgeGraph]
-        val edgeLabelMapBuilder = Map.newBuilder[String, EdgeGraph]
-        val seenEdgeLabelIds = mutable.Set[String]()
+        val edgeLabelMapBuilder = Map.newBuilder[Long, EdgeGraph]
+        val seenEdgeLabelIds = mutable.Set[Long]()
 
         val edgeStmt = conn.createStatement()
         try {
@@ -866,13 +866,13 @@ object Graph {
           )
           try
             while (edgeRs.next()) {
-              val sourceId = edgeRs.getString("source_id")
-              val targetId = edgeRs.getString("target_id")
+              val sourceId = edgeRs.getLong("source_id")
+              val targetId = edgeRs.getLong("target_id")
 
               (nodesByIdMap.get(sourceId), nodesByIdMap.get(targetId)) match {
                 case (Some(sourceNode), Some(targetNode)) =>
                   val label = EdgeGraph(
-                    id = edgeRs.getString("id"),
+                    id = edgeRs.getLong("id"),
                     resourceId = edgeRs.getString("resource_id"),
                     classType = edgeRs.getString("class_type"),
                     length = edgeRs.getDouble("length")

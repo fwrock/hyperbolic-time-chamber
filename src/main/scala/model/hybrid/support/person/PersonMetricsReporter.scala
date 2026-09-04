@@ -173,7 +173,7 @@ class PersonMetricsReporter(
     * @param currentTick Current simulation tick
     */
   def reportTripCompleted(
-    vehicleId: String,
+    vehicleId: Long,
     distanceTraveled: Double,
     travelTime: Long,
     completionReason: String,
@@ -207,7 +207,7 @@ class PersonMetricsReporter(
   def reportActivityStart(
     activityType: String,
     activitySequence: Int,
-    nodeId: String,
+    nodeId: Long,
     endTime: String,
     currentTick: Tick
   ): Unit =

@@ -1375,6 +1375,122 @@ until this deeper gap is addressed — a genuine `htc-architect`-level design qu
 signal model need turn-movement-aware admission control, and if so what data/format would supply
 it), not a follow-up wiring task. Flagged here, not designed or implemented.
 
+## `PersonPlanManager.handlePTUnloadRequest` Silently Drops the Reply When a PT-Boarding Timeout Races the Real Ride (Found 2026-08-07, Not Fixed)
+
+Found during a `docs/TIME_WARP_DESIGN.md`-driven audit checking whether `model/hybrid`'s
+consistency-critical request/reply handlers actually follow this repo's own CLAUDE.md
+"Synchronization Discipline" (every consistency-critical request handler must reply on *every*
+branch, including no-op ones). **Not Time-Warp-specific** — reproduces identically under the
+conservative barrier; found while looking for Time Warp gaps, but it's a general correctness bug.
+
+**The gap**: `PersonPlanManager.handlePTUnloadRequest` (`support/person/PersonPlanManager.scala:378-419`)
+only sends a reply inside its `case t: Traveling if t.ptWait.isDefined` branch (delegating to
+`PersonPTTripHandler.handlePTUnloadRequest`, itself verified to reply on every branch). The fallback:
+
+```scala
+case _ =>
+  logWarn(s"$personId received PT unload request from ${event.actorRefId} while not waiting on a PT leg — ignoring (already handled)")
+  None
+```
+
+sends **no reply at all** — `Person.actInteractWith` (`actor/Person.scala:228-240`) consumes the
+`Option[PlanStepResult]` via `.foreach`, so a `None` here silently drops the interaction with zero
+message back to the requesting `Bus`/`Subway`.
+
+**Why the fallback branch is actually reachable, not just defensive dead code**: `ptWait`
+(`TripExecutionState.Traveling.ptWait`) is set when a transit leg starts
+(`PersonPlanManager.scala:180-191`), alongside a self-scheduled timeout wake at
+`currentTick + state.ptWaitTimeoutTicks`. Boarding (`Person.actInteractWith`'s
+`PassengerBoardedVehicleData` case, `Person.scala:225-226`) only sets the actor-local
+`currentPTVehicleRef` — it never clears/reschedules that pending timeout, and there's no API in this
+TM to cancel an already-scheduled tick. `ptWait` is only cleared on true arrival
+(`PersonPlanManager.scala:414`, inside the same branch that replies). So if the PT ride itself (after
+boarding) takes longer than `ptWaitTimeoutTicks` — plausible under congestion if that timeout was
+tuned for "wait for the bus to *arrive*," not "wait out the whole ride" — the Person self-wakes
+mid-ride, sees `Traveling(ptWait = Some(...))`, and dispatches `replanAfterPTTimeout`
+(`PersonPlanManager.scala:245-310`), which unconditionally drops the current leg run and replans —
+with no awareness the person is already physically seated on the vehicle. When the real vehicle
+later reaches the alighting stop and sends its unload request, `tripExecution` no longer matches
+`Traveling(ptWait = Some(...))`, so the request falls into the silent-`None` branch above.
+
+**Consequence**: the vehicle's `expectedUnloadResponses` counter (`BusStopHandler.scala:174`,
+`SubwayPassengerHandler`'s equivalent — both actor-local, not part of `BusState`/`SubwayState`)
+never reaches `countUnloadReceived`, so `handleUnloadPassenger`'s completion branch
+(`BusStopHandler.scala:100-147`, gated on `state.countUnloadReceived >= expectedUnloadResponses`)
+never fires — the vehicle is permanently stuck in `WaitingUnloadPassenger` for that stop specifically
+because of this one passenger. No TM-level hang (the vehicle had already called
+`onFinishSpontaneous(None)` before waiting and relies on a later `scheduleEvent` call to re-enter the
+schedule, the same "immediate-`None`-finish + reschedule-on-reply" pattern verified clean everywhere
+else in the vehicle↔`Node` signal/capacity exchange during the same audit) — this manifests as a
+silently-corrupted trip/ridership/completion metric, not a crash.
+
+**Not fixed** — flagged for whoever picks this up. The real fix is upstream of the reply handler
+itself: `PassengerBoardedVehicleData` handling needs to cancel or account for the pending
+`ptWaitTimeoutTicks` wake once boarding actually happens, not patch the fallback branch to
+paper over a still-possible desync between `tripExecution` and physical vehicle occupancy.
+
+**Also surfaced, not a bug**: the vehicle↔`Node` signal/link-access exchange (`CarSignalHandler`
+and its Motorcycle/Bicycle/Bus equivalents) doesn't literally implement CLAUDE.md's "withhold
+`onFinishSpontaneous` until the reply arrives" wording — it finishes with `None` immediately and
+relies on the reply handler's `scheduleEvent` call to re-enter the schedule. Functionally sound today
+(`NodeEventHandler.handleRequestLinkAccess` replies on every branch, verified), but worth noting the
+failure mode differs from CLAUDE.md's literal example: a future missing-reply bug introduced here
+would silently strand a vehicle forever rather than hang the Time Manager, since the requester is
+already unregistered from `runningEvents`/`scheduledActors` by the time it's waiting.
+
+## Time Warp: `Movable` Route State (`movableCurrentPath`/`bestRoute`) Not Correctly Reconstructed After a Rollback (Found 2026-08-07, Not Fixed)
+
+Found running a real conservative-vs-optimistic comparison on the tiny end-to-end scenario, as a
+continuation of the Time Warp report-flush-race work (`docs/TIME_WARP_DESIGN.md` §4). Two prior
+layers of that race were fixed and verified first (see that doc's implementation log): (1) an
+ack-based handshake (`DestructAckEvent`/`LocalDestructCompleteEvent`) so `OptimisticGlobalTimeManager`
+only tells `ReportManager` to stop once every force-destructed actor's flush has actually been sent,
+closing a race where `ReportManager` routinely closed its parquet writers before Time-Warp-buffered
+reports arrived; and (2) a `hasStarted` gate on `OptimisticLocalTimeManager.onActorRescheduled`, since
+`registerActor`/`scheduleEvent` can arrive during the load/warm-up phase (well before this LTM's own
+`StartSimulationTimeEvent`), and dispatching then — as the unconditional immediate-dispatch behavior
+used to — handed EAGER actors like `SubwayStation`/`BusStation` their first `SpontaneousEvent` before
+the infrastructure it depends on (`Node`, the dynamic-actor-spawn machinery) was ready.
+
+Both fixes are real and independently verified (unit tests, plus confirmed via live logs that
+`SubwayStation`/`BusStation` now actually run — route calculation, dynamic `Bus`/`Subway` spawn, real
+interaction traffic — none of which happened at all before either fix). But the comparison run's
+parquet output is still far short of parity with conservative mode (0 rows vs. conservative's 285),
+and the reason is a third, distinct, and larger gap:
+
+**The gap**: `Bus`/`Subway` (and by construction, anything sharing `Movable`) genuinely roll back
+under Time Warp once real activity starts — confirmed via repeated `"anti-message for
+unknown/already-pruned messageId"` log lines for both actors, meaning `RollbackHistoryHandler`
+detected a straggler and unwound processed events. After one of these rollbacks, `BusSignalHandler`
+starts logging `"No current node"` (`support/bus/BusSignalHandler.scala:72`) — `getCurrentNode`
+(`Movable.scala:271`) reads `state.movableCurrentPath`, and that field comes back empty/`None` even
+though `Movable.enterLink()` (`Movable.scala:159-202`) always sets it *synchronously*, before ever
+sending anything, so this isn't the fire-and-forget `EnterLinkData` exchange racing ahead of a reply
+(that was the first hypothesis; ruled out by reading `enterLink()`/`getCurrentNode` directly — no
+reply is ever awaited to populate this field in the first place). The only mechanism that could make
+an already-synchronously-set field revert to empty is replay: `RollbackHistoryHandler`'s
+checkpoint-plus-forward-replay reconstructing this actor's state after a rollback without correctly
+reproducing every mutation `Movable` subclasses make to their route-position fields along the way.
+
+**Why conservative mode never surfaces this**: it doesn't roll back at all — no stragglers, no
+replay, so whatever gap exists in replay's fidelity for `Movable` state is invisible under the
+barrier. This is a genuine Time-Warp-only correctness gap, not a report-buffering/flush-ordering
+issue like the other two fixed this round — it sits at the semantic level of "does replaying logged
+events actually reproduce the same state as live execution did," specifically for `Movable`'s
+route-tracking fields (`movableCurrentPath`, `movableBestRoute`, `currentPathPosition`, and siblings
+across `Car`/`Bus`/`Motorcycle`/`Bicycle`/`Subway`).
+
+**Not fixed** — this is a materially bigger and riskier area than the two flush/registration-timing
+fixes above (core vehicle movement state, not Time Warp plumbing), so it's flagged here rather than
+attempted at the end of an already-long session. Whoever picks this up should start by checking
+whether `RollbackHistoryHandler`'s `recordProcessedEvent`/`rollbackTo` replay path
+(`core/actor/rollback/RollbackHistoryHandler.scala`) re-runs `Movable.enterLink()`/`leavingLink()`'s
+full mutation sequence on each replayed event, or only a partial subset (e.g. if replay short-circuits
+side effects that were originally driven by an interaction-event reply rather than the spontaneous
+event itself — `Movable`'s route fields are mutated across *both* `actSpontaneous` and
+`actInteractWith` handling, and it's plausible only one of those paths is captured correctly by
+whatever `LoggedEvent` replay currently reconstructs).
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file

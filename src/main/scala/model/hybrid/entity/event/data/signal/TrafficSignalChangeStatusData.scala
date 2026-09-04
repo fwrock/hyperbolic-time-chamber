@@ -8,5 +8,5 @@ import model.hybrid.entity.state.model.SignalState
 case class TrafficSignalChangeStatusData(
   signalState: SignalState,
   nextTick: Tick,
-  phaseOrigin: String
+  phaseOrigin: Long
 ) extends BaseEventData

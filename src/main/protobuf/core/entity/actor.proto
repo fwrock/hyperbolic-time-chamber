@@ -5,7 +5,7 @@ package org.htc.protobuf.core.entity;
 import "google/protobuf/any.proto";
 
 message Identify {
-  string id = 1;
+  int64 id = 1;
   string resourceId = 2;
   string classType = 3;
   string actorRef = 4;
@@ -27,7 +27,7 @@ message ActorDataSimulation {
 }
 
 message Dependency {
-  string id = 1;
+  int64 id = 1;
   string classType = 2;
   string resourceId = 3;
   string actorType = 4;

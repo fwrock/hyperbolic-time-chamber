@@ -23,20 +23,9 @@ class BusStationRouteCalculator(
 
   private def state: BusStationState = getStateFn()
 
-  def orderedBusStopIds: List[String] = {
-    def suffixNumber(id: String): Option[Long] = {
-      val digits = id.reverse.takeWhile(_.isDigit).reverse
-      if (digits.nonEmpty) Some(digits.toLong) else None
-    }
-    state.busStops.keys.toList.sortBy { id =>
-      suffixNumber(id) match {
-        case Some(num) => (0L, num, id)
-        case None      => (1L, Long.MaxValue, id)
-      }
-    }
-  }
+  def orderedBusStopIds: List[Long] = state.busStops.keys.toList.sorted
 
-  private def mkRouteFutures(stops: List[String], going: Boolean)(implicit
+  private def mkRouteFutures(stops: List[Long], going: Boolean)(implicit
     ec: ExecutionContext
   ): List[Future[Option[(SubRoutePair, mutable.Queue[(Identify, Identify)])]]] =
     stops.sliding(2).toList.map { pair =>

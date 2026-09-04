@@ -101,7 +101,10 @@ enum ActorCreationType {
 message ActorInteraction{
   uint64 tick = 1;
   uint64 lamportTick = 2;
-  string actorRefId = 3;
+  // Sender's logical entity id (matches Identify.id/Dependency.id — int64 like every other
+  // actor-addressing id in the migrated model). No prefix-stripping needed here (unlike entityId
+  // below): a raw int64 has no "htcaid_<type>_" string prefix to strip in the first place.
+  int64 actorRefId = 3;
   // No longer populated on the wire: it's always derivable from actorClassType
   // (StringUtil.getModelClassName applied to the decoded actorClassType string reconstructs the
   // sender's own FQCN, which is exactly what this field used to carry — see
@@ -133,9 +136,20 @@ message ActorInteraction{
   // a free-form caller string, so there's nothing to fall back for. See
   // docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 10.
   ActorClassType entityClassType = 16;
-  // True when actorRefId had its "htcaid_<type>_" prefix stripped (type = the sender's own
-  // actorClassType, field 6) — needed because, unlike entityId/entityClassType, actorRefId has no
-  // spare enum slot to double as a strip/no-strip signal (its type is always actorClassType
-  // itself). Default false = actorRefId is verbatim on the wire.
-  bool actorRefIdPrefixStripped = 17;
+  // Formerly actorRefIdPrefixStripped (bool): a String-era wire optimization stripping the
+  // "htcaid_<type>_" prefix off actorRefId. Obsolete now that actorRefId is int64 (field 3) --
+  // there's no string prefix left to strip. Reserved, not reused, since old binaries on this wire
+  // format (pre actorRefId-as-int64) are not a compatibility concern for this feature branch.
+  reserved 17;
+  reserved "actorRefIdPrefixStripped";
+  // Time Warp (docs/TIME_WARP_DESIGN.md §10): this send's identity, paired with actorRefId
+  // (sender) and tick — together they form the MessageId (senderId, tick, seq) a rollback's
+  // anti-message cascade needs to address. Per-sender monotonically increasing, assigned by
+  // SimulationBaseActor.sendMessageTo; 0 for every message sent before this field existed and for
+  // any sender not yet participating in Time Warp (i.e. every conservative-mode send today).
+  uint64 seq = 18;
+  // True if this ActorInteraction is an anti-message retracting an earlier send identified by
+  // (actorRefId, tick, seq) above, rather than a normal interaction. Default false — every
+  // conservative-mode send is unaffected.
+  bool isAntiMessage = 19;
 }

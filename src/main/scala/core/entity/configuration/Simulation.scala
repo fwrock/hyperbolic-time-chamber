@@ -1,6 +1,7 @@
 package org.interscity.htc
 package core.entity.configuration
 
+import core.enumeration.TimeManagerTypeEnum
 import core.types.Tick
 
 import java.time.LocalDateTime
@@ -16,6 +17,12 @@ case class Simulation(
   timeStep: Long,
   tickDuration: Option[Double] = None,
   duration: Tick,
+  /** Which synchronization strategy every simulation entity's LTM pool uses for this run — one of
+    * `TimeManagerTypeEnum`'s values. Defaults to the conservative `SelectiveBarrier` strategy
+    * (today's only reachable behavior); set to `TimeManagerTypeEnum.TIME_WARP` to run this
+    * scenario under optimistic synchronization instead. See `docs/TIME_WARP_DESIGN.md`.
+    */
+  timeManagerType: String = TimeManagerTypeEnum.DISCRETE_EVENT,
   extendSimulationIfPendingEventsAfterEnd: Boolean = false,
   enableDynamicModeChoice: Boolean = false,
   /** When set, overrides `modeChoiceWeights.includedModes` for every Person in the simulation.

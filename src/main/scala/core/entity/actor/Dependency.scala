@@ -4,7 +4,7 @@ package core.entity.actor
 import org.apache.pekko.actor.ActorRef
 
 case class Dependency(
-  id: String,
+  id: Long,
   classType: String,
   resourceId: String
 ) {

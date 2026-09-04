@@ -54,14 +54,14 @@ class Person(
 
   // PT vehicle reference stored when Bus/Subway sends PassengerBoardedVehicleData.
   // Used by onDestruct to send isArrival=false if Person dies while still on board.
-  private var currentPTVehicleRef: Option[(String, String)] = None  // (vehicleId, vehicleClassType)
+  private var currentPTVehicleRef: Option[(Long, String)] = None  // (vehicleId, vehicleClassType)
 
   // ============================================================================
   // Support Classes (lazy initialization - created only when needed)
   // ============================================================================
 
   // Wrapper to adapt sendMessageTo signature from AnyRef to Any
-  private def sendMessage(entityId: String, shardId: String, data: Any, eventType: String, actorType: Any): Unit = {
+  private def sendMessage(entityId: Long, shardId: String, data: Any, eventType: String, actorType: Any): Unit = {
     sendMessageTo(entityId, shardId, data.asInstanceOf[AnyRef], eventType, actorType.asInstanceOf[org.interscity.htc.core.enumeration.CreationTypeEnum])
   }
 
@@ -287,7 +287,7 @@ class Person(
   override protected def buildMigrationSnapshot(): MigrationSnapshot = {
     val base = super.buildMigrationSnapshot()
     base.copy(
-      currentPTVehicleRefId = currentPTVehicleRef.map(_._1).getOrElse(""),
+      currentPTVehicleRefId = currentPTVehicleRef.map(_._1).getOrElse(0L),
       currentPTVehicleRefClassType = currentPTVehicleRef.map(_._2).getOrElse("")
     )
   }
@@ -299,7 +299,7 @@ class Person(
     super.applyMigrationSnapshot(snapshot)
 
     currentPTVehicleRef =
-      if (snapshot.currentPTVehicleRefId.nonEmpty)
+      if (snapshot.currentPTVehicleRefId != 0L)
         Some((snapshot.currentPTVehicleRefId, snapshot.currentPTVehicleRefClassType))
       else None
   }

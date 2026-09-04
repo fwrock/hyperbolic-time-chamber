@@ -65,8 +65,8 @@ case class LinkState(
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
   scheduleOnTimeManager: Boolean = false,
-  from: String,
-  to: String,
+  from: Long,
+  to: Long,
   length: Double,
   lanes: Int,
   speedLimit: Double,
@@ -144,8 +144,8 @@ object LinkState {
   /** Create a hybrid link in MESO mode (default, backward compatible) */
   def createMeso(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,
@@ -167,8 +167,8 @@ object LinkState {
   /** Create a hybrid link in MICRO mode with initialized lane structure */
   def createMicro(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,

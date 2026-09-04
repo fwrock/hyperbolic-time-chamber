@@ -21,7 +21,8 @@ class NearestStopUtilityEngineSpec extends AnyFlatSpec with Matchers {
     weights            = ModeChoiceWeights(),
     ownedVehicles      = Map.empty,
     vehicleCurrentNode = Map.empty,
-    currentTick        = 0L
+    currentTick        = 0L,
+    entityId           = "test-person"
   )
 
   "validateForScenario" should "always be Right, regardless of scenario data availability" in {
@@ -32,15 +33,15 @@ class NearestStopUtilityEngineSpec extends AnyFlatSpec with Matchers {
   "decide" should "resolve to a walk leg when transit data is unavailable and walk is allowed" in {
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk, ConcreteMode.Bus), strategyId = "nearest-stop-utility")
 
-    val result = engine.decide("n1", "n2", request, ctx)
+    val result = engine.decide(1L, 2L, request, ctx)
 
-    result shouldBe Right(List(WalkLeg("n1", "n2", None)))
+    result shouldBe Right(List(WalkLeg(1L, 2L, None)))
   }
 
   it should "report NoViableJourney when the only resolvable mode (walk) isn't allowed" in {
     val request = ModeDecisionRequest(allowedModes = Set(ConcreteMode.Bus), strategyId = "nearest-stop-utility")
 
-    val result = engine.decide("n1", "n2", request, ctx)
+    val result = engine.decide(1L, 2L, request, ctx)
 
     result match {
       case Left(NoViableJourney(reason)) => reason should include("not in allowedModes")
@@ -59,6 +60,6 @@ class NearestStopUtilityEngineSpec extends AnyFlatSpec with Matchers {
     // With TransitMapUtil unavailable, chooseBestLogistics skips before ever consulting
     // maxWalkDistanceM, so the override is inert here — this asserts it is at least accepted
     // and doesn't change the graceful-degradation outcome.
-    engine.decide("n1", "n2", request, ctx) shouldBe Right(List(WalkLeg("n1", "n2", None)))
+    engine.decide(1L, 2L, request, ctx) shouldBe Right(List(WalkLeg(1L, 2L, None)))
   }
 }

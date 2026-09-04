@@ -141,7 +141,7 @@ class SqliteLoadData(private val properties: Properties)
       actor =>
         ActorSimulationCreation(
           resourceId = IdUtil.format(sourceId),
-          actor = actor.copy(id = IdUtil.format(actor.id))
+          actor = actor.copy(id = actor.id)
         )
     )
 

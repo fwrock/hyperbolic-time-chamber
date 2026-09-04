@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
   *   or legacy `"resourceId"`.
   */
 case class ShardActorId @JsonCreator() (
-  @JsonAlias(Array("entityId")) @JsonProperty("id") entityId: String,
+  @JsonAlias(Array("entityId")) @JsonProperty("id") entityId: Long,
   @JsonProperty("classType") classType: String,
   @JsonAlias(Array("shardBucket")) @JsonProperty("resourceId") shardBucket: String = ""
 ) {
@@ -30,7 +30,7 @@ case class ShardActorId @JsonCreator() (
     *   Use entityId instead.
     */
   @deprecated("Use entityId instead", "2.8.0")
-  def id: String = entityId
+  def id: Long = entityId
 
   /** Backward-compat alias for [[shardBucket]].
     * @deprecated

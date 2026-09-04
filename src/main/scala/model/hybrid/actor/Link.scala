@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.types.Tick
 import core.entity.event.SpontaneousEvent
 
@@ -70,15 +71,51 @@ class Link(
 
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
-      from = StringPool.intern(s.from),
-      to   = StringPool.intern(s.to)
+      from = s.from,
+      to   = s.to
     )
 
-  /** Tracks when each vehicle entered the link (for travel time calculation) */
-  private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+  /** Tracks when each vehicle entered the link (for travel time calculation).
+    * protected, not private: lets LinkMigrationSnapshotSpec drive this directly, same rationale as
+    * the vehicle actors' link-wait fields.
+    */
+  protected val vehicleEntryTick: mutable.Map[Long, Tick] = mutable.Map.empty
 
   /** Accumulated waiting time per vehicle (seconds) */
-  private val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+  protected val vehicleWaitingSeconds: mutable.Map[Long, Double] = mutable.Map.empty
+
+  /** `Link` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07):
+    * `vehicleEntryTick`/`vehicleWaitingSeconds` feed travel-time math sent to a departing vehicle
+    * (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`) but are
+    * actor-local `mutable.Map`s, invisible to a Time Warp rollback restore — a rollback that undoes
+    * a vehicle's leave-event without also purging its now-stale map entry would compute a different
+    * travel time for the same logical leave event on replay than the original live run did.
+    * `microTickScheduled`/`signalAtExit`/`emptyGraceTick` are deliberately NOT captured here — same
+    * audit found them cheap-to-lose scheduling/cache state per CLAUDE.md's own carve-out ("does
+    * losing this value on restart break correctness for someone else, or just cost a recompute").
+    */
+  private def captureLinkMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      linkVehicleEntryTick = vehicleEntryTick.toMap,
+      linkVehicleWaitingSeconds = vehicleWaitingSeconds.toMap
+    )
+
+  /** Restores what [[captureLinkMigrationFields]] captured. */
+  private def restoreLinkMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    vehicleEntryTick.clear()
+    vehicleEntryTick ++= snapshot.linkVehicleEntryTick
+    vehicleWaitingSeconds.clear()
+    vehicleWaitingSeconds ++= snapshot.linkVehicleWaitingSeconds
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureLinkMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreLinkMigrationFields(snapshot)
+  }
 
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false
@@ -158,16 +195,36 @@ class Link(
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
     metricsReporter.publishDynamicCost()
-    // One-time report so the entry Node can seed its availableCapacity counter before any
-    // vehicle ever requests access to this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+  }
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  /** Seeds the entry Node's availableCapacity counter for this link, before any vehicle ever
+    * requests access to it. See docs/CONGESTION_PROPAGATION_DESIGN.md. Deferred to the post-load
+    * registration phase (rather than sent from onInitialize) because EAGER sources of different
+    * classTypes load concurrently (LoadDataManager.handleLoadNext groups sources by classType and
+    * advances every queue each round) — a Link can otherwise initialize and message its Node
+    * before that Node exists yet. Post-load registration only fires once every EAGER source has
+    * finished loading, so the target Node is guaranteed to be initialized here.
+    */
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(IdUtil.format(state.from)).orElse(
+        relationships
+          .get(IdUtil.format(state.from))
+          .orElse(
+            relationships.values.find(_.classType == "hybrid.actor.Node")
+          )
+      )
+    val nodeId = dependencyOpt.map(_.id).getOrElse(state.from)
     sendMessageTo(
-      entityId  = state.from,
+      entityId  = nodeId,
       shardId   = "hybrid.actor.Node",
-      data      = RegisterLinkCapacityData(linkId = getEntityId, capacity = state.capacity.toInt),
+      data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
       eventType = EventTypeEnum.RegisterLinkCapacity.toString,
       actorType = LoadBalancedDistributed
     )
-    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
@@ -240,7 +297,7 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
@@ -258,7 +315,7 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = vehiclesRemaining
       ),

@@ -11,6 +11,10 @@ package model.hybrid.entity.state.model
   *   in the sequence.
   */
 case class RouteStop(
+  // Transit-map stop id (e.g. "htcaid:stop;bus_sptrans_301790") -- an external JSON data key
+  // matched against TransitStop.id, not an actor/entity id, so it stays String (deviation from a
+  // blanket Long sweep that had mistakenly caught this field; a real value like the example above
+  // does not parse as Long).
   stopId: String,
   travelTimeFromPrevSeconds: Int
 )
