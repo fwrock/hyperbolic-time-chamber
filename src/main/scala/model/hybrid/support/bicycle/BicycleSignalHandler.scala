@@ -32,8 +32,18 @@ class BicycleSignalHandler(
   finishJourneyFn: (String, Long) => Unit,
   onFinishPrivateVehicleFn: Long => Unit,
   setSignalWaitUntilTickFn:    Option[Tick] => Unit,
-  setSignalWaitNeedsReverifyFn: Boolean => Unit
+  setSignalWaitNeedsReverifyFn: Boolean => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged; Bicycle.scala's real construction site passes
+  // all four explicitly -- same pattern as CarSignalHandler.
+  isTimeWarpFn: () => Boolean = () => false,
+  registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
+  isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
+
+  /** See CarSignalHandler.linkAccessAwaitKey. */
+  private def linkAccessAwaitKey(linkId: Long): String = s"link-access:$linkId"
 
   def requestSignalState(state: BicycleState): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
@@ -65,6 +75,7 @@ class BicycleSignalHandler(
                     RequestLinkAccessData(targetLinkId = linkId),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
+                registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
                 onFinishSpontaneousFn(None)
                 case 0L =>
                   leavingLinkFn()
@@ -79,13 +90,24 @@ class BicycleSignalHandler(
   }
 
   def handleLinkAccess(data: LinkAccessData, state: BicycleState): Unit = {
-    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
+    val linkId = getNextLinkFn()
+    val awaitKey = linkAccessAwaitKey(linkId)
+    val isStale =
+      if (isTimeWarpFn())
+        !isAwaitingReplyFn(awaitKey, "LinkAccessData", data.requestSeq)
+      else
+        state.status != WaitingSignalState && state.status != WaitingCapacity
+    if (isStale) {
       logDebugFn(
         s"${entityIdFn()}: Ignoring stale LinkAccessData " +
-          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
+          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard, " +
+          s"see docs/TIME_WARP_DESIGN.md §10 for the Time Warp variant of this check."
       )
       return
     }
+
+    // Full/WaitingCapacity is NOT a terminal reply -- see CarSignalHandler.handleLinkAccess.
+    if (isTimeWarpFn() && data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
       val tick = currentTickFn()

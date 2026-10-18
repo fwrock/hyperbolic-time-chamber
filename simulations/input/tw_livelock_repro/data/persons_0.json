@@ -1,0 +1,3362 @@
+[
+  {
+    "id": 39,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 38,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 5
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 41,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 40,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 3
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 43,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 42,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 7
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 45,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 44,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 2
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 47,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 46,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 9
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 49,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 48,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 9
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 51,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 50,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 8
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 53,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 52,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 3
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 55,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 54,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 5
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 57,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 56,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 6
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 59,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 58,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 7
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 61,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 60,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 6
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 63,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 62,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 8
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 65,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 64,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 2
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 67,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 66,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 4
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 69,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 68,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 4
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 71,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "work",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 70,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 4
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 73,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 72,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 5
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 75,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 74,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 3
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 77,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "shopping",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "car": {
+            "id": 76,
+            "resourceId": "",
+            "classType": "hybrid.actor.Car"
+          }
+        },
+        "vehicleCurrentNode": {
+          "car": 4
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 79,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "bicycle": {
+            "id": 78,
+            "resourceId": "",
+            "classType": "hybrid.actor.Bicycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "bicycle": 3
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 81,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "bicycle": {
+            "id": 80,
+            "resourceId": "",
+            "classType": "hybrid.actor.Bicycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "bicycle": 8
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 83,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 9,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "bicycle": {
+            "id": 82,
+            "resourceId": "",
+            "classType": "hybrid.actor.Bicycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "bicycle": 9
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 85,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 1,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "bicycle": {
+            "id": 84,
+            "resourceId": "",
+            "classType": "hybrid.actor.Bicycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "bicycle": 1
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 87,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "bicycle": {
+            "id": 86,
+            "resourceId": "",
+            "classType": "hybrid.actor.Bicycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "bicycle": 6
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 89,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 2,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "motorcycle": {
+            "id": 88,
+            "resourceId": "",
+            "classType": "hybrid.actor.Motorcycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "motorcycle": 2
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 91,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 4,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "motorcycle": {
+            "id": 90,
+            "resourceId": "",
+            "classType": "hybrid.actor.Motorcycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "motorcycle": 4
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 93,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 5,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 8,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "motorcycle": {
+            "id": 92,
+            "resourceId": "",
+            "classType": "hybrid.actor.Motorcycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "motorcycle": 8
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 95,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "leisure",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 3,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "motorcycle": {
+            "id": 94,
+            "resourceId": "",
+            "classType": "hybrid.actor.Motorcycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "motorcycle": 3
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 97,
+    "typeActor": "hybrid.actor.Person",
+    "data": {
+      "dataType": "model.hybrid.entity.state.PersonState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": true,
+        "originalPlan": [
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 300
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "school",
+            "nodeId": 6,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 1800
+            }
+          },
+          {
+            "kind": "PendingDecision",
+            "decision": {
+              "allowedModes": [
+                "Walk",
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus",
+                "Subway"
+              ],
+              "strategyId": "travel-time",
+              "weightsOverride": null
+            }
+          },
+          {
+            "kind": "Activity",
+            "activityType": "home",
+            "nodeId": 7,
+            "endTime": {
+              "kind": "AtTick",
+              "tick": 86400
+            }
+          }
+        ],
+        "ownedVehicles": {
+          "motorcycle": {
+            "id": 96,
+            "resourceId": "",
+            "classType": "hybrid.actor.Motorcycle"
+          }
+        },
+        "vehicleCurrentNode": {
+          "motorcycle": 7
+        },
+        "totalDistanceTraveled": 0.0,
+        "completedTrips": 0,
+        "ptWaitTimeoutTicks": 86400,
+        "modeChoiceWeights": {
+          "includedModes": [
+            "bus",
+            "subway",
+            "walk",
+            "car",
+            "bicycle"
+          ],
+          "betaMode": 1.0,
+          "betaAccess": 0.001,
+          "betaEgress": 0.001,
+          "betaPrivateVehicle": 5e-05,
+          "modePrefSubway": 2.0,
+          "modePrefBus": 1.0,
+          "modePrefWalk": 0.0,
+          "modePrefCar": 3.0,
+          "modePrefBicycle": 1.5,
+          "modePrefMotorcycle": 2.0,
+          "maxAccessDistanceM": 1500.0,
+          "maxWalkDistanceM": 2000.0,
+          "betaTravelTime": 0.01,
+          "walkingSpeedMs": 1.4,
+          "avgBusSpeedMs": 8.33,
+          "avgSubwaySpeedMs": 12.5,
+          "avgBicycleSpeedMs": 5.56,
+          "avgMotorcycleSpeedMs": 11.11,
+          "avgCarSpeedMs": 13.89
+        }
+      }
+    },
+    "dependencies": {}
+  }
+]

@@ -51,6 +51,15 @@ class BicycleJourneyReporter(
     journeyFinishedReported           = false
   }
 
+  /** See `CarJourneyReporter.clearCompletionGuards`'s doc for the full rationale: this flag is
+    * actor-local, not `state`, so a Time Warp rollback never resets it on its own, silently
+    * blocking a replayed trip completion from ever being reported again. Deliberately narrower than
+    * `reset()` -- must not wipe accumulated SUMO metrics for the surviving, not-undone portion of
+    * the current trip.
+    */
+  def clearCompletionGuards(): Unit =
+    journeyFinishedReported = false
+
   def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {

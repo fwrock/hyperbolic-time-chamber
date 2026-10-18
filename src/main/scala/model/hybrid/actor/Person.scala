@@ -56,6 +56,32 @@ class Person(
   // Used by onDestruct to send isArrival=false if Person dies while still on board.
   private var currentPTVehicleRef: Option[(Long, String)] = None  // (vehicleId, vehicleClassType)
 
+  /** Guards `metricsReporter.reportScheduleComplete` against Time Warp replay duplicates (see
+    * `CarJourneyReporter.clearCompletionGuards`' doc for the identical rationale on the vehicle
+    * side, and docs/KNOWN_GAPS.md's "Report loss/duplication" entry, Cause 2, for how this one was
+    * found: unlike the vehicle journey reporters, this call site had no guard at all, so every
+    * replay pass through `dispatch(PlanStepResult.Finished)` re-reported the same completion —
+    * confirmed live as 3-4 duplicate `person_schedule_complete` rows for the same entity, all at
+    * the same tick). Unlike the per-trip vehicle guards, this needs no per-trip reset: a Person's
+    * daily schedule completes at most once ever (immediately followed by `destruct = true`), so the
+    * only reset this needs is the rollback one below.
+    */
+  // protected, not private: lets PersonScheduleCompleteGuardSpec drive this directly, same
+  // rationale as this codebase's other test-only protected accessors (e.g. Car.scala's
+  // currentLinkId).
+  protected var scheduleCompleteReported: Boolean = false
+
+  /** See `scheduleCompleteReported`'s doc. Cleared unconditionally on every rollback for the same
+    * reason `Car.onRollbackDiscardPending` clears its own journey-completion guards: if the
+    * schedule-complete decision this guards was NOT among the undone events (it already happened
+    * before the rollback's target), nothing left to replay can reach `PlanStepResult.Finished`
+    * again for it, so clearing the guard here can't produce a spurious duplicate.
+    */
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    scheduleCompleteReported = false
+  }
+
   // ============================================================================
   // Support Classes (lazy initialization - created only when needed)
   // ============================================================================
@@ -88,7 +114,8 @@ class Person(
   private lazy val privateVehicleHandler = new PersonPrivateVehicleTripHandler(
     personId = getEntityId,
     sendMessageFn = sendMessage,
-    logDebug = logDebug
+    logDebug = logDebug,
+    registerAwaitedReplyFn = (key, kind) => registerAwaitedReply(key, kind)
   )
 
   private lazy val planManager = new PersonPlanManager(
@@ -217,15 +244,78 @@ class Person(
     }
   }
 
-  override def actInteractWith(event: ActorInteractionEvent): Unit =
+  /** `TripCompletedData` is guarded by `isAwaitingReply`/`registerAwaitedReply`
+    * (docs/TIME_WARP_DESIGN.md's 2026-09-06 live-incident entry, extended to Person here -- see
+    * `PersonPrivateVehicleTripHandler.vehicleTripAwaitKey`) so a rollback-orphaned reply to a
+    * since-retracted `StartTrip` is dropped without touching state, instead of matching a stale
+    * `state.tripExecution` shape by coincidence. The remaining branches
+    * (`PassengerBoardedVehicleData`/PT unload requests) still only guard on `state.tripExecution`/
+    * `currentPTVehicleRef`, both of which a rollback can revert independently of whether the reply
+    * in hand is still the one that guard was set up for -- the `#timewarp-trace` calls below exist
+    * to prove or disprove that remaining gap against a real repro run: for each branch, compare
+    * `event.tick`/`event.seq` (identity of the send this reply answers) to `currentTick`/the
+    * actor-local expected-reply markers.
+    */
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    core.actor.trace.TimeWarpTrace.trace(
+      getEntityId.toString,
+      currentTick,
+      "person_interact_enter",
+      s"eventTick=${event.tick} eventSeq=${event.seq} eventType=${event.eventType} " +
+        s"senderId=${event.actorRefId} tripExecution=${state.tripExecution.getClass.getSimpleName} " +
+        s"currentPTVehicleRef=$currentPTVehicleRef"
+    )
     event.data match {
       case d: TripCompletedData =>
-        dispatch(planManager.handleVehicleTripCompleted(state, d, currentTick))
+        // #timewarp-trace
+        core.actor.trace.TimeWarpTrace.trace(
+          getEntityId.toString,
+          currentTick,
+          "person_trip_completed",
+          s"eventTick=${event.tick} eventSeq=${event.seq} vehicleId=${d.vehicleId} " +
+            s"tripExecution=${state.tripExecution.getClass.getSimpleName}"
+        )
+        val isTimeWarpMode = getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP
+        val awaitKey = privateVehicleHandler.vehicleTripAwaitKey(d.vehicleId)
+        if (isTimeWarpMode && !isAwaitingReply(awaitKey, "TripCompletedData", d.requestSeq)) {
+          // #timewarp-trace
+          core.actor.trace.TimeWarpTrace.trace(
+            getEntityId.toString,
+            currentTick,
+            "person_trip_completed_stale_reply",
+            s"vehicleId=${d.vehicleId} requestSeq=${d.requestSeq} -- rollback-orphaned reply to a " +
+              s"since-retracted StartTrip (or one this Person never sent); ignoring without touching state"
+          )
+          logWarn(
+            s"$getEntityId: ignoring stale TripCompleted from ${d.vehicleId} (requestSeq=${d.requestSeq} " +
+              "doesn't match the currently outstanding StartTrip) -- rollback-orphaned reply, see " +
+              "docs/TIME_WARP_DESIGN.md §10"
+          )
+        } else {
+          if (isTimeWarpMode) consumeAwaitedReply(awaitKey)
+          dispatch(planManager.handleVehicleTripCompleted(state, d, currentTick))
+        }
 
       case d: PassengerBoardedVehicleData =>
+        // #timewarp-trace
+        core.actor.trace.TimeWarpTrace.trace(
+          getEntityId.toString,
+          currentTick,
+          "person_boarded_vehicle",
+          s"eventTick=${event.tick} eventSeq=${event.seq} vehicleId=${d.vehicleId} " +
+            s"priorCurrentPTVehicleRef=$currentPTVehicleRef overwriting=${currentPTVehicleRef.isDefined}"
+        )
         currentPTVehicleRef = Some((d.vehicleId, d.vehicleClassType))
 
       case d: BusRequestUnloadPassengerData =>
+        // #timewarp-trace
+        core.actor.trace.TimeWarpTrace.trace(
+          getEntityId.toString,
+          currentTick,
+          "person_bus_unload_request",
+          s"eventTick=${event.tick} eventSeq=${event.seq} nodeId=${d.nodeId} " +
+            s"currentPTVehicleRef=$currentPTVehicleRef -- no reply-identity check before honoring this request"
+        )
         planManager.handlePTUnloadRequest(event, d.nodeId, ConcreteMode.Bus, state, currentTick).foreach {
           result =>
             currentPTVehicleRef = None
@@ -233,6 +323,14 @@ class Person(
         }
 
       case d: SubwayRequestUnloadPassengerData =>
+        // #timewarp-trace
+        core.actor.trace.TimeWarpTrace.trace(
+          getEntityId.toString,
+          currentTick,
+          "person_subway_unload_request",
+          s"eventTick=${event.tick} eventSeq=${event.seq} nodeId=${d.nodeId} " +
+            s"currentPTVehicleRef=$currentPTVehicleRef -- no reply-identity check before honoring this request"
+        )
         planManager.handlePTUnloadRequest(event, d.nodeId, ConcreteMode.Subway, state, currentTick).foreach {
           result =>
             currentPTVehicleRef = None
@@ -240,11 +338,19 @@ class Person(
         }
 
       case d: PTLineNotOperationalData =>
+        // #timewarp-trace
+        core.actor.trace.TimeWarpTrace.trace(
+          getEntityId.toString,
+          currentTick,
+          "person_pt_line_not_operational",
+          s"eventTick=${event.tick} eventSeq=${event.seq} tripExecution=${state.tripExecution.getClass.getSimpleName}"
+        )
         dispatch(planManager.handlePTLineNotOperational(d, state, currentTick))
 
       case _ =>
         logWarn(s"Person event not handled: ${event.eventType}")
     }
+  }
 
   /** Applies one [[PlanStepResult]] to actor state and resolves the corresponding
     * spontaneous-event obligation. See [[PlanStepResult]]'s own doc for what each case means.
@@ -265,11 +371,14 @@ class Person(
     case PlanStepResult.Finished(newState) =>
       state = newState
       logDebug(s"${getEntityId} completed daily schedule (${state.completedTrips} trips, ${state.totalDistanceTraveled}m)")
-      metricsReporter.reportScheduleComplete(
-        totalTrips = state.completedTrips,
-        totalDistance = state.totalDistanceTraveled,
-        currentTick = currentTick
-      )
+      if (!scheduleCompleteReported) {
+        scheduleCompleteReported = true
+        metricsReporter.reportScheduleComplete(
+          totalTrips = state.completedTrips,
+          totalDistance = state.totalDistanceTraveled,
+          currentTick = currentTick
+        )
+      }
       planManager.notifyVehiclesScheduleComplete(state)
       onFinishSpontaneous(None, destruct = true)
   }

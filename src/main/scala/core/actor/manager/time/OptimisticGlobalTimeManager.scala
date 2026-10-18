@@ -80,6 +80,20 @@ class OptimisticGlobalTimeManager(
     */
   private var heartbeatCancellable: Option[Cancellable] = None
 
+  /** Wall-clock time of the last observed GVT advance, used only by [[logGtmStallIfNeeded]] to
+    * decide when a non-idle, non-progressing run has gone quiet long enough to be worth a
+    * `[GTM-STALL]` warning. Updated in [[recomputeGvtAndCheckTermination]] whenever the GVT
+    * estimate moves forward.
+    */
+  private var lastGvtAdvanceWall: Long = System.currentTimeMillis()
+
+  /** How long (ms) `currentGvt` may sit unchanged, while not every LTM is idle, before
+    * [[logGtmStallIfNeeded]] logs a `[GTM-STALL]` warning — mirrors `ConservativeGlobalTimeManager`
+    * /`LocalDiscreteEventTimeManager`'s own stall-warning thresholds/style. Not tuned yet.
+    */
+  private lazy val gtmStallLogThresholdMs: Long =
+    SimulatorSettingsRegistry.getInt("htc.time-warp.gtm-stall-log-threshold-ms", context.system.settings.config).toLong
+
   /** Populated from `registeredManagers` the moment [[terminateSimulation]] fires, drained as each
     * LTM's [[LocalDestructCompleteEvent]] arrives. `simulationManager` (and in turn `ReportManager`)
     * is only told to stop once this is empty -- see that event's doc for the data-loss race this
@@ -141,6 +155,7 @@ class OptimisticGlobalTimeManager(
       handleTimeManagerTerminated(ref)
     case OptimisticGlobalTimeManager.TerminationHeartbeatTick =>
       recomputeGvtAndCheckTermination()
+      logGtmStallIfNeeded()
     case _: LocalDestructCompleteEvent =>
       handleLocalDestructComplete(sender())
     case event => super.handleEvent(event)
@@ -298,13 +313,10 @@ class OptimisticGlobalTimeManager(
 
     val previousGvt = currentGvt
     currentGvt = gvtEstimationStrategy.estimate(latestReports.values.toSeq)
-    // Broadcast only on real advancement (docs/TIME_WARP_DESIGN.md §4): recomputeGvtAndCheckTermination
-    // runs on every LvtReportEvent, and an unchanged GVT unlocks nothing new for any LTM to flush —
-    // broadcasting every round regardless would multiply this already-per-report-triggered fan-out
-    // by the LTM pool size for no benefit, the same "cheap and non-blocking, not free" posture §3
-    // already applies to LVT reporting itself.
+
     if (currentGvt > previousGvt) {
       notifyLocalManagers(GvtUpdateEvent(currentGvt))
+      lastGvtAdvanceWall = System.currentTimeMillis()
     }
     val allIdle = latestReports.values.forall(_.isIdle)
 
@@ -320,6 +332,41 @@ class OptimisticGlobalTimeManager(
       logInfo(s"GVT plateaued at $currentGvt with all LTMs idle for $plateauRoundsRequired rounds — terminating")
       terminateSimulation()
     }
+  }
+
+  /** `[GTM-STALL]` visibility (found lacking during a real `tls_test` livelock investigation:
+    * `OptimisticGlobalTimeManager` had zero stall logging, unlike `ConservativeGlobalTimeManager`'s
+    * `[GTM-STALL]`/`LocalDiscreteEventTimeManager`'s `[STALL]`, so that freeze produced total log
+    * silence). Fires from the same heartbeat that drives [[recomputeGvtAndCheckTermination]], so it
+    * runs even once no `LvtReportEvent` is arriving anymore. Only warns when the GVT has sat
+    * unchanged for more than [[gtmStallLogThresholdMs]] AND at least one registered LTM is
+    * non-idle — an all-idle plateau is the (expected) path toward termination, not a stall, and is
+    * already covered by [[recomputeGvtAndCheckTermination]]'s own logging.
+    */
+  private def logGtmStallIfNeeded(): Unit = {
+    if (isTerminated || !simulationStarted) return
+    val elapsed = System.currentTimeMillis() - lastGvtAdvanceWall
+    if (elapsed <= gtmStallLogThresholdMs) return
+    if (latestReports.isEmpty) return
+    val allIdle = latestReports.values.forall(_.isIdle)
+    if (allIdle) return
+
+    val lines = latestReports.toSeq
+      .sortBy(_._1.path.toString)
+      .map {
+        case (ref, report) =>
+          s"    ${ref.path.name}@${ref.path.address.hostPort}  (lvt=${report.lvt}, isIdle=${report.isIdle})"
+      }
+      .mkString("\n")
+    val neverReported = registeredManagers.diff(latestReports.keySet)
+    val neverReportedLine =
+      if (neverReported.nonEmpty) s"\n  never reported: ${neverReported.map(_.path.name).mkString(", ")}" else ""
+
+    logWarn(
+      s"[GTM-STALL] gvt=$currentGvt unchanged for ${elapsed / 1000}s | " +
+        s"plateauRounds=${plateauDetector.currentPlateauRounds}/$plateauRoundsRequired | " +
+        s"registered=${registeredManagers.size} reported=${latestReports.size}\n$lines$neverReportedLine"
+    )
   }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {}

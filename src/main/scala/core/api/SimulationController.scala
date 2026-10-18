@@ -72,8 +72,14 @@ object SimulationController {
 
     withSystem {
       sys =>
-        val proxy = DistributedUtil.createSingletonProxy(sys, SIMULATION_MANAGER_ACTOR_NAME)
         val configArg = configFile.filter(_.nonEmpty).orNull
+        // Shard regions for this scenario's actor classTypes are normally registered once at
+        // boot (HyperbolicTimeChamber.start -> SimulationUtil.startShards), but in API mode
+        // boot happens before any scenario is chosen, so that call is deferred (see
+        // HyperbolicTimeChamber.scala) -- register them now, against the scenario actually
+        // being started, before PrepareSimulationEvent reaches SimulationManager.
+        core.util.SimulationUtil.startShards(sys, configArg)
+        val proxy = DistributedUtil.createSingletonProxy(sys, SIMULATION_MANAGER_ACTOR_NAME)
         proxy ! PrepareSimulationEvent(configuration = configArg)
         _status.set(SimulationStatus.Loading)
         logger.info(

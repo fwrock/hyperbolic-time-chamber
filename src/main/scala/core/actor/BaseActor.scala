@@ -131,8 +131,12 @@ abstract class BaseActor[T <: BaseState](
   protected def logInfo(eventInfo: String): Unit =
     log.info(s"$entityId: $eventInfo")
 
-  protected def logDebug(eventInfo: String): Unit =
-    log.debug(s"$entityId: $eventInfo")
+  /** `eventInfo` is by-name so a caller building an expensive string (interpolation, formatting)
+    * never pays that cost when DEBUG is disabled -- previously always evaluated eagerly even
+    * though `log.debug` itself is a no-op below the threshold.
+    */
+  protected def logDebug(eventInfo: => String): Unit =
+    if (log.isDebugEnabled) log.debug(s"$entityId: $eventInfo")
 
   protected def logWarn(eventInfo: String): Unit =
     log.warning(s"$entityId: $eventInfo")
@@ -212,7 +216,14 @@ abstract class BaseActor[T <: BaseState](
         id => context.actorSelection(event.actorRef) ! DestructAckEvent(actorId = id)
       }
     }
-    context.stop(self)
+    // Route through selfDestruct() rather than a bare context.stop(self): for a
+    // LoadBalancedDistributed (cluster-sharded) entity, plain context.stop never informs the
+    // shard region, so the next message addressed to this entityId (a stale reply, a late
+    // anti-message) makes the shard region silently spin up a brand-new "ghost" instance with
+    // uninitialized state -- nothing ever re-sends the original InitializeEvent. selfDestruct()
+    // already carries the passivation-safe logic for sharded actors; mirror it here instead of
+    // duplicating (and drifting from) it.
+    selfDestruct()
   }
 
   /** Called when the actor is finished. This method is called when the actor finishes processing

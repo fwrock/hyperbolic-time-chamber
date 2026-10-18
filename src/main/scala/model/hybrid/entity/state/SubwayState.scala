@@ -1,6 +1,7 @@
 package org.interscity.htc
 package model.hybrid.entity.state
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
@@ -9,6 +10,11 @@ import org.interscity.htc.model.hybrid.entity.state.model.SubwayNodeState
 
 import scala.collection.mutable
 
+/** `subwayStations` / `passengers` carry `@JsonDeserialize(keyAs = classOf[java.lang.Long])`: on
+  * Scala 3, jackson-module-scala only preserves a case class's full Map key/value generics for
+  * the *first* constructor parameter, so any later `Map[Long, _]` field silently deserializes its
+  * keys as `String` without this annotation (see `BusStationState` for the full explanation).
+  */
 case class SubwayState(
   override val startTick: Tick = 0,
   capacity: Int,
@@ -17,12 +23,14 @@ case class SubwayState(
   var distance: Double = 0.0,
   boardingTimeByPassenger: Double = 1.5,
   stopTime: Tick,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   subwayStations: mutable.Map[Long, Long] = mutable.Map.empty,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
   override val origin: Long,
   override val destination: Long,
   nodeState: SubwayNodeState = SubwayNodeState(),
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   passengers: mutable.Map[Long, Identify] = mutable.Map.empty,
   var currentPathPosition: Int = 0,
   line: String,

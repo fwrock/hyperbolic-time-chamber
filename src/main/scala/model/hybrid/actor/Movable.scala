@@ -99,6 +99,28 @@ abstract class Movable[T <: MovableState](
         onFinishSpontaneous(Some(currentTick + 1))
     }
 
+  /** See `SimulationBaseActor.isKnownSupersededReply`'s doc for the full rationale and the live
+    * evidence that motivated it (docs/KNOWN_GAPS.md, Cause 3). A `LinkInfoData` reply
+    * (`ReceiveEnterLinkInfo`/`ReceiveLeaveLinkInfo`) is provably superseded exactly when
+    * `isAwaitingReply` says so for the matching await key/kind — the identical identity check
+    * `CarLinkHandler.handleLeaveLink`'s own staleness gate already uses, just consulted before the
+    * generic straggler-rollback trigger instead of after it. `event.actorRefId` is the link this
+    * reply came from, matching how `enterLinkAwaitKey`/`leaveLinkAwaitKey` were registered in
+    * `enterLink`/`leavingLink` below (keyed by the link's id, not this movable's own).
+    */
+  override protected def isKnownSupersededReply(event: ActorInteractionEvent): Boolean =
+    event.data match {
+      case d: LinkInfoData =>
+        EventTypeEnum.valueOf(event.eventType) match {
+          case ReceiveEnterLinkInfo =>
+            !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId), "EnterLinkData", d.requestSeq)
+          case ReceiveLeaveLinkInfo =>
+            !isAwaitingReply(Movable.leaveLinkAwaitKey(event.actorRefId), "LeaveLinkData", d.requestSeq)
+          case _ => false
+        }
+      case _ => false
+    }
+
   override def actInteractWith(event: ActorInteractionEvent): Unit = {
     if (state == null) {
       logWarn(
@@ -170,6 +192,12 @@ abstract class Movable[T <: MovableState](
             state.movableStatus = Waiting
             waitingTicksCounter = 0
 
+            // registerAwaitedReply must run AFTER sendMessageTo: it captures this actor's
+            // messageSendSeq as the request's identity token (AwaitedReply.sendSeq), which must
+            // equal the seq sendMessageTo just embedded on the wire for THIS send -- registering
+            // first would capture the PRIOR send's seq instead, breaking isAwaitingReply's identity
+            // check for every request after the first. See CarSignalHandler.requestSignalState for
+            // the same ordering.
             sendMessageTo(
               entityId = entityId,
               shardId = shardId,
@@ -181,6 +209,7 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
             )
+            registerAwaitedReply(Movable.enterLinkAwaitKey(entityId), "EnterLinkData")
             onFinishSpontaneous(Some(currentTick + 1))
 
           case None =>
@@ -212,6 +241,8 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         resolveLink(linkEdgeGraphId) match {
           case Some((entityId, shardId)) =>
+            // See enterLink's identical comment: registerAwaitedReply must run AFTER
+            // sendMessageTo so its captured sendSeq matches the seq this send just put on the wire.
             sendMessageTo(
               entityId = entityId,
               shardId = shardId,
@@ -223,6 +254,7 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.LeaveLink.toString,
               actorType = LoadBalancedDistributed
             )
+            registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)
@@ -281,4 +313,18 @@ abstract class Movable[T <: MovableState](
   protected def getNextLink: Long =
     if (state == null) 0L
     else viewNextPath.map(_._1).getOrElse(0L)
+}
+
+object Movable {
+
+  /** Correlation key for the one outstanding `EnterLinkData` -> `ReceiveEnterLinkInfo` exchange
+    * for a given link (identified by its resolved entity id, matching `event.actorRefId` on the
+    * reply). Shared by every concrete vehicle type since [[Movable.enterLink]] is the single call
+    * site that sends `EnterLinkData` -- keyed on `entityId` (not e.g. this actor's own id, which
+    * is constant per vehicle) so entering a *different* link never supersedes/consumes this one.
+    */
+  def enterLinkAwaitKey(entityId: Long): String = s"enter-link:$entityId"
+
+  /** Same as [[enterLinkAwaitKey]], for the `LeaveLinkData` -> `ReceiveLeaveLinkInfo` exchange. */
+  def leaveLinkAwaitKey(entityId: Long): String = s"leave-link:$entityId"
 }

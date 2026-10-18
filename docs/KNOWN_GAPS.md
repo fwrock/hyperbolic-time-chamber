@@ -1491,6 +1491,349 @@ event itself — `Movable`'s route fields are mutated across *both* `actSpontane
 `actInteractWith` handling, and it's plausible only one of those paths is captured correctly by
 whatever `LoggedEvent` replay currently reconstructs).
 
+## `BusStation`/`Subway` Crash Every Tick — Jackson Silently Leaves `Map[Long, Long]` Keys as `String` at Runtime (Found 2026-08-26, Fixed 2026-09-11)
+
+`hybrid.actor.BusStation` and `hybrid.actor.Subway` throw `ClassCastException: java.lang.String
+incompatible with java.lang.Long` on every `actSpontaneous`, inside
+`BusStationRouteCalculator.orderedBusStopIds` (`state.busStops.keys.toList.sorted`, where
+`BusStationState.busStops: mutable.LinkedHashMap[Long, Long]`). Reproduced in isolation with a
+throwaway synthetic case class and a `{"4":2,"5":3}` JSON payload run through the exact
+`JsonUtil` mapper: Jackson/jackson-module-scala silently leaves `Map[Long, X]` **keys** as raw
+`String` at runtime despite the declared type (values coerce fine — `println` even prints the
+keys looking like numbers, but the first `.asInstanceOf`/unboxing to `Long` throws).
+
+**Root cause, precisely identified 2026-09-11**: this is not a generic Jackson/Long bug — it is
+specific to Scala 3 case classes. jackson-module-scala only preserves a case class's full Map
+key/value generic signature for the constructor's *first* parameter; every later `Map[Long, _]`
+parameter has its key type erased to `Object` by the time Jackson resolves a key deserializer, so
+the key silently stays the raw JSON field-name `String`. A **mapper-wide** `KeyDeserializer`
+registration for `java.lang.Long` (or its primitive `TYPE`) via `SimpleModule` is provably never
+consulted for these fields — confirmed by instrumenting the deserializer and observing zero
+invocations even with the registration present. The only mechanism Jackson actually honors here is
+the **per-field** `@JsonDeserialize(keyAs = classOf[java.lang.Long])` annotation, which bypasses
+the broken type inference entirely.
+
+**Fixed**: this annotation was already applied (uncommitted, working-tree-only) to every
+non-first-position `Map[Long, _]` field across `model.hybrid.entity.state` (`BusStationState`,
+`BusState`, `SubwayState`, `NodeState`, `TrafficSignalState`) by an earlier session, each with a
+comment explaining the rule. **One field was missed**: `MigrationSnapshot.linkVehicleEntryTick` /
+`linkVehicleWaitingSeconds` (`core.actor.manager.loadbalance.migration.MigrationSnapshot`) — these
+round-trip through the exact same `JsonUtil` mapper on every shard-migration
+save/restore (`BaseActor.saveMigrationState`/`restoreMigrationState`), feeding
+`Link.vehicleEntryTick`/`vehicleWaitingSeconds` via `++=`. Without the annotation this would have
+**silently corrupted** per-vehicle link timing state after every migration restore (a missed key
+lookup, not a crash, since `Map[Long,Long]#++=` doesn't unbox eagerly) — directly relevant to Time
+Warp's rollback/migration-snapshot correctness. Added the same `@JsonDeserialize(keyAs = ...)`
+annotation to both fields; full `sbt test` (339 tests) passes.
+
+An audit of every `Map[Long, _]` in the codebase (`grep -rn "Map\[Long" src/main/scala`) found no
+other case-class constructor parameter missing the annotation — the remaining unannotated hits are
+all actor-local `var`s/handler-method parameters/`java.util.HashMap`s that never round-trip through
+`JsonUtil` directly (they get captured into an already-annotated state/snapshot field instead, or
+use a different serialization path e.g. `CompactGraph`'s `java.util.HashMap`).
+
+## Time Warp: Rollback-Orphaned Reply Permanently Hangs an Actor Waiting on a Signal/Link Reply (Found/Fixed 2026-09-05)
+
+Found chasing an unrelated `tls_test` livelock, not the `Movable` route-replay gap above (that one
+is still open). **Root cause**: an actor sends a request (e.g. `RequestLinkAccessData`) and
+disengages via `onFinishSpontaneousFn(None)`, relying entirely on the reply handler to reschedule
+it. If a Time Warp rollback then restores `state.status` to its pre-request value before the
+genuine, un-retractable reply arrives, the old `state.status`-only staleness guard
+(`state.status != WaitingSignalState && state.status != WaitingCapacity`) sees the "wrong" status
+and silently drops the reply as stale. Nothing else can ever reschedule that actor — it's
+permanently orphaned, hanging its LTM/GVT.
+
+**Fixed** via a new rollback-immune, actor-local tracker (`core/actor/AwaitedReply.scala`,
+`SimulationBaseActor.registerAwaitedReply`/`isAwaitingReply`/`consumeAwaitedReply`) consulted
+alongside the existing `state.status` guard — see `docs/TIME_WARP_DESIGN.md`'s 2026-09-05 log
+entries for the full mechanism and reasoning (including why this is correctly actor-local and not
+`state`, per this doc's "Shard Migration Silently Drops Actor-Local Reply State" entry above:
+losing this on a migration costs a stale-reply false-positive, not a hang). First pass wired it
+into `Car`'s signal handler and the shared `Movable` enter/leave-link path (covering
+`Car`/`Bicycle`/`Motorcycle`'s link handlers); a follow-up pass the same day ported the identical
+fix to `BicycleSignalHandler`/`MotorcycleSignalHandler`, `BusSignalHandler`/`BusLinkHandler`, and
+`Subway`'s inline enter/leave-link handling — all of which had been missed and carried the exact
+same live bug (Bus/Subway had it in both the signal-wait and, for `BusLinkHandler`, a
+previously-unguarded leave-link path). All five `Movable` subclasses now carry the fix; this
+class of bug is closed. Regression tests: `SimulationBaseActorAwaitedReplySpec` plus
+`BicycleSignalHandlerSpec`, `MotorcycleSignalHandlerSpec`, `BusSignalHandlerSpec`,
+`BusLinkHandlerSpec`, `SubwayAwaitedReplySpec`. Full suite: 315 tests, 0 failures.
+
+## Time Warp: Dynamic Actor Spawn (`BusStation`/`SubwayStation` → `Bus`/`Subway`) Bypasses Anti-Message Tracking, Duplicate-`InitializeEvent`s a Live Actor on Rollback (Found/Fixed 2026-09-07)
+
+`BusStation`/`SubwayStation` create their `Bus`/`Subway` actors via `SimulationBaseActor.spawnDynamicActor`,
+which talks directly to the `ShardRegion` (`shardRegion ! ShardRegion.StartEntity(...)`) rather
+than going through `sendMessageTo`. That means the spawn is never captured in
+`currentEventSentMessages`/`LoggedEvent.sentMessages`, so `AntiMessageCascade` can never generate
+an anti-message for it. If the station's Time Warp rollback target lands before the tick where it
+dequeued a bus/subway and called spawn, replay re-dequeues the same `BusInformation`/
+`SubwayInformation` (the dequeue itself is fine — `state.buses`/`state.subways`/`state.lines` are
+checkpointed and restored correctly) and re-spawns with the same deterministic entity id.
+`ShardRegion.StartEntity` on an already-live id just re-delivers `InitializeEvent` to the running
+actor, and `SimulationBaseActor.onInitialize` has no idempotency guard (unlike `BaseActor
+.onInitialize`'s `if (!isInitialized)`), so the live `Bus`/`Subway` gets its state and
+`RollbackHistoryHandler` reset mid-flight. Intermittent — only when the station's rollback target
+crosses the exact dequeue tick.
+
+**Fixed** by deferring the one truly irrevocable step — `spawnDynamicActorFn` (plus the
+actor-local `dependencies` registration that has to go with it, since `dependencies` is not part
+of checkpointed `state` and so isn't restored by rollback either) — until GVT has passed the
+dequeue tick, reusing the same "wait for a GVT watermark, then do the irrevocable thing" pattern
+already used for `SimulationBaseActor.reportBuffer`/`flushBufferedReportsUpTo`
+(`SpontaneousEvent.gvt`, piggybacked on every `SpontaneousEvent` an `OptimisticLocalTimeManager`
+sends). Everything else about creating a bus/subway (route validation, building the state object,
+`report()`) is either pure or already Time-Warp-safe, so it still runs eagerly at dequeue time in
+both modes.
+
+Concretely: `BusStationBusCreator.createBus`/`SubwayStationCreator.createSubway` (private) were
+split into `prepareBus`/`prepareSubway` (route + state build + `report()`, returns the state JSON,
+never calls `spawnDynamicActorFn`) and `spawnPrepared`/`spawnPreparedSubway` (the metrics
+increment + the actual `spawnDynamicActorFn` call). `createBus`/`createSubway` still chain both in
+sequence, so the non-Time-Warp path is byte-for-byte unchanged. `SubwayStationCreator` also gained
+`prepareSubwaysFrom`, the prepare-only counterpart of `createSubwayFrom` (it can dequeue+prepare
+more than one line's subway per call).
+
+Under Time Warp, `BusStation`/`SubwayStation` stash the prepared `(bus/subway, dequeue tick, state
+JSON)` locally (`pendingBusSpawn: Option[...]` / `pendingSubwaySpawns: mutable.Map[Long, ...]`)
+instead of spawning immediately, and poll every tick in `actSpontaneous` until
+`event.gvt.exists(_ >= dequeueTick)`, at which point `firePendingBusSpawn`/
+`firePendingSubwaySpawns` finally calls `spawnPrepared`/`spawnPreparedSubway` and registers the
+`dependencies` entry. This is safe by GVT's own monotonicity invariant (`MarginBasedGVTEstimation`:
+`GVT = min(reported LVTs) - margin`, the point below which no rollback can ever reach again): once
+GVT has passed the dequeue tick, the station provably can never roll back to before it again, so
+firing the deferred spawn needs no anti-message mechanism. Conversely, if the station rolls back to
+before the dequeue tick before GVT gets there, the stash is simply discarded — nothing external
+was ever created, so nothing needs undoing.
+
+That discard is a new `protected` hook on `SimulationBaseActor`, `onRollbackDiscardPending
+(targetTick: Tick)` (default no-op), called unconditionally from `rollbackAndCascade` right after
+the existing `reportBuffer.filterInPlace(_._1.tick < targetTick)` line — both existing call sites
+into `rollbackAndCascade` are already inside `isTimeWarp &&` guards, so no extra gating was needed
+at the hook's call site. `BusStation`/`SubwayStation` override it to drop any stash entry whose
+dequeue tick is `>= targetTick`, mirroring the reportBuffer filter's `< targetTick` convention.
+
+Non-Time-Warp (discrete-event/conservative) mode is unaffected by construction: the deferred-spawn
+path is gated on `getCurrentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, and
+`pendingBusSpawn`/`pendingSubwaySpawns` are simply never populated outside Time Warp.
+
+Regression tests: `BusStationBusCreatorSpec`, `SubwayStationCreatorSpec` — both plain-ScalaTest,
+no Pekko, covering: `prepareBus`/`prepareSubway` never touch the spawn lambda;
+`spawnPrepared`/`spawnPreparedSubway` call it with exactly the JSON `prepare*` produced;
+`prepareBus`/`prepareSubway` still throw `IllegalStateException` on an empty/missing route exactly
+as the old `createBus`/`createSubway` did; `prepareSubwaysFrom` dequeues+prepares without ever
+spawning and re-enqueues on failure; `createBus`/`createSubwayFrom` (the non-Time-Warp path) still
+spawn immediately, unchanged. Full suite: 330 tests, 0 failures.
+
+## Time Warp: `OptimisticLocalTimeManager.localVirtualTime` Understated GVT for Two Real Reasons (Found/Fixed 2026-09-11) — But GVT-Plateau Termination Itself Was Never the Bug; the Real, Now-Quantified Gap Is Report Loss/Duplication (Found 2026-09-11, Not Fixed)
+
+**History of this investigation, since the framing changed twice in one session — read this before
+trusting either fix in isolation.** An earlier session's diagnosis attributed a "GVT plateaued at
+-100 while report data shows real progress" symptom to the `deferFinishSpontaneous()` dynamic-spawn
+pattern — already fully removed by the time this was rechecked (see that section above, fixed
+2026-09-07). Rerunning `simulations/input/tw_livelock_repro` (endTick=3600, 1 bus line, 20 cars, 5
+bicycles) under `time-warp` against a real docker-compose cluster (after this session's Jackson
+`Map[Long,_]` fix unblocked `Bus`/`Subway` running at all — see that entry above) reproduced the
+exact same log line, `"GVT plateaued at -100 with all LTMs idle for 3 rounds — terminating"`, ~1.5s
+after load. Two real bugs in `OptimisticLocalTimeManager.localVirtualTime` were found and fixed
+(below) on the assumption this explained premature termination. **It didn't, and termination was
+never premature in this scenario** — see "The actual explanation" below, established only after
+adding a real conservative-mode baseline run that no prior session had done for this scenario.
+
+**Bug 1 (fixed): idle-instant collapse.** `localVirtualTime` (`OptimisticLocalTimeManager.scala:237`
+at the time):
+```scala
+protected def localVirtualTime: Tick =
+  if (runningEvents.nonEmpty) runningEvents.map(a => highestProcessedTickOf(a.id)).min
+  else nextTick.getOrElse(localTickOffset)
+```
+The `if` branch is correct. But the instant `runningEvents` goes empty — routine between one batch
+resolving and the next being dispatched, not just at genuine end-of-simulation — LVT fell back to
+`nextTick.getOrElse(localTickOffset)`. `localTickOffset` starts at `initialTick` and in this class
+is only ever moved *backward* (by `resyncScheduleAfterRollback`'s rollback resync), never forward
+as actors genuinely progress — so any such idle instant silently discarded all of
+`highestProcessedTick`'s real history. **Fix**: added `LocalTimeManagerBase.minHighestProcessedTick`
+(the min `highestProcessedTick` across every actor this LTM still owns, persists across idle gaps,
+removed only on `completeDestruct`) and floor the idle-branch at `min(nextTick, that)` instead.
+Regression test: `OptimisticLocalTimeManagerSpec` — "should report LVT as the actor's real
+high-water mark once idle, not collapse back to localTickOffset."
+
+**Bug 2 (fixed): permanently-empty routee collapse.** `MarginBasedGVTEstimation.estimate` takes
+`min` over *every* reporting LTM unconditionally. An LTM pool routee that has never had (or no
+longer has) a single actor assigned — plausible whenever the pool has more instances than the
+scenario has actors (`HTC_TIME_MANAGER_INSTANCES=16` for this ~90-actor scenario) — reported
+`localTickOffset` (`0`) forever via the same fallback, permanently pinning the global `min` near
+`0 - margin` regardless of how far every *other*, genuinely busy LTM progressed. **Fix**: when
+`registeredActors.isEmpty`, report `Long.MaxValue` (no constraint) instead. Regression test:
+"should report LVT as Long.MaxValue... for a routee with zero actors ever assigned."
+
+Both fixes are real, safe (only ever make LVT *more* accurate, never invent progress — preserves
+the "underestimate is safe" invariant), and covered by new passing tests (full suite: 341 tests).
+**Neither changed the live symptom** — rerunning the same scenario after both fixes still logged
+`"GVT plateaued at -100"` at the same ~1.5s mark. Chased a third hypothesis (Link/Node actors in
+MESO mode call `onFinishSpontaneous(None)` and never self-reschedule, so their contribution to
+`highestProcessedTick` freezes at their first dispatch tick even while they keep handling
+interaction events for the rest of the simulation — interactions never update `highestProcessedTick`
+at all) — real observation, but turned out to be a red herring for *this* symptom too.
+
+**The actual explanation, established by finally running a real conservative-mode baseline of this
+exact scenario** (`timeManagerType: "discrete-event"`, same docker-compose cluster): conservative
+mode **also** stops producing events at max `tick=1801` — identical to time-warp. This is not a
+coincidence: every `Person`'s plan here is `home (→300) → trip → leisure (→1800) → trip → home
+(→86400)` — after the second trip completes (~tick 1801), nothing is scheduled again until tick
+86400, far past this scenario's `endTick=3600`. `BusStation` (the one actor type that genuinely
+self-reschedules every tick) ran for real all the way to `"BusStation 36 reached simulation end
+tick=3600, stopping scheduling"` before the plateau fired. **The GVT-plateau termination decision
+itself is correct** — there really is no more spontaneous work to dispatch anywhere once every
+actor's plan is exhausted. The `-100` number is a red herring for a real symptom that isn't the one
+it looks like: it never caused an early stop, and reads confusingly low mostly because of the two
+now-fixed calculation bugs above, plus whatever residual imprecision Bug 3 above still contributes
+(not chased further, since it no longer has an observable symptom attached to it).
+
+**What the baseline comparison actually revealed — the real, now-precisely-quantified gap**:
+report count. Both runs reach `tick=1801`; conservative produced 660 parquet rows, time-warp only
+252, for the *same* activity window. Breaking down by `event_type`, the pattern is not uniform
+under-counting — it's a mix of near-total loss and duplication:
+
+| Pattern | Event types | Example |
+|---|---|---|
+| Near-total loss (≥90% missing) | `leave_link` (0/26 survive), `enter_link`, `journey_started`/`journey_completed`, `sumo_tripinfo`, `route_planned`, `person_trip_completed`/`person_trip_metrics`/`person_leg_metrics`, `vehicle_event_count` | conservative has 51 `enter_link` rows, time-warp has 15, and only 1 of those 15 ticks overlaps with a conservative row at the same `(entity_id, tick)` |
+| Duplication (same entity+tick reported 3-4×) | `person_schedule_complete` (conservative: 30, time-warp: **58** — more than conservative, not less) | entity `45` has 4 separate `person_schedule_complete` rows all at `tick=300` |
+
+**Cause 1, found and fixed same session: `journeyFinishedReported`/`sumoTripInfoReported` are
+actor-local, not `state`.** `CarJourneyReporter.finishJourney`/`reportSumoTripInfo` (and the
+identical pattern in `BusJourneyReporter`/`BicycleJourneyReporter`/`MotorcycleJourneyReporter`) each
+guard against duplicate reporting with a `private var ...Reported: Boolean = false`, set `true` on
+first call and never reset except by the per-trip `reset()` (called only at genuine new-trip start,
+via `resetTripState()`). A Time Warp rollback restores `state` via `RollbackHistoryHandler` but has
+no way to know about this actor-local flag, so it survives untouched. Sequence: a trip's real
+completion fires once (flag → `true`, report buffered); an overlapping rollback undoes back to
+*before* that completion (discarding the now-invalid buffered report, correctly, via
+`reportBuffer.filterInPlace(_._1.tick < targetTick)`); replay reaches the same (or corrected)
+completion point again and calls `finishJourney` again — but the guard is still `true` from the
+first, now-invalidated attempt, so the call is silently swallowed and **no report survives for that
+trip's completion at all**, for the rest of the simulation (the guard is never reset again short of
+a whole new trip starting). Confirmed directly: `entity 42` (a `Car`) showed `journey_completed`
+reported at `tick=0` in the time-warp parquet output — a stale/impossible timestamp, symptomatic of
+this exact class of corruption.
+
+**Fix**: added `clearCompletionGuards()` to each of the four journey reporters — narrower than
+`reset()`, clearing only the `...Reported` flags without wiping accumulated SUMO metrics
+(`sumoDepartTick` etc.) that describe the surviving, not-undone portion of the current trip. Wired
+into `Car`/`Bus`/`Bicycle`/`Motorcycle`'s (new) `onRollbackDiscardPending` override — the same
+existing extension point `BusStation`/`SubwayStation` already use for their own actor-local stash —
+called unconditionally on every rollback for that actor. Safe: if the guarded completion was NOT
+among the undone events (it already happened before the rollback's target), nothing in the replay
+can call `finishJourney` again for that already-finished trip, so clearing the guard can't produce
+a spurious duplicate. New test: `CarJourneyReporterSpec` (plain ScalaTest, no Pekko). Full suite:
+344 tests, 0 failures.
+
+**Measured effect, same live scenario**: `journey_completed` 15→23 rows, `sumo_tripinfo` 15→23,
+`enter_link` 15→21, `leave_link` 2→3 (conservative baseline: 51/51/51/26 respectively) — a real,
+confirmed improvement, but **most of the loss remains**. Two more, distinct causes identified but
+**not fixed this session**:
+
+**Cause 2 (found, partially fixed): `PersonMetricsReporter.reportScheduleComplete` had no
+idempotency guard at all** — unlike the vehicle journey reporters, there was no `...Reported` flag
+to reset in the first place; `Person.dispatch`'s `PlanStepResult.Finished` branch called it
+unconditionally every time that branch was reached, and replay could reach it more than once.
+Explained why `person_schedule_complete` was *duplicated* (conservative: 30, time-warp: 33-58
+across runs) rather than lost.
+
+**Fix**: added a `protected var scheduleCompleteReported: Boolean` guard on `Person` (no per-trip
+reset needed, unlike the vehicle case — a Person's daily schedule completes at most once ever,
+immediately followed by `destruct = true`), checked/set around the `reportScheduleComplete` call,
+and cleared via a new `Person.onRollbackDiscardPending` override, same mechanism as `Car`/`Bus`/
+`Bicycle`/`Motorcycle`. New test: `PersonScheduleCompleteGuardSpec` (drives the guard/reset directly
+since `dispatch` itself is private). Full suite: 347 tests, 0 failures.
+
+**Measured effect, same live scenario**: duplicate count dropped (e.g. entity `45`: 4 → 3 rows at
+the same tick) but **duplication is not fully eliminated** — some entities still show 2-3 rows.
+This means `dispatch(PlanStepResult.Finished)` can apparently be reached more than once for the
+same Person *without* an intervening rollback for that actor resetting the guard in between (the
+guard-clear is keyed to this actor's own `onRollbackDiscardPending` firing, but if the duplicate
+calls happen within a window where no rollback touched *this* actor at all, clearing on rollback
+can't be the whole story). Not investigated further — next step would be logging every call to
+`dispatch(Finished)` with `currentGeneration`/`isReplaying` to see what actually triggers the
+repeat calls when no rollback intervenes.
+
+**Cause 3 (found via new Prometheus instrumentation, not fixed): vehicles thrash on entering links
+without progressing to leaving them — a functional rollback/replay bug, NOT a report-pipeline bug.**
+
+To distinguish "reports lost in the buffering pipeline" from "the underlying behavior itself is
+wrong," added three new metrics (`core.metrics.core.ActorMetrics`,
+`htc_report_discarded_by_rollback_total`/`htc_report_flushed_total`, both by `event_type`, plus
+`htc_antimessages_sent_total` by `sender_actor_type`) and instrumented `SimulationBaseActor.report`/
+`flushBufferedReportsUpTo`/`rollbackAndCascade`'s discard/`sendAntiMessage`. Existing
+`ActorMetrics.eventsProcessed{event_type}` already counted every `report()` call *attempted*
+(conservative and Time Warp alike). Querying `:9999/metrics` right after the same live
+`tw_livelock_repro` run (before shutdown) gave, per `event_type` (attempted / discarded-by-rollback
+/ flushed):
+
+| event_type | attempted | discarded | flushed | attempted − discarded | conservative baseline (attempted-equivalent) |
+|---|---|---|---|---|---|
+| `enter_link` | 84 | 61 | 20 | 23 (≈ flushed, small race) | 51 |
+| `leave_link` | 7 | 2 | 5 | 5 (exact) | 26 |
+| `route_planned` | 62 | 56 | 6 | 6 (exact) | 40 |
+| `journey_started` | 74 | 64 | 10 | 10 (exact) | 50 |
+| `sumo_tripinfo` | 29 | 8 | 21 | 21 (exact) | 51 |
+| `journey_completed` | 29 | 8 | 21 | 21 (exact) | 51 |
+| `vehicle_event_count` | 23 | 6 | 17 | 17 (exact) | 40 |
+
+**The buffering pipeline's own accounting is correct** — `attempted − discarded = flushed` holds
+almost exactly for every event type. Nothing is silently lost between `report()` and the reporter
+target; every report is accounted for as either genuinely flushed or genuinely discarded because a
+rollback undid the tick it described. This rules out a report-buffering bug as Cause 3.
+
+**What the numbers show instead**: a clear over/under-attempt split. "Entering" events
+(`enter_link` 84 vs. 51 baseline, `journey_started` 74 vs. 50, `route_planned` 62 vs. 40) are
+*over*-attempted — replay is re-generating the same early-route report() calls repeatedly, while
+"completion" events (`leave_link` 7 vs. 26, `journey_completed`/`sumo_tripinfo` 29 vs. 51,
+`vehicle_event_count` 23 vs. 40) are *under*-attempted — vehicles rarely make it far enough to call
+these at all. This is the signature of a vehicle repeatedly entering a link, being rolled back, and
+retrying — without net forward progress through its route — not vehicles genuinely completing
+shorter, valid, different routes. Corroborated by anti-message volume by sender type from the same
+run: `hybrid.actor.Car` 66, `hybrid.actor.Link` 64, vs. `hybrid.actor.Node` 17, `hybrid.actor.Bicycle`
+10, `hybrid.actor.Person` 1 — the Car↔Link enter/leave-link exchange dominates rollback churn by a
+wide margin over every other interaction type in this scenario.
+
+**Root cause found, partially fixed (2026-09-11/12).** Traced with the new metrics above: of the
+Car↔Link `ReceiveEnterLinkInfo` stragglers, most were NOT the 2026-09-06 `AwaitedReply` `key`+`kind`
+livelock class (that fix's `requestSeq` identity check is correct and already in place) — they were
+a *different* bug: `SimulationBaseActor.handleInteractWith` unconditionally triggered a full
+rollback for any tick-behind interaction, checked *before* `actInteractWith` (and therefore before
+`CarLinkHandler`'s own `isAwaitingReplyFn` staleness gate) ever got a chance to recognize a reply as
+already-superseded. **Fixed**: a new `protected def isKnownSupersededReply(event): Boolean = false`
+hook on `SimulationBaseActor`, consulted before the rollback trigger; `Movable` overrides it using
+the same `isAwaitingReply` identity check business logic already had. Also added the same staleness
+gate to `CarLinkHandler.handleEnterLink` that `handleLeaveLink` already had (defense in depth — the
+old comment claiming it was "always safe" to skip was wrong under heavy contention). New tests:
+`MovableIsKnownSupersededReplySpec`. Full suite: 351 tests, 0 failures. **Measured effect**: only
+~8 of ~42 rollbacks for this pair were genuinely superseded replies (now correctly dropped without
+a rollback, tracked by `htc_stale_reply_dropped_without_rollback_total`) — a real but minority
+improvement.
+
+**The remaining ~34 are genuine causality violations, not a fixable protocol bug** — traced to
+`Movable.actSpontaneous`'s `Waiting` case (`Movable.scala:78-91`): after sending `EnterLinkData`,
+the Movable resolves `onFinishSpontaneous` immediately and then self-reschedules every tick
+(`onFinishSpontaneous(Some(currentTick + 1))`) while polling for the reply, up to `MaxWaitingTicks`
+(a self-recovery timeout for a genuinely lost reply). This is real dispatch activity from the LTM's
+perspective, so `currentTick`/`highestProcessedTick` climb every tick with **no actual business
+progress** — purely idle polling. If the `Link` is busy (its own LTM routee serving other vehicles)
+and its real, correct reply arrives stamped with an earlier tick than the Movable's now-inflated
+`currentTick`, the straggler check fires for what is genuinely the awaited, correct reply. This is
+architectural, not a code bug: the per-tick self-poll pattern is exactly what makes Time Warp's
+straggler mechanism see ordinary waiting as forward progress needing later correction. Full
+before/after architecture diagrams, the proposed fix (eliminate the round-trip entirely using the
+already-existing, already-replay-safe `DynamicWeightCache` instead of a live reply), and its
+explicit fidelity trade-off (`Link.costPublishInterval`, default 10 ticks of staleness) are written
+up in `docs/TIME_WARP_ARCHITECTURE_AUDIT.md`'s Section 5 — deliberately **not implemented**, pending
+a modeling-fidelity decision, not an engineering one.
+
+This entry supersedes the vague "Parquet parity with conservative mode is not yet achieved" language
+elsewhere in `docs/TIME_WARP_DESIGN.md` with concrete, reproducible numbers. Reproduction: run
+`simulations/input/tw_livelock_repro` in both `timeManagerType` modes against the same cluster and
+diff parquet output by `(event_type, entity_id, tick)`.
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file

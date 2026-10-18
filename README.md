@@ -491,6 +491,7 @@ src/main/scala/
 | [API Reference](docs/API.md) | REST API endpoints, request/response schemas |
 | [ClickHouse Queries](docs/clickhouse-queries.md) | Sample analytical queries |
 | [Known Gaps](docs/KNOWN_GAPS.md) | Honest audit: what's documented vs. what's actually implemented/tested |
+| [Message Exchange Estimate](docs/MESSAGE_EXCHANGE_ESTIMATE.md) | Order-of-magnitude message-flow taxonomy and per-scenario estimate (São Paulo vs Toulouse) |
 
 ---
 

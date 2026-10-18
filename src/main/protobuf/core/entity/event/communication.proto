@@ -15,6 +15,13 @@ message ScheduleEvent {
   uint64 tick = 1;
   string actorRef = 2;
   Identify identify = 3;
+  // True only when this ScheduleEvent originates from SimulationBaseActor.resyncScheduleAfterRollback
+  // after a Time Warp rollback genuinely reverted this actor's currentTick. Tells
+  // LocalTimeManagerBase.scheduleEvent to SET highestProcessedTick(actorId) = tick (this actor's
+  // authoritative post-rollback position) instead of comparing against it and bumping forward.
+  // Default false for every other producer -- conservative mode never sets this, by construction
+  // (it never calls rollbackAndCascade at all).
+  bool resyncAfterRollback = 4;
 }
 
 message FinishEvent {

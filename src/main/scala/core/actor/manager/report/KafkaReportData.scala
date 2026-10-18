@@ -10,7 +10,8 @@ import org.apache.pekko.actor.ActorRef
 
 import java.time.LocalDateTime
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.duration._
 
 /** Reporter actor that streams simulation metric events to Redpanda/Kafka.
   *
@@ -56,33 +57,38 @@ class KafkaReportData(
   }
 
   override def postStop(): Unit = {
-    if (buffer.nonEmpty) flush()
     implicit val ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+    try Await.result(flush(), 10.seconds)
+    catch {
+      case err: Exception => logWarn(s"Final Kafka flush before shutdown did not complete: ${err.getMessage}")
+    }
     publisher.close().failed.foreach { err =>
       logWarn(s"Error closing Kafka producer: ${err.getMessage}")
     }
     super.postStop()
   }
 
-  private def flush(): Unit = {
-    if (buffer.isEmpty) return
+  private def flush(): Future[Unit] = {
+    if (buffer.isEmpty) return Future.successful(())
     val snapshot = buffer.toList
     buffer.clear()
     implicit val ec: ExecutionContext =
       context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
-    snapshot.foreach { ev =>
-      SimulationReportEventAvro.serialize(ev) match {
-        case scala.util.Success(bytes) =>
-          publisher
-            .publish(topicFor(ev.label.getOrElse("")), ev.entityId, bytes)
-            .failed
-            .foreach { err =>
-              logWarn(s"Kafka publish failed for entity ${ev.entityId}: ${err.getMessage}")
-            }
-        case scala.util.Failure(err) =>
-          logWarn(s"Kafka serialization failed for entity ${ev.entityId}: ${err.getMessage}")
-      }
-    }
+    Future
+      .sequence(snapshot.map { ev =>
+        SimulationReportEventAvro.serialize(ev) match {
+          case scala.util.Success(bytes) =>
+            publisher
+              .publish(topicFor(ev.label.getOrElse("")), ev.entityId, bytes)
+              .recover { case err =>
+                logWarn(s"Kafka publish failed for entity ${ev.entityId}: ${err.getMessage}")
+              }
+          case scala.util.Failure(err) =>
+            logWarn(s"Kafka serialization failed for entity ${ev.entityId}: ${err.getMessage}")
+            Future.successful(())
+        }
+      })
+      .map(_ => ())
   }
 
   private def topicFor(label: String): String = label match {

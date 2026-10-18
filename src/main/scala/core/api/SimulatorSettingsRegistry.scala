@@ -152,6 +152,15 @@ object SimulatorSettingsRegistry {
       "Enable [ACTOR-TRACE] INFO logs for major actor lifecycle events (Person, Bus, Car, Subway, etc.). " +
         "Toggle at runtime via REST API. Remove from source by searching '// #actor-trace'.",
       "false"
+    ),
+    SettingDef(
+      "htc.timewarp-trace.enabled",
+      "HTC_TIMEWARP_TRACE_ENABLED",
+      "Enable [TW-TRACE] DEBUG logs for the Time Warp rollback/dispatch/reply-matching path " +
+        "(SimulationBaseActor.rollbackAndCascade, OptimisticLocalTimeManager.dispatchNextAvailable, " +
+        "Person interaction handling). Toggle at runtime via REST API; requires the DEBUG log level " +
+        "to also be enabled for org.interscity.htc.timewarp.trace to actually see lines.",
+      "false"
     )
   )
 

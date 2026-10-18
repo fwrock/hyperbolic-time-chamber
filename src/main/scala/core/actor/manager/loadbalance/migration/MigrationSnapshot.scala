@@ -1,6 +1,8 @@
 package org.interscity.htc
 package core.actor.manager.loadbalance.migration
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+
 /** Encapsulates all actor data that must survive shard migration.
   *
   * This case class is serializable by Jackson (all primitive types and simple maps) without
@@ -134,6 +136,13 @@ case class MigrationSnapshot(
   vehicleSignalWaitNeedsReverify: Boolean = false,
   expectedUnloadResponses: Int = 0,
   currentStopNode: Long = 0L,
+  // Non-first-position Map[Long, _] constructor params: jackson-module-scala on Scala 3 only
+  // preserves full Map key/value generics for the *first* constructor parameter, so later ones
+  // need @JsonDeserialize(keyAs = ...) or the key silently deserializes as String and every
+  // real-Long-key lookup either misses silently or throws ClassCastException once unboxed (see
+  // BusStationState for the full explanation).
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   linkVehicleEntryTick: Map[Long, Long] = Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   linkVehicleWaitingSeconds: Map[Long, Double] = Map.empty
 )

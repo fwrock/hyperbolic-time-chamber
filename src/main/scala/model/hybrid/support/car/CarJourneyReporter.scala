@@ -70,6 +70,26 @@ class CarJourneyReporter(
     sumoTripInfoReported            = false
   }
 
+  /** `journeyFinishedReported`/`sumoTripInfoReported` are actor-local, not `state` -- a Time Warp
+    * rollback restores `state` but never touches them. If the trip's real completion already fired
+    * once (setting these `true`) before a rollback undoes back to before that point, replay
+    * re-reaching the same (or now-corrected) completion finds the guard already tripped and the
+    * report is silently dropped forever -- the actual root cause of `journey_completed`/
+    * `sumo_tripinfo` being almost entirely missing from Time Warp output (see docs/KNOWN_GAPS.md,
+    * found 2026-09-11). Unlike `reset()`, this must NOT clear the accumulated SUMO metrics
+    * (`sumoDepartTick` etc.) -- those describe the surviving, not-undone portion of the current
+    * trip and must not be wiped just because some later part of it is being replayed. Called from
+    * the owning actor's `onRollbackDiscardPending` on every rollback, unconditionally: safe because
+    * if the completion this guards was NOT among the undone events (it already happened at a tick
+    * before the rollback's target), nothing in the replay can call `finishJourney`/
+    * `reportSumoTripInfo` again for that same, already-finished trip -- there is no earlier logged
+    * event left to replay that would do so.
+    */
+  def clearCompletionGuards(): Unit = {
+    journeyFinishedReported = false
+    sumoTripInfoReported    = false
+  }
+
   def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {

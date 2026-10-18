@@ -75,7 +75,8 @@ class LinkVehicleFlowHandler(
           linkCapacity     = state.capacity,
           linkNumberOfCars = state.registered.size,
           linkFreeSpeed    = state.freeSpeed,
-          linkLanes        = state.lanes
+          linkLanes        = state.lanes,
+          requestSeq       = event.seq
         ),
         EventTypeEnum.ReceiveEnterLinkInfo.toString
       )
@@ -102,7 +103,8 @@ class LinkVehicleFlowHandler(
         linkCapacity     = state.capacity,
         linkNumberOfCars = state.registered.size,
         linkFreeSpeed    = state.freeSpeed,
-        linkLanes        = state.lanes
+        linkLanes        = state.lanes,
+        requestSeq       = event.seq
       ),
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
@@ -258,7 +260,8 @@ class LinkVehicleFlowHandler(
         linkCapacity     = state.capacity,
         linkNumberOfCars = state.registered.size,
         linkFreeSpeed    = state.freeSpeed,
-        linkLanes        = state.lanes
+        linkLanes        = state.lanes,
+        requestSeq       = event.seq
       ),
       EventTypeEnum.ReceiveLeaveLinkInfo.toString
     )
