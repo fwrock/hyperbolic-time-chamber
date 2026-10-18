@@ -65,6 +65,13 @@ trait PrivateVehicle[T <: MovableState] {
     */
   private var tripStartTick: Option[Tick] = None
 
+  /** The `ActorInteractionEvent.seq` of the `StartTrip` request currently being served, echoed
+    * back on [[TripCompletedData.requestSeq]] so the owning Person can tell this trip's genuine
+    * completion apart from a rollback-orphaned reply to an earlier, since-retracted `StartTrip`
+    * (see `TripCompletedData.requestSeq`'s doc). `0L` outside Time Warp, where it's never read.
+    */
+  private var tripRequestSeq: Long = 0L
+
   /** Track trip start distance (for distance calculation).
     */
   private var tripStartDistance: Double = 0.0
@@ -156,6 +163,7 @@ trait PrivateVehicle[T <: MovableState] {
       driverAttributes = data.driverAttributes.validate()
       tripStartTick = Some(data.startTick)
       tripStartDistance = getCurrentDistance
+      tripRequestSeq = event.seq
 
       applyDriverAttributes(driverAttributes)
 
@@ -224,7 +232,8 @@ trait PrivateVehicle[T <: MovableState] {
             finalNode = finalNode,
             completionTick = getActorCurrentTick,
             completionReason = reason,
-            wasTeleported = wasTeleported
+            wasTeleported = wasTeleported,
+            requestSeq = tripRequestSeq
           ),
           eventType = "TripCompleted",
           actorType = LoadBalancedDistributed

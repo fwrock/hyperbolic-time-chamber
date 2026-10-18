@@ -3,12 +3,12 @@ package core.actor.manager.time
 
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.types.Tick
-import core.util.ManagerConstantsUtil.POOL_TIME_MANAGER_ACTOR_NAME
+import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 import core.api.SimulatorSettingsRegistry
 
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
-import org.apache.pekko.routing.RoundRobinPool
+import org.apache.pekko.actor.{ActorRef, Props}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.{Broadcast, RoundRobinPool}
 
 /** Base for the cluster-wide singleton time-manager coordinator, holding the plumbing that's
   * identical regardless of synchronization strategy — creating and reaching the pool of local time
@@ -71,11 +71,11 @@ abstract class GlobalTimeManagerBase(
   }
 
   protected def notifyLocalManagers(event: Any): Unit =
-    timeManagersPool ! org.apache.pekko.routing.Broadcast(event)
+    timeManagersPool ! Broadcast(event)
 
   protected def getSelfProxy: ActorRef =
     if (selfProxy == null) {
-      selfProxy = createSingletonProxy(core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME)
+      selfProxy = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME)
       selfProxy
     } else {
       selfProxy

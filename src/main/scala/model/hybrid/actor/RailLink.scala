@@ -80,7 +80,8 @@ class RailLink(
         linkCapacity = 0,
         linkNumberOfCars = 0,
         linkFreeSpeed = 0,
-        linkLanes = 0
+        linkLanes = 0,
+        requestSeq = event.seq
       )
 
       sendMessageTo(
@@ -111,7 +112,8 @@ class RailLink(
       linkCapacity = state.capacity,
       linkNumberOfCars = state.registered.size,
       linkFreeSpeed = effectiveSpeed,
-      linkLanes = state.lanes
+      linkLanes = state.lanes,
+      requestSeq = event.seq
     )
 
     sendMessageTo(
@@ -136,7 +138,8 @@ class RailLink(
       linkCapacity = state.capacity,
       linkNumberOfCars = state.registered.size,
       linkFreeSpeed = state.effectiveSpeed,
-      linkLanes = state.lanes
+      linkLanes = state.lanes,
+      requestSeq = event.seq
     )
 
     sendMessageTo(

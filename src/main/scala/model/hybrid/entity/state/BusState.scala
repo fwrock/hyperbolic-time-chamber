@@ -3,6 +3,7 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.ActorTypeEnum.Bus
@@ -52,6 +53,11 @@ import scala.collection.mutable
   *   Current mode (MESO or MICRO)
   * @param microState
   *   Optional microscopic bus state
+  *
+  * `busStops` and `people` carry `@JsonDeserialize(keyAs = classOf[java.lang.Long])`: on Scala 3,
+  * jackson-module-scala only preserves a case class's full Map key/value generics for the
+  * *first* constructor parameter, so any later `Map[Long, _]` field silently deserializes its
+  * keys as `String` without this annotation (see `BusStationState` for the full explanation).
   */
 case class BusState(
   // ========== Meso fields ==========
@@ -61,8 +67,10 @@ case class BusState(
   var distance: Double = 0.0,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   var busStops: Map[Long, Long],
   val numberOfPorts: Int,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
   val people: mutable.Map[Long, Identify] = mutable.Map[Long, Identify](),
   var currentPathPosition: Int = 0,
   override val origin: Long,

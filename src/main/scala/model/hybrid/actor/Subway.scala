@@ -192,7 +192,20 @@ class Subway(
     )
 
     import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
-    if (state.status == Moving) {
+    // Movable.leavingLink registers this reply (Movable.leaveLinkAwaitKey) for every Movable
+    // subclass, Subway included. Under conservative mode this keeps the original `state.status
+    // == Moving` gate unchanged. Under Time Warp, a rollback can restore state.status away from
+    // Moving from before this reply's originating LeaveLinkData was sent -- a status-only gate
+    // would then silently drop a genuine, un-retractable reply and never resolve
+    // onFinishSpontaneous again, orphaning this actor (docs/TIME_WARP_DESIGN.md §10; see
+    // CarSignalHandler.handleLinkAccess for the reference implementation of this pattern).
+    val isTimeWarpMode = getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP
+    val awaitKey = Movable.leaveLinkAwaitKey(event.actorRefId)
+    val shouldProcess =
+      if (isTimeWarpMode) isAwaitingReply(awaitKey, "LeaveLinkData", data.requestSeq)
+      else state.status == Moving
+    if (shouldProcess) {
+      if (isTimeWarpMode) consumeAwaitedReply(awaitKey)
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
     }
@@ -203,7 +216,11 @@ class Subway(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    
+    // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
+    // CarLinkHandler.handleEnterLink), so always safe to consume once received.
+    if (getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP)
+      consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
+
     if (data.linkLength <= 0 || data.linkFreeSpeed <= 0) {
       logWarn(
         s"[SUBWAY] REJECTED by RailLink ${event.actorRefId}: zero linkLength=${data.linkLength} or speed=${data.linkFreeSpeed} " +

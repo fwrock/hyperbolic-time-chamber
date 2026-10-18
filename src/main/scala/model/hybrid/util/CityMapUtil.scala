@@ -1,6 +1,6 @@
 package org.interscity.htc.model.hybrid.util
 
-import org.interscity.htc.core.api.SimulatorSettingsRegistry
+import org.interscity.htc.core.api.{ ApiConfigRegistry, SimulatorSettingsRegistry }
 import org.interscity.htc.model.hybrid.collections.{ CompactGraph, CompactLandmarkIndex, Graph, LoadedGraphData, SCCIndex }
 import org.interscity.htc.model.hybrid.collections.graph.{ ContractionHierarchiesIndex, LandmarkIndex }
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
@@ -13,10 +13,21 @@ object CityMapUtil {
   val edgeGraphIdExtractor: EdgeGraph => Long = (edgeLabel: EdgeGraph) => edgeLabel.id
 
   private lazy val cityMapFilePath: String =
-    SimulatorSettingsRegistry
-      .get("htc.mobility.city-map-file")
+    scenarioCityMapFile
+      .orElse(SimulatorSettingsRegistry.get("htc.mobility.city-map-file"))
       .orElse(sys.env.get("HTC_MOBILITY_CITY_MAP_FILE"))
       .getOrElse("city_map.json")
+
+  /** City map path declared by the currently loaded scenario (`simulation.json`'s `cityMapFile`
+    * field). The REST API stores the chosen scenario in [[ApiConfigRegistry]] on
+    * `POST /api/v1/scenarios/{name}/load`, so this is the authoritative per-scenario source. It
+    * takes priority over `htc.mobility.city-map-file` / `HTC_MOBILITY_CITY_MAP_FILE`, which are
+    * legacy single-scenario fallbacks that go stale when a different scenario is loaded from the
+    * UI (previously this made the engine warm up the wrong city map, so every Person failed its
+    * walking-route lookups).
+    */
+  private def scenarioCityMapFile: Option[String] =
+    ApiConfigRegistry.get.flatMap(_.cityMapFile)
 
   private lazy val loadedCityData: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph] =
     (

@@ -16,6 +16,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateE
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
 import org.interscity.htc.core.metrics.model.hybrid.BusStationMetrics
 import org.interscity.htc.model.hybrid.support.busstation.{ BusStationBusCreator, BusStationRouteCalculator }
+import org.interscity.htc.core.enumeration.TimeManagerTypeEnum
 import scala.collection.mutable
 import core.util.StringPool
 
@@ -37,6 +38,11 @@ class BusStation(
 
   private var awaitingDynamicInit: Boolean = false
   private val dynamicInitPollIntervalTicks: Tick = 1L
+
+  private case class PendingBusSpawn(creationTick: Tick, bus: BusInformation, stateJson: String)
+  private var pendingBusSpawn: Option[PendingBusSpawn] = None
+
+  private def isTimeWarp: Boolean = getCurrentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
 
   private lazy val routeCalculator = new BusStationRouteCalculator(
     getStateFn      = () => state,
@@ -71,6 +77,11 @@ class BusStation(
       onFinishSpontaneous(None)
     } else if (awaitingDynamicInit) {
       onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    } else if (pendingBusSpawn.isDefined && event.gvt.exists(_ >= pendingBusSpawn.get.creationTick)) {
+      firePendingBusSpawn()
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    } else if (pendingBusSpawn.isDefined) {
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
     } else if (pendingSpawnTick.exists(currentTick < _)) {
       onFinishSpontaneous(pendingSpawnTick)
     } else
@@ -84,13 +95,11 @@ class BusStation(
           if (state.buses.nonEmpty) {
             val bus = state.buses.dequeue()
             try {
-              busCreator.createBus(bus)
-              dependencies(bus.actorId.toString) = ShardActorId(
-                entityId = bus.actorId,
-                classType = classOf[Bus].getName
-              )
-              pendingSpawnTick = Some(currentTick + state.interval)
-              awaitingDynamicInit = true
+              createOrStashBus(bus)
+              if (!isTimeWarp) {
+                pendingSpawnTick = Some(currentTick + state.interval)
+                awaitingDynamicInit = true
+              }
               onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
             } catch {
               case e: IllegalStateException =>
@@ -124,14 +133,12 @@ class BusStation(
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
         try {
-          busCreator.createBus(bus)
-          dependencies(bus.actorId.toString) = ShardActorId(
-            entityId = bus.actorId,
-            classType = classOf[Bus].getName
-          )
+          createOrStashBus(bus)
           state.status = Working
-          pendingSpawnTick = Some(currentTick + state.interval)
-          awaitingDynamicInit = true
+          if (!isTimeWarp) {
+            pendingSpawnTick = Some(currentTick + state.interval)
+            awaitingDynamicInit = true
+          }
           onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
         } catch {
           case e: IllegalStateException =>
@@ -196,14 +203,12 @@ class BusStation(
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
         try {
-          busCreator.createBus(bus)
-          dependencies(bus.actorId.toString) = ShardActorId(
-            entityId = bus.actorId,
-            classType = classOf[Bus].getName
-          )
+          createOrStashBus(bus)
           state.status = Working
-          pendingSpawnTick = Some(currentTick + state.interval)
-          awaitingDynamicInit = true
+          if (!isTimeWarp) {
+            pendingSpawnTick = Some(currentTick + state.interval)
+            awaitingDynamicInit = true
+          }
           onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
         } catch {
           case e: IllegalStateException =>
@@ -237,6 +242,47 @@ class BusStation(
       onFinishSpontaneous(None)
     }
   }
+
+  /** Prepares the bus eagerly (route validation + state build + `report()`, all pure/GVT-buffer
+    * safe) in both modes, but only performs the irrevocable `spawnDynamicActor` immediately under
+    * conservative (non-Time-Warp) execution. Under Time Warp the prepared bus is stashed in
+    * [[pendingBusSpawn]] and only spawned once [[firePendingBusSpawn]] fires, gated on
+    * `event.gvt` passing the dequeue tick — see `docs/TIME_WARP_DESIGN.md`'s dynamic-actor-spawn
+    * entry for why this is safe.
+    */
+  private def createOrStashBus(bus: BusInformation): Unit =
+    if (isTimeWarp) {
+      val stateJson = busCreator.prepareBus(bus)
+      pendingBusSpawn = Some(PendingBusSpawn(currentTick, bus, stateJson))
+    } else {
+      busCreator.createBus(bus)
+      dependencies(bus.actorId.toString) = ShardActorId(
+        entityId = bus.actorId,
+        classType = classOf[Bus].getName
+      )
+    }
+
+  private def firePendingBusSpawn(): Unit =
+    pendingBusSpawn.foreach {
+      p =>
+        busCreator.spawnPrepared(p.bus, p.stateJson)
+        dependencies(p.bus.actorId.toString) = ShardActorId(
+          entityId = p.bus.actorId,
+          classType = classOf[Bus].getName
+        )
+        pendingSpawnTick = Some(currentTick + state.interval)
+        awaitingDynamicInit = true
+        pendingBusSpawn = None
+    }
+
+  /** GVT monotonicity (`docs/TIME_WARP_DESIGN.md` §3: GVT never decreases and no rollback can
+    * ever reach a tick at or below it again) guarantees that once a rollback target is at or
+    * before a stashed bus's dequeue tick, that dequeue never happened from the restored state's
+    * perspective — nothing external was ever created for it, so the stash entry is simply
+    * dropped rather than replayed.
+    */
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit =
+    pendingBusSpawn = pendingBusSpawn.filter(_.creationTick < targetTick)
 
   override def onDestruct(event: DestructEvent): Unit =
     state.status = Finish

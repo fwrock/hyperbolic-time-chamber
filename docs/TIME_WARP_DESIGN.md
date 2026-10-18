@@ -1623,6 +1623,169 @@ bigger and riskier than gaps 1-2 (core vehicle movement state across `Car`/`Bus`
 point rather than attempted at the end of this session. Parquet parity with conservative mode (285
 rows) is **still not achieved** — this gap is why.
 
+### Rollback-orphaned-reply bug found and fixed — `AwaitedReply`, `resyncScheduleAfterRollback`, LTM stall/destruct fixes (2026-09-05)
+
+Found while chasing a `tls_test` livelock, not while working the `Movable` route-replay gap above
+(that gap is still open — see `docs/KNOWN_GAPS.md`'s "Time Warp: `Movable` Route State..." entry;
+this is a different, adjacent bug). Root cause: a Time Warp rollback can restore `state.status` to
+its pre-request value while a genuine, un-retractable reply is still inbound (e.g.
+`RequestLinkAccessData` sent, rollback undoes the send-time state, then the real
+`LinkAccessData` reply arrives). The receiver had already disengaged via
+`onFinishSpontaneousFn(None)` when it sent the request, so only the reply handler can ever
+reschedule it — the old `state.status`-only staleness guard treated the genuine reply as stale
+and dropped it, permanently orphaning the actor and hanging its LTM/GVT.
+
+Fix: `core/actor/AwaitedReply.scala` (new) plus `SimulationBaseActor.registerAwaitedReply`/
+`isAwaitingReply`/`consumeAwaitedReply` — a rollback-immune, actor-local (deliberately *not*
+`state`) tracker of "am I still genuinely waiting for reply key K," consulted alongside the
+existing `state.status` guard rather than replacing it. Actor-local is correct here per this
+doc's/`CLAUDE.md`'s state-vs-actor-local-var rule: this is the *sender's* own wait bookkeeping,
+not a reply obligation the *receiver* must honor, so losing it on a migration (currently
+disabled) only costs a stale-reply false-positive, not a hang. Wired into
+`CarSignalHandler.handleLinkAccess` and the enter/leave-link paths of
+`CarLinkHandler`/`BicycleLinkHandler`/`MotorcycleLinkHandler` (via `Movable.enterLink`/
+`leavingLink` registering at `Movable.enterLinkAwaitKey`/`leaveLinkAwaitKey`). Ported to
+`BicycleSignalHandler`/`MotorcycleSignalHandler` (and investigated for Bus/Subway) in a follow-up
+pass — see the log entry immediately below for the final scope.
+
+Same pass also fixed: `SimulationBaseActor.resyncScheduleAfterRollback` (an undone event's
+`FinishEvent`/`ScheduleEvent` registration was surviving rollback in
+`OptimisticLocalTimeManager.scheduledActors`, corrupting that LTM's LVT/GVT — resynced via a
+documented `generation = Long.MaxValue` bypass of the stale-generation guard);
+`OptimisticLocalTimeManager.dispatchNextAvailable` rewritten from tick-gated to
+per-actor-in-flight-gated dispatch (fixed a confirmed-live stall: one stuck actor on a shared pool
+routee blocked every other unrelated actor on that same routee); GVT-gated destruct deferral
+(`LocalTimeManagerBase.pendingDestruct`/`shouldDestructNow`/`drainPendingDestruct`,
+`OptimisticGlobalTimeManager`'s `[GTM-STALL]` diagnostic logging). Independently bundled from the
+same debugging session, unrelated to Time Warp specifically: `CreatorLoadData`'s
+`Map[String,String]` → `Map[String,Queue]` fix for overlapping-batch clobbering;
+`CityMapUtil` reading the API-mode scenario's own `cityMapFile` instead of a stale global
+setting; `BaseActor.destruct` routing through `selfDestruct()` instead of a bare `context.stop`
+to avoid ghost shard re-spawn; `TimeManagerMetrics` labeling by pool-routee instead of one gauge
+shared across all LTM instances. New specs: `SimulationBaseActorAwaitedReplySpec`,
+`SimulationBaseActorRollbackScheduleResyncSpec`, `CreatorLoadDataCorrelationSpec`,
+`BaseActorDestructPassivationSpec`, plus expanded `OptimisticLocalTimeManagerSpec`.
+
+### Rollback-orphaned-reply fix, follow-up: ported to Bicycle/Motorcycle/Bus/Subway (2026-09-05)
+
+The pass above fixed Car and the shared `Movable` enter/leave-link path (covering Bicycle/
+Motorcycle's link handlers too) but missed several mirrors of the same bug, all overlooked rather
+than deliberately scoped out:
+
+- `BicycleSignalHandler.handleLinkAccess`/`MotorcycleSignalHandler.handleLinkAccess` still used
+  the old unconditional `state.status`-only guard. Ported the same
+  `isAwaitingReplyFn`/`registerAwaitedReplyFn`/`consumeAwaitedReplyFn` wiring from
+  `CarSignalHandler`, wired into `Bicycle.scala`/`Motorcycle.scala`'s `signalHandler`
+  construction.
+- `BusSignalHandler.handleLinkAccess`/`requestSignalState` was structurally identical to
+  `CarSignalHandler`'s and had the identical vulnerability — fixed the same way, wired into
+  `Bus.scala`'s `signalHandler` construction.
+- `BusLinkHandler.handleLeaveLink` had **no** staleness guard at all (not even a
+  conservative-mode one). Added a Time-Warp-only guard (`isTimeWarpFn()`-gated, so conservative
+  mode is unchanged) plus a consume call on `handleEnterLink`.
+- `Subway.scala` had no handler class — its inline `actHandleReceiveLeaveLinkInfo`'s
+  `if (state.status == Moving)` gate was the exact vulnerable pattern (a rollback resetting
+  `state.status` away from `Moving` would silently drop a genuine reply and never call
+  `onFinishSpontaneous`, orphaning the actor). Replaced with a Time-Warp-aware check using
+  `Movable.leaveLinkAwaitKey`/`isAwaitingReply`/`consumeAwaitedReply`, preserving exact
+  conservative-mode behavior; also added an unconditional consume to
+  `actHandleReceiveEnterLinkInfo`.
+
+New specs: `BicycleSignalHandlerSpec`, `MotorcycleSignalHandlerSpec`, `BusSignalHandlerSpec`,
+`BusLinkHandlerSpec`, `SubwayAwaitedReplySpec` — each proving a genuine post-rollback reply is
+still accepted and a genuinely stale one is still dropped, with conservative-mode behavior
+verified unchanged. Full suite after this pass: 315 tests, 0 failures. **All five `Movable`
+subclasses now carry the rollback-orphaned-reply fix; this class of bug is closed.**
+
+### Live-incident follow-up: `AwaitedReply` matched only on `key`+`kind`, causing a rollback-cascade livelock at real scale (Found/Fixed 2026-09-06)
+
+A real docker-compose run against a real scenario (immediately after the fix above landed)
+exposed a genuine regression: CPU pegged near 1000%, no forward GVT progress, and the log
+filled with the same handful of actor ids rolling back repeatedly to nearby `targetTick`s in
+rapid succession, interleaved with `anti-message for unknown messageId=... (already retracted by
+an earlier overlapping rollback, or a genuine protocol anomaly)` warnings — the exact,
+previously-unsolved "anti-message-arrives-before-its-original stash edge case" named in this
+doc's own Next-steps item 5, now dominant instead of a rare corner case.
+
+**Root cause**: `isAwaitingReply(key, kind)` matched only on `key`+`kind`, never on request
+identity. Sequence: actor sends a request, registers an awaited reply, disengages. A rollback
+undoes that send (anti-messaging the original request) and `resyncScheduleAfterRollback` forces
+an immediate re-dispatch; if `state.status` was also reverted, the actor re-sends the *same
+kind* of request to the *same key*, silently overwriting the awaited-reply entry. The receiver's
+reply to the *first* (now-retracted) request is still in flight and matches `key`+`kind` on
+arrival — wrongly accepted, scheduling the actor off stale data — while the genuine reply to the
+*second* request later finds the entry already consumed and is wrongly dropped, re-orphaning the
+actor under a new guise. Confirmed as a direct consequence of the fix above: previously-orphaned
+actors stayed silently inert (low CPU, wrong but quiet); once they could resume, they re-sent
+fast enough to make request supersession — and this identity gap — the dominant behavior instead
+of untested.
+
+**Fix**: `AwaitedReply.sendSeq` (previously "for diagnostics only") is now the actual identity
+comparator. `isAwaitingReply(key, kind, requestSeq)` takes a third parameter and checks it
+against the registered entry's `sendSeq`. The corresponding `requestSeq` is threaded from the
+original request's `ActorInteractionEvent.seq` into the reply *payload* itself (`LinkAccessData`,
+`LinkInfoData`, `PendingLinkAccessRequest`, all with `requestSeq: Long = 0L`) by
+`NodeEventHandler`, `LinkVehicleFlowHandler`, and `RailLink` — no wire-format/proto change needed,
+since `seq` already traveled on every `ActorInteractionEvent` for anti-message bookkeeping; the
+gap was that receivers never copied it into reply data and nothing ever compared it. All
+`isAwaitingReplyFn` call sites (Car/Bus/Bicycle/Motorcycle signal+link handlers, `Subway`) updated
+to pass/compare it.
+
+**A second bug found while implementing this**: `Movable.enterLink()`/`leavingLink()` were
+calling `registerAwaitedReply(...)` *before* `sendMessageTo(...)`, so it captured the *previous*
+send's sequence number instead of the send it was meant to identify — silently defeating the
+identity check for every request after the first. Fixed to send-then-register, matching the
+ordering `CarSignalHandler`/`BusSignalHandler`/`BicycleSignalHandler`/`MotorcycleSignalHandler`
+already used.
+
+New regression test in `SimulationBaseActorAwaitedReplySpec`: registers an awaited reply, then
+re-registers for the same key (simulating rollback-then-resync-then-resend), and verifies a reply
+tagged with the superseded identity is rejected while one tagged with the current identity is
+accepted. Full suite: 316 tests, 0 failures. **Not yet re-verified against the live scenario that
+exposed the original livelock — do that before trusting Time Warp at real scale again.**
+
+### `BusStation`/`SubwayStation` dynamic-actor-spawn gap found and fixed — lazy-cancellation via the GVT watermark (2026-09-07)
+
+Found independently of the rollback-orphaned-reply work above: `BusStation`/`SubwayStation` create
+their `Bus`/`Subway` actors via `SimulationBaseActor.spawnDynamicActor`, which talks to the
+`ShardRegion` directly (`shardRegion ! ShardRegion.StartEntity(...)`) rather than through
+`sendMessageTo`. That send is therefore never captured in `LoggedEvent.sentMessages`, so
+`AntiMessageCascade` can never retract it with an anti-message — the one class of side effect §4's
+report-buffering fix and §10's anti-messages don't already cover, because both of those assume the
+side effect either goes through `sendMessageTo` (anti-messageable) or through `report()`
+(GVT-buffered). A dynamic spawn is neither: it's a direct, one-shot, unbuffered call to cluster
+sharding. If a station's rollback target lands before the tick it dequeued a bus/subway and spawned
+it, replay re-dequeues the same entity id (the dequeue itself is fine — `state.buses`/
+`state.subways`/`state.lines` are checkpointed) and re-spawns it. `ShardRegion.StartEntity` on an
+already-live id just re-delivers `InitializeEvent`, and `SimulationBaseActor.onInitialize` has no
+idempotency guard, so the *live* `Bus`/`Subway` gets its state and `RollbackHistoryHandler` reset
+mid-flight — a second, silent way to corrupt a running actor beyond the rollback-orphaned-reply
+mechanism already documented above.
+
+**Fix — lazy cancellation, reusing the existing GVT-watermark pattern (§4)**: split bus/subway
+creation into a prepare phase (route validation, state-object build, `report()` — all pure or
+already GVT-buffer-safe) and a spawn phase (the `spawnDynamicActorFn` call plus the `dependencies`
+registration, which is not part of checkpointed `state` and so also isn't restored by rollback).
+Under Time Warp, `BusStation`/`SubwayStation` run the prepare phase eagerly at dequeue time (safe —
+it's either pure or state-checkpointed) and stash the result locally
+(`pendingBusSpawn`/`pendingSubwaySpawns`), polling every tick in `actSpontaneous` until
+`event.gvt` (already piggybacked on every `SpontaneousEvent`, see this doc's §4) passes the dequeue
+tick, at which point the spawn phase finally runs. This is exactly the same shape as `report()`
+buffering until GVT passes its tick — the only new piece is a rollback-side discard: a new
+`protected def onRollbackDiscardPending(targetTick: Tick): Unit` hook on `SimulationBaseActor`
+(default no-op), called from `rollbackAndCascade` right where `reportBuffer` is filtered, so a
+subclass can drop any stash entry whose dequeue tick the rollback just undid. Safe by the same GVT
+monotonicity argument as everywhere else in this design: once GVT passes the dequeue tick, the
+station provably cannot roll back before it again, so the deferred spawn needs no anti-message; if
+it *does* roll back before GVT gets there, nothing external was ever created, so the discard is a
+pure no-op cleanup. Non-Time-Warp mode is untouched — gated on
+`getCurrentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, and the immediate-spawn path
+(`createBus`/`createSubwayFrom`) is unchanged, byte-for-byte, in that mode.
+
+Full detail (exact method/field names, both stations) is in `docs/KNOWN_GAPS.md`'s matching entry.
+Regression tests: `BusStationBusCreatorSpec`, `SubwayStationCreatorSpec` (plain ScalaTest, no
+Pekko). Full suite: 330 tests, 0 failures.
+
 ## Relevant file map (per-row status; see "Next steps" for what's still outstanding)
 
 | File | Role |
@@ -1646,6 +1809,9 @@ rows) is **still not achieved** — this gap is why.
 | `core/actor/SimulationBaseActor.scala` (done) | `currentTimeManagerType` derived from `timeManagers`' own key (both the `onInitialize` shard-entity path and the `PoolDistributed`/`ActorCreatorUtil.createPoolActor` constructor-time path), not the always-unset `properties.defaultTimeManagerType` |
 | `model/hybrid/micro/model/KraussModel.scala` (done) | Seed RNG deterministically per `(entityId, tick)`; remove unseeded `new Random()` call sites |
 | `model/hybrid/decision/TravelTimeLogitEngine.scala`, `core/actor/manager/RandomSeedManager.scala` (done) | Replace global shared RNG with per-`(entityId, tick)` seeding |
+| `core/actor/SimulationBaseActor.scala` (done) | `onRollbackDiscardPending(targetTick)` hook (default no-op), called from `rollbackAndCascade`, so a subclass can drop an actor-local pending-irrevocable-action stash undone by a rollback |
+| `model/hybrid/actor/BusStation.scala`, `model/hybrid/support/busstation/BusStationBusCreator.scala` (done) | `prepareBus`/`spawnPrepared` split + GVT-gated `pendingBusSpawn` stash; closes the dynamic-actor-spawn anti-message gap for `Bus` |
+| `model/hybrid/actor/SubwayStation.scala`, `model/hybrid/support/subwaystation/SubwayStationCreator.scala` (done) | `prepareSubway`/`spawnPreparedSubway`/`prepareSubwaysFrom` split + GVT-gated `pendingSubwaySpawns` stash; closes the same gap for `Subway` |
 
 ## Next steps
 

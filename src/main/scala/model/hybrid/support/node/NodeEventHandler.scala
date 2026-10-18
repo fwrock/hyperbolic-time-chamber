@@ -109,7 +109,7 @@ class NodeEventHandler(
               sendMessageFn(
                 event.actorRefId,
                 event.shardRefId,
-                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos),
+                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos, requestSeq = event.seq),
                 EventTypeEnum.ReceiveLinkAccess.toString
               )
             case Some(_) =>
@@ -134,7 +134,7 @@ class NodeEventHandler(
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn()),
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = event.seq),
         EventTypeEnum.ReceiveLinkAccess.toString
       )
     }
@@ -153,17 +153,17 @@ class NodeEventHandler(
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn()),
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = event.seq),
         EventTypeEnum.ReceiveLinkAccess.toString
       )
     } else {
       state.capacityWaitQueue
         .getOrElseUpdate(targetLinkId, mutable.Queue.empty)
-        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId))
+        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId, requestSeq = event.seq))
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full),
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full, requestSeq = event.seq),
         EventTypeEnum.ReceiveLinkAccess.toString
       )
     }
@@ -207,7 +207,12 @@ class NodeEventHandler(
         sendMessageFn(
           pending.actorRefId,
           pending.shardRefId,
-          LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Available),
+          LinkAccessData(
+            phase = Green,
+            nextTick = currentTickFn(),
+            capacityState = LinkCapacityStateEnum.Available,
+            requestSeq = pending.requestSeq
+          ),
           EventTypeEnum.ReceiveLinkAccess.toString
         )
       }

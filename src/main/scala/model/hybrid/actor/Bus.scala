@@ -112,6 +112,15 @@ class Bus(
     restoreBusMigrationFields(snapshot)
   }
 
+  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported/sumoTripInfoReported
+  // are actor-local, not `state`, so a Time Warp rollback restoring `state` never resets them --
+  // without this, a trip whose completion already fired once before the rollback's target can never
+  // report its (corrected, replayed) completion again for the rest of the simulation.
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    journeyReporter.clearCompletionGuards()
+  }
+
   /** Current link being traversed.
     */
   // protected, not private: lets BusMigrationSnapshotSpec drive these directly, same rationale as
@@ -230,7 +239,11 @@ class Bus(
     onFinishDestructFn   = () => onFinishSpontaneous(None, destruct = true),
     finishJourneyFn      = (reason, node) => finishJourney(reason, node),
     setMesoExitTickFn    = tick => mesoExitTick = tick,
-    restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx)
+    restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx),
+    logDebugFn           = msg => logDebug(msg),
+    isTimeWarpFn         = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isAwaitingReplyFn    = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn = key => consumeAwaitedReply(key)
   )
 
   private lazy val signalHandler = new BusSignalHandler(
@@ -250,7 +263,11 @@ class Bus(
     logDebugFn             = msg => logDebug(msg),
     setSignalWaitUntilTickFn = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
-    restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx)
+    restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx),
+    isTimeWarpFn           = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    registerAwaitedReplyFn = (key, kind) => registerAwaitedReply(key, kind),
+    isAwaitingReplyFn      = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn  = key => consumeAwaitedReply(key)
   )
 
   private lazy val stopHandler = new BusStopHandler(

@@ -146,7 +146,8 @@ lazy val root = (project in file("."))
     ),
     
     dependencyOverrides ++= Seq(
-      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion
+      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-http-spray-json" % pekkoHttpVersion
     ),
     
     Compile / PB.protoSources := Seq(

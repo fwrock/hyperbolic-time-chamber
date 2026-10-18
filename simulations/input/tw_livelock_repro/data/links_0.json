@@ -1,0 +1,1034 @@
+[
+  {
+    "id": 10,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 1,
+        "to": 2,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 11,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 2,
+        "to": 1,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 12,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 1,
+        "to": 4,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 13,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 4,
+        "to": 1,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 14,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 2,
+        "to": 3,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 15,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 3,
+        "to": 2,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 16,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 2,
+        "to": 5,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 17,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 5,
+        "to": 2,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 18,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 3,
+        "to": 6,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 19,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 6,
+        "to": 3,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 20,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 4,
+        "to": 5,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 21,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 5,
+        "to": 4,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 22,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 4,
+        "to": 7,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 7,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 23,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 7,
+        "to": 4,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 7,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 4,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 24,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 5,
+        "to": 6,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 25,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 6,
+        "to": 5,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 26,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 5,
+        "to": 8,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 27,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 8,
+        "to": 5,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 5,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 28,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 6,
+        "to": 9,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 29,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 9,
+        "to": 6,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 30,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 7,
+        "to": 8,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 7,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 31,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 8,
+        "to": 7,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 7,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 32,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 8,
+        "to": 9,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 33,
+    "typeActor": "hybrid.actor.Link",
+    "data": {
+      "dataType": "model.hybrid.entity.state.LinkState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "from": 9,
+        "to": 8,
+        "length": 200.0,
+        "lanes": 1,
+        "speedLimit": 40.0,
+        "capacity": 600.0,
+        "freeSpeed": 40.0,
+        "currentSpeed": 40.0,
+        "congestionFactor": 1.0,
+        "registered": [],
+        "simulationMode": "MESO",
+        "microTimeStep": 0.1,
+        "microTicksPerGlobalTick": 10,
+        "vehiclesByLane": {},
+        "laneConfigurations": [
+          {
+            "laneId": 0,
+            "type": "normal",
+            "width": 3.5,
+            "speedLimit": null
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

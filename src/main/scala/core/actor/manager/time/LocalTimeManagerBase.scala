@@ -53,6 +53,14 @@ abstract class LocalTimeManagerBase(
   private var selfProxy: ActorRef = null
   @volatile protected var isTerminated = false
 
+  /** Bounded per-instance label for `TimeManagerMetrics.tmScheduledActors`/`tmRunningEvents` --
+    * a pool routee's `self.path.name` (e.g. "$a"/"$b" under `OptimisticGlobalTimeManager`'s
+    * round-robin pool) or the fixed actor name for a singleton LTM. Never an entity id (bounded by
+    * the pool size, not simulation content) -- see `TimeManagerMetrics`'s doc for why this exists:
+    * without it, all pool routees' writes to the same unlabeled gauge last-writer-win each other.
+    */
+  protected lazy val metricsManagerLabel: String = self.path.name
+
   /** True once this LTM's own `startSimulation` has actually run. Registration/scheduling can (and,
     * for EAGER-loaded actors, routinely does) arrive well before that -- during the load/warm-up/
     * post-load-registration phases, long before `SimulationManager` sends `StartSimulationTimeEvent`.
@@ -72,6 +80,14 @@ abstract class LocalTimeManagerBase(
   private val registeredIdentities: mutable.Map[Long, Identify] = mutable.Map()
   private val dispatchGeneration: mutable.Map[Long, Long] = mutable.Map().withDefaultValue(0L)
 
+  /** Monotonically non-decreasing under every code path except one: a `ScheduleEvent` with
+    * `resyncAfterRollback = true` (sent only by `SimulationBaseActor.resyncScheduleAfterRollback()`
+    * after a live Time Warp rollback) unconditionally sets it to `event.tick`. No other code may
+    * write a smaller value here. Safe under overlapping/repeated rollbacks of the same actor
+    * because Pekko preserves per-sender→per-receiver message ordering: a later resync's `set` is
+    * always processed after an earlier one's, and the actor (single-threaded) can never be
+    * mid-dispatch and mid-rollback-resync at the same time.
+    */
   private val highestProcessedTick: mutable.Map[Long, Tick] = mutable.Map().withDefaultValue(-1L)
 
   /** Actors registered via [[RegisterPassiveActorEvent]] instead of [[RegisterActorEvent]] — see
@@ -88,6 +104,40 @@ abstract class LocalTimeManagerBase(
     * `ReportManager` close its writers.
     */
   private val pendingDestructAcks: mutable.Set[Long] = mutable.Set()
+
+  /** `destruct = true` `FinishEvent`s that arrived from live business logic but haven't yet been
+    * confirmed safe to act on — see `shouldDestructNow`'s doc for why. Keyed by actor id so a
+    * later `ScheduleEvent` for the same actor (a rollback replaying it back to life) can cancel
+    * the pending destruct by removing its entry.
+    */
+  private val pendingDestruct: mutable.Map[Long, FinishEvent] = mutable.Map.empty
+
+  /** Whether a `destruct = true` `FinishEvent` can be acted on immediately. Conservative mode has
+    * no speculative execution — a `FinishEvent` it sees can never be invalidated by a later
+    * rollback, so the base/default is unconditionally `true` and `ConservativeLocalTimeManager`
+    * must not override this. [[OptimisticLocalTimeManager]] overrides it to gate on GVT: under
+    * Time Warp, an actor's "I'm done" decision is itself speculative and can be undone by a
+    * rollback, so destruction must wait until GVT confirms no rollback can ever reach back past
+    * `finish.end` again.
+    */
+  protected def shouldDestructNow(finish: FinishEvent): Boolean = true
+
+  /** Read-only accessor onto `highestProcessedTick`, whose default (`-1L`, via `withDefaultValue`)
+    * mirrors the map's own lookup semantics — used by [[OptimisticLocalTimeManager.localVirtualTime]]
+    * to compute the minimum watermark across every actor currently in flight, without widening the
+    * map itself to `protected`.
+    */
+  protected def highestProcessedTickOf(actorId: Long): Tick = highestProcessedTick(actorId)
+
+  /** The minimum `highestProcessedTick` across every actor this LTM has ever actually dispatched
+    * (via [[sendSpontaneousEvent]]) and not yet destructed (`completeDestruct` removes the entry).
+    * `None` only for an LTM that has never dispatched anything yet. Unlike `highestProcessedTickOf`
+    * restricted to `runningEvents`, this reflects real, already-observed progress that survives a
+    * momentary gap where nothing happens to be in flight — see
+    * [[OptimisticLocalTimeManager.localVirtualTime]]'s doc for why that gap matters.
+    */
+  protected def minHighestProcessedTick: Option[Tick] =
+    if (highestProcessedTick.isEmpty) None else Some(highestProcessedTick.values.min)
 
   override def onStart(): Unit =
     if (parentManager.nonEmpty) {
@@ -152,14 +202,25 @@ abstract class LocalTimeManagerBase(
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
     countScheduled += 1
     val actorId = event.identify.map(_.id).getOrElse(event.actorRef.toLong)
-    val actorWatermark = highestProcessedTick(actorId)
-    val effectiveTick = if (event.tick <= actorWatermark) {
+    // Being rescheduled means "not finished anymore" -- cancels a pending destruct if a rollback's
+    // resyncScheduleAfterRollback reschedules this actor before GVT ever confirmed the destruct.
+    pendingDestruct.remove(actorId)
+    val effectiveTick = if (event.resyncAfterRollback) {
       logDebug(
-        s"ScheduleEvent tick=${event.tick} for actor=$actorId is at/behind its own highestProcessedTick=$actorWatermark; bumping to ${actorWatermark + 1}"
+        s"ScheduleEvent tick=${event.tick} for actor=$actorId is an authoritative rollback resync; resetting highestProcessedTick (was ${highestProcessedTick(actorId)})"
       )
-      actorWatermark + 1
-    } else {
+      highestProcessedTick(actorId) = event.tick
       event.tick
+    } else {
+      val actorWatermark = highestProcessedTick(actorId)
+      if (event.tick <= actorWatermark) {
+        logDebug(
+          s"ScheduleEvent tick=${event.tick} for actor=$actorId is at/behind its own highestProcessedTick=$actorWatermark; bumping to ${actorWatermark + 1}"
+        )
+        actorWatermark + 1
+      } else {
+        event.tick
+      }
     }
     val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
     val prevNextTick = nextTick
@@ -188,8 +249,6 @@ abstract class LocalTimeManagerBase(
         return
       }
 
-      finish.scheduleTick.map(_.toLong).foreach(scheduledTicksOnFinish.add)
-
       finish.scheduleTick.foreach {
         tickStr =>
           val tick = tickStr.toLong
@@ -202,13 +261,24 @@ abstract class LocalTimeManagerBase(
           } else {
             tick
           }
+          /** `scheduledTicksOnFinish` must track the same key `scheduledActors` was populated
+            * under (`effectiveTick`), not the raw `finish.scheduleTick` -- every removal site
+            * (`processTick`/`dispatchNextAvailable` across strategies) removes by `effectiveTick`.
+            * Recording the raw tick here left a permanent entry behind whenever the watermark bump
+            * above fired (tick <= actorWatermark, e.g. after a Time Warp rollback advanced the
+            * watermark past a now-stale FinishEvent.scheduleTick): that stale tick never gets
+            * removed, so `nextTick` (scheduledActors.keys ++ scheduledTicksOnFinish) never returns
+            * None again, freezing `isIdle`/`localVirtualTime` forever even once all real work
+            * drains.
+            */
+          scheduledTicksOnFinish.add(effectiveTick)
           val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
           actorsSet.add(finish.identify)
       }
 
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
-      TimeManagerMetrics.tmRunningEvents.set(runningEvents.size.toDouble)
+      TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel).set(runningEvents.size.toDouble)
 
       if (finish.scheduleTick.isEmpty) {
         val actorId = finish.identify.id
@@ -229,7 +299,19 @@ abstract class LocalTimeManagerBase(
       }
 
       finishDestruct(finish)
-      if (wasProcessingSpontaneousEvent) {
+      /** Must also fire when `wasProcessingSpontaneousEvent` is false but this `FinishEvent`
+        * still carried a `scheduleTick` (a duplicate/second `FinishEvent` for an actor already
+        * cleared from `runningEvents` by an earlier one at the same or newer generation -- the
+        * per-generation staleness guard above only rejects an *older* generation, not a second
+        * delivery at the current one). Without this, the `scheduledActors`/`scheduledTicksOnFinish`
+        * entry just added above sits registered but undispatched: nothing else re-triggers
+        * `dispatchNextAvailable`/`advanceToNextTick` for this routee unless some other actor
+        * sharing it happens to call `scheduleEvent` later, which isn't guaranteed once the
+        * scenario's actor population winds down -- reproduced live: `OptimisticLocalTimeManager`
+        * routees frozen with `isIdle=false` forever, `runningEvents`/`scheduledActors` genuinely
+        * empty, no further `[TW-TRACE] dispatch_*` activity at all.
+        */
+      if (wasProcessingSpontaneousEvent || finish.scheduleTick.isDefined) {
         advanceToNextTick()
       }
     } else {
@@ -238,18 +320,45 @@ abstract class LocalTimeManagerBase(
 
   private def finishDestruct(finish: FinishEvent): Unit =
     if (finish.destruct) {
-      ActorMetrics.eventsProcessed.labels("destruct").inc()
-      registeredActors.remove(finish.identify.id)
-      dispatchGeneration.remove(finish.identify.id)
-      highestProcessedTick.remove(finish.identify.id)
-      val removedIdentity = registeredIdentities.remove(finish.identify.id)
-      // Prometheus: decrement active actors gauge
-      removedIdentity.foreach {
-        identity =>
-          val actorType = identity.classType.split('.').lastOption.getOrElse(identity.classType)
-          ActorMetrics.activeActors.labels(actorType).dec()
-      }
-      sendDestructEvent(finish)
+      if (shouldDestructNow(finish)) completeDestruct(finish.identify)
+      else pendingDestruct(finish.identify.id) = finish
+    }
+
+  /** Actually retires an actor: bookkeeping cleanup plus the shard-routed `DestructEvent` send.
+    * Called either immediately (conservative mode, or optimistic mode once GVT has already caught
+    * up) or later, once `drainPendingDestruct` confirms GVT has caught up to a previously-deferred
+    * `FinishEvent`. Uses the shard-routed `sendDestructEvent(Identify)` overload (not the stale-
+    * `ActorRef` one) so this also can't leave a stale `ActorRef` behind.
+    */
+  protected def completeDestruct(identity: Identify): Unit = {
+    ActorMetrics.eventsProcessed.labels("destruct").inc()
+    registeredActors.remove(identity.id)
+    dispatchGeneration.remove(identity.id)
+    highestProcessedTick.remove(identity.id)
+    val removedIdentity = registeredIdentities.remove(identity.id)
+    // Prometheus: decrement active actors gauge
+    removedIdentity.foreach {
+      removed =>
+        val actorType = removed.classType.split('.').lastOption.getOrElse(removed.classType)
+        ActorMetrics.activeActors.labels(actorType).dec()
+    }
+    sendDestructEvent(identity)
+  }
+
+  /** Confirms every `pendingDestruct` entry whose speculative `FinishEvent` is now GVT-safe
+    * (`finish.end <= gvt`) and actually retires those actors; entries still ahead of GVT stay
+    * pending. `pendingDestruct` is only ever populated under a strategy that overrides
+    * `shouldDestructNow` to defer (i.e. [[OptimisticLocalTimeManager]]), so this is a no-op for
+    * every other strategy. Defined here (rather than duplicated per-subclass) since `pendingDestruct`
+    * is private to this class; subclasses drive it by calling this from wherever they learn of a
+    * new GVT estimate.
+    */
+  protected def drainPendingDestruct(gvt: Tick): Unit =
+    if (pendingDestruct.nonEmpty) {
+      val (ready, stillPending) = pendingDestruct.partition { case (_, finish) => finish.end <= gvt }
+      pendingDestruct.clear()
+      pendingDestruct ++= stillPending
+      ready.values.foreach(finish => completeDestruct(finish.identify))
     }
 
   override protected def onSpontaneousEvent(spontaneous: SpontaneousEvent): Unit =
@@ -287,7 +396,7 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    TimeManagerMetrics.tmScheduledActors.set(actorsRef.size.toDouble)
+    TimeManagerMetrics.tmScheduledActors.labels(metricsManagerLabel).set(actorsRef.size.toDouble)
     ActorMetrics.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
     actorsRef.foreach {
       identity =>
@@ -351,6 +460,14 @@ abstract class LocalTimeManagerBase(
 
   private def forceDestructActiveActors(): Unit = {
     val identitiesToDestruct = mutable.Map[Long, Identify]()
+
+    // Actors whose destruct was deferred waiting for GVT confirmation (see shouldDestructNow) are
+    // otherwise unreachable here entirely, same rationale as passivelyRegisteredIdentities below --
+    // real simulation end must still destroy them rather than leave them waiting forever.
+    pendingDestruct.foreach {
+      case (id, finish) => identitiesToDestruct.put(id, finish.identify)
+    }
+    pendingDestruct.clear()
 
     scheduledActors.foreach {
       case (tick, identities) =>

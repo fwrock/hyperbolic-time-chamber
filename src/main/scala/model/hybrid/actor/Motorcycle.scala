@@ -109,6 +109,15 @@ class Motorcycle(
     restoreMotorcycleMigrationFields(snapshot)
   }
 
+  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported is actor-local, not
+  // `state`, so a Time Warp rollback restoring `state` never resets it -- without this, a trip
+  // whose completion already fired once before the rollback's target can never report its
+  // (corrected, replayed) completion again for the rest of the simulation.
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    journeyReporter.clearCompletionGuards()
+  }
+
   /** Current link being traversed.
     */
   // protected, not private: lets MotorcycleLinkWaitMigrationSnapshotSpec drive these directly,
@@ -191,7 +200,10 @@ class Motorcycle(
     finishJourneyFn          = (reason, node) => journeyReporter.finishJourney(reason, node, state),
     setMesoExitTickFn        = t => mesoExitTick = t,
     getTripDestinationFn     = () => getTripDestination,
-    logDebugFn               = msg => logDebug(msg)
+    logDebugFn               = msg => logDebug(msg),
+    isTimeWarpFn             = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isAwaitingReplyFn        = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn    = key => consumeAwaitedReply(key)
   )
 
   private lazy val signalHandler = new MotorcycleSignalHandler(
@@ -213,7 +225,11 @@ class Motorcycle(
     onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
     aggressivenessFn             = () => aggressiveness,
     setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t,
-    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
+    isTimeWarpFn                 = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    registerAwaitedReplyFn       = (key, kind) => registerAwaitedReply(key, kind),
+    isAwaitingReplyFn            = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn        = key => consumeAwaitedReply(key)
   )
 
   // ===== PrivateVehicle Accessor Methods =====

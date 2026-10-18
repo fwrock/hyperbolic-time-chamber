@@ -13,6 +13,12 @@ import org.interscity.htc.core.metrics.model.hybrid.SubwayStationMetrics
 import core.actor.trace.ActorTrace
 import scala.collection.mutable
 
+/** A dequeued-and-prepared subway (state built, route validated, `report()` already emitted)
+  * whose irrevocable [[SubwayStationCreator.spawnPreparedSubway]] step has not yet run. See
+  * `SubwayStationCreator.prepareSubwaysFrom`.
+  */
+case class PreparedSubway(subway: SubwayInformation, line: String, stateJson: String)
+
 class SubwayStationCreator(
   getStateFn:          () => SubwayStationState,
   entityIdFn:          () => String,
@@ -57,6 +63,39 @@ class SubwayStationCreator(
     spawned
   }
 
+  /** Dequeues and prepares (route + state-object + `report()`, all pure/GVT-buffer-safe — see
+    * `SimulationBaseActor.reportBuffer`) at most one subway per line in `lines`, without ever
+    * calling the irrevocable `spawnDynamicActorFn`. The dequeue itself is safe to run eagerly
+    * under Time Warp because `state.subways`/`state.lines` are checkpointed and restored
+    * correctly by rollback; only the actual spawn is deferred by the caller.
+    */
+  def prepareSubwaysFrom(lines: mutable.Map[String, SubwayLineInformation]): Seq[PreparedSubway] = {
+    val prepared = mutable.ListBuffer.empty[PreparedSubway]
+    lines.keys.foreach { line =>
+      state.subways.get(line) match
+        case Some(subwayQueue) =>
+          if (subwayQueue.nonEmpty && state.garage) {
+            val subway = subwayQueue.dequeue()
+            val subwayStartTick = currentTickFn() + lines(line).interval
+            try {
+              val stateJson = prepareSubway(subway, line, subwayStartTick)
+              prepared += PreparedSubway(subway, line, stateJson)
+              lines(line).nextTick = subwayStartTick
+            } catch {
+              case e: IllegalStateException =>
+                logErrorFn(s"Failed to prepare subway ${subway.actorId} for line $line: ${e.getMessage}")
+                subwayQueue.enqueue(subway)
+              case e: Exception =>
+                logErrorFn(s"Unexpected error preparing subway ${subway.actorId} for line $line: ${e.getMessage}")
+                subwayQueue.enqueue(subway)
+            }
+          }
+        case None =>
+          logWarnFn(s"Subway not found for line $line")
+    }
+    prepared.toSeq
+  }
+
   def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
     state.lines.filter { case (_, line) => line.nextTick <= currentTickFn() }
 
@@ -72,17 +111,23 @@ class SubwayStationCreator(
       .sorted
       .headOption
 
-  private def createSubway(subway: SubwayInformation, startTick: Long): Unit = {
-    val route = convertLineRouteToPath(subway.line)
+  /** Everything about creating a subway that is pure/idempotent and safe to run eagerly under
+    * Time Warp: route lookup, state-object construction, and `report()` (already GVT-buffered —
+    * see `SimulationBaseActor.reportBuffer`). Deliberately excludes the one irrevocable step,
+    * `spawnDynamicActorFn`, which the caller defers separately under Time Warp; see
+    * `docs/TIME_WARP_DESIGN.md`'s dynamic-actor-spawn entry.
+    */
+  def prepareSubway(subway: SubwayInformation, line: String, startTick: Long): String = {
+    val route = convertLineRouteToPath(line)
     if (route.isEmpty) {
-      logWarnFn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available")
-      throw new IllegalStateException(s"No route available for subway line ${subway.line}")
+      logWarnFn(s"Cannot create subway ${subway.actorId} for line $line - no valid route available")
+      throw new IllegalStateException(s"No route available for subway line $line")
     }
 
-    val subwayStations = convertLineToSubwayStations(subway.line)
+    val subwayStations = convertLineToSubwayStations(line)
     if (subwayStations.isEmpty) {
-      logWarnFn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available")
-      throw new IllegalStateException(s"No subway stations available for line ${subway.line}")
+      logWarnFn(s"Cannot create subway ${subway.actorId} for line $line - no subway stations available")
+      throw new IllegalStateException(s"No subway stations available for line $line")
     }
 
     val subwayState = {
@@ -119,9 +164,20 @@ class SubwayStationCreator(
       "subway_created"
     )
 
-    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
-    spawnDynamicActorFn("hybrid.actor.Subway", subway.actorId, toJson(subwayState))
+    toJson(subwayState)
   }
+
+  /** The one irrevocable step of subway creation. Under Time Warp the caller only invokes this
+    * once GVT has passed the tick `prepareSubway` ran at, since a shard-region `StartEntity` for
+    * an already-live entity id cannot be undone by an anti-message.
+    */
+  def spawnPreparedSubway(subway: SubwayInformation, stateJson: String): Unit = {
+    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
+    spawnDynamicActorFn("hybrid.actor.Subway", subway.actorId, stateJson)
+  }
+
+  private def createSubway(subway: SubwayInformation, startTick: Long): Unit =
+    spawnPreparedSubway(subway, prepareSubway(subway, subway.line, startTick))
 
   private def convertLineToSubwayStations(line: String): mutable.Map[Long, Long] = {
     val lineRoute     = state.linesRoute(line)

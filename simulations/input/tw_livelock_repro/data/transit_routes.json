@@ -1,0 +1,17 @@
+[
+  {
+    "lineId": "mini_bus_line_0",
+    "stopType": "bus",
+    "headwaySeconds": 3600,
+    "stops": [
+      {
+        "stopId": "htcaid:stop;34",
+        "travelTimeFromPrevSeconds": 0
+      },
+      {
+        "stopId": "htcaid:stop;35",
+        "travelTimeFromPrevSeconds": 60
+      }
+    ]
+  }
+]

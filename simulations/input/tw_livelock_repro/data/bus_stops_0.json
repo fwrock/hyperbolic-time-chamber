@@ -1,0 +1,40 @@
+[
+  {
+    "id": 34,
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": 2,
+        "label": "Line 0 Terminal A",
+        "people": {},
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": 2,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 35,
+    "typeActor": "hybrid.actor.BusStop",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BusStopState",
+      "content": {
+        "nodeId": 1,
+        "label": "Line 0 Terminal B",
+        "people": {},
+        "scheduleOnTimeManager": false
+      }
+    },
+    "dependencies": {
+      "node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

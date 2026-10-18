@@ -22,6 +22,13 @@ import core.types.Tick
   *   Tick when trip completed
   * @param completionReason
   *   Why the trip ended ("reached_destination", "error", etc.)
+  * @param requestSeq
+  *   Echo of the `ActorInteractionEvent.seq` the originating `StartTrip` request carried (`0L`
+  *   outside Time Warp, where this field is never consulted) -- lets the owning Person's
+  *   `isAwaitingReply` guard distinguish a genuine reply to its currently-outstanding `StartTrip`
+  *   from a rollback-orphaned reply to a since-retracted one, the same identity mechanism
+  *   `LinkAccessData.requestSeq`/`LinkInfoData.requestSeq` already give Car/Bus/Bicycle/Motorcycle/
+  *   Subway (see `docs/TIME_WARP_DESIGN.md`'s 2026-09-06 live-incident entry).
   */
 case class TripCompletedData(
   vehicleId: Long,
@@ -31,5 +38,6 @@ case class TripCompletedData(
   finalNode: Long,
   completionTick: Tick,
   completionReason: String,
-  wasTeleported: Boolean = false
+  wasTeleported: Boolean = false,
+  requestSeq: Long = 0L
 ) extends BaseEventData

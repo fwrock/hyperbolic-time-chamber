@@ -54,6 +54,16 @@ final class TerminationPlateauDetector(plateauRoundsRequired: Int) {
       plateauRoundsRequired <= 1
     }
 
+  /** Diagnostic-only accessor (`[GTM-STALL]` logging) — how many consecutive idle-and-unchanged-GVT
+    * rounds have been observed so far, out of `plateauRoundsRequired` needed to terminate.
+    */
+  def currentPlateauRounds: Int = consecutivePlateauRounds
+
+  /** Diagnostic-only accessor (`[GTM-STALL]` logging) — the GVT value the plateau count is
+    * currently measured against, if any round has been observed yet.
+    */
+  def lastObservedGvtValue: Option[Tick] = lastObservedGvt
+
   /** Resets to the pre-any-observation state — e.g. after a pause/resume, where "idle" observed
     * before the pause shouldn't count toward a plateau that spans the pause.
     */

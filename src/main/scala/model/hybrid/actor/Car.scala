@@ -89,6 +89,15 @@ class Car(
     restoreCarMigrationFields(snapshot)
   }
 
+  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported/sumoTripInfoReported
+  // are actor-local, not `state`, so a Time Warp rollback restoring `state` never resets them --
+  // without this, a trip whose completion already fired once before the rollback's target can never
+  // report its (corrected, replayed) completion again for the rest of the simulation.
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    journeyReporter.clearCompletionGuards()
+  }
+
   // protected, not private: lets CarLinkWaitMigrationSnapshotSpec drive these directly rather than
   // reverse-engineering LinkInfoData/LinkAccessData payloads just to exercise the capture/restore
   // round trip -- same rationale as this class's other test-only protected accessors.
@@ -131,7 +140,11 @@ class Car(
     getTripDestinationFn        = () => getTripDestination,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
-    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks)
+    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks),
+    isTimeWarpFn                = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    registerAwaitedReplyFn      = (key, kind) => registerAwaitedReply(key, kind),
+    isAwaitingReplyFn           = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn       = key => consumeAwaitedReply(key)
   )
 
   private lazy val linkHandler = new CarLinkHandler(
@@ -147,7 +160,10 @@ class Car(
     setLinkEntryTickFn    = tick => linkEntryTick = tick,
     getLinkEntryTickFn    = () => linkEntryTick,
     setMesoExitTickFn     = tick => mesoExitTick = tick,
-    getTripDestinationFn  = () => getTripDestination
+    getTripDestinationFn  = () => getTripDestination,
+    isTimeWarpFn          = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isAwaitingReplyFn     = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn = key => consumeAwaitedReply(key)
   )
 
   private lazy val microHandler = new CarMicroHandler(
@@ -467,7 +483,7 @@ class Car(
   private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
 
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
-    signalHandler.handleLinkAccess(data, state)
+    signalHandler.handleLinkAccess(data, state, eventTick = event.tick, eventSeq = event.seq)
 
   override def leavingLink(): Unit = {
     mesoExitTick = None

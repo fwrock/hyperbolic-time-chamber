@@ -1,6 +1,7 @@
 package org.interscity.htc
 package model.hybrid.support.person
 
+import core.actor.trace.TimeWarpTrace
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
 import model.hybrid.decision.{ DecisionContext, ModeDecisionEngineRegistry, NoViableJourney }
@@ -327,6 +328,14 @@ class PersonPlanManager(
   def handleVehicleTripCompleted(state: PersonState, data: TripCompletedData, currentTick: Tick): PlanStepResult =
     (state.cursor.executed.lastOption, state.tripExecution) match {
       case (Some(pv: PrivateVehicleLeg), t: TripExecutionState.Traveling) =>
+        // #timewarp-trace
+        TimeWarpTrace.trace(
+          personId,
+          currentTick,
+          "person_trip_completed_matched",
+          s"vehicleId=${data.vehicleId} legStartTick=${t.legStartTick} tripId=${t.tripId} " +
+            s"mode=${modeLabel(pv.mode)} -- no reply-identity check against the request this answers"
+        )
         val mode = modeLabel(pv.mode)
         val activityType = peekNextActivity(state.cursor.remaining).map(_.activityType).getOrElse("unknown")
 
@@ -361,7 +370,17 @@ class PersonPlanManager(
         updatedState = privateVehicleHandler.updateVehicleLocation(pv.mode, data.finalNode, updatedState)
         step(updatedState, currentTick)
 
-      case _ =>
+      case (executed, tripExecution) =>
+        // #timewarp-trace
+        TimeWarpTrace.trace(
+          personId,
+          currentTick,
+          "person_trip_completed_mismatch",
+          s"vehicleId=${data.vehicleId} lastExecuted=${executed.map(_.getClass.getSimpleName).getOrElse("none")} " +
+            s"tripExecution=${tripExecution.getClass.getSimpleName} -- candidate rollback-orphaned-reply case: " +
+            s"a genuine reply to a request this Person itself sent, arriving after a rollback reverted the " +
+            s"cursor/tripExecution state the guard above depends on"
+        )
         logWarn(
           s"$personId received TripCompleted from ${data.vehicleId} while not on a matching private vehicle leg " +
             "— likely stale after a replan/timeout, ignoring"
@@ -385,6 +404,15 @@ class PersonPlanManager(
     state.tripExecution match {
       case t: TripExecutionState.Traveling if t.ptWait.isDefined =>
         val ptWait = t.ptWait.get
+        // #timewarp-trace
+        TimeWarpTrace.trace(
+          personId,
+          currentTick,
+          "person_pt_unload_matched",
+          s"eventTick=${event.tick} eventSeq=${event.seq} senderId=${event.actorRefId} " +
+            s"alightingNodeId=${ptWait.alightingNodeId} requestedNodeId=$nodeId " +
+            s"-- no reply-identity check against the request this answers"
+        )
         val isArrival = ptHandler.handlePTUnloadRequest(event, nodeId, mode, ptWait.alightingNodeId)
         if (!isArrival) {
           None
@@ -414,7 +442,17 @@ class PersonPlanManager(
           val updated = state.copy(tripExecution = t.copy(physicalNodeId = nodeId, ptWait = None))
           Some(step(updated, currentTick))
         }
-      case _ =>
+      case tripExecution =>
+        // #timewarp-trace
+        TimeWarpTrace.trace(
+          personId,
+          currentTick,
+          "person_pt_unload_mismatch",
+          s"eventTick=${event.tick} eventSeq=${event.seq} senderId=${event.actorRefId} nodeId=$nodeId " +
+            s"tripExecution=${tripExecution.getClass.getSimpleName} -- candidate rollback-orphaned-reply case: " +
+            s"this is a consistency-critical reply (see this method's own doc) being silently dropped by a " +
+            s"guard a rollback may have reverted since the request was sent"
+        )
         logWarn(s"$personId received PT unload request from ${event.actorRefId} while not waiting on a PT leg — ignoring (already handled)")
         None
     }

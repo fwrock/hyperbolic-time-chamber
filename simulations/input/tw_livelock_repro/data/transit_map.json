@@ -1,0 +1,26 @@
+[
+  {
+    "id": "htcaid:stop;34",
+    "actorId": 34,
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": 2,
+    "latitude": -23.55,
+    "longitude": -46.627,
+    "stopType": "bus",
+    "lines": [
+      "mini_bus_line_0"
+    ]
+  },
+  {
+    "id": "htcaid:stop;35",
+    "actorId": 35,
+    "actorClassType": "hybrid.actor.BusStop",
+    "nodeId": 1,
+    "latitude": -23.55,
+    "longitude": -46.63,
+    "stopType": "bus",
+    "lines": [
+      "mini_bus_line_0"
+    ]
+  }
+]

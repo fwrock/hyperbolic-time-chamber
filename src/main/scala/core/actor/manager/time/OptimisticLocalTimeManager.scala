@@ -1,6 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
+import core.entity.event.FinishEvent
 import core.entity.event.control.execution.{ GvtUpdateEvent, LvtReportEvent }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
@@ -76,9 +77,19 @@ class OptimisticLocalTimeManager(
 
   override protected def currentGvt: Option[Tick] = lastKnownGvt
 
+  /** Under Time Warp, an actor's own "I'm done" decision is speculative -- it can be undone by a
+    * later rollback -- so it's only safe to actually retire the actor once GVT has advanced past
+    * the tick the decision was made at (`finish.end`); see `pendingDestruct`'s doc in
+    * [[LocalTimeManagerBase]].
+    */
+  override protected def shouldDestructNow(finish: FinishEvent): Boolean =
+    lastKnownGvt.exists(finish.end <= _)
+
   override def handleEvent: Receive = {
     val gvtHandler: PartialFunction[Any, Unit] = {
-      case event: GvtUpdateEvent => lastKnownGvt = Some(event.gvt)
+      case event: GvtUpdateEvent =>
+        lastKnownGvt = Some(event.gvt)
+        drainPendingDestruct(event.gvt)
     }
     gvtHandler.orElse(super.handleEvent)
   }
@@ -126,16 +137,18 @@ class OptimisticLocalTimeManager(
     * unconditionally once it does fire, picking up anything that queued up early.
     */
   override protected def onActorRescheduled(effectiveTick: Tick, wasIdle: Boolean, isEarlierTick: Boolean): Unit =
-    if (hasStarted && runningEvents.isEmpty) dispatchNextAvailable()
+    if (hasStarted) dispatchNextAvailable()
 
-  /** Once a batch fully resolves (`runningEvents` empties), immediately dispatch the next available
-    * batch — no permission round-trip — and report this LTM's new LVT.
+  /** Dispatches whatever's ready every time a batch resolves — no permission round-trip — and
+    * reports this LTM's new LVT. Unguarded by `runningEvents.isEmpty`: `dispatchNextAvailable`
+    * itself only skips actors still genuinely in flight (see its doc), so gating the call itself
+    * on the whole routee being empty would resurrect the one-stuck-actor-blocks-everyone bug this
+    * per-actor readiness check exists to fix.
     */
-  override protected def advanceToNextTick(): Unit =
-    if (runningEvents.isEmpty) {
-      dispatchNextAvailable()
-      reportGlobalTimeManager()
-    }
+  override protected def advanceToNextTick(): Unit = {
+    dispatchNextAvailable()
+    reportGlobalTimeManager()
+  }
 
   protected def processTick(tick: Tick): Unit = {
     // Process ALL events scheduled at ticks <= tick, not just exactly at tick — same skipped-tick
@@ -153,22 +166,116 @@ class OptimisticLocalTimeManager(
     scheduledTicksOnFinish.remove(effectiveTick)
   }
 
-  private def dispatchNextAvailable(): Unit =
-    nextTick.foreach {
+  /** Dispatches every actor across every scheduled tick that isn't already in flight
+    * (`runningEvents`), rather than gating all dispatch on the whole routee being idle. The old
+    * `nextTick.foreach` version picked one tick and dispatched everything scheduled at or before
+    * it, using `runningEvents.isEmpty` at the two call sites as an implicit "nothing else is
+    * running" precondition — but since one `OptimisticLocalTimeManager` instance is a shared pool
+    * routee serving several causally-unrelated actors' independent schedules (see this class's own
+    * doc), a single actor orphaned in `runningEvents` (e.g. by a rollback bug elsewhere) made that
+    * gate permanently false and silently stalled every other actor ever scheduled on this routee —
+    * confirmed live via a freeze where all pool routees were simultaneously `isIdle=false` and
+    * stuck. Filtering per-actor instead means an in-flight straggler only blocks itself.
+    */
+  private def dispatchNextAvailable(): Unit = {
+    val runningIds = runningEvents.map(_.id)
+    // #timewarp-trace
+    core.actor.trace.TimeWarpTrace.trace(
+      metricsManagerLabel,
+      localTickOffset,
+      "dispatch_enter",
+      s"scheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")} runningIds=${runningIds.mkString(",")}"
+    )
+    var dispatchedAny = false
+    scheduledActors.keys.toSeq.sorted.foreach {
       tick =>
-        localTickOffset = tick
-        tickOffset = tick - initialTick
-        processTick(tick)
+        scheduledActors.get(tick).foreach {
+          actorsSet =>
+            val ready = actorsSet.filterNot(a => runningIds.contains(a.id))
+            if (ready.nonEmpty) {
+              if (tick < localTickOffset) {
+                localTickOffset = tick
+                tickOffset = tick - initialTick
+              }
+              // #timewarp-trace
+              core.actor.trace.TimeWarpTrace.trace(
+                metricsManagerLabel,
+                tick,
+                "dispatch_send",
+                s"dispatchedIds=${ready.map(_.id).mkString(",")} remainingAtTick=${(actorsSet.size - ready.size)}"
+              )
+              dispatchedAny = true
+              sendSpontaneousEvent(tick, ready)
+              actorsSet --= ready
+              if (actorsSet.isEmpty) {
+                scheduledActors.remove(tick)
+                scheduledTicksOnFinish.remove(tick)
+              }
+            }
+        }
     }
+    // #timewarp-trace
+    core.actor.trace.TimeWarpTrace.trace(
+      metricsManagerLabel,
+      localTickOffset,
+      "dispatch_exit",
+      s"dispatchedAny=$dispatchedAny remainingScheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")}"
+    )
+  }
 
-  /** v1 approximation of this LTM's local virtual time: the tick of whatever's currently running
-    * if anything is (nothing at or after that tick can be guaranteed final yet), otherwise the
-    * next scheduled tick (or the current tick if nothing is scheduled at all — the terminal case).
-    * Deliberately simple; `docs/TIME_WARP_DESIGN.md` doesn't specify LVT computation at this level
-    * of detail, and refining it is cheap to revisit once measured against real GVT behavior.
+  /** This LTM's local virtual time under per-actor concurrent dispatch (see `dispatchNextAvailable`):
+    * the lowest `highestProcessedTick` watermark among every actor currently in flight — nothing at
+    * or after that tick can be guaranteed final while even one in-flight actor is still working at
+    * (or behind) it. Supersedes the old single-in-flight-tick approximation (`localTickOffset`
+    * while anything was running), which assumed at most one tick's worth of actors could ever be
+    * concurrently in flight; that stopped being true once `dispatchNextAvailable` could send
+    * multiple ticks' actors out at once. Always `<=` the old approximation, so this can only make
+    * LVT more conservative, never less — safe per the margin-based GVT rationale (an underestimate
+    * never causes premature fossil collection or termination).
+    *
+    * When `runningEvents` is momentarily empty — routine between one dispatch batch resolving and
+    * the next being sent, not just at genuine end-of-simulation — this must NOT fall back to
+    * `localTickOffset`: that field is only ever moved *backward* by a rollback resync
+    * (`resyncScheduleAfterRollback`), never forward as actors genuinely progress, so it silently
+    * discards real history and pins GVT near `initialTick` forever (found 2026-09-11 — see
+    * `docs/KNOWN_GAPS.md`'s "OptimisticLocalTimeManager.localVirtualTime Collapses to Near-Zero..."
+    * entry for the live-run evidence: actors had genuinely processed hundreds of ticks while GVT
+    * stayed plateaued at `initialTick - margin`, causing `TerminationPlateauDetector` to end the
+    * simulation almost immediately). Instead, floor at `minHighestProcessedTick` — every
+    * currently-registered actor's own already-observed progress, which persists across idle gaps
+    * and is removed only on genuine destruct — combined with `nextTick` (not-yet-dispatched
+    * scheduled work is itself a valid, even earlier, safe bound) via `min`, so this can still only
+    * make LVT more conservative, never less. `localTickOffset` remains the fallback only for an LTM
+    * that has never dispatched or scheduled anything at all.
+    *
+    * A second, independent case needs the same care: `registeredActors.isEmpty` — this LTM pool
+    * routee has never had (or no longer has) a single actor assigned to it, plausible whenever the
+    * pool has more instances than the scenario has actors, or the distribution is uneven (see
+    * `docs/TIME_WARP_DESIGN.md`'s "an LTM pool routee that never gets any actors assigned never
+    * reported its LVT" fix, which made it report at all but not what value). Such a routee can
+    * never be the source of a straggler/rollback, so it must impose *no* constraint on GVT —
+    * `MarginBasedGVTEstimation.estimate` takes `min` over every reporting LTM unconditionally, so a
+    * permanently-empty routee reporting `localTickOffset` (`0`) would otherwise pin GVT near
+    * `-margin` forever regardless of how far every other, genuinely busy LTM has progressed (found
+    * 2026-09-11 alongside the gap above — fixing only the busy-LTM case did not by itself resolve a
+    * real end-to-end run's premature termination; this was the other half). Reports `Long.MaxValue`
+    * instead: the maximal, safest-possible LVT, since "no constraint" can only ever be an
+    * *overestimate-safe* direction here — every other LTM's own real, lower LVT still bounds the
+    * global `min` correctly.
     */
   protected def localVirtualTime: Tick =
-    if (runningEvents.nonEmpty) localTickOffset else nextTick.getOrElse(localTickOffset)
+    if (runningEvents.nonEmpty) {
+      runningEvents.map(a => highestProcessedTickOf(a.id)).min
+    } else if (registeredActors.isEmpty) {
+      Long.MaxValue
+    } else {
+      (nextTick, minHighestProcessedTick) match {
+        case (Some(scheduled), Some(floor)) => math.min(scheduled, floor)
+        case (Some(scheduled), None)        => scheduled
+        case (None, Some(floor))            => floor
+        case (None, None)                   => localTickOffset
+      }
+    }
 
   /** Asynchronous, non-blocking LVT report — never a request the sender waits on. `hasScheduled`
     * is unused: under this strategy there's no barrier permission to request, only a status

@@ -187,11 +187,14 @@ the simpler default there.
 
 ## 4. Entity Reference
 
-Every entity follows the same envelope schema:
+Every entity follows the same envelope schema. `id` is a bare `Long` — see
+[§6](#6-id-naming-conventions) for the full id contract (the `"htcaid:..."` strings still shown
+in some of the worked examples below are a pre-existing inconsistency in this doc, not the
+current format):
 
 ```json
 {
-  "id": "htcaid:<type>;<unique-identifier>",
+  "id": 42,
   "typeActor": "hybrid.actor.<ActorClass>",
   "data": {
     "dataType": "model.hybrid.entity.state.<StateClass>",
@@ -904,21 +907,46 @@ If neither is set, `TransitMapUtil.isAvailable` returns `false` and the system f
 
 ## 6. ID Naming Conventions
 
-All IDs use the `htcaid:<type>;<identifier>` pattern:
+**Current contract: every entity id is a plain, opaque, monotonically increasing JSON `Long`
+number — a bare integer, not a string, and never prefixed.** This applies to the top-level
+envelope `"id"` on every actor (`ActorSimulation.id: Long`), every relationship/dependency
+reference (`ShardActorId.entityId: Long`, the protobuf `Identify.id: Long`), and every field
+that references another entity by id — `NodeState.links: List[Long]`, `LinkState.from`/`to:
+Long`, `PersonState.originalPlan`'s `Activity.nodeId`/`WalkLeg.originNodeId`/
+`destinationNodeId: Long`, `PersonState.ownedVehicles`/`vehicleCurrentNode: Map[String, Long]`
+(values), `city_map.json`'s `NodeGraph`/`EdgeGraph.id: Long`, and so on. The runtime String
+entity id used internally for actor paths/sharding (`BaseActor.getEntityId`) is just
+`id.toString` (see `core.util.IdUtil.format(id: Long): String`) — e.g. `"6483859"` — never a
+prefixed string.
 
-| Entity | Pattern | Example |
-|---|---|---|
-| Node | `htcaid:node;<osm_id>` | `htcaid:node;573641` |
-| Link | `htcaid:link;<numeric_id>` | `htcaid:link;1001` |
-| Rail link | `htcaid:rail_link;<line>_segment_<n>` | `htcaid:rail_link;line_1_segment_0` |
-| Traffic signal | `htcaid:signal;signal_<n>` | `htcaid:signal;signal_42` |
-| Bus stop | `htcaid:busstop;<operator>_<stop_id>` | `htcaid:busstop;sptrans_18848` |
-| Bus station | `htcaid:busstation;<route_id>` | `htcaid:busstation;route_42` |
-| Bus | `htcaid:bus;<route_id>_bus_<n>` | `htcaid:bus;route_42_bus_0` |
-| Subway station | `htcaid:subwaystation;station_<osm_id>` | `htcaid:subwaystation;station_A` |
-| Subway | `htcaid:subway;<line>_fwd_train_<n>` | `htcaid:subway;line_1_fwd_train_0` |
-| Car | `htcaid:car;<person_id>_v_car` | `htcaid:car;person_42_v_car` |
-| Person | `htcaid:person;<person_id>` | `htcaid:person;42` |
+```json
+{ "id": 42, "typeActor": "hybrid.actor.Node", "data": { ... }, "dependencies": {} }
+```
+
+Ids are assigned by whatever generates the scenario (see `tools/sao-paulo/generate_hybrid_input.py`'s
+`ScenarioIdRegistry`: `id_for(kind, source_id)` deterministically assigns the next free `Long`
+the first time a given `(kind, source_id)` key is seen, and returns the same id on every later
+lookup of that key, so a rerun with the same seed/inputs reproduces the same ids) — there is no
+required numbering scheme (OSM id, sequential, hashed) beyond "globally unique across the whole
+scenario, across every actor type."
+
+**Two narrow exceptions stay opaque `String`, never `Long`** — both are matched only by exact
+string equality, never parsed numerically:
+- `transit_map.json`'s per-stop `"id"` field (`TransitStop.id: String`) — matched against
+  `transit_routes.json`'s `stops[].stopId: String` ([§13](#13-dynamic-mode-choice)). Both are
+  free-form labels; `actorId`/`nodeId` on the same `TransitStop` *are* `Long` (see [§5](#5-city_mapjson-and-transit_mapjson)).
+- `dependencies`/relationship map **keys** (e.g. `"from_node"`, `"to_node"`, or an arbitrary
+  label) — the map itself is `Map[String, ShardActorId]`; only the `id` *value* inside each
+  entry is `Long`.
+
+> **Historical note:** earlier scenario data (and every JSON example elsewhere in this
+> document, which predates this section and has not all been converted) used a
+> `"htcaid:<type>;<identifier>"` string convention instead. That convention is retired — treat
+> any `"htcaid:..."` string you see in an example elsewhere in this doc as illustrative of the
+> *shape* only, not the literal format to write; the `id` position holds a bare number. There is
+> no automated conversion tool for existing old-format data yet — a scenario still using
+> `"htcaid:..."` ids needs its ids reassigned by hand (or regenerated via
+> `tools/sao-paulo/generate_hybrid_input.py`) until one is written.
 
 ---
 
