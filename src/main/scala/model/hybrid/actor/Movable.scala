@@ -210,7 +210,7 @@ abstract class Movable[T <: MovableState](
               actorType = LoadBalancedDistributed
             )
             registerAwaitedReply(Movable.enterLinkAwaitKey(entityId), "EnterLinkData")
-            onFinishSpontaneous(Some(currentTick + 1))
+            onFinishSpontaneous(None)
 
           case None =>
             state.movableStatus = Finished
