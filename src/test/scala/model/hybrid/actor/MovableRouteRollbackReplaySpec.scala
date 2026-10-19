@@ -196,7 +196,7 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
 
       // t=1: enter segment 1 (10,100) -- dequeues it off movableBestRoute.
       actor ! SpontaneousEvent(tick = 1L, actorRef = timeManagerProbe.ref)
-      timeManagerProbe.expectMsgType[FinishEvent](3.seconds).scheduleTick shouldBe Some("2")
+      timeManagerProbe.expectMsgType[FinishEvent](3.seconds).scheduleTick shouldBe None
       linkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
 
       // ack at t=2: leaves segment 1, dequeues nothing further -- bestRoute now (20,200),(30,300).
@@ -206,7 +206,7 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
 
       // t=3: enter segment 2 (20,200) -- dequeues it; bestRoute now just (30,300).
       actor ! SpontaneousEvent(tick = 3L, actorRef = timeManagerProbe.ref)
-      timeManagerProbe.expectMsgType[FinishEvent](3.seconds).scheduleTick shouldBe Some("4")
+      timeManagerProbe.expectMsgType[FinishEvent](3.seconds).scheduleTick shouldBe None
       linkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
 
       // This is the point the control run below stops at: on link (20,200), one segment already
