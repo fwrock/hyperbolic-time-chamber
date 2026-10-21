@@ -189,8 +189,27 @@ abstract class MovableReplayEquivalenceBase(checkpointInterval: Int)
   /** Compares everything the actor would carry across a migration, minus its entity id (each rig is
     * a different actor) and the two clocks.
     */
-  private def fingerprint(rig: Rig): MigrationSnapshot =
-    rig.actor.underlyingActor.testSnapshot.copy(entityId = "", currentTick = 0L, lamportClock = 0L)
+
+  /** The registry's keys embed the per-rig link id and its values a send seq, a monotonic identity
+    * that is never rolled back, so a reprocessed send gets a fresh one the control never allocated.
+    * What must match is which waits are registered, of what kind, and from which tick.
+    */
+  private def normalizedAwaits(awaited: Map[String, String]): Map[String, String] =
+    awaited.map { case (key, v) => key.replaceAll(":\\d+$", ":link") -> v.substring(0, v.lastIndexOf('|')) }
+
+  private def fingerprint(rig: Rig): MigrationSnapshot = {
+    val snap = rig.actor.underlyingActor.testSnapshot
+    snap.copy(entityId = "", currentTick = 0L, lamportClock = 0L, awaitedReplies = normalizedAwaits(snap.awaitedReplies))
+  }
+
+  /** The rollback undoes events k+1..5, and the interactions among them (the acks) are processed
+    * again after the straggler. Undone spontaneous events are not: the time manager re-dispatches
+    * those, and there is none here. The control therefore applies the same acks live.
+    */
+  private def driveControl(rig: Rig, k: Int): Unit = {
+    driveLive(rig, upTo = k)
+    ((k + 1) to historyLength).map(liveEvent(rig, _)).collect { case e: ActorInteractionEvent => e }.foreach(rig.actor ! _)
+  }
 
   // A straggler at tick k+1 is only a straggler while k+1 < currentTick (5), so k ranges 0..3.
   (0 to 3).foreach {
@@ -198,7 +217,7 @@ abstract class MovableReplayEquivalenceBase(checkpointInterval: Int)
       s"[checkpoint interval $checkpointInterval] a rollback to just before event ${k + 1}" should
         s"restore exactly the snapshot of a control actor driven live through the first $k events" in {
           val control = newRig()
-          driveLive(control, upTo = k)
+          driveControl(control, k)
           val expected = fingerprint(control)
 
           val rolledBack = newRig()

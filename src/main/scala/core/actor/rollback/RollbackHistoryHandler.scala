@@ -91,14 +91,16 @@ final class RollbackHistoryHandler(
     tick: Tick,
     seq: Long,
     sentMessages: Seq[SentMessage] = Seq.empty,
-    dynamicWeightReads: Map[String, Double] = Map.empty
+    dynamicWeightReads: Map[String, Double] = Map.empty,
+    scheduleOutcome: Option[Option[Tick]] = None
   ): Unit = {
     log += LoggedEvent(
       tick = tick,
       seq = seq,
       event = event,
       sentMessages = sentMessages,
-      dynamicWeightReads = dynamicWeightReads
+      dynamicWeightReads = dynamicWeightReads,
+      scheduleOutcome = scheduleOutcome
     )
     eventsSinceCheckpoint += 1
     if (eventsSinceCheckpoint >= checkpointInterval) {
@@ -168,6 +170,12 @@ final class RollbackHistoryHandler(
     * concrete event type) supplies the match logic.
     */
   def findEvent(predicate: AnyRef => Boolean): Option[LoggedEvent] = log.find(le => predicate(le.event))
+
+  /** The schedule request of the latest retained event that made one (see
+    * [[LoggedEvent.scheduleOutcome]]); `None` if no retained event ever did.
+    */
+  def lastScheduleOutcome: Option[Option[Tick]] =
+    log.sortBy(_.seq).reverseIterator.flatMap(_.scheduleOutcome).nextOption()
 
   /** Test/diagnostic hook — how many full-copy checkpoints are currently retained. */
   private[rollback] def checkpointCount: Int = checkpoints.size

@@ -31,7 +31,8 @@ import scala.concurrent.duration.DurationInt
   *     while the gap exists, and fail once the gap is fixed (telling you to drop the wrapper).
   *
   * Gaps covered:
-  *   - A: an interaction undone by a rollback is never reprocessed after the straggler.
+  *   - A: an interaction undone by a rollback must be reprocessed after the straggler, except the
+  *     one an anti-message retracts.
   *   - B: replaying a surviving event re-sends its messages (B1) and re-buffers its reports (B2),
   *     although the originals were already delivered and are never retracted.
   *   - R: after a rollback the actor is rescheduled at the tick of its last surviving event, which
@@ -182,7 +183,7 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
   // Gap A: undone interactions are not reprocessed
   // ---------------------------------------------------------------------------------------------
 
-  "a straggler rollback" should "currently lose the interaction it undid (Gap A, characterization)" in {
+  "a straggler rollback" should "reprocess the interaction it undid, after the straggler, in tick order (Gap A)" in {
     val tm = TestProbe()
     val reporter = TestProbe()
     val (_, peerId) = newPeer()
@@ -192,30 +193,43 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     actor ! interaction(tick = 103L, senderId = 202L)
     actor ! interaction(tick = 101L, senderId = 203L) // straggler: 101 < currentTick 103
 
-    // I@103:202 was undone by the rollback to 101 and nothing ever reprocesses it.
-    actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@101:203")
+    actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@101:203", "I@103:202")
   }
 
-  it should "reprocess the interaction it undid, after the straggler, in tick order (Gap A, desired)" in {
+  it should "reprocess every undone interaction exactly once, however many were undone" in {
     val tm = TestProbe()
     val reporter = TestProbe()
     val (_, peerId) = newPeer()
     val actor = newActor(tm, reporter, peerId)
 
     actor ! interaction(tick = 100L, senderId = 201L)
+    actor ! interaction(tick = 105L, senderId = 204L)
     actor ! interaction(tick = 103L, senderId = 202L)
     actor ! interaction(tick = 101L, senderId = 203L)
 
-    pendingUntilFixed {
-      actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@101:203", "I@103:202")
-    }
+    actor.underlyingActor.testEntries shouldBe
+      List("I@100:201", "I@101:203", "I@103:202", "I@105:204")
+  }
+
+  it should "not reprocess the interaction an anti-message retracts, but keep the ones after it" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+
+    actor ! interaction(tick = 100L, senderId = 201L, seq = 1L)
+    actor ! interaction(tick = 102L, senderId = 202L, seq = 7L)
+    actor ! interaction(tick = 104L, senderId = 203L, seq = 1L)
+    actor ! interaction(tick = 102L, senderId = 202L, seq = 7L).copy(isAntiMessage = true)
+
+    actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@104:203")
   }
 
   // ---------------------------------------------------------------------------------------------
   // Gap B1: replay re-sends messages that were already delivered
   // ---------------------------------------------------------------------------------------------
 
-  it should "currently re-send, during replay, the message of a surviving event (Gap B1, characterization)" in {
+  it should "retract only the undone send and not re-send the surviving one (Gap B1)" in {
     val tm = TestProbe()
     val reporter = TestProbe()
     val (peer, peerId) = newPeer()
@@ -224,24 +238,9 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     runScenarioWithSurvivingEvent(actor, tm, peer)
 
     val received = peer.receiveWhile(2.seconds) { case e: ActorInteractionEvent => e }
-    // One anti-message for the undone tick-3 send, plus one duplicate of the tick-1 send that the
-    // replay re-issued although the receiver already processed the original.
+    // One anti-message for the undone tick-3 send; the tick-1 send was delivered and survives.
     received.count(_.isAntiMessage) shouldBe 1
-    received.count(!_.isAntiMessage) shouldBe 1
-  }
-
-  it should "not re-send the messages of surviving events during replay (Gap B1, desired)" in {
-    val tm = TestProbe()
-    val reporter = TestProbe()
-    val (peer, peerId) = newPeer()
-    val actor = newActor(tm, reporter, peerId)
-
-    runScenarioWithSurvivingEvent(actor, tm, peer)
-
-    val received = peer.receiveWhile(2.seconds) { case e: ActorInteractionEvent => e }
-    pendingUntilFixed {
-      received.filterNot(_.isAntiMessage) shouldBe empty
-    }
+    received.filterNot(_.isAntiMessage) shouldBe empty
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -260,7 +259,7 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     reporter.receiveWhile(2.seconds) { case r: ReportEvent => r.data }
   }
 
-  it should "currently flush the report of a surviving event twice (Gap B2, characterization)" in {
+  it should "flush the report of a surviving event exactly once (Gap B2)" in {
     val tm = TestProbe()
     val reporter = TestProbe()
     val (peer, peerId) = newPeer()
@@ -268,21 +267,8 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
 
     val flushed = flushedReportTicks(actor, tm, peer, reporter)
 
-    flushed.count(_ == 1L) shouldBe 2 // original buffered report + the one replay added again
+    flushed.count(_ == 1L) shouldBe 1
     flushed.count(_ == 3L) shouldBe 0 // tick 3 was undone and rightly discarded
-  }
-
-  it should "flush the report of a surviving event exactly once (Gap B2, desired)" in {
-    val tm = TestProbe()
-    val reporter = TestProbe()
-    val (peer, peerId) = newPeer()
-    val actor = newActor(tm, reporter, peerId)
-
-    val flushed = flushedReportTicks(actor, tm, peer, reporter)
-
-    pendingUntilFixed {
-      flushed.count(_ == 1L) shouldBe 1
-    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -300,17 +286,7 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     tm.expectMsgType[ScheduleEvent](3.seconds).tick
   }
 
-  "the post-rollback resync" should "currently reschedule the actor at the tick of its last surviving event (Gap R, characterization)" in {
-    val tm = TestProbe()
-    val reporter = TestProbe()
-    val (peer, peerId) = newPeer()
-    val actor = newActor(tm, reporter, peerId)
-
-    // Tick 1 survived and is already reflected in state; the LTM is asked to dispatch tick 1 again.
-    resyncTickAfterRollback(actor, tm, peer) shouldBe 1L
-  }
-
-  it should "reschedule the actor strictly after the last surviving event (Gap R, desired)" in {
+  "the post-rollback resync" should "reschedule the actor strictly after the last surviving event (Gap R)" in {
     val tm = TestProbe()
     val reporter = TestProbe()
     val (peer, peerId) = newPeer()
@@ -318,8 +294,7 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
 
     val rescheduledAt = resyncTickAfterRollback(actor, tm, peer)
 
-    pendingUntilFixed {
-      rescheduledAt should be > 1L
-    }
+    // Tick 1 survived and asked to run again at tick 2; tick 1 itself must not be dispatched twice.
+    rescheduledAt shouldBe 2L
   }
 }

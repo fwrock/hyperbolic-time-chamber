@@ -105,6 +105,11 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
   *   [[org.interscity.htc.model.hybrid.actor.Link]] only: accumulated waiting time per
   *   currently-registered vehicle (keyed by entity id), same audit and same reasoning as
   *   [[linkVehicleEntryTick]].
+  * @param awaitedReplies
+  *   Time Warp only: the actor's outstanding awaited-reply registry (`key` -> `kind|sentAtTick|
+  *   sendSeq`), i.e. its pending reply obligations. It lives in the snapshot, not as a bare actor
+  *   var, so a rollback restores it together with `state` and a shard migration cannot drop it.
+  *   Empty outside Time Warp.
   */
 case class MigrationSnapshot(
   stateJson: String,
@@ -136,6 +141,7 @@ case class MigrationSnapshot(
   vehicleSignalWaitNeedsReverify: Boolean = false,
   expectedUnloadResponses: Int = 0,
   currentStopNode: Long = 0L,
+  awaitedReplies: Map[String, String] = Map.empty,
   // Non-first-position Map[Long, _] constructor params: jackson-module-scala on Scala 3 only
   // preserves full Map key/value generics for the *first* constructor parameter, so later ones
   // need @JsonDeserialize(keyAs = ...) or the key silently deserializes as String and every
