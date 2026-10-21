@@ -245,6 +245,7 @@ class SimulationBaseActorRollbackScheduleResyncSpec extends AnyFlatSpec with Mat
       val clearing = timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
       clearing.scheduleTick shouldBe None
       clearing.generation shouldBe Long.MaxValue
+      clearing.awaitingReply shouldBe true // the surviving wait must keep the LTM from reporting idle
 
       // But no forced re-dispatch follows: this actor is correctly disengaged, waiting on a real
       // reply that will resolve it the normal actInteractWith path, not this resync.

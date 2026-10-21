@@ -17,8 +17,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.DurationInt
 
-/** W0 of the Time Warp correctness plan, Gap T: termination cannot tell "finished" from "blocked on
-  * a reply that never comes".
+/** Gap T: termination must tell "finished" from "blocked on a reply that never comes".
   *
   * An actor that sends a request and resolves its spontaneous event with `None` (what `Movable`
   * does after `EnterLinkData`, commit c339162) leaves both `runningEvents` and the schedule. From
@@ -26,9 +25,9 @@ import scala.concurrent.duration.DurationInt
   * (see Gap A), the GTM's `TerminationPlateauDetector` sees all LTMs idle and a flat GVT and
   * declares a successful end while the actor is still waiting.
   *
-  * The characterization test pins today's behavior. The pending test states the contract W1 must
-  * establish; it needs a way for the actor to tell the LTM it is waiting, which does not exist yet,
-  * so it is a placeholder.
+  * Fixed by `FinishEvent.awaitingReply`: an actor that resolves with no next tick while its
+  * awaited-reply registry is non-empty says so, and the LTM stays non-idle until a later finish
+  * clears it.
   */
 class OptimisticLocalTimeManagerBlockedActorSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
@@ -60,6 +59,8 @@ class OptimisticLocalTimeManagerBlockedActorSpec extends AnyFlatSpec with Matche
       registerActor(RegisterActorEvent(startTick = startTick, actorId = identity.id, identify = Some(identity)))
     def testFinish(finish: FinishEvent): Unit = finishEvent(finish)
     def testRunningEventIds: Set[Long] = runningEvents.map(_.id).toSet
+    def testCompleteDestruct(identity: Identify): Unit = completeDestruct(identity)
+    def testReport(): Unit = reportGlobalTimeManager()
   }
 
   private def identityFor(id: Long, probe: TestProbe): Identify =
@@ -71,37 +72,82 @@ class OptimisticLocalTimeManagerBlockedActorSpec extends AnyFlatSpec with Matche
       actorType = "PoolDistributed"
     )
 
-  "an actor that resolved its spontaneous event with None while waiting for a reply" should
-    "currently make the LTM report isIdle = true (Gap T, characterization)" in {
+  private def finishWith(
+    ltm: TestActorRef[TestOptimisticLocalTimeManager],
+    identity: Identify,
+    probe: TestProbe,
+    awaitingReply: Boolean
+  ): Unit =
+    ltm.underlyingActor.testFinish(
+      FinishEvent(
+        actorRef = probe.ref,
+        identify = identity,
+        end = 0L,
+        scheduleTick = None,
+        timeManager = ltm,
+        generation = 1L,
+        awaitingReply = awaitingReply
+      )
+    )
+
+  private def latestReport(parent: TestProbe): LvtReportEvent =
+    parent.receiveWhile(1.second) { case m => m }.collect { case e: LvtReportEvent => e }.last
+
+  private def startedLtm(parent: TestProbe, identity: Identify) = {
+    val ltm = TestActorRef(new TestOptimisticLocalTimeManager(Some(parent.ref)))
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegister(identity, 0L)
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
+    ltm
+  }
+
+  "an actor that resolved its spontaneous event with None and awaits nothing" should
+    "let the LTM report isIdle = true" in {
       val parentProbe = TestProbe()
       val actorProbe = TestProbe()
-      val ltm = TestActorRef(new TestOptimisticLocalTimeManager(Some(parentProbe.ref)))
       val identity = identityFor(1L, actorProbe)
+      val ltm = startedLtm(parentProbe, identity)
 
-      ltm.underlyingActor.testStart(0L)
-      ltm.underlyingActor.testRegister(identity, 0L)
-      ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
-
-      // The actor sent a request at tick 0 and now waits for the reply: no next tick to schedule.
-      ltm.underlyingActor.testFinish(
-        FinishEvent(
-          actorRef = actorProbe.ref,
-          identify = identity,
-          end = 0L,
-          scheduleTick = None,
-          timeManager = ltm,
-          generation = 1L
-        )
-      )
+      finishWith(ltm, identity, actorProbe, awaitingReply = false)
 
       ltm.underlyingActor.testRunningEventIds shouldBe empty
-      parentProbe.fishForMessage(1.second) {
-        case e: LvtReportEvent => e.isIdle
-        case _                 => false
-      }
+      latestReport(parentProbe).isIdle shouldBe true
     }
 
-  it should "keep the LTM non-idle, and its LVT at the request tick, until the reply arrives (Gap T, W1 contract)" in {
-    pending
+  "an actor that resolved its spontaneous event with None while waiting for a reply" should
+    "keep the LTM non-idle, and its LVT at the request tick, until the reply arrives (Gap T)" in {
+      val parentProbe = TestProbe()
+      val actorProbe = TestProbe()
+      val identity = identityFor(1L, actorProbe)
+      val ltm = startedLtm(parentProbe, identity)
+
+      finishWith(ltm, identity, actorProbe, awaitingReply = true)
+
+      // Neither running nor scheduled, but not finished either.
+      ltm.underlyingActor.testRunningEventIds shouldBe empty
+      val blocked = latestReport(parentProbe)
+      blocked.isIdle shouldBe false
+      blocked.blockedActors shouldBe 1
+      blocked.lvt should be <= 0L
+
+      // The reply arrives and the actor resolves its next dispatch with nothing left to wait for.
+      finishWith(ltm, identity, actorProbe, awaitingReply = false)
+      val released = latestReport(parentProbe)
+      released.isIdle shouldBe true
+      released.blockedActors shouldBe 0
+    }
+
+  it should "stop counting as blocked once the actor is destructed" in {
+    val parentProbe = TestProbe()
+    val actorProbe = TestProbe()
+    val identity = identityFor(1L, actorProbe)
+    val ltm = startedLtm(parentProbe, identity)
+    finishWith(ltm, identity, actorProbe, awaitingReply = true)
+    latestReport(parentProbe).isIdle shouldBe false
+
+    ltm.underlyingActor.testCompleteDestruct(identity)
+    ltm.underlyingActor.testReport()
+
+    latestReport(parentProbe).blockedActors shouldBe 0
   }
 }

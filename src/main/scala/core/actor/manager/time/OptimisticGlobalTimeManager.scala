@@ -293,7 +293,7 @@ class OptimisticGlobalTimeManager(
       logWarn(s"Received LVT report from unregistered manager: ${manager.path}")
       return
     }
-    latestReports.update(manager, LocalVirtualTimeReport(source = manager, lvt = report.lvt, isIdle = report.isIdle))
+    latestReports.update(manager, LocalVirtualTimeReport(source = manager, lvt = report.lvt, isIdle = report.isIdle, blockedActors = report.blockedActors))
     recomputeGvtAndCheckTermination()
   }
 
@@ -355,7 +355,7 @@ class OptimisticGlobalTimeManager(
       .sortBy(_._1.path.toString)
       .map {
         case (ref, report) =>
-          s"    ${ref.path.name}@${ref.path.address.hostPort}  (lvt=${report.lvt}, isIdle=${report.isIdle})"
+          s"    ${ref.path.name}@${ref.path.address.hostPort}  (lvt=${report.lvt}, isIdle=${report.isIdle}, blockedOnReply=${report.blockedActors})"
       }
       .mkString("\n")
     val neverReported = registeredManagers.diff(latestReports.keySet)

@@ -461,7 +461,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       scheduleEvent = None,
       timeManager = currentTimeManager,
       destruct = false,
-      generation = Long.MaxValue
+      generation = Long.MaxValue,
+      awaitingReply = outstandingAwaitedReplies.nonEmpty
     )
     // Unregistering the stale TM entry above is always correct regardless of wait state -- it may
     // be clearing a schedule left by a different undone event than whatever this actor is still
@@ -1406,7 +1407,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       scheduleEvent = None,
       timeManager = currentTimeManager,
       destruct = destruct,
-      generation = currentGeneration
+      generation = currentGeneration,
+      awaitingReply = isTimeWarp && scheduleTick.isEmpty && outstandingAwaitedReplies.nonEmpty
     )
   }
 
