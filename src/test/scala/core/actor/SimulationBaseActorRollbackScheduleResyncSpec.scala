@@ -276,7 +276,8 @@ class SimulationBaseActorRollbackScheduleResyncSpec extends AnyFlatSpec with Mat
       // With nothing left outstanding, the forced re-dispatch fires exactly as it did before this
       // fix -- proving Case A ("reply itself was invalidated") isn't accidentally broken.
       val rescheduled = timeManagerProbe.expectMsgType[ScheduleEvent](3.seconds)
-      rescheduled.tick shouldBe 0L
+      // The tick=0 dispatch survived and had asked for tick 1, so that is where the actor resumes.
+      rescheduled.tick shouldBe 1L
 
       timeManagerProbe.expectNoMessage(1.second)
     }

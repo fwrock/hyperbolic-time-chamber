@@ -152,11 +152,16 @@ class SimulationBaseActorStragglerTriggerSpec extends AnyFlatSpec with Matchers 
     antiMessage.seq shouldBe 1L
     antiMessage.actorRefId shouldBe actor.underlyingActor.testEntityId // the anti-message's sender is THIS actor -- it's retracting its own prior relay
 
-    val replayedRelay = peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
-    replayedRelay.isAntiMessage shouldBe false
-    replayedRelay.data shouldBe RelayData(1) // tick=3's own processing, counter back to 1 from the restored floor(0)
+    val stragglerRelay = peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
+    stragglerRelay.isAntiMessage shouldBe false
+    stragglerRelay.data shouldBe RelayData(1) // tick=3's own processing, counter back to 1 from the restored floor(0)
 
-    actor.underlyingActor.testCounter shouldBe 1
+    // tick=5 was undone but its sender never retracted it, so it is processed again after the straggler.
+    val reprocessedRelay = peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
+    reprocessedRelay.isAntiMessage shouldBe false
+    reprocessedRelay.data shouldBe RelayData(2)
+
+    actor.underlyingActor.testCounter shouldBe 2
   }
 
   "receiving a real anti-message" should "roll back to before the original interaction and cascade a further anti-message for its own relay" in {

@@ -30,11 +30,17 @@ import core.types.Tick
   *   route computed during this event's original live dispatch must see the exact same costs if
   *   this event is ever replayed, not whatever the cache holds by the time replay happens. Empty
   *   for any event that never read a dynamic weight.
+  * @param scheduleOutcome
+  *   what this event asked the time manager to schedule for the actor: `None` if it never asked,
+  *   `Some(None)` if it finished with no next tick, `Some(Some(t))` if it asked for tick `t`. The
+  *   undone event's registration is swept on rollback, so the surviving events' latest outcome is
+  *   what the actor must be rescheduled at.
   */
 final case class LoggedEvent(
   tick: Tick,
   seq: Long,
   event: AnyRef,
   sentMessages: Seq[SentMessage] = Seq.empty,
-  dynamicWeightReads: Map[String, Double] = Map.empty
+  dynamicWeightReads: Map[String, Double] = Map.empty,
+  scheduleOutcome: Option[Option[Tick]] = None
 )

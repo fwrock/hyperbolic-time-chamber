@@ -188,9 +188,11 @@ class SimulationBaseActorTimeWarpReplaySpec extends AnyFlatSpec with Matchers wi
     // arrived there as a side effect of the rollback itself.
     timeManagerProbe.expectNoMessage(3.seconds)
 
-    // But sendMessageTo's resend during replay IS expected -- a second, fresh
-    // ActorInteractionEvent for the peer, per docs/TIME_WARP_DESIGN.md §10.
-    peerProbe.expectMsgClass(3.seconds, classOf[core.entity.event.ActorInteractionEvent])
+    // Nor may it resend tick 1's message: the original was delivered and is never retracted (only
+    // the undone tick-2 send is), so a resend would hand the peer a duplicate (Gap B1). The one
+    // thing that does reach the peer is the anti-message for the undone tick-2 send.
+    val toPeer = peerProbe.receiveWhile(2.seconds) { case e: core.entity.event.ActorInteractionEvent => e }
+    toPeer.filterNot(_.isAntiMessage) shouldBe empty
   }
 
   it should "leave the actor able to resume live dispatch normally after a rollback" in {
@@ -207,7 +209,7 @@ class SimulationBaseActorTimeWarpReplaySpec extends AnyFlatSpec with Matchers wi
     peerProbe.expectMsgClass(3.seconds, classOf[core.entity.event.ActorInteractionEvent])
 
     actor.underlyingActor.testRollbackTo(targetTick = 2L)
-    peerProbe.expectMsgClass(3.seconds, classOf[core.entity.event.ActorInteractionEvent]) // the replay's resend
+    peerProbe.receiveWhile(2.seconds) { case e: core.entity.event.ActorInteractionEvent => e } // anti-message for the undone send
 
     // Corrected re-dispatch for tick 2 (the causally-correct one this time) -- a normal live
     // dispatch, not a replay, so it must behave exactly like any other live dispatch: real

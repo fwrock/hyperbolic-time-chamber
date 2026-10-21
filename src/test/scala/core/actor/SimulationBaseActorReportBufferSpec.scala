@@ -151,12 +151,13 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     // tick >= 1), discarding both buffered reports, before reprocessing this straggler for real.
     actor ! interaction(tick = 1L, senderId = 102L, seq = 1L)
 
-    // Advance GVT far enough to cover everything. Only the straggler's own reprocessed tick=1
-    // report should ever reach the reporter -- the original tick=1 and tick=2 reports were
-    // discarded by the rollback, not merely delayed, so this must be exactly one message.
+    // Advance GVT far enough to cover everything. The original tick=1 and tick=2 reports were
+    // discarded by the rollback, not merely delayed; what reaches the reporter is the straggler's
+    // own report plus the reports of the two undone interactions, which are processed again after
+    // it (their senders never retracted them). Exactly three messages, each once.
     actor ! SpontaneousEvent(tick = 5L, actorRef = timeManagerProbe.ref, gvt = Some(10L))
 
-    reporterProbe.expectMsgType[ReportEvent](3.seconds).data shouldBe 1L
+    reporterProbe.receiveN(3, 3.seconds).collect { case r: ReportEvent => r.data } shouldBe Seq(1L, 1L, 2L)
     reporterProbe.expectNoMessage(500.millis)
   }
 }

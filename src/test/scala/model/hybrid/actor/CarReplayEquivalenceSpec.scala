@@ -34,8 +34,8 @@ import scala.compiletime.uninitialized
   * Car's `AwaitedReply` registry is rollback-immune, so the reply's entry was already consumed when
   * the reply was first handled live, and `CarLinkHandler.handleEnterLink` sees nothing awaited. The
   * restored Car stays `Waiting` with its link bookkeeping empty, for a reply that will never come
-  * again. Restoring from a checkpoint taken after the reply is unaffected. The equivalence test for
-  * that case is wrapped in `pendingUntilFixed` and a characterization test pins today's behavior.
+  * again. Fixed by making the awaited-reply registry part of the migration snapshot, so a restore
+  * brings back the wait the reply needs, and by replay reusing the original send seq.
   *
   * Harness limits, same as `MovableRouteRollbackReplaySpec`: `Car` addresses links through
   * `LoadBalancedDistributed` sharding, which does not exist under `pekko.actor.provider = local`, so
@@ -192,12 +192,21 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
     (1 to upTo).foreach(i => rig.actor ! liveEvent(rig, i))
 
   /** Every rig has its own link peer, so its id is replaced by a marker instead of compared. */
+
+  /** The registry's keys embed the per-rig link id and its values a send seq, a monotonic identity
+    * that is never rolled back, so a reprocessed send gets a fresh one the control never allocated.
+    * What must match is which waits are registered, of what kind, and from which tick.
+    */
+  private def normalizedAwaits(awaited: Map[String, String]): Map[String, String] =
+    awaited.map { case (key, v) => key.replaceAll(":\\d+$", ":link") -> v.substring(0, v.lastIndexOf('|')) }
+
   private def fingerprint(rig: Rig): MigrationSnapshot = {
     val snap = rig.actor.underlyingActor.testSnapshot
     snap.copy(
       entityId = "",
       currentTick = 0L,
       lamportClock = 0L,
+      awaitedReplies = normalizedAwaits(snap.awaitedReplies),
       vehicleCurrentLinkId = if (snap.vehicleCurrentLinkId == rig.linkId) -1L else snap.vehicleCurrentLinkId
     )
   }
@@ -221,8 +230,12 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
   private val replaysTheLinkReply = checkpointInterval > 2
 
   private def rollBackTo(k: Int): (Rig, Rig) = {
+    // The rollback undoes events k+1..4 and processes the interactions among them again after the
+    // straggler (the link reply); undone spontaneous events are redispatched by the time manager,
+    // which does not exist here. The control applies the same replies live.
     val control = newRig()
     driveLive(control, upTo = k)
+    ((k + 1) to historyLength).map(liveEvent(control, _)).collect { case e: ActorInteractionEvent => e }.foreach(control.actor ! _)
 
     val rolledBack = newRig()
     driveLive(rolledBack, upTo = historyLength)
@@ -234,27 +247,51 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
   // k ranges 0..2.
   (0 to 2).foreach {
     k =>
-      val pendingForGapP = k == 2 && replaysTheLinkReply
       s"[checkpoint interval $checkpointInterval] a Car rollback to just before event ${k + 1}" should
-        s"restore exactly the snapshot of a control Car driven live through the first $k events${if (pendingForGapP) " (Gap P, desired)" else ""}" in {
+        s"restore exactly the snapshot of a control Car driven live through the first $k events" in {
           val (control, rolledBack) = rollBackTo(k)
-          if (pendingForGapP) pendingUntilFixed(fingerprint(rolledBack) shouldBe fingerprint(control))
-          else fingerprint(rolledBack) shouldBe fingerprint(control)
+          fingerprint(rolledBack) shouldBe fingerprint(control)
         }
   }
 
   if (replaysTheLinkReply) {
     s"[checkpoint interval $checkpointInterval] a Car whose link reply is replayed after a rollback" should
-      "currently stay Waiting with empty link bookkeeping, unlike a live control (Gap P, characterization)" in {
+      "end up Moving with the same link bookkeeping as a live control (Gap P regression)" in {
         val (control, rolledBack) = rollBackTo(2)
 
         control.actor.underlyingActor.testStatus shouldBe MovableStatusEnum.Moving
         control.actor.underlyingActor.testLinkFields._1 shouldBe Some(control.linkId)
 
-        rolledBack.actor.underlyingActor.testStatus shouldBe MovableStatusEnum.Waiting
-        rolledBack.actor.underlyingActor.testLinkFields._1 shouldBe None
+        rolledBack.actor.underlyingActor.testStatus shouldBe MovableStatusEnum.Moving
+        rolledBack.actor.underlyingActor.testLinkFields._1 shouldBe Some(rolledBack.linkId)
       }
   }
+
+  "a Car that discarded a duplicate link reply as stale live" should
+    "discard it again when a rollback replays it, instead of re-applying it" in {
+      def history(rig: Rig, upTo: Int): Unit = {
+        val events = Seq[Any](
+          SpontaneousEvent(tick = 1L, actorRef = rig.tm.ref),
+          linkInfo(2L, rig.linkId, requestSeq = 1L, EventTypeEnum.ReceiveEnterLinkInfo),
+          // same requestSeq: the first reply already consumed the awaited entry, so live it is stale
+          linkInfo(3L, rig.linkId, requestSeq = 1L, EventTypeEnum.ReceiveEnterLinkInfo),
+          SpontaneousEvent(tick = 4L, actorRef = rig.tm.ref),
+          SpontaneousEvent(tick = 5L, actorRef = rig.tm.ref)
+        )
+        events.take(upTo).foreach(rig.actor ! _)
+      }
+
+      val control = newRig()
+      history(control, upTo = 3)
+
+      val rolledBack = newRig()
+      history(rolledBack, upTo = 5)
+      rolledBack.actor ! straggler(tick = 4L)
+
+      control.actor.underlyingActor.testLinkFields._3 shouldBe Some(2L)
+      rolledBack.actor.underlyingActor.testLinkFields._3 shouldBe Some(2L)
+      fingerprint(rolledBack) shouldBe fingerprint(control)
+    }
 }
 
 class CarReplayEquivalenceInterval1Spec extends CarReplayEquivalenceBase(checkpointInterval = 1)

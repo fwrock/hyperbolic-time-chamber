@@ -225,6 +225,12 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
       linkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
       timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
 
+      // The rollback below undoes this ack, but its sender never retracts it, so it is processed
+      // again after the straggler: the restored actor must land exactly here, not at the t=3 point.
+      val expectedRouteAfterAck = actor.underlyingActor.testRoute.map(_.toSeq)
+      val expectedPathAfterAck = actor.underlyingActor.testCurrentPath
+      val expectedStatusAfterAck = actor.underlyingActor.testStatus
+
       actor ! SpontaneousEvent(tick = 5L, actorRef = timeManagerProbe.ref)
       timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
       linkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
@@ -235,7 +241,7 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
       // A genuinely causally-earlier interaction (tick=4, strictly less than currentTick=5) forces
       // a real straggler rollback: RollbackHistoryHandler.rollbackTo(4) undoes every logged event
       // at tick >= 4 -- both the t=4 ack and the t=5 entry -- restoring the checkpoint-plus-replay
-      // state as of right after the t=3 dispatch above.
+      // state as of right after the t=3 dispatch above, after which the undone t=4 ack is replayed.
       actor ! straggler(tick = 4L, senderId = 999L, seq = 1L)
 
       // The undone sends get anti-messaged; drain them before asserting on final state.
@@ -243,9 +249,9 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
         case m: ActorInteractionEvent => m
       }
 
-      actor.underlyingActor.testRoute.map(_.toSeq) shouldBe expectedRoute
-      actor.underlyingActor.testCurrentPath shouldBe expectedPath
-      actor.underlyingActor.testStatus shouldBe expectedStatus
+      actor.underlyingActor.testRoute.map(_.toSeq) shouldBe expectedRouteAfterAck
+      actor.underlyingActor.testCurrentPath shouldBe expectedPathAfterAck
+      actor.underlyingActor.testStatus shouldBe expectedStatusAfterAck
     }
 
   it should "match a control Movable driven live (no rollback) to the same logical point" in {
@@ -264,6 +270,11 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
     liveActor ! SpontaneousEvent(tick = 3L, actorRef = liveTimeManagerProbe.ref)
     liveTimeManagerProbe.expectMsgType[FinishEvent](3.seconds)
     liveLinkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
+
+    // The undone t=4 ack is processed again after the straggler, so the control applies it too.
+    liveActor ! enterLinkAck(tick = 4L, linkPeerId = liveLinkPeerId, seq = 2L)
+    liveLinkProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
+    liveTimeManagerProbe.expectMsgType[FinishEvent](3.seconds)
 
     val rollbackTimeManagerProbe = TestProbe()
     val (rollbackLinkProbe, rollbackLinkPeerId) = newPeer()
