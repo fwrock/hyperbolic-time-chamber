@@ -1834,6 +1834,23 @@ elsewhere in `docs/TIME_WARP_DESIGN.md` with concrete, reproducible numbers. Rep
 `simulations/input/tw_livelock_repro` in both `timeManagerType` modes against the same cluster and
 diff parquet output by `(event_type, entity_id, tick)`.
 
+## Time Warp: Awaited-Reply Registry Outside the Snapshot Broke Replay and Reprocessing of Undone Replies (Found 2026-10-21, Fixed 2026-10-21)
+
+`outstandingAwaitedReplies` was a rollback-immune actor var. A checkpoint restore therefore could not
+bring back a wait that an undone (or replayed) event had consumed, so a reply reexecuted by replay
+(Gap P) or reprocessed after a straggler (Gap A) found nothing awaited, was dropped as stale, and the
+actor stayed `Waiting`. A first patch recorded each `isAwaitingReply` verdict in the log; that was a
+workaround and was replaced.
+
+**Fix:** the registry is part of `MigrationSnapshot` (`awaitedReplies`), captured and restored with
+`state`, so a restore plus replay rebuilds it exactly as it was at the restored point. Waits
+registered by undone events vanish by themselves (`pruneInvalidatedAwaitedReplies` is gone), a wait
+an undone event consumed comes back, and a shard migration can no longer drop a pending reply
+obligation. Replay allocates no send seqs (it no longer resends); a replayed `registerAwaitedReply`
+takes the seq of the original send from `LoggedEvent.sentMessages`, so the echoed `requestSeq` still
+matches. Covered by `CarReplayEquivalenceSpec` (Gap P, undone reply accepted on reprocessing, stale
+duplicate stays stale).
+
 ## Test Coverage
 
 Effectively none. `src/main/scala` has ~504 files; `src/test/scala` has **exactly one** file
