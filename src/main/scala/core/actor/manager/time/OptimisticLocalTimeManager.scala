@@ -286,7 +286,8 @@ class OptimisticLocalTimeManager(
       parent =>
         parent ! LvtReportEvent(
           lvt = localVirtualTime,
-          isIdle = runningEvents.isEmpty && nextTick.isEmpty
+          isIdle = runningEvents.isEmpty && nextTick.isEmpty && blockedActors.isEmpty,
+          blockedActors = blockedActors.size
         )
     }
 }

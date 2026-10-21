@@ -13,6 +13,9 @@ import core.types.Tick
   *   localVirtualTime`'s doc for how it's computed)
   * @param isIdle
   *   whether this LTM currently has nothing scheduled and nothing running — feeds §11's
-  *   termination-plateau detection alongside the GVT estimate itself
+  *   termination-plateau detection alongside the GVT estimate itself. Never true while an actor is
+  *   blocked on a reply, even though that actor is neither running nor scheduled
+  * @param blockedActors
+  *   how many actors are blocked on a reply (diagnostic: names the culprit in `[GTM-STALL]`)
   */
-case class LvtReportEvent(lvt: Tick, isIdle: Boolean)
+case class LvtReportEvent(lvt: Tick, isIdle: Boolean, blockedActors: Int = 0)

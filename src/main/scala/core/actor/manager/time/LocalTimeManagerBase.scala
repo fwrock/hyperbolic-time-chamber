@@ -80,6 +80,11 @@ abstract class LocalTimeManagerBase(
   private val registeredIdentities: mutable.Map[Long, Identify] = mutable.Map()
   private val dispatchGeneration: mutable.Map[Long, Long] = mutable.Map().withDefaultValue(0L)
 
+  /** Actors whose latest accepted `FinishEvent` said they are waiting for a reply
+    * ([[FinishEvent.awaitingReply]]). Not running and not scheduled, yet not finished either.
+    */
+  protected val blockedActors: mutable.Set[Long] = mutable.Set.empty
+
   /** Monotonically non-decreasing under every code path except one: a `ScheduleEvent` with
     * `resyncAfterRollback = true` (sent only by `SimulationBaseActor.resyncScheduleAfterRollback()`
     * after a live Time Warp rollback) unconditionally sets it to `event.tick`. No other code may
@@ -249,6 +254,10 @@ abstract class LocalTimeManagerBase(
         return
       }
 
+      val blockedSetChanged =
+        if (finish.awaitingReply) blockedActors.add(finish.identify.id)
+        else blockedActors.remove(finish.identify.id)
+
       finish.scheduleTick.foreach {
         tickStr =>
           val tick = tickStr.toLong
@@ -311,7 +320,9 @@ abstract class LocalTimeManagerBase(
         * routees frozen with `isIdle=false` forever, `runningEvents`/`scheduledActors` genuinely
         * empty, no further `[TW-TRACE] dispatch_*` activity at all.
         */
-      if (wasProcessingSpontaneousEvent || finish.scheduleTick.isDefined) {
+      // A change in who is blocked changes what this LTM reports (isIdle), so it must report even when
+      // nothing was running or scheduled; otherwise the GTM keeps acting on the previous report.
+      if (wasProcessingSpontaneousEvent || finish.scheduleTick.isDefined || blockedSetChanged) {
         advanceToNextTick()
       }
     } else {
@@ -335,6 +346,7 @@ abstract class LocalTimeManagerBase(
     registeredActors.remove(identity.id)
     dispatchGeneration.remove(identity.id)
     highestProcessedTick.remove(identity.id)
+    blockedActors.remove(identity.id)
     val removedIdentity = registeredIdentities.remove(identity.id)
     // Prometheus: decrement active actors gauge
     removedIdentity.foreach {
