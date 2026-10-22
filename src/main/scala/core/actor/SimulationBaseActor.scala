@@ -5,7 +5,7 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
-import core.actor.rollback.RollbackHistoryHandler
+import core.actor.rollback.{ EventReadJournal, RecordedRead, RollbackHistoryHandler }
 import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
@@ -18,7 +18,6 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
-import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
 import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
@@ -94,18 +93,13 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
 
-  // --- Time Warp (docs/TIME_WARP_DESIGN.md) --- everything below is gated behind
-  // `currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, which nothing sets yet (see the
-  // design doc's step-4/5 implementation log) — under every currently reachable configuration
-  // (i.e. conservative mode, always, today) `rollbackHandler` is never touched, so its `lazy`
-  // initializer never runs and this costs conservative-mode actors nothing.
-  //
   // This actor's own monotonically increasing processed-event counter — the `seq` RollbackHistoryHandler
   // orders its log by (see LoggedEvent.seq's doc). A plain actor-local `var`, not `state`: safe per
   // CLAUDE.md's rule for actor-local mutable fields, since it holds no reply obligation and is
   // cheap to recompute/reset — it only orders this actor's own already-in-memory replay log, not
   // anything another actor is waiting to hear back about.
   private var processedEventSeq: Long = 0L
+  private var currentEventSeq: Long = 0L
 
   // This actor's own monotonically increasing SEND counter (docs/TIME_WARP_DESIGN.md §10's
   // MessageId.seq — a distinct counter from processedEventSeq above, which orders processed
@@ -122,15 +116,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   // isTimeWarp (see sendMessageTo), so this stays empty and unused for conservative-mode actors.
   private val currentEventSentMessages: mutable.ArrayBuffer[core.actor.rollback.SentMessage] = mutable.ArrayBuffer.empty
 
-  // Every DynamicWeightCache.getWeight(linkId, ...) result observed while the CURRENTLY-processing
-  // event runs (docs/TIME_WARP_DESIGN.md's model-level audit, third finding) -- flushed into that
-  // event's RollbackHistoryHandler log entry (LoggedEvent.dynamicWeightReads) once processing
-  // finishes, so a future replay of this exact event can force the same reads via
-  // DynamicWeightCache.withOverride instead of hitting the live, real-time-shifted cache. Cleared at
-  // the start of handleSpontaneous/handleInteractWith; only ever populated when isTimeWarp (the
-  // whole event body runs inside DynamicWeightCache.withRecording(this) in that case), so this stays
-  // empty and unused for conservative-mode actors.
-  private val currentEventDynamicWeightReads: mutable.Map[String, Double] = mutable.Map.empty
+  // A sequence preserves repeated reads of the same external input within one event.
+  private val currentEventReads: mutable.ArrayBuffer[RecordedRead] = mutable.ArrayBuffer.empty
+
+  // Transport cancellation survives a state rewind, including when the positive arrives later.
+  private val cancelledMessages: mutable.Set[core.actor.rollback.MessageId] = mutable.Set.empty
+  private val processedMessages: mutable.Set[core.actor.rollback.MessageId] = mutable.Set.empty
 
   // What the CURRENTLY-processing event asked the time manager to schedule for this actor: None if
   // it never asked, Some(None) if it finished with no next tick (which clears every pending tick on
@@ -145,24 +136,22 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var replaySendSeqs: Iterator[Long] = Iterator.empty
   private var replayLastSendSeq: Long = -1L
 
-  // Time Warp only (isTimeWarp-gated, zero cost under conservative mode). Tracks "am I genuinely
-  // still waiting for a specific reply" OUTSIDE of `state`, specifically so a checkpoint restore
-  // (RollbackHistoryHandler.rollbackTo) cannot silently wipe it the way state.status can be wiped.
+  // Both policies need this to distinguish an idle actor from an unresolved interaction.
+  // Tracks "am I genuinely still waiting for a specific reply" alongside `state`.
   // Part of the migration snapshot, so a checkpoint restore plus replay rebuilds it exactly as it was
   // at the restored point: waits registered by undone events disappear, and a wait an undone event
   // consumed comes back. A fresh registerAwaitedReply for the same key supersedes (overwrites) any
   // prior entry, so "stale" means "a newer request for the same thing has since been sent."
   private val outstandingAwaitedReplies: mutable.Map[String, core.actor.AwaitedReply] = mutable.Map.empty
 
-  /** No-op unless [[isTimeWarp]]. Overwrites any existing entry for `key` -- see
+  /** Overwrites any existing entry for `key` -- see
     * [[outstandingAwaitedReplies]]'s doc for why a fresh registration superseding a stale one is
     * the intended behavior, not a bug.
     */
-  protected def registerAwaitedReply(key: String, kind: String): Unit =
-    if (isTimeWarp) {
-      val sendSeq = if (isReplaying && replayLastSendSeq >= 0L) replayLastSendSeq else messageSendSeq
-      outstandingAwaitedReplies.put(key, core.actor.AwaitedReply(kind = kind, sentAtTick = currentTick, sendSeq = sendSeq))
-    }
+  protected def registerAwaitedReply(key: String, kind: String): Unit = {
+    val sendSeq = if (isReplaying && replayLastSendSeq >= 0L) replayLastSendSeq else messageSendSeq
+    outstandingAwaitedReplies.put(key, core.actor.AwaitedReply(kind = kind, sentAtTick = currentTick, sendSeq = sendSeq))
+  }
 
   /** Under [[isTimeWarp]], true iff an entry is registered for `key` with a matching `kind` AND
     * `requestSeq` matches that entry's `sendSeq` -- i.e. this reply belongs to the CURRENTLY
@@ -199,19 +188,11 @@ abstract class SimulationBaseActor[T <: BaseState](
   // undoes has already reported data for a branch that turns out never to have happened — silently,
   // since nothing about rollbackTo touches the reporter pipeline. Only ever populated when
   // isTimeWarp (see report(event)), so this stays empty and unused for conservative-mode actors.
-  private val reportBuffer: mutable.ArrayBuffer[(ReportEvent, ActorRef)] = mutable.ArrayBuffer.empty
+  private final case class BufferedReport(event: ReportEvent, target: ActorRef, eventSeq: Long)
+  private val reportBuffer: mutable.ArrayBuffer[BufferedReport] = mutable.ArrayBuffer.empty
 
-  /** True while [[replayLoggedEvent]] is re-executing an already-processed event's business logic
-    * against a just-restored checkpoint, as opposed to a live dispatch. The one flag that makes
-    * replay safe: [[onFinishSpontaneous]] and [[scheduleEvent]] both check it and skip signaling
-    * the time manager while it's set (see each method's own doc for why), while `sendMessageTo` is
-    * deliberately left unguarded — `docs/TIME_WARP_DESIGN.md` §10 wants replay to actually resend
-    * messages, each getting a fresh `MessageId`, so the *previous* (now-invalidated) sends can be
-    * anti-messaged instead. Never true outside of [[replayLoggedEvent]]'s own call stack, and
-    * [[replayLoggedEvent]] is only ever invoked by [[rollbackHandler]]'s `replayEventFn`, itself
-    * only reachable from `RollbackHistoryHandler.rollbackTo` — which nothing calls yet (see
-    * `docs/TIME_WARP_DESIGN.md`'s implementation log for this step), so this is provably always
-    * `false` today, same as [[isTimeWarp]].
+  /** Coast-forward reconstructs a surviving prefix without repeating its external effects.
+    * Undone events run live again with fresh send identities after cancellation.
     */
   private var isReplaying: Boolean = false
 
@@ -240,30 +221,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     * both are meaningless here: nothing is dispatching a *new* event for the time manager to track,
     * and this event is already in the log being replayed, not a fresh one to log again.
     *
-    * Known scope limit: `sendMessageTo` calls made during this replay populate
-    * [[currentEventSentMessages]] same as a live dispatch, but nothing here flushes that back onto
-    * the original `LoggedEvent` being replayed (unlike a live dispatch, which flushes it via
-    * `recordProcessedEvent`) — so if *this exact event* is ever rolled back a second time, its
-    * anti-message cascade would use the sends from its *first* dispatch, not this replay's. A real
-    * gap for a repeated-rollback-of-the-same-event edge case, not designed further here; the
-    * common single-rollback path this step's tests exercise is unaffected. The same caveat applies
-    * to [[currentEventDynamicWeightReads]] below — a second rollback of this same replayed event
-    * would replay it a third time using the ORIGINAL live dispatch's recorded reads (from
-    * `logged.dynamicWeightReads`, untouched here), not this replay's own — same deeper-nested-
-    * rollback edge case, not this event type's own new gap.
-    *
-    * The whole business-logic call is wrapped in `DynamicWeightCache.withOverride(logged.
-    * dynamicWeightReads)` (`docs/TIME_WARP_DESIGN.md`'s model-level audit, third finding) so any
-    * `getWeight` read inside `actSpontaneous`/`actInteractWith` — however deeply nested, e.g. inside
-    * a route calculation — reproduces exactly what the original live dispatch saw, instead of
-    * whatever the live dynamic-weight cache holds by the time this replay runs.
+    * [[EventReadJournal]] reproduces the original event's external observations in read order.
+    * A replay failure propagates: continuing with partially reconstructed state is incorrect.
     */
   private def replayLoggedEvent(logged: core.actor.rollback.LoggedEvent): Unit = {
     isReplaying = true
     replaySendSeqs = logged.sentMessages.iterator.map(_.messageId.seq)
     replayLastSendSeq = -1L
     try
-      DynamicWeightCache.withOverride(logged.dynamicWeightReads) {
+      EventReadJournal.withReplay(logged.recordedReads) {
         logged.event match {
           case spontaneous: SpontaneousEvent =>
             currentTick = spontaneous.tick
@@ -283,7 +249,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     catch
       case e: Throwable =>
         logError(s"Exception replaying a logged event for $getEntityId: ${e.getMessage}")
-        e.printStackTrace()
+        throw e
     finally {
       isReplaying = false
       replaySendSeqs = Iterator.empty
@@ -291,9 +257,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
   }
 
-  /** True only under Time Warp — the one gate every new-but-not-yet-safe-to-activate call site
-    * below checks before touching [[rollbackHandler]], so conservative mode is provably unaffected.
-    */
+  /** The synchronization mode is selected for the whole simulation run. */
   private def isTimeWarp: Boolean = currentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
 
   /** Hook called from [[rollbackAndCascade]] (Time Warp only) right after undone state is
@@ -335,9 +299,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     * to the same "undo back to a tick, cascade what that undoes" operation
     * `RollbackHistoryHandler.rollbackTo` already implements.
     */
-  private def rollbackAndCascade(targetTick: Tick): Seq[core.actor.rollback.LoggedEvent] = {
+  private def rollbackAndCascade(
+    targetTick: Tick,
+    rollbackFn: () => Seq[core.actor.rollback.LoggedEvent],
+    resyncSchedule: Boolean = true
+  ): Seq[core.actor.rollback.LoggedEvent] = {
     val currentTickBeforeRestore = currentTick
-    val undone = rollbackHandler.rollbackTo(targetTick)
+    val undone = rollbackFn()
+    undone.iterator.map(_.event).collect { case e: ActorInteractionEvent => e.messageId }
+      .foreach(processedMessages.remove)
     if (undone.isEmpty) {
       // #timewarp-trace
       core.actor.trace.TimeWarpTrace.trace(
@@ -359,18 +329,17 @@ abstract class SimulationBaseActor[T <: BaseState](
       s"[TW-ROLLBACK] $getEntityId rolling back to targetTick=$targetTick " +
         s"(currentTick was $currentTickBeforeRestore, undoing ${undone.size} logged event(s))"
     )
-    // §4: any report() buffered for a tick this rollback just undid must be dropped, not flushed
-    // later — it describes state that turned out never to have happened. Reports already flushed
-    // (tick < targetTick, or a tick that already passed GVT before this rollback) are unaffected;
-    // they were only ever flushed once GVT made them irrevocable in the first place.
+    // Cancellation can preserve an earlier event at the same tick, so effects follow execution
+    // identity rather than tick alone. Already committed output still requires a proven GVT.
     if (isTimeWarp) {
-      val (kept, discarded) = reportBuffer.partition(_._1.tick < targetTick)
+      val firstUndoneSeq = undone.iterator.map(_.seq).min
+      val (kept, discarded) = reportBuffer.partition(_.eventSeq < firstUndoneSeq)
       if (discarded.nonEmpty) {
         reportBuffer.clear()
         reportBuffer ++= kept
         discarded.foreach {
-          case (event, _) =>
-            if (event.label != null) ActorMetrics.reportDiscardedByRollback.labels(event.label).inc()
+          case buffered =>
+            if (buffered.event.label != null) ActorMetrics.reportDiscardedByRollback.labels(buffered.event.label).inc()
         }
       }
     }
@@ -385,7 +354,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"undoneTicks=${undone.map(_.tick).sorted.mkString(",")} retractedMessageIds=${retracted.map(_.messageId).mkString(",")}"
     )
     retracted.foreach(sendAntiMessage)
-    resyncScheduleAfterRollback()
+    if (resyncSchedule) resyncScheduleAfterRollback()
     undone
   }
 
@@ -605,6 +574,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The current time manager type name
     */
   protected def getCurrentTimeManagerType: String = currentTimeManagerType
+
+  /** Namespaced, versioned model metadata for behavior-affecting fields outside `state`.
+    * Prefer `state`; these hooks let models compose adapters without extending core schemas.
+    */
+  protected def captureModelSnapshot(): Map[String, String] = Map.empty
+
+  protected def restoreModelSnapshot(metadata: Map[String, String]): Unit = ()
   
   /** Builds a migration snapshot that includes simulation-specific metadata in addition to the base
     * actor state.
@@ -644,6 +620,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       dependencyTypes = depTypes,
       dependencyResourceIds = depResourceIds,
       dependencyActorTypes = depActorTypes,
+      modelSnapshot = captureModelSnapshot(),
       awaitedReplies = outstandingAwaitedReplies.iterator.map {
         case (key, r) => key -> s"${r.kind}|${r.sentAtTick}|${r.sendSeq}"
       }.toMap
@@ -669,6 +646,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
+    restoreModelSnapshot(snapshot.modelSnapshot)
 
     outstandingAwaitedReplies.clear()
     snapshot.awaitedReplies.foreach {
@@ -681,8 +659,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         }
     }
 
+    relationships.clear()
     if (snapshot.dependencyIds.nonEmpty) {
-      relationships.clear()
       snapshot.dependencyIds.foreach {
         case (key, id) =>
           val classType = snapshot.dependencyTypes.getOrElse(key, "")
@@ -818,6 +796,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     relationships.clear()
     relationships ++= event.data.relationships
     reporters = event.data.reporters
+    // The rollback floor must include model initialization, including a seeded plan cursor.
+    onFinishInitialize()
     if (state != null) {
       startTick = state.getStartTick
       if (state.isSetScheduleOnTimeManager) {
@@ -866,7 +846,6 @@ abstract class SimulationBaseActor[T <: BaseState](
           e
         )
     }
-    onFinishInitialize()
   }
 
   /** Return true to opt in to the post-load registration phase. The actor will receive
@@ -1028,6 +1007,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
+    val undoneInteractions =
+      if (isTimeWarp && state != null && event.tick < currentTick) {
+        // This dispatch already owns a TM slot; its FinishEvent replaces the undone schedule.
+        interactionsToReprocess(
+          rollbackAndCascade(event.tick, () => rollbackHandler.rollbackTo(event.tick), resyncSchedule = false),
+          annihilated = None
+        )
+      } else Seq.empty
     currentTick = event.tick
     currentTimeManager = event.actorRef
     currentGeneration = event.generation
@@ -1052,12 +1039,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
     _spontaneousFinishSent = false
     if (isTimeWarp) {
+      currentEventSeq = processedEventSeq + 1L
       currentEventSentMessages.clear()
-      currentEventDynamicWeightReads.clear()
+      currentEventReads.clear()
       currentEventScheduleOutcome = None
     }
     try
-      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actSpontaneous(event))
+      if (isTimeWarp) EventReadJournal.withRecording(currentEventReads)(actSpontaneous(event))
       else actSpontaneous(event)
     catch
       case e: Throwable =>
@@ -1080,10 +1068,12 @@ abstract class SimulationBaseActor[T <: BaseState](
         tick = currentTick,
         seq = processedEventSeq,
         sentMessages = currentEventSentMessages.toSeq,
-        dynamicWeightReads = currentEventDynamicWeightReads.toMap,
+        recordedReads = currentEventReads.toVector,
         scheduleOutcome = currentEventScheduleOutcome
       )
+      currentEventSeq = 0L
     }
+    undoneInteractions.foreach(handleInteractWith)
   }
 
   /** Called when the actor receives a spontaneous event from the time manager. Override this method
@@ -1107,21 +1097,19 @@ abstract class SimulationBaseActor[T <: BaseState](
     // found (already fossil-collected below GVT, or this actor was never the receiver -- shouldn't
     // happen but isn't fatal either way), there's nothing left to undo; log and move on.
     if (isTimeWarp && event.isAntiMessage) {
+      cancelledMessages.add(event.messageId)
       findLoggedEventForMessage(event.messageId) match {
         case Some(logged) =>
           ActorMetrics.antiMessageRollbackTriggered.labels(cachedActorTypeLabel).inc()
-          val undone = rollbackAndCascade(logged.tick)
+          val undone = rollbackAndCascade(logged.tick, () => rollbackHandler.rollbackFrom(logged.seq))
           interactionsToReprocess(undone, annihilated = Some(event.messageId)).foreach(handleInteractWith)
         case None =>
-          // Not necessarily "pruned" -- RollbackHistoryHandler.pruneBelow is dead code today
-          // (never called), so GVT-based fossil collection never actually happens. This branch
-          // means either an earlier overlapping rollback already retracted/removed the logged
-          // event this anti-message refers to, or a genuine protocol anomaly.
-          logWarn(
-            s"$getEntityId: anti-message for unknown messageId=${event.messageId} " +
-              s"(already retracted by an earlier overlapping rollback, or a genuine protocol anomaly)"
-          )
+          logDebug(s"$getEntityId: retaining cancellation for messageId=${event.messageId}")
       }
+      return
+    }
+
+    if (isTimeWarp && (cancelledMessages.contains(event.messageId) || processedMessages.contains(event.messageId))) {
       return
     }
 
@@ -1165,19 +1153,22 @@ abstract class SimulationBaseActor[T <: BaseState](
       ActorMetrics.stragglerRollbackDistanceTicks
         .labels(cachedActorTypeLabel)
         .observe((currentTick - event.tick).toDouble)
-      undoneInteractions = interactionsToReprocess(rollbackAndCascade(event.tick), annihilated = None)
+      undoneInteractions = interactionsToReprocess(
+        rollbackAndCascade(event.tick, () => rollbackHandler.rollbackAfter(event.tick)), annihilated = None
+      )
     }
 
     if (event.tick > currentTick) {
       currentTick = event.tick
     }
     if (isTimeWarp) {
+      currentEventSeq = processedEventSeq + 1L
       currentEventSentMessages.clear()
-      currentEventDynamicWeightReads.clear()
+      currentEventReads.clear()
       currentEventScheduleOutcome = None
     }
     try
-      if (isTimeWarp) DynamicWeightCache.withRecording(currentEventDynamicWeightReads)(actInteractWith(event))
+      if (isTimeWarp) EventReadJournal.withRecording(currentEventReads)(actInteractWith(event))
       else actInteractWith(event)
     catch
       case e: Exception =>
@@ -1193,9 +1184,11 @@ abstract class SimulationBaseActor[T <: BaseState](
         tick = currentTick,
         seq = processedEventSeq,
         sentMessages = currentEventSentMessages.toSeq,
-        dynamicWeightReads = currentEventDynamicWeightReads.toMap,
+        recordedReads = currentEventReads.toVector,
         scheduleOutcome = currentEventScheduleOutcome
       )
+      processedMessages.add(event.messageId)
+      currentEventSeq = 0L
     }
     // After the straggler, so they run in causal order. Only the straggler branch fills this.
     undoneInteractions.foreach(handleInteractWith)
@@ -1408,7 +1401,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       timeManager = currentTimeManager,
       destruct = destruct,
       generation = currentGeneration,
-      awaitingReply = isTimeWarp && scheduleTick.isEmpty && outstandingAwaitedReplies.nonEmpty
+      awaitingReply = scheduleTick.isEmpty && outstandingAwaitedReplies.nonEmpty
     )
   }
 
@@ -1493,8 +1486,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
-    // The surviving event's original report is still in reportBuffer (rollback only drops entries
-    // at or after the target tick); replaying it again would emit it twice.
+    // The surviving event's original report is still buffered; replaying it would emit it twice.
     if (isReplaying) return
     if (reporters.isEmpty) return
     if (event.label != null) {
@@ -1503,9 +1495,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     val stateReporter = state.getReporterType
     val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType
     val target = if (reporters.contains(reportType)) reporters(reportType) else reporters(cachedDefaultReportType)
-    if (isTimeWarp) {
-      reportBuffer += ((event, target))
-    } else {
+    reportToTarget(event, target)
+  }
+
+  private def reportToTarget(event: ReportEvent, target: ActorRef): Unit = {
+    if (isReplaying) return
+    if (isTimeWarp) reportBuffer += BufferedReport(event, target, currentEventSeq)
+    else {
       if (event.label != null) ActorMetrics.reportFlushed.labels(event.label).inc()
       target ! event
     }
@@ -1519,14 +1515,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def flushBufferedReportsUpTo(gvt: Tick): Unit =
     if (reportBuffer.nonEmpty) {
-      val (ready, pending) = reportBuffer.partition(_._1.tick <= gvt)
+      val (ready, pending) = reportBuffer.partition(_.event.tick <= gvt)
       if (ready.nonEmpty) {
         reportBuffer.clear()
         reportBuffer ++= pending
         ready.foreach {
-          case (event, target) =>
-            if (event.label != null) ActorMetrics.reportFlushed.labels(event.label).inc()
-            target ! event
+          case buffered =>
+            if (buffered.event.label != null) ActorMetrics.reportFlushed.labels(buffered.event.label).inc()
+            buffered.target ! buffered.event
         }
       }
     }
@@ -1555,13 +1551,13 @@ abstract class SimulationBaseActor[T <: BaseState](
   ): Unit =
     reporters.get(reportType).foreach {
       reporter =>
-        reporter ! ReportEvent(
+        reportToTarget(ReportEvent(
           entityId = entityId,
           tick = currentTick,
           lamportTick = getLamportClock,
           data = data,
           label = label
-        )
+        ), reporter)
     }
 
   /** Reports to the default strategy (e.g. Parquet) and mirrors the same payload to the `kafka`

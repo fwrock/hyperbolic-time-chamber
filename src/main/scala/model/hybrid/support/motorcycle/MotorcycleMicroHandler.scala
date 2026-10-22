@@ -136,6 +136,7 @@ class MotorcycleMicroHandler(
     logDebugFn(s"Motorcycle leaving MICRO link ${data.linkId}")
     val travelTime = getLinkEntryTickFn().map(e => currentTickFn() - e).getOrElse(0L)
 
+    state.movableLinkExitReported = true
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane =

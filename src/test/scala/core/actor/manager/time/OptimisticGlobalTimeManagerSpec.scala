@@ -58,11 +58,12 @@ class OptimisticGlobalTimeManagerSpec extends AnyFlatSpec with Matchers with Bef
       ) {
     override def onStart(): Unit = ()
     def testSetPool(ref: ActorRef): Unit = timeManagersPool = ref
+    def testRecoveryFinished: Boolean = recoveryFinished
   }
 
   private def newGtm(): TestActorRef[TestOptimisticGlobalTimeManager] = {
     val ref = TestActorRef(new TestOptimisticGlobalTimeManager)
-    Thread.sleep(1000)
+    TestProbe().awaitAssert(ref.underlyingActor.testRecoveryFinished shouldBe true, 5.seconds, 10.millis)
     ref
   }
 

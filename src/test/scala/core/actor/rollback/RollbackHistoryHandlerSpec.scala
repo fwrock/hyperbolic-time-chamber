@@ -130,6 +130,50 @@ class RollbackHistoryHandlerSpec extends AnyFlatSpec with Matchers {
     handler.checkpointCount shouldBe 1
   }
 
+  it should "undo a complete processing suffix when the history contains a delayed spontaneous event" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor)
+    handler.initialize(startTick = 0L)
+    record(handler, actor, tick = 1L, seq = 1L, label = "prefix")
+    record(handler, actor, tick = 10L, seq = 2L, label = "future-interaction")
+    record(handler, actor, tick = 5L, seq = 3L, label = "delayed-spontaneous")
+
+    handler.rollbackTo(8L).map(_.seq) shouldBe Seq(2L, 3L)
+    actor.counter shouldBe 1
+    handler.logSize shouldBe 1
+  }
+
+  "rollbackAfter" should "preserve a same-tick cause while undoing later processing" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor)
+    handler.initialize(startTick = 0L)
+    record(handler, actor, tick = 10L, seq = 1L, label = "request")
+    record(handler, actor, tick = 20L, seq = 2L, label = "future")
+
+    handler.rollbackAfter(10L).map(_.seq) shouldBe Seq(2L)
+    actor.counter shouldBe 1
+    handler.logSize shouldBe 1
+    handler.rollbackAfter(10L) shouldBe empty
+  }
+
+  for (interval <- Seq(1, 2, 50)) {
+    "rollbackFrom" should s"retain earlier same-tick events with checkpoint interval $interval" in {
+      val actor = new FakeActor
+      val handler = newHandler(actor, interval)
+      handler.initialize(startTick = 0L)
+      record(handler, actor, tick = 10L, seq = 1L, label = "first")
+      record(handler, actor, tick = 10L, seq = 2L, label = "second")
+      record(handler, actor, tick = 10L, seq = 3L, label = "cancelled")
+      record(handler, actor, tick = 11L, seq = 4L, label = "later")
+
+      handler.rollbackFrom(3L).map(_.seq) shouldBe Seq(3L, 4L)
+      actor.counter shouldBe 2
+      handler.logSize shouldBe 2
+      handler.rollbackFrom(2L).map(_.seq) shouldBe Seq(2L)
+      actor.counter shouldBe 1
+    }
+  }
+
   "pruneBelow" should "discard checkpoints/log entries strictly before the retained floor" in {
     val actor = new FakeActor
     val handler = newHandler(actor, checkpointInterval = 2)
@@ -145,6 +189,19 @@ class RollbackHistoryHandlerSpec extends AnyFlatSpec with Matchers {
     // floor(seq=0) is gone, seq=4/6 checkpoints untouched.
     handler.checkpointCount shouldBe 3
     handler.logSize shouldBe 5 // events with seq 2,3,4,5,6 remain (seq >= floor's seq=2)
+  }
+
+  it should "retain a checkpoint before GVT when a checkpoint at GVT already contains events to undo" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor, checkpointInterval = 2)
+    handler.initialize(startTick = 0L)
+    record(handler, actor, tick = 1L, seq = 1L, label = "before")
+    record(handler, actor, tick = 2L, seq = 2L, label = "at-gvt-first")
+    record(handler, actor, tick = 2L, seq = 3L, label = "at-gvt-second")
+    handler.pruneBelow(gvt = 2L)
+
+    handler.rollbackTo(targetTick = 2L).map(_.seq) shouldBe Seq(2L, 3L)
+    actor.counter shouldBe 1
   }
 
   it should "never discard the floor needed for a rollback still targeting exactly gvt" in {

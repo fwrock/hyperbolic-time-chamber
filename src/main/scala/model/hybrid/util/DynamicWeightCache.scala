@@ -3,6 +3,7 @@ package org.interscity.htc.model.hybrid.util
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
+import org.interscity.htc.core.actor.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.util.cache.{ DisabledCacheStrategy, InMemoryCacheStrategy, KafkaCacheStrategy, WeightCacheStrategy }
 
 import java.util.concurrent.atomic.AtomicLong
@@ -119,8 +120,9 @@ object DynamicWeightCache {
   // than the one that was actually causally communicated to other actors (LinkInfoData already sent
   // along the ORIGINAL route). Fixed with a ThreadLocal recording/override hook rather than
   // threading parameters through every call site (CompactGraph's A*, CityMapUtil's congestion
-  // check, and any future caller) -- `SimulationBaseActor` wraps a live dispatch in `withRecording`
-  // and a replay in `withOverride`, transparently covering whatever `getWeight` calls happen inside,
+  // check, and any future caller). SimulationBaseActor now uses the generic EventReadJournal
+  // around each actor event. The legacy helpers below remain for standalone cache scopes,
+  // while the generic journal covers whatever `getWeight` calls happen inside an actor event,
   // wherever they are, without CompactGraph/GPSUtil/the model actors needing to know Time Warp
   // exists. Safe across concurrently-running actors on different threads by construction (each
   // thread's Pekko dispatcher runs one actor's message to completion before picking up the next, so
@@ -154,7 +156,12 @@ object DynamicWeightCache {
     finally overrideMap.set(previous)
   }
 
-  def getWeight(linkId: Long, staticWeight: Double): Double = {
+  def getWeight(linkId: Long, staticWeight: Double): Double =
+    EventReadJournal.read(s"hybrid.routing.weight:$linkId") {
+      readLiveWeight(linkId, staticWeight)
+    }
+
+  private def readLiveWeight(linkId: Long, staticWeight: Double): Double = {
     val linkIdKey = linkId.toString
     val activeOverride = overrideMap.get()
     val (w, wasDynamic) =

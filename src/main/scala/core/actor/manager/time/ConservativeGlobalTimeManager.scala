@@ -317,7 +317,8 @@ class ConservativeGlobalTimeManager(
       LocalTimeManagerTickInfo(
         tick = report.tick,
         hasSchedule = report.hasScheduled,
-        isProcessed = true
+        isProcessed = true,
+        hasPendingWork = report.hasPendingWork
       )
     )
 
@@ -379,6 +380,10 @@ class ConservativeGlobalTimeManager(
         progressiveLoadBlockedNanos = System.nanoTime()
         pendingNextTick = Some(nextLoadTick)
         requestProgressiveLoad(nextLoadTick)
+        return
+      }
+      if (localTimeManagers.values.exists(_.hasPendingWork)) {
+        gracePeriodUsed = false
         return
       }
       if (!gracePeriodUsed) {

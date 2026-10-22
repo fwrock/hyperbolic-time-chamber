@@ -28,6 +28,9 @@ abstract class MovableState(
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
 
+  // MICRO exit is proactive; the subsequent LeaveLink cleanup does not produce another reply.
+  var movableLinkExitReported: Boolean = false
+
   def getStatus: MovableStatusEnum = movableStatus
 
   def updateStatus(newStatus: MovableStatusEnum): Unit = movableStatus = newStatus

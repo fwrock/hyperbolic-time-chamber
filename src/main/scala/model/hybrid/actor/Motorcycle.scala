@@ -509,8 +509,10 @@ class Motorcycle(
     }
   }
 
-  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit =
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)
+  }
 
   private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
     microHandler.handleMicroUpdate(data, state)

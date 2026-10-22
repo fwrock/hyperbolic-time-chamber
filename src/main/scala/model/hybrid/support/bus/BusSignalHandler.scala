@@ -104,7 +104,7 @@ class BusSignalHandler(
     }
 
     // Full/WaitingCapacity is NOT a terminal reply -- see CarSignalHandler.handleLinkAccess.
-    if (isTimeWarpFn() && data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
+    if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
       val tick = currentTickFn()

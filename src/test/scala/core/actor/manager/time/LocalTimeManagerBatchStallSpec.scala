@@ -134,6 +134,40 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     }
   }
 
+  it should "report pending replies without holding runningEvents or inventing a scheduled tick" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(42L, actor)
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegister(identity, 0L)
+    parent.receiveWhile(idle = 50.millis) { case _ => () }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
+    actor.expectMsgType[SpontaneousEvent]
+
+    ltm.underlyingActor.testFinish(FinishEvent(
+      actorRef = actor.ref, identify = identity, end = 0L, timeManager = ltm,
+      generation = 1L, awaitingReply = true
+    ))
+    ltm.underlyingActor.testRunningEventIds shouldBe empty
+    ltm.underlyingActor.testScheduledTicks shouldBe empty
+    parent.fishForMessage(1.second) {
+      case report: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
+        !report.hasScheduled && report.hasPendingWork
+      case _ => false
+    }
+
+    ltm.underlyingActor.testFinish(FinishEvent(
+      actorRef = actor.ref, identify = identity, end = 1L, timeManager = ltm,
+      generation = 1L, awaitingReply = false
+    ))
+    parent.fishForMessage(1.second) {
+      case report: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
+        !report.hasScheduled && !report.hasPendingWork
+      case _ => false
+    }
+  }
+
   it should "let a fully-disengaged actor (no FinishEvent scheduleTick at all) be re-woken later via a fresh ScheduleEvent, re-notifying an idle parent -- the exact protocol BusStation/SubwayStation depend on after a dynamic-actor-spawn ack" in {
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()

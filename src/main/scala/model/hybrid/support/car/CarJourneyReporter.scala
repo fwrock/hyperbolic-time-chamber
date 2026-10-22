@@ -4,15 +4,15 @@ package model.hybrid.support.car
 import core.types.Tick
 import core.actor.trace.ActorTrace
 import org.interscity.htc.core.metrics.model.hybrid.MovableMetrics
-import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes}
+import org.interscity.htc.model.hybrid.entity.state.{CarJourneyState, CarState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Finished
 
 import scala.collection.mutable
 
 /** Tracks journey metrics and SUMO-compatible trip statistics for a Car actor.
   *
-  * Owns all SUMO TripInfo variables and provides finishJourney / reportSumoTripInfo
-  * so Car.scala stays free of tracking boilerplate.
+  * Reads journey data from checkpointed model state through a callback, so a restored actor
+  * cannot retain physics inputs or completion guards from its discarded future.
   *
   * @param reportFn       Actor report callback
   * @param entityIdFn     Supplier for the car's entity ID
@@ -29,27 +29,57 @@ class CarJourneyReporter(
   private val tripOriginFn: () => Option[Long],
   private val tripDestFn: () => Option[Long],
   private val tripStartTickFn: () => Option[Tick],
-  private val driverAttrsFn: () => DriverAttributes
+  private val driverAttrsFn: () => DriverAttributes,
+  private val journeyStateFn: () => CarJourneyState
 ) {
 
-  private var journeyFinishedReported: Boolean = false
+  private def journeyFinishedReported: Boolean = journeyStateFn().journeyFinishedReported
+  private def journeyFinishedReported_=(value: Boolean): Unit = journeyStateFn().journeyFinishedReported = value
 
-  // SUMO TripInfo variables
-  var sumoDepartTick: Option[Tick]  = None
-  var sumoDepartSpeed: Double        = 0.0
-  var sumoArrivalSpeed: Double       = 0.0
-  var sumoDepartLane: Option[String] = None
-  var sumoDepartPos: Double          = 0.0
-  var sumoArrivalLane: Option[String] = None
-  var sumoArrivalPos: Double          = 0.0
-  var sumoWaitingTimeSeconds: Double  = 0.0
-  var sumoWaitingCount: Int           = 0
-  var sumoStopTimeSeconds: Double     = 0.0
-  var sumoIdealTravelTimeSeconds: Double      = 0.0
-  var sumoCurrentMicroTimeStepSeconds: Double = 1.0
-  var sumoIsHalting: Boolean = false
-  var sumoRerouteNo: Int     = 0
-  private var sumoTripInfoReported: Boolean = false
+  def sumoDepartTick: Option[Tick] = journeyStateFn().sumoDepartTick
+  def sumoDepartTick_=(value: Option[Tick]): Unit = journeyStateFn().sumoDepartTick = value
+
+  def sumoDepartSpeed: Double = journeyStateFn().sumoDepartSpeed
+  def sumoDepartSpeed_=(value: Double): Unit = journeyStateFn().sumoDepartSpeed = value
+
+  def sumoArrivalSpeed: Double = journeyStateFn().sumoArrivalSpeed
+  def sumoArrivalSpeed_=(value: Double): Unit = journeyStateFn().sumoArrivalSpeed = value
+
+  def sumoDepartLane: Option[String] = journeyStateFn().sumoDepartLane
+  def sumoDepartLane_=(value: Option[String]): Unit = journeyStateFn().sumoDepartLane = value
+
+  def sumoDepartPos: Double = journeyStateFn().sumoDepartPos
+  def sumoDepartPos_=(value: Double): Unit = journeyStateFn().sumoDepartPos = value
+
+  def sumoArrivalLane: Option[String] = journeyStateFn().sumoArrivalLane
+  def sumoArrivalLane_=(value: Option[String]): Unit = journeyStateFn().sumoArrivalLane = value
+
+  def sumoArrivalPos: Double = journeyStateFn().sumoArrivalPos
+  def sumoArrivalPos_=(value: Double): Unit = journeyStateFn().sumoArrivalPos = value
+
+  def sumoWaitingTimeSeconds: Double = journeyStateFn().sumoWaitingTimeSeconds
+  def sumoWaitingTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoWaitingTimeSeconds = value
+
+  def sumoWaitingCount: Int = journeyStateFn().sumoWaitingCount
+  def sumoWaitingCount_=(value: Int): Unit = journeyStateFn().sumoWaitingCount = value
+
+  def sumoStopTimeSeconds: Double = journeyStateFn().sumoStopTimeSeconds
+  def sumoStopTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoStopTimeSeconds = value
+
+  def sumoIdealTravelTimeSeconds: Double = journeyStateFn().sumoIdealTravelTimeSeconds
+  def sumoIdealTravelTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoIdealTravelTimeSeconds = value
+
+  def sumoCurrentMicroTimeStepSeconds: Double = journeyStateFn().sumoCurrentMicroTimeStepSeconds
+  def sumoCurrentMicroTimeStepSeconds_=(value: Double): Unit = journeyStateFn().sumoCurrentMicroTimeStepSeconds = value
+
+  def sumoIsHalting: Boolean = journeyStateFn().sumoIsHalting
+  def sumoIsHalting_=(value: Boolean): Unit = journeyStateFn().sumoIsHalting = value
+
+  def sumoRerouteNo: Int = journeyStateFn().sumoRerouteNo
+  def sumoRerouteNo_=(value: Int): Unit = journeyStateFn().sumoRerouteNo = value
+
+  private def sumoTripInfoReported: Boolean = journeyStateFn().sumoTripInfoReported
+  private def sumoTripInfoReported_=(value: Boolean): Unit = journeyStateFn().sumoTripInfoReported = value
 
   def reset(): Unit = {
     journeyFinishedReported         = false
@@ -70,21 +100,7 @@ class CarJourneyReporter(
     sumoTripInfoReported            = false
   }
 
-  /** `journeyFinishedReported`/`sumoTripInfoReported` are actor-local, not `state` -- a Time Warp
-    * rollback restores `state` but never touches them. If the trip's real completion already fired
-    * once (setting these `true`) before a rollback undoes back to before that point, replay
-    * re-reaching the same (or now-corrected) completion finds the guard already tripped and the
-    * report is silently dropped forever -- the actual root cause of `journey_completed`/
-    * `sumo_tripinfo` being almost entirely missing from Time Warp output (see docs/KNOWN_GAPS.md,
-    * found 2026-09-11). Unlike `reset()`, this must NOT clear the accumulated SUMO metrics
-    * (`sumoDepartTick` etc.) -- those describe the surviving, not-undone portion of the current
-    * trip and must not be wiped just because some later part of it is being replayed. Called from
-    * the owning actor's `onRollbackDiscardPending` on every rollback, unconditionally: safe because
-    * if the completion this guards was NOT among the undone events (it already happened at a tick
-    * before the rollback's target), nothing in the replay can call `finishJourney`/
-    * `reportSumoTripInfo` again for that same, already-finished trip -- there is no earlier logged
-    * event left to replay that would do so.
-    */
+  /** Explicit reset for callers discarding completion without restoring a state snapshot. */
   def clearCompletionGuards(): Unit = {
     journeyFinishedReported = false
     sumoTripInfoReported    = false

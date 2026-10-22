@@ -128,7 +128,7 @@ class CarSignalHandler(
     // key -- consuming here would make that later, genuinely-awaited reply look stale. Every other
     // branch below resolves the wait (self-schedules via scheduleEventFn instead), so it's safe to
     // consume there.
-    if (isTimeWarpFn() && data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
+    if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
       val tick = currentTickFn()

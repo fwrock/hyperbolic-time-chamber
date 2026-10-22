@@ -292,7 +292,7 @@ class Person(
               "docs/TIME_WARP_DESIGN.md §10"
           )
         } else {
-          if (isTimeWarpMode) consumeAwaitedReply(awaitKey)
+          consumeAwaitedReply(awaitKey)
           dispatch(planManager.handleVehicleTripCompleted(state, d, currentTick))
         }
 

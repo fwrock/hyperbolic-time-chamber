@@ -438,8 +438,10 @@ class Bus(
 
   /** Handle entering MICRO link.
     */
-  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit =
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)
+  }
 
   /** Handle microscopic update.
     */

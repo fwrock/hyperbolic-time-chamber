@@ -92,7 +92,8 @@ abstract class ConservativeLocalTimeManager(
       parentManager.get ! LocalTimeReportEvent(
         tick = reportTick,
         hasScheduled = hasScheduled,
-        actorRef = self.path.toString
+        actorRef = self.path.toString,
+        hasPendingWork = runningEvents.nonEmpty || blockedActors.nonEmpty
       )
     }
 }

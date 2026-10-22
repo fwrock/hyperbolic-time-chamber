@@ -94,6 +94,25 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
   }
 
+  it should "dispatch only the earliest queued tick for each actor in one pass" in {
+    val parentProbe = TestProbe()
+    val actorProbe = TestProbe()
+    val ltm = newManager(parentProbe)
+    val identity = identityFor(42L, actorProbe)
+    ltm.underlyingActor.testRegister(identity, 1L)
+    ltm.underlyingActor.testSchedule(identity, 2L)
+    ltm.underlyingActor.testStart(0L)
+
+    actorProbe.expectMsgType[core.entity.event.SpontaneousEvent].tick shouldBe 1L
+    actorProbe.expectNoMessage(200.millis)
+    ltm.underlyingActor.testScheduledTicks shouldBe Set(2L)
+    ltm.underlyingActor.testFinish(
+      FinishEvent(actorRef = actorProbe.ref, identify = identity, end = 1L,
+        scheduleTick = Some("2"), timeManager = ltm, generation = 1L)
+    )
+    actorProbe.expectMsgType[core.entity.event.SpontaneousEvent].tick shouldBe 2L
+  }
+
   it should "report LVT via a fire-and-forget LvtReportEvent once the batch resolves, not a blocking LocalTimeReportEvent" in {
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()

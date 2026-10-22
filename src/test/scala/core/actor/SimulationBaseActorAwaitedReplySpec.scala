@@ -94,7 +94,7 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
             if (isTimeWarpMode) !isAwaitingReply("req", "Reply", event.seq)
             else state.status != "Waiting"
           if (!isStale) {
-            if (isTimeWarpMode) consumeAwaitedReply("req")
+            consumeAwaitedReply("req")
             state = state.copy(status = "Done", replies = state.replies + 1)
             scheduleEvent(currentTick)
           }
@@ -108,6 +108,7 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
     def testInitializeRollback(): Unit = rollbackHandler.initialize(startTick)
     def testStatus: String = state.status
     def testReplies: Int = state.replies
+    def testHasReplyObligation(key: String): Boolean = awaitedReplySendSeq(key).nonEmpty
     def testIsAwaitingReply(key: String, kind: String, sendSeq: Long): Boolean = isAwaitingReply(key, kind, sendSeq)
   }
 
@@ -310,6 +311,24 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
     val resched = tmProbe.fishForMessage(3.seconds) { case _: ScheduleEvent => true; case _ => false }
     resched.asInstanceOf[ScheduleEvent].tick shouldBe 5L
     actor.underlyingActor.testReplies shouldBe 1
+  }
+
+  it should "mark its resolved dispatch as pending until the awaited reply has been consumed" in {
+    val (peerProbe, peerName) = newPeer()
+    val tmProbe = TestProbe()
+    val actor = newActor(peerName, TimeManagerTypeEnum.DISCRETE_EVENT)
+
+    actor ! spontaneous(5L, tmProbe.ref)
+    peerProbe.expectMsgType[ActorInteractionEvent]
+    val waiting = tmProbe.expectMsgType[FinishEvent]
+    waiting.scheduleTick shouldBe None
+    waiting.awaitingReply shouldBe true
+    actor.underlyingActor.testHasReplyObligation("req") shouldBe true
+
+    actor ! interaction(5L, peerName, ReplyData(), "reply")
+    tmProbe.expectMsgType[ScheduleEvent]
+    actor.underlyingActor.testReplies shouldBe 1
+    actor.underlyingActor.testHasReplyObligation("req") shouldBe false
   }
 
   "SimulationBaseActor.pruneInvalidatedAwaitedReplies" should

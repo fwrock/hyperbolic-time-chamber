@@ -54,13 +54,22 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     * (see `SimulationBaseActorStragglerTriggerSpec`, same harness pattern used here).
     */
   private class TestReportActor(properties: Properties) extends SimulationBaseActor[ReportBufferState](properties) {
+    var specificReporter: Option[ReportTypeEnum] = None
+    var mirror: Boolean = false
+    private def emit(tick: Tick): Unit =
+      if (mirror) reportMirrored(data = tick, label = "test-report")
+      else specificReporter match {
+        case Some(kind) => reportToSpecificReporter(kind, tick, "test-report")
+        case None => report(data = tick, label = "test-report")
+      }
+
     override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
-      report(data = event.tick, label = "test-report")
+      emit(event.tick)
       onFinishSpontaneous(Some(event.tick + 1))
     }
 
     override def actInteractWith(event: ActorInteractionEvent): Unit =
-      report(data = event.tick, label = "test-report")
+      emit(event.tick)
 
     def testSetState(s: ReportBufferState): Unit = {
       state = s
@@ -85,7 +94,8 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
 
   private var nextOwnEntityId = 0L
 
-  private def newActor(timeManagerType: String, timeManagerProbe: TestProbe, reporterProbe: TestProbe): TestActorRef[TestReportActor] = {
+  private def newActor(timeManagerType: String, timeManagerProbe: TestProbe, reporterProbe: TestProbe,
+    additionalReporters: Map[ReportTypeEnum, org.apache.pekko.actor.ActorRef] = Map.empty): TestActorRef[TestReportActor] = {
     nextOwnEntityId += 1
     val ownEntityId = nextOwnEntityId
     val properties = Properties(
@@ -93,7 +103,7 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
       resourceId = "res-1",
       timeManagers = mutable.Map(timeManagerType -> timeManagerProbe.ref),
       defaultTimeManagerType = timeManagerType,
-      reporters = mutable.Map(ReportTypeEnum.parquet -> reporterProbe.ref)
+      reporters = mutable.Map(ReportTypeEnum.parquet -> reporterProbe.ref) ++ additionalReporters
     )
     // LoadBalancedDistributed actors overwrite entityId with self.path.name in preStart -- give
     // TestActorRef an explicit numeric name (matching production's real Pekko-assigned entityId
@@ -118,6 +128,51 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     reporterProbe.expectMsgType[ReportEvent](3.seconds).data shouldBe 1L
   }
 
+  "targeted reports" should "remain immediate under conservative execution" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val target = TestProbe()
+    val actor = newActor(TimeManagerTypeEnum.DISCRETE_EVENT, tm, reporter, Map(ReportTypeEnum.clickhouse -> target.ref))
+    actor.underlyingActor.specificReporter = Some(ReportTypeEnum.clickhouse)
+    actor ! interaction(1L, 101L, 1L)
+    target.expectMsgType[ReportEvent].data shouldBe 1L
+    reporter.expectNoMessage(100.millis)
+  }
+
+  it should "buffer, cancel, and suppress replay output just like default reports in Time Warp" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val target = TestProbe()
+    val actor = newActor(TimeManagerTypeEnum.TIME_WARP, tm, reporter, Map(ReportTypeEnum.clickhouse -> target.ref))
+    actor.underlyingActor.specificReporter = Some(ReportTypeEnum.clickhouse)
+    val undone = interaction(3L, 101L, 2L)
+    actor ! interaction(1L, 101L, 1L)
+    actor ! undone
+    target.expectNoMessage(100.millis)
+    actor ! undone.copy(isAntiMessage = true)
+    actor ! SpontaneousEvent(tick = 4L, actorRef = tm.ref, gvt = Some(10L))
+
+    target.expectMsgType[ReportEvent].data shouldBe 1L
+    target.expectNoMessage(100.millis)
+    reporter.expectNoMessage(100.millis)
+  }
+
+  "mirrored reports" should "commit both destinations only after GVT covers their event" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val kafka = TestProbe()
+    val actor = newActor(TimeManagerTypeEnum.TIME_WARP, tm, reporter, Map(ReportTypeEnum.kafka -> kafka.ref))
+    actor.underlyingActor.mirror = true
+    actor ! interaction(1L, 101L, 1L)
+    reporter.expectNoMessage(100.millis)
+    kafka.expectNoMessage(100.millis)
+    actor ! SpontaneousEvent(tick = 2L, actorRef = tm.ref, gvt = Some(1L))
+    reporter.expectMsgType[ReportEvent].data shouldBe 1L
+    kafka.expectMsgType[ReportEvent].data shouldBe 1L
+    reporter.expectNoMessage(100.millis)
+    kafka.expectNoMessage(100.millis)
+  }
+
   "report() under Time Warp" should "buffer instead of sending immediately, then flush once a SpontaneousEvent carries a covering GVT" in {
     val timeManagerProbe = TestProbe()
     val reporterProbe = TestProbe()
@@ -132,6 +187,21 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
 
     reporterProbe.expectMsgType[ReportEvent](3.seconds).data shouldBe 1L // flushed tick-1 report
     reporterProbe.expectNoMessage(500.millis) // tick-2's own report is not yet covered by gvt=1
+  }
+
+  it should "discard only the cancelled event's report when two interactions share a tick" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val actor = newActor(TimeManagerTypeEnum.TIME_WARP, tm, reporter)
+    actor ! interaction(tick = 10L, senderId = 101L, seq = 1L)
+    val cancelled = interaction(tick = 10L, senderId = 101L, seq = 2L)
+    actor ! cancelled
+
+    actor ! cancelled.copy(isAntiMessage = true)
+    actor ! SpontaneousEvent(tick = 20L, actorRef = tm.ref, gvt = Some(10L))
+
+    reporter.expectMsgType[ReportEvent].data shouldBe 10L
+    reporter.expectNoMessage(100.millis)
   }
 
   it should "discard a buffered report for a tick a real rollback undoes, never flushing it later" in {

@@ -108,6 +108,7 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
       data: LinkInfoData
     ): Unit = {
       state.movableStatus = MovableStatusEnum.Ready
+      consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
       leavingLink()
     }
 
@@ -119,6 +120,9 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
     def testRoute: Option[mutable.Queue[(Long, Long)]] = if (state == null) None else state.movableBestRoute
     def testCurrentPath: Option[(Long, Long)] = if (state == null) None else state.movableCurrentPath
     def testStatus: MovableStatusEnum = if (state == null) null else state.movableStatus
+    def testHasReplyObligation(key: String): Boolean = awaitedReplySendSeq(key).nonEmpty
+    def testMarkLinkExitReported(): Unit = state.movableLinkExitReported = true
+    def testLinkExitReported: Boolean = state.movableLinkExitReported
   }
 
   private var nextPeerId = 0L
@@ -131,14 +135,15 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
     (probe, id)
   }
 
-  private def newActor(timeManagerProbe: TestProbe, linkPeerId: Long, route: Seq[(Long, Long)]): TestActorRef[TestMovable] = {
+  private def newActor(timeManagerProbe: TestProbe, linkPeerId: Long, route: Seq[(Long, Long)],
+    mode: String = TimeManagerTypeEnum.TIME_WARP): TestActorRef[TestMovable] = {
     nextPeerId += 1
     val ownEntityId = nextPeerId
     val properties = Properties(
       entityId = ownEntityId.toString,
       resourceId = "res-1",
-      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> timeManagerProbe.ref),
-      defaultTimeManagerType = TimeManagerTypeEnum.TIME_WARP
+      timeManagers = mutable.Map(mode -> timeManagerProbe.ref),
+      defaultTimeManagerType = mode
     )
     val ref = TestActorRef(new TestMovable(properties, linkPeerId), ownEntityId.toString)
     // See SimulationBaseActorTimeWarpReplaySpec's newActor for why this one-time wait is needed:
@@ -149,8 +154,45 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
     state.movableBestRoute = Some(mutable.Queue.from(route))
     state.movableStatus = MovableStatusEnum.Ready
     ref.underlyingActor.testSetState(state)
-    ref.underlyingActor.testInitializeRollback()
+    if (mode == TimeManagerTypeEnum.TIME_WARP) ref.underlyingActor.testInitializeRollback()
     ref
+  }
+
+  for (mode <- Seq(TimeManagerTypeEnum.DISCRETE_EVENT, TimeManagerTypeEnum.TIME_WARP)) {
+    "A final-link departure" should s"finish without a reply obligation in $mode" in {
+      val tm = TestProbe()
+      val (link, linkId) = newPeer()
+      val actor = newActor(tm, linkId, Seq((10L, 100L)), mode)
+      actor ! SpontaneousEvent(tick = 0L, actorRef = tm.ref)
+      link.expectMsgType[ActorInteractionEvent]
+      tm.expectMsgType[FinishEvent].awaitingReply shouldBe true
+
+      actor ! enterLinkAck(tick = 1L, linkPeerId = linkId, seq = 1L)
+      link.expectMsgType[ActorInteractionEvent].eventType shouldBe EventTypeEnum.LeaveLink.toString
+      tm.expectMsgType[FinishEvent].awaitingReply shouldBe false
+      tm.expectMsgType[FinishEvent].awaitingReply shouldBe false
+      actor.underlyingActor.testHasReplyObligation(Movable.leaveLinkAwaitKey(linkId)) shouldBe false
+    }
+
+    "An already-reported MICRO departure" should s"not await cleanup and reset on the next entry in $mode" in {
+      val tm = TestProbe()
+      val (link, linkId) = newPeer()
+      val actor = newActor(tm, linkId, Seq((10L, 100L), (20L, 200L)), mode)
+      actor ! SpontaneousEvent(tick = 0L, actorRef = tm.ref)
+      link.expectMsgType[ActorInteractionEvent]
+      tm.expectMsgType[FinishEvent]
+      actor.underlyingActor.testMarkLinkExitReported()
+
+      actor ! enterLinkAck(tick = 1L, linkPeerId = linkId, seq = 1L)
+      link.expectMsgType[ActorInteractionEvent].eventType shouldBe EventTypeEnum.LeaveLink.toString
+      tm.expectMsgType[FinishEvent]
+      actor.underlyingActor.testHasReplyObligation(Movable.leaveLinkAwaitKey(linkId)) shouldBe false
+
+      actor ! SpontaneousEvent(tick = 2L, actorRef = tm.ref)
+      link.expectMsgType[ActorInteractionEvent].eventType shouldBe EventTypeEnum.EnterLink.toString
+      tm.expectMsgType[FinishEvent].awaitingReply shouldBe true
+      actor.underlyingActor.testLinkExitReported shouldBe false
+    }
   }
 
   private def enterLinkAck(tick: Tick, linkPeerId: Long, seq: Long): ActorInteractionEvent =

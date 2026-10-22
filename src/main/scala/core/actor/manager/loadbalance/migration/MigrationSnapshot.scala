@@ -106,10 +106,13 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
   *   currently-registered vehicle (keyed by entity id), same audit and same reasoning as
   *   [[linkVehicleEntryTick]].
   * @param awaitedReplies
-  *   Time Warp only: the actor's outstanding awaited-reply registry (`key` -> `kind|sentAtTick|
+  *   The actor's outstanding awaited-reply registry (`key` -> `kind|sentAtTick|
   *   sendSeq`), i.e. its pending reply obligations. It lives in the snapshot, not as a bare actor
   *   var, so a rollback restores it together with `state` and a shard migration cannot drop it.
-  *   Empty outside Time Warp.
+  *   Both policies use this registry to distinguish pending replies from completed work.
+  * @param modelSnapshot
+  *   Namespaced, versioned model metadata from SimulationBaseActor's snapshot hooks. Values are
+  *   strings (including model-owned JSON) so adding a model does not expand the core schema.
   */
 case class MigrationSnapshot(
   stateJson: String,
@@ -150,5 +153,6 @@ case class MigrationSnapshot(
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
   linkVehicleEntryTick: Map[Long, Long] = Map.empty,
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
-  linkVehicleWaitingSeconds: Map[Long, Double] = Map.empty
+  linkVehicleWaitingSeconds: Map[Long, Double] = Map.empty,
+  modelSnapshot: Map[String, String] = Map.empty
 )

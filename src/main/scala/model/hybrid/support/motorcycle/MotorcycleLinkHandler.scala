@@ -31,7 +31,7 @@ class MotorcycleLinkHandler(
   private def leaveLinkAwaitKey(linkId: Long): String = model.hybrid.actor.Movable.leaveLinkAwaitKey(linkId)
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
-    if (isTimeWarpFn()) consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
+    consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
     val baseSpeed       = linkDensitySpeed(
       length        = data.linkLength,
       capacity      = data.linkCapacity,
@@ -86,7 +86,7 @@ class MotorcycleLinkHandler(
       )
       return
     }
-    if (isTimeWarpFn()) consumeAwaitedReplyFn(awaitKey)
+    consumeAwaitedReplyFn(awaitKey)
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")

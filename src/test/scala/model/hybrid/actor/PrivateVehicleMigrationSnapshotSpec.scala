@@ -5,7 +5,9 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.actor.properties.Properties
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
-import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData }
+import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData, TripCompletedData }
+import core.enumeration.CreationTypeEnum
+import core.util.JsonUtil
 import model.hybrid.entity.state.CarState
 import model.hybrid.entity.state.DriverAttributes
 import model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
@@ -60,6 +62,11 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     */
   private class TestCar(properties: Properties) extends Car(properties) {
     override protected def registerOnTimeManager(tick: Tick): Unit = ()
+    override protected def getActorEntityId: String = "101"
+    val sentPayloads = scala.collection.mutable.ArrayBuffer.empty[AnyRef]
+    override protected def sendVehicleMessage(
+      entityId: Long, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum
+    ): Unit = { sentPayloads += data }
 
     def testSetState(s: CarState): Unit = state = s
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
@@ -70,6 +77,8 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     def testGetTripDestination: Option[Long] = getTripDestination
     def testGetTripStartTick: Option[Tick] = getTripStartTick
     def testIsPersonCentric: Boolean = isPersonCentric
+    def testDriverAttributes: DriverAttributes = driverAttributes
+    def testCompleteTrip(): Unit = reportTripCompletion("reached_destination", 1002L)
   }
 
   private def freshParkedState(): CarState = {
@@ -174,6 +183,23 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
 
     rehydratedCar.testGetTripOrigin shouldBe None
     rehydratedCar.testIsPersonCentric shouldBe false
+  }
+
+  it should "restore the original reply identity and driver after another trip has overwritten them" in {
+    val car = newTestCar("101")
+    car.testSetState(freshParkedState())
+    val (event, data) = startTripEvent(42L, "hybrid.actor.Person")
+    val originalDriver = DriverAttributes(aggressiveness = 0.8, reactionTime = 1.4)
+    car.testHandleStartTrip(event.copy(seq = 11L), data.copy(driverAttributes = originalDriver))
+    val snapshot = JsonUtil.fromJson[MigrationSnapshot](JsonUtil.toJson(car.testBuildMigrationSnapshot()))
+
+    car.testSetState(freshParkedState())
+    car.testHandleStartTrip(event.copy(seq = 22L), data.copy(driverAttributes = DriverAttributes()))
+    car.testApplyMigrationSnapshot(snapshot)
+    car.testCompleteTrip()
+
+    car.sentPayloads.collect { case d: TripCompletedData => d.requestSeq }.toList shouldBe List(11L)
+    car.testDriverAttributes shouldBe originalDriver
   }
 
   "PrivateVehicle migration round trip" should "preserve destroyAfterNextPark set by an owner's schedule-complete signal mid-trip" in {

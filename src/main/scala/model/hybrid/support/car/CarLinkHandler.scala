@@ -66,7 +66,7 @@ class CarLinkHandler(
       )
       return
     }
-    if (isTimeWarpFn()) consumeAwaitedReplyFn(awaitKey)
+    consumeAwaitedReplyFn(awaitKey)
 
     setCurrentLinkIdFn(Some(linkId))
     setCurrentLinkLengthFn(data.linkLength)
@@ -139,7 +139,7 @@ class CarLinkHandler(
     }
     // LeaveLinkData -> ReceiveLeaveLinkInfo is single-shot/terminal (same as EnterLinkData above),
     // so always safe to consume once accepted.
-    if (isTimeWarpFn()) consumeAwaitedReplyFn(awaitKey)
+    consumeAwaitedReplyFn(awaitKey)
 
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0

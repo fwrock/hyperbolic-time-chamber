@@ -152,6 +152,7 @@ class CarMicroHandler(
 
     val travelTime = getLinkEntryTickFn().map(currentTickFn() - _).getOrElse(0L)
 
+    state.movableLinkExitReported = true
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")

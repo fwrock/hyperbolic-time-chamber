@@ -41,7 +41,7 @@ class BusLinkHandler(
 
     // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
     // CarLinkHandler.handleEnterLink), so always safe to consume once received.
-    if (isTimeWarpFn()) consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
+    consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
 
     val speed = linkDensitySpeed(
       length       = data.linkLength,
@@ -102,8 +102,8 @@ class BusLinkHandler(
         )
         return
       }
-      consumeAwaitedReplyFn(awaitKey)
     }
+    consumeAwaitedReplyFn(awaitKey)
 
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0

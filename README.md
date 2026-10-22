@@ -480,6 +480,8 @@ src/main/scala/
 
 | Document | Description |
 |---|---|
+| [Extensible Time Warp Runtime](docs/TIME_WARP_EXTENSIBLE_RUNTIME.md) | Current core/model audit, conservative and optimistic architecture, implementation stages and acceptance gates |
+| [Time Warp Validation](docs/TIME_WARP_VALIDATION_2026_10_22.md) | Regression tests and bounded scenario evidence for the runtime foundations |
 | [Scenario Modeling Guide](docs/SCENARIO_MODELING.md) | Full JSON schema for all entity types, dependency graph, ID conventions |
 | [Road Infrastructure](docs/ROAD_INFRASTRUCTURE.md) | Link (MESO/MICRO), Node, TrafficSignal internals |
 | [Person Agent](docs/PERSON_AGENT.md) | Activity model, mode choice, trip lifecycle |

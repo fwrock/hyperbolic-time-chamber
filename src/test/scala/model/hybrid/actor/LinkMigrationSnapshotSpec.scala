@@ -108,6 +108,23 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
     rehydratedLink.testVehicleWaitingSeconds shouldBe Map(9L -> 7.0)
   }
 
+  it should "restore MICRO scheduling and exit signals through model-neutral snapshot metadata" in {
+    val link = newTestLink("link-control-state")
+    link.testSetState(freshState())
+    val original = link.testBuildMigrationSnapshot()
+    val controls = Map(
+      "hybrid.link.v1.microTickScheduled" -> "true",
+      "hybrid.link.v1.signalAtExit" -> "Red",
+      "hybrid.link.v1.emptyGraceTick" -> "4"
+    )
+    val encoded = core.util.JsonUtil.toJson(original.copy(modelSnapshot = controls))
+    link.testApplyMigrationSnapshot(core.util.JsonUtil.fromJson[MigrationSnapshot](encoded))
+    link.testBuildMigrationSnapshot().modelSnapshot shouldBe controls
+
+    link.testApplyMigrationSnapshot(original)
+    link.testBuildMigrationSnapshot().modelSnapshot shouldBe original.modelSnapshot
+  }
+
   it should "leave a rehydrated link with empty maps when none were registered" in {
     val sourceLink = newTestLink("link-4")
     sourceLink.testSetState(freshState())

@@ -178,7 +178,7 @@ class OptimisticLocalTimeManager(
     * stuck. Filtering per-actor instead means an in-flight straggler only blocks itself.
     */
   private def dispatchNextAvailable(): Unit = {
-    val runningIds = runningEvents.map(_.id)
+    val runningIds = scala.collection.mutable.Set.from(runningEvents.map(_.id))
     // #timewarp-trace
     core.actor.trace.TimeWarpTrace.trace(
       metricsManagerLabel,
@@ -206,6 +206,7 @@ class OptimisticLocalTimeManager(
               )
               dispatchedAny = true
               sendSpontaneousEvent(tick, ready)
+              runningIds ++= ready.map(_.id)
               actorsSet --= ready
               if (actorsSet.isEmpty) {
                 scheduledActors.remove(tick)
