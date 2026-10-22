@@ -34,6 +34,7 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     var currentLinkLength: Double = 0.0
     var linkEntryTick: Option[Tick] = None
 
+    val journeyState = model.hybrid.entity.state.CarJourneyState()
     val journeyReporter = new CarJourneyReporter(
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
@@ -41,7 +42,8 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       tripOriginFn = () => Some(1L),
       tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
-      driverAttrsFn = () => DriverAttributes()
+      driverAttrsFn = () => DriverAttributes(),
+      journeyStateFn = () => journeyState
     )
 
     val handler = new CarMicroHandler(
@@ -107,6 +109,9 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       ),
       state
     )
+
+    state.movableLinkExitReported shouldBe true
+    core.util.JsonUtil.fromJson[CarState](core.util.JsonUtil.toJson(state)).movableLinkExitReported shouldBe true
 
     handler.handleMicroEnterLink(enterLinkData(102L), state)
 

@@ -1,5 +1,9 @@
 # Time Warp (Optimistic Synchronization with Rollback) — Design
 
+> **Current review, 2026-10-22:** use [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md)
+> for the verified core/model findings and target architecture. The dated status below is historical:
+> margin-based GVT and an idle plateau do not prove safe commitment or termination.
+
 ## Current status (2026-08-07, end of session): terminates correctly, but report output isn't yet at parity with conservative mode
 
 Time Warp reliably **terminates** end-to-end against a real cluster — see the sections below for that

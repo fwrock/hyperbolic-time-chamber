@@ -47,7 +47,7 @@ import scala.collection.mutable
   *   re-executes one already-processed event's logic against the actor's current (just-restored)
   *   state, to walk it forward from a checkpoint to an exact target point in the log. Takes the
   *   full [[LoggedEvent]], not just its `event` field, so the caller can also restore
-  *   `dynamicWeightReads` (or anything else logged alongside the event) for the duration of the
+  *   `recordedReads` (or anything else logged alongside the event) for the duration of the
   *   replay — see `docs/TIME_WARP_DESIGN.md`'s model-level audit, third finding.
   */
 final class RollbackHistoryHandler(
@@ -91,7 +91,7 @@ final class RollbackHistoryHandler(
     tick: Tick,
     seq: Long,
     sentMessages: Seq[SentMessage] = Seq.empty,
-    dynamicWeightReads: Map[String, Double] = Map.empty,
+    recordedReads: Vector[RecordedRead] = Vector.empty,
     scheduleOutcome: Option[Option[Tick]] = None
   ): Unit = {
     log += LoggedEvent(
@@ -99,7 +99,7 @@ final class RollbackHistoryHandler(
       seq = seq,
       event = event,
       sentMessages = sentMessages,
-      dynamicWeightReads = dynamicWeightReads,
+      recordedReads = recordedReads,
       scheduleOutcome = scheduleOutcome
     )
     eventsSinceCheckpoint += 1
@@ -109,33 +109,49 @@ final class RollbackHistoryHandler(
     }
   }
 
-  /** Rolls this actor back to before `targetTick`: every logged event at `tick >= targetTick` is
-    * undone (state-wise) and returned to the caller, who is responsible for turning each into an
-    * anti-message once §10 wires that up. Every event at `tick < targetTick` is preserved by
-    * restoring the nearest earlier checkpoint and replaying forward to exactly that point.
+  /** Restores the prefix before the earliest processed event at or after `targetTick`.
+    * The entire suffix must be undone, even if a delayed spontaneous event moved time backward;
+    * retaining such an event without replaying it would make the log disagree with restored state.
+    * The caller cancels the returned events' outputs and reprocesses surviving inputs.
     *
     * A no-op (empty result, no restore/replay) if nothing is actually at or after `targetTick` —
     * the common case where a straggler's tick is still in the actor's future.
     *
     * @throws IllegalStateException
-    *   if called before [[initialize]] established a floor, or if `targetTick` is at or before the
-    *   very first checkpoint (both indicate a caller bug, not a runtime condition to recover from)
+    *   if no checkpoint precedes the affected event
     */
   def rollbackTo(targetTick: Tick): Seq[LoggedEvent] = {
+    log.iterator.filter(_.tick >= targetTick).map(_.seq).minOption match {
+      case Some(firstUndoneSeq) => rollbackFrom(firstUndoneSeq)
+      case None => Seq.empty
+    }
+  }
+
+  /** A new interaction follows already-processed events at its tick, including its own cause. */
+  def rollbackAfter(targetTick: Tick): Seq[LoggedEvent] = {
+    log.iterator.filter(_.tick > targetTick).map(_.seq).minOption match {
+      case Some(firstUndoneSeq) => rollbackFrom(firstUndoneSeq)
+      case None => Seq.empty
+    }
+  }
+
+  /** Cancellation targets one processed event; earlier events at the same tick must survive.
+    * Undo its complete processing suffix so retained history always matches restored state.
+    */
+  def rollbackFrom(firstUndoneSeq: Long): Seq[LoggedEvent] = {
     val sorted = log.sortBy(_.seq).toSeq
-    val undone = sorted.filter(_.tick >= targetTick)
+    val undone = sorted.filter(_.seq >= firstUndoneSeq)
     if (undone.isEmpty) {
       return Seq.empty
     }
 
-    val firstUndoneSeq = undone.map(_.seq).min
     val floor = checkpoints
       .filter(_.seq < firstUndoneSeq)
       .sortBy(_.seq)
       .lastOption
       .getOrElse(
         throw new IllegalStateException(
-          s"rollbackTo($targetTick): no checkpoint before seq=$firstUndoneSeq — " +
+          s"rollbackFrom($firstUndoneSeq): no checkpoint before the target — " +
             s"was initialize() called before the first recordProcessedEvent?"
         )
       )
@@ -151,13 +167,11 @@ final class RollbackHistoryHandler(
     undone
   }
 
-  /** Fossil collection: once nothing before `gvt` can ever be needed again (per the GVT
-    * watermark's own guarantee, `docs/TIME_WARP_DESIGN.md` §3), discard every checkpoint/log entry
-    * strictly older than the latest checkpoint at or before `gvt` — that checkpoint itself is kept
-    * as the new floor, since a future rollback could still target exactly `gvt`.
+  /** Retain a floor strictly before GVT: a checkpoint at GVT already includes events that a
+    * rollback to GVT must undo. Call only with a proven watermark including in-transit work.
     */
   def pruneBelow(gvt: Tick): Unit =
-    checkpoints.filter(_.tick <= gvt).sortBy(_.seq).lastOption.foreach {
+    checkpoints.filter(_.tick < gvt).sortBy(_.seq).lastOption.foreach {
       floor =>
         checkpoints.filterInPlace(_.seq >= floor.seq)
         log.filterInPlace(_.seq >= floor.seq)

@@ -202,7 +202,13 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
 
   private def fingerprint(rig: Rig): MigrationSnapshot = {
     val snap = rig.actor.underlyingActor.testSnapshot
+    val normalizedState = core.util.JsonUtil.fromJson[CarState](snap.stateJson)
+    normalizedState.journey.sumoDepartLane = normalizedState.journey.sumoDepartLane
+      .map(_.replace(s"${rig.linkId}_", "link_"))
+    normalizedState.journey.sumoArrivalLane = normalizedState.journey.sumoArrivalLane
+      .map(_.replace(s"${rig.linkId}_", "link_"))
     snap.copy(
+      stateJson = core.util.JsonUtil.toJson(normalizedState),
       entityId = "",
       currentTick = 0L,
       lamportClock = 0L,
@@ -239,12 +245,11 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
 
     val rolledBack = newRig()
     driveLive(rolledBack, upTo = historyLength)
-    rolledBack.actor ! straggler(tick = ticks(k))
+    rolledBack.actor ! straggler(tick = ticks(k) - 1L)
     (control, rolledBack)
   }
 
-  // A straggler at tick(k+1) is only a straggler while it is behind currentTick (the last tick), so
-  // k ranges 0..2.
+  // The positive input follows the retained tick; the next event belongs to the undone suffix.
   (0 to 2).foreach {
     k =>
       s"[checkpoint interval $checkpointInterval] a Car rollback to just before event ${k + 1}" should

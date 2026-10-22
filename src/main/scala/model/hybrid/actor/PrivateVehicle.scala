@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
+import core.util.JsonUtil
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import model.hybrid.entity.state.{ DriverAttributes, MovableState }
 import model.hybrid.entity.state.enumeration.MovableStatusEnum
@@ -325,7 +326,11 @@ trait PrivateVehicle[T <: MovableState] {
       tripDestination = tripDestination.getOrElse(0L),
       tripStartTick = tripStartTick.getOrElse(Long.MinValue),
       tripStartDistance = tripStartDistance,
-      destroyAfterNextPark = destroyAfterNextPark
+      destroyAfterNextPark = destroyAfterNextPark,
+      modelSnapshot = base.modelSnapshot ++ Map(
+        "hybrid.private-vehicle.v1.tripRequestSeq" -> tripRequestSeq.toString,
+        "hybrid.private-vehicle.v1.driverAttributes" -> JsonUtil.toJson(driverAttributes)
+      )
     )
 
   /** Restores reply-linkage and lifecycle-intent fields from a migration snapshot. See
@@ -342,6 +347,9 @@ trait PrivateVehicle[T <: MovableState] {
     tripStartTick = if (snapshot.tripStartTick != Long.MinValue) Some(snapshot.tripStartTick) else None
     tripStartDistance = snapshot.tripStartDistance
     destroyAfterNextPark = snapshot.destroyAfterNextPark
+    tripRequestSeq = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.tripRequestSeq").fold(0L)(_.toLong)
+    driverAttributes = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.driverAttributes")
+      .fold(DriverAttributes())(JsonUtil.fromJson[DriverAttributes])
   }
 
   /** Private vehicles should only re-register on the TM after migration when they are NOT parked.

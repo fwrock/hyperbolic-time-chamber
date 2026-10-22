@@ -30,6 +30,11 @@ class MarginBasedGVTEstimationSpec extends AnyFlatSpec with Matchers {
     an[IllegalArgumentException] should be thrownBy new MarginBasedGVTEstimation(margin = -1L)
   }
 
+  it should "saturate at Long.MinValue instead of overflowing into a positive commit watermark" in {
+    new MarginBasedGVTEstimation(margin = 100L)
+      .estimate(Seq(report(Long.MinValue + 50L))) shouldBe Long.MinValue
+  }
+
   it should "never let a single very-behind LTM be masked by others being far ahead" in {
     val strategy = new MarginBasedGVTEstimation(margin = 2L)
 

@@ -6,5 +6,6 @@ import core.types.Tick
 case class LocalTimeManagerTickInfo(
   tick: Tick,
   hasSchedule: Boolean = false,
-  isProcessed: Boolean = false
+  isProcessed: Boolean = false,
+  hasPendingWork: Boolean = false
 )

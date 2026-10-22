@@ -190,6 +190,7 @@ abstract class Movable[T <: MovableState](
         resolveLink(linkEdgeGraphId) match {
           case Some((entityId, shardId)) =>
             state.movableStatus = Waiting
+            state.movableLinkExitReported = false
             waitingTicksCounter = 0
 
             // registerAwaitedReply must run AFTER sendMessageTo: it captures this actor's
@@ -254,13 +255,14 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.LeaveLink.toString,
               actorType = LoadBalancedDistributed
             )
-            registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)
               onFinishSpontaneous(None)
               return
             }
+            if (!state.movableLinkExitReported)
+              registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
             state.movableCurrentPath = None
             onFinishSpontaneous(Some(currentTick + 1))
           case _ =>

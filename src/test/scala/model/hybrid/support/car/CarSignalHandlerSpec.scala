@@ -68,6 +68,7 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     val needsReverifyCalls = mutable.ArrayBuffer.empty[Boolean]
     val reported = mutable.ArrayBuffer.empty[Map[String, Any]]
 
+    val journeyState = model.hybrid.entity.state.CarJourneyState()
     val journeyReporter = new CarJourneyReporter(
       reportFn = (data, _) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
@@ -75,7 +76,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       tripOriginFn = () => Some(1L),
       tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
-      driverAttrsFn = () => DriverAttributes()
+      driverAttrsFn = () => DriverAttributes(),
+      journeyStateFn = () => journeyState
     )
 
     val handler = new CarSignalHandler(

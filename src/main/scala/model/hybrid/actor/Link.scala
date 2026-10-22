@@ -91,9 +91,8 @@ class Link(
     * actor-local `mutable.Map`s, invisible to a Time Warp rollback restore — a rollback that undoes
     * a vehicle's leave-event without also purging its now-stale map entry would compute a different
     * travel time for the same logical leave event on replay than the original live run did.
-    * `microTickScheduled`/`signalAtExit`/`emptyGraceTick` are deliberately NOT captured here — same
-    * audit found them cheap-to-lose scheduling/cache state per CLAUDE.md's own carve-out ("does
-    * losing this value on restart break correctness for someone else, or just cost a recompute").
+    * MICRO scheduling and exit-signal state are captured by the model snapshot hooks as well:
+    * they control subsequent events and cannot be reconstructed from the vehicle maps alone.
     */
   private def captureLinkMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
@@ -128,6 +127,20 @@ class Link(
     */
   private var emptyGraceTick: Int = 0
   private val MICRO_GRACE_TICKS: Int = 5
+
+  override protected def captureModelSnapshot(): Map[String, String] =
+    super.captureModelSnapshot() ++ Map(
+      "hybrid.link.v1.microTickScheduled" -> microTickScheduled.toString,
+      "hybrid.link.v1.signalAtExit" -> signalAtExit.fold("")(_.toString),
+      "hybrid.link.v1.emptyGraceTick" -> emptyGraceTick.toString
+    )
+
+  override protected def restoreModelSnapshot(metadata: Map[String, String]): Unit = {
+    super.restoreModelSnapshot(metadata)
+    microTickScheduled = metadata.get("hybrid.link.v1.microTickScheduled").exists(_.toBoolean)
+    signalAtExit = metadata.get("hybrid.link.v1.signalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    emptyGraceTick = metadata.get("hybrid.link.v1.emptyGraceTick").fold(0)(_.toInt)
+  }
 
   /** Configuration: interval between dynamic cost publications (ticks) */
   private val costPublishInterval: Int =

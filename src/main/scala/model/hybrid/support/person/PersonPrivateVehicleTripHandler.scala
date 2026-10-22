@@ -24,7 +24,8 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
   * @param registerAwaitedReplyFn Registers this Person's outstanding `StartTrip` -> `TripCompleted`
   *   exchange for the leg's vehicle, so `Person.actInteractWith`'s `TripCompletedData` guard can
   *   tell a genuine reply apart from a rollback-orphaned one to an earlier, since-retracted
-  *   `StartTrip` (see `TripCompletedData.requestSeq`'s doc). No-op outside Time Warp.
+  *   `StartTrip` (see `TripCompletedData.requestSeq`'s doc). Also tracks pending work for
+  *   conservative termination while the vehicle is being activated or driven by MICRO links.
   */
 class PersonPrivateVehicleTripHandler(
   personId: String,

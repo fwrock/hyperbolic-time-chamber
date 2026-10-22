@@ -92,6 +92,10 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     }
     def testInitializeRollback(): Unit = rollbackHandler.initialize(startTick)
     def testEntries: List[String] = state.entries
+    def testSnapshot = buildMigrationSnapshot()
+    def testRestore(snapshot: core.actor.manager.loadbalance.migration.MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
+    def testAddRelationship(): Unit = relationships.put("future", core.entity.actor.ShardActorId(entityId = 99L, classType = "test.Peer"))
+    def testRelationshipKeys: Set[String] = relationships.keySet.toSet
   }
 
   private var nextId = 0L
@@ -179,6 +183,73 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@103:202")
   }
 
+  "checkpoint restore" should "remove relationships added after a checkpoint with no relationships" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    val snapshot = actor.underlyingActor.testSnapshot
+    actor.underlyingActor.testAddRelationship()
+    actor.underlyingActor.testRestore(snapshot)
+    actor.underlyingActor.testRelationshipKeys shouldBe empty
+  }
+
+  "a delayed interaction" should "preserve its earlier same-tick cause and its original send" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (peer, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor ! SpontaneousEvent(tick = 10L, actorRef = tm.ref)
+    tm.expectMsgType[FinishEvent]
+    peer.expectMsgType[ActorInteractionEvent]
+    actor ! interaction(tick = 20L, senderId = 201L)
+
+    actor ! interaction(tick = 10L, senderId = peerId)
+
+    actor.underlyingActor.testEntries shouldBe List("S@10", s"I@10:$peerId", "I@20:201")
+    peer.expectNoMessage(100.millis)
+  }
+
+  "a delayed spontaneous event" should "run before a later interaction already processed by the actor" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (peer, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor ! interaction(tick = 100L, senderId = 201L)
+
+    actor ! SpontaneousEvent(tick = 50L, actorRef = tm.ref)
+
+    actor.underlyingActor.testEntries shouldBe List("S@50", "I@100:201")
+    tm.expectMsgType[FinishEvent].scheduleTick.map(_.toLong) shouldBe Some(51L)
+    tm.expectNoMessage(100.millis)
+    peer.expectMsgType[ActorInteractionEvent].tick shouldBe 50L
+    peer.expectNoMessage(100.millis)
+  }
+
+  it should "cancel future sends while finishing its current dispatch exactly once" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (peer, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor ! SpontaneousEvent(tick = 10L, actorRef = tm.ref)
+    tm.expectMsgType[FinishEvent]
+    peer.expectMsgType[ActorInteractionEvent]
+    actor ! SpontaneousEvent(tick = 20L, actorRef = tm.ref)
+    tm.expectMsgType[FinishEvent]
+    val futureSend = peer.expectMsgType[ActorInteractionEvent]
+
+    actor ! SpontaneousEvent(tick = 15L, actorRef = tm.ref)
+
+    actor.underlyingActor.testEntries shouldBe List("S@10", "S@15")
+    val anti = peer.expectMsgType[ActorInteractionEvent]
+    anti.isAntiMessage shouldBe true
+    anti.messageId shouldBe futureSend.messageId
+    peer.expectMsgType[ActorInteractionEvent].tick shouldBe 15L
+    peer.expectNoMessage(100.millis)
+    tm.expectMsgType[FinishEvent].scheduleTick.map(_.toLong) shouldBe Some(16L)
+    tm.expectNoMessage(100.millis)
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Gap A: undone interactions are not reprocessed
   // ---------------------------------------------------------------------------------------------
@@ -194,6 +265,45 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     actor ! interaction(tick = 101L, senderId = 203L) // straggler: 101 < currentTick 103
 
     actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@101:203", "I@103:202")
+  }
+
+  it should "annihilate a positive message even when its anti-message arrived first" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    val cancelled = interaction(tick = 100L, senderId = 201L, seq = 7L)
+
+    actor ! cancelled.copy(isAntiMessage = true)
+    actor ! cancelled
+    actor ! interaction(tick = 101L, senderId = 202L)
+    actor.underlyingActor.testEntries shouldBe List("I@101:202")
+  }
+
+  it should "keep cancellation knowledge through a later state rollback" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    val cancelled = interaction(tick = 102L, senderId = 201L, seq = 7L)
+
+    actor ! cancelled
+    actor ! cancelled.copy(isAntiMessage = true)
+    actor ! interaction(tick = 103L, senderId = 202L)
+    actor ! interaction(tick = 101L, senderId = 203L)
+    actor ! cancelled
+    actor.underlyingActor.testEntries shouldBe List("I@101:203", "I@103:202")
+  }
+
+  it should "process a duplicate positive identity only once" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    val event = interaction(tick = 100L, senderId = 201L, seq = 7L)
+    actor ! event
+    actor ! event
+    actor.underlyingActor.testEntries shouldBe List("I@100:201")
   }
 
   it should "reprocess every undone interaction exactly once, however many were undone" in {
@@ -223,6 +333,26 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     actor ! interaction(tick = 102L, senderId = 202L, seq = 7L).copy(isAntiMessage = true)
 
     actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@104:203")
+  }
+
+  it should "preserve earlier sends and reports at the cancelled interaction's tick" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (peer, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor ! SpontaneousEvent(tick = 10L, actorRef = tm.ref)
+    tm.expectMsgType[FinishEvent]
+    peer.expectMsgType[ActorInteractionEvent]
+    val cancelled = interaction(tick = 10L, senderId = 901L, seq = 7L)
+    actor ! cancelled
+
+    actor ! cancelled.copy(isAntiMessage = true)
+
+    actor.underlyingActor.testEntries shouldBe List("S@10")
+    peer.expectNoMessage(100.millis)
+    actor ! SpontaneousEvent(tick = 11L, actorRef = tm.ref, gvt = Some(Long.MaxValue))
+    reporter.expectMsgType[ReportEvent].data shouldBe 10L
+    reporter.expectNoMessage(100.millis)
   }
 
   // ---------------------------------------------------------------------------------------------

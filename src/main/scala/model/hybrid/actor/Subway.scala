@@ -205,7 +205,7 @@ class Subway(
       if (isTimeWarpMode) isAwaitingReply(awaitKey, "LeaveLinkData", data.requestSeq)
       else state.status == Moving
     if (shouldProcess) {
-      if (isTimeWarpMode) consumeAwaitedReply(awaitKey)
+      consumeAwaitedReply(awaitKey)
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
     }
@@ -218,8 +218,7 @@ class Subway(
   ): Unit = {
     // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
     // CarLinkHandler.handleEnterLink), so always safe to consume once received.
-    if (getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP)
-      consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
 
     if (data.linkLength <= 0 || data.linkFreeSpeed <= 0) {
       logWarn(

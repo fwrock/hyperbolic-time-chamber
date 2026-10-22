@@ -211,7 +211,7 @@ abstract class MovableReplayEquivalenceBase(checkpointInterval: Int)
     ((k + 1) to historyLength).map(liveEvent(rig, _)).collect { case e: ActorInteractionEvent => e }.foreach(rig.actor ! _)
   }
 
-  // A straggler at tick k+1 is only a straggler while k+1 < currentTick (5), so k ranges 0..3.
+  // The positive input follows tick k, leaving events k+1 onward in the undone suffix.
   (0 to 3).foreach {
     k =>
       s"[checkpoint interval $checkpointInterval] a rollback to just before event ${k + 1}" should
@@ -222,7 +222,7 @@ abstract class MovableReplayEquivalenceBase(checkpointInterval: Int)
 
           val rolledBack = newRig()
           driveLive(rolledBack, upTo = historyLength)
-          rolledBack.actor ! straggler(tick = k + 1L)
+          rolledBack.actor ! straggler(tick = k.toLong)
 
           fingerprint(rolledBack) shouldBe expected
         }

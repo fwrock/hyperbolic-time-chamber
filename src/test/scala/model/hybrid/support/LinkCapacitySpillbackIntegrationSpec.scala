@@ -109,7 +109,8 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
       tripOriginFn = () => Some(originNodeId),
       tripDestFn = () => Some(destNodeId),
       tripStartTickFn = () => Some(0L),
-      driverAttrsFn = () => DriverAttributes()
+      driverAttrsFn = () => DriverAttributes(),
+      journeyStateFn = () => state.journey
     )
 
     val handler = new CarSignalHandler(

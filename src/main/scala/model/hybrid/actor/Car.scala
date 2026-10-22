@@ -35,7 +35,11 @@ class Car(
   override protected def internStateStrings(s: CarState): CarState = {
     val copied = s.copy(
       origin      = s.origin,
-      destination = s.destination
+      destination = s.destination,
+      journey = s.journey.copy(
+        sumoDepartLane = s.journey.sumoDepartLane.map(StringPool.intern),
+        sumoArrivalLane = s.journey.sumoArrivalLane.map(StringPool.intern)
+      )
     )
     copied.movableStatus             = s.movableStatus
     copied.movableBestRoute          = s.movableBestRoute
@@ -43,6 +47,7 @@ class Car(
     copied.movableCurrentNode        = s.movableCurrentNode
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
+    copied.movableLinkExitReported   = s.movableLinkExitReported
     copied
   }
 
@@ -89,15 +94,6 @@ class Car(
     restoreCarMigrationFields(snapshot)
   }
 
-  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported/sumoTripInfoReported
-  // are actor-local, not `state`, so a Time Warp rollback restoring `state` never resets them --
-  // without this, a trip whose completion already fired once before the rollback's target can never
-  // report its (corrected, replayed) completion again for the rest of the simulation.
-  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
-    super.onRollbackDiscardPending(targetTick)
-    journeyReporter.clearCompletionGuards()
-  }
-
   // protected, not private: lets CarLinkWaitMigrationSnapshotSpec drive these directly rather than
   // reverse-engineering LinkInfoData/LinkAccessData payloads just to exercise the capture/restore
   // round trip -- same rationale as this class's other test-only protected accessors.
@@ -119,7 +115,8 @@ class Car(
     tripOriginFn    = () => getTripOrigin,
     tripDestFn      = () => getTripDestination,
     tripStartTickFn = () => getTripStartTick,
-    driverAttrsFn   = () => getDriverAttributes
+    driverAttrsFn   = () => getDriverAttributes,
+    journeyStateFn  = () => state.journey
   )
 
   private lazy val signalHandler = new CarSignalHandler(
@@ -504,6 +501,7 @@ class Car(
   }
 
   private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)
     emissionHandler.onMicroEnterLink(data.linkId, data.microTimeStep)
   }

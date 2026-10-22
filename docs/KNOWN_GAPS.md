@@ -4,6 +4,87 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Time Warp correctness and extensibility (reviewed 2026-10-22)
+
+See [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md) for the current prioritized
+core/model audit and [validation record](TIME_WARP_VALIDATION_2026_10_22.md) for tested evidence.
+The margin-based GVT estimator does not account for messages in transit; plateau termination,
+direct actor destruction, and shared speculative feedback remain correctness blockers. This
+patch fixes targeted-report buffering, cancellation retention, duplicate dispatch/input handling,
+empty relationship restoration, Link control-state snapshots, replay observations, the fossil
+floor boundary, and GVT subtraction overflow. These local fixes do not establish mode parity.
+
+## Conservative premature termination during vehicle activation (fixed 2026-10-22)
+
+The fixed-seed two-person MICRO scenario could stop at tick 10 after two `person_trip_started`
+reports and no completed trips. Rebuilding the pre-review revision `200ba25` in an isolated
+worktree reproduced the same failure, so it predates the review's uncommitted changes.
+
+`Person` sent `StartTrip`, then finished its spontaneous event with no next tick. Its awaited
+trip reply was recorded only in Time Warp mode, and conservative LTM reports represented only
+scheduled ticks. Before `Car` had registered its first tick, all LTMs could report no schedule;
+the global manager's extra idle-query round could finish before the activation arrived.
+
+Both policies now retain registered reply obligations. Conservative LTM reports include an
+additive `LocalTimeReportEvent.hasPendingWork` field; the GTM can advance scheduled actors while
+another actor awaits a reply, but cannot declare idle termination while an obligation remains.
+Accepted replies consume the registry entry in either mode. MICRO entry acknowledgements also
+consume the corresponding EnterLink request. Final-link cleanup that completes without using
+its reply does not register an unnecessary wait. After a proactive MICRO exit, the vehicle
+also skips a redundant cleanup wait, using a checkpointed flag reset on its next link entry.
+
+The original scenario now reports four completed 200 m trips, two completed daily schedules,
+four MICRO entries and exits, no errors/stalls, and an engine stop after the final activity.
+A two-link variant also completes four 400 m trips, eight matching MICRO entries/exits, and
+two daily schedules of 800 m, then stops at tick 800 without errors or stalls.
+See [the validation follow-up](TIME_WARP_VALIDATION_2026_10_22.md#conservative-termination-follow-up)
+for the baseline comparison, tests, and artifacts. This fixes the tracked request/reply path;
+it is not a replacement for the future complete transport/quiescence protocol.
+
+## Optimistic replay initialization and rollback boundaries (fixed 2026-10-22)
+
+The reproduced Person error, `Replay did not consume all recorded reads`, came from an initial
+checkpoint taken before `onFinishInitialize` seeded its plan cursor. The live actor departed
+normally, but restoring that floor gave replay an empty plan. Core initialization now runs that
+hook before capturing the floor. `PersonReplayInitializationSpec` reproduces both the empty-cursor
+restore and the original exception before the fix, then checks the restored plan, observed
+decision, request identity, and cancellation/replacement of a completed trip.
+
+Two further core defects appeared while rerunning the optimistic MICRO scenarios:
+
+- Anti-messages rolled back by tick, undoing events processed before the cancelled message at
+  that same tick. Cancellation now uses the exact processed-event sequence. Buffered reports
+  carry that sequence so a surviving same-tick report is retained as well as its original send.
+  Positive interactions undo strictly later ticks, preserving their existing same-tick causal
+  prefix; otherwise a delayed reply could retract the very request it needs to answer.
+- Earlier spontaneous events overwrote `currentTick` and executed against future state.
+  They now restore the preceding history, cancel undone sends, execute, and reprocess surviving
+  interactions. Their normal `FinishEvent` resolves the incoming dispatch; no extra rollback
+  clear/reschedule exchange is sent for it.
+
+Rollback also removes the complete processing suffix from its first affected event. Previously
+a later-processed event with an earlier tick could remain in the log while missing from restored
+state. Pure history tests cover that case and exact cancellation with checkpoint intervals 1,
+2, and 50; actor tests cover surviving sends/reports and exactly one dispatch completion.
+
+The private-vehicle adapter also omitted the active `StartTrip` request token and driver
+attributes. A regression restored trip 1 after trip 2 overwrote those fields and observed a
+completion with token 22 instead of token 11. Both fields now round-trip in namespaced model
+snapshot metadata, without extending the core checkpoint schema. Car, Bicycle, and Motorcycle
+share this adapter.
+
+Car's journey reporter also supplied a physical input: `sumoArrivalSpeed` becomes the next
+MICRO link's entry velocity. The focused replay test observed 5 m/s instead of the original
+0 m/s after undoing a velocity update. Journey fields and completion guards now live in
+`CarState.journey` (`CarJourneyState`), and the reporter accesses the current state through a
+lambda. Restore therefore replaces physics/reporting inputs and guards together; Car no
+longer clears its completion guards unconditionally after restoring a surviving prefix.
+
+These changes preserve the existing single-policy-per-run configuration and add no mobility
+dependency to core. They do not provide safe GVT, speculative lifecycle retirement, a global
+same-tick order, or complete model snapshot coverage. See
+[the replay validation follow-up](TIME_WARP_VALIDATION_2026_10_22.md#optimistic-replay-follow-up).
+
 ## [RESOLVED 2026-07-22] Headline Gap: an Undocumented, Orphaned Second Actor Package
 
 **Resolution**: `model/mobility/actor/` (Car, Bus, BusStation, BusStop, Link, Node, Person, Subway,

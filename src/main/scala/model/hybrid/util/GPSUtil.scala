@@ -1,6 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
+import org.interscity.htc.core.actor.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
@@ -430,6 +431,25 @@ object GPSUtil {
     destinationId: Long,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.compact:$originId:$destinationId:$useDynamicWeights:$maxExpansions") {
+      calcRouteCompactLive(originId, destinationId, useDynamicWeights, maxExpansions)
+    }
+
+  private[util] def observeRoute(key: String)(live: => Option[(Double, mutable.Queue[(Long, Long)])])
+    : Option[(Double, mutable.Queue[(Long, Long)])] = {
+    if (!EventReadJournal.isActive) return live
+    val frozen = EventReadJournal.read(key) {
+      live.map { case (cost, path) => (cost, path.toVector) }
+    }
+    frozen.map { case (cost, path) => (cost, mutable.Queue.from(path)) }
+  }
+
+  private def calcRouteCompactLive(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean,
+    maxExpansions: Int
   ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
@@ -517,6 +537,15 @@ object GPSUtil {
     originId: Long,
     destinationId: Long,
     maxExpansions: Int = 200_000
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.walking:$originId:$destinationId:$maxExpansions") {
+      calcRouteCompactWalkingLive(originId, destinationId, maxExpansions)
+    }
+
+  private def calcRouteCompactWalkingLive(
+    originId: Long,
+    destinationId: Long,
+    maxExpansions: Int
   ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))

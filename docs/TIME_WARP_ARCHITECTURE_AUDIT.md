@@ -1,5 +1,9 @@
 # Time Warp — Auditoria de Arquitetura (Como Deveria Ser vs. Como Está)
 
+> **Current review, 2026-10-22:** [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md)
+> supersedes the architecture/status recommendations below. It includes current code findings,
+> local fixes, and the remaining GVT, lifecycle, ordering, and extensibility requirements.
+
 > **Atualização 2026-09-12** — a Seção 3.1 abaixo (medição de 2026-09-10) está **superada**. Uma
 > sessão seguinte (2026-09-11/12) rodou uma comparação real completa e encontrou uma explicação
 > completamente diferente e mais precisa para a falta de paridade de report — não é o gap de rota
