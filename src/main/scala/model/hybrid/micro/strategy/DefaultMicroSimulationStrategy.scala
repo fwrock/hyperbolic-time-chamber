@@ -128,6 +128,7 @@ class DefaultMicroSimulationStrategy(
     vehicleWaitingSeconds: mutable.Map[Long, Double],
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
   ): Seq[MicroVehicleUpdate] = {
+    VehicleInLane.sortFrontToBack(vehicles)
 
     // Virtual leader placed at link exit when Red; IDM naturally decelerates to a stop.
     val signalLeader: Option[VehicleInLane] =
@@ -225,11 +226,7 @@ class DefaultMicroSimulationStrategy(
       }
     }
 
-    val ordered = vehicles.sortBy(
-      v => -v.position
-    )
-    vehicles.clear()
-    vehicles ++= ordered
+    VehicleInLane.sortFrontToBack(vehicles)
 
     updates.toSeq
   }

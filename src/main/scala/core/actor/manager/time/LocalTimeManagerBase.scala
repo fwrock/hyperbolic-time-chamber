@@ -471,7 +471,7 @@ abstract class LocalTimeManagerBase(
   }
 
   /** Confirms every `pendingDestruct` entry whose speculative `FinishEvent` is now GVT-safe
-    * (`finish.end <= gvt`) and actually retires those actors; entries still ahead of GVT stay
+    * (`finish.end < gvt`) and actually retires those actors; entries at or ahead of GVT stay
     * pending. `pendingDestruct` is only ever populated under a strategy that overrides
     * `shouldDestructNow` to defer (i.e. [[OptimisticLocalTimeManager]]), so this is a no-op for
     * every other strategy. Defined here (rather than duplicated per-subclass) since `pendingDestruct`
@@ -480,7 +480,7 @@ abstract class LocalTimeManagerBase(
     */
   protected def drainPendingDestruct(gvt: Tick): Unit =
     if (pendingDestruct.nonEmpty) {
-      val (ready, stillPending) = pendingDestruct.partition { case (_, finish) => finish.end <= gvt }
+      val (ready, stillPending) = pendingDestruct.partition { case (_, finish) => finish.end < gvt }
       pendingDestruct.clear()
       pendingDestruct ++= stillPending
       ready.values.foreach(finish => completeDestruct(finish.identify))

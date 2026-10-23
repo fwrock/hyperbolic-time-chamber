@@ -253,4 +253,14 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
         vehicle.get.maxDeceleration shouldBe expectedDeceleration
     }
   }
+
+  it should "order equal-position arrivals by vehicle ID regardless of message arrival order" in {
+    val linkId = "308"
+    val f = newFixture(linkId, newMicroState(linkId, lanes = 1))
+
+    f.handler.handleEnterLinkMicro(event(15L, linkId), enterData(15L))
+    f.handler.handleEnterLinkMicro(event(13L, linkId), enterData(13L))
+
+    f.getState().vehiclesByLane(0).map(_.actorId) shouldBe Seq(13L, 15L)
+  }
 }

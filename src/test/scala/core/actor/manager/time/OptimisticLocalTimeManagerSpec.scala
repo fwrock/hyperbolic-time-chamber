@@ -412,7 +412,8 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     actorProbe.expectNoMessage(200.millis)
   }
 
-  it should "destruct the actor once a GvtUpdateEvent confirms gvt has caught up to finish.end" in {
+  for (gvtKnownBeforeFinish <- Seq(false, true)) {
+  it should s"destruct only after GVT passes finish.end (cached GVT: $gvtKnownBeforeFinish)" in {
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
@@ -421,6 +422,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
     actorProbe.expectMsgClass(3.seconds, classOf[core.entity.event.SpontaneousEvent])
+    if (gvtKnownBeforeFinish) ltm ! GvtUpdateEvent(gvt = 10L)
     ltm.underlyingActor.testFinish(
       FinishEvent(
         actorRef = actorProbe.ref,
@@ -434,11 +436,12 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     )
     actorProbe.expectNoMessage(200.millis)
 
-    ltm ! GvtUpdateEvent(gvt = 9L)
+    ltm ! GvtUpdateEvent(gvt = 10L)
     actorProbe.expectNoMessage(200.millis)
 
-    ltm ! GvtUpdateEvent(gvt = 10L)
+    ltm ! GvtUpdateEvent(gvt = 11L)
     actorProbe.expectMsgClass(3.seconds, classOf[DestructEvent])
+  }
   }
 
   it should "cancel the pending destruct when a ScheduleEvent reschedules the same actor before GVT confirms it, so a later GvtUpdateEvent must not destroy it" in {

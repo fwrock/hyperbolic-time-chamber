@@ -47,6 +47,10 @@ positives, antis, self-events, in-flight dispatches, and reply obligations const
 the frontier. Commitment uses time strictly below GVT. A terminal LP remains
 rollbackable until retirement is authorized; raw destruction is rejected. A sink
 receipt ACK and final asynchronous flush ACK are required before optimistic success.
+LP retirement is now round-scoped: the LP checks that the coordinator authorized
+the same committed round, the terminal and latest processed events are strictly below GVT, and no work
+remains. Settled/truncated final cuts carry a separate coordinator marker. Any
+accounted input delivered to an LP with null state fails before acknowledgement.
 Default actor restart, lost participants, and work below published GVT fail the run.
 The accounted path also disables pre-rollback “superseded reply” dropping: request
 identity in a speculative suffix is not proof that an earlier input is dispensable.
@@ -66,6 +70,41 @@ ledger/ACK overhead; it has no scale or speedup claim.
 See [protocol and supported scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and
 [validation](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). Older entries below are
 historical investigations; their margin/plateau safety claims are superseded.
+
+## Conservative barrier does not close interaction channels (confirmed 2026-10-23)
+
+`ConservativeGlobalTimeManager` releases the next global tick after every LTM has
+reported, while ordinary `sendMessageTo` interactions travel directly through the
+sharding region. The sender's `FinishEvent` and the interaction use different
+recipients, so the GTM/LTM reports do not prove the interaction has reached the
+receiver. Registered awaited replies only account for selected consistency-critical
+requests; fire-and-forget sends are not represented in `hasPendingWork`. A late
+delivery can therefore introduce work at or before a frontier already released by
+the conservative barrier.
+
+This makes the barrier's channel-closure proof incomplete. Separately, repeated
+conservative runs of the fixed-seed two-link scenario with the same jar show a
+model-level tie-order issue: both vehicles enter the second MICRO link at tick 35,
+but the first vehicle to exit reverses between runs. Equal-position vehicles are
+inserted in message arrival order in `LinkVehicleFlowHandler`, and the car-following
+strategy uses lane queue order to choose each leader. This arrival-order
+sensitivity is consistent with the conservative/optimistic first-link lead swap.
+Do not attribute
+that observed state difference to the conservative barrier without further evidence.
+
+Equal-position MICRO lane order now uses descending position and ascending vehicle
+ID at insertion and after simulation steps. Focused specs and repeated fixed-seed
+runs pass strict trip, summary, and null-state-discard checks. Conservative
+two-link runs still differ in the tick of the first link-11 arrival (33 versus 35),
+so full event-tick determinism is not established. See the validation record for
+the per-run outcomes.
+
+The barrier still needs a conservative-run gateway that records each send before
+forwarding, acknowledges receiver acceptance, and holds the frontier until all
+relevant channel deliveries are settled. Fixed rounds, grace polls, and delays
+cannot prove this condition. Add an injected delayed-channel protocol regression
+to validate that independent gap. Details and protocol invariants are in
+[`TIME_WARP_ACCOUNTED_RUNTIME.md`](TIME_WARP_ACCOUNTED_RUNTIME.md#conservative-same-tick-closure-follow-up).
 
 ## Conservative premature termination during vehicle activation (fixed 2026-10-22)
 
