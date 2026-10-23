@@ -89,6 +89,10 @@ The frontier is monotone, and **only event time strictly below GVT commits**. An
 event at GVT can still be cancelled or reordered. Unexpected input below published
 GVT, lost participants, failed reconstruction, and independent actor restart fail
 the run; they never lower the frontier or become successful idle termination.
+An LP input delivered to a registered process with null model state also fails the
+run before the delivery is acknowledged. It indicates initialization loss or an
+invalid late delivery to a retired sharded entity; silently discarding it would
+lose an anti-message or model interaction while reporting apparent success.
 
 With no live work, normal completion uses `Long.MaxValue` as the frontier sentinel.
 With only work beyond the finite inclusive horizon, commitment reaches
@@ -102,9 +106,14 @@ Truncation does not invoke model `onDestruct` to synthesize extra model events.
 `selfDestruct` and destructive spontaneous completion record a checkpointed
 terminal intent and cancel future self-scheduling. They do not stop a speculative
 LP or flush its future reports. Rollback restores terminal intent with state.
-At a cut, a terminal LP is eligible for physical retirement only when its terminal
-event is below GVT and it has no pending work. Final completion also retires idle
-infrastructure. Physical retirement performs no new model transitions.
+At a cut, a terminal LP is eligible for physical retirement only when both its terminal
+event and its latest processed event are strictly below GVT and it has no pending work.
+A later interaction can extend speculative history after terminal intent was recorded;
+that history and its reports must survive until GVT passes them too. The LP accepts an ordinary
+retirement command only from the coordinator and only for the same committed round
+that granted eligibility. Final-cut retirement is separately marked by the
+coordinator because horizon truncation may intentionally leave future work beyond
+the requested horizon. Physical retirement performs no new model transitions.
 
 Every reporting destination uses the same speculative buffer, replay suppression,
 and rollback discard rules. The coordinator is the sole producer of committed
@@ -164,5 +173,69 @@ asynchronous epoch/color GVT implementation must preserve the same channel and
 membership invariants. Conservative independent same-tick channel closure and
 acknowledged durable completion remain separate migration work. No mixed-policy
 run or runtime policy switching is required by this architecture.
+
+## Conservative same-tick closure follow-up
+
+The conservative `SelectiveBarrier` is not a channel-closed barrier. Each LTM
+reports its next scheduled tick and whether its local dispatched work is complete.
+The GTM then advances when every registered LTM has reported, but an interaction
+sent directly through a sharding region is outside those reports. In particular,
+the sender's `FinishEvent` reaches its LTM independently of the interaction's
+delivery to the receiver. `ConservativeGlobalTimeManager.handleLocalTimeReport`
+can therefore release the next tick while an earlier-tick interaction is still
+in transit. `hasPendingWork` covers registered reply obligations; it does not
+count all ordinary fire-and-forget interactions.
+
+This is a source-proven closure gap. However, investigation of the observed
+two-link ordering difference found a more direct model-level nondeterminism:
+vehicles entering the same MICRO link at the same tick and position are inserted
+in message arrival order, and the car-following calculation uses queue order to
+choose the leader. Repeated conservative runs with the same jar and seed kept both
+link-11 entries at tick 35 but reversed which vehicle exited first. Thus the
+observed difference does not establish that an unclosed conservative channel
+caused the outcome. The independent closure gap still requires a protocol fix;
+do not mask it with a sleep, extra idle poll, or fixed number of barrier rounds.
+
+The immediate reproducible cause was in
+`LinkVehicleFlowHandler.handleEnterLinkMicro`: equal-position inserts appended in
+arrival order. `DefaultMicroSimulationStrategy.processMicroLane` then treated the
+previous queue element as leader, and its post-step sort used position alone.
+`VehicleInLane` now defines a shared front-to-back order by descending position,
+then ascending logical vehicle ID; entry, each sub-tick, lane changes, and the
+legacy micro manager use it. Focused tests cover reversed arrival sequences and
+leader selection. Repeated seeded MICRO runs pass strict trip/summary/discard
+checks and produce a stable first-link leader, but conservative two-link runs
+still vary the tick at which the first vehicle enters link 11 (tick 33 versus 35).
+The lane tie fix therefore closes the reproduced equal-position cause without
+establishing full conservative determinism or cross-policy event-tick parity.
+See `docs/TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md` for the run table and
+preliminary MESO comparison.
+
+The conservative policy needs its own safe-time gateway, selected for the whole
+run before actors start. Its minimum protocol is:
+
+1. Route every model interaction through the conservative gateway. Register its
+   unique token and logical event order before forwarding it to the destination.
+2. Have the destination acknowledge after accepting the interaction into its
+   model input path, including any resulting schedule/control update. A delivery
+   acknowledgement must not depend on a later reply through the original sender.
+3. Include outstanding gateway deliveries and their event times in the barrier
+   snapshot. Release a frontier only after all LTMs report and no earlier/equal
+   channel delivery remains in flight.
+4. Preserve the established same-tick rule: causal sends advance the microstep;
+   independent events use the stable logical key. The receiver must queue and
+   execute according to that order before the frontier passes it.
+5. Treat unknown destinations, lost acknowledgements, and gateway failure as
+   explicit run failures. Do not infer channel closure from elapsed time or idle
+   LTM reports.
+
+Implement this behind a conservative-run protocol boundary, reusing transport
+identity and ordering primitives where appropriate but not enabling optimistic
+rollback, GVT commitment, or actor-policy mixing. First add an injected-channel
+protocol test that holds one delivery after its sender reports finished and
+asserts that the frontier cannot pass it. Then validate with the fixed-seed
+scenario and a sequential reference, comparing physical event ticks and state
+outcomes as well as trip totals. The existing report-order difference remains
+unresolved until those tests pass.
 
 See [validation evidence](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md).

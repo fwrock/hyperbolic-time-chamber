@@ -98,6 +98,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val runtimeIncarnation = java.util.UUID.randomUUID().toString
   private var runtimeFrozen = false
   private var runtimeGvt = Long.MinValue
+  private var runtimeCommitRound = 0L
+  private var committedRetirement: Option[(Long, Boolean)] = None
   private var runtimeFrontierAt = System.nanoTime()
   private var runtimeDiagnosticAt = 0L
   private var runtimeFailed = false
@@ -1294,6 +1296,11 @@ abstract class SimulationBaseActor[T <: BaseState](
       pendingDynamicInits.values.map(_._2.data.data).map(_ => currentTick)).minOption
   }
 
+  // Later interactions can extend history beyond the terminal decision without scheduling
+  // another wake. Their state and reports must remain rollbackable until they also commit.
+  private def mayRetireTerminal(gvt: Long): Boolean =
+    terminalIntent.exists(_.tick < gvt) && currentTick < gvt && runtimeMinimum.isEmpty
+
   private def acceptRuntimeInput(event: AnyRef): Unit = event match {
     case e: SpontaneousEvent if (e.order.nonEmpty && e.scheduleRevision < scheduleRevision) ||
       (e.generation > 0L && e.generation <= currentGeneration) =>
@@ -1322,6 +1329,14 @@ abstract class SimulationBaseActor[T <: BaseState](
           case _ => throw new IllegalArgumentException("not an LP event")
         }
         require(tick >= runtimeGvt, s"LP input $tick below frontier $runtimeGvt")
+        // The coordinator only registers LPs after initialization and retires them only after
+        // their committed work is drained. Receiving any input with no model state therefore
+        // means a late message reached a retired/recreated shard entity (or initialization was
+        // lost). Acknowledge-and-discard would hide a broken optimistic lifecycle and lose work.
+        require(
+          state != null,
+          s"runtime delivered ${event.getClass.getSimpleName} to uninitialized LP $getEntityId"
+        )
         acceptRuntimeInput(event)
         accountedCoordinator.foreach(_ ! DeliveryAccepted(epoch, token))
         drainInputs()
@@ -1344,18 +1359,36 @@ abstract class SimulationBaseActor[T <: BaseState](
       sender() ! RuntimeSnapshot(round, runtimeMinimum, outstandingAwaitedReplies.size,
         pendingCreationCallbacks.size + pendingDynamicInits.size)
     case CommitRuntime(round, gvt) =>
-      require(gvt >= runtimeGvt, "commit frontier regression")
-      if (gvt != runtimeGvt) runtimeFrontierAt = System.nanoTime()
-      runtimeGvt = gvt
-      flushBufferedReportsUpTo(gvt)
-      val eligible = terminalIntent.nonEmpty && currentTick < gvt && runtimeMinimum.isEmpty
-      sender() ! RuntimeCommitted(round, eligible)
+      if (!accountedCoordinator.contains(sender()) || !runtimeFrozen || round <= runtimeCommitRound || gvt < runtimeGvt) {
+        failRuntime(new IllegalStateException(
+          s"unauthorized commit for $getEntityId at round=$round while frozen=$runtimeFrozen gvt=$gvt/$runtimeGvt"
+        ))
+      } else {
+        runtimeCommitRound = round
+        if (gvt != runtimeGvt) runtimeFrontierAt = System.nanoTime()
+        runtimeGvt = gvt
+        flushBufferedReportsUpTo(gvt)
+        val eligible = mayRetireTerminal(gvt)
+        committedRetirement = Some(round -> eligible)
+        sender() ! RuntimeCommitted(round, eligible)
+      }
     case ResumeRuntime(_) =>
       runtimeFrozen = false
       try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
-    case RetireRuntimeProcess(round) =>
-      sender() ! RuntimeProcessRetired(round)
-      physicallyRetire()
+    case RetireRuntimeProcess(round, finalCut) =>
+      val coordinatorSent = accountedCoordinator.contains(sender())
+      val committedThisRound = committedRetirement.exists(_._1 == round)
+      val eligibleThisRound = committedRetirement.contains(round -> true)
+      val terminalStillSafe = mayRetireTerminal(runtimeGvt)
+      if (!coordinatorSent || !committedThisRound || (!finalCut && (!eligibleThisRound || !terminalStillSafe))) {
+        failRuntime(new IllegalStateException(
+          s"unauthorized or unsafe retirement for $getEntityId at round=$round finalCut=$finalCut gvt=$runtimeGvt"
+        ))
+      } else {
+        committedRetirement = None
+        sender() ! RuntimeProcessRetired(round)
+        physicallyRetire()
+      }
     case event: MigrationContextEvent if awaitingMigration =>
       awaitingMigration = false
       handleMigrationContext(event)

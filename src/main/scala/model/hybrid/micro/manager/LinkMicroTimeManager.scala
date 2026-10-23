@@ -122,12 +122,7 @@ class LinkMicroTimeManager(
 
     vehiclesByLane.get(lane) match {
       case Some(queue) =>
-        val insertIndex = queue.indexWhere(_.position < position)
-        if (insertIndex >= 0) {
-          queue.insert(insertIndex, vehicle)
-        } else {
-          queue.enqueue(vehicle)
-        }
+        VehicleInLane.insertFrontToBack(queue, vehicle)
       case None =>
         context.log.error(s"[$linkId] Invalid lane $lane for vehicle $vehicleId")
     }
@@ -192,6 +187,7 @@ class LinkMicroTimeManager(
   )(implicit context: ActorContext[Command]): Unit = {
 
     if (vehicles.isEmpty) return
+    VehicleInLane.sortFrontToBack(vehicles)
 
     for (i <- vehicles.indices) {
       val vehicle = vehicles(i)
@@ -238,6 +234,8 @@ class LinkMicroTimeManager(
         context.log.debug(s"[$linkId] Vehicle ${vehicle.actorId} reached end of link")
       }
     }
+
+    VehicleInLane.sortFrontToBack(vehicles)
   }
 
   /** Update vehicle state from external source.
@@ -254,6 +252,7 @@ class LinkMicroTimeManager(
         if (index >= 0) {
           val oldVehicle = queue(index)
           queue(index) = oldVehicle.copy(position = position, velocity = velocity)
+          VehicleInLane.sortFrontToBack(queue)
           context.log.trace(s"[$linkId] Updated vehicle $vehicleId: pos=$position, vel=$velocity")
         }
     }
@@ -277,12 +276,7 @@ class LinkMicroTimeManager(
 
               vehiclesByLane.get(toLane).foreach {
                 toQueue =>
-                  val insertIndex = toQueue.indexWhere(_.position < vehicle.position)
-                  if (insertIndex >= 0) {
-                    toQueue.insert(insertIndex, vehicle)
-                  } else {
-                    toQueue.enqueue(vehicle)
-                  }
+                  VehicleInLane.insertFrontToBack(toQueue, vehicle)
               }
 
               context.log

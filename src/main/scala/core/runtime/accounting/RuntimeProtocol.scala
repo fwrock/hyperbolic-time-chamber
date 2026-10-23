@@ -26,7 +26,7 @@ final case class RuntimeSnapshot(round: Long, minimum: Option[Long], blocked: In
 final case class CommitRuntime(round: Long, gvt: Long) extends RuntimeCommand
 final case class RuntimeCommitted(round: Long, mayRetire: Boolean) extends RuntimeCommand
 final case class ResumeRuntime(round: Long) extends RuntimeCommand
-final case class RetireRuntimeProcess(round: Long) extends RuntimeCommand
+final case class RetireRuntimeProcess(round: Long, finalCut: Boolean = false) extends RuntimeCommand
 final case class RuntimeProcessRetired(round: Long) extends RuntimeCommand
 final case class StartRuntime(startTick: Long) extends RuntimeCommand
 final case class RequestRuntimeRound() extends RuntimeCommand

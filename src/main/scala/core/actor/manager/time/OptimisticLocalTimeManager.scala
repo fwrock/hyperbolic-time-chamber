@@ -45,7 +45,7 @@ class OptimisticLocalTimeManager(
     * [[LocalTimeManagerBase]].
     */
   override protected def shouldDestructNow(finish: FinishEvent): Boolean =
-    lastKnownGvt.exists(finish.end <= _)
+    lastKnownGvt.exists(finish.end < _)
 
   override def handleEvent: Receive = {
     val gvtHandler: PartialFunction[Any, Unit] = {

@@ -4,7 +4,58 @@ Related design: [implemented protocol](TIME_WARP_ACCOUNTED_RUNTIME.md) and
 [target architecture](TIME_WARP_EXTENSIBLE_RUNTIME.md). Each case runs one fixed
 policy; separate processes are used for conservative and optimistic cases.
 
+## Latest verified results — retirement correction
+
+The rebuilt retirement-correction artifact passes all four bounded MICRO cases.
+The actor now retains its state and speculative history until GVT is strictly
+beyond both its terminal event and latest processed event, with no pending work;
+ordinary physical retirement also requires coordinator authorization for the
+same committed round. The older Time Manager adapter now uses the same strict
+GVT boundary.
+
+| Check | Conservative, one link | Conservative, two links | Optimistic, one link | Optimistic, two links |
+|---|---:|---:|---:|---:|
+| Person trips / expected | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 |
+| Daily summaries / expected | 2 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
+| MICRO entries / exits | 4 / 4 | 8 / 8 | 4 / 4 | 8 / 8 |
+| Exception lines / replay mismatches | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| Null-state interaction discards | 0 | 0 | 0 | 0 |
+| Rollbacks / stalls | 0 / 0 | 0 / 0 | 51 / 0 | 227 / 0 |
+| Engine stop before launcher teardown | Yes | Yes | Yes | Yes |
+| Strict acceptance | Pass | Pass | Pass | Pass |
+
+`sbt test assembly` passed **476 tests across 99 suites**. The executable is
+`/tmp/htc-retirement-checked-20261023.jar`, SHA-256
+`27ffe6efde91cd8ef14466791e4597797dbc59f21cf51f44fbf114dafbb82d0a`.
+See [retirement verification evidence](#retirement-boundary-verification-follow-up)
+for the reproduced boundary failures, corrections, inputs, commands, and output
+locations. These results validate the retirement correction in the tested MICRO
+scope; conservative channel ordering, full event-tick parity, and MESO validation
+remain separate open work.
+
 ## Defects reproduced and corrected
+
+### Historical failed acceptance matrix — before the corrections
+
+The earlier `batch-*` run set has the following observed outcomes:
+
+| Check | Conservative, one link | Conservative, two links | Optimistic, one link | Optimistic, two links |
+|---|---:|---:|---:|---:|
+| Person trips / expected | 4 / 4 | 4 / 4 | 4 / 4 | 3 / 4 |
+| Daily summaries / expected | 2 / 2 | 2 / 2 | 2 / 2 | 1 / 2 |
+| MICRO entries / exits | 4 / 4 | 8 / 8 | 4 / 4 | 8 / 8 |
+| Null-state interaction discards | 0 | 0 | 21 | 0 |
+| Rollbacks / stalls | 0 / 0 | 0 / 0 | 39 / 0 | 195 / 0 |
+| Strict acceptance | Pass | Pass | Fail | Fail |
+
+These are retained in `/tmp/htc-person-replay-20261022/batch-*`. The optimistic
+one-link run's trip totals do not override its 21 discarded anti-messages; the
+two-link run's engine stop does not override its missing trip and daily summary.
+Both correctly fail strict acceptance. They predate the final queued-dispatch
+correction and are not results for the final archived jar below. Later
+`accounted-queue-*` cases were rerun against that jar and passed the strict outcome,
+runtime, and completion checks. Keeping both sets makes the correction auditable;
+the earlier failures remain regression evidence, not successful validation.
 
 The earlier event-ordering baseline still stopped optimistic LPs before late
 cancellations and lost daily completion reports. Those observations are preserved
@@ -180,6 +231,89 @@ not a simulated-state parity metric. Later optimistic repetitions also require
 comparison of all physical metrics against a sequential reference. Do not infer
 complete deterministic or physical parity from trip counts or matching row counts.
 
+## Two-link MICRO tie-order investigation (2026-10-23)
+
+To distinguish reporter ordering from changed vehicle state, the same conservative
+jar (`/tmp/htc-accounted-queue-20261023.jar`) and seed-42 scenario were run twice
+with DEBUG actor logging enabled. Both runs completed with 152 records and the
+expected outcomes. Link actor logs show different actual receiver order for the
+two same-tick arrivals at link 11:
+
+| Run | Link 11 `EnterLink` receive order | MICRO exit order |
+|---|---|---|
+| `conservative-debug-logs` | car 15, then car 13 | car 15 at tick 56 (21 ticks), car 13 at tick 58 (23 ticks) |
+| `conservative-debug-logs-b` | car 13, then car 15 | car 13 at tick 56 (21 ticks), car 15 at tick 58 (23 ticks) |
+
+Both cars enter link 11 at simulation tick 35 in each run. The log lines are emitted
+inside the Link actor's `handleEnterLink` before its synchronous MICRO registration,
+so they establish the actual order seen by the model, rather than report-sink order.
+The lead vehicle reverses with that receive order. `LinkVehicleFlowHandler` inserts
+vehicles at position zero by appending equal-position arrivals; the MICRO strategy
+then uses lane queue order to choose the leader. This demonstrates a model-level
+same-tick tie whose outcome depends on cross-actor message arrival. It is not merely
+a report serialization difference, and the evidence does not identify CPU-resource
+contention as the cause.
+
+The conservative/optimistic first-link lead swap is consistent with this same
+arrival-order sensitivity. The earlier conservative-channel-closure hypothesis is
+not established as the cause of this scenario's differing vehicle ticks. The source
+level conservative channel-closure gap remains independent and still needs an
+injected delayed-channel regression.
+
+## Stable MICRO lane tie-break validation (2026-10-23)
+
+`VehicleInLane` now orders lane members by descending position and then ascending
+vehicle ID. Link entry, every active MICRO sub-tick, lane changes, and the legacy
+micro manager share the same ordering. Focused coverage verifies reversed arrival
+insertion, leader selection, post-step ordering, and Link handler integration.
+
+The full suite passes **472 tests in 99 suites**, and assembly succeeds. Final
+artifact SHA-256: `aeefef777337f1c40a8122fdc49902c07e688bdf72b64ad5b8f226ad1a8ca1c3`.
+Six seeded MICRO simulator runs pass strict trip, schedule, MICRO traversal,
+exception, replay, null-state-discard, stall, and engine-stop checks. The one-link
+cases and first two-link repetitions ran before a final consistency change in the
+legacy micro manager; four two-link repetitions were rerun against the exact final
+artifact:
+
+| Run | Mode / scenario | Trips / schedules | MICRO entries / exits | Rollbacks | Strict result |
+|---|---|---:|---:|---:|---|
+| `lane-fix-final-cons-multi-a` | Conservative, two links | 4 / 2 | 8 / 8 | 0 | Pass |
+| `lane-fix-final-cons-multi-b` | Conservative, two links repeat | 4 / 2 | 8 / 8 | 0 | Pass |
+| `lane-fix-final-opt-multi-a` | Optimistic, two links | 4 / 2 | 8 / 8 | 83 | Pass |
+| `lane-fix-final-opt-multi-b` | Optimistic, two links repeat | 4 / 2 | 8 / 8 | 202 | Pass |
+
+The earlier one-link runs also passed on the same active Link strategy code: both
+modes produced four trips, two schedules, four MICRO entries/exits, and zero
+null-state discards.
+
+The same-tick equal-position leader now follows vehicle ID even when messages
+arrive in the opposite order. This removes that cause of the link-level lead swap.
+In `lane-fix-final-cons-debug`, the Link actor received car 15 before car 13 at
+link 11, but car 13 exited first (tick 56 versus tick 58), as the stable ID order
+requires. This is a simulator-level check that the leader no longer follows
+message arrival order.
+
+The tie fix does not establish full conservative event-tick determinism: in the
+two conservative repetitions, car 13 entered link 11 at tick 33 in one run and
+tick 35 in the other. The optimistic two-link pair repeated the same reported
+event ticks. The conservative handoff timing difference needs a separate causal
+trace. The source-level conservative channel-closure gap also remains independent.
+
+## Preliminary MESO policy check
+
+The same generated scenario was rerun after changing all link states to MESO in
+temporary inputs under both policies (before the legacy-manager-only final
+consistency change). All four runs stopped and emitted four trip
+completions, two daily summaries, zero exception lines, zero null-state discards,
+and zero stalls. This is not a MESO parity pass: in the one-link cases, reported
+trip distance is 0 m; in the two-link cases, each reported trip distance is 200 m
+although its route has two 200 m links. The optimistic two-link first trip also
+completed at tick 50 versus tick 32 conservatively. MESO distance accounting and
+the multi-link policy timing therefore need their own fixes and strict acceptance
+scenario before MESO can be called validated for both policies. Temporary run
+artifacts are under `/tmp/htc-person-replay-20261022/meso/` and the
+`lane-fix-meso-*` directories.
+
 ## Final queued-dispatch correction
 
 The final full build passed **469 tests in 98 suites** and assembly succeeded:
@@ -259,3 +393,67 @@ person 14 at 56/246 and person 16 at 54/244; conservative completion is 54/244 a
 56/246 respectively. Daily summaries match. Full cross-policy metric parity is
 therefore **still open**, despite independently correct trip counts, destinations,
 distances, activity sequences, and committed completion in these bounded cases.
+
+## Retirement boundary verification follow-up
+
+Checking the round-scoped retirement change exposed two additional boundary bugs:
+
+- A terminal decision at tick 10 followed by an interaction at tick 20 was marked
+  eligible at GVT 20. The new regression failed before the correction with
+  `expected RuntimeCommitted(1,false), found RuntimeCommitted(1,true)`. Ordinary
+  retirement now requires both the terminal event and the latest processed event
+  to be strictly below GVT, with no pending work. Later speculative state and
+  reports survive until that frontier passes them.
+- The older Time Manager adapter used `finish.end <= GVT` in its immediate and
+  deferred destruction paths. Both boundary tests failed before the correction.
+  Both paths now require `finish.end < GVT`, including when GVT is already cached
+  before the finish arrives.
+
+The LP also checks the coordinator and committed round before accepting ordinary
+retirement. Final-cut retirement is explicitly marked for settled completion or
+horizon truncation. A null-state accounted delivery fails before acknowledgement.
+The rollback test still proves terminal intent can be cancelled at GVT and the
+actor can subsequently commit corrected output and retire.
+
+`sbt test assembly` passed **476 tests across 99 suites**, with no failures.
+Build log: `/tmp/htc-retirement-check-20261023-final-build.log`. Failing regression
+evidence is preserved in `/tmp/htc-retirement-suffix-regression-before.log` and
+`/tmp/htc-retirement-gvt-boundary-before.log`.
+
+The rebuilt artifact is `/tmp/htc-retirement-checked-20261023.jar`, assembly hash
+`c2bfa0f71efd4eadabb865c2812aff316c200428`, SHA-256
+`27ffe6efde91cd8ef14466791e4597797dbc59f21cf51f44fbf114dafbb82d0a`.
+The same generated seed-42 inputs described above were reused: two persons,
+two owned cars, no transit, horizon 1000, and one fixed policy per run.
+Expected distances remain 200 m per one-link trip and 400 m per two-link trip.
+
+| Run suffix | Policy / route | Trips / expected | Daily summaries / expected | MICRO entries / exits | Rollbacks | Strict result |
+|---|---|---|---|---|---|---|
+| conservative-single | Conservative / one link | 4 / 4 | 2 / 2 | 4 / 4 | 0 | Pass |
+| optimistic-single | Optimistic / one link | 4 / 4 | 2 / 2 | 4 / 4 | 51 | Pass |
+| conservative-multi | Conservative / two links | 4 / 4 | 2 / 2 | 8 / 8 | 0 | Pass |
+| optimistic-multi | Optimistic / two links | 4 / 4 | 2 / 2 | 8 / 8 | 227 | Pass |
+
+Each run directory is
+`/tmp/htc-person-replay-20261022/accounted-retirement-checked-<suffix>/` and
+contains `run.conf`, `run.log`, JSONL reports, `analysis.json`, and per-person
+outcome verification. All four cases have zero errors, replay mismatches,
+null-state interaction discards, and stalls. Both optimistic runs show monotone
+accounted frontiers and acknowledged completion before reporter shutdown.
+The launcher observed engine completion before its bounded JVM teardown; these
+results do not assert that the cluster JVM exits by itself.
+
+Reproduction uses the preserved runner and verifier:
+
+```bash
+python3 /tmp/htc-person-replay-20261022/run.py accounted-retirement-checked-conservative-single /tmp/htc-retirement-checked-20261023.jar /tmp/htc-person-replay-20261022/discrete-event-single.json 111
+python3 /tmp/htc-person-replay-20261022/run.py accounted-retirement-checked-optimistic-single /tmp/htc-retirement-checked-20261023.jar /tmp/htc-person-replay-20261022/time-warp-single.json 112
+python3 /tmp/htc-person-replay-20261022/run.py accounted-retirement-checked-conservative-multi /tmp/htc-retirement-checked-20261023.jar /tmp/htc-person-replay-20261022/discrete-event-multi.json 113
+python3 /tmp/htc-person-replay-20261022/run.py accounted-retirement-checked-optimistic-multi /tmp/htc-retirement-checked-20261023.jar /tmp/htc-person-replay-20261022/time-warp-multi.json 114
+python3 /tmp/htc-person-replay-20261022/analyze.py accounted-retirement-checked-conservative-single accounted-retirement-checked-optimistic-single accounted-retirement-checked-conservative-multi accounted-retirement-checked-optimistic-multi
+```
+
+Use fresh labels when reproducing because report files append. Input hashes,
+commands, artifact identity, and results are recorded in
+`/tmp/htc-retirement-check-20261023-manifest.json`. These bounded MICRO checks do
+not close the conservative channel-ordering gap or establish MESO/tick parity.

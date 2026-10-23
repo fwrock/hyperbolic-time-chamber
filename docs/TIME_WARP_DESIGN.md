@@ -933,6 +933,13 @@ field), `LocalTimeManagerBase.scala` (+`currentGvt` hook, piggybacked onto every
 broadcast (expects `GvtUpdateEvent` before `StopSimulationEvent` on the terminating round). Full
 suite (242 tests) passes.
 
+**2026-10-23 correction:** the mechanism below records the earlier unaccounted
+implementation. Its inclusive GVT flush and unconditional termination flush are
+superseded: only events strictly below GVT commit, and a local finish never
+authorizes physical retirement. The terminal event, latest processed history,
+pending inputs, and in-transit deliveries must all be settled before ordinary
+retirement. See [the accounted runtime](TIME_WARP_ACCOUNTED_RUNTIME.md#reversible-completion-and-output).
+
 **The mechanism**: `report()` still resolves its target reporter and increments `eventsProcessed`
 immediately (that metric counts this actor processing an event, not data reaching a reporter), but
 under `isTimeWarp` the actual `target ! event` send is deferred into a per-actor `reportBuffer`

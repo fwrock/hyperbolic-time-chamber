@@ -292,7 +292,7 @@ final class AccountedRuntimeCoordinator(expectedManagers: Int, duration: Long, r
     sinksDrained = !finalCut
     pendingRetire.foreach { ref =>
       if (managers.contains(ref)) ref ! RuntimeStopManagers(roundId)
-      else ref ! RetireRuntimeProcess(roundId)
+      else ref ! RetireRuntimeProcess(roundId, finalCut = finalCut)
     }
     if (finalCut) reportManager match {
       case Some(manager) => manager ! DrainRuntimeReports(roundId, self, usedSinks.toSet)

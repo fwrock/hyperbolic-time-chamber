@@ -150,8 +150,7 @@ class LinkVehicleFlowHandler(
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>
-      val idx = queue.indexWhere(_.position < vehicle.position)
-      if (idx >= 0) queue.insert(idx, vehicle) else queue.enqueue(vehicle)
+      VehicleInLane.insertFrontToBack(queue, vehicle)
     }
 
     sendMicroEnterAck(event, assignedLane)

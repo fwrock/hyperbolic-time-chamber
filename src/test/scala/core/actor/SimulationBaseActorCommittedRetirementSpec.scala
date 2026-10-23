@@ -28,10 +28,12 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     ConfigFactory.parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off").withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
   private class LP(props: Properties, rejectCapability: Boolean = false, classifyReplyAsSuperseded: Boolean = false,
-    awaitSpontaneous: Boolean = false) extends SimulationBaseActor[RetirementState](props) {
+    awaitSpontaneous: Boolean = false, finishOnEveryInput: Boolean = true) extends SimulationBaseActor[RetirementState](props) {
     def ready: Boolean = recoveryFinished
     def count: Int = state.count
+    def clearModelState(): Unit = state = null
     def terminal: Boolean = buildMigrationSnapshot().terminalIntent.nonEmpty
+    def terminalTick: Option[Long] = buildMigrationSnapshot().terminalIntent.map(_.tick)
     override protected def validateRuntimeCapabilities(): Unit =
       require(!rejectCapability, "unsupported test effect")
     override protected def isKnownSupersededReply(event: ActorInteractionEvent): Boolean = classifyReplyAsSuperseded
@@ -44,7 +46,7 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
       if (awaitSpontaneous) consumeAwaitedReply("peer")
       state = state.copy(count = state.count + 1)
       report(event.tick, "completed")
-      selfDestruct()
+      if (finishOnEveryInput || event.data == "complete") selfDestruct()
     }
   }
 
@@ -177,6 +179,31 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     coordinator.expectNoMessage(100.millis)
   }
 
+  "an accounted delivery to an LP with no model state" should "fail the run instead of acknowledging and dropping the input" in {
+    val coordinator = TestProbe()
+    val manager = TestProbe()
+    val creator = TestProbe()
+    val lp = TestActorRef(new LP(Properties(entityId = "100", actorType = CreationTypeEnum.PoolDistributed,
+      runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
+      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref))))
+    creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    lp ! InitializeEvent("100", creator.ref, InitializeData(RetirementState(), "test", creator.ref,
+      mutable.Map.empty, timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref),
+      runtimeCoordinator = Some(coordinator.ref)))
+    coordinator.expectMsgType[JoinRuntime]
+    coordinator.send(lp, RuntimeJoined("run", coordinator.ref, manager.ref))
+    creator.expectMsgType[InitializeEntityAckEvent]
+
+    lp.underlyingActor.clearModelState()
+    val anti = ActorInteractionEvent(10L, 0L, 99L, "example.Peer", "", "example.Peer",
+      data = "cancelled", resourceId = "test", seq = 1L,
+      order = Some(EventOrder(10L, 0L, "anti")), isAntiMessage = true)
+    coordinator.send(lp, RuntimeDelivery("run", 1L, anti))
+
+    coordinator.expectMsgType[RuntimeFailure].reason should include ("delivered ActorInteractionEvent to uninitialized LP 100")
+    coordinator.expectNoMessage(100.millis)
+  }
+
   "a speculative terminal LP" should "survive cancellation at GVT and retire only after corrected output commits" in {
     val coordinator = TestProbe()
     val manager = TestProbe()
@@ -232,5 +259,84 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     coordinator.expectMsg(RuntimeProcessRetired(2L))
     watcher.expectTerminated(lp)
     sink.expectNoMessage(100.millis)
+  }
+
+  it should "reject a retirement command while its terminal event is still at GVT" in {
+    val coordinator = TestProbe()
+    val manager = TestProbe()
+    val creator = TestProbe()
+    val lp = TestActorRef(new LP(Properties(entityId = "105", actorType = CreationTypeEnum.PoolDistributed,
+      runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
+      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref))))
+    creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    lp ! InitializeEvent("105", creator.ref, InitializeData(RetirementState(), "test", creator.ref,
+      mutable.Map.empty, timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref),
+      runtimeCoordinator = Some(coordinator.ref)))
+    coordinator.expectMsgType[JoinRuntime]
+    coordinator.send(lp, RuntimeJoined("run", coordinator.ref, manager.ref))
+    creator.expectMsgType[InitializeEntityAckEvent]
+    val completion = ActorInteractionEvent(10L, 0L, 99L, "example.Source", "", "example.Source",
+      data = "complete", resourceId = "test", seq = 1L,
+      order = Some(EventOrder(10L, 0L, "completion")))
+    coordinator.send(lp, RuntimeDelivery("run", 1L, completion))
+    coordinator.awaitAssert(lp.underlyingActor.terminal shouldBe true, 3.seconds, 10.millis)
+    coordinator.receiveWhile(idle = 50.millis) { case _ => () }
+    coordinator.send(lp, FreezeRuntime(1L))
+    coordinator.expectMsg(RuntimeFrozen(1L))
+    coordinator.send(lp, CommitRuntime(1L, 10L))
+    coordinator.expectMsg(RuntimeCommitted(1L, false))
+
+    val watcher = TestProbe()
+    watcher.watch(lp)
+    coordinator.send(lp, RetireRuntimeProcess(1L))
+
+    coordinator.expectMsgType[RuntimeFailure].reason should include ("unauthorized or unsafe retirement")
+    watcher.expectNoMessage(100.millis)
+    lp.underlyingActor.count shouldBe 1
+  }
+
+  it should "retain later speculative history after its terminal decision has committed" in {
+    val coordinator = TestProbe()
+    val manager = TestProbe()
+    val creator = TestProbe()
+    val sink = TestProbe()
+    val lp = TestActorRef(new LP(Properties(entityId = "106", actorType = CreationTypeEnum.PoolDistributed,
+      runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map(ReportTypeEnum.parquet -> sink.ref),
+      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref)), finishOnEveryInput = false))
+    creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    lp ! InitializeEvent("106", creator.ref, InitializeData(RetirementState(), "test", creator.ref,
+      mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> manager.ref),
+      runtimeCoordinator = Some(coordinator.ref)))
+    coordinator.expectMsgType[JoinRuntime]
+    coordinator.send(lp, RuntimeJoined("run", coordinator.ref, manager.ref))
+    creator.expectMsgType[InitializeEntityAckEvent]
+    def input(tick: Long, data: String) = ActorInteractionEvent(tick, 0L, 99L,
+      "example.Source", "", "example.Source", data = data, resourceId = "test", seq = tick,
+      order = Some(EventOrder(tick, 0L, s"input-$tick")))
+    coordinator.send(lp, RuntimeDelivery("run", 1L, input(10L, "complete")))
+    coordinator.send(lp, RuntimeDelivery("run", 2L, input(20L, "observe")))
+    coordinator.awaitAssert({
+      lp.underlyingActor.count shouldBe 2
+      lp.underlyingActor.terminalTick shouldBe Some(10L)
+    }, 3.seconds, 10.millis)
+    coordinator.receiveWhile(idle = 50.millis) { case _ => () }
+
+    coordinator.send(lp, FreezeRuntime(1L))
+    coordinator.expectMsg(RuntimeFrozen(1L))
+    coordinator.send(lp, CommitRuntime(1L, 20L))
+    coordinator.expectMsgType[PublishCommittedReport].event.tick shouldBe 10L
+    coordinator.expectMsg(RuntimeCommitted(1L, false))
+    lp.underlyingActor.count shouldBe 2
+
+    coordinator.send(lp, FreezeRuntime(2L))
+    coordinator.expectMsg(RuntimeFrozen(2L))
+    coordinator.send(lp, CommitRuntime(2L, 21L))
+    coordinator.expectMsgType[PublishCommittedReport].event.tick shouldBe 20L
+    coordinator.expectMsg(RuntimeCommitted(2L, true))
+    val watcher = TestProbe()
+    watcher.watch(lp)
+    coordinator.send(lp, RetireRuntimeProcess(2L))
+    coordinator.expectMsg(RuntimeProcessRetired(2L))
+    watcher.expectTerminated(lp)
   }
 }

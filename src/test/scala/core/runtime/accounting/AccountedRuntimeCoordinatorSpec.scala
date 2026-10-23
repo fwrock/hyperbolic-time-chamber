@@ -83,7 +83,7 @@ class AccountedRuntimeCoordinatorSpec extends AnyFlatSpec with Matchers with Bef
     manager.expectMsg(CommitRuntime(freeze.round, Long.MaxValue))
     lp.send(coordinator, RuntimeCommitted(freeze.round, true))
     manager.send(coordinator, RuntimeCommitted(freeze.round, false))
-    lp.expectMsg(RetireRuntimeProcess(freeze.round))
+    lp.expectMsg(RetireRuntimeProcess(freeze.round, finalCut = true))
     manager.expectMsg(RuntimeStopManagers(freeze.round))
     manager.send(coordinator, RuntimeProcessRetired(freeze.round))
     parent.expectNoMessage(100.millis)
@@ -128,7 +128,7 @@ class AccountedRuntimeCoordinatorSpec extends AnyFlatSpec with Matchers with Bef
     val delivery = sink.expectMsgType[CommittedReportDelivery]
     reportManager.expectNoMessage(100.millis)
     sink.send(coordinator, DeliveryAccepted(epoch, delivery.token))
-    lp.expectMsg(RetireRuntimeProcess(freeze.round))
+    lp.expectMsg(RetireRuntimeProcess(freeze.round, finalCut = true))
     manager.expectMsg(RuntimeStopManagers(freeze.round))
     val drain = reportManager.expectMsgType[DrainRuntimeReports]
     drain.targets shouldBe Set(sink.ref)
@@ -181,7 +181,7 @@ class AccountedRuntimeCoordinatorSpec extends AnyFlatSpec with Matchers with Bef
     manager.expectMsg(CommitRuntime(freeze.round, 1001L))
     lp.send(coordinator, RuntimeCommitted(freeze.round, false))
     manager.send(coordinator, RuntimeCommitted(freeze.round, false))
-    lp.expectMsg(RetireRuntimeProcess(freeze.round))
+    lp.expectMsg(RetireRuntimeProcess(freeze.round, finalCut = true))
     manager.expectMsg(RuntimeStopManagers(freeze.round))
     lp.send(coordinator, RuntimeProcessRetired(freeze.round))
     manager.send(coordinator, RuntimeProcessRetired(freeze.round))
