@@ -7,10 +7,7 @@ import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 
-/** Owns all per-tick / cumulative metrics counters plus reporting for a Link actor.
-  *
-  * All heavy state is kept here so Link.scala can stay lean.
-  */
+/** Counters belong to checkpointed LinkState so replay cannot count an entry twice. */
 class LinkMetricsReporter(
   reportFn:                   (Map[String, Any], String) => Unit,
   entityIdFn:                 () => String,
@@ -24,17 +21,29 @@ class LinkMetricsReporter(
   logWarnFn:                  String => Unit
 ) {
 
-  private var lastCostPublishTick: Tick  = 0L
-  private var summaryTick: Tick          = Long.MinValue
-  private var tickLoaded: Int            = 0
-  var tickInserted: Int                  = 0
-  var tickArrived: Int                   = 0
-  var tickTravelTimeSum: Double          = 0.0
-  var tickProcessingDurationMs: Long     = 0L
-  var cumulativeLoadedVehicles: Long     = 0L
-  private var cumulativeLoaded: Long     = 0L
-  private var cumulativeArrived: Long    = 0L
-  private var cumulativeDiscarded: Long  = 0L
+  private def metrics = getLinkStateFn().metrics
+  private def lastCostPublishTick: Tick = metrics.lastCostPublishTick
+  private def lastCostPublishTick_=(value: Tick): Unit = metrics.lastCostPublishTick = value
+  private def summaryTick: Tick = metrics.summaryTick
+  private def summaryTick_=(value: Tick): Unit = metrics.summaryTick = value
+  private def tickLoaded: Int = metrics.tickLoaded
+  private def tickLoaded_=(value: Int): Unit = metrics.tickLoaded = value
+  def tickInserted: Int = metrics.tickInserted
+  def tickInserted_=(value: Int): Unit = metrics.tickInserted = value
+  def tickArrived: Int = metrics.tickArrived
+  def tickArrived_=(value: Int): Unit = metrics.tickArrived = value
+  def tickTravelTimeSum: Double = metrics.tickTravelTimeSum
+  def tickTravelTimeSum_=(value: Double): Unit = metrics.tickTravelTimeSum = value
+  def tickProcessingDurationMs: Long = metrics.tickProcessingDurationMs
+  def tickProcessingDurationMs_=(value: Long): Unit = metrics.tickProcessingDurationMs = value
+  def cumulativeLoadedVehicles: Long = metrics.cumulativeLoadedVehicles
+  def cumulativeLoadedVehicles_=(value: Long): Unit = metrics.cumulativeLoadedVehicles = value
+  private def cumulativeLoaded: Long = metrics.cumulativeLoaded
+  private def cumulativeLoaded_=(value: Long): Unit = metrics.cumulativeLoaded = value
+  private def cumulativeArrived: Long = metrics.cumulativeArrived
+  private def cumulativeArrived_=(value: Long): Unit = metrics.cumulativeArrived = value
+  private def cumulativeDiscarded: Long = metrics.cumulativeDiscarded
+  private def cumulativeDiscarded_=(value: Long): Unit = metrics.cumulativeDiscarded = value
 
   def ensureSummaryTick(tick: Tick): Unit =
     if (summaryTick != tick) {

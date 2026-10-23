@@ -32,7 +32,7 @@ class SubwayStation(
     ) {
 
   override protected def validateRuntimeCapabilities(): Unit =
-    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireCancellableTransitBirth()
+    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireAccountedBirth(getCurrentTimeManagerType)
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSubwayAckCount: Int  = 0

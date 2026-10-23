@@ -20,7 +20,7 @@ src/main/scala/
     entity/          — state/, event/, configuration/, control/
     util/            — StringPool, JsonUtil, IdUtil, ActorCreatorUtil
     metrics/         — Prometheus counter/gauge definitions
-    runtime/         — event order/input queue; accounting/ owns optimistic transport and safe-time cuts
+    runtime/         — event order/input queue; accounting/ and distributed/ define transport and safe-time cuts
   model/
     mobility/        — data-only survivors of a removed legacy actor package: entity/ (state,
                        event data incl. SubRoutePair, VehicleLinkFlowData — still consumed by
@@ -186,17 +186,22 @@ Common bugs to check for when reviewing a diff against this discipline:
 ## Optimistic runtime boundary
 
 A run selects one fixed policy before startup. Production Time Warp uses
-`core/runtime/accounting`: every modeled interaction, anti-message, dispatch, and
-schedule control must cross its acceptance ledger. Do not send raw model events or
-raw destruction around it. Terminal intent remains checkpointed and reversible;
-only the coordinator authorizes physical retirement. Reports commit strictly below
-GVT; successful completion waits for actual sink receipt and storage flush ACKs.
+`AccountedOptimisticGlobalTimeManager` and `AccountedOptimisticLocalTimeManager`:
+each LTM owns delivery ledgers and its LPs; only round summaries reach the GTM.
+Every modeled interaction, anti-message and dispatch must cross the owner's
+acceptance ledger. Scheduling controls are applied by the same owner before the
+LP's ordered freeze acknowledgement. Do not send raw model events or destruction
+around this boundary. Terminal intent remains checkpointed and reversible; the
+owner authorizes physical retirement only after the GTM's safe committed round.
+Reports commit strictly below GVT; completion waits for actual sink receipt and
+storage flush ACKs. The centralized coordinator remains only as a reference/test
+implementation; the production factory does not create it.
 
 The reference path requires fixed/preloaded LP membership and rejects independent
 restart/recovery. Models use `validateRuntimeCapabilities` to reject effects without
 an adapter. Hybrid shared routing feedback and live transit birth are currently
 rejected; static routing and preloaded cars/persons are validated. See
-`docs/TIME_WARP_ACCOUNTED_RUNTIME.md` for invariants, supported scope, and costs.
+`docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md` for invariants, supported scope, and costs.
 
 ## Simulation Models
 

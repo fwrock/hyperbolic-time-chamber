@@ -295,7 +295,41 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     lp.underlyingActor.count shouldBe 1
   }
 
-  it should "retain later speculative history after its terminal decision has committed" in {
+  "a distributed LP" should "retain pre-start input beyond its finite horizon without executing or publishing it" in {
+    val global = TestProbe()
+    val owner = TestProbe()
+    val creator = TestProbe()
+    val sink = TestProbe()
+    val lp = TestActorRef(new LP(Properties(entityId = "107", actorType = CreationTypeEnum.PoolDistributed,
+      runtimeCoordinator = Some(global.ref), reporters = mutable.Map(ReportTypeEnum.parquet -> sink.ref),
+      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> owner.ref))))
+    creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    lp ! InitializeEvent("107", creator.ref, InitializeData(RetirementState(), "test", creator.ref,
+      mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> owner.ref),
+      runtimeCoordinator = Some(global.ref)))
+    global.expectMsgType[JoinRuntime]
+    global.send(lp, RuntimeJoined("run", global.ref, owner.ref, distributed = true))
+    creator.expectMsgType[InitializeEntityAckEvent]
+    owner.send(lp, RuntimeDelivery("run", 1L, ActorInteractionEvent(110L, 0L, 99L,
+      "example.Source", "", "example.Source", data = "future", resourceId = "test", seq = 1L,
+      order = Some(EventOrder.root(110L, "example.Source", 99L)))))
+    owner.expectMsg(DeliveryAccepted("run", 1L))
+    owner.send(lp, SetRuntimeHorizon(100L))
+    owner.send(lp, ResumeRuntime(0L))
+    owner.send(lp, FreezeRuntime(1L))
+    owner.expectMsg(RuntimeFrozen(1L))
+    owner.send(lp, CollectRuntimeSnapshot(1L))
+    owner.expectMsg(RuntimeSnapshot(1L, Some(110L), 0, 0))
+    lp.underlyingActor.count shouldBe 0
+    owner.send(lp, CommitRuntime(1L, 101L))
+    owner.expectMsg(RuntimeCommitted(1L, false))
+    sink.expectNoMessage(100.millis)
+    global.expectNoMessage(100.millis)
+    owner.send(lp, RetireRuntimeProcess(1L, finalCut = true))
+    owner.expectMsg(RuntimeProcessRetired(1L))
+  }
+
+  "a speculative terminal LP" should "retain later speculative history after its terminal decision has committed" in {
     val coordinator = TestProbe()
     val manager = TestProbe()
     val creator = TestProbe()

@@ -21,10 +21,9 @@ import org.interscity.htc.core.metrics.core.PhaseMetrics
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-/** Conservative (`SelectiveBarrier`) global time-manager coordinator: an LTM is only told to
-  * advance once every LTM registered here has reported the current tick as fully processed. This
-  * is today's (and, before `docs/TIME_WARP_DESIGN.md` §2's split, the only) `GlobalTimeManager`
-  * behavior — renamed and rebased onto [[GlobalTimeManagerBase]], no behavior change.
+/** Legacy `SelectiveBarrier` implementation retained for compatibility tests.
+  * Production construction through `props` selects [[ChannelClosedGlobalTimeManager]]:
+  * local tick completion alone cannot account for model messages still in transit.
   *
   * @param simulationDuration
   *   The total duration of the simulation in ticks
@@ -669,7 +668,7 @@ object ConservativeGlobalTimeManager {
     simulationManager: ActorRef
   ): Props =
     Props(
-      classOf[ConservativeGlobalTimeManager],
+      classOf[ChannelClosedGlobalTimeManager],
       simulationDuration,
       extendSimulationIfPendingEventsAfterEnd,
       simulationManager

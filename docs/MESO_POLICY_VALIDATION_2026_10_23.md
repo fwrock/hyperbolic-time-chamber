@@ -1,5 +1,12 @@
 # MESO Car policy validation — 2026-10-23
 
+The later [channel-closure validation](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md)
+repeats these cases on the new conservative runtime and resolves the per-vehicle
+density differences described below. This document preserves the earlier model-fix
+artifact and its observed limits.
+The subsequent [distributed optimistic validation](DISTRIBUTED_OPTIMISTIC_VALIDATION_2026_10_23.md)
+records the current production path and repeats the MESO checks alongside MICRO.
+
 Each simulator process selects one policy before startup. This check uses the
 same seed-42 person-owned Car inputs under conservative and optimistic execution;
 it does not mix policies within a simulation.

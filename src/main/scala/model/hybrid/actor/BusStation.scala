@@ -27,7 +27,7 @@ class BusStation(
     ) {
 
   override protected def validateRuntimeCapabilities(): Unit =
-    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireCancellableTransitBirth()
+    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireAccountedBirth(getCurrentTimeManagerType)
 
   override protected def internStateStrings(s: BusStationState): BusStationState =
     s.copy(

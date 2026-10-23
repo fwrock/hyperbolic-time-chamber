@@ -5,7 +5,7 @@ import core.types.Tick
 import core.entity.state.BaseState
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
+import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegister, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
 
@@ -79,7 +79,8 @@ case class LinkState(
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
-  laneConfigurations: List[LaneConfig] = List.empty
+  laneConfigurations: List[LaneConfig] = List.empty,
+  metrics: LinkMetricsState = LinkMetricsState()
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
