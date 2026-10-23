@@ -159,13 +159,31 @@ class MovableRouteRollbackReplaySpec extends AnyFlatSpec with Matchers with Befo
   }
 
   for (mode <- Seq(TimeManagerTypeEnum.DISCRETE_EVENT, TimeManagerTypeEnum.TIME_WARP)) {
-    "A final-link departure" should s"finish without a reply obligation in $mode" in {
+    "A final MESO departure" should s"await its distance reply before completion in $mode" in {
       val tm = TestProbe()
       val (link, linkId) = newPeer()
       val actor = newActor(tm, linkId, Seq((10L, 100L)), mode)
       actor ! SpontaneousEvent(tick = 0L, actorRef = tm.ref)
       link.expectMsgType[ActorInteractionEvent]
       tm.expectMsgType[FinishEvent].awaitingReply shouldBe true
+
+      actor ! enterLinkAck(tick = 1L, linkPeerId = linkId, seq = 1L)
+      link.expectMsgType[ActorInteractionEvent].eventType shouldBe EventTypeEnum.LeaveLink.toString
+      val waiting = tm.expectMsgType[FinishEvent]
+      waiting.awaitingReply shouldBe true
+      waiting.scheduleTick shouldBe None
+      actor.underlyingActor.testHasReplyObligation(Movable.leaveLinkAwaitKey(linkId)) shouldBe true
+      actor.underlyingActor.testStatus should not be MovableStatusEnum.Finished
+    }
+
+    "A final already-reported MICRO departure" should s"finish without a cleanup reply in $mode" in {
+      val tm = TestProbe()
+      val (link, linkId) = newPeer()
+      val actor = newActor(tm, linkId, Seq((10L, 100L)), mode)
+      actor ! SpontaneousEvent(tick = 0L, actorRef = tm.ref)
+      link.expectMsgType[ActorInteractionEvent]
+      tm.expectMsgType[FinishEvent]
+      actor.underlyingActor.testMarkLinkExitReported()
 
       actor ! enterLinkAck(tick = 1L, linkPeerId = linkId, seq = 1L)
       link.expectMsgType[ActorInteractionEvent].eventType shouldBe EventTypeEnum.LeaveLink.toString

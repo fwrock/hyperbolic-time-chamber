@@ -116,7 +116,8 @@ class Car(
     tripDestFn      = () => getTripDestination,
     tripStartTickFn = () => getTripStartTick,
     driverAttrsFn   = () => getDriverAttributes,
-    journeyStateFn  = () => state.journey
+    journeyStateFn  = () => state.journey,
+    tripStartDistanceFn = () => getTripStartDistance
   )
 
   private lazy val signalHandler = new CarSignalHandler(
@@ -127,8 +128,6 @@ class Car(
     onFinishSpontaneousFn       = nextTick => onFinishSpontaneous(nextTick),
     scheduleEventFn             = tick => scheduleEvent(tick),
     leavingLinkFn               = () => leavingLink(),
-    selfDestructFn              = () => selfDestruct(),
-    isPersonCentricFn           = () => isPersonCentric,
     logWarnFn                   = msg => logWarn(msg),
     logStaleEventDebugFn        = msg => logStaleEventDebug(msg),
     sendMessageFn               = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),

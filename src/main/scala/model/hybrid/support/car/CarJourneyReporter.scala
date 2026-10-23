@@ -30,7 +30,8 @@ class CarJourneyReporter(
   private val tripDestFn: () => Option[Long],
   private val tripStartTickFn: () => Option[Tick],
   private val driverAttrsFn: () => DriverAttributes,
-  private val journeyStateFn: () => CarJourneyState
+  private val journeyStateFn: () => CarJourneyState,
+  private val tripStartDistanceFn: () => Double = () => 0.0
 ) {
 
   private def journeyFinishedReported: Boolean = journeyStateFn().journeyFinishedReported
@@ -165,7 +166,7 @@ class CarJourneyReporter(
     val origin      = tripOriginFn().getOrElse(state.origin)
 
     MovableMetrics.journeysCompleted.labels("Car").inc()
-    MovableMetrics.journeyDistanceMeters.labels("Car").observe(state.distance)
+    MovableMetrics.journeyDistanceMeters.labels("Car").observe(state.distance - tripStartDistanceFn())
     if (destination == finalNode) MovableMetrics.journeySuccesses.labels("Car").inc()
     else MovableMetrics.journeyFailures.labels("Car", reason).inc()
 
@@ -229,7 +230,7 @@ class CarJourneyReporter(
         "arrivalLane"       -> sumoArrivalLane.getOrElse(""),
         "arrivalPos"        -> sumoArrivalPos,
         "duration"          -> durationSecs,
-        "routeLength"       -> state.distance,
+        "routeLength"       -> (state.distance - tripStartDistanceFn()),
         "waitingTime"       -> sumoWaitingTimeSeconds,
         "waitingCount"      -> sumoWaitingCount,
         "stopTime"          -> sumoStopTimeSeconds,

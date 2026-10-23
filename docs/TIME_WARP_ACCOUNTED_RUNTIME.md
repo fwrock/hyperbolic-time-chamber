@@ -129,6 +129,30 @@ a successful drain. These are storage-acknowledgement contracts, not a guarantee
 exactly-once recovery after coordinator/process failure. Such recovery needs stable
 effect IDs, durable runtime transactions, and sink deduplication.
 
+## Hybrid traversal reply ownership
+
+The policy selects event scheduling and commitment; the model's MESO/MICRO mode
+selects the traversal protocol. Both policies use the same model protocol:
+
+| Mode | Traversal completion | Sender's obligation |
+|---|---|---|
+| MESO | `LeaveLinkData` receives `ReceiveLeaveLinkInfo` | Wait for this reply before completing the trip or entering another link; it supplies the distance accounting. |
+| MICRO | The Link proactively sends `MicroLeaveLinkData` | Account distance immediately; the later `LeaveLinkData` is cleanup and requires no second reply. |
+
+`Movable.leavingLink` uses the checkpointed `movableLinkExitReported` marker to
+distinguish these cases. `enterLink` resets the marker for each new link. A pending
+MESO leave request registers its correlation key and finishes without a next wake;
+the reply handler consumes that obligation, accounts the link, and completes the
+journey or schedules the next link. An intermediate reply must never clear timing
+metadata already belonging to a newer link. Car signal handling initiates departure;
+the completion path decides terminal intent after traversal accounting.
+
+Car SUMO `routeLength` and the journey-distance metric subtract the checkpointed
+trip-start odometer. Vehicle `distance` and `total_distance` fields remain cumulative;
+person trip distance and SUMO route length describe one trip. The bounded MESO
+validation covers person-owned Cars, static routing, and unsignaled links. Other
+vehicle adapters and controlled signals require their own scenario validation.
+
 ## Model adaptation and supported scope
 
 Core remains independent of mobility. Existing model handlers use:
@@ -208,8 +232,9 @@ checks and produce a stable first-link leader, but conservative two-link runs
 still vary the tick at which the first vehicle enters link 11 (tick 33 versus 35).
 The lane tie fix therefore closes the reproduced equal-position cause without
 establishing full conservative determinism or cross-policy event-tick parity.
-See `docs/TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md` for the run table and
-preliminary MESO comparison.
+See `docs/TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md` for MICRO results and
+`docs/MESO_POLICY_VALIDATION_2026_10_23.md` for the corrected Car MESO distance/timing
+checks and remaining same-tick density differences.
 
 The conservative policy needs its own safe-time gateway, selected for the whole
 run before actors start. Its minimum protocol is:

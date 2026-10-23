@@ -25,8 +25,6 @@ class CarSignalHandler(
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val scheduleEventFn: Tick => Unit,
   private val leavingLinkFn: () => Unit,
-  private val selfDestructFn: () => Unit,
-  private val isPersonCentricFn: () => Boolean,
   private val logWarnFn: String => Unit,
   private val logStaleEventDebugFn: String => Unit,
   private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
@@ -68,7 +66,6 @@ class CarSignalHandler(
 
     if (getTripDestinationFn().getOrElse(state.destination) == currentPathNode || routeDepleted) {
       leavingLinkFn()
-      if (!isPersonCentricFn()) selfDestructFn()
     } else {
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
