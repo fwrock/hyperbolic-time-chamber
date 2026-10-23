@@ -137,6 +137,8 @@ object SimulationController {
     }
   }
 
+  def markFailed(): Unit = _status.set(SimulationStatus.Failed)
+
   private def withSystem(f: ActorSystem => Unit): Either[String, Unit] =
     _system.get() match {
       case None => Left("Actor system not yet initialized")

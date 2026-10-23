@@ -40,7 +40,9 @@ case class SpontaneousEvent(
   actorRef: ActorRef,
   safeHorizon: Tick = -1,
   generation: Long = 0L,
-  gvt: Option[Tick] = None
+  gvt: Option[Tick] = None,
+  scheduleRevision: Long = 0L,
+  order: Option[core.runtime.EventOrder] = None
 ) extends BaseEvent[DefaultBaseEventData](tick = tick, actorRef = actorRef) {
 
   /** Returns the effective safe horizon (tick if not set) */

@@ -25,6 +25,8 @@ class KafkaPublisher(implicit
 ) {
 
   private val producerSettings = producerConfig(system)
+    .withProperty("acks", "all")
+    .withProperty("enable.idempotence", "true")
   private val sendProducer = SendProducer(producerSettings)(system)
 
   def publish(topic: String, key: String, message: Array[Byte])(implicit

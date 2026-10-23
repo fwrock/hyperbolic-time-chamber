@@ -9,54 +9,15 @@ import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 import org.apache.pekko.actor.{ ActorRef, Props }
 import org.htc.protobuf.core.entity.event.control.execution.StartSimulationTimeEvent
 
-/** Time Warp's local-time-manager strategy (`docs/TIME_WARP_DESIGN.md` §2): dispatches its own
-  * scheduled work as soon as it's available, without waiting for the `GlobalTimeManager`'s
-  * permission the way [[ConservativeLocalTimeManager]]'s `SelectiveBarrier` does. Each
-  * `OptimisticLocalTimeManager` instance (recall: one instance is a cluster-router-pool routee
-  * shared by many actors, same as today) runs ahead independently of every other LTM instance —
-  * that cross-LTM independence, not fine-grained per-actor concurrency *within* one instance, is
-  * this v1's actual parallelism win over the conservative barrier, which serializes every LTM to
-  * the same GTM-chosen tick every round. Within one instance, batches are still processed
-  * sequentially (`runningEvents` must empty before the next batch dispatches) — see the
-  * "Known scope limits" note below for why finer-grained intra-instance concurrency isn't in v1.
-  *
-  * Progress is reported to the `OptimisticGlobalTimeManager` asynchronously via [[LvtReportEvent]]
-  * — fire-and-forget, never a blocking handshake — so this LTM never waits on anything before
-  * continuing to dispatch, matching §3's "GVT reporting must be asynchronous and non-blocking."
-  *
-  * '''Known scope limits (deliberately out of v1, see `docs/TIME_WARP_DESIGN.md`'s implementation
-  * log entry for this step for the full rationale):'''
-  *   - Straggler detection is not wired to an actual rollback trigger yet. `scheduleEvent`'s
-  *     existing stale-tick guard (inherited from [[LocalTimeManagerBase]]) already detects exactly
-  *     the condition Time Warp needs — a request at or behind an actor's own `highestProcessedTick`
-  *     watermark — but silently bumps it forward the same way conservative mode does, rather than
-  *     triggering [[core.actor.rollback.RollbackHistoryHandler]]. Wiring that handler into a real
-  *     actor (`BaseActor`/`SimulationBaseActor`) and turning this into a genuine rollback trigger is
-  *     deferred to land together with anti-messages (§10) — a partial rollback that can't cascade-
-  *     undo what the actor already sent downstream would silently produce wrong results, which is
-  *     worse than not having Time Warp at all.
-  *   - Cross-actor interaction-message stragglers (an `ActorInteractionEvent` arriving with a tick
-  *     behind what the receiver already processed) aren't detected here either — `handleInteractWith`
-  *     bypasses the LTM entirely (interactions are actor-to-actor, not LTM-mediated) and currently
-  *     just silently declines to move `currentTick` backward; making that a rollback trigger is the
-  *     same deferred BaseActor-integration work as above.
-  *   - Only one concrete tick-processing strategy exists (below), unlike the conservative side's
-  *     discrete-event/time-stepped split — Time Warp is inherently episodic/discrete-event-shaped,
-  *     so no time-stepped variant is planned.
-  *   - No large-tick batching (`LocalDiscreteEventTimeManager`'s `TICK_BATCH_SIZE` mechanism) —
-  *     deferred until this is measured against a real scenario at scale.
-  *
-  * @param simulationDuration
-  *   The total duration of the simulation in ticks
-  * @param simulationManager
-  *   Reference to the simulation manager
-  * @param parentManager
-  *   Reference to the global time manager
+/** Dispatches ready LPs without the conservative barrier, at most one dispatch per LP.
+  * Production dispatch and schedule control cross the accounted coordinator. Local progress
+  * reports remain diagnostic and cannot authorize commitment or termination.
   */
 class OptimisticLocalTimeManager(
   simulationDuration: Tick,
   simulationManager: ActorRef,
-  parentManager: Option[ActorRef]
+  parentManager: Option[ActorRef],
+  coordinator: Option[ActorRef] = None
 ) extends LocalTimeManagerBase(
       simulationDuration = simulationDuration,
       simulationManager = simulationManager,
@@ -73,6 +34,7 @@ class OptimisticLocalTimeManager(
     * reports "nothing known safe yet" instead of falsely unlocking a flush before any GVT estimate
     * has ever been computed.
     */
+  accountedRuntime = coordinator
   private var lastKnownGvt: Option[Tick] = None
 
   override protected def currentGvt: Option[Tick] = lastKnownGvt
@@ -178,6 +140,7 @@ class OptimisticLocalTimeManager(
     * stuck. Filtering per-actor instead means an in-flight straggler only blocks itself.
     */
   private def dispatchNextAvailable(): Unit = {
+    if (runtimeFrozen) return
     val runningIds = scala.collection.mutable.Set.from(runningEvents.map(_.id))
     // #timewarp-trace
     core.actor.trace.TimeWarpTrace.trace(
@@ -187,7 +150,8 @@ class OptimisticLocalTimeManager(
       s"scheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")} runningIds=${runningIds.mkString(",")}"
     )
     var dispatchedAny = false
-    scheduledActors.keys.toSeq.sorted.foreach {
+    scheduledActors.keys.toSeq.sorted.filter(tick =>
+      accountedRuntime.isEmpty || tick <= Math.addExact(initialTick, simulationDuration)).foreach {
       tick =>
         scheduledActors.get(tick).foreach {
           actorsSet =>
@@ -224,49 +188,13 @@ class OptimisticLocalTimeManager(
     )
   }
 
-  /** This LTM's local virtual time under per-actor concurrent dispatch (see `dispatchNextAvailable`):
-    * the lowest `highestProcessedTick` watermark among every actor currently in flight — nothing at
-    * or after that tick can be guaranteed final while even one in-flight actor is still working at
-    * (or behind) it. Supersedes the old single-in-flight-tick approximation (`localTickOffset`
-    * while anything was running), which assumed at most one tick's worth of actors could ever be
-    * concurrently in flight; that stopped being true once `dispatchNextAvailable` could send
-    * multiple ticks' actors out at once. Always `<=` the old approximation, so this can only make
-    * LVT more conservative, never less — safe per the margin-based GVT rationale (an underestimate
-    * never causes premature fossil collection or termination).
-    *
-    * When `runningEvents` is momentarily empty — routine between one dispatch batch resolving and
-    * the next being sent, not just at genuine end-of-simulation — this must NOT fall back to
-    * `localTickOffset`: that field is only ever moved *backward* by a rollback resync
-    * (`resyncScheduleAfterRollback`), never forward as actors genuinely progress, so it silently
-    * discards real history and pins GVT near `initialTick` forever (found 2026-09-11 — see
-    * `docs/KNOWN_GAPS.md`'s "OptimisticLocalTimeManager.localVirtualTime Collapses to Near-Zero..."
-    * entry for the live-run evidence: actors had genuinely processed hundreds of ticks while GVT
-    * stayed plateaued at `initialTick - margin`, causing `TerminationPlateauDetector` to end the
-    * simulation almost immediately). Instead, floor at `minHighestProcessedTick` — every
-    * currently-registered actor's own already-observed progress, which persists across idle gaps
-    * and is removed only on genuine destruct — combined with `nextTick` (not-yet-dispatched
-    * scheduled work is itself a valid, even earlier, safe bound) via `min`, so this can still only
-    * make LVT more conservative, never less. `localTickOffset` remains the fallback only for an LTM
-    * that has never dispatched or scheduled anything at all.
-    *
-    * A second, independent case needs the same care: `registeredActors.isEmpty` — this LTM pool
-    * routee has never had (or no longer has) a single actor assigned to it, plausible whenever the
-    * pool has more instances than the scenario has actors, or the distribution is uneven (see
-    * `docs/TIME_WARP_DESIGN.md`'s "an LTM pool routee that never gets any actors assigned never
-    * reported its LVT" fix, which made it report at all but not what value). Such a routee can
-    * never be the source of a straggler/rollback, so it must impose *no* constraint on GVT —
-    * `MarginBasedGVTEstimation.estimate` takes `min` over every reporting LTM unconditionally, so a
-    * permanently-empty routee reporting `localTickOffset` (`0`) would otherwise pin GVT near
-    * `-margin` forever regardless of how far every other, genuinely busy LTM has progressed (found
-    * 2026-09-11 alongside the gap above — fixing only the busy-LTM case did not by itself resolve a
-    * real end-to-end run's premature termination; this was the other half). Reports `Long.MaxValue`
-    * instead: the maximal, safest-possible LVT, since "no constraint" can only ever be an
-    * *overestimate-safe* direction here — every other LTM's own real, lower LVT still bounds the
-    * global `min` correctly.
+  /** Include both queued work and actual in-flight timestamps: after rollback, a historical
+    * high-water mark may be ahead of the replacement dispatch. Interaction/channel minima
+    * remain outside this report and must be added before it can support a proven GVT round.
     */
   protected def localVirtualTime: Tick =
     if (runningEvents.nonEmpty) {
-      runningEvents.map(a => highestProcessedTickOf(a.id)).min
+      (runningEvents.map(a => inFlightTickOf(a.id)) ++ nextTick).min
     } else if (registeredActors.isEmpty) {
       Long.MaxValue
     } else {
@@ -297,12 +225,14 @@ object OptimisticLocalTimeManager {
   def props(
     simulationDuration: Tick,
     simulationManager: ActorRef,
-    parentManager: Option[ActorRef]
+    parentManager: Option[ActorRef],
+    coordinator: Option[ActorRef] = None
   ): Props =
     Props(
       classOf[OptimisticLocalTimeManager],
       simulationDuration,
       simulationManager,
-      parentManager
+      parentManager,
+      coordinator
     )
 }

@@ -45,7 +45,8 @@ class ProgressiveLoadDataManager(
   val poolTimeManager: ActorRef,
   val timeManagerType: String,
   val simulationManager: ActorRef,
-  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+  val runtimeCoordinator: Option[ActorRef] = None
 ) extends BaseManager[DefaultState](
       actorId = PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME,
       timeManager = null
@@ -618,7 +619,8 @@ class ProgressiveLoadDataManager(
             entityId = "progressive-creator-load-data",
             loadDataManager = self,
             timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            reporters = poolReporters
+            reporters = poolReporters,
+            runtimeCoordinator = runtimeCoordinator
           )
         )
       ),
@@ -650,7 +652,8 @@ class ProgressiveLoadDataManager(
             entityId = "progressive-creator-pool-load-data",
             loadDataManager = self,
             timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            reporters = poolReporters
+            reporters = poolReporters,
+            runtimeCoordinator = runtimeCoordinator
           )
         )
       ),
@@ -674,13 +677,15 @@ object ProgressiveLoadDataManager {
     poolTimeManager: ActorRef,
     timeManagerType: String,
     simulationManager: ActorRef,
-    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+    runtimeCoordinator: Option[ActorRef] = None
   ): Props =
     Props(
       classOf[ProgressiveLoadDataManager],
       poolTimeManager,
       timeManagerType,
       simulationManager,
-      poolReporters
+      poolReporters,
+      runtimeCoordinator
     )
 }

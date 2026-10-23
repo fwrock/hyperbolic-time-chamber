@@ -26,7 +26,8 @@ class LoadDataManager(
   val poolTimeManager: ActorRef,
   val timeManagerType: String,
   val simulationManager: ActorRef,
-  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+  val runtimeCoordinator: Option[ActorRef] = None
 ) extends BaseManager[DefaultState](
       timeManager = timeSingletonManager,
       actorId = "load-data-manager"
@@ -203,6 +204,7 @@ class LoadDataManager(
             entityId = "creator-load-data",
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            runtimeCoordinator = runtimeCoordinator,
             reporters = reporters,
             postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
@@ -230,6 +232,7 @@ class LoadDataManager(
             entityId = "creator-pool-load-data",
             loadDataManager = getSelfProxy,
             timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            runtimeCoordinator = runtimeCoordinator,
             reporters = reporters,
             postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
@@ -315,7 +318,8 @@ object LoadDataManager {
     poolTimeManager: ActorRef,
     timeManagerType: String,
     simulationManager: ActorRef,
-    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+    runtimeCoordinator: Option[ActorRef] = None
   ): Props =
     Props(
       classOf[LoadDataManager],
@@ -323,6 +327,7 @@ object LoadDataManager {
       poolTimeManager,
       timeManagerType,
       simulationManager,
-      poolReporters
+      poolReporters,
+      runtimeCoordinator
     )
 }

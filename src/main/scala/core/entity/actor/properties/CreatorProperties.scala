@@ -18,5 +18,6 @@ case class CreatorProperties(
   data: Any = null,
   actorType: CreationTypeEnum = Simple,
   postLoadCoordinator: ActorRef = null,
-  postLoadRegistrationClasses: Set[String] = Set.empty
+  postLoadRegistrationClasses: Set[String] = Set.empty,
+  runtimeCoordinator: Option[ActorRef] = None
 )

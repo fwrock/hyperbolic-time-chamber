@@ -79,6 +79,9 @@ class SimulationManager(
     case event: ProgressiveLoadingCompleteEvent => handleProgressiveLoadingComplete(event)
     case event: LoadBalanceReadyEvent           => handleLoadBalanceReady(event)
     case _: StopSimulationEvent                 => handleStopSimulation()
+    case core.runtime.accounting.RuntimeFailure(reason) =>
+      logError(s"[SIMULATION-FAILED] $reason")
+      core.api.SimulationController.markFailed()
     case RetryPrepareSimulation =>
       clusterRetryScheduled = false
       prepareSimulation()
@@ -247,8 +250,11 @@ class SimulationManager(
     startLoadData()
   }
 
+  private var runtimeCoordinator: Option[ActorRef] = None
+
   private def registerPoolTimeManager(event: TimeManagerRegisterEvent): Unit = {
     poolTimeManager = event.actorRef
+    runtimeCoordinator = event.runtimeCoordinator
     startLoadData()
   }
 
@@ -429,7 +435,8 @@ class SimulationManager(
         poolTimeManager = poolTimeManager,
         timeManagerType = configuration.timeManagerType,
         simulationManager = selfProxy,
-        poolReporters = reporters
+        poolReporters = reporters,
+        runtimeCoordinator = runtimeCoordinator
       ),
       name = LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()
@@ -538,7 +545,8 @@ class SimulationManager(
         poolTimeManager = poolTimeManager,
         timeManagerType = configuration.timeManagerType,
         simulationManager = getSelfProxy,
-        poolReporters = reporters
+        poolReporters = reporters,
+        runtimeCoordinator = runtimeCoordinator
       ),
       name = PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

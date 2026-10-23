@@ -110,6 +110,7 @@ class CsvReportData(
     } catch {
       case e: Exception =>
         logError(s"Failed to write CSV report to file: ${e.getMessage}", e)
+        throw e
     }
   }
 
@@ -118,6 +119,16 @@ class CsvReportData(
     if (!Files.exists(dirPath)) {
       Files.createDirectories(dirPath)
     }
+  }
+
+  override protected def flushCommittedReports(): scala.concurrent.Future[Unit] = {
+    flushBuffer()
+    val path = Paths.get(filePath)
+    if (Files.exists(path)) {
+      val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
+      try channel.force(true) finally channel.close()
+    }
+    scala.concurrent.Future.successful(())
   }
 
   override def postStop(): Unit =

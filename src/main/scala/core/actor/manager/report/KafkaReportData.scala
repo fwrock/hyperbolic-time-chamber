@@ -10,7 +10,7 @@ import org.apache.pekko.actor.ActorRef
 
 import java.time.LocalDateTime
 import scala.collection.mutable
-import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 
 /** Reporter actor that streams simulation metric events to Redpanda/Kafka.
@@ -19,8 +19,8 @@ import scala.concurrent.duration._
   * Running fire-and-forget on the io-dispatcher means Kafka back-pressure never blocks the
   * simulation actor pool.
   *
-  * Fail-safe: if Kafka is unreachable during a flush, a warning is logged and the events are
-  * dropped. The simulation continues unaffected.
+  * Legacy reporting is best effort. Accounted commitment retains write failures and only
+  * acknowledges a drain after the broker has acknowledged every batch.
   */
 class KafkaReportData(
   override val reportManager: ActorRef,
@@ -35,6 +35,8 @@ class KafkaReportData(
     try config.getInt("htc.report-manager.kafka.batch-size")
     catch { case _: Exception => 1000 }
 
+  private var strictCommit = false
+  private var pendingWrites: Future[Unit] = Future.successful(())
   private val buffer = new mutable.ArrayBuffer[SimulationReportEvent](batchSize)
 
   private lazy val publisher = new KafkaPublisher()(context.system)
@@ -56,39 +58,38 @@ class KafkaReportData(
     if (buffer.size >= batchSize) flush()
   }
 
+  override protected def onCommittedReport(event: ReportEvent): Unit = {
+    strictCommit = true
+    onReport(event)
+  }
+
+  override protected def flushCommittedReports(): Future[Unit] = {
+    strictCommit = true
+    flush()
+    pendingWrites
+  }
+
   override def postStop(): Unit = {
     implicit val ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
-    try Await.result(flush(), 10.seconds)
-    catch {
-      case err: Exception => logWarn(s"Final Kafka flush before shutdown did not complete: ${err.getMessage}")
-    }
-    publisher.close().failed.foreach { err =>
-      logWarn(s"Error closing Kafka producer: ${err.getMessage}")
-    }
+    flush().transformWith(_ => publisher.close()).failed.foreach(err => logWarn(s"Kafka close failed: ${err.getMessage}"))
     super.postStop()
   }
 
   private def flush(): Future[Unit] = {
-    if (buffer.isEmpty) return Future.successful(())
+    if (buffer.isEmpty) return pendingWrites
     val snapshot = buffer.toList
     buffer.clear()
-    implicit val ec: ExecutionContext =
-      context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
-    Future
-      .sequence(snapshot.map { ev =>
-        SimulationReportEventAvro.serialize(ev) match {
-          case scala.util.Success(bytes) =>
-            publisher
-              .publish(topicFor(ev.label.getOrElse("")), ev.entityId, bytes)
-              .recover { case err =>
-                logWarn(s"Kafka publish failed for entity ${ev.entityId}: ${err.getMessage}")
-              }
-          case scala.util.Failure(err) =>
-            logWarn(s"Kafka serialization failed for entity ${ev.entityId}: ${err.getMessage}")
-            Future.successful(())
-        }
-      })
-      .map(_ => ())
+    val strict = strictCommit
+    implicit val ec: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+    val batch = () => Future.sequence(snapshot.map { event =>
+      SimulationReportEventAvro.serialize(event) match {
+        case scala.util.Success(bytes) => publisher.publish(topicFor(event.label.getOrElse("")), event.entityId, bytes)
+        case scala.util.Failure(error) => Future.failed(error)
+      }
+    }).map(_ => ())
+    val write = pendingWrites.flatMap(_ => batch())
+    pendingWrites = if (strict) write else write.recover { case err => logWarn(s"Kafka publish failed: ${err.getMessage}") }
+    pendingWrites
   }
 
   private def topicFor(label: String): String = label match {

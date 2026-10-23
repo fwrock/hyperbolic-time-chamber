@@ -154,5 +154,8 @@ case class MigrationSnapshot(
   linkVehicleEntryTick: Map[Long, Long] = Map.empty,
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
   linkVehicleWaitingSeconds: Map[Long, Double] = Map.empty,
-  modelSnapshot: Map[String, String] = Map.empty
+  modelSnapshot: Map[String, String] = Map.empty,
+  logicalOrder: Option[core.runtime.EventOrder] = None,
+  pendingSelf: Option[core.runtime.EventOrder] = None,
+  terminalIntent: Option[core.runtime.EventOrder] = None
 )

@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor
 
 import core.entity.actor.properties.Properties
+import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.state.BaseState
 import core.enumeration.{ CreationTypeEnum, TimeManagerTypeEnum }
@@ -19,19 +20,8 @@ import scala.collection.mutable
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.DurationInt
 
-/** Regression coverage for the time-manager resync gap `htc-architect` diagnosed: a rollback that
-  * undoes an actor's own live spontaneous dispatch also invalidates the real
-  * `FinishEvent(scheduleTick = ...)` that dispatch already sent to `currentTimeManager` before it
-  * was undone. Left alone, that stale registration sits in
-  * `OptimisticLocalTimeManager.scheduledActors` forever, corrupting the LTM's `nextTick`/LVT and
-  * dragging cluster-wide GVT -- exactly the "simulation kind of froze" symptom this fixes.
-  *
-  * `SimulationBaseActor.resyncScheduleAfterRollback` (called from `rollbackAndCascade`) is the fix:
-  * a real `FinishEvent(scheduleTick = None)` to sweep every stale tick entry, followed by a real
-  * `scheduleEvent(currentTick)` reflecting the actor's genuine post-rollback position. This spec
-  * drives both messages through a real mailbox against a `TestProbe` standing in for the time
-  * manager -- same harness shape as `SimulationBaseActorTimeWarpReplaySpec`/
-  * `SimulationBaseActorStragglerTriggerSpec`.
+/** Rollback replaces the complete logical schedule atomically with a newer transport revision.
+  * It must retain real reply obligations and the schedule of the surviving state prefix.
   */
 private case class ResyncState(startTick: Tick = 0L, counter: Int = 0) extends BaseState(startTick = startTick)
 
@@ -188,19 +178,11 @@ class SimulationBaseActorRollbackScheduleResyncSpec extends AnyFlatSpec with Mat
       // handleInteractWith's straggler branch rolls back to before tick=5, undoing that dispatch.
       actor ! interaction(tick = 3L, senderId = 101L, seq = 1L)
 
-      // The clearing FinishEvent: no scheduleTick (sweeps every stale bucket, including the
-      // now-invalid tick=6 one), and a generation high enough to survive finishEvent's
-      // stale-generation guard despite currentGeneration having reverted on rollback.
-      val clearing = timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
-      clearing.scheduleTick shouldBe None
-      clearing.generation shouldBe Long.MaxValue
-      clearing.destruct shouldBe false
-
-      // The corrective re-registration: a real ScheduleEvent at the actor's genuine post-rollback
-      // tick (the restored checkpoint's currentTick, i.e. startTick = 0 -- nothing survived the
-      // rollback to replay forward from).
-      val rescheduled = timeManagerProbe.expectMsgType[ScheduleEvent](3.seconds)
-      rescheduled.tick shouldBe 0L
+      val replacement = timeManagerProbe.expectMsgType[ReplaceScheduleEvent](3.seconds)
+      replacement.next.map(_.tick) shouldBe Some(0L)
+      replacement.revision should be > 1L
+      replacement.completedGeneration should not be Long.MaxValue
+      replacement.awaitingReply shouldBe false
 
       timeManagerProbe.expectNoMessage(1.second)
     }
@@ -240,15 +222,10 @@ class SimulationBaseActorRollbackScheduleResyncSpec extends AnyFlatSpec with Mat
       // at tick=0, survives pruning untouched.
       actor ! interaction(tick = 3L, senderId = 101L, seq = 1L)
 
-      // The clearing FinishEvent still always arrives -- it may be sweeping a stale registration
-      // left by a different undone event than the one "keyA" is still waiting on.
-      val clearing = timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
-      clearing.scheduleTick shouldBe None
-      clearing.generation shouldBe Long.MaxValue
-      clearing.awaitingReply shouldBe true // the surviving wait must keep the LTM from reporting idle
+      val replacement = timeManagerProbe.expectMsgType[ReplaceScheduleEvent](3.seconds)
+      replacement.next shouldBe None
+      replacement.awaitingReply shouldBe true
 
-      // But no forced re-dispatch follows: this actor is correctly disengaged, waiting on a real
-      // reply that will resolve it the normal actInteractWith path, not this resync.
       timeManagerProbe.expectNoMessage(1.second)
     }
 
@@ -271,14 +248,9 @@ class SimulationBaseActorRollbackScheduleResyncSpec extends AnyFlatSpec with Mat
       // send is retracted, so pruneInvalidatedAwaitedReplies drops it.
       actor ! interaction(tick = 3L, senderId = 101L, seq = 1L)
 
-      val clearing = timeManagerProbe.expectMsgType[FinishEvent](3.seconds)
-      clearing.scheduleTick shouldBe None
-
-      // With nothing left outstanding, the forced re-dispatch fires exactly as it did before this
-      // fix -- proving Case A ("reply itself was invalidated") isn't accidentally broken.
-      val rescheduled = timeManagerProbe.expectMsgType[ScheduleEvent](3.seconds)
-      // The tick=0 dispatch survived and had asked for tick 1, so that is where the actor resumes.
-      rescheduled.tick shouldBe 1L
+      val replacement = timeManagerProbe.expectMsgType[ReplaceScheduleEvent](3.seconds)
+      replacement.next.map(_.tick) shouldBe Some(1L)
+      replacement.awaitingReply shouldBe false
 
       timeManagerProbe.expectNoMessage(1.second)
     }

@@ -9,6 +9,7 @@ import org.apache.pekko.actor.ActorRef
 
 import java.time.LocalDateTime
 import scala.collection.mutable
+import scala.concurrent.{ ExecutionContext, Future }
 
 /** Reporter actor that streams vehicle link flow events to ClickHouse.
   *
@@ -16,8 +17,8 @@ import scala.collection.mutable
   * (JSONEachRow format). Running on the io-dispatcher means the blocking HTTP call never blocks the
   * simulation actor pool.
   *
-  * Fail-safe: if ClickHouse is unreachable at startup or during a flush, a warning is logged and
-  * the events are dropped. The simulation continues unaffected.
+  * Legacy reporting is best effort. Accounted commitment retains schema/write failures and
+  * acknowledges the drain only after ClickHouse confirms the writes.
   */
 class ClickHouseReportData(
   override val reportManager: ActorRef,
@@ -72,18 +73,15 @@ class ClickHouseReportData(
 
   private val ch = new ClickHouseClientManager(host, port, database, username, password)
 
-  /** Flag: false if CH was unreachable at startup (skip all flushes silently). */
-  private var chAvailable: Boolean = true
-
-  override def preStart(): Unit = {
-    super.preStart()
+  private implicit val io: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
+  private lazy val schemaReady: Future[Unit] = Future {
     ch.createSchemaIfNeeded() match {
-      case Right(_) => logInfo(s"ClickHouse schema ready at $host:$port/$database")
-      case Left(error) =>
-        chAvailable = false
-        logWarn(s"ClickHouse unavailable ($error). Flow reporting disabled for this actor.")
+      case Right(_) => ()
+      case Left(error) => throw new IllegalStateException(s"ClickHouse schema unavailable: $error")
     }
   }
+  private var pendingWrites: Future[Unit] = Future.successful(())
+  private var strictCommit = false
 
   // Pre-sized to batchSize to avoid the doubling-resize cycle when filling the buffer.
   private val buffer = new mutable.ArrayBuffer[String](batchSize)
@@ -96,24 +94,35 @@ class ClickHouseReportData(
       case _ =>
     }
 
-  override def postStop(): Unit =
-    if (buffer.nonEmpty) flush()
-
-  private def flush(): Unit = {
-    if (!chAvailable || buffer.isEmpty) {
-      buffer.clear()
-      return
-    }
-    val rows = buffer.toSeq
-    buffer.clear()
-    ch.insertBatch(rows) match {
-      case Right(_) => // success
-      case Left(err) =>
-        logWarn(s"ClickHouse flush failed ($err). Dropped ${rows.size} rows.")
-    }
+  override protected def onCommittedReport(event: ReportEvent): Unit = {
+    require(event.data.isInstanceOf[VehicleLinkFlowData], "unsupported ClickHouse report payload")
+    strictCommit = true
+    onReport(event)
   }
 
-  /** Converts a flow event to a ClickHouse-compatible JSON object string. */
+  override protected def flushCommittedReports(): Future[Unit] = {
+    strictCommit = true
+    flush()
+    pendingWrites
+  }
+
+  override def postStop(): Unit = { flush(); () }
+
+  private def flush(): Future[Unit] = {
+    if (buffer.isEmpty) return pendingWrites
+    val rows = buffer.toVector
+    buffer.clear()
+    val strict = strictCommit
+    val write = pendingWrites.flatMap(_ => schemaReady).flatMap { _ => Future {
+      ch.insertBatch(rows) match {
+        case Right(_) => ()
+        case Left(error) => throw new IllegalStateException(s"ClickHouse write failed: $error")
+      }
+    }}
+    pendingWrites = if (strict) write else write.recover { case error => logWarn(s"ClickHouse reporting failed: ${error.getMessage}") }
+    pendingWrites
+  }
+
   private def toJsonLine(event: ReportEvent, flow: VehicleLinkFlowData): String = {
     val sb = new java.lang.StringBuilder(256)
     sb.append("{\"simulation_id\":\"").append(escape(simulationId)).append('"')

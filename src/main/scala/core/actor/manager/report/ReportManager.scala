@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.report
 
 import core.actor.manager.BaseManager
+import core.runtime.accounting.*
 import core.entity.event.control.report.RegisterReportersEvent
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum
@@ -26,6 +27,7 @@ class ReportManager(
     ) {
 
   private var selfProxy: ActorRef = null
+  private var drain: Option[(Long, ActorRef, Set[ActorRef], Vector[String])] = None
   private val reporters = mutable.Map[ReportTypeEnum, ActorRef]()
 
   override def onStart(): Unit = {
@@ -96,6 +98,28 @@ class ReportManager(
   }
 
   override def handleEvent: Receive = {
+    case DrainRuntimeReports(round, replyTo, targets) =>
+      require(drain.isEmpty, "overlapping report drains")
+      if (targets.isEmpty) replyTo ! RuntimeReportsFlushed(round)
+      else {
+        drain = Some((round, replyTo, targets, Vector.empty))
+        targets.foreach { target => context.watch(target); target ! FlushRuntimeReports(round, self) }
+      }
+    case RuntimeReportsFlushed(round, error) =>
+      drain.foreach { case (expected, replyTo, pending, errors) =>
+        if (round == expected && pending.contains(sender())) {
+          val remaining = pending - sender()
+          val failures = errors ++ error
+          if (remaining.isEmpty) {
+            drain = None
+            replyTo ! RuntimeReportsFlushed(round, if (failures.isEmpty) None else Some(failures.mkString("; ")))
+          } else drain = Some((round, replyTo, remaining, failures))
+        }
+      }
+    case org.apache.pekko.actor.Terminated(ref) =>
+      drain.foreach { case (round, replyTo, pending, _) =>
+        if (pending.contains(ref)) { drain = None; replyTo ! RuntimeReportsFlushed(round, Some(s"report sink lost: $ref")) }
+      }
     case _: StopSimulationEvent =>
       logInfo("Received StopSimulationEvent. Flushing/stopping reporters")
       val destructEvent = DestructEvent(actorRef = getPath)

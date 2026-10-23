@@ -20,6 +20,7 @@ src/main/scala/
     entity/          — state/, event/, configuration/, control/
     util/            — StringPool, JsonUtil, IdUtil, ActorCreatorUtil
     metrics/         — Prometheus counter/gauge definitions
+    runtime/         — event order/input queue; accounting/ owns optimistic transport and safe-time cuts
   model/
     mobility/        — data-only survivors of a removed legacy actor package: entity/ (state,
                        event data incl. SubRoutePair, VehicleLinkFlowData — still consumed by
@@ -167,8 +168,11 @@ Rules of thumb:
 - Never let B's reply-producing logic require a further round-trip back through A (or anything
   downstream of A) before B can answer — that creates a logical wait cycle (livelock) even though
   no actor thread is ever blocked.
-- Ordering between these exchanges is guaranteed by the Lamport clock (`lamportTick` on
-  `BaseEvent`), not by a manual sync with the Time Manager.
+- Send exchanges through `sendMessageTo`; the runtime stamps them with `EventOrder`
+  (tick, causal microstep, stable logical key). Lamport clocks record causality but do not sort
+  actor mailboxes. Optimistic rollback compares full event order. Conservative execution still
+  needs its barrier and, for independent same-tick arrivals, complete channel/frontier accounting;
+  do not add ad hoc model round-trips through the Time Manager.
 
 Common bugs to check for when reviewing a diff against this discipline:
 - A fire-and-forget path where `onFinishSpontaneous` got moved into a reply handler for no
@@ -178,6 +182,21 @@ Common bugs to check for when reviewing a diff against this discipline:
 - A reply handler that forgets `onFinishSpontaneous` after consuming the response — the sender
   received its answer but never resolves its own spontaneous event.
 - A watchdog/timeout added to "fix" a hang instead of finding and fixing the missing reply path.
+
+## Optimistic runtime boundary
+
+A run selects one fixed policy before startup. Production Time Warp uses
+`core/runtime/accounting`: every modeled interaction, anti-message, dispatch, and
+schedule control must cross its acceptance ledger. Do not send raw model events or
+raw destruction around it. Terminal intent remains checkpointed and reversible;
+only the coordinator authorizes physical retirement. Reports commit strictly below
+GVT; successful completion waits for actual sink receipt and storage flush ACKs.
+
+The reference path requires fixed/preloaded LP membership and rejects independent
+restart/recovery. Models use `validateRuntimeCapabilities` to reject effects without
+an adapter. Hybrid shared routing feedback and live transit birth are currently
+rejected; static routing and preloaded cars/persons are validated. See
+`docs/TIME_WARP_ACCOUNTED_RUNTIME.md` for invariants, supported scope, and costs.
 
 ## Simulation Models
 

@@ -201,7 +201,9 @@ abstract class CarReplayEquivalenceBase(checkpointInterval: Int)
     awaited.map { case (key, v) => key.replaceAll(":\\d+$", ":link") -> v.substring(0, v.lastIndexOf('|')) }
 
   private def fingerprint(rig: Rig): MigrationSnapshot = {
-    val snap = rig.actor.underlyingActor.testSnapshot
+    val snapshot = rig.actor.underlyingActor.testSnapshot
+    // Separate fixture LPs have different root identities; preserve logical time while normalizing that identity.
+    val snap = snapshot.copy(pendingSelf = snapshot.pendingSelf.map(_.copy(key = "fixture-self")))
     val normalizedState = core.util.JsonUtil.fromJson[CarState](snap.stateJson)
     normalizedState.journey.sumoDepartLane = normalizedState.journey.sumoDepartLane
       .map(_.replace(s"${rig.linkId}_", "link_"))

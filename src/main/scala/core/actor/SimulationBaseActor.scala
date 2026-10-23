@@ -9,6 +9,9 @@ import core.actor.rollback.{ EventReadJournal, RecordedRead, RollbackHistoryHand
 import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
+import core.runtime.{ EventOrder, OrderedInputQueue }
+import core.runtime.accounting.*
+import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
@@ -89,6 +92,89 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var currentTimeManager: ActorRef = uninitialized
   private var _spontaneousFinishSent     = false
   private var currentGeneration: Long = 0L
+  private var scheduleRevision = 0L
+  private var accountedCoordinator: Option[ActorRef] = Option(properties).flatMap(_.runtimeCoordinator)
+  private var runtimeEpoch: Option[String] = None
+  private val runtimeIncarnation = java.util.UUID.randomUUID().toString
+  private var runtimeFrozen = false
+  private var runtimeGvt = Long.MinValue
+  private var runtimeFrontierAt = System.nanoTime()
+  private var runtimeDiagnosticAt = 0L
+  private var runtimeFailed = false
+  private var terminalIntent: Option[EventOrder] = None
+  private val pendingCancellations = mutable.Queue.empty[ActorInteractionEvent]
+  private val initializationAcks = mutable.ArrayBuffer.empty[(ActorRef, AnyRef)]
+  private val pendingCreationCallbacks = mutable.Queue.empty[(String, Long)]
+  protected def usesAccountedRuntime: Boolean = accountedCoordinator.nonEmpty
+
+  /** Reject model capabilities whose effects cannot participate in the runtime's cut. */
+  protected def validateRuntimeCapabilities(): Unit = ()
+
+  private def sendTimeManager(target: ActorRef, event: AnyRef): Unit = accountedCoordinator match {
+    case Some(coordinator) => coordinator ! RouteControl(runtimeEpoch.get, target, event, math.max(currentTick, runtimeGvt))
+    case None => target ! event
+  }
+
+  private def failRuntime(error: Throwable): Unit = {
+    runtimeFailed = true
+    runtimeFrozen = true
+    accountedCoordinator.foreach(_ ! RuntimeFailure(s"${getClass.getName}/$getEntityId: ${error.getMessage}"))
+  }
+
+  private var logicalOrder: Option[EventOrder] = None
+  private var pendingSelf: Option[EventOrder] = None
+  private var effectOrdinal = 0L
+  private val inputQueue = new OrderedInputQueue
+  private var drainingInputs = false
+
+  private def nextEffectOrder(at: Tick): EventOrder = {
+    effectOrdinal = Math.addExact(effectOrdinal, 1L)
+    logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong))
+      .child(at, effectOrdinal)
+  }
+
+  private def nextScheduleRevision(): Long = {
+    scheduleRevision = Math.addExact(scheduleRevision, 1L)
+    scheduleRevision
+  }
+
+  private def enqueueInput(event: AnyRef): Unit = {
+    inputQueue.enqueue(event)
+    drainInputs()
+  }
+
+  private def drainInputs(): Unit = {
+    if (drainingInputs || runtimeFrozen || runtimeFailed || (usesAccountedRuntime && runtimeEpoch.isEmpty)) return
+    drainingInputs = true
+    try {
+      while (pendingCancellations.nonEmpty && !runtimeFailed) handleInteractWith(pendingCancellations.dequeue())
+      while (pendingCreationCallbacks.nonEmpty && !runtimeFailed) {
+        val (id, _) = pendingCreationCallbacks.dequeue()
+        val classType = dynamicActorClassTypes.remove(id).getOrElse("")
+        onDynamicActorInitialized(id, classType)
+      }
+      var ready = true
+      while (!runtimeFailed && ready && inputQueue.nonEmpty) {
+        // Transport release cannot wait behind a model input that needs the replacement slot.
+        inputQueue.discardDispatchesWhere(e =>
+          (e.order.nonEmpty && e.scheduleRevision < scheduleRevision) ||
+            (e.generation > 0L && e.generation <= currentGeneration)).foreach(handleSpontaneous)
+        val head = inputQueue.headOption
+        val headOrder = head.flatMap {
+          case e: ActorInteractionEvent => e.order
+          case e: SpontaneousEvent => e.order
+          case _ => None
+        }
+        ready = head.nonEmpty && !pendingSelf.exists(p => headOrder.exists(p < _))
+        if (ready) inputQueue.dequeue() match {
+          case e: ActorInteractionEvent => handleInteractWith(e)
+          case e: SpontaneousEvent => handleSpontaneous(e)
+          case _ => ()
+        }
+      }
+    } finally drainingInputs = false
+  }
+
 
   private val pendingDynamicInits: mutable.Map[String, (ActorRef, InitializeEvent)] = mutable.Map.empty
   private val dynamicActorClassTypes: mutable.Map[String, String] = mutable.Map.empty
@@ -233,10 +319,13 @@ abstract class SimulationBaseActor[T <: BaseState](
         logged.event match {
           case spontaneous: SpontaneousEvent =>
             currentTick = spontaneous.tick
-            currentTimeManager = spontaneous.actorRef
-            currentGeneration = spontaneous.generation
+            logicalOrder = spontaneous.order
+            effectOrdinal = 0L
+            pendingSelf = None
             actSpontaneous(spontaneous)
           case interaction: ActorInteractionEvent =>
+            logicalOrder = interaction.order
+            effectOrdinal = 0L
             updateLamportClock(interaction.lamportTick)
             if (interaction.tick > currentTick) {
               currentTick = interaction.tick
@@ -268,26 +357,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def onRollbackDiscardPending(targetTick: Tick): Unit = ()
 
-  /** Called from [[handleInteractWith]] before it would otherwise treat a tick-behind interaction
-    * event as a genuine causality violation requiring a full rollback. Returning `true` tells the
-    * generic layer "I can already prove, without rolling back, that this specific message carries
-    * no information my current state doesn't already correctly reflect — drop it, no processing, no
-    * rollback." Default `false`: every actor that doesn't override this behaves exactly as before
-    * (unconditional rollback on any tick-behind interaction).
-    *
-    * The only sound way to answer `true` is an identity check equivalent to
-    * [[isAwaitingReply]]'s: this message is a reply to a request this actor has since superseded
-    * with a fresh one for the same logical exchange (see [[Movable]]'s override for the concrete
-    * `EnterLinkData`/`LeaveLinkData` case this was built for). It is NOT sound to answer `true`
-    * based on `state` alone (e.g. "I've already moved past this" by business-state inspection) —
-    * `state` is exactly what a genuine causality violation would still need corrected via rollback.
-    * Found 2026-09-11 (docs/KNOWN_GAPS.md's "Report loss/duplication" entry, Cause 3): a real run
-    * showed `Link -> Car ReceiveEnterLinkInfo` dominating rollback volume — Car had already
-    * re-sent a fresh `EnterLinkData` after an unrelated rollback, so the Link's now-superseded
-    * reply to the OLD request straggled Car's advanced `currentTick`, paying a full rollback+
-    * anti-message-cascade cost to reach the same "discard, do nothing" outcome
-    * `CarLinkHandler`'s own staleness gate would have reached anyway, had the message ever gotten
-    * that far.
+  /** Legacy shortcut only. Accounted execution must restore the event's prefix before judging
+    * a reply: even request identity in the speculative suffix may be undone later.
     */
   protected def isKnownSupersededReply(event: ActorInteractionEvent): Boolean = false
 
@@ -375,94 +446,19 @@ abstract class SimulationBaseActor[T <: BaseState](
       .collect { case e: ActorInteractionEvent => e }
       .filterNot(e => e.isAntiMessage || annihilated.contains(e.messageId))
 
-  /** After [[rollbackHandler]] undoes one or more processed events, this actor's own future
-    * self-schedule can be wrong: the undone event(s), during their original live dispatch, already
-    * sent a real `FinishEvent`/`ScheduleEvent` straight to `currentTimeManager`, registering a
-    * future tick computed from state that turned out never to have happened. That registration
-    * isn't touched by the anti-message cascade above — `onFinishSpontaneous`/`scheduleEvent` bypass
-    * `sendMessageTo` (see their own docs), so they're never captured in `LoggedEvent.sentMessages`
-    * and `AntiMessageCascade` never sees them to retract. Left alone, the stale tick sits in
-    * `OptimisticLocalTimeManager.scheduledActors` forever (or until it's coincidentally reached),
-    * corrupting that LTM's `nextTick`/LVT, which drags cluster-wide GVT and can stall the whole
-    * simulation, not just this actor.
-    *
-    * Fix, in two ordered real (non-replay) sends to the same `currentTimeManager` — Pekko preserves
-    * per-sender-per-receiver ordering, so the clear is guaranteed to land before the reschedule:
-    *   1. `FinishEvent(scheduleTick = None)` — the one TM-side primitive that already exists for
-    *      "unregister this actor from every future tick" (`LocalTimeManagerBase.finishEvent`'s
-    *      `scheduleTick.isEmpty` sweep), so the stale entry is removed rather than left alongside a
-    *      new one (which would be a double-dispatch bug, not a fix).
-    *   2. [[scheduleEvent]] at the tick the last surviving event had requested (see
-    *      [[RollbackHistoryHandler.lastScheduleOutcome]]), or at `currentTick` when no survivor ever
-    *      scheduled — this actor's genuine post-rollback position, restored
-    *      by `rollbackTo` itself (via `applyMigrationSnapshot`/`replayLoggedEvent`, both of which
-    *      set `currentTick`). `LocalTimeManagerBase.scheduleEvent`'s own `highestProcessedTick`
-    *      watermark bump takes care of never re-dispatching a tick already processed.
-    *
-    * `generation = Long.MaxValue` on the clearing `FinishEvent` deliberately bypasses
-    * `finishEvent`'s stale-generation guard (`LocalTimeManagerBase.scala:184`): when the undone
-    * event was this actor's own most recent live spontaneous dispatch, `currentGeneration` now
-    * legitimately holds an *older* generation than the time manager's `dispatchGeneration` counter
-    * — that counter is TM-side bookkeeping incremented on every dispatch and is never rolled back —
-    * so the normal "reject an out-of-order FinishEvent" check would silently drop exactly the
-    * corrective message this method exists to deliver. `generation` is read only for that one
-    * comparison (never stored or propagated, see `FinishEvent.scala`), so this has no effect beyond
-    * guaranteeing the clear always lands.
-    *
-    * Only ever called from [[rollbackAndCascade]], itself only reachable from a live
-    * `actInteractWith` dispatch (never while [[isReplaying]]), so `currentTimeManager` is always
-    * the real, live time manager to correct — same guard `onFinishSpontaneous` uses for the same
-    * "never live-dispatched" edge case.
-    */
+  /** Replacement is one revisioned operation, never a fabricated dispatch completion. */
   private def resyncScheduleAfterRollback(): Unit = {
     if (currentTimeManager == null) return
-    currentTimeManager ! FinishEvent(
-      end = currentTick,
-      actorRef = self,
-      identify = Identify(
-        id = getEntityId.toLong,
-        resourceId = IdUtil.format(properties.resourceId),
-        classType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
-        actorRef = getPath,
-        actorType = properties.actorType.toString
-      ),
-      scheduleTick = None,
-      scheduleEvent = None,
-      timeManager = currentTimeManager,
-      destruct = false,
-      generation = Long.MaxValue,
-      awaitingReply = outstandingAwaitedReplies.nonEmpty
-    )
-    // Unregistering the stale TM entry above is always correct regardless of wait state -- it may
-    // be clearing a schedule left by a different undone event than whatever this actor is still
-    // waiting on. Only the forced re-dispatch below is conditional: if a genuine, unretracted wait
-    // survives the registry restore, this actor is correctly disengaged (CLAUDE.md's
-    // Synchronization Discipline) and must NOT be force-woken -- the real reply, when it arrives,
-    // resolves it via the normal actInteractWith -> reply-handler -> onFinishSpontaneous path,
-    // identical to conservative mode (that path never depended on this resync to unstick it).
-    if (outstandingAwaitedReplies.nonEmpty) {
-      logDebug(
-        s"$getEntityId: rollback resync at tick=$currentTick skipped -- actor genuinely still " +
-          s"awaiting a reply (${outstandingAwaitedReplies.keys.mkString(",")}), not force-dispatching"
-      )
-      // #timewarp-trace
-      core.actor.trace.TimeWarpTrace.trace(
-        getEntityId,
-        currentTick,
-        "rollback_resync_skipped_awaiting_reply",
-        s"outstandingAwaitedReplies=${outstandingAwaitedReplies.mkString(",")}"
-      )
-      return
+    val next = if (usesAccountedRuntime) pendingSelf
+    else if (outstandingAwaitedReplies.nonEmpty) None else pendingSelf.orElse {
+      rollbackHandler.lastScheduleOutcome match {
+        case Some(Some(tick)) => Some(EventOrder.root(tick, getClass.getName, getEntityId.toLong))
+        case None => Some(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong))
+        case Some(None) => None
+      }
     }
-    // The schedule the last surviving event left behind, not currentTick: that tick was already
-    // processed, and a resync overwrites the TM's highestProcessedTick, so rescheduling it would
-    // dispatch the same tick twice. With no surviving event that ever scheduled, the restored
-    // currentTick is the only position there is.
-    rollbackHandler.lastScheduleOutcome match {
-      case Some(Some(nextTick)) => scheduleEvent(nextTick, resyncAfterRollback = true)
-      case Some(None)           => ()
-      case None                 => scheduleEvent(currentTick, resyncAfterRollback = true)
-    }
+    sendTimeManager(currentTimeManager, ReplaceScheduleEvent(schedulingIdentity(), nextScheduleRevision(), next,
+      currentGeneration, next.isEmpty && outstandingAwaitedReplies.nonEmpty))
   }
 
   /** Finds the logged event (if any) this actor recorded for processing the interaction identified
@@ -491,7 +487,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         eventType = "anti-message",
         tick = sentMessage.messageId.tick,
         seq = sentMessage.messageId.seq,
-        isAntiMessage = true
+        isAntiMessage = true,
+        receiverModel = sentMessage.receiverShardId
       )
     } else {
       sendMessageToShard(
@@ -613,6 +610,9 @@ abstract class SimulationBaseActor[T <: BaseState](
 
     base.copy(
       currentTick = currentTick,
+      logicalOrder = logicalOrder,
+      terminalIntent = terminalIntent,
+      pendingSelf = pendingSelf,
       startTick = startTick,
       lamportClock = lamportClock.getClock,
       currentTimeManagerType = currentTimeManagerType,
@@ -643,6 +643,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     super.applyMigrationSnapshot(snapshot)
 
     currentTick = snapshot.currentTick
+    logicalOrder = snapshot.logicalOrder
+    terminalIntent = snapshot.terminalIntent
+    pendingSelf = snapshot.pendingSelf
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
@@ -677,6 +680,11 @@ abstract class SimulationBaseActor[T <: BaseState](
     * incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent arrives.
     */
   private var awaitingMigration: Boolean = false
+
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    accountedCoordinator.foreach(_ ! RuntimeFailure(s"LP restart requires coordinated recovery: $getEntityId (${reason.getMessage})"))
+    super.preRestart(reason, message)
+  }
 
   override def preStart(): Unit = {
     super.preStart()
@@ -713,7 +721,10 @@ abstract class SimulationBaseActor[T <: BaseState](
         if (state != null) {
           startTick = state.getStartTick
         }
-        creatorManager ! StartEntityAckEvent(entityId = entityId)
+        if (usesAccountedRuntime) {
+          onFinishInitialize()
+          initializationAcks += creatorManager -> StartEntityAckEvent(entityId = entityId)
+        } else creatorManager ! StartEntityAckEvent(entityId = entityId)
         if (state != null) {
           if (state.isSetScheduleOnTimeManager) {
             registerOnTimeManager()
@@ -742,9 +753,18 @@ abstract class SimulationBaseActor[T <: BaseState](
       actorType = properties.actorType.toString
     )
 
+  private def schedulingIdentity(): Identify =
+    Identify(id = getEntityId.toLong, resourceId = properties.resourceId, classType = getClass.getName,
+      actorRef = getPath, actorType = properties.actorType.toString)
+
   private def registerOnTimeManager(): Unit = {
+    pendingSelf = Some(EventOrder.root(startTick, getClass.getName, getEntityId.toLong))
     if (isTimeWarp) {
       rollbackHandler.initialize(startTick)
+    }
+    if (usesAccountedRuntime) {
+      accountedCoordinator.get ! JoinRuntime(schedulingIdentity(), self, pendingSelf, startTick, runtimeIncarnation)
+      return
     }
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) {
@@ -773,6 +793,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def registerPassivelyOnTimeManager(): Unit = {
     rollbackHandler.initialize(startTick)
+    if (usesAccountedRuntime) {
+      accountedCoordinator.get ! JoinRuntime(schedulingIdentity(), self, None, startTick, runtimeIncarnation)
+      return
+    }
     val timeManager = getTimeManager(currentTimeManagerType)
     if (timeManager == null) return
     timeManager ! core.entity.event.control.execution.RegisterPassiveActorEvent(actorId = entityId.toLong, identify = Some(selfIdentify()))
@@ -780,6 +804,7 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   override protected def onInitialize(event: InitializeEvent): Unit = {
     entityId = event.id
+    accountedCoordinator = event.data.runtimeCoordinator.orElse(accountedCoordinator)
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
       currentTimeManagerType = timeManagers.keys.headOption.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT)
@@ -791,7 +816,16 @@ abstract class SimulationBaseActor[T <: BaseState](
       state = JsonUtil.convertValue[T](event.data.data)
     catch {
       case e: Exception =>
+        if (usesAccountedRuntime) { failRuntime(e); return }
         logError(s"Failed to deserialize state for $entityId: ${e.getMessage}", e)
+    }
+    if (usesAccountedRuntime && state == null) {
+      failRuntime(new IllegalArgumentException(s"null initialized state for $getEntityId"))
+      return
+    }
+    if (usesAccountedRuntime) {
+      try validateRuntimeCapabilities()
+      catch { case scala.util.control.NonFatal(e) => failRuntime(e); return }
     }
     relationships.clear()
     relationships ++= event.data.relationships
@@ -805,6 +839,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           registerOnTimeManager()
         catch {
           case e: Exception =>
+            if (usesAccountedRuntime) { failRuntime(e); return }
             logError(
               s"$entityId: registerOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
               e
@@ -815,6 +850,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           registerPassivelyOnTimeManager()
         catch {
           case e: Exception =>
+            if (usesAccountedRuntime) { failRuntime(e); return }
             logError(
               s"$entityId: registerPassivelyOnTimeManager() FAILED with ${e.getClass.getName}: ${e.getMessage}",
               e
@@ -838,7 +874,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
     }
     try
-      event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
+      if (usesAccountedRuntime) initializationAcks += event.actorRef -> InitializeEntityAckEvent(entityId = entityId)
+      else event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
     catch {
       case e: Exception =>
         logError(
@@ -902,6 +939,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     // Replay only rebuilds `state`: the original send of a surviving event was already delivered and
     // is never retracted, so repeating it would hand the receiver a duplicate. Sends of undone
     // events are retracted by anti-message, not resent here.
+    val outgoingOrder = nextEffectOrder(currentTick)
     if (isReplaying) {
       if (replaySendSeqs.hasNext) replayLastSendSeq = replaySendSeqs.next()
       return
@@ -917,7 +955,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     val seq = if (isTimeWarp) {
       messageSendSeq += 1
       currentEventSentMessages += core.actor.rollback.SentMessage(
-        messageId = core.actor.rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq),
+        messageId = core.actor.rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq,
+          senderType = if (usesAccountedRuntime) getClass.getName else "",
+          epoch = runtimeEpoch.getOrElse(""), incarnation = if (usesAccountedRuntime) runtimeIncarnation else ""),
         receiverId = entityId,
         receiverShardId = if (shardId != null) shardId else "",
         receiverActorType = actorType.toString
@@ -927,10 +967,19 @@ abstract class SimulationBaseActor[T <: BaseState](
       0L
     }
     if (actorType == PoolDistributed) {
-      sendMessageToPool(entityId, data, eventType, seq = seq)
+      sendMessageToPool(entityId, data, eventType, seq = seq, order = Some(outgoingOrder), receiverModel = Option(shardId).getOrElse(""))
     } else {
-      sendMessageToShard(entityId, shardId, data, eventType, seq = seq)
+      sendMessageToShard(entityId, shardId, data, eventType, seq = seq, order = Some(outgoingOrder))
     }
+  }
+
+  private def submitRuntimeInteraction(target: Long, model: String, data: AnyRef, eventType: String,
+    tick: Tick, seq: Long, anti: Boolean, order: Option[EventOrder]): Unit = {
+    val message = ActorInteractionEvent(tick, getLamportClock, getEntityId.toLong, getShardId,
+      self.path.name, getClass.getName, eventType, data, properties.actorType.toString,
+      properties.resourceId, seq, anti, order, runtimeEpoch.get, runtimeIncarnation)
+    accountedCoordinator.get ! RouteInteraction(runtimeEpoch.get,
+      LogicalProcessId(if (model == null || model.isEmpty) "" else StringUtil.getModelClassName(model), target), message)
   }
 
   private def sendMessageToShard(
@@ -940,8 +989,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     eventType: String = "default",
     tick: Tick = currentTick,
     seq: Long = 0L,
-    isAntiMessage: Boolean = false
+    isAntiMessage: Boolean = false,
+    order: Option[EventOrder] = None
   ): Unit = {
+    if (usesAccountedRuntime) {
+      submitRuntimeInteraction(entityId, shardId, data, eventType, tick, seq, isAntiMessage, order)
+      return
+    }
     val shardingRegion = getShardRef(IdUtil.format(StringUtil.getModelClassName(shardId)))
 
     shardingRegion ! core.entity.event.EntityEnvelopeEvent(
@@ -958,7 +1012,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         actorType = properties.actorType.toString,
         resourceId = properties.resourceId,
         seq = seq,
-        isAntiMessage = isAntiMessage
+        isAntiMessage = isAntiMessage,
+        order = order
       )
     )
   }
@@ -969,8 +1024,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     eventType: String = "default",
     tick: Tick = currentTick,
     seq: Long = 0L,
-    isAntiMessage: Boolean = false
+    isAntiMessage: Boolean = false,
+    order: Option[EventOrder] = None,
+    receiverModel: String = ""
   ): Unit = {
+    if (usesAccountedRuntime) {
+      submitRuntimeInteraction(entityId, receiverModel, data, eventType, tick, seq, isAntiMessage, order)
+      return
+    }
     val pool = getActorPoolRef(entityId.toString)
     pool ! ActorInteractionEvent(
       tick = tick,
@@ -984,7 +1045,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       actorType = properties.actorType.toString,
       resourceId = properties.resourceId,
       seq = seq,
-      isAntiMessage = isAntiMessage
+      isAntiMessage = isAntiMessage,
+      order = order
     )
   }
 
@@ -1007,23 +1069,32 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
-    val undoneInteractions =
-      if (isTimeWarp && state != null && event.tick < currentTick) {
-        // This dispatch already owns a TM slot; its FinishEvent replaces the undone schedule.
-        interactionsToReprocess(
-          rollbackAndCascade(event.tick, () => rollbackHandler.rollbackTo(event.tick), resyncSchedule = false),
-          annihilated = None
-        )
-      } else Seq.empty
-    currentTick = event.tick
+    if ((event.order.nonEmpty && event.scheduleRevision < scheduleRevision) ||
+      (event.generation > 0L && event.generation <= currentGeneration)) {
+      sendTimeManager(event.actorRef, FinishEvent(self, schedulingIdentity(), currentTick, timeManager = event.actorRef,
+        generation = event.generation, discardedDispatch = true))
+      return
+    }
     currentTimeManager = event.actorRef
     currentGeneration = event.generation
+    val undoneInteractions =
+      if (isTimeWarp && state != null && (event.tick < currentTick ||
+        event.order.exists(o => logicalOrder.exists(_ > o)))) {
+        interactionsToReprocess(
+          rollbackAndCascade(event.tick,
+            () => event.order.fold(rollbackHandler.rollbackTo(event.tick))(rollbackHandler.rollbackBefore),
+            resyncSchedule = false), annihilated = None)
+      } else Seq.empty
+    currentTick = event.tick
+    logicalOrder = event.order
+    effectOrdinal = 0L
+    pendingSelf = None
     // §4: this SpontaneousEvent is the one channel an OptimisticLocalTimeManager already has to
     // reach this actor regularly — piggyback its last-known GVT here rather than inventing a
     // separate LTM-to-actor broadcast. An idle actor simply flushes on its next dispatch instead of
     // the instant GVT technically clears it; that's a bounded delay, not a correctness gap (nothing
     // buffered can be observed as "sent" by anyone until it actually is).
-    if (isTimeWarp) event.gvt.foreach(flushBufferedReportsUpTo)
+    if (isTimeWarp && !usesAccountedRuntime) event.gvt.foreach(flushBufferedReportsUpTo)
     if (state == null) {
       ActorMetrics.eventsWhenStateIsNull.labels(
         getClass.getSimpleName,
@@ -1049,13 +1120,20 @@ abstract class SimulationBaseActor[T <: BaseState](
       else actSpontaneous(event)
     catch
       case e: Throwable =>
+        if (usesAccountedRuntime) { failRuntime(e); return }
         logError(
           s"Exception during actSpontaneous at tick=$currentTick for ${getEntityId}: ${e.getMessage}"
         )
         e.printStackTrace()
         if (state == null) onFinishSpontaneous(None)
         else onFinishSpontaneous(Some(currentTick + 1))
+    if (usesAccountedRuntime && !_spontaneousFinishSent && outstandingAwaitedReplies.nonEmpty)
+      deferFinishSpontaneous()
     if (!_spontaneousFinishSent) {
+      if (usesAccountedRuntime) {
+        failRuntime(new IllegalStateException(s"missing spontaneous completion at tick=$currentTick"))
+        return
+      }
       logError(
         s"[BUG] ${getClass.getSimpleName}/${getEntityId} did not call onFinishSpontaneous at tick=$currentTick — auto-recovering"
       )
@@ -1073,7 +1151,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
       currentEventSeq = 0L
     }
-    undoneInteractions.foreach(handleInteractWith)
+    undoneInteractions.foreach(inputQueue.enqueue)
   }
 
   /** Called when the actor receives a spontaneous event from the time manager. Override this method
@@ -1102,7 +1180,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         case Some(logged) =>
           ActorMetrics.antiMessageRollbackTriggered.labels(cachedActorTypeLabel).inc()
           val undone = rollbackAndCascade(logged.tick, () => rollbackHandler.rollbackFrom(logged.seq))
-          interactionsToReprocess(undone, annihilated = Some(event.messageId)).foreach(handleInteractWith)
+          interactionsToReprocess(undone, annihilated = Some(event.messageId)).foreach(inputQueue.enqueue)
         case None =>
           logDebug(s"$getEntityId: retaining cancellation for messageId=${event.messageId}")
       }
@@ -1132,8 +1210,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     // happened. Default `isKnownSupersededReply` is `false` for every actor that doesn't override
     // it, so this changes nothing for anyone who hasn't opted in.
     var undoneInteractions: Seq[ActorInteractionEvent] = Seq.empty
-    if (isTimeWarp && event.tick < currentTick) {
-      if (isKnownSupersededReply(event)) {
+    var restoredPrefix = false
+    if (isTimeWarp && (event.tick < currentTick || event.order.exists(o => logicalOrder.exists(_ > o)))) {
+      if (!usesAccountedRuntime && isKnownSupersededReply(event)) {
         ActorMetrics.staleReplyDroppedWithoutRollback
           .labels(cachedActorTypeLabel, event.actorClassType, event.eventType)
           .inc()
@@ -1153,14 +1232,21 @@ abstract class SimulationBaseActor[T <: BaseState](
       ActorMetrics.stragglerRollbackDistanceTicks
         .labels(cachedActorTypeLabel)
         .observe((currentTick - event.tick).toDouble)
+      restoredPrefix = true
       undoneInteractions = interactionsToReprocess(
-        rollbackAndCascade(event.tick, () => rollbackHandler.rollbackAfter(event.tick)), annihilated = None
+        rollbackAndCascade(event.tick,
+          () => event.order.fold(rollbackHandler.rollbackAfter(event.tick))(rollbackHandler.rollbackBefore)), annihilated = None
       )
     }
 
-    if (event.tick > currentTick) {
-      currentTick = event.tick
+    if (pendingSelf.exists(p => event.order.exists(p < _)) && restoredPrefix) {
+      inputQueue.enqueue(event)
+      undoneInteractions.foreach(inputQueue.enqueue)
+      return
     }
+    if (event.tick > currentTick) currentTick = event.tick
+    logicalOrder = event.order
+    effectOrdinal = 0L
     if (isTimeWarp) {
       currentEventSeq = processedEventSeq + 1L
       currentEventSentMessages.clear()
@@ -1172,6 +1258,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       else actInteractWith(event)
     catch
       case e: Exception =>
+        if (usesAccountedRuntime) { failRuntime(e); return }
         logError(
           s"Exception during actInteractWith at tick=$currentTick for ${getEntityId} " +
             s"from ${event.actorRefId} (${event.eventType}): ${e.getMessage}"
@@ -1191,7 +1278,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       currentEventSeq = 0L
     }
     // After the straggler, so they run in causal order. Only the straggler branch fills this.
-    undoneInteractions.foreach(handleInteractWith)
+    undoneInteractions.foreach(inputQueue.enqueue)
   }
 
   /** Called when the actor receives an interaction event from another actor. Override this method
@@ -1201,7 +1288,74 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
+  private def runtimeMinimum: Option[Long] = {
+    (inputQueue.minimumTick.toSeq ++ pendingSelf.map(_.tick) ++ pendingCancellations.map(_.tick) ++
+      outstandingAwaitedReplies.values.map(_.sentAtTick) ++ pendingCreationCallbacks.map(_._2) ++
+      pendingDynamicInits.values.map(_._2.data.data).map(_ => currentTick)).minOption
+  }
+
+  private def acceptRuntimeInput(event: AnyRef): Unit = event match {
+    case e: SpontaneousEvent if (e.order.nonEmpty && e.scheduleRevision < scheduleRevision) ||
+      (e.generation > 0L && e.generation <= currentGeneration) =>
+      sendTimeManager(e.actorRef, FinishEvent(self, schedulingIdentity(), currentTick,
+        timeManager = e.actorRef, generation = e.generation, discardedDispatch = true))
+    case e: SpontaneousEvent => inputQueue.enqueue(e)
+    case e: ActorInteractionEvent if e.isAntiMessage => pendingCancellations.enqueue(e)
+    case e: ActorInteractionEvent => inputQueue.enqueue(e)
+    case other => throw new IllegalArgumentException(s"unsupported runtime LP input ${other.getClass.getName}")
+  }
+
   override def receive: Receive = {
+    case RuntimeJoined(epoch, coordinator, owner) =>
+      require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
+      runtimeEpoch = Some(epoch)
+      currentTimeManager = owner
+      initializationAcks.foreach { case (target, ack) => target ! ack }
+      initializationAcks.clear()
+      drainInputs()
+    case RuntimeDelivery(epoch, token, event) =>
+      try {
+        require(runtimeEpoch.contains(epoch), "wrong runtime delivery epoch")
+        val tick = event match {
+          case e: SpontaneousEvent => e.tick
+          case e: ActorInteractionEvent => e.tick
+          case _ => throw new IllegalArgumentException("not an LP event")
+        }
+        require(tick >= runtimeGvt, s"LP input $tick below frontier $runtimeGvt")
+        acceptRuntimeInput(event)
+        accountedCoordinator.foreach(_ ! DeliveryAccepted(epoch, token))
+        drainInputs()
+      } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+    case FreezeRuntime(round) => runtimeFrozen = true; sender() ! RuntimeFrozen(round)
+    case CollectRuntimeSnapshot(round) =>
+      val minimum = runtimeMinimum
+      val now = System.nanoTime()
+      if (core.actor.trace.TimeWarpTrace.enabled && minimum.nonEmpty && runtimeGvt != Long.MinValue &&
+        now - runtimeFrontierAt > 5000000000L &&
+        now - runtimeDiagnosticAt > 5000000000L) {
+        runtimeDiagnosticAt = now
+        logWarn(s"[RUNTIME-PENDING] round=$round frontier=$runtimeGvt minimum=$minimum pendingSelf=$pendingSelf " +
+          s"queued=${inputQueue.headOption} awaited=${outstandingAwaitedReplies.toMap} " +
+          s"state=${scala.util.Try(JsonUtil.toJson(state)).getOrElse(String.valueOf(state)).take(6000)}")
+      }
+      core.actor.trace.TimeWarpTrace.trace(getEntityId, currentTick, "runtime_snapshot",
+        s"round=$round minimum=$minimum pendingSelf=$pendingSelf logicalOrder=$logicalOrder " +
+          s"queued=${inputQueue.headOption} awaited=${outstandingAwaitedReplies.toMap} terminal=$terminalIntent")
+      sender() ! RuntimeSnapshot(round, runtimeMinimum, outstandingAwaitedReplies.size,
+        pendingCreationCallbacks.size + pendingDynamicInits.size)
+    case CommitRuntime(round, gvt) =>
+      require(gvt >= runtimeGvt, "commit frontier regression")
+      if (gvt != runtimeGvt) runtimeFrontierAt = System.nanoTime()
+      runtimeGvt = gvt
+      flushBufferedReportsUpTo(gvt)
+      val eligible = terminalIntent.nonEmpty && currentTick < gvt && runtimeMinimum.isEmpty
+      sender() ! RuntimeCommitted(round, eligible)
+    case ResumeRuntime(_) =>
+      runtimeFrozen = false
+      try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+    case RetireRuntimeProcess(round) =>
+      sender() ! RuntimeProcessRetired(round)
+      physicallyRetire()
     case event: MigrationContextEvent if awaitingMigration =>
       awaitingMigration = false
       handleMigrationContext(event)
@@ -1216,8 +1370,18 @@ abstract class SimulationBaseActor[T <: BaseState](
       stash()
 
     case event: MigrationContextEvent      => handleMigrationContext(event)
-    case event: SpontaneousEvent           => handleSpontaneous(event)
-    case event: ActorInteractionEvent      => handleInteractWith(event)
+    case _: ActorInteractionEvent | _: SpontaneousEvent if usesAccountedRuntime =>
+      failRuntime(new IllegalStateException("unaccounted model input; register an input producer"))
+    case event: SpontaneousEvent if (event.order.nonEmpty && event.scheduleRevision < scheduleRevision) ||
+      (event.generation > 0L && event.generation <= currentGeneration) =>
+      sendTimeManager(event.actorRef, FinishEvent(self, schedulingIdentity(), currentTick, timeManager = event.actorRef,
+        generation = event.generation, discardedDispatch = true))
+      drainInputs()
+    case event: SpontaneousEvent           => enqueueInput(event)
+    case event: ActorInteractionEvent if event.isAntiMessage =>
+      handleInteractWith(event)
+      drainInputs()
+    case event: ActorInteractionEvent      => enqueueInput(event)
     case event: ShardRegion.StartEntityAck => handleSpawnedEntityStartAck(event)
     case event: InitializeEntityAckEvent   => handleSpawnedEntityInitAck(event)
     case event                             => super.receive(event)
@@ -1246,6 +1410,12 @@ abstract class SimulationBaseActor[T <: BaseState](
     stateData: Any,
     relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
   ): Unit = {
+    if (usesAccountedRuntime) {
+      failRuntime(new UnsupportedOperationException("live dynamic birth requires a cancellable lifecycle adapter; precreate inert LPs before startup"))
+      return
+    }
+    if (isReplaying) return
+    accountedCoordinator.foreach(_ ! BeginRuntimeCreation(entityId.toString, currentTick))
     val initEvent = InitializeEvent(
       id = entityId.toString,
       actorRef = self,
@@ -1253,6 +1423,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         data = stateData,
         resourceId = properties.resourceId,
         timeManagers = timeManagers,
+        runtimeCoordinator = accountedCoordinator,
         creatorManager = self,
         reporters = reporters,
         relationships = relationships
@@ -1265,7 +1436,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       resourceId = properties.resourceId,
       timeManagers = timeManagers,
       creatorManager = creatorManager,
-      reporters = reporters
+      reporters = reporters,
+      runtimeCoordinator = accountedCoordinator
     )
     pendingDynamicInits.put(entityId.toString, (shardRegion, initEvent))
     dynamicActorClassTypes.put(entityId.toString, classType)
@@ -1286,39 +1458,43 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
 
   private def handleSpawnedEntityInitAck(event: InitializeEntityAckEvent): Unit = {
-    val classType = dynamicActorClassTypes.remove(event.entityId).getOrElse("")
-    onDynamicActorInitialized(event.entityId, classType)
-  }
-
-  /** For cluster-sharded (LoadBalancedDistributed) entities, use Pekko passivation instead of
-    * context.stop(self). Passivation signals the ShardRegion to stop buffering messages for this
-    * entity ID, so stale in-flight messages go to Dead Letters instead of triggering a ghost
-    * restart with state == null. Plain context.stop does NOT inform the shard, causing the entity
-    * to be recreated on the next incoming message.
-    *
-    * Also the real termination path for Time Warp participants (`Car`/`Bicycle`/`Motorcycle`/
-    * `PrivateVehicle`/`Movable` all call this directly, not `onDestruct`'s `DestructEvent` path) —
-    * so any report() still sitting in [[reportBuffer]] waiting for a GVT that will now never arrive
-    * (this actor is about to stop existing) must flush unconditionally here. §4: nothing can ever
-    * roll back an actor that no longer exists, so every remaining buffered report is safe by
-    * construction at this point, not just the ones already covered by the last GVT this actor saw.
-    */
-  override protected def selfDestruct(): Unit = {
-    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
-    if (properties != null && properties.actorType == LoadBalancedDistributed) {
-      context.parent ! ShardRegion.Passivate(PoisonPill)
+    if (usesAccountedRuntime) {
+      accountedCoordinator.foreach(_ ! EndRuntimeCreation(event.entityId))
+      pendingCreationCallbacks.enqueue(event.entityId -> currentTick)
+      drainInputs()
     } else {
-      context.stop(self)
+      val classType = dynamicActorClassTypes.remove(event.entityId).getOrElse("")
+      onDynamicActorInitialized(event.entityId, classType)
     }
   }
 
-  /** Same unconditional final flush as [[selfDestruct]]'s doc explains, for the other termination
-    * path: forced destruction via a `DestructEvent` from the time manager (`BaseActor.destruct`)
-    * rather than the actor choosing to stop itself.
-    */
+  override protected def acceptPhysicalDestruction(event: DestructEvent): Boolean = {
+    if (usesAccountedRuntime) {
+      accountedCoordinator.foreach(_ ! RuntimeFailure(s"uncommitted destruction of $getEntityId"))
+      false
+    } else true
+  }
+
+  /** A terminal decision is speculative until a proven frontier passes its producing history. */
+  override protected def selfDestruct(): Unit = {
+    if (isTimeWarp) {
+      terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
+      onFinishSpontaneous(None)
+    } else physicallyRetire()
+  }
+
+  private def physicallyRetire(): Unit =
+    if (properties != null && properties.actorType == LoadBalancedDistributed)
+      context.parent ! ShardRegion.Passivate(PoisonPill)
+    else context.stop(self)
+
   override protected def onDestruct(event: DestructEvent): Unit = {
-    if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
-    super.onDestruct(event)
+    if (usesAccountedRuntime) {
+      accountedCoordinator.foreach(_ ! RuntimeFailure(s"uncommitted destruction of $getEntityId"))
+    } else {
+      if (isTimeWarp) flushBufferedReportsUpTo(Long.MaxValue)
+      super.onDestruct(event)
+    }
   }
 
   private def handleMigrationContext(event: MigrationContextEvent): Unit = {
@@ -1370,6 +1546,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     // real, the first time this event was live-dispatched. Nothing to update here either:
     // _spontaneousFinishSent's safety-net check only runs inside handleSpontaneous, which replay
     // never goes through.
+    if (scheduleTick.nonEmpty) terminalIntent = None
+    pendingSelf = scheduleTick.map(nextEffectOrder)
+    if (destruct && isTimeWarp) terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
     if (isReplaying) return
     _spontaneousFinishSent = true
     if (isTimeWarp) currentEventScheduleOutcome = Some(scheduleTick)
@@ -1386,7 +1565,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       logDebug(s"$getEntityId: onFinishSpontaneous called with no currentTimeManager (never live-dispatched) -- nothing to report, skipping")
       return
     }
-    currentTimeManager ! FinishEvent(
+    sendTimeManager(currentTimeManager, FinishEvent(
       end = currentTick,
       actorRef = self,
       identify = Identify(
@@ -1399,15 +1578,16 @@ abstract class SimulationBaseActor[T <: BaseState](
       scheduleTick = scheduleTick.map(_.toString),
       scheduleEvent = None,
       timeManager = currentTimeManager,
-      destruct = destruct,
+      destruct = destruct && !usesAccountedRuntime,
       generation = currentGeneration,
-      awaitingReply = scheduleTick.isEmpty && outstandingAwaitedReplies.nonEmpty
-    )
+      awaitingReply = scheduleTick.isEmpty && outstandingAwaitedReplies.nonEmpty,
+      scheduleRevision = nextScheduleRevision(),
+      nextOrder = pendingSelf
+    ))
   }
 
   /** Sends a spontaneous event to itself. */
-  protected def selfSpontaneous(): Unit =
-    self ! SpontaneousEvent(currentTick, currentTimeManager)
+  protected def selfSpontaneous(): Unit = scheduleEvent(currentTick)
 
   /** Schedules an event at a specific tick. CRITICAL: Send to currentTimeManager (same TM that sent
     * last SpontaneousEvent), NOT to the pool router. Using getTimeManager() routes round-robin to
@@ -1422,11 +1602,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     // Time Warp replay: same reasoning as onFinishSpontaneous's isReplaying guard -- this actor's
     // real future schedule was already correctly registered with the time manager the first time
     // this event was live-dispatched; replaying it must not re-register (or double-register) it.
+    terminalIntent = None
+    pendingSelf = Some(nextEffectOrder(tick))
     if (isReplaying) return
     if (isTimeWarp && !resyncAfterRollback) currentEventScheduleOutcome = Some(Some(tick))
     val tm =
       if (currentTimeManager != null) currentTimeManager else getTimeManager(currentTimeManagerType)
-    tm ! ScheduleEvent(
+    sendTimeManager(tm, ScheduleEvent(
       tick = tick,
       actorRef = getPath,
       identify = Some(
@@ -1438,8 +1620,10 @@ abstract class SimulationBaseActor[T <: BaseState](
           actorType = properties.actorType.toString
         )
       ),
-      resyncAfterRollback = resyncAfterRollback
-    )
+      resyncAfterRollback = resyncAfterRollback,
+      revision = nextScheduleRevision(),
+      order = pendingSelf.map(o => org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(o.tick, o.microstep, o.key))
+    ))
   }
 
   /** Reports data to the reporting system.
@@ -1515,14 +1699,17 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   private def flushBufferedReportsUpTo(gvt: Tick): Unit =
     if (reportBuffer.nonEmpty) {
-      val (ready, pending) = reportBuffer.partition(_.event.tick <= gvt)
+      val (ready, pending) = reportBuffer.partition(_.event.tick < gvt)
       if (ready.nonEmpty) {
         reportBuffer.clear()
         reportBuffer ++= pending
         ready.foreach {
           case buffered =>
             if (buffered.event.label != null) ActorMetrics.reportFlushed.labels(buffered.event.label).inc()
-            buffered.target ! buffered.event
+            accountedCoordinator match {
+              case Some(coordinator) => coordinator ! PublishCommittedReport(buffered.target, buffered.event)
+              case None => buffered.target ! buffered.event
+            }
         }
       }
     }

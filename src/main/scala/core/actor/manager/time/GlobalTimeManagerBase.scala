@@ -44,6 +44,8 @@ abstract class GlobalTimeManagerBase(
     * `ConservativeGlobalTimeManager` supplies `LocalDiscreteEventTimeManager.props`; an
     * `OptimisticGlobalTimeManager` would supply its own optimistic LTM props here instead.
     */
+  protected def runtimeCoordinatorForActors: Option[ActorRef] = None
+
   protected def localTimeManagerProps(): Props
 
   protected def createTimeManagersPool(): Unit = {
@@ -67,7 +69,7 @@ abstract class GlobalTimeManagerBase(
       ).props(localTimeManagerProps()),
       name = POOL_TIME_MANAGER_ACTOR_NAME
     )
-    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool)
+    simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool, runtimeCoordinator = runtimeCoordinatorForActors)
   }
 
   protected def notifyLocalManagers(event: Any): Unit =

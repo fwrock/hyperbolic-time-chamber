@@ -30,5 +30,8 @@ case class FinishEvent(
   destruct: Boolean = false,
   eventsAmount: Long = 0,
   generation: Long = 0L,
-  awaitingReply: Boolean = false
+  awaitingReply: Boolean = false,
+  scheduleRevision: Long = 0L,
+  nextOrder: Option[core.runtime.EventOrder] = None,
+  discardedDispatch: Boolean = false
 ) extends BaseEvent(tick = end, actorRef = actorRef)

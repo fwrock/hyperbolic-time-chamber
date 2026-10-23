@@ -36,7 +36,10 @@ class ActorInteractionSerializer(
             actorType,
             resourceId,
             seq,
-            isAntiMessage
+            isAntiMessage,
+            order,
+            sourceEpoch,
+            sourceIncarnation
           ) =>
         NestedPayloadCodec.encode(serialization, data) match {
           case Success(encoded) =>
@@ -58,7 +61,10 @@ class ActorInteractionSerializer(
               actorClassTypeOverride = actorClassTypeOverride,
               eventTypeOverride = eventTypeOverride,
               seq = seq,
-              isAntiMessage = isAntiMessage
+              isAntiMessage = isAntiMessage,
+              order = order.map(ActorInteractionCodec.encodeOrder),
+              sourceEpoch = sourceEpoch,
+              sourceIncarnation = sourceIncarnation
             )
             proto.toByteArray
           case Failure(exception) =>
@@ -94,7 +100,10 @@ class ActorInteractionSerializer(
             actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
             resourceId = proto.resourceId,
             seq = proto.seq,
-            isAntiMessage = proto.isAntiMessage
+            isAntiMessage = proto.isAntiMessage,
+            order = proto.order.map(ActorInteractionCodec.decodeOrder),
+            sourceEpoch = proto.sourceEpoch,
+            sourceIncarnation = proto.sourceIncarnation
           )
         case Failure(exception) =>
           throw new IllegalArgumentException(

@@ -113,7 +113,7 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
 
   "A Person initialized from scenario data" should "restore its seeded plan before the first event" in {
     val rig = newRig()
-    val initialized = rig.person.underlyingActor.testState
+    val initialized = core.util.JsonUtil.fromJson[PersonState](core.util.JsonUtil.toJson(rig.person.underlyingActor.testState))
     initialized.cursor.remaining shouldBe RemainingQueue(initialized.originalPlan)
     wake(rig, 0L)
 
@@ -158,7 +158,7 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
 
     rig.person ! completed.copy(isAntiMessage = true)
 
-    rig.tm.expectMsgType[FinishEvent].awaitingReply shouldBe true
+    rig.tm.expectMsgType[core.entity.event.control.execution.ReplaceScheduleEvent].awaitingReply shouldBe true
     rig.person.underlyingActor.testState shouldBe core.util.JsonUtil.fromJson[PersonState](afterDeparture.stateJson)
     rig.person.underlyingActor.testSnapshot.awaitedReplies shouldBe afterDeparture.awaitedReplies
     rig.engine.liveReads shouldBe 1

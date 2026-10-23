@@ -135,6 +135,18 @@ final class RollbackHistoryHandler(
     }
   }
 
+  def rollbackBefore(order: core.runtime.EventOrder): Seq[LoggedEvent] = {
+    val first = log.iterator.filter { logged =>
+      val recorded = logged.event match {
+        case e: core.entity.event.ActorInteractionEvent => e.order
+        case e: core.entity.event.SpontaneousEvent => e.order
+        case _ => None
+      }
+      recorded.exists(_ > order) || logged.tick > order.tick
+    }.map(_.seq).minOption
+    first.fold(Seq.empty[LoggedEvent])(rollbackFrom)
+  }
+
   /** Cancellation targets one processed event; earlier events at the same tick must survive.
     * Undo its complete processing suffix so retained history always matches restored state.
     */

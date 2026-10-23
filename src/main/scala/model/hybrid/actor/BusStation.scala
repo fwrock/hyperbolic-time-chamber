@@ -26,6 +26,9 @@ class BusStation(
       properties = properties
     ) {
 
+  override protected def validateRuntimeCapabilities(): Unit =
+    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireCancellableTransitBirth()
+
   override protected def internStateStrings(s: BusStationState): BusStationState =
     s.copy(
       name        = StringPool.intern(s.name),

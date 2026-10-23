@@ -1,7 +1,9 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.entity.event.control.execution.TimeManagerRegisterEvent
+import core.entity.event.control.execution.{ TimeManagerRegisterEvent, ReplaceScheduleEvent }
+import core.runtime.EventOrder
+import core.runtime.accounting.*
 import core.entity.event.control.execution.QueryNextTickEvent
 import core.entity.event.control.execution.RegisterPassiveActorEvent
 import core.entity.event.control.execution.DestructAckEvent
@@ -77,7 +79,16 @@ abstract class LocalTimeManagerBase(
     * already correctly sequenced after startup) does.
     */
   protected var hasStarted = false
+  protected var accountedRuntime: Option[ActorRef] = None
+  protected var runtimeFrozen = false
+  private var runtimeEpoch: Option[String] = None
+  private val runtimeIdentities = mutable.Map.empty[Long, Identify]
+
   private val registeredIdentities: mutable.Map[Long, Identify] = mutable.Map()
+  private val scheduleRevisions = mutable.Map.empty[Long, Long].withDefaultValue(0L)
+  private val inFlightTicks = mutable.Map.empty[Long, Tick]
+  private val scheduledLocations = mutable.Map.empty[Long, mutable.Map[Tick, Identify]]
+  private val logicalSchedules = mutable.Map.empty[Long, EventOrder]
   private val dispatchGeneration: mutable.Map[Long, Long] = mutable.Map().withDefaultValue(0L)
 
   /** Actors whose latest accepted `FinishEvent` said they are waiting for a reply
@@ -132,7 +143,9 @@ abstract class LocalTimeManagerBase(
     * to compute the minimum watermark across every actor currently in flight, without widening the
     * map itself to `protected`.
     */
+  protected def scheduleRevisionOf(actorId: Long): Long = scheduleRevisions(actorId)
   protected def highestProcessedTickOf(actorId: Long): Tick = highestProcessedTick(actorId)
+  protected def inFlightTickOf(actorId: Long): Tick = inFlightTicks.getOrElse(actorId, highestProcessedTick(actorId))
 
   /** The minimum `highestProcessedTick` across every actor this LTM has ever actually dispatched
     * (via [[sendSpontaneousEvent]]) and not yet destructed (`completeDestruct` removes the entry).
@@ -144,17 +157,49 @@ abstract class LocalTimeManagerBase(
   protected def minHighestProcessedTick: Option[Tick] =
     if (highestProcessedTick.isEmpty) None else Some(highestProcessedTick.values.min)
 
-  override def onStart(): Unit =
-    if (parentManager.nonEmpty) {
-      parentManager.get ! TimeManagerRegisterEvent(actorRef = self)
-    }
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    accountedRuntime.foreach(_ ! RuntimeFailure(s"time-manager restart requires coordinated recovery: ${self.path}"))
+    super.preRestart(reason, message)
+  }
+
+  override def onStart(): Unit = {
+    accountedRuntime.foreach(_ ! JoinRuntimeManager(self))
+    parentManager.foreach(_ ! TimeManagerRegisterEvent(actorRef = self))
+  }
 
   override def handleEvent: Receive = {
+    case RuntimeDelivery(epoch, token, event) =>
+      runtimeEpoch = Some(epoch)
+      event match {
+        case RegisterOwnedProcess(identity, ref, wake, logicalIdentity) =>
+          runtimeIdentities(identity.id) = logicalIdentity.getOrElse(identity)
+          wake match {
+            case Some(order) =>
+              logicalSchedules(identity.id) = order
+              registerActor(RegisterActorEvent(order.tick, identity.id, Some(identity)))
+            case None => registerPassiveActor(RegisterPassiveActorEvent(identity.id, Some(identity)))
+          }
+        case other => handleEvent(other)
+      }
+      accountedRuntime.foreach(_ ! DeliveryAccepted(epoch, token))
+    case FreezeRuntime(round) =>
+      runtimeFrozen = true
+      sender() ! RuntimeFrozen(round)
+    case CollectRuntimeSnapshot(round) =>
+      val minimum = (nextTick.toSeq ++ runningEvents.map(a => inFlightTickOf(a.id))).minOption
+      sender() ! RuntimeSnapshot(round, minimum, blockedActors.size, 0)
+    case CommitRuntime(round, _) => sender() ! RuntimeCommitted(round, false)
+    case ResumeRuntime(_) => runtimeFrozen = false; if (hasStarted) advanceToNextTick()
+    case RuntimeStopManagers(round) =>
+      runtimeFrozen = true
+      isStopped = true
+      sender() ! RuntimeProcessRetired(round)
     case start: StartSimulationTimeEvent => startSimulation(start)
     case register: RegisterActorEvent    => registerActor(register)
     case passive: RegisterPassiveActorEvent => registerPassiveActor(passive)
     case ack: DestructAckEvent           => handleDestructAck(ack)
     case schedule: ScheduleEvent         => scheduleEvent(schedule)
+    case replacement: ReplaceScheduleEvent => replaceSchedule(replacement)
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
     case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>
@@ -204,7 +249,73 @@ abstract class LocalTimeManagerBase(
         ActorMetrics.activeActors.labels(actorType).inc()
     }
 
+  private def addScheduledActor(tick: Tick, identity: Identify): Unit = {
+    val locations = scheduledLocations.getOrElseUpdate(identity.id, mutable.Map.empty)
+    val actors = scheduledActors.getOrElseUpdate(tick, mutable.Set.empty)
+    locations.put(tick, identity).foreach(actors.remove)
+    actors.add(identity)
+  }
+
+  private def forgetScheduledLocation(actorId: Long, tick: Tick): Unit =
+    scheduledLocations.get(actorId).foreach { locations =>
+      locations.remove(tick)
+      if (locations.isEmpty) scheduledLocations.remove(actorId)
+    }
+
+  private def clearScheduledActor(actorId: Long): Unit = {
+    // Replacement must scale with this LP's own schedules, not scan every other LP's bucket.
+    scheduledLocations.remove(actorId).foreach(_.foreach { case (tick, identity) =>
+      scheduledActors.get(tick).foreach { actors =>
+        actors.remove(identity)
+        if (actors.isEmpty) scheduledActors.remove(tick)
+      }
+      if (!scheduledActors.contains(tick)) scheduledTicksOnFinish.remove(tick)
+    })
+  }
+
+  private def releaseDispatch(actorId: Long, generation: Long): Boolean = {
+    if (generation != dispatchGeneration(actorId)) return false
+    val removed = runningEvents.exists(_.id == actorId)
+    runningEvents.filterInPlace(_.id != actorId)
+    if (removed) inFlightTicks.remove(actorId)
+    TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel).set(runningEvents.size.toDouble)
+    removed
+  }
+
+  protected def replaceSchedule(event: ReplaceScheduleEvent): Unit = {
+    require(event.revision > 0L, "schedule replacement needs a positive revision")
+    val actorId = event.identify.id
+    if (event.revision <= scheduleRevisions(actorId)) return
+    val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
+    val previousNext = nextTick
+    scheduleRevisions(actorId) = event.revision
+    clearScheduledActor(actorId)
+    pendingDestruct.remove(actorId)
+    logicalSchedules.remove(actorId)
+    if (event.awaitingReply) blockedActors.add(actorId) else blockedActors.remove(actorId)
+    // A dispatch still in transit owns its slot until the LP acknowledges that exact generation.
+    releaseDispatch(actorId, event.completedGeneration)
+    event.next.foreach { order =>
+      logicalSchedules(actorId) = order
+      addScheduledActor(order.tick, event.identify)
+    }
+    event.next match {
+      case Some(order) => onActorRescheduled(order.tick, wasIdle, previousNext.exists(order.tick < _))
+      case None => ()
+    }
+    if (hasStarted) advanceToNextTick()
+  }
+
   protected def scheduleEvent(event: ScheduleEvent): Unit = {
+    if (event.revision > 0L) {
+      val identity = event.identify.getOrElse(throw new IllegalArgumentException("missing schedule identity"))
+      val order = event.order.map(o => EventOrder(o.tick, o.microstep, o.key))
+        .getOrElse(throw new IllegalArgumentException("missing logical schedule order"))
+      require(order.tick == event.tick, "schedule/order tick mismatch")
+      replaceSchedule(ReplaceScheduleEvent(identity, event.revision, Some(order), -1L, false))
+      return
+    }
+    if (event.identify.exists(i => scheduleRevisions(i.id) > 0L)) return
     countScheduled += 1
     val actorId = event.identify.map(_.id).getOrElse(event.actorRef.toLong)
     // Being rescheduled means "not finished anymore" -- cancels a pending destruct if a rollback's
@@ -229,8 +340,7 @@ abstract class LocalTimeManagerBase(
     }
     val wasIdle = scheduledActors.isEmpty && runningEvents.isEmpty
     val prevNextTick = nextTick
-    val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
-    event.identify.foreach(actorsSet.add)
+    event.identify.foreach(identity => addScheduledActor(effectiveTick, identity))
     val isEarlierTick = !wasIdle && prevNextTick.exists(effectiveTick < _)
     onActorRescheduled(effectiveTick, wasIdle, isEarlierTick)
   }
@@ -245,6 +355,19 @@ abstract class LocalTimeManagerBase(
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
       ActorMetrics.eventsProcessed.labels("finish").inc()
+      if (finish.discardedDispatch) {
+        if (releaseDispatch(finish.identify.id, finish.generation)) advanceToNextTick()
+        return
+      }
+      if (finish.scheduleRevision > 0L) {
+        if (finish.scheduleRevision <= scheduleRevisions(finish.identify.id)) return
+        require(finish.nextOrder.map(_.tick.toString) == finish.scheduleTick, "finish/order tick mismatch")
+        replaceSchedule(ReplaceScheduleEvent(finish.identify, finish.scheduleRevision,
+          finish.nextOrder, finish.generation, finish.awaitingReply))
+        if (finish.scheduleRevision == scheduleRevisions(finish.identify.id)) finishDestruct(finish)
+        return
+      }
+      if (scheduleRevisions(finish.identify.id) > 0L) return
 
       val currentGen = dispatchGeneration(finish.identify.id)
       if (!finish.destruct && finish.generation < currentGen) {
@@ -281,30 +404,16 @@ abstract class LocalTimeManagerBase(
             * drains.
             */
           scheduledTicksOnFinish.add(effectiveTick)
-          val actorsSet = scheduledActors.getOrElseUpdate(effectiveTick, mutable.Set[Identify]())
-          actorsSet.add(finish.identify)
+          addScheduledActor(effectiveTick, finish.identify)
       }
 
       val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
       runningEvents.filterInPlace(_.id != finish.identify.id)
+      inFlightTicks.remove(finish.identify.id)
       TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel).set(runningEvents.size.toDouble)
 
       if (finish.scheduleTick.isEmpty) {
-        val actorId = finish.identify.id
-        val actorClass = finish.identify.classType
-        var removedFromTicks = 0
-        scheduledActors.foreach {
-          case (tick, actors) =>
-            val sizeBefore = actors.size
-            actors.filterInPlace(_.id != actorId)
-            if (actors.size < sizeBefore) removedFromTicks += 1
-        }
-        scheduledActors.filterInPlace {
-          case (_, actors) => actors.nonEmpty
-        }
-        if (removedFromTicks > 0) {
-//          logDebug(s"Unregistered ${actorClass} (${actorId}) from $removedFromTicks future ticks")
-        }
+        clearScheduledActor(finish.identify.id)
       }
 
       finishDestruct(finish)
@@ -345,6 +454,10 @@ abstract class LocalTimeManagerBase(
     ActorMetrics.eventsProcessed.labels("destruct").inc()
     registeredActors.remove(identity.id)
     dispatchGeneration.remove(identity.id)
+    inFlightTicks.remove(identity.id)
+    scheduleRevisions.remove(identity.id)
+    logicalSchedules.remove(identity.id)
+    scheduledLocations.remove(identity.id)
     highestProcessedTick.remove(identity.id)
     blockedActors.remove(identity.id)
     val removedIdentity = registeredIdentities.remove(identity.id)
@@ -418,6 +531,20 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
+    forgetScheduledLocation(identity.id, tick)
+    if (accountedRuntime.nonEmpty) {
+      val full = runtimeIdentities.getOrElse(identity.id, identity)
+      val generation = dispatchGeneration(identity.id) + 1L
+      dispatchGeneration(identity.id) = generation
+      inFlightTicks(identity.id) = tick
+      highestProcessedTick(identity.id) = tick
+      accountedRuntime.get ! RouteDispatch(LogicalProcessId(full.classType, full.id),
+        SpontaneousEvent(tick, self, generation = generation,
+          scheduleRevision = scheduleRevisions(identity.id),
+          order = Some(logicalSchedules.get(identity.id).filter(_.tick == tick)
+            .getOrElse(EventOrder.root(tick, full.classType, full.id)))))
+      return
+    }
     if (identity.actorType.isEmpty) {
       logWarn(s"Actor identity has empty actorType, removing from runningEvents to prevent stall: $identity")
       runningEvents.filterInPlace(_.id != identity.id)
@@ -426,6 +553,7 @@ abstract class LocalTimeManagerBase(
 
     val generation = dispatchGeneration(identity.id) + 1
     dispatchGeneration(identity.id) = generation
+    inFlightTicks(identity.id) = tick
     if (tick > highestProcessedTick(identity.id)) {
       highestProcessedTick(identity.id) = tick
     }
@@ -452,13 +580,19 @@ abstract class LocalTimeManagerBase(
     val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
     actorRef ! core.entity.event.EntityEnvelopeEvent(
       IdUtil.format(identity.id),
-      SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
+      SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt,
+        scheduleRevision = scheduleRevisions(identity.id),
+        order = Some(logicalSchedules.get(identity.id).filter(_.tick == tick)
+          .getOrElse(EventOrder.root(tick, identity.classType, identity.id))))
     )
   }
 
   private def sendSpontaneousEventPool(tick: Tick, identity: Identify, generation: Long): Unit = {
     val actorRef = context.system.actorSelection(identity.actorRef)
-    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt)
+    actorRef ! SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt,
+        scheduleRevision = scheduleRevisions(identity.id),
+        order = Some(logicalSchedules.get(identity.id).filter(_.tick == tick)
+          .getOrElse(EventOrder.root(tick, identity.classType, identity.id))))
   }
 
   private def terminateSimulation(): Unit = synchronized {

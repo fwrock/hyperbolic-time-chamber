@@ -31,6 +31,9 @@ class SubwayStation(
       properties = properties
     ) {
 
+  override protected def validateRuntimeCapabilities(): Unit =
+    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireCancellableTransitBirth()
+
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSubwayAckCount: Int  = 0
   private var pendingSubwayNextTick: Option[Tick] = None

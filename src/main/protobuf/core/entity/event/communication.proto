@@ -11,17 +11,21 @@ message EntityEnvelope {
   string payload_manifest = 4;
 }
 
+message LogicalEventOrder {
+  int64 tick = 1;
+  uint64 microstep = 2;
+  string key = 3;
+}
+
 message ScheduleEvent {
   uint64 tick = 1;
   string actorRef = 2;
   Identify identify = 3;
-  // True only when this ScheduleEvent originates from SimulationBaseActor.resyncScheduleAfterRollback
-  // after a Time Warp rollback genuinely reverted this actor's currentTick. Tells
-  // LocalTimeManagerBase.scheduleEvent to SET highestProcessedTick(actorId) = tick (this actor's
-  // authoritative post-rollback position) instead of comparing against it and bumping forward.
-  // Default false for every other producer -- conservative mode never sets this, by construction
-  // (it never calls rollbackAndCascade at all).
+  // Legacy unstamped compatibility only. New runtime schedules use revision + order;
+  // rollback replaces a complete schedule atomically through ReplaceScheduleEvent.
   bool resyncAfterRollback = 4;
+  uint64 revision = 5;
+  LogicalEventOrder order = 6;
 }
 
 message FinishEvent {
@@ -159,4 +163,7 @@ message ActorInteraction{
   // (actorRefId, tick, seq) above, rather than a normal interaction. Default false — every
   // conservative-mode send is unaffected.
   bool isAntiMessage = 19;
+  LogicalEventOrder order = 20;
+  string sourceEpoch = 21;
+  string sourceIncarnation = 22;
 }

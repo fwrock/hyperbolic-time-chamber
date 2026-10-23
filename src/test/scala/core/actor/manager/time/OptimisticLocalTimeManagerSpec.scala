@@ -50,6 +50,7 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
         simulationManager = ActorRef.noSender,
         parentManager = parentManager
       ) {
+    def testRecoveryFinished: Boolean = recoveryFinished
     def testStart(startTick: Tick): Unit =
       startSimulation(StartSimulationTimeEvent(startTick = startTick, actorRef = "", data = None))
     def testRegister(identity: Identify, startTick: Tick): Unit =
@@ -77,8 +78,11 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
       actorType = "PoolDistributed"
     )
 
-  private def newManager(parentProbe: TestProbe): TestActorRef[TestOptimisticLocalTimeManager] =
-    TestActorRef(new TestOptimisticLocalTimeManager(Some(parentProbe.ref)))
+  private def newManager(parentProbe: TestProbe): TestActorRef[TestOptimisticLocalTimeManager] = {
+    val ref = TestActorRef(new TestOptimisticLocalTimeManager(Some(parentProbe.ref)))
+    parentProbe.awaitAssert(ref.underlyingActor.testRecoveryFinished shouldBe true, 5.seconds, 10.millis)
+    ref
+  }
 
   "OptimisticLocalTimeManager" should "dispatch a registered actor immediately, with no UpdateGlobalTimeEvent permission needed" in {
     val parentProbe = TestProbe()
@@ -92,6 +96,66 @@ class OptimisticLocalTimeManagerSpec extends AnyFlatSpec with Matchers with Befo
     // No UpdateGlobalTimeEvent sent at all -- unlike ConservativeLocalTimeManager, dispatch must
     // have already happened purely from registerActor/scheduleEvent's own re-notify hook.
     ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
+  }
+
+  it should "replace an in-flight schedule atomically without changing the requested tick" in {
+    val parentProbe = TestProbe()
+    val actorProbe = TestProbe()
+    val ltm = newManager(parentProbe)
+    val identity = identityFor(44L, actorProbe)
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegister(identity, 100L)
+    actorProbe.expectMsgType[core.entity.event.SpontaneousEvent].tick shouldBe 100L
+    ltm.underlyingActor.testSchedule(identity, 150L)
+    ltm.underlyingActor.testSchedule(identity, 200L)
+    val next = core.runtime.EventOrder(10L, 0L, "replacement")
+    ltm ! core.entity.event.control.execution.ReplaceScheduleEvent(identity, 1L, Some(next), 1L, false)
+    val dispatched = actorProbe.expectMsgType[core.entity.event.SpontaneousEvent](2.seconds)
+    dispatched.tick shouldBe 10L
+    dispatched.order shouldBe Some(next)
+    dispatched.scheduleRevision shouldBe 1L
+    ltm.underlyingActor.testScheduledTicks shouldBe empty
+    parentProbe.fishForMessage(1.second) {
+      case e: LvtReportEvent => e.lvt == 10L && !e.isIdle
+      case _ => false
+    }
+  }
+
+  it should "retain an unseen dispatch until its exact discard acknowledgement" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(45L, actor)
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegister(identity, 100L)
+    val old = actor.expectMsgType[core.entity.event.SpontaneousEvent]
+    val next = core.runtime.EventOrder(10L, 0L, "replacement")
+    ltm ! core.entity.event.control.execution.ReplaceScheduleEvent(identity, 2L, Some(next), 0L, false)
+    actor.expectNoMessage(100.millis)
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(identity.id)
+    ltm.underlyingActor.testFinish(FinishEvent(actor.ref, identity, 100L, timeManager = ltm,
+      generation = old.generation, discardedDispatch = true))
+    val replacement = actor.expectMsgType[core.entity.event.SpontaneousEvent]
+    replacement.tick shouldBe 10L
+    replacement.scheduleRevision shouldBe 2L
+    ltm.underlyingActor.testFinish(FinishEvent(actor.ref, identity, 100L, timeManager = ltm,
+      generation = old.generation, discardedDispatch = true))
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(identity.id)
+  }
+
+  it should "ignore duplicated and superseded schedule revisions" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(46L, actor)
+    val next = core.runtime.EventOrder(10L, 0L, "replacement")
+    ltm ! core.entity.event.control.execution.ReplaceScheduleEvent(identity, 2L, Some(next), 0L, false)
+    ltm ! core.entity.event.control.execution.ReplaceScheduleEvent(identity, 2L, None, 0L, false)
+    ltm ! core.entity.event.control.execution.ReplaceScheduleEvent(identity, 1L, None, 0L, false)
+    actor.expectNoMessage(100.millis)
+    ltm.underlyingActor.testStart(0L)
+    actor.expectMsgType[core.entity.event.SpontaneousEvent].order shouldBe Some(next)
+    actor.expectNoMessage(100.millis)
   }
 
   it should "dispatch only the earliest queued tick for each actor in one pass" in {

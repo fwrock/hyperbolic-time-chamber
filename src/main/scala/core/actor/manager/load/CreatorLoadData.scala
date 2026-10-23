@@ -229,6 +229,7 @@ class CreatorLoadData(
           classType = actorCreation.actor.typeActor,
           data = actorCreation.actor.data.content,
           timeManagers = timeManagers,
+          runtimeCoordinator = creatorProperties.runtimeCoordinator,
           creatorManager = self,
           reporters = reporters,
           relationships = {
@@ -257,6 +258,7 @@ class CreatorLoadData(
           actorClassName = actorCreation.actor.typeActor,
           entityId = actorCreation.actor.id.toString,
           timeManagers = timeManagers,
+          runtimeCoordinator = creatorProperties.runtimeCoordinator,
           creatorManager = self,
           reporters = reporters
         )
@@ -456,6 +458,7 @@ class CreatorLoadData(
                   data = data.data,
                   resourceId = data.resourceId,
                   timeManagers = data.timeManagers,
+                  runtimeCoordinator = data.runtimeCoordinator,
                   creatorManager = data.creatorManager,
                   reporters = data.reporters,
                   relationships = data.relationships.map {
