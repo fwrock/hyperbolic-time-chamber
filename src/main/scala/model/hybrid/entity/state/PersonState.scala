@@ -172,7 +172,9 @@ case class PersonState(
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0,
   ptWaitTimeoutTicks: Long = 86400L,
-  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights()
+  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
+  var scheduleAlreadyTruncated: Boolean = false,
+  var scheduleCompleteReported: Boolean = false
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager

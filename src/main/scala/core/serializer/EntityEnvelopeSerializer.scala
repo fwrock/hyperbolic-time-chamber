@@ -79,7 +79,10 @@ class EntityEnvelopeSerializer(
           eventTypeOverride = eventTypeOverride,
           entityClassType = entityClassTypeProto,
           seq = aie.seq,
-          isAntiMessage = aie.isAntiMessage
+          isAntiMessage = aie.isAntiMessage,
+          order = aie.order.map(ActorInteractionCodec.encodeOrder),
+          sourceEpoch = aie.sourceEpoch,
+          sourceIncarnation = aie.sourceIncarnation
         ).toByteArray
       case Failure(exception) =>
         throw new IllegalArgumentException(
@@ -132,7 +135,10 @@ class EntityEnvelopeSerializer(
               actorType = ActorInteractionCodec.decodeCreationType(proto.actorType),
               resourceId = proto.resourceId,
               seq = proto.seq,
-              isAntiMessage = proto.isAntiMessage
+              isAntiMessage = proto.isAntiMessage,
+              order = proto.order.map(ActorInteractionCodec.decodeOrder),
+              sourceEpoch = proto.sourceEpoch,
+              sourceIncarnation = proto.sourceIncarnation
             )
           )
         case Failure(exception) =>

@@ -13,5 +13,6 @@ case class InitializeData(
   creatorManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
   relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId](),
-  timeManagers: mutable.Map[String, ActorRef] = null // Suporta múltiplos time managers
+  timeManagers: mutable.Map[String, ActorRef] = null,
+  runtimeCoordinator: Option[ActorRef] = None
 ) extends BaseEventData

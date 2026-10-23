@@ -48,39 +48,11 @@ class Person(
       properties = properties
     ) {
 
-  // Truncation is deferred to the first actSpontaneous so that SimulationManager has already
-  // published htc.simulation.duration to SimulatorSettingsRegistry before we run.
-  private var scheduleAlreadyTruncated: Boolean = false
-
-  // PT vehicle reference stored when Bus/Subway sends PassengerBoardedVehicleData.
-  // Used by onDestruct to send isArrival=false if Person dies while still on board.
-  private var currentPTVehicleRef: Option[(Long, String)] = None  // (vehicleId, vehicleClassType)
-
-  /** Guards `metricsReporter.reportScheduleComplete` against Time Warp replay duplicates (see
-    * `CarJourneyReporter.clearCompletionGuards`' doc for the identical rationale on the vehicle
-    * side, and docs/KNOWN_GAPS.md's "Report loss/duplication" entry, Cause 2, for how this one was
-    * found: unlike the vehicle journey reporters, this call site had no guard at all, so every
-    * replay pass through `dispatch(PlanStepResult.Finished)` re-reported the same completion —
-    * confirmed live as 3-4 duplicate `person_schedule_complete` rows for the same entity, all at
-    * the same tick). Unlike the per-trip vehicle guards, this needs no per-trip reset: a Person's
-    * daily schedule completes at most once ever (immediately followed by `destruct = true`), so the
-    * only reset this needs is the rollback one below.
-    */
-  // protected, not private: lets PersonScheduleCompleteGuardSpec drive this directly, same
-  // rationale as this codebase's other test-only protected accessors (e.g. Car.scala's
-  // currentLinkId).
-  protected var scheduleCompleteReported: Boolean = false
-
-  /** See `scheduleCompleteReported`'s doc. Cleared unconditionally on every rollback for the same
-    * reason `Car.onRollbackDiscardPending` clears its own journey-completion guards: if the
-    * schedule-complete decision this guards was NOT among the undone events (it already happened
-    * before the rollback's target), nothing left to replay can reach `PlanStepResult.Finished`
-    * again for it, so clearing the guard here can't produce a spurious duplicate.
-    */
-  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
-    super.onRollbackDiscardPending(targetTick)
-    scheduleCompleteReported = false
-  }
+  private var currentPTVehicleRef: Option[(Long, String)] = None
+  protected def scheduleCompleteReported: Boolean = state != null && state.scheduleCompleteReported
+  protected def scheduleCompleteReported_=(value: Boolean): Unit = if (state != null) state.scheduleCompleteReported = value
+  private def scheduleAlreadyTruncated: Boolean = state != null && state.scheduleAlreadyTruncated
+  private def scheduleAlreadyTruncated_=(value: Boolean): Unit = if (state != null) state.scheduleAlreadyTruncated = value
 
   // ============================================================================
   // Support Classes (lazy initialization - created only when needed)

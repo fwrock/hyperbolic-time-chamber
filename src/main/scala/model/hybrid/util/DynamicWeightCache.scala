@@ -41,6 +41,10 @@ object DynamicWeightCache {
 
   private val config = ConfigFactory.load()
 
+  def configuredStrategy: String =
+    if (config.hasPath("htc.routing.cache-strategy")) config.getString("htc.routing.cache-strategy")
+    else "inmemory"
+
   private lazy val strategy: WeightCacheStrategy = {
     val strategyType =
       try

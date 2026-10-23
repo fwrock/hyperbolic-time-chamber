@@ -91,6 +91,7 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
       startTick = s.startTick
     }
     def testInitializeRollback(): Unit = rollbackHandler.initialize(startTick)
+    def testSchedule(tick: Tick): Unit = scheduleEvent(tick)
     def testEntries: List[String] = state.entries
     def testSnapshot = buildMigrationSnapshot()
     def testRestore(snapshot: core.actor.manager.loadbalance.migration.MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
@@ -181,6 +182,45 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     actor ! interaction(tick = 103L, senderId = 202L)
 
     actor.underlyingActor.testEntries shouldBe List("I@100:201", "I@103:202")
+  }
+
+  "logical order" should "restore noncommuting same-tick inputs independently of delivery order" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor ! interaction(10L, 202L).copy(order = Some(core.runtime.EventOrder(10L, 0L, "b")))
+    actor ! interaction(10L, 201L).copy(order = Some(core.runtime.EventOrder(10L, 0L, "a")))
+    actor.underlyingActor.testEntries shouldBe List("I@10:201", "I@10:202")
+  }
+
+  "the shared input queue" should "wait for an already scheduled earlier self-event" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor.underlyingActor.testSchedule(20L)
+    val scheduled = tm.expectMsgType[ScheduleEvent]
+    val order = scheduled.order.map(o => core.runtime.EventOrder(o.tick, o.microstep, o.key)).get
+    // Use the same physical tick so the newly produced wake at 21 cannot defer this assertion.
+    actor ! interaction(20L, 201L).copy(order = Some(order.child(20L, 1L)))
+    actor.underlyingActor.testEntries shouldBe empty
+    actor ! SpontaneousEvent(20L, tm.ref, generation = 1L, scheduleRevision = scheduled.revision,
+      order = Some(order))
+    actor.underlyingActor.testEntries shouldBe List("S@20", "I@20:201")
+  }
+
+  it should "acknowledge an obsolete dispatch before a future self-event can block the queue" in {
+    val tm = TestProbe()
+    val reporter = TestProbe()
+    val (_, peerId) = newPeer()
+    val actor = newActor(tm, reporter, peerId)
+    actor.underlyingActor.testSchedule(20L)
+    tm.expectMsgType[ScheduleEvent]
+    actor ! SpontaneousEvent(100L, tm.ref, generation = 1L,
+      order = Some(core.runtime.EventOrder(100L, 0L, "obsolete")))
+    tm.expectMsgType[FinishEvent].discardedDispatch shouldBe true
+    actor.underlyingActor.testEntries shouldBe empty
   }
 
   "checkpoint restore" should "remove relationships added after a checkpoint with no relationships" in {
@@ -411,9 +451,9 @@ class SimulationBaseActorTimeWarpGapsSpec extends AnyFlatSpec with Matchers with
     peer: TestProbe
   ): Tick = {
     runScenarioWithSurvivingEvent(actor, tm, peer)
-    val clearing = tm.expectMsgType[FinishEvent](3.seconds)
-    clearing.scheduleTick shouldBe None
-    tm.expectMsgType[ScheduleEvent](3.seconds).tick
+    val replacement = tm.expectMsgType[core.entity.event.control.execution.ReplaceScheduleEvent](3.seconds)
+    replacement.revision should be > 0L
+    replacement.next.get.tick
   }
 
   "the post-rollback resync" should "reschedule the actor strictly after the last surviving event (Gap R)" in {

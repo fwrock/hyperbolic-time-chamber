@@ -1,0 +1,52 @@
+package org.interscity.htc
+package core.runtime
+
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import scala.collection.mutable
+
+/** One owner drains this queue synchronously; callbacks never re-enter model dispatch. */
+final class OrderedInputQueue {
+  private case class Entry(event: AnyRef, tick: Long, order: Option[EventOrder], arrival: Long,
+    var discarded: Boolean = false)
+  private given Ordering[Entry] = Ordering.by[Entry, (Long, Long, String, Long)] { e =>
+    (e.tick, e.order.fold(0L)(_.microstep), e.order.fold("")(_.key), e.arrival)
+  }.reverse
+  private val pending = mutable.PriorityQueue.empty[Entry]
+  private val dispatches = mutable.LongMap.empty[Entry]
+  private var arrival = 0L
+
+  def enqueue(event: AnyRef): Unit = {
+    val (tick, order) = event match {
+      case e: ActorInteractionEvent => (e.tick, e.order)
+      case e: SpontaneousEvent      => (e.tick, e.order)
+      case other => throw new IllegalArgumentException(s"unsupported LP input: ${other.getClass.getName}")
+    }
+    require(order.forall(_.tick == tick), "event/order tick mismatch")
+    arrival = Math.addExact(arrival, 1L)
+    val entry = Entry(event, tick, order, arrival)
+    pending.enqueue(entry)
+    if (event.isInstanceOf[SpontaneousEvent]) dispatches(arrival) = entry
+  }
+
+  def discardDispatchesWhere(predicate: SpontaneousEvent => Boolean): Vector[SpontaneousEvent] = {
+    val obsolete = dispatches.valuesIterator.filter(e => predicate(e.event.asInstanceOf[SpontaneousEvent])).toVector
+    obsolete.map { entry =>
+      entry.discarded = true
+      dispatches.remove(entry.arrival)
+      entry.event.asInstanceOf[SpontaneousEvent]
+    }
+  }
+
+  private def trimHead(): Unit =
+    while (pending.headOption.exists(_.discarded)) pending.dequeue()
+
+  def headOption: Option[AnyRef] = { trimHead(); pending.headOption.map(_.event) }
+  def dequeue(): AnyRef = {
+    trimHead()
+    val entry = pending.dequeue()
+    dispatches.remove(entry.arrival)
+    entry.event
+  }
+  def nonEmpty: Boolean = { trimHead(); pending.nonEmpty }
+  def minimumTick: Option[Long] = { trimHead(); pending.headOption.map(_.tick) }
+}

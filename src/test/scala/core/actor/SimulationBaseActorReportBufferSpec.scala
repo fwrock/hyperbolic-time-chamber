@@ -166,7 +166,7 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     actor ! interaction(1L, 101L, 1L)
     reporter.expectNoMessage(100.millis)
     kafka.expectNoMessage(100.millis)
-    actor ! SpontaneousEvent(tick = 2L, actorRef = tm.ref, gvt = Some(1L))
+    actor ! SpontaneousEvent(tick = 2L, actorRef = tm.ref, gvt = Some(2L))
     reporter.expectMsgType[ReportEvent].data shouldBe 1L
     kafka.expectMsgType[ReportEvent].data shouldBe 1L
     reporter.expectNoMessage(100.millis)
@@ -183,7 +183,7 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
 
     // A later dispatch carries a GVT that has now passed tick 1 -- the buffered report for tick 1
     // must flush as a side effect of this dispatch, even though this event's own tick is 2.
-    actor ! SpontaneousEvent(tick = 2L, actorRef = timeManagerProbe.ref, gvt = Some(1L))
+    actor ! SpontaneousEvent(tick = 2L, actorRef = timeManagerProbe.ref, gvt = Some(2L))
 
     reporterProbe.expectMsgType[ReportEvent](3.seconds).data shouldBe 1L // flushed tick-1 report
     reporterProbe.expectNoMessage(500.millis) // tick-2's own report is not yet covered by gvt=1
@@ -198,7 +198,7 @@ class SimulationBaseActorReportBufferSpec extends AnyFlatSpec with Matchers with
     actor ! cancelled
 
     actor ! cancelled.copy(isAntiMessage = true)
-    actor ! SpontaneousEvent(tick = 20L, actorRef = tm.ref, gvt = Some(10L))
+    actor ! SpontaneousEvent(tick = 20L, actorRef = tm.ref, gvt = Some(11L))
 
     reporter.expectMsgType[ReportEvent].data shouldBe 10L
     reporter.expectNoMessage(100.millis)

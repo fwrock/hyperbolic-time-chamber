@@ -139,7 +139,8 @@ object ActorCreatorUtil {
     resourceId: String,
     timeManagers: mutable.Map[String, ActorRef],
     creatorManager: ActorRef,
-    reporters: mutable.Map[ReportTypeEnum, ActorRef] = mutable.Map.empty
+    reporters: mutable.Map[ReportTypeEnum, ActorRef] = mutable.Map.empty,
+    runtimeCoordinator: Option[ActorRef] = None
   ): ActorRef = {
     val clazz = Class.forName(StringUtil.getModelClassName(actorClassName))
     val sharding = ClusterSharding(system)
@@ -157,6 +158,7 @@ object ActorCreatorUtil {
           entityId = entityId,
           resourceId = resourceId,
           timeManagers = timeManagers,
+          runtimeCoordinator = runtimeCoordinator,
           creatorManager = creatorManager,
           reporters = reporters,
           actorType = CreationTypeEnum.LoadBalancedDistributed
@@ -289,7 +291,8 @@ object ActorCreatorUtil {
     reporters: mutable.Map[ReportTypeEnum, ActorRef],
     data: Any,
     dependencies: mutable.Map[String, ShardActorId],
-    creationType: CreationTypeEnum
+    creationType: CreationTypeEnum,
+    runtimeCoordinator: Option[ActorRef] = None
   ): ActorRef = {
     val clazz = Class.forName(actorClassName)
     system.actorOf(
@@ -307,6 +310,7 @@ object ActorCreatorUtil {
             entityId = entityId,
             resourceId = resourceId,
             timeManagers = timeManagers,
+            runtimeCoordinator = runtimeCoordinator,
             creatorManager = creatorManager,
             reporters = reporters,
             data = data,

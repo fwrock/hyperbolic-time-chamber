@@ -69,6 +69,9 @@ class Link(
       properties = properties
     ) {
 
+  override protected def validateRuntimeCapabilities(): Unit =
+    model.hybrid.util.HybridRuntimeCapabilities.validateOptimisticRouting(DynamicWeightCache.configuredStrategy)
+
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
       from = s.from,

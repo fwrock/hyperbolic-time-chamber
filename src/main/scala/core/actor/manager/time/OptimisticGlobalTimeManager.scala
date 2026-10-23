@@ -1,446 +1,127 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.gvt.{ GVTEstimationStrategy, LocalVirtualTimeReport, MarginBasedGVTEstimation, TerminationPlateauDetector }
+import core.actor.manager.time.gvt.{ GVTEstimationStrategy, MarginBasedGVTEstimation }
 import core.api.SimulatorSettingsRegistry
-import core.entity.event.control.execution.{ GvtUpdateEvent, LocalDestructCompleteEvent, LvtReportEvent, TimeManagerRegisterEvent }
-import core.entity.event.control.load.{ ProgressiveLoadManagerRegisteredEvent, ProgressiveLoadingCompleteEvent, RegisterProgressiveLoadManagerEvent, TickWindowReady, TickWindowRequest }
+import core.entity.event.control.execution.{ LvtReportEvent, TimeManagerRegisterEvent }
+import core.entity.event.control.load.*
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
+import core.runtime.accounting.*
 import core.types.Tick
-import core.util.ManagerConstantsUtil.GLOBAL_TIME_MANAGER_ACTOR_NAME
-
-import org.apache.pekko.actor.{ ActorRef, Cancellable, Props, Terminated }
+import core.util.ManagerConstantsUtil.{ GLOBAL_TIME_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME }
+import org.apache.pekko.actor.{ ActorRef, Cancellable, Props, Terminated, OneForOneStrategy, SupervisorStrategy }
 import org.htc.protobuf.core.entity.actor.Identify
+import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
+import scala.concurrent.duration.*
 
-import scala.collection.mutable
-import scala.concurrent.duration.DurationInt
-
-/** Time Warp's global-time-manager coordinator (`docs/TIME_WARP_DESIGN.md` §2/§3/§11): a GVT
-  * coordinator instead of a `SelectiveBarrier`. Every registered `OptimisticLocalTimeManager`
-  * reports its local virtual time asynchronously via [[LvtReportEvent]] (never a blocking
-  * handshake — see that message's doc); this class aggregates those reports into a GVT estimate
-  * via a pluggable [[GVTEstimationStrategy]] and declares termination once [[TerminationPlateauDetector]]
-  * says every LTM is idle and the GVT has stopped moving for long enough.
-  *
-  * Handles progressive loading (see [[handleTickWindowReady]]/[[recomputeGvtAndCheckTermination]])
-  * since `SimulationManager` sends `RegisterProgressiveLoadManagerEvent` unconditionally whenever a
-  * scenario has progressive sources, regardless of which GTM is active — without an ack, a
-  * Time Warp run would hang forever waiting for one, and without gating termination on it, an
-  * "idle GVT plateau" caused by nothing having been progressively loaded yet would be
-  * indistinguishable from real completion. Still does not attempt migration-pause coordination —
-  * that interaction genuinely isn't designed for optimistic mode anywhere in
-  * `docs/TIME_WARP_DESIGN.md`, and shard rebalancing is disabled project-wide regardless (see
-  * `CLAUDE.md`).
-  *
-  * @param simulationDuration
-  *   The total duration of the simulation in ticks
-  * @param simulationManager
-  *   Reference to the simulation manager
-  * @param gvtEstimationStrategy
-  *   how to turn per-LTM LVT reports into one GVT estimate; margin-based is v1's only
-  *   implementation (§3) — no default tuned margin, per the design doc's "measure before guessing"
-  *   posture, so callers must supply one explicitly
-  * @param plateauRoundsRequired
-  *   how many consecutive idle-and-unchanged-GVT rounds before declaring termination (§11); same
-  *   "measure before guessing" posture
+/** Scheduling remains optimistic. Commitment and completion require a fresh accounted cut;
+  * the historical estimator arguments are retained only for constructor/config compatibility.
   */
 class OptimisticGlobalTimeManager(
   simulationDuration: Tick,
   simulationManager: ActorRef,
   gvtEstimationStrategy: GVTEstimationStrategy,
   plateauRoundsRequired: Int
-) extends GlobalTimeManagerBase(
-      simulationDuration = simulationDuration,
-      simulationManager = simulationManager,
-      actorId = GLOBAL_TIME_MANAGER_ACTOR_NAME
-    ) {
+) extends GlobalTimeManagerBase(simulationDuration, simulationManager, GLOBAL_TIME_MANAGER_ACTOR_NAME) {
+  protected var accountedCoordinator: ActorRef = _
+  override protected def runtimeCoordinatorForActors: Option[ActorRef] = Option(accountedCoordinator)
+  private var progressive: Option[ActorRef] = None
+  private var inputClosed = true
+  private var pendingStart: Option[StartSimulationTimeEvent] = None
+  private var started = false
+  private var finished = false
+  private var heartbeat: Option[Cancellable] = None
 
-  private val registeredManagers: mutable.Set[ActorRef] = mutable.Set.empty
-  private val latestReports: mutable.Map[ActorRef, LocalVirtualTimeReport] = mutable.Map.empty
-  private val plateauDetector = new TerminationPlateauDetector(plateauRoundsRequired)
-  private var currentGvt: Tick = Long.MinValue
-  private var simulationStarted: Boolean = false
-  @volatile private var isTerminated = false
+  override val supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case _: Exception => SupervisorStrategy.Stop }
 
-  private var progressiveLoadManager: ActorRef = _
-  private var progressiveLoadingEnabled: Boolean = false
-  private var progressiveLoadingComplete: Boolean = false
-  private var progressiveLoadedUpToTick: Tick = Long.MaxValue
-  private var maxLookAheadTicks: Tick = 10_000L
-  private var waitingForInitialWindow: Boolean = false
-  private var waitingForNextWindow: Boolean = false
-  private var pendingStartEvent: Option[StartSimulationTimeEvent] = None
-
-  /** Self-scheduled heartbeat, started once the simulation actually begins dispatching (see
-    * [[startHeartbeat]]'s doc for why this exists at all — `recomputeGvtAndCheckTermination`
-    * otherwise only runs reactively off `LvtReportEvent`, which stops arriving entirely once
-    * everything goes idle, before `TerminationPlateauDetector` ever accumulates enough consecutive
-    * rounds to declare termination).
-    */
-  private var heartbeatCancellable: Option[Cancellable] = None
-
-  /** Wall-clock time of the last observed GVT advance, used only by [[logGtmStallIfNeeded]] to
-    * decide when a non-idle, non-progressing run has gone quiet long enough to be worth a
-    * `[GTM-STALL]` warning. Updated in [[recomputeGvtAndCheckTermination]] whenever the GVT
-    * estimate moves forward.
-    */
-  private var lastGvtAdvanceWall: Long = System.currentTimeMillis()
-
-  /** How long (ms) `currentGvt` may sit unchanged, while not every LTM is idle, before
-    * [[logGtmStallIfNeeded]] logs a `[GTM-STALL]` warning — mirrors `ConservativeGlobalTimeManager`
-    * /`LocalDiscreteEventTimeManager`'s own stall-warning thresholds/style. Not tuned yet.
-    */
-  private lazy val gtmStallLogThresholdMs: Long =
-    SimulatorSettingsRegistry.getInt("htc.time-warp.gtm-stall-log-threshold-ms", context.system.settings.config).toLong
-
-  /** Populated from `registeredManagers` the moment [[terminateSimulation]] fires, drained as each
-    * LTM's [[LocalDestructCompleteEvent]] arrives. `simulationManager` (and in turn `ReportManager`)
-    * is only told to stop once this is empty -- see that event's doc for the data-loss race this
-    * closes.
-    */
-  private val pendingDestructConfirmations: mutable.Set[ActorRef] = mutable.Set.empty
-
-  override def onStart(): Unit = createTimeManagersPool()
-
-  /** Found running a real end-to-end scenario under Time Warp (docs/TIME_WARP_DESIGN.md):
-    * `recomputeGvtAndCheckTermination` only ever runs reactively, triggered by a new
-    * `LvtReportEvent`/`TickWindowReady`/`Terminated` arriving. Once every `OptimisticLocalTimeManager`
-    * genuinely goes idle (all real work finished), nothing ever sends another message that would
-    * trigger a fresh recompute — so `TerminationPlateauDetector`'s `plateau-rounds-required`
-    * consecutive rounds can never accumulate past the single round the *last* real report already
-    * produced. The simulation sits fully idle forever, never terminating, with no error and no log.
-    * Conservative mode never had this gap: `ConservativeGlobalTimeManager`'s own barrier round is
-    * inherently periodic (`UpdateGlobalTimeEvent`/`QueryNextTickEvent` keep cycling regardless of
-    * activity). Optimistic mode has no equivalent built-in cadence, so this timer supplies one —
-    * self-scheduled, not tied to any particular LTM, cancelled the moment the simulation actually
-    * terminates (or this actor stops) so it can never fire after `CoordinatedShutdown` begins.
-    */
-  private def startHeartbeat(): Unit =
-    if (heartbeatCancellable.isEmpty) {
-      val interval =
-        SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", context.system.settings.config).millis
-      heartbeatCancellable = Some(
-        context.system.scheduler.scheduleWithFixedDelay(interval, interval, self, OptimisticGlobalTimeManager.TerminationHeartbeatTick)(context.dispatcher)
-      )
-    }
-
-  private def stopHeartbeat(): Unit = {
-    heartbeatCancellable.foreach(_.cancel())
-    heartbeatCancellable = None
-  }
-
-  override def postStop(): Unit = {
-    stopHeartbeat()
-    super.postStop()
+  override def onStart(): Unit = {
+    val managerCount = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
+    accountedCoordinator = context.actorOf(AccountedRuntimeCoordinator.props(
+      managerCount, simulationDuration, Some(createSingletonProxy(REPORT_MANAGER_ACTOR_NAME))), "accounted-runtime")
+    context.watch(accountedCoordinator)
+    createTimeManagersPool()
   }
 
   override protected def localTimeManagerProps(): Props =
-    OptimisticLocalTimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy))
+    OptimisticLocalTimeManager.props(simulationDuration, simulationManager, Some(getSelfProxy), Option(accountedCoordinator))
 
   override def handleEvent: Receive = {
-    case start: StartSimulationTimeEvent => startSimulation(start)
-    case schedule: org.htc.protobuf.core.entity.event.communication.ScheduleEvent => scheduleEvent(schedule)
-    case timeManagerRegisterEvent: TimeManagerRegisterEvent =>
-      registerTimeManager(timeManagerRegisterEvent)
-    case report: LvtReportEvent =>
-      handleLvtReport(report)
+    case event: StartSimulationTimeEvent => startSimulation(event)
     case event: RegisterProgressiveLoadManagerEvent =>
-      handleRegisterProgressiveLoadManager(event)
+      progressive = Some(event.progressiveLoadManager)
+      inputClosed = false
+      event.ackTo.foreach(_ ! ProgressiveLoadManagerRegisteredEvent(event.lookAheadTicks))
     case event: TickWindowReady =>
-      handleTickWindowReady(event)
-    case _: ProgressiveLoadingCompleteEvent =>
-      onProgressiveLoadingComplete()
-    case Terminated(ref) =>
-      handleTimeManagerTerminated(ref)
-    case OptimisticGlobalTimeManager.TerminationHeartbeatTick =>
-      recomputeGvtAndCheckTermination()
-      logGtmStallIfNeeded()
-    case _: LocalDestructCompleteEvent =>
-      handleLocalDestructComplete(sender())
+      if (event.readyUpToTick == Long.MaxValue) { inputClosed = true; beginExecution() }
+      else if (pendingStart.nonEmpty) progressive.foreach(_ ! TickWindowRequest(event.readyUpToTick + 1L, Long.MaxValue))
+    case _: ProgressiveLoadingCompleteEvent => inputClosed = true; beginExecution()
+    case _: LvtReportEvent => () // Diagnostic LVT numbers never authorize commitment.
+    case _: TimeManagerRegisterEvent => ()
+    case RuntimeExecutionPaused(round) => logInfo(s"Accounted runtime paused after round=$round")
+    case RequestRuntimeRound() => if (started && !finished) accountedCoordinator ! RequestRuntimeRound()
+    case RuntimeAdvanced(round, gvt) if sender() == accountedCoordinator =>
+      localTickOffset = gvt
+      logInfo(s"[ACCOUNTED-GVT] round=$round frontier=$gvt")
+    case RuntimeFinished(gvt, truncated) if sender() == accountedCoordinator =>
+      finished = true
+      heartbeat.foreach(_.cancel())
+      logInfo(s"[ACCOUNTED-COMPLETE] frontier=$gvt status=${if (truncated) "horizon-truncated" else "completed"}")
+      simulationManager ! StopSimulationEvent()
+    case Terminated(ref) if ref == accountedCoordinator && !finished =>
+      finished = true
+      heartbeat.foreach(_.cancel())
+      simulationManager ! RuntimeFailure("accounted coordinator lost; run cannot recover independently")
+    case failure: RuntimeFailure =>
+      finished = true
+      heartbeat.foreach(_.cancel())
+      logError(s"[RUNTIME-FAILED] ${failure.reason}")
+      simulationManager ! failure
     case event => super.handleEvent(event)
   }
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
-    logInfo(s"Optimistic GlobalTimeManager started at tick ${event.startTick}")
+    pendingStart = Some(event)
     initialTick = event.startTick
-    localTickOffset = initialTick
-    isPaused = false
-    isStopped = false
+    if (!inputClosed) progressive.foreach(_ ! TickWindowRequest(event.startTick, Long.MaxValue))
+    else beginExecution()
+  }
 
-    if (progressiveLoadingEnabled && !progressiveLoadingComplete) {
-      logInfo(s"Progressive loading enabled — holding simulation start until initial window from tick $initialTick is loaded")
-      pendingStartEvent = Some(event)
-      waitingForInitialWindow = true
-      requestProgressiveLoad(initialTick)
-      return
-    }
-
-    simulationStarted = true
-    notifyLocalManagers(event)
+  private def beginExecution(): Unit = if (!finished && !started && inputClosed && pendingStart.nonEmpty) {
+    require(accountedCoordinator != null, "optimistic execution requires an accounted runtime")
+    val event = pendingStart.get
+    pendingStart = None
+    started = true
     startTime = System.currentTimeMillis()
-    startHeartbeat()
+    accountedCoordinator ! StartRuntime(event.startTick)
+    val interval = SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", config).millis
+    heartbeat = Some(context.system.scheduler.scheduleWithFixedDelay(interval, interval, self,
+      RequestRuntimeRound())(context.dispatcher))
   }
-
-  private def handleRegisterProgressiveLoadManager(event: RegisterProgressiveLoadManagerEvent): Unit = {
-    progressiveLoadManager = event.progressiveLoadManager
-    progressiveLoadingEnabled = true
-    progressiveLoadedUpToTick = -1L
-    progressiveLoadingComplete = false
-    maxLookAheadTicks = event.lookAheadTicks
-    logInfo(s"Progressive load manager registered with maxLookAhead=${event.lookAheadTicks}")
-    event.ackTo.foreach(_ ! ProgressiveLoadManagerRegisteredEvent(event.lookAheadTicks))
-  }
-
-  private def requestProgressiveLoad(fromTick: Tick): Unit =
-    if (progressiveLoadManager != null) {
-      progressiveLoadManager ! TickWindowRequest(currentTick = fromTick, horizonTick = fromTick + maxLookAheadTicks)
-    }
-
-  private def handleTickWindowReady(event: TickWindowReady): Unit = {
-    progressiveLoadedUpToTick = event.readyUpToTick
-    if (event.readyUpToTick == Long.MaxValue) {
-      onProgressiveLoadingComplete()
-    }
-
-    if (waitingForInitialWindow) {
-      waitingForInitialWindow = false
-      logInfo(s"Initial progressive window loaded up to tick ${event.readyUpToTick} (${event.actorsCreated} actors) — starting simulation")
-      pendingStartEvent.foreach {
-        startEvent =>
-          pendingStartEvent = None
-          simulationStarted = true
-          startTime = System.currentTimeMillis()
-          notifyLocalManagers(startEvent)
-          startHeartbeat()
-      }
-      return
-    }
-
-    if (waitingForNextWindow) {
-      waitingForNextWindow = false
-      plateauDetector.reset()
-      recomputeGvtAndCheckTermination()
-    }
-  }
-
-  def onProgressiveLoadingComplete(): Unit = {
-    progressiveLoadingComplete = true
-    progressiveLoadedUpToTick = Long.MaxValue
-    logInfo("Progressive loading complete")
-  }
-
-  protected def registerActor(event: org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent): Unit = {}
-
-  protected def scheduleEvent(event: org.htc.protobuf.core.entity.event.communication.ScheduleEvent): Unit =
-    timeManagersPool ! event
-
-  protected def finishEvent(event: FinishEvent): Unit = {}
 
   override protected def pauseSimulation(): Unit = {
-    super.pauseSimulation()
-    plateauDetector.reset()
-    notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.PauseSimulationEvent())
+    isPaused = true
+    Option(accountedCoordinator).foreach(_ ! PauseRuntimeExecution())
+  }
+  override protected def resumeSimulation(): Unit = {
+    isPaused = false
+    Option(accountedCoordinator).foreach(_ ! ResumeRuntimeExecution())
   }
 
-  override protected def resumeSimulation(): Unit =
-    if (isPaused) {
-      isPaused = false
-      self ! SpontaneousEvent(tick = localTickOffset, actorRef = self)
-      notifyLocalManagers(org.htc.protobuf.core.entity.event.control.execution.ResumeSimulationEvent())
-    }
-
-  override protected def stopSimulation(): Unit = {
-    super.stopSimulation()
-    terminateSimulation()
-  }
-
-  private def registerTimeManager(event: TimeManagerRegisterEvent): Unit =
-    if (registeredManagers.add(event.actorRef)) {
-      context.watch(event.actorRef)
-      logInfo(
-        s"Registered Optimistic LocalTimeManager: ${event.actorRef.path.name} " +
-          s"on ${event.actorRef.path.address} - Total registered: ${registeredManagers.size}"
-      )
-    }
-
-  private def handleTimeManagerTerminated(ref: ActorRef): Unit =
-    if (registeredManagers.remove(ref)) {
-      latestReports.remove(ref)
-      logWarn(
-        s"Optimistic LocalTimeManager terminated: ${ref.path.name} on ${ref.path.address}. " +
-          s"Remaining: ${registeredManagers.size}"
-      )
-      // A terminated LTM can never send its LocalDestructCompleteEvent -- don't wait on one that
-      // will never arrive (see terminateSimulation's doc for what this gates).
-      if (pendingDestructConfirmations.remove(ref) && pendingDestructConfirmations.isEmpty && isTerminated) {
-        finalizeSimulationStop()
-      }
-      recomputeGvtAndCheckTermination()
-    }
-
-  private def handleLocalDestructComplete(manager: ActorRef): Unit =
-    if (pendingDestructConfirmations.remove(manager) && pendingDestructConfirmations.isEmpty) {
-      finalizeSimulationStop()
-    }
-
-  private def finalizeSimulationStop(): Unit =
-    simulationManager ! StopSimulationEvent()
-
-  private def handleLvtReport(report: LvtReportEvent): Unit = {
-    val manager = sender()
-    if (!registeredManagers.contains(manager)) {
-      logWarn(s"Received LVT report from unregistered manager: ${manager.path}")
-      return
-    }
-    latestReports.update(manager, LocalVirtualTimeReport(source = manager, lvt = report.lvt, isIdle = report.isIdle, blockedActors = report.blockedActors))
-    recomputeGvtAndCheckTermination()
-  }
-
-  /** Only estimates once every registered LTM has reported at least once — an incomplete report
-    * set makes "all idle" meaningless, and the GVT strategy's own doc already requires it to
-    * under-, not over-, estimate for a partial set, so waiting for completeness here is the more
-    * conservative (and simpler) choice for v1. Also holds off entirely while a progressive window
-    * request is in flight ([[waitingForNextWindow]]) or [[isTerminated]]/`!simulationStarted`.
-    *
-    * An all-idle round while progressive loading isn't complete yet isn't real termination — it
-    * usually just means nothing has been created past the current window — so it requests the next
-    * window and resets the plateau detector instead of treating idleness as progress toward it.
-    */
-  private def recomputeGvtAndCheckTermination(): Unit = {
-    if (isTerminated || !simulationStarted || waitingForNextWindow) return
-    if (latestReports.size < registeredManagers.size) return
-
-    val previousGvt = currentGvt
-    currentGvt = gvtEstimationStrategy.estimate(latestReports.values.toSeq)
-
-    if (currentGvt > previousGvt) {
-      notifyLocalManagers(GvtUpdateEvent(currentGvt))
-      lastGvtAdvanceWall = System.currentTimeMillis()
-    }
-    val allIdle = latestReports.values.forall(_.isIdle)
-
-    if (allIdle && progressiveLoadingEnabled && !progressiveLoadingComplete) {
-      logInfo(s"All LTMs idle but progressive loading not complete (loadedUpTo=$progressiveLoadedUpToTick) — requesting next window")
-      waitingForNextWindow = true
-      requestProgressiveLoad(progressiveLoadedUpToTick + 1)
-      plateauDetector.reset()
-      return
-    }
-
-    if (plateauDetector.observe(allIdle = allIdle, gvt = currentGvt)) {
-      logInfo(s"GVT plateaued at $currentGvt with all LTMs idle for $plateauRoundsRequired rounds — terminating")
-      terminateSimulation()
-    }
-  }
-
-  /** `[GTM-STALL]` visibility (found lacking during a real `tls_test` livelock investigation:
-    * `OptimisticGlobalTimeManager` had zero stall logging, unlike `ConservativeGlobalTimeManager`'s
-    * `[GTM-STALL]`/`LocalDiscreteEventTimeManager`'s `[STALL]`, so that freeze produced total log
-    * silence). Fires from the same heartbeat that drives [[recomputeGvtAndCheckTermination]], so it
-    * runs even once no `LvtReportEvent` is arriving anymore. Only warns when the GVT has sat
-    * unchanged for more than [[gtmStallLogThresholdMs]] AND at least one registered LTM is
-    * non-idle — an all-idle plateau is the (expected) path toward termination, not a stall, and is
-    * already covered by [[recomputeGvtAndCheckTermination]]'s own logging.
-    */
-  private def logGtmStallIfNeeded(): Unit = {
-    if (isTerminated || !simulationStarted) return
-    val elapsed = System.currentTimeMillis() - lastGvtAdvanceWall
-    if (elapsed <= gtmStallLogThresholdMs) return
-    if (latestReports.isEmpty) return
-    val allIdle = latestReports.values.forall(_.isIdle)
-    if (allIdle) return
-
-    val lines = latestReports.toSeq
-      .sortBy(_._1.path.toString)
-      .map {
-        case (ref, report) =>
-          s"    ${ref.path.name}@${ref.path.address.hostPort}  (lvt=${report.lvt}, isIdle=${report.isIdle}, blockedOnReply=${report.blockedActors})"
-      }
-      .mkString("\n")
-    val neverReported = registeredManagers.diff(latestReports.keySet)
-    val neverReportedLine =
-      if (neverReported.nonEmpty) s"\n  never reported: ${neverReported.map(_.path.name).mkString(", ")}" else ""
-
-    logWarn(
-      s"[GTM-STALL] gvt=$currentGvt unchanged for ${elapsed / 1000}s | " +
-        s"plateauRounds=${plateauDetector.currentPlateauRounds}/$plateauRoundsRequired | " +
-        s"registered=${registeredManagers.size} reported=${latestReports.size}\n$lines$neverReportedLine"
-    )
-  }
-
-  protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {}
-
-  protected def advanceToNextTick(): Unit = {}
-
-  protected def nextTick: Option[Tick] =
-    if (localTickOffset - initialTick >= simulationDuration) None else Some(localTickOffset + 1)
-
-  /** Found comparing conservative-vs-optimistic output on a real run (`docs/TIME_WARP_DESIGN.md`):
-    * this used to call `CoordinatedShutdown(...).run(JvmExitReason)` immediately after broadcasting
-    * `StopSimulationEvent` -- but that broadcast is what triggers each `OptimisticLocalTimeManager`'s
-    * `forceDestructActiveActors()`, which sends every still-live actor a `DestructEvent`, whose
-    * `onDestruct`/`selfDestruct` handling is what actually flushes that actor's buffered `report()`
-    * calls (§4). All of that is asynchronous, mailbox-by-mailbox -- immediately tearing down the
-    * actor system gave that cascade no chance to finish, silently dropping the overwhelming majority
-    * of buffered reports (287 rows under conservative mode vs. 2 under optimistic, same scenario).
-    * `ConservativeGlobalTimeManager.terminateSimulation` never had this problem for two compounding
-    * reasons: it never calls `CoordinatedShutdown` at all (it just stops processing and goes idle,
-    * to be reaped externally, same as this method now does), and conservative-mode `report()` was
-    * never buffered in the first place (sent immediately, so there's nothing to lose regardless of
-    * what happens afterward). Removing the premature shutdown call fixes both this and the
-    * `CoordinatedShutdown` hang the same earlier end-to-end run also found -- they were the same
-    * root cause observed two different ways.
-    *
-    * Removing the immediate `CoordinatedShutdown` call fixed the JVM-level race, but left a second,
-    * subtler one: `notifyLocalManagers(StopSimulationEvent())` triggers each LTM's
-    * `forceDestructActiveActors`, an async, mailbox-by-mailbox, multi-hop cascade (LTM -> actor ->
-    * reporter) -- while `simulationManager ! StopSimulationEvent()` reaches `ReportManager` in a
-    * single hop and used to fire in the very same breath, so `ReportManager` routinely closed its
-    * parquet writers before the cascade's flush sends had even arrived (confirmed via a real
-    * conservative-vs-optimistic run: 0 rows written under optimistic, even with the destruct
-    * cascade itself completing with zero exceptions). Fixed the same way as the JVM-level race:
-    * wait for real confirmation instead of guessing at a delay. Each LTM now acks
-    * ([[LocalDestructCompleteEvent]]) once every actor it force-destructed has itself acked
-    * ([[org.interscity.htc.core.entity.event.control.execution.DestructAckEvent]]) that its
-    * `onDestruct` -- and the report flush it triggers -- has actually been sent; only once every
-    * registered LTM has confirmed does `simulationManager`/`ReportManager` get told to stop.
-    */
-  private def terminateSimulation(): Unit = synchronized {
-    if (!isTerminated) {
-      isTerminated = true
-      stopHeartbeat()
-      printSimulationDuration()
-      logInfo(s"Optimistic simulation terminated at GVT=$currentGvt")
-      pendingDestructConfirmations.clear()
-      pendingDestructConfirmations ++= registeredManagers
-      notifyLocalManagers(StopSimulationEvent())
-      if (pendingDestructConfirmations.isEmpty) {
-        finalizeSimulationStop()
-      }
-    }
-  }
+  override def postStop(): Unit = { heartbeat.foreach(_.cancel()); super.postStop() }
+  override protected def stopSimulation(): Unit =
+    Option(accountedCoordinator).foreach(_ ! RuntimeFailure("simulation cancelled externally"))
+  def onProgressiveLoadingComplete(): Unit = { inputClosed = true; beginExecution() }
+  protected def registerActor(event: org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent): Unit = ()
+  protected def scheduleEvent(event: ScheduleEvent): Unit = throw new IllegalStateException("unowned optimistic schedule")
+  protected def finishEvent(event: FinishEvent): Unit = ()
+  protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = ()
+  protected def advanceToNextTick(): Unit = ()
+  protected def nextTick: Option[Tick] = None
 }
 
 object OptimisticGlobalTimeManager {
-
-  /** Self-sent by [[OptimisticGlobalTimeManager.startHeartbeat]]'s periodic scheduler — see that
-    * method's doc for why this exists. Not a public protocol message; only this actor ever sends
-    * or handles it.
-    */
-  private case object TerminationHeartbeatTick
-
-  def props(
-    simulationDuration: Tick,
-    simulationManager: ActorRef,
-    gvtMargin: Tick,
-    plateauRoundsRequired: Int
-  ): Props =
-    Props(
-      classOf[OptimisticGlobalTimeManager],
-      simulationDuration,
-      simulationManager,
-      new MarginBasedGVTEstimation(gvtMargin),
-      plateauRoundsRequired
-    )
+  def props(simulationDuration: Tick, simulationManager: ActorRef, gvtMargin: Tick, plateauRoundsRequired: Int): Props =
+    Props(new OptimisticGlobalTimeManager(simulationDuration, simulationManager,
+      new MarginBasedGVTEstimation(gvtMargin), plateauRoundsRequired))
 }

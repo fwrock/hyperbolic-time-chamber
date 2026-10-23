@@ -10,6 +10,10 @@ make each mode satisfy its expected outcomes independently, then compare results
 reproduced activation/reply path. See [Conservative termination follow-up](#conservative-termination-follow-up).
 The earlier run records are retained as historical evidence; optimistic failures remain open.
 
+**2026-10-23 follow-up:** the next event-ordering and revisioned-scheduling changes
+are recorded separately in [the current validation record](TIME_WARP_VALIDATION_2026_10_23.md).
+Results below describe the archived 2026-10-22 builds.
+
 ## Initial review automated regression evidence
 
 `sbt test assembly` completed successfully after the final routing observation change:

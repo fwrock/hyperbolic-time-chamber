@@ -25,7 +25,10 @@ case class ActorInteractionEvent(
   // Time Warp (docs/TIME_WARP_DESIGN.md §10): see communication.proto's ActorInteraction.seq/
   // isAntiMessage for the full rationale. 0/false for every conservative-mode send.
   seq: Long = 0L,
-  isAntiMessage: Boolean = false
+  isAntiMessage: Boolean = false,
+  order: Option[core.runtime.EventOrder] = None,
+  sourceEpoch: String = "",
+  sourceIncarnation: String = ""
 ) {
 
   def toIdentity: Identify = Identify(
@@ -41,5 +44,6 @@ case class ActorInteractionEvent(
     * `MessageId(senderId = getEntityId, ...)`), so this is the one legitimate `.toString` -- the
     * inverse edge conversion, not a business-logic re-derivation.
     */
-  def messageId: MessageId = MessageId(senderId = actorRefId.toString, tick = tick, seq = seq)
+  def messageId: MessageId = MessageId(senderId = actorRefId.toString, tick = tick, seq = seq,
+    senderType = if (sourceEpoch.nonEmpty) actorClassType else "", epoch = sourceEpoch, incarnation = sourceIncarnation)
 }

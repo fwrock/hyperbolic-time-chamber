@@ -201,7 +201,10 @@ abstract class BaseActor[T <: BaseState](
     * @param event
     *   The destruction event
     */
+  protected def acceptPhysicalDestruction(event: DestructEvent): Boolean = true
+
   private def destruct(event: DestructEvent): Unit = {
+    if (!acceptPhysicalDestruction(event)) return
     ActorMetrics.actorsDestroyed.labels(getClass.getSimpleName).inc()
     onDestruct(event)
     // Ack back to whoever force-destructed us (see DestructAckEvent's doc): lets the time manager

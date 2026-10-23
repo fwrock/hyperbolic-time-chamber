@@ -103,6 +103,7 @@ class CreatorPoolLoadData(
             poolConfiguration = actorCreation.actor.poolConfiguration,
             resourceId = IdUtil.format(actorCreation.resourceId),
             timeManagers = timeManagers,
+            runtimeCoordinator = creatorProperties.runtimeCoordinator,
             creatorManager = self,
             reporters = creatorProperties.reporters,
             data = actorCreation.actor.data.content,

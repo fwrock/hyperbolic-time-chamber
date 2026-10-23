@@ -53,6 +53,7 @@ abstract class ConservativeLocalTimeManager(
       initialTick = globalTick
       logDebug(s"[LocalTM] startTime lazily initialised at globalTick=$globalTick (StartSimulationTimeEvent may have been missed)")
     }
+    hasStarted = true
     localTickOffset = globalTick
     tickOffset = globalTick - initialTick
     if (isRunning && !isTerminated) {

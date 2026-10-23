@@ -21,6 +21,12 @@ import org.htc.protobuf.core.entity.event.communication.{ ActorClassType, ActorC
   */
 private[serializer] object ActorInteractionCodec {
 
+  def encodeOrder(value: core.runtime.EventOrder): org.htc.protobuf.core.entity.event.communication.LogicalEventOrder =
+    org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(value.tick, value.microstep, value.key)
+
+  def decodeOrder(value: org.htc.protobuf.core.entity.event.communication.LogicalEventOrder): core.runtime.EventOrder =
+    core.runtime.EventOrder(value.tick, value.microstep, value.key)
+
   // ---- eventType ----------------------------------------------------------------------------
 
   private val eventTypeToProto: Map[String, ActorEventType] = Map(

@@ -17,20 +17,23 @@ ordering, scheduling, transport identity, rollback, cancellation, commitment, an
 lifecycle. Adding an energy, land-use, epidemic, or another mobility model should
 not require modifying `SimulationBaseActor` or adding fields to a core checkpoint.
 
-The current implementation contains working rollback components, but **does not yet
-provide a correctness argument for general optimistic execution**. Most urgently,
-the GVT estimator ignores messages in transit and termination reuses stale idle
-reports. Increasing the margin or waiting longer cannot establish correctness.
-First establish conservative correctness against independently expected outcomes,
-then establish optimistic correctness in a separate run. The reproduced conservative
-activation/termination failure is fixed; ordering and transport gaps remain below.
-Once each mode works independently, compare separate runs of the
-same input. Agreement alone is insufficient if both runs produce incorrect results.
+The 2026-10-23 follow-up implements a **paused-round reference runtime** for
+optimistic commitment and termination. Every positive, anti-message, dispatch, and
+schedule control crosses an acceptance ledger. A fresh frozen cut determines GVT;
+logical completion remains reversible, and physical retirement and acknowledged
+report drain precede successful completion. See
+[the implemented protocol and its limits](TIME_WARP_ACCOUNTED_RUNTIME.md).
 
-This change implements bounded foundations and regression fixes. It does not claim
-to implement the replacement runtime or solve distributed GVT. The architecture
-and roadmap below implement a fixed policy for the entire simulation. Per-actor
-policy selection and switching during execution are outside the design.
+This is a bounded correctness baseline, not a certification of arbitrary models or
+distributed recovery. Optimistic runs currently require fixed/preloaded membership;
+live transit birth and shared dynamic routing feedback are rejected until they have
+cancellable/timestamped model adapters. Fossil collection and scalable asynchronous
+GVT remain later work. Conservative execution retains its barrier implementation;
+complete independent same-tick channel closure is still open.
+
+Each mode must satisfy independently expected outcomes before separate-run comparison.
+The roadmap below remains the architecture target. Per-actor policy selection and
+switching during execution are outside the design.
 
 ## Basis and review method
 
@@ -58,9 +61,9 @@ Paths in this table are relative to `src/main/scala`.
 
 | Priority | Finding and concrete failure path | Status in this change |
 |---|---|---|
-| P0 | `core/actor/manager/time/gvt/MarginBasedGVTEstimation.scala`: local reports can all be at 1000 while a tick-10 positive or anti-message is delayed in a shard/router/mailbox. Subtracting 100 still allows commitment of tick 10. Simulation-time margin does not bound wall-clock delivery delay. | Open; corrected the safety claim and fixed subtraction underflow only. |
-| P0 | `OptimisticGlobalTimeManager.recomputeGvtAndCheckTermination`: heartbeats repeatedly evaluate the same `latestReports`; unchanged idle observations do not prove a fresh consistent cut or empty channels. A delayed request, reply, anti-message, or creation can arrive after termination starts. | Open; replace with accounted quiescence. |
-| P0 | `SimulationBaseActor.selfDestruct`: direct model calls flush every report and stop immediately. Stopping an actor does not prove its speculative history is committed. LTM deferred destruction is bypassed by these calls. | Open; runtime must retain a terminal LP until commitment. |
+| P0 | `core/actor/manager/time/gvt/MarginBasedGVTEstimation.scala`: local reports can all be at 1000 while a tick-10 positive or anti-message is delayed in a shard/router/mailbox. Subtracting 100 still allows commitment of tick 10. Simulation-time margin does not bound wall-clock delivery delay. | Replaced in production optimistic execution by a ledger-drained, frozen snapshot round. The legacy estimator remains for compatibility/tests and does not authorize commitment. |
+| P0 | `OptimisticGlobalTimeManager.recomputeGvtAndCheckTermination`: heartbeats repeatedly evaluate the same `latestReports`; unchanged idle observations do not prove a fresh consistent cut or empty channels. A delayed request, reply, anti-message, or creation can arrive after termination starts. | Replaced by fresh participant snapshots, delivery acceptance, producer closure, and explicit completion/failure results. Repeated idle reports no longer authorize success. |
+| P0 | `SimulationBaseActor.selfDestruct`: direct model calls flush every report and stop immediately. Stopping an actor does not prove its speculative history is committed. LTM deferred destruction is bypassed by these calls. | Fixed in the accounted path: checkpoint terminal intent, retain the LP for rollback, and authorize physical retirement only after a safe cut. Raw destruction fails the run. |
 | P0 | `SimulationBaseActor.reportToSpecificReporter` sent directly, bypassing buffering, rollback discard, and replay suppression. `reportMirrored` therefore leaked speculative Kafka output even when its default output was buffered. `Link` uses targeted ClickHouse output. | Fixed: all reporting destinations now share `reportToTarget`. |
 | P0 | `handleInteractWith` forgot an anti-message whose positive was absent. If cancellation arrives before the positive, or after the positive was undone but before it is reintroduced, the cancelled event can execute later. | Fixed: retain cancellation identities outside model state; filter positives and reprocessing. GVT-based reclamation remains open. |
 | P1 | `OptimisticLocalTimeManager.dispatchNextAvailable` computed running IDs once. If an actor was queued at ticks 1 and 2 before startup, the same pass sent both, despite its first dispatch already becoming in flight. | Fixed: update the per-pass running-ID set after each dispatch. |
@@ -70,25 +73,25 @@ Paths in this table are relative to `src/main/scala`.
 | P1 | `GPSUtil.calcRouteCompact` can miss its process-wide cache live and hit it during replay, skipping the weight reads made by the original search. Recording only cache-internal reads is therefore not a stable replay boundary. | Fixed: journal immutable route results above positive/negative cache lookup and reconstruct fresh mutable queues for each consumer. Nested reads belong to their outer observation. |
 | P1 | The route cache key distinguishes walking from vehicle routes but does not distinguish dynamic/static weights or a committed cost version. A route computed with dynamic costs can remain cached after those costs change. | Open; cache immutable topology separately from time/version-dependent model decisions. |
 | P1 | `Link.microTickScheduled`, `signalAtExit`, and `emptyGraceTick` were excluded from snapshots as caches. They gate MICRO scheduling, signal behavior, and grace termination; no deterministic rebuild ran on restore. | Fixed: capture and replace these through namespaced model snapshot hooks. |
-| P1 | `handleSpontaneous` assigned `currentTick = event.tick` without checking whether interactions already advanced the actor beyond it. A delayed spontaneous event could execute against future state without rollback. | Fixed for earlier-tick dispatch: restore the prefix, cancel undone outputs, process the spontaneous event, then reprocess surviving interactions. Finish the incoming dispatch normally, without an extra clear/reschedule exchange. A unified queue and same-tick ordering remain target work. |
-| P1 | Straggler detection compares only `event.tick < currentTick`. Same-tick noncommuting interactions follow mailbox arrival order; Lamport clock updates do not sort the mailbox or trigger rollback for an earlier same-tick order key. | Open; define superdense time and stable tie ordering. |
-| P1 | `OptimisticLocalTimeManager.localVirtualTime` ignores pending scheduled ticks while `runningEvents` is nonempty; a queued earlier tick can be omitted from the minimum. Passive/reactive LP activity and interaction mailboxes are not represented by spontaneous dispatch bookkeeping. | Open; local minima must come from the LP runtime and input queues. |
-| P1 | `OptimisticGlobalTimeManager` assigns the newest estimate directly to `currentGvt`. Late reports can lower it; already committed effects cannot be reversed. Merely clamping with `max` does not make an unsafe estimator safe. | Open; publish monotone, proven round results. |
-| P1 | `LinkMetricsReporter.publishDynamicCost` writes the shared routing cache during speculative execution and coast-forward. Recording reads makes a surviving event repeat its observations, but does not retract a cache write or correct another LP that consumed it. | Open; route model feedback as timestamped events; commit external publication separately. |
-| P1 | `BusStation`/`SubwayStation` defer child creation until GVT but can then initialize a child using an earlier planned start tick. Their polling and local pending/ACK variables are outside a general lifecycle log. Delaying creation alone does not prove absence of new work below GVT. | Open; represent creation as a cancellable logical event, or announce its lower bound until safe activation. |
-| P1 | Completion guards in vehicle journey reporters and `Person.scheduleCompleteReported` were actor-local and cleared after rollback rather than restored with the exact state prefix. `Person.scheduleAlreadyTruncated` is also outside the snapshot. | Car's journey fields and completion guards now live in checkpointed `CarState.journey`; its reporter accesses that state through a callback. Person and other vehicle reporters still require the same audit. |
+| P1 | `handleSpontaneous` assigned `currentTick = event.tick` without checking whether interactions already advanced the actor beyond it. A delayed spontaneous event could execute against future state without rollback. | Fixed for earlier-tick dispatch: restore the prefix, cancel undone outputs, process the spontaneous event, then reprocess surviving interactions. Finish the incoming dispatch normally, without an extra clear/reschedule exchange. The shared input queue and full-order rollback now cover same-tick conflicts. |
+| P1 | Straggler detection compares only `event.tick < currentTick`. Same-tick noncommuting interactions follow mailbox arrival order; Lamport clock updates do not sort the mailbox or trigger rollback for an earlier same-tick order key. | Shared causal microsteps and stable keys now drive the ordered actor queue and optimistic rollback. Conservative independent-channel closure remains open; see the 2026-10-23 follow-up. |
+| P1 | `OptimisticLocalTimeManager.localVirtualTime` ignores pending scheduled ticks while `runningEvents` is nonempty; a queued earlier tick can be omitted from the minimum. Passive/reactive LP activity and interaction mailboxes are not represented by spontaneous dispatch bookkeeping. | Queued schedules and actual in-flight dispatch ticks now participate in the minimum, including after rewind. The accounted snapshot also includes LP queues, passive LPs, and drained transport acceptance. |
+| P1 | `OptimisticGlobalTimeManager` assigns the newest estimate directly to `currentGvt`. Late reports can lower it; already committed effects cannot be reversed. Merely clamping with `max` does not make an unsafe estimator safe. | Fixed in the accounted coordinator: validate the frozen cut before publishing; a regression is fatal. |
+| P1 | `LinkMetricsReporter.publishDynamicCost` writes the shared routing cache during speculative execution and coast-forward. Recording reads makes a surviving event repeat its observations, but does not retract a cache write or correct another LP that consumed it. | Adapter remains open. The hybrid capability hook rejects shared feedback in accounted runs; static routing is supported. |
+| P1 | `BusStation`/`SubwayStation` defer child creation until GVT but can then initialize a child using an earlier planned start tick. Their polling and local pending/ACK variables are outside a general lifecycle log. Delaying creation alone does not prove absence of new work below GVT. | Adapter remains open. Accounted runs reject live spawn and transit station birth at validation; fixed/preloaded membership is supported. |
+| P1 | Completion guards in vehicle journey reporters and `Person.scheduleCompleteReported` were actor-local and cleared after rollback rather than restored with the exact state prefix. `Person.scheduleAlreadyTruncated` is also outside the snapshot. | Car's journey fields and completion guards now live in checkpointed `CarState.journey`; its reporter accesses that state through a callback. Person completion/truncation guards now live in `PersonState` and restore with the exact prefix. Other vehicle reporters still require the same audit. |
 | P1 | `CarMicroHandler` initializes an entry's velocity from `CarJourneyReporter.sumoArrivalSpeed` when no MICRO state is active. That value survived a rewind, so replay could use a future speed (the focused regression observed 5 m/s instead of the original 0 m/s). | Fixed by moving the complete journey record to `CarJourneyState` within `CarState`. The handler remains an adapter over model state; no core mobility fields or ad hoc replay overrides were added. |
 | P1 | Initial rollback checkpoints were captured before `onFinishInitialize` seeded Person's cursor. Restoring that floor produced an empty plan, so replay skipped the original decision and left recorded reads unused. | Fixed: finish state initialization before registering/capturing the floor. Regression tests reproduce the original exception, restore the exact plan and pending reply identity, and exercise cancellation/replacement through the runtime. |
 | P1 | `PrivateVehicle` checkpoints restored the trip owner but omitted `tripRequestSeq` and `driverAttributes`. Restoring an earlier trip after a newer activation could echo the newer token in its completion, which Person rejected. | Fixed through namespaced model snapshot metadata, shared by Car/Bicycle/Motorcycle. A JSON checkpoint regression checks the actual completion token and restored driver after a second trip overwrites both. |
-| P1 | Anti-message handling used `rollbackTo(logged.tick)`, undoing earlier events at the same tick, including the causal send that preceded the cancelled input. Report discard also used tick alone. Positive straggler rollback could likewise retract the request answered by an incoming same-tick reply. | Fixed: cancel from the exact processed-event sequence; positive interactions retain the existing prefix at their tick and undo strictly later processing. Buffered reports carry their producing event's sequence. Independent same-tick inputs still follow arrival order; a stable global ordering contract remains open. |
+| P1 | Anti-message handling used `rollbackTo(logged.tick)`, undoing earlier events at the same tick, including the causal send that preceded the cancelled input. Report discard also used tick alone. Positive straggler rollback could likewise retract the request answered by an incoming same-tick reply. | Fixed: cancel from the exact processed-event sequence; positive interactions retain the existing prefix at their tick and undo strictly later processing. Buffered reports carry their producing event's sequence. The 2026-10-23 shared queue and full-order rollback add deterministic optimistic same-tick correction. Conservative independent-channel closure remains open. |
 | P1 | Tick rollback could remove a future-tick entry while retaining a later-processed, earlier-tick spontaneous entry. Restored state then omitted an event still present in the retained log. | Fixed: undo a complete processing suffix from the earliest affected event. |
-| P1 | `replayLoggedEvent` previously logged an exception and continued after partially reconstructing the LP. Live dispatch also catches exceptions and can log partial mutations as completed events. | Replay failure now propagates. A structured run-failure/transactional dispatch policy remains open. |
-| P1 | The latest fixed-seed optimistic one-/two-link runs still fail expected completion: blocked work, repeated cancellation, inconsistent vehicle reports, and null-state late-message discards remain. Fixing the Person journal exception did not resolve the complete multi-actor protocol. | Observed open acceptance blocker; preserve the controlled traces and implement the input/lifecycle/commit contracts below. See the latest scenario acceptance table in the validation record. |
-| P1 | `scheduleEvent`/`finishEvent` repair old timestamps by bumping them to an actor watermark plus one; rollback repair uses a privileged generation value and clear/reschedule messages. This changes event time rather than proving causal ordering. | Open; replace with identified, cancellable self-events and schedule revisions. |
+| P1 | `replayLoggedEvent` previously logged an exception and continued after partially reconstructing the LP. Live dispatch also catches exceptions and can log partial mutations as completed events. | Accounted live/replay failures freeze and fail the run. Automatic independent recovery is unsupported. |
+| P1 | The 2026-10-22 fixed-seed optimistic one-/two-link runs fail expected completion: blocked work, repeated cancellation, inconsistent vehicle reports, and null-state late-message discards remain. Fixing the Person journal exception did not resolve the complete multi-actor protocol. | Historical failure retained in the dated records. The accounted follow-up fixes the reproduced retirement/report loss and fabricated rollback wake; current supported-scope evidence is recorded separately. |
+| P1 | `scheduleEvent`/`finishEvent` repair old timestamps by bumping them to an actor watermark plus one; rollback repair uses a privileged generation value and clear/reschedule messages. This changes event time rather than proving causal ordering. | Fixed for the versioned runtime path: identified self-events, monotone schedule revisions, atomic replacement, and explicit stale-dispatch acknowledgement preserve requested timestamps. An unstamped compatibility adapter remains. |
 | P1 | Conservative idle detection ignored interaction-driven waits/activation. The bounded generated case reported two person trip starts, then `No more scheduled events` and stop, with zero completed trips. | Fixed for tracked reply obligations: both policies record and consume waits, and conservative local reports carry `hasPendingWork`. The original case now completes four trips and stops without errors/stalls. See the termination follow-up in the validation record. Full channel accounting remains part of the target architecture. |
-| P1 | `MessageId` contains sender numeric ID, tick, and send counter, but no run, model/type namespace, or incarnation. Counters are actor-local and not preserved across restart. Reuse can alias old cancellations. | Open; introduce typed LP identity and restart/run epochs. Migration remains disabled. |
-| P1 | Shutdown acknowledgements confirm that actors sent reports; they do not confirm that every reporter persisted them. Report messages and stop messages reach sinks through different senders, so their cross-sender order is not guaranteed. | Open; per-sink drain and durable flush acknowledgements. |
-| P2 | `pruneBelow` has no production caller; replay logs, checkpoints, cancelled identities, processed identities, and idle actors' output can grow without bound. Passive actors receive no periodic spontaneous GVT notification. | Open; safe collection and commit broadcast follow correct GVT. |
+| P1 | `MessageId` contains sender numeric ID, tick, and send counter, but no run, model/type namespace, or incarnation. Counters are actor-local and not preserved across restart. Reuse can alias old cancellations. | Accounted identities now include model/run/incarnation; independent restart fails explicitly. Private scheduler handles also isolate equal numeric model IDs. Migration remains disabled. |
+| P1 | Shutdown acknowledgements confirm that actors sent reports; they do not confirm that every reporter persisted them. Report messages and stop messages reach sinks through different senders, so their cross-sender order is not guaranteed. | Implemented for accounted optimistic completion: sole committed producer, actual sink acceptance, and final storage flush ACK. Real Kafka/ClickHouse service validation remains open; conservative shutdown retains its legacy path. |
+| P2 | `pruneBelow` has no production caller; replay logs, checkpoints, cancelled identities, processed identities, and idle actors' output can grow without bound. Historically passive actors received no periodic spontaneous GVT notification. | Strict commit broadcasts now reach passive LPs. History/index/tombstone reclamation remains open. |
 | P2 | The core `MigrationSnapshot` embeds many vehicle/link fields. A process-wide random stream or real-time TTL input also couples otherwise independent models and LPs. | Extension hooks added; migrate legacy fields incrementally and make random streams event/LP owned. |
 
 P0 means the result/commit boundary can be wrong, rather than merely slow. P1 means
@@ -99,6 +102,43 @@ The previously reported Movable route-state gap remains a hypothesis requiring a
 reproduction. Route fields are already in `MovableState`; that alone neither proves
 correct replay nor identifies a separate route bug. Fixing incomplete model snapshots,
 ordering, feedback, and replay inputs must precede attributing divergence to routing.
+
+## Event-ordering foundation follow-up — 2026-10-23
+
+The shared adapter now carries `EventOrder(tick, microstep, key)` on interactions
+and self-events. Zero-delay outputs advance the causal microstep; SHA-256 parent
+keys plus output ordinals keep logical identity independent of transport resend
+counters and shard placement. Both serializers preserve the metadata. The actor
+uses one ordered input queue for received events and requeued interactions, and
+waits for an already-known earlier self-event instead of executing its future
+interaction first. Optimistic stragglers compare the complete order, including
+same-tick conflicts. Cancellation still targets the exact transport send.
+
+Schedules now carry a monotonically increasing transport revision and the logical
+self-event key. `ReplaceScheduleEvent` replaces or cancels the schedule atomically;
+rollback no longer fabricates a `Long.MaxValue` completion. A stale dispatch is
+acknowledged by its exact generation without invoking the model or altering the
+replacement schedule. Conservative batch entries retain their captured revision,
+so an obsolete wake still waiting behind a batch is skipped before dispatch.
+Revisions and transport generations survive rollback;
+logical event position and pending self-event are checkpointed and reconstructed.
+Versioned schedules retain the requested physical tick. The unstamped compatibility
+path still accepts legacy messages and retains its watermark adapter.
+
+Existing model handlers continue to use `sendMessageTo`, `scheduleEvent`, and
+`onFinishSpontaneous`. They do not allocate transport revisions or logical keys.
+`onFinishSpontaneous(Some(t))` replaces the LP's pending wake; `None` cancels it.
+The transport may redispatch a retained logical self-event with a new revision,
+while coast-forward reconstructs its original logical identity. A model adapter
+must snapshot its own behavior-affecting state and journal external observations;
+these core changes do not automatically make an arbitrary model optimistic-safe.
+
+This is the event-contract foundation, not completion of every Stage 1 gate.
+Conservative dispatch still uses the existing physical-tick barrier: the engine
+has no proof that an independent smaller same-tick interaction cannot still
+arrive. The accounted optimistic follow-up now supplies run/incarnation identities,
+channel acceptance, safe-time rounds, reversible terminal intent, and sink drain.
+See [the implemented scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and its remaining limits.
 
 ## Target architecture
 
@@ -235,8 +275,9 @@ without adding another bus/car-specific field to the core schema.
 
 Choose the strict convention **commit time < GVT**. Events at GVT remain rollbackable.
 Use the same comparison for output, lifecycle, tombstone collection, and history.
-The current code still uses inclusive report/destruction comparisons; harmonizing
-those is part of the GVT replacement, not silently claimed by these local fixes.
+The accounted path now uses this strict boundary for buffered reports and terminal
+retirement. Legacy isolated-LTM destruction code is retained for compatibility; it
+does not authorize retirement in the production accounted path.
 
 The minimum must include executing LP events, pending LP inputs/self-events, positive
 and negative messages in transit, delayed creation, and lower bounds promised by
@@ -259,7 +300,8 @@ For HTC's first correct implementation, use an explicit **quiescent snapshot rou
 4. Compute the minimum of frozen pending work and producer lower bounds. Validate
    monotonicity before publishing. Unexpected work below a published watermark is a
    fatal invariant violation with its message history, not a reason to lower GVT.
-5. Commit below that bound, collect fossils, acknowledge completion, and resume.
+5. Commit below that bound, acknowledge completion, and resume. Fossil collection
+   is a separate bounded-memory milestone and is not enabled by this baseline.
    Declare normal termination only when the same accounted snapshot proves no live
    work, no in-transit messages, no blocked obligations, and no future producer input.
 
@@ -345,3 +387,22 @@ follow that baseline rather than expand the first correctness milestone.
 
 See [TIME_WARP_VALIDATION_2026_10_22.md](TIME_WARP_VALIDATION_2026_10_22.md) for commands,
 observed results, and the limits of the checks performed for this patch.
+
+## Implementation status — accounted runtime, 2026-10-23
+
+Stages 2–4 now have a concrete reference implementation for fixed/preloaded LPs,
+strict report commitment, and reversible terminal intent. The implementation uses
+`core/runtime/accounting`, composed with the existing actor/history adapter; the
+`SimulationModel` and `SynchronizationPolicy` interfaces above remain target APIs.
+No mobility imports were added to core. Model validation rejects unsupported effects
+before registration, and model snapshot/read hooks remain the adaptation boundary.
+
+Stage 3 still requires a multi-node transport campaign. Stage 4 still requires
+cancellable live birth, timestamped feedback, and real Kafka/ClickHouse integration
+tests. Conservative durable completion has not been migrated to this protocol.
+Stage 5 requires a second unrelated model and stronger same-tick conservative
+closure. Passing the small mobility cases is evidence for those cases only.
+
+See [the accounted protocol](TIME_WARP_ACCOUNTED_RUNTIME.md) and
+[its validation record](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). The earlier
+validation documents preserve before/after evidence from the preceding milestones.

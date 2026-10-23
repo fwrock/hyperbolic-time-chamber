@@ -8,11 +8,64 @@ update this file as gaps close.
 
 See [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md) for the current prioritized
 core/model audit and [validation record](TIME_WARP_VALIDATION_2026_10_22.md) for tested evidence.
-The margin-based GVT estimator does not account for messages in transit; plateau termination,
-direct actor destruction, and shared speculative feedback remain correctness blockers. This
+The historical margin-based estimator did not account for messages in transit. The
+2026-10-23 accounted runtime replaces heuristic commitment, plateau termination,
+and direct speculative destruction for fixed/preloaded optimistic runs. Shared
+speculative feedback and live birth require model adapters and are rejected. This
 patch fixes targeted-report buffering, cancellation retention, duplicate dispatch/input handling,
 empty relationship restoration, Link control-state snapshots, replay observations, the fossil
 floor boundary, and GVT subtraction overflow. These local fixes do not establish mode parity.
+
+## Shared event ordering and schedule revisions (foundation added 2026-10-23)
+
+`EventOrder` separates causal simulation time and stable logical identity from fresh
+transport send counters. Interactions and spontaneous dispatches share the actor's
+ordered queue; same-tick optimistic stragglers now restore the correct prefix.
+The pending self-event is part of the checkpoint, and a received interaction cannot
+overtake an already-known earlier self-event. This local queue does not establish
+that conservative channels contain no earlier independent input.
+
+Rollback uses atomic `ReplaceScheduleEvent` updates with monotone revisions.
+Obsolete dispatches acknowledge their exact generation without model execution;
+older schedule updates cannot erase a newer replacement. The requested tick is
+preserved on the versioned path. LVT now includes queued ticks and the actual
+in-flight tick after rollback, rather than using an older high-water mark for that
+dispatch. Production optimistic execution now obtains its frontier from the
+accounted cut described below; local LVT alone remains insufficient.
+
+The accounted path now scopes transport identity by model/run/incarnation, accounts
+model/control delivery, preserves speculative retirement, and drains committed
+reports. Coordinated actor restart recovery remains unsupported and fails the run. The legacy
+unstamped schedule adapter retains its old watermark semantics. See
+[validation and remaining limits](TIME_WARP_VALIDATION_2026_10_23.md).
+
+## Accounted optimistic commitment and retirement (2026-10-23)
+
+`core/runtime/accounting/AccountedRuntimeCoordinator` freezes all registered LPs
+and LTMs, drains delivery acceptance, and collects fresh round snapshots. Pending
+positives, antis, self-events, in-flight dispatches, and reply obligations constrain
+the frontier. Commitment uses time strictly below GVT. A terminal LP remains
+rollbackable until retirement is authorized; raw destruction is rejected. A sink
+receipt ACK and final asynchronous flush ACK are required before optimistic success.
+Default actor restart, lost participants, and work below published GVT fail the run.
+The accounted path also disables pre-rollback “superseded reply” dropping: request
+identity in a speculative suffix is not proof that an earlier input is dispensable.
+A second reproduced core wait cycle is fixed by indexing queued dispatches separately:
+a dispatch invalidated during a frozen rollback must release its LTM slot before
+waiting for the restored earlier wake, including when another input precedes it.
+
+Membership is fixed after eager and fully exhausted progressive loading. The model
+validation hook rejects shared dynamic routing feedback and transit stations that
+need live birth. Their old “wait for GVT then spawn at an earlier tick” pattern is
+not a valid birth protocol, even with a safe GVT. External/live producers, reversible
+birth, timestamped shared feedback, migration/recovery, bounded histories, and
+multi-node validation remain open. Conservative output drain retains its legacy
+completion path. This central reference coordinator adds pauses and per-message
+ledger/ACK overhead; it has no scale or speedup claim.
+
+See [protocol and supported scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and
+[validation](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). Older entries below are
+historical investigations; their margin/plateau safety claims are superseded.
 
 ## Conservative premature termination during vehicle activation (fixed 2026-10-22)
 

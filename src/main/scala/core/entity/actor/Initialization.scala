@@ -15,7 +15,8 @@ case class Initialization(
   timeManagers: mutable.Map[String, ActorRef],
   creatorManager: ActorRef,
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
-  relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId]()
+  relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId](),
+  runtimeCoordinator: Option[ActorRef] = None
 ) {
 
   def toInitializeData: InitializeData =
@@ -27,6 +28,7 @@ case class Initialization(
       relationships = relationships.map {
         case (label, rel) => rel.entityId.toString -> rel
       },
-      timeManagers = timeManagers
+      timeManagers = timeManagers,
+      runtimeCoordinator = runtimeCoordinator
     )
 }

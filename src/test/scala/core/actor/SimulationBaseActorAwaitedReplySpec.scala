@@ -178,15 +178,11 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
     // doesn't get mistaken for the fresh dispatch's own "req" send below.
     peerProbe.expectMsgClass(3.seconds, classOf[ActorInteractionEvent])
 
-    // resyncScheduleAfterRollback's FinishEvent(scheduleTick=None) clear, followed by a real
-    // ScheduleEvent(resyncAfterRollback=true): the pruned entry leaves this actor with nothing left
-    // to wait on, so the forced re-dispatch fires exactly as it did before the pruning fix (the
-    // "registering event IS inside the undone range" case).
-    tmProbe.expectMsgClass(3.seconds, classOf[FinishEvent])
-    val resync = tmProbe.expectMsgType[ScheduleEvent](3.seconds)
+    // The replacement clears every obsolete registration and carries the restored schedule atomically.
+    val resync = tmProbe.expectMsgType[core.entity.event.control.execution.ReplaceScheduleEvent](3.seconds)
     // The restored checkpoint is genesis (startTick=0) -- nothing survived the rollback to replay
     // forward from, so 0 is this actor's genuine post-rollback tick, not the interaction's tick=3.
-    resync.tick shouldBe 0L
+    resync.next.map(_.tick) shouldBe Some(0L)
     actor.underlyingActor.testStatus shouldBe "Idle" // the wait-marker really was wiped by the rollback
 
     // The stale reply for the now-retracted original request (seq=1L, the pruned entry's identity)
@@ -196,7 +192,7 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
     actor.underlyingActor.testReplies shouldBe 0
     actor.underlyingActor.testStatus shouldBe "Idle"
 
-    // The real time manager would honor the resync's ScheduleEvent by dispatching a fresh
+    // The real time manager would honor the replacement by dispatching a fresh
     // SpontaneousEvent at this actor's genuine post-rollback tick -- simulated directly here, since
     // tmProbe is a bare probe with no scheduling logic of its own. The fresh dispatch resends "req"
     // with a new identity (sendSeq=2).
@@ -345,7 +341,7 @@ class SimulationBaseActorAwaitedReplySpec extends AnyFlatSpec with Matchers with
       // A causally-earlier interaction rolls this actor back to before tick=5, undoing that
       // dispatch -- and with it, the send registerAwaitedReply captured as "req"'s identity.
       actor ! interaction(3L, senderId = 999L, data = TriggerData(), eventType = "trigger")
-      tmProbe.fishForMessage(3.seconds) { case _: ScheduleEvent => true; case _ => false }
+      tmProbe.fishForMessage(3.seconds) { case _: core.entity.event.control.execution.ReplaceScheduleEvent => true; case _ => false }
 
       // The entry is gone, not merely superseded -- querying its own original identity now
       // returns false, proving pruneInvalidatedAwaitedReplies actually removed it rather than

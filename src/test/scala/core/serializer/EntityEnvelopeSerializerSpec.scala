@@ -72,6 +72,38 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
     roundTripped shouldBe original
   }
 
+  it should "preserve logical order on both interaction wire paths" in {
+    val serialization = SerializationExtension(system)
+    val order = core.runtime.EventOrder(123L, 17L, "stable-logical-key")
+    val original = ActorInteractionEvent(tick = 123L, lamportTick = 5L, actorRefId = 42L,
+      shardRefId = "org.interscity.htc.model.Car", actorPathRef = "car-42", actorClassType = "Car",
+      sourceEpoch = "simulation-run", sourceIncarnation = "source-incarnation",
+      data = LinkInfoData(linkLength = 100.0, linkCapacity = 10.0, linkNumberOfCars = 3,
+        linkFreeSpeed = 13.9, linkLanes = 2), resourceId = "test", seq = 99L, order = Some(order))
+    Seq(original, EntityEnvelopeEvent("car-43", original)).foreach { event =>
+      val serializer = serialization.findSerializerFor(event)
+        .asInstanceOf[org.apache.pekko.serialization.SerializerWithStringManifest]
+      serialization.deserialize(serializer.toBinary(event), serializer.identifier, serializer.manifest(event)).get shouldBe event
+    }
+  }
+
+  it should "round-trip revisioned dispatch and schedule control messages with CBOR" in {
+    val serialization = SerializationExtension(system)
+    val probe = org.apache.pekko.testkit.TestProbe()(system)
+    val order = core.runtime.EventOrder(10L, 2L, "self-key")
+    val identity = org.htc.protobuf.core.entity.actor.Identify(id = 1L, classType = "test.Actor")
+    val messages: Seq[AnyRef] = Seq(
+      core.entity.event.SpontaneousEvent(10L, probe.ref, generation = 4L, scheduleRevision = 7L, order = Some(order)),
+      core.entity.event.FinishEvent(probe.ref, identity, 10L, scheduleTick = Some("10"), timeManager = probe.ref,
+        scheduleRevision = 8L, nextOrder = Some(order)),
+      core.entity.event.control.execution.ReplaceScheduleEvent(identity, 9L, Some(order), 4L, false))
+    messages.foreach { msg =>
+      val serializer = serialization.findSerializerFor(msg)
+        .asInstanceOf[org.apache.pekko.serialization.SerializerWithStringManifest]
+      serialization.deserialize(serialization.serialize(msg).get, serializer.identifier, serializer.manifest(msg)).get shouldBe msg
+    }
+  }
+
   it should "derive shardRefId from actorClassType on the wire, ignoring whatever value the sender happened to pass (recommendation 9)" in {
     val serialization = SerializationExtension(system)
 
