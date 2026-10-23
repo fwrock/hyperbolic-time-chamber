@@ -255,14 +255,20 @@ abstract class Movable[T <: MovableState](
               EventTypeEnum.LeaveLink.toString,
               actorType = LoadBalancedDistributed
             )
+            if (!state.movableLinkExitReported) {
+              // MESO distance and final completion depend on the leave reply. Starting the
+              // next link here lets that delayed reply clear the next link's timing state.
+              registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
+              state.movableCurrentPath = None
+              onFinishSpontaneous(None)
+              return
+            }
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)
               onFinishSpontaneous(None)
               return
             }
-            if (!state.movableLinkExitReported)
-              registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
             state.movableCurrentPath = None
             onFinishSpontaneous(Some(currentTick + 1))
           case _ =>

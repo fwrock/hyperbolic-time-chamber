@@ -18,7 +18,8 @@ class CarJourneyReporterSpec extends AnyWordSpec with Matchers {
 
   private def newReporter(
     reports: mutable.ArrayBuffer[Map[String, Any]],
-    journeyState: CarJourneyState = CarJourneyState()
+    journeyState: CarJourneyState = CarJourneyState(),
+    tripStartDistanceFn: () => Double = () => 0.0
   ): CarJourneyReporter =
     new CarJourneyReporter(
       reportFn = (data, _) => reports += data,
@@ -28,10 +29,27 @@ class CarJourneyReporterSpec extends AnyWordSpec with Matchers {
       tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
       driverAttrsFn = () => DriverAttributes(),
-      journeyStateFn = () => journeyState
+      journeyStateFn = () => journeyState,
+      tripStartDistanceFn = tripStartDistanceFn
     )
 
   "CarJourneyReporter" should {
+    "report SUMO route length per trip while preserving the lifetime odometer" in {
+      val reports = mutable.ArrayBuffer.empty[Map[String, Any]]
+      val state = newState()
+      var tripStartDistance = 0.0
+      val reporter = newReporter(reports, state.journey, () => tripStartDistance)
+      state.distance = 200.0
+      reporter.finishJourney("reached_destination", 2L, state)
+      reporter.reset()
+      tripStartDistance = state.distance
+      state.distance = 400.0
+      reporter.finishJourney("reached_destination", 2L, state)
+
+      reports.filter(_("event_type") == "sumo_tripinfo").map(_("routeLength")).toList shouldBe List(200.0, 200.0)
+      state.distance shouldBe 400.0
+    }
+
     "report journey_completed only once per trip, guarding against genuine duplicate calls" in {
       val reports = mutable.ArrayBuffer.empty[Map[String, Any]]
       val reporter = newReporter(reports)

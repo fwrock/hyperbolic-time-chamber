@@ -4,7 +4,38 @@ Related design: [implemented protocol](TIME_WARP_ACCOUNTED_RUNTIME.md) and
 [target architecture](TIME_WARP_EXTENSIBLE_RUNTIME.md). Each case runs one fixed
 policy; separate processes are used for conservative and optimistic cases.
 
-## Latest verified results — retirement correction
+## Latest verified results — MESO follow-up
+
+The MESO departure correction now waits for distance accounting before completing
+a trip or entering its next link. Car SUMO route lengths use the checkpointed
+trip-start odometer, including on repeat trips. The latest full build passes
+**483 tests across 100 suites**.
+
+| Check | Conservative, one link | Conservative, two links | Optimistic, one link | Optimistic, two links |
+|---|---:|---:|---:|---:|
+| Person trips / expected | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 |
+| Daily summaries / expected | 2 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
+| MESO entries / exits | 4 / 4 | 8 / 8 | 4 / 4 | 8 / 8 |
+| Person/SUMO distance per trip (m) | 200 | 400 | 200 | 400 |
+| Completion ticks, both persons | 30 / 220 | 50 / 240 | 30 / 220 | 50 / 240 |
+| Errors / replay mismatches | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| Null-state discards | 0 | 0 | 0 | 0 |
+| Rollbacks / stalls | 0 / 0 | 0 / 0 | 29 / 0 | 62 / 0 |
+| Distance, traversal, timing, runtime acceptance | Pass | Pass | Pass | Pass |
+
+The exact final artifact also passes two-link MICRO regressions under both
+policies: four trips, two summaries, eight matching entries/exits, correct SUMO
+trip distances, and zero errors or null-state discards. These are bounded
+person-owned Car scenarios on static unsignaled routes. MESO trip ticks and
+distances match, but some same-tick per-car density/speed estimates still differ
+because conservative channel ordering remains open. No full report-parity or
+other-vehicle claim is made.
+
+See [the MESO validation record](MESO_POLICY_VALIDATION_2026_10_23.md) for reproduced
+failures, protocol correction, strict timing expectations, artifact hashes, all
+six final simulator cases, raw comparison evidence, and reproduction commands.
+
+## Retirement correction — preceding MICRO validation
 
 The rebuilt retirement-correction artifact passes all four bounded MICRO cases.
 The actor now retains its state and speculative history until GVT is strictly
@@ -30,8 +61,8 @@ GVT boundary.
 See [retirement verification evidence](#retirement-boundary-verification-follow-up)
 for the reproduced boundary failures, corrections, inputs, commands, and output
 locations. These results validate the retirement correction in the tested MICRO
-scope; conservative channel ordering, full event-tick parity, and MESO validation
-remain separate open work.
+scope; conservative channel ordering and full event-tick parity remain open.
+The later MESO validation is recorded above and in its dedicated document.
 
 ## Defects reproduced and corrected
 
@@ -299,7 +330,10 @@ tick 35 in the other. The optimistic two-link pair repeated the same reported
 event ticks. The conservative handoff timing difference needs a separate causal
 trace. The source-level conservative channel-closure gap also remains independent.
 
-## Preliminary MESO policy check
+## Historical preliminary MESO policy check — before departure correction
+
+This failure evidence is superseded for the bounded Car cases by the
+[MESO correction and validation](MESO_POLICY_VALIDATION_2026_10_23.md).
 
 The same generated scenario was rerun after changing all link states to MESO in
 temporary inputs under both policies (before the legacy-manager-only final

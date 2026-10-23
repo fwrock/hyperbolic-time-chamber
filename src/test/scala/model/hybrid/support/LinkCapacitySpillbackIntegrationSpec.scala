@@ -121,8 +121,6 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
       onFinishSpontaneousFn = _ => (),
       scheduleEventFn = tick => scheduleEventCalls += tick,
       leavingLinkFn = () => leavingLinkCalls += (()),
-      selfDestructFn = () => (),
-      isPersonCentricFn = () => false,
       logWarnFn = _ => (),
       logStaleEventDebugFn = _ => (),
       sendMessageFn = (_, _, _, _) => (),

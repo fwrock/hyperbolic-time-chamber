@@ -71,6 +71,25 @@ See [protocol and supported scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and
 [validation](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). Older entries below are
 historical investigations; their margin/plateau safety claims are superseded.
 
+## MESO Car departure and per-trip reporting (corrected 2026-10-23)
+
+The final MESO departure used to complete the trip before `ReceiveLeaveLinkInfo`
+added the last link's distance; intermediate departures could schedule the next
+link before the earlier reply cleared link timing metadata. `Movable.leavingLink`
+now waits for the MESO reply on every link. Its checkpointed exit-reported marker
+preserves proactive MICRO completion without adding a cleanup wait. Car signal
+handling initiates departure and leaves completion/terminal intent to the traversal
+completion path. Car SUMO route lengths and journey-distance metrics subtract the
+checkpointed trip-start odometer instead of counting previous trips again.
+
+The full build passes 483 tests in 100 suites. Four seeded Car MESO cases and two
+MICRO regressions pass distance, traversal, runtime, and applicable timing checks.
+MESO person and SUMO trip lengths are 200/400 m, and completion ticks match across
+policies in these one/two-link free-flow cases. Same-tick per-car density estimates
+still differ in some entries, so full report parity and conservative channel
+ordering remain open. Other vehicles, transit, congestion, and junction control
+need their own validation. See [evidence and limits](MESO_POLICY_VALIDATION_2026_10_23.md).
+
 ## Conservative barrier does not close interaction channels (confirmed 2026-10-23)
 
 `ConservativeGlobalTimeManager` releases the next global tick after every LTM has

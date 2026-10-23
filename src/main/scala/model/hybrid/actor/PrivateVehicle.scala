@@ -194,6 +194,8 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def getTripStartTick: Option[Tick] = tripStartTick
 
+  protected def getTripStartDistance: Double = tripStartDistance
+
   /** Get current driver attributes (for speed factor metrics).
     */
   protected def getDriverAttributes: DriverAttributes = driverAttributes
