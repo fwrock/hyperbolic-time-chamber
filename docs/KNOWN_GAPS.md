@@ -4,6 +4,27 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Current production policy update (2026-10-23, distributed follow-up)
+
+Production optimistic execution now uses LTM-owned transport and report ledgers;
+the existing GTM aggregates frozen round summaries and no longer creates a central
+message-routing coordinator child. Conservative execution retains its separate
+channel-closed batch protocol. Neither run mixes or switches policies.
+
+`LinkMetricsState` now checkpoints cumulative and per-tick SUMO counters. The
+validated two-link MICRO reports match between policies, including the 67 summary
+rows that previously differed. A larger cohort exposed a second model restore
+bug: Node's `Map[Long, Int]` values became boxed Longs under the shared Jackson
+configuration. Explicit Integer content annotations now preserve replay arithmetic;
+the regression fails with the original cast error before the fix.
+
+The current full suite passes 496 tests. See
+[the distributed protocol](DISTRIBUTED_OPTIMISTIC_RUNTIME.md) and
+[current validation](DISTRIBUTED_OPTIMISTIC_VALIDATION_2026_10_23.md) for the final
+artifact, scenario matrices and performance limitations. Historical baseline
+sections below preserve their original findings; their central-routing and open
+counter-gap status statements are superseded by this update.
+
 ## Time Warp correctness and extensibility (reviewed 2026-10-22)
 
 See [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md) for the current prioritized
@@ -63,9 +84,27 @@ validation hook rejects shared dynamic routing feedback and transit stations tha
 need live birth. Their old “wait for GVT then spawn at an earlier tick” pattern is
 not a valid birth protocol, even with a safe GVT. External/live producers, reversible
 birth, timestamped shared feedback, migration/recovery, bounded histories, and
-multi-node validation remain open. Conservative output drain retains its legacy
-completion path. This central reference coordinator adds pauses and per-message
-ledger/ACK overhead; it has no scale or speedup claim.
+multi-node validation remain open. This central reference coordinator is a separate
+child of `OptimisticGlobalTimeManager`. It adds pauses and per-message ledger/ACK
+overhead and remains a potential bottleneck; it has no scale or speedup claim.
+
+The production conservative factory now selects `ChannelClosedGlobalTimeManager`
+and `ChannelAwareLocalTimeManager`: interactions and acceptance ledgers stay with
+LTMs, and the GTM agrees on the next causal batch only after channels drain.
+Report receipt and final sink flush precede successful completion. The legacy
+barrier class is retained for compatibility tests and does not provide those
+guarantees when constructed directly. This change does not distribute the
+optimistic coordinator. Both accounted paths reject live model birth and shared
+dynamic routing until adapters exist. See
+[the conservative protocol and limits](CONSERVATIVE_CHANNEL_RUNTIME.md).
+
+The [channel validation](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md) passes all
+487 tests and the bounded MESO/MICRO outcome checks. MESO physical payloads and
+MICRO non-summary reports match between policies. MICRO cumulative SUMO `loaded`
+and `ended` counters still differ: `LinkMetricsReporter` stores them outside Link's
+checkpoint hooks, so replay can count the same entry/exit again. Full MICRO report
+parity remains open until these counters restore with model state. This is separate
+from channel closure and from the optimistic coordinator's scalability limitation.
 
 See [protocol and supported scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and
 [validation](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). Older entries below are

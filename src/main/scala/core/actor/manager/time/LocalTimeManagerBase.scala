@@ -172,13 +172,7 @@ abstract class LocalTimeManagerBase(
       runtimeEpoch = Some(epoch)
       event match {
         case RegisterOwnedProcess(identity, ref, wake, logicalIdentity) =>
-          runtimeIdentities(identity.id) = logicalIdentity.getOrElse(identity)
-          wake match {
-            case Some(order) =>
-              logicalSchedules(identity.id) = order
-              registerActor(RegisterActorEvent(order.tick, identity.id, Some(identity)))
-            case None => registerPassiveActor(RegisterPassiveActorEvent(identity.id, Some(identity)))
-          }
+          registerOwnedProcess(identity, wake, logicalIdentity.getOrElse(identity))
         case other => handleEvent(other)
       }
       accountedRuntime.foreach(_ ! DeliveryAccepted(epoch, token))
@@ -207,6 +201,58 @@ abstract class LocalTimeManagerBase(
       forceDestructActiveActors()
       terminateSimulation()
     case event => super.handleEvent(event)
+  }
+
+  protected def registerOwnedProcess(identity: Identify, wake: Option[EventOrder], logicalIdentity: Identify): Unit = {
+    runtimeIdentities(identity.id) = logicalIdentity
+    wake match {
+      case Some(order) =>
+        logicalSchedules(identity.id) = order
+        registerActor(RegisterActorEvent(order.tick, identity.id, Some(identity)))
+      case None => registerPassiveActor(RegisterPassiveActorEvent(identity.id, Some(identity)))
+    }
+  }
+
+  protected def readyOrderedSchedules: Vector[(Tick, Identify, EventOrder)] = {
+    val runningIds = runningEvents.iterator.map(_.id).toSet
+    val earliest = scheduledActors.keysIterator.toVector.sorted.find { tick =>
+      scheduledActors(tick).exists(a => !runningIds.contains(a.id))
+    }
+    earliest.toVector.flatMap { tick =>
+      scheduledActors(tick).iterator.filterNot(a => runningIds.contains(a.id)).map { identity =>
+        val logical = runtimeIdentities.getOrElse(identity.id, identity)
+        (tick, identity, logicalSchedules.get(identity.id).filter(_.tick == tick)
+          .getOrElse(EventOrder.root(tick, logical.classType, logical.id)))
+      }
+    }.toVector
+  }
+
+  protected def dispatchConservativeSchedules(tick: Tick, microstep: Long): Unit = {
+    val ready = readyOrderedSchedules.collect {
+      case (`tick`, identity, order) if order.microstep == microstep => identity
+    }
+    ready.foreach { identity =>
+      scheduledActors.get(tick).foreach(_.remove(identity))
+      runningEvents.add(identity)
+      sendSpontaneousEvent(tick, identity)
+    }
+    if (scheduledActors.get(tick).exists(_.isEmpty)) {
+      scheduledActors.remove(tick)
+      scheduledTicksOnFinish.remove(tick)
+    }
+  }
+
+  protected def prepareOwnedDispatch(tick: Tick, identity: Identify): SpontaneousEvent = {
+    forgetScheduledLocation(identity.id, tick)
+    val full = runtimeIdentities.getOrElse(identity.id, identity)
+    val generation = Math.addExact(dispatchGeneration(identity.id), 1L)
+    dispatchGeneration(identity.id) = generation
+    inFlightTicks(identity.id) = tick
+    highestProcessedTick(identity.id) = tick
+    SpontaneousEvent(tick, self, generation = generation,
+      scheduleRevision = scheduleRevisions(identity.id),
+      order = Some(logicalSchedules.get(identity.id).filter(_.tick == tick)
+        .getOrElse(EventOrder.root(tick, full.classType, full.id))))
   }
 
   protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
@@ -452,22 +498,28 @@ abstract class LocalTimeManagerBase(
     */
   protected def completeDestruct(identity: Identify): Unit = {
     ActorMetrics.eventsProcessed.labels("destruct").inc()
-    registeredActors.remove(identity.id)
-    dispatchGeneration.remove(identity.id)
-    inFlightTicks.remove(identity.id)
-    scheduleRevisions.remove(identity.id)
-    logicalSchedules.remove(identity.id)
-    scheduledLocations.remove(identity.id)
-    highestProcessedTick.remove(identity.id)
-    blockedActors.remove(identity.id)
-    val removedIdentity = registeredIdentities.remove(identity.id)
+    forgetOwnedProcess(identity.id)
+    sendDestructEvent(identity)
+  }
+
+  protected def forgetOwnedProcess(id: Long): Unit = {
+    registeredActors.remove(id)
+    dispatchGeneration.remove(id)
+    inFlightTicks.remove(id)
+    scheduleRevisions.remove(id)
+    logicalSchedules.remove(id)
+    clearScheduledActor(id)
+    highestProcessedTick.remove(id)
+    blockedActors.remove(id)
+    runtimeIdentities.remove(id)
+    pendingDestruct.remove(id)
+    val removedIdentity = registeredIdentities.remove(id).orElse(passivelyRegisteredIdentities.remove(id))
     // Prometheus: decrement active actors gauge
     removedIdentity.foreach {
       removed =>
         val actorType = removed.classType.split('.').lastOption.getOrElse(removed.classType)
         ActorMetrics.activeActors.labels(actorType).dec()
     }
-    sendDestructEvent(identity)
   }
 
   /** Confirms every `pendingDestruct` entry whose speculative `FinishEvent` is now GVT-safe
@@ -534,15 +586,8 @@ abstract class LocalTimeManagerBase(
     forgetScheduledLocation(identity.id, tick)
     if (accountedRuntime.nonEmpty) {
       val full = runtimeIdentities.getOrElse(identity.id, identity)
-      val generation = dispatchGeneration(identity.id) + 1L
-      dispatchGeneration(identity.id) = generation
-      inFlightTicks(identity.id) = tick
-      highestProcessedTick(identity.id) = tick
       accountedRuntime.get ! RouteDispatch(LogicalProcessId(full.classType, full.id),
-        SpontaneousEvent(tick, self, generation = generation,
-          scheduleRevision = scheduleRevisions(identity.id),
-          order = Some(logicalSchedules.get(identity.id).filter(_.tick == tick)
-            .getOrElse(EventOrder.root(tick, full.classType, full.id)))))
+        prepareOwnedDispatch(tick, identity))
       return
     }
     if (identity.actorType.isEmpty) {

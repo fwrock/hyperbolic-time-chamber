@@ -15,8 +15,8 @@ import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
 import scala.concurrent.duration.*
 
-/** Scheduling remains optimistic. Commitment and completion require a fresh accounted cut;
-  * the historical estimator arguments are retained only for constructor/config compatibility.
+/** Centralized reference implementation retained for compatibility tests and comparisons.
+  * Production `props` selects [[AccountedOptimisticGlobalTimeManager]], whose LTMs own transport.
   */
 class OptimisticGlobalTimeManager(
   simulationDuration: Tick,
@@ -122,6 +122,5 @@ class OptimisticGlobalTimeManager(
 
 object OptimisticGlobalTimeManager {
   def props(simulationDuration: Tick, simulationManager: ActorRef, gvtMargin: Tick, plateauRoundsRequired: Int): Props =
-    Props(new OptimisticGlobalTimeManager(simulationDuration, simulationManager,
-      new MarginBasedGVTEstimation(gvtMargin), plateauRoundsRequired))
+    Props(new AccountedOptimisticGlobalTimeManager(simulationDuration, simulationManager))
 }

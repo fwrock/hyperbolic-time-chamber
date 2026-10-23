@@ -11,6 +11,7 @@ import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent 
 import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
 import core.runtime.{ EventOrder, OrderedInputQueue }
 import core.runtime.accounting.*
+import core.runtime.conservative.*
 import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.types.Tick
 import core.entity.state.BaseState
@@ -97,6 +98,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var runtimeEpoch: Option[String] = None
   private val runtimeIncarnation = java.util.UUID.randomUUID().toString
   private var runtimeFrozen = false
+  private var distributedRuntime = false
+  private var runtimeHorizon = Long.MaxValue
   private var runtimeGvt = Long.MinValue
   private var runtimeCommitRound = 0L
   private var committedRetirement: Option[(Long, Boolean)] = None
@@ -108,11 +111,15 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val initializationAcks = mutable.ArrayBuffer.empty[(ActorRef, AnyRef)]
   private val pendingCreationCallbacks = mutable.Queue.empty[(String, Long)]
   protected def usesAccountedRuntime: Boolean = accountedCoordinator.nonEmpty
+  private def usesConservativeRuntime: Boolean = usesAccountedRuntime && !isTimeWarp
+  private def runtimeAuthority: Option[ActorRef] =
+    if (distributedRuntime) Some(currentTimeManager) else accountedCoordinator
 
   /** Reject model capabilities whose effects cannot participate in the runtime's cut. */
   protected def validateRuntimeCapabilities(): Unit = ()
 
   private def sendTimeManager(target: ActorRef, event: AnyRef): Unit = accountedCoordinator match {
+    case Some(_) if usesConservativeRuntime || distributedRuntime => target ! RouteControl(runtimeEpoch.get, target, event, math.max(currentTick, runtimeGvt))
     case Some(coordinator) => coordinator ! RouteControl(runtimeEpoch.get, target, event, math.max(currentTick, runtimeGvt))
     case None => target ! event
   }
@@ -149,7 +156,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (drainingInputs || runtimeFrozen || runtimeFailed || (usesAccountedRuntime && runtimeEpoch.isEmpty)) return
     drainingInputs = true
     try {
-      while (pendingCancellations.nonEmpty && !runtimeFailed) handleInteractWith(pendingCancellations.dequeue())
+      pendingCancellations.dequeueAll(_.tick <= runtimeHorizon).foreach { event =>
+        if (!runtimeFailed) handleInteractWith(event)
+      }
       while (pendingCreationCallbacks.nonEmpty && !runtimeFailed) {
         val (id, _) = pendingCreationCallbacks.dequeue()
         val classType = dynamicActorClassTypes.remove(id).getOrElse("")
@@ -167,7 +176,11 @@ abstract class SimulationBaseActor[T <: BaseState](
           case e: SpontaneousEvent => e.order
           case _ => None
         }
-        ready = head.nonEmpty && !pendingSelf.exists(p => headOrder.exists(p < _))
+        val withinHorizon = head.forall {
+          case e: ActorInteractionEvent => e.tick <= runtimeHorizon
+          case e: SpontaneousEvent => e.tick <= runtimeHorizon
+        }
+        ready = head.nonEmpty && withinHorizon && !pendingSelf.exists(p => headOrder.exists(p < _))
         if (ready) inputQueue.dequeue() match {
           case e: ActorInteractionEvent => handleInteractWith(e)
           case e: SpontaneousEvent => handleSpontaneous(e)
@@ -730,7 +743,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         if (state != null) {
           if (state.isSetScheduleOnTimeManager) {
             registerOnTimeManager()
-          } else if (isTimeWarp) {
+          } else if (isTimeWarp || usesAccountedRuntime) {
             registerPassivelyOnTimeManager()
           }
         }
@@ -794,7 +807,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     * becoming a permanent busy-loop).
     */
   private def registerPassivelyOnTimeManager(): Unit = {
-    rollbackHandler.initialize(startTick)
+    if (isTimeWarp) rollbackHandler.initialize(startTick)
     if (usesAccountedRuntime) {
       accountedCoordinator.get ! JoinRuntime(schedulingIdentity(), self, None, startTick, runtimeIncarnation)
       return
@@ -834,6 +847,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     reporters = event.data.reporters
     // The rollback floor must include model initialization, including a seeded plan cursor.
     onFinishInitialize()
+    if (usesAccountedRuntime) initializationAcks += event.actorRef -> InitializeEntityAckEvent(entityId = entityId)
     if (state != null) {
       startTick = state.getStartTick
       if (state.isSetScheduleOnTimeManager) {
@@ -847,7 +861,7 @@ abstract class SimulationBaseActor[T <: BaseState](
               e
             )
         }
-      } else if (isTimeWarp) {
+      } else if (isTimeWarp || usesAccountedRuntime) {
         try
           registerPassivelyOnTimeManager()
         catch {
@@ -876,8 +890,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
     }
     try
-      if (usesAccountedRuntime) initializationAcks += event.actorRef -> InitializeEntityAckEvent(entityId = entityId)
-      else event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
+      if (!usesAccountedRuntime) event.actorRef ! InitializeEntityAckEvent(entityId = entityId)
     catch {
       case e: Exception =>
         logError(
@@ -980,7 +993,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     val message = ActorInteractionEvent(tick, getLamportClock, getEntityId.toLong, getShardId,
       self.path.name, getClass.getName, eventType, data, properties.actorType.toString,
       properties.resourceId, seq, anti, order, runtimeEpoch.get, runtimeIncarnation)
-    accountedCoordinator.get ! RouteInteraction(runtimeEpoch.get,
+    val transport = if (usesConservativeRuntime || distributedRuntime) currentTimeManager else accountedCoordinator.get
+    transport ! RouteInteraction(runtimeEpoch.get,
       LogicalProcessId(if (model == null || model.isEmpty) "" else StringUtil.getModelClassName(model), target), message)
   }
 
@@ -1312,16 +1326,68 @@ abstract class SimulationBaseActor[T <: BaseState](
     case other => throw new IllegalArgumentException(s"unsupported runtime LP input ${other.getClass.getName}")
   }
 
+  private def nextConservativeInput: Option[EventOrder] = inputQueue.headOption.map {
+    case e: ActorInteractionEvent => e.order.getOrElse(throw new IllegalStateException("unordered conservative interaction"))
+    case e: SpontaneousEvent => e.order.getOrElse(throw new IllegalStateException("unordered conservative dispatch"))
+  }
+
   override def receive: Receive = {
-    case RuntimeJoined(epoch, coordinator, owner) =>
+    case SetRuntimeHorizon(horizon) =>
+      require(distributedRuntime && runtimeAuthority.contains(sender()) && runtimeFrozen && runtimeCommitRound == 0L,
+        "execution horizon outside runtime startup")
+      runtimeHorizon = horizon
+    case RuntimeJoined(epoch, coordinator, owner, distributed) =>
       require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
       runtimeEpoch = Some(epoch)
       currentTimeManager = owner
+      distributedRuntime = distributed
+      if (distributed) runtimeFrozen = true
+      if (usesConservativeRuntime) {
+        runtimeFrozen = true
+        flushBufferedReportsUpTo(Long.MaxValue)
+      }
       initializationAcks.foreach { case (target, ack) => target ! ack }
       initializationAcks.clear()
       drainInputs()
+    case ConservativeDelivery(epoch, token, event) =>
+      try {
+        require(usesConservativeRuntime && runtimeEpoch.contains(epoch) && sender() == currentTimeManager,
+          "invalid conservative delivery")
+        require(state != null, s"conservative input to uninitialized LP $getEntityId")
+        event match {
+          case e: ActorInteractionEvent => require(!e.isAntiMessage, "anti-message in conservative run")
+          case _: SpontaneousEvent => ()
+          case _ => throw new IllegalArgumentException("invalid conservative input")
+        }
+        acceptRuntimeInput(event)
+        sender() ! ConservativeInputAccepted(epoch, token, nextConservativeInput)
+      } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+    case ExecuteConservativeBatch(round, tick, microstep) =>
+      try {
+        require(usesConservativeRuntime && sender() == currentTimeManager && !runtimeFailed,
+          "invalid conservative execution grant")
+        while (nextConservativeInput.exists(o => o.tick == tick && o.microstep == microstep) && !runtimeFailed) {
+          val order = nextConservativeInput.get
+          require(logicalOrder.forall(_ < order), s"conservative causality violation: $logicalOrder then $order")
+          inputQueue.dequeue() match {
+            case e: ActorInteractionEvent => handleInteractWith(e)
+            case e: SpontaneousEvent => handleSpontaneous(e)
+          }
+        }
+        if (!runtimeFailed) sender() ! ConservativeBatchProcessed(round, nextConservativeInput,
+          outstandingAwaitedReplies.size, terminalIntent.nonEmpty)
+      } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+    case RetireConservativeProcess(round, truncated) =>
+      if (!usesConservativeRuntime || sender() != currentTimeManager || runtimeFailed ||
+        (!truncated && (inputQueue.nonEmpty || outstandingAwaitedReplies.nonEmpty))) {
+        failRuntime(new IllegalStateException(s"unsafe conservative retirement of $getEntityId"))
+      } else {
+        sender() ! ConservativeProcessRetired(round)
+        physicallyRetire()
+      }
     case RuntimeDelivery(epoch, token, event) =>
       try {
+        require(runtimeAuthority.contains(sender()), "runtime delivery from non-owner")
         require(runtimeEpoch.contains(epoch), "wrong runtime delivery epoch")
         val tick = event match {
           case e: SpontaneousEvent => e.tick
@@ -1338,11 +1404,15 @@ abstract class SimulationBaseActor[T <: BaseState](
           s"runtime delivered ${event.getClass.getSimpleName} to uninitialized LP $getEntityId"
         )
         acceptRuntimeInput(event)
-        accountedCoordinator.foreach(_ ! DeliveryAccepted(epoch, token))
+        sender() ! DeliveryAccepted(epoch, token)
         drainInputs()
       } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
-    case FreezeRuntime(round) => runtimeFrozen = true; sender() ! RuntimeFrozen(round)
+    case FreezeRuntime(round) =>
+      if (!runtimeAuthority.contains(sender())) failRuntime(new IllegalStateException("freeze from non-owner"))
+      else { runtimeFrozen = true; sender() ! RuntimeFrozen(round) }
     case CollectRuntimeSnapshot(round) =>
+      require(runtimeAuthority.contains(sender()) && (!distributedRuntime || runtimeFrozen),
+        "snapshot outside an authorized frozen round")
       val minimum = runtimeMinimum
       val now = System.nanoTime()
       if (core.actor.trace.TimeWarpTrace.enabled && minimum.nonEmpty && runtimeGvt != Long.MinValue &&
@@ -1359,7 +1429,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       sender() ! RuntimeSnapshot(round, runtimeMinimum, outstandingAwaitedReplies.size,
         pendingCreationCallbacks.size + pendingDynamicInits.size)
     case CommitRuntime(round, gvt) =>
-      if (!accountedCoordinator.contains(sender()) || !runtimeFrozen || round <= runtimeCommitRound || gvt < runtimeGvt) {
+      if (!runtimeAuthority.contains(sender()) || !runtimeFrozen || round <= runtimeCommitRound || gvt < runtimeGvt) {
         failRuntime(new IllegalStateException(
           s"unauthorized commit for $getEntityId at round=$round while frozen=$runtimeFrozen gvt=$gvt/$runtimeGvt"
         ))
@@ -1373,10 +1443,13 @@ abstract class SimulationBaseActor[T <: BaseState](
         sender() ! RuntimeCommitted(round, eligible)
       }
     case ResumeRuntime(_) =>
-      runtimeFrozen = false
-      try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+      if (!runtimeAuthority.contains(sender())) failRuntime(new IllegalStateException("resume from non-owner"))
+      else {
+        runtimeFrozen = false
+        try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+      }
     case RetireRuntimeProcess(round, finalCut) =>
-      val coordinatorSent = accountedCoordinator.contains(sender())
+      val coordinatorSent = runtimeAuthority.contains(sender())
       val committedThisRound = committedRetirement.exists(_._1 == round)
       val eligibleThisRound = committedRetirement.contains(round -> true)
       val terminalStillSafe = mayRetireTerminal(runtimeGvt)
@@ -1444,7 +1517,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
   ): Unit = {
     if (usesAccountedRuntime) {
-      failRuntime(new UnsupportedOperationException("live dynamic birth requires a cancellable lifecycle adapter; precreate inert LPs before startup"))
+      val adapter = if (isTimeWarp) "cancellable lifecycle" else "accounted birth/initialization"
+      failRuntime(new UnsupportedOperationException(s"live dynamic birth requires a $adapter adapter; precreate inert LPs before startup"))
       return
     }
     if (isReplaying) return
@@ -1510,7 +1584,7 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   /** A terminal decision is speculative until a proven frontier passes its producing history. */
   override protected def selfDestruct(): Unit = {
-    if (isTimeWarp) {
+    if (isTimeWarp || usesAccountedRuntime) {
       terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
       onFinishSpontaneous(None)
     } else physicallyRetire()
@@ -1581,7 +1655,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     // never goes through.
     if (scheduleTick.nonEmpty) terminalIntent = None
     pendingSelf = scheduleTick.map(nextEffectOrder)
-    if (destruct && isTimeWarp) terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
+    if (destruct && (isTimeWarp || usesAccountedRuntime)) terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
     if (isReplaying) return
     _spontaneousFinishSent = true
     if (isTimeWarp) currentEventScheduleOutcome = Some(scheduleTick)
@@ -1717,7 +1791,8 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   private def reportToTarget(event: ReportEvent, target: ActorRef): Unit = {
     if (isReplaying) return
-    if (isTimeWarp) reportBuffer += BufferedReport(event, target, currentEventSeq)
+    if (usesConservativeRuntime && runtimeEpoch.nonEmpty) currentTimeManager ! PublishConservativeReport(target, event)
+    else if (isTimeWarp || usesConservativeRuntime) reportBuffer += BufferedReport(event, target, currentEventSeq)
     else {
       if (event.label != null) ActorMetrics.reportFlushed.labels(event.label).inc()
       target ! event
@@ -1740,6 +1815,8 @@ abstract class SimulationBaseActor[T <: BaseState](
           case buffered =>
             if (buffered.event.label != null) ActorMetrics.reportFlushed.labels(buffered.event.label).inc()
             accountedCoordinator match {
+              case Some(_) if usesConservativeRuntime => currentTimeManager ! PublishConservativeReport(buffered.target, buffered.event)
+              case Some(_) if distributedRuntime => currentTimeManager ! PublishCommittedReport(buffered.target, buffered.event)
               case Some(coordinator) => coordinator ! PublishCommittedReport(buffered.target, buffered.event)
               case None => buffered.target ! buffered.event
             }

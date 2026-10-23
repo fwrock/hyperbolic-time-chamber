@@ -11,7 +11,8 @@ sealed trait RuntimeCommand
 
 final case class LogicalProcessId(model: String, id: Long)
 final case class JoinRuntime(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], startTick: Long = 0L, incarnation: String = "") extends RuntimeCommand
-final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef) extends RuntimeCommand
+final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef, distributed: Boolean = false) extends RuntimeCommand
+final case class SetRuntimeHorizon(horizon: Long) extends RuntimeCommand
 final case class JoinRuntimeManager(ref: ActorRef) extends RuntimeCommand
 final case class RegisterOwnedProcess(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], logicalIdentity: Option[Identify] = None) extends RuntimeCommand
 final case class RouteInteraction(epoch: String, target: LogicalProcessId, event: ActorInteractionEvent) extends RuntimeCommand

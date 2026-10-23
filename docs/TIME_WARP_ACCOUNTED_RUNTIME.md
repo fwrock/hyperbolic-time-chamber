@@ -1,4 +1,10 @@
-# Accounted optimistic runtime — reference implementation
+# Accounted optimistic runtime — centralized reference
+
+The production factory now selects the
+[distributed optimistic runtime](DISTRIBUTED_OPTIMISTIC_RUNTIME.md), in which the
+existing GTM aggregates LTM summaries and no separate coordinator actor is created.
+The centralized implementation below is retained for compatibility tests and
+baseline comparisons; its per-message routing topology is historical.
 
 Implemented 2026-10-23. This implements part of the architecture in
 [TIME_WARP_EXTENSIBLE_RUNTIME.md](TIME_WARP_EXTENSIBLE_RUNTIME.md). One policy is
@@ -11,6 +17,13 @@ Pausing a run does not change its policy.
 Managers. Every initialized LP, including passive infrastructure, registers its
 full model class, numeric ID, concrete actor reference, incarnation UUID, and
 initial wake. Initialization is acknowledged only after runtime registration.
+`OptimisticGlobalTimeManager.onStart` creates this as a separate child actor named
+`accounted-runtime`; it is not the GTM actor itself. The GTM handles startup and
+progress/completion notifications, while this child handles accounted transport
+and safe-time rounds. This is an additional centralized processing point, and its
+per-message work can limit throughput. The conservative distributed channel
+protocol does not yet replace this optimistic transport path.
+
 The coordinator assigns exactly one LTM owner. Numeric IDs may repeat across
 models: private scheduler handles isolate the legacy Long-keyed LTM indexes.
 Logical ordering continues to use the original model identity, never those handles.
@@ -194,11 +207,20 @@ Remaining work includes multi-node transport tests; cancellable birth and input
 producer adapters; timestamped feedback; durable effect retry; bounded histories
 and speculation; a second unrelated model; and measured performance. A later
 asynchronous epoch/color GVT implementation must preserve the same channel and
-membership invariants. Conservative independent same-tick channel closure and
-acknowledged durable completion remain separate migration work. No mixed-policy
+membership invariants. Conservative independent same-tick closure and sink drain
+now have a separate [distributed LTM protocol](CONSERVATIVE_CHANNEL_RUNTIME.md). No mixed-policy
 run or runtime policy switching is required by this architecture.
 
-## Conservative same-tick closure follow-up
+## Conservative same-tick closure investigation (legacy path)
+
+The investigation below describes the previous production barrier. The factory now
+selects the [channel-closed conservative runtime](CONSERVATIVE_CHANNEL_RUNTIME.md),
+with LTM-local ledgers and GTM batch summaries. The old class remains in the
+checkout for compatibility tests. These historical differences must be assessed
+against the new validation record before treating them as current failures.
+See [the channel validation](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md): the
+bounded MESO payload differences are resolved; MICRO movement reports match while
+cumulative summary counters still expose missing model snapshot state.
 
 The conservative `SelectiveBarrier` is not a channel-closed barrier. Each LTM
 reports its next scheduled tick and whether its local dispatched work is complete.

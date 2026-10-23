@@ -17,6 +17,8 @@ import scala.collection.mutable
   * so any later `Map[Long, _]` field silently deserializes its keys as `String` without this
   * annotation (see `BusStationState` for the full explanation). The `String`-keyed `busStops` /
   * `subwayStations` fields below are unaffected and intentionally left unannotated.
+  * Counter maps also need Integer content types: the shared mapper otherwise widens their
+  * erased numeric values to Long, which fails on the first replayed Int arithmetic operation.
   */
 case class NodeState(
   startTick: Tick,
@@ -39,11 +41,11 @@ case class NodeState(
   // so stays String per the governing String-vs-Long rule (deviation from a blanket Long sweep
   // that had mistakenly caught this field alongside the genuinely id-keyed maps above).
   subwayStations: mutable.Map[String, Identify] = mutable.Map.empty,
-  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
   signalWaitingCounts: mutable.Map[Long, Int] = mutable.Map.empty,
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
   capacityWaitQueue: mutable.Map[Long, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty,
-  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
   availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty
 ) extends BaseState(
       startTick = startTick,
