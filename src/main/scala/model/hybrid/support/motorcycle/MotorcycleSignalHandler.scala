@@ -73,7 +73,7 @@ class MotorcycleSignalHandler(
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported),
+                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported, approachLinkId = state.currentPath.map(_._1).getOrElse(0L)),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
                 registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
@@ -138,6 +138,7 @@ class MotorcycleSignalHandler(
       journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
+      data.junctionLink.foreach(path => state.movablePendingJunctionPath = Some(path))
       val tick = currentTickFn()
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(tick))

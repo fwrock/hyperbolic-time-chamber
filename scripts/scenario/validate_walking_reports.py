@@ -8,6 +8,23 @@ import math
 from pathlib import Path
 
 
+def shortest_distance(graph, origin, destination, movements=None):
+    movements = movements or {}
+    queue, visited = [(0.0, origin, 0)], set()
+    while queue:
+        distance, node, previous = heapq.heappop(queue)
+        if node == destination:
+            return distance
+        if (node, previous) in visited:
+            continue
+        visited.add((node, previous))
+        for link_id, link in graph.items():
+            if link['from'] == node and not link.get('junctionGeometry'):
+                extra = movements.get((previous, link_id), 0.0)
+                heapq.heappush(queue, (distance + link['length'] + extra, link['to'], link_id if movements else 0))
+    raise AssertionError('unreachable expected leg')
+
+
 def validate(args):
     config = json.loads(args.simulation.read_text())
     def entities(kind):
@@ -15,23 +32,12 @@ def validate(args):
                 for record in json.loads(Path(source['dataSource']['info']['path']).read_text())]
     road = {r['id']: r['data']['content'] for r in entities('Link')}
     rail = {r['id']: r['data']['content'] for r in entities('RailLink')}
-    def shortest(graph, origin, destination):
-        queue, visited = [(0.0, origin)], set()
-        while queue:
-            distance, node = heapq.heappop(queue)
-            if node == destination:
-                return distance
-            if node in visited:
-                continue
-            visited.add(node)
-            for link in graph.values():
-                if link['from'] == node:
-                    heapq.heappush(queue, (distance + link['length'], link['to']))
-        raise AssertionError('unreachable expected leg')
+    movements = {(m['incomingLinkId'], m['outgoingLinkId']): road[m['connectorLinkId']]['length']
+                 for node in entities('Node') for m in node['data']['content'].get('junctionMovements', [])}
     def walking_distance(leg):
         route = leg.get('precomputedRoute')
         if route is None:
-            return shortest(road, leg['originNodeId'], leg['destinationNodeId'])
+            return shortest_distance(road, leg['originNodeId'], leg['destinationNodeId'])
         node, distance = leg['originNodeId'], 0.0
         for link_id, target in route:
             link = road[link_id]
@@ -75,7 +81,8 @@ def validate(args):
             else:
                 assert leg['kind'] == 'TransitLeg'
                 mode = leg['mode']
-                length = shortest(road if mode == 'Bus' else rail, leg['boardingStop']['nodeId'], leg['alightingStop']['nodeId'])
+                length = shortest_distance(road if mode == 'Bus' else rail, leg['boardingStop']['nodeId'],
+                    leg['alightingStop']['nodeId'], movements if mode == 'Bus' else None)
                 start = next(ride_starts)
                 assert start['mode'] == mode and start['line'] == leg['line'] and start['tick'] == tick
                 ride = next(rides)
@@ -112,6 +119,24 @@ def validate(args):
     micro_exits = [r for r in events('leave_micro_link') if str(r.get('bus_id')) in bus_ids]
     if any(link['simulationMode'] == 'MICRO' for link in road.values()):
         assert micro_entries and micro_exits, 'MICRO Bus did not traverse infrastructure'
+    connector_ids = {link_id for link_id, link in road.items() if link.get('junctionGeometry')}
+    connector_entries = [r for r in micro_entries if r['link_id'] in connector_ids]
+    connector_exits = [r for r in micro_exits if r['link_id'] in connector_ids]
+    if connector_ids:
+        assert {r['link_id'] for r in connector_entries} == connector_ids, 'Bus skipped a junction movement'
+        assert len(connector_exits) >= 2 * len(connector_ids), 'Bus did not repeat its cyclic junction route'
+        for bus in bus_ids:
+            sequence = [r for r in micro_entries if str(r['bus_id']) == bus]
+            for i, entry in enumerate(sequence):
+                geometry = road[entry['link_id']].get('junctionGeometry')
+                if geometry:
+                    assert i > 0 and sequence[i-1]['link_id'] == geometry['incomingLinkId']
+                    if i+1 < len(sequence):
+                        assert sequence[i+1]['link_id'] == geometry['outgoingLinkId'], 'connector advanced the Bus route cursor'
+        admitted = Counter((str(r['vehicle_id']), r['connector_link_id'], r['tick'])
+                           for r in events('junction_connector_admitted') if str(r['vehicle_id']) in bus_ids)
+        entered = Counter((str(r['bus_id']), r['link_id'], r['tick']) for r in connector_entries)
+        assert admitted == entered, 'connector grant/entry multiplicity'
     assert not events('person_trip_aborted') and not events('person_pt_replanned') and not events('person_pt_replan_failed')
     log = args.log.read_text(errors='replace')
     for marker in ('[ERROR]', '[RUNTIME-FAILED]', '[SIMULATION-FAILED]', '[STALL', '[GTM-STALL]', '[RUNTIME-STALL]',
@@ -126,6 +151,7 @@ def validate(args):
                 walkingDistance=sum(r['distance'] for r in events('person_walking_completed')),
                 dailySummaries=len(events('person_schedule_complete')), boardings=dict(expected_modes),
                 microBusEntries=len(micro_entries), microBusExits=len(micro_exits),
+                junctionBusEntries=len(connector_entries), junctionBusExits=len(connector_exits),
                 physicalRows=len(rows), rollbacks=log.count('[TW-ROLLBACK]'), engineStopped=True)
 
 

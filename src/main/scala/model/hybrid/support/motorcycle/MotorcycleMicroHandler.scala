@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.motorcycle
 
 import core.types.Tick
+import model.hybrid.entity.state.model.JunctionGeometry
 import org.interscity.htc.model.hybrid.entity.event.data.{
   MicroEnterLinkData,
   MicroLeaveLinkData,
@@ -86,7 +87,7 @@ class MotorcycleMicroHandler(
         "link_length"     -> data.linkLength,
         "initial_velocity" -> initialMicroState.velocity,
         "tick"            -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -126,7 +127,7 @@ class MotorcycleMicroHandler(
             "lane"          -> data.currentLane,
             "sub_tick"      -> data.subTick,
             "tick"          -> currentTickFn()
-          ),
+          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -155,7 +156,7 @@ class MotorcycleMicroHandler(
         "average_speed"     -> data.averageSpeed,
         "total_distance"    -> state.distance,
         "tick"              -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

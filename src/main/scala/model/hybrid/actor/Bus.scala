@@ -69,6 +69,8 @@ class Bus(
     copied.movableReachedDestination = s.movableReachedDestination
     copied.movableLinkExitReported = s.movableLinkExitReported
     copied.movablePendingRouteQuery = s.movablePendingRouteQuery
+    copied.movablePendingJunctionPath = s.movablePendingJunctionPath
+    copied.movableCurrentPathIsJunction = s.movableCurrentPathIsJunction
     copied
   }
 
@@ -492,7 +494,7 @@ class Bus(
     mesoExitTick = None
     signalWaitUntilTick = None
     signalWaitNeedsReverify = false
-    currentStopNode = state.currentPath.map(_._2)
+    currentStopNode = if (state.movableCurrentPathIsJunction) None else state.currentPath.map(_._2)
     state.status = Ready
     super.leavingLink()
   }

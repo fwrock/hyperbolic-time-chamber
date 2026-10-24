@@ -49,6 +49,8 @@ class Car(
     copied.movableReachedDestination = s.movableReachedDestination
     copied.movableLinkExitReported   = s.movableLinkExitReported
     copied.movablePendingRouteQuery  = s.movablePendingRouteQuery
+    copied.movablePendingJunctionPath = s.movablePendingJunctionPath
+    copied.movableCurrentPathIsJunction = s.movableCurrentPathIsJunction
     copied
   }
 
@@ -266,6 +268,8 @@ class Car(
     */
   override protected def resetTripState(): Unit = {
     if (state == null) return
+    state.movablePendingJunctionPath = None
+    state.movableCurrentPathIsJunction = false
     currentLinkId = None
     currentLinkLength = 0.0
     linkEntryTick = None

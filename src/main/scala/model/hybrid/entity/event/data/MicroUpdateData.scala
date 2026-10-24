@@ -36,5 +36,6 @@ case class MicroUpdateData(
   leaderVehicle: Option[Long],
   gapToLeader: Double,
   leaderVelocity: Double,
-  safeVelocity: Double
+  safeVelocity: Double,
+  junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None
 ) extends BaseEventData

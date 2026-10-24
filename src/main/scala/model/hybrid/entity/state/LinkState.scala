@@ -82,12 +82,21 @@ case class LinkState(
   @JsonDeserialize(keyAs = classOf[java.lang.Integer])
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
   laneConfigurations: List[LaneConfig] = List.empty,
-  metrics: LinkMetricsState = LinkMetricsState()
+  metrics: LinkMetricsState = LinkMetricsState(),
+  junctionGeometry: Option[model.JunctionGeometry] = None,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Double])
+  exitSpeedLimitsMps: Map[Long, Double] = Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
+  require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
+  junctionGeometry.foreach { geometry =>
+    require(from == geometry.nodeId && to == geometry.nodeId, "junction connector must stay at its node")
+    require(math.abs(length - geometry.lengthMeters) <= 1e-6, "junction link length must match geometry")
+    require(math.abs(speedLimit / 3.6 - geometry.speedLimitMps) <= 1e-6, "junction speed must match geometry")
+  }
 
   /** Check if link is in microscopic mode */
   def isMicroMode: Boolean = simulationMode == SimulationModeEnum.MICRO

@@ -26,5 +26,6 @@ case class LinkAccessData(
   nextTick: Tick,
   queuePosition: Int = 0,
   capacityState: LinkCapacityStateEnum = LinkCapacityStateEnum.Available,
-  requestSeq: Long = 0L
+  requestSeq: Long = 0L,
+  junctionLink: Option[model.hybrid.entity.state.model.PrecomputedRouteItem] = None
 ) extends BaseEventData

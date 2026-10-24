@@ -38,7 +38,8 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     signals: mutable.Map[Long, SignalState] = mutable.Map.empty,
     signalWaitingCounts: mutable.Map[Long, Int] = mutable.Map.empty,
     capacityWaitQueue: mutable.Map[Long, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty,
-    availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty
+    availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
+    junctionMovements: List[model.hybrid.entity.state.model.JunctionMovement] = Nil
   ): NodeState =
     NodeState(
       startTick = 0L,
@@ -50,7 +51,8 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       signals = signals,
       signalWaitingCounts = signalWaitingCounts,
       capacityWaitQueue = capacityWaitQueue,
-      availableCapacity = availableCapacity
+      availableCapacity = availableCapacity,
+      junctionMovements = junctionMovements
     )
 
   private def newHandler(
@@ -60,7 +62,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     val sent = mutable.ArrayBuffer.empty[(Long, String, AnyRef, String)]
     val handler = new NodeEventHandler(
       getStateFn = () => state,
-      entityIdFn = () => "htcaid:node;n_test",
+      entityIdFn = () => "2",
       currentTickFn = () => 100L,
       pendingSignals = mutable.Map.empty,
       reportFn = (_, _) => (),
@@ -93,6 +95,49 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     val (_, _, data, evType) = sent.head
     evType shouldBe "ReceiveLinkAccess"
     data shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+  }
+
+  it should "admit the selected connector before reserving the downstream road" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 1, 100L -> 1),
+      junctionMovements = List(model.hybrid.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 50))
+    sent.head._3 shouldBe LinkAccessData(Green, 100, requestSeq = 77,
+      junctionLink = Some(model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2)))
+    state.availableCapacity(700L) shouldBe 0
+    state.availableCapacity(100L) shouldBe 1
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 78),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 700))
+    sent.last._3 shouldBe LinkAccessData(Green, 100, requestSeq = 78)
+    state.availableCapacity(100L) shouldBe 0
+  }
+
+  it should "restore a connector wait and grant its original road request after space is freed" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 0, 100L -> 1),
+      junctionMovements = List(model.hybrid.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 50))
+    sent.head._3 shouldBe LinkAccessData(Green, 100, capacityState = Full, requestSeq = 77)
+    state.capacityWaitQueue(700L).head.targetLinkId shouldBe 100L
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    val (afterRestore, granted) = newHandler(restored)
+    afterRestore.handleLinkCapacityFreed(LinkCapacityFreedData(700, 1))
+    granted.head._3 shouldBe LinkAccessData(Green, 100, requestSeq = 77,
+      junctionLink = Some(model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2)))
+    restored.capacityWaitQueue shouldBe empty
+    restored.availableCapacity(100L) shouldBe 1
+  }
+
+  it should "cancel connector waits using the originally requested downstream road" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 0),
+      junctionMovements = List(model.hybrid.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, _) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(100, approachLinkId = 50))
+    state.capacityWaitQueue.keySet shouldBe Set(700L)
+    handler.handleCancelLinkAccessRequest(requestEvent(), CancelLinkAccessRequestData(100))
+    state.capacityWaitQueue shouldBe empty
   }
 
   it should "preserve MICRO crossing clearance when the node's phase changed after the physical crossing" in {

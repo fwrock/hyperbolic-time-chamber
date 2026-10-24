@@ -133,7 +133,8 @@ class LinkMicroSimulationHandler(
         travelTime         = elapsedTicks,
         distanceTraveled   = state.length,
         averageSpeed       = avgSpeed,
-        waitingTimeSeconds = accWaiting
+        waitingTimeSeconds = accWaiting,
+        junctionPosition = state.junctionGeometry.map(_.positionAt(update.position))
       ),
       "MicroLeaveLink"
     )
@@ -155,7 +156,8 @@ class LinkMicroSimulationHandler(
         leaderVehicle  = update.leaderVehicle,
         gapToLeader    = update.gapToLeader,
         leaderVelocity = update.leaderVelocity,
-        safeVelocity   = update.safeVelocity
+        safeVelocity   = update.safeVelocity,
+        junctionPosition = getLinkStateFn().junctionGeometry.map(_.positionAt(update.position))
       ),
       "MicroUpdate"
     )
