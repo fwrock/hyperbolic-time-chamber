@@ -4,6 +4,34 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Cross-JVM policy follow-up (2026-10-24)
+
+The separate-JVM campaign exposed gaps hidden by one-process tests: Kryo implicit
+numeric IDs could not be decoded by a cold peer, Class constructor arguments fell
+through to disabled Java serialization, and LTM Props captured creator closures.
+Production codecs now retain ordered explicit IDs and use class names for unlisted
+types; remote LTM construction uses class/argument Props. Independent-codec tests
+reproduce all three failures on the previous implementation.
+
+Transit also exposed process-local settings installed only by SimulationManager's
+singleton. Remote Persons had no RAPTOR routes and silently skipped their Bus leg.
+Each node now installs scenario resource settings before shard creation. Startup
+warm-up now dispatches on worker readiness rather than a one-time pool broadcast;
+the late-input case reproduced a remote worker missing that broadcast and leaving
+startup waiting indefinitely. Unique ACKs, node identity, worker loss/restart and
+target failure are checked explicitly.
+
+The full suite passes **582 tests across 124 suites**. Ten successful two-JVM
+scenario runs (including delayed TCP) match physical expectations and references;
+two worker-loss checks explicitly fail without successful completion. Fifteen
+full report comparisons match. See the
+[cross-JVM validation record](MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) for physical
+outcomes, reference comparisons, delayed transport, worker-loss evidence and exact
+artifact identity. These are bounded loopback JVM checks; multi-host partitions,
+coordinated recovery, migration, live distributed API settings, shared speculative
+feedback and scale validation remain open. Earlier one-JVM records retain their
+original scope.
+
 ## Accounted model-created birth follow-up (2026-10-24)
 
 Both production policies now support one deterministic unique logical birth slot
@@ -23,7 +51,7 @@ The Bus cyclic next-link peek now follows its actual route cursor for capacity a
 signal checks. These defects affected independent outcomes, so mere engine completion
 or policy parity was insufficient acceptance.
 
-The latest build passes **571 tests across 121 suites**. Eight transit cases
+The actor-birth milestone build passed **571 tests across 121 suites**. Eight transit cases
 (MESO, MICRO, late input and multiple births under both policies) and four car
 regressions pass, with six matching full physical-report comparisons. Cyclic
 services explicitly truncate at the horizon. A MESO bus whose next wake is beyond

@@ -43,6 +43,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
   private var eligible = Set.empty[ActorRef]
   private var snapshots = Map.empty[ActorRef, RuntimeSnapshot]
   private var transfers = 0L
+  private var crossOwnerTransfers = 0L
   private var receipts = 0L
   private var retiringFinal = false
   private var limits = OptimisticExecutionLimits()
@@ -89,6 +90,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         require(sender() == global && epoch.isEmpty && members.contains(self), "invalid membership")
         epoch = run
         managers = members
+        logInfo(s"[RUNTIME-MEMBERSHIP] policy=time-warp owner=${self.path} workers=${members.size}")
       }
       case RegisterLocalProcess(run, join) => protect {
         checkEpoch(run)
@@ -177,6 +179,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
           val destination = owner(target)
           outgoing(id) = destination
           transfers += 1L
+          if (destination != self) crossOwnerTransfers += 1L
           transferTo(destination, OptimisticTransfer(epoch, id, target, event))
         }
       }
@@ -364,7 +367,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
     phase = if (retiringFinal) Stopped else Paused
     if (retiringFinal) isStopped = true
     global ! LocalProcessesRetired(round)
-    logInfo(s"[LTM-ACCOUNTING] round=$round transfers=$transfers receipts=$receipts outgoing=${outgoing.size} accepting=${accepting.size}")
+    logInfo(s"[LTM-ACCOUNTING] round=$round transfers=$transfers receipts=$receipts outgoing=${outgoing.size} accepting=${accepting.size} crossOwnerTransfers=$crossOwnerTransfers")
   }
   override protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit = {
     require(phase == Running && tick <= horizon, "dispatch outside execution")
@@ -374,5 +377,5 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
 
 object AccountedOptimisticLocalTimeManager {
   def props(duration: Tick, manager: ActorRef, global: ActorRef): Props =
-    Props(new AccountedOptimisticLocalTimeManager(duration, manager, global))
+    Props(classOf[AccountedOptimisticLocalTimeManager], Long.box(duration), manager, global)
 }

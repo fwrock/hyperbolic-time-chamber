@@ -35,6 +35,9 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var members = Vector.empty[ActorRef]
   private var epoch = ""
   private var token = 0L
+  private var transfers = 0L
+  private var receipts = 0L
+  private var crossOwnerTransfers = 0L
   private var handle = 0L
   private var batch: Option[ExecuteConservativeBatch] = None
   private var preparing = false
@@ -79,6 +82,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       require(event.managers.contains(self), "worker omitted from membership")
       epoch = event.epoch
       members = event.managers
+      logInfo(s"[RUNTIME-MEMBERSHIP] policy=discrete-event owner=${self.path} workers=${members.size}")
     }
     case RegisterConservativeProcess(run, authority, join) => protect {
       checkEpoch(run)
@@ -124,6 +128,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       val id = nextToken()
       val destination = owner(target)
       outgoing(id) = destination
+      transfers += 1L
+      if (destination != self) crossOwnerTransfers += 1L
       transferTo(destination, ConservativeTransfer(epoch, id, target, event))
     }
     case event: ConservativeTransfer => protect {
@@ -161,6 +167,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     case ConservativeTransferAccepted(run, id) => protect {
       checkEpoch(run)
       require(outgoing.remove(id).contains(sender()), "wrong channel acknowledgement")
+      receipts += 1L
       completeBatch()
     }
     case RouteControl(run, target, control, _) => protect {
@@ -283,6 +290,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     target ! ConservativeReady(round, next, blockedProcesses.size + runningEvents.size)
   }
   private def completeStop(): Unit = if (stopping.nonEmpty && retirements.isEmpty) {
+    logInfo(s"[CONSERVATIVE-ACCOUNTING] round=${stopping.get.round} transfers=$transfers receipts=$receipts outgoing=${outgoing.size} accepting=${accepting.size} crossOwnerTransfers=$crossOwnerTransfers")
     coordinator ! ConservativeRuntimeStopped(stopping.get.round, sinks.toSet)
   }
 
@@ -310,5 +318,5 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
 
 object ChannelAwareLocalTimeManager {
   def props(duration: Tick, manager: ActorRef, coordinator: ActorRef): Props =
-    Props(new ChannelAwareLocalTimeManager(duration, manager, coordinator))
+    Props(classOf[ChannelAwareLocalTimeManager], Long.box(duration), manager, coordinator)
 }

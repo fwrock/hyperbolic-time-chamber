@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Run a bounded HTC scenario in separate JVMs, optionally delaying TCP or killing a worker.
+
+This records evidence; outcome acceptance still requires a model-specific validator.
+Use a fresh output directory. Paths in the scenario must be available to every JVM.
+"""
+import argparse
+import asyncio
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import threading
+import time
+
+
+class DelayedTransport:
+    def __init__(self, advertised, bound, delay_ms):
+        self.advertised, self.bound = advertised, bound
+        self.delay = delay_ms / 1000
+        self.ready = threading.Event()
+        self.stopping = threading.Event()
+        self.error = None
+        self.connections = self.chunks = self.bytes = 0
+        self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def run(self):
+        try:
+            asyncio.run(self.serve())
+        except Exception as error:
+            self.error = error
+            self.ready.set()
+
+    async def serve(self):
+        servers = []
+        try:
+            for advertised, bound in zip(self.advertised, self.bound):
+                async def relay(reader, writer, destination=bound):
+                    upstream = None
+                    try:
+                        other_reader, upstream = await asyncio.open_connection("127.0.0.1", destination)
+                        self.connections += 1
+
+                        async def pump(source, target):
+                            while data := await source.read(65536):
+                                await asyncio.sleep(self.delay)
+                                target.write(data)
+                                await target.drain()
+                                self.chunks += 1
+                                self.bytes += len(data)
+                            if target.can_write_eof():
+                                target.write_eof()
+
+                        await asyncio.gather(pump(reader, upstream), pump(other_reader, writer))
+                    except (ConnectionError, OSError):
+                        pass
+                    finally:
+                        writer.close()
+                        if upstream is not None:
+                            upstream.close()
+
+                servers.append(await asyncio.start_server(relay, "127.0.0.1", advertised))
+            self.ready.set()
+            while not self.stopping.is_set():
+                await asyncio.sleep(.05)
+        finally:
+            for server in servers:
+                server.close()
+                await server.wait_closed()
+
+    def start(self):
+        self.thread.start()
+        if not self.ready.wait(5):
+            raise RuntimeError("TCP relays did not start")
+        if self.error:
+            raise self.error
+
+    def stop(self):
+        self.stopping.set()
+        if self.thread.is_alive():
+            self.thread.join(5)
+
+
+def run(args):
+    root = args.output.resolve()
+    root.mkdir(parents=True, exist_ok=False)
+    jar, scenario = args.jar.resolve(), args.simulation.resolve()
+    configuration = json.loads(scenario.read_text())
+    city_map = Path(configuration["cityMapFile"])
+    if not city_map.is_absolute():
+        city_map = scenario.parent / city_map
+    ports = [args.base_port + i for i in range(args.nodes)]
+    bound = [port + 100 for port in ports] if args.delay_ms else ports
+    relay = DelayedTransport(ports, bound, args.delay_ms) if args.delay_ms else None
+    processes, streams, runtime_logs = [], [], []
+    stopped = failed = killed = False
+    kill_elapsed = None
+    started = time.monotonic()
+    extra = args.extra_config.read_text() if args.extra_config else ""
+    try:
+        if relay:
+            relay.start()
+        for index, port in enumerate(ports):
+            node = root / f"node-{index}"
+            node.mkdir()
+            config = f'''include classpath("application.conf")
+clustering.ip="127.0.0.1"
+clustering.port={port}
+clustering.seed-ip="127.0.0.1"
+clustering.seed-port={ports[0]}
+clustering.management-http-port={args.base_port + 10 + index}
+pekko.management.http.port={args.base_port + 10 + index}
+pekko.remote.artery.bind.hostname="127.0.0.1"
+pekko.remote.artery.bind.port={bound[index]}
+pekko.cluster.min-nr-of-members={args.nodes}
+htc.api.enabled=false
+htc.routing.cache-strategy="disabled"
+htc.time-manager.total-instances={args.nodes}
+htc.time-manager.max-instances-per-node=1
+htc.report-manager.enabled-strategies=["json"]
+htc.report-manager.default-strategy="json"
+htc.report-manager.json.directory={json.dumps(str(root / "reports"))}
+htc.report-manager.json.number-of-instances=1
+htc.report-manager.json.number-of-instances-per-node=1
+htc.report-manager.json.batch-size=1
+{extra}
+'''
+            (node / "run.conf").write_text(config)
+            env = dict(os.environ, HTC_METRICS_PORT=str(args.base_port + 20 + index),
+                       HTC_SIMULATION_CONFIG_FILE=str(scenario), HTC_MOBILITY_CITY_MAP_FILE=str(city_map))
+            command = ["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "-Xms128m", "-Xmx2g",
+                       "-XX:ActiveProcessorCount=4", "-Dconfig.file=" + str(node / "run.conf"), "-jar", str(jar)]
+            (node / "command.json").write_text(json.dumps(command, indent=2) + "\n")
+            stream = (node / "run.log").open("w")
+            streams.append(stream)
+            processes.append(subprocess.Popen(command, env=env, stdout=stream, stderr=subprocess.STDOUT))
+            if index == 0 and args.nodes > 1:
+                time.sleep(.4)
+
+        def logs():
+            return [(root / f"node-{i}/run.log").read_text(errors="replace") for i in range(args.nodes)]
+
+        while time.monotonic() - started < args.timeout:
+            runtime_logs = logs()
+            stopped = any("Received StopSimulationEvent. Flushing/stopping reporters" in log for log in runtime_logs)
+            failed = any("[RUNTIME-FAILED]" in log or "[SIMULATION-FAILED]" in log for log in runtime_logs)
+            if stopped or failed:
+                time.sleep(2)
+                break
+            if args.kill_node is not None and not killed and any(args.kill_after in log for log in runtime_logs):
+                processes[args.kill_node].kill()
+                killed = True
+                kill_elapsed = round(time.monotonic() - started, 3)
+            if any(proc.poll() is not None for i, proc in enumerate(processes)
+                   if not (killed and i == args.kill_node)):
+                break
+            if relay and relay.error:
+                raise relay.error
+            time.sleep(.1)
+        runtime_logs = logs()
+        for index, log in enumerate(runtime_logs):
+            (root / f"node-{index}/runtime.log").write_text(log)
+        # Keep lifecycle teardown out of execution acceptance while retaining full raw logs.
+        (root / "runtime.log").write_text("\n".join(runtime_logs))
+    finally:
+        for proc in processes:
+            if proc.poll() is None:
+                proc.terminate()
+        deadline = time.monotonic() + 5
+        for proc in processes:
+            try:
+                proc.wait(timeout=max(.1, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        for stream in streams:
+            stream.close()
+        if relay:
+            relay.stop()
+
+    with jar.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    result = dict(jar=str(jar), jarSha256=digest, simulationFile=str(scenario),
+                  policy=configuration["timeManagerType"], nodes=args.nodes,
+                  localTimeManagersPerNode=1, advertisedPorts=ports, bindPorts=bound,
+                  engineReportedStop=stopped, runtimeFailed=failed,
+                  faultInjected=killed, killNode=args.kill_node, killAfter=args.kill_after,
+                  killElapsedSeconds=kill_elapsed, delayMsPerRead=args.delay_ms,
+                  elapsedSeconds=round(time.monotonic() - started, 2),
+                  returncodes=[proc.returncode for proc in processes])
+    if relay:
+        result["relay"] = dict(connections=relay.connections, chunks=relay.chunks, bytes=relay.bytes)
+    (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result, indent=2))
+    if args.kill_node is not None:
+        return 0 if killed and failed and not stopped else 1
+    return 0 if stopped and not failed else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--jar", type=Path, required=True)
+    parser.add_argument("--simulation", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--base-port", type=int, required=True)
+    parser.add_argument("--nodes", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument("--delay-ms", type=float, default=0)
+    parser.add_argument("--kill-node", type=int, choices=(1,))
+    parser.add_argument("--kill-after", default="[ACCOUNTED-GVT] round=1 ")
+    parser.add_argument("--extra-config", type=Path)
+    args = parser.parse_args()
+    if not (1024 <= args.base_port <= 65300) or args.delay_ms < 0 or args.timeout <= 0:
+        parser.error("invalid port, delay or timeout")
+    if args.kill_node is not None and args.nodes != 2:
+        parser.error("worker-loss injection requires two JVMs")
+    return run(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

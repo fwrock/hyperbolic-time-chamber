@@ -125,3 +125,13 @@ ledger sizes. `[ACCOUNTED-ROUND]` records freeze, snapshot, commit and retiremen
 durations in nanoseconds. These permit measuring coordination costs independently
 of heartbeat intervals and cluster startup. Model messages and their ACKs must not
 appear in the GTM's routing path.
+
+## Cross-JVM follow-up (2026-10-24)
+
+The [two-JVM validation](MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) exercises real
+Artery transport with one owner per process. Independent cold codecs now cover
+unlisted classes; pool workers use explicit class constructors. Each node installs
+its own immutable scenario resource settings before shard initialization, and
+warm-up workers acknowledge readiness before receiving targets. The record keeps
+multi-host partitions, recovery/migration, distributed live API updates and capacity
+claims separate from this bounded validation.

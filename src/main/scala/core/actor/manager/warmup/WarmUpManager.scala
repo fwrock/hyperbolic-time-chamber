@@ -3,85 +3,87 @@ package core.actor.manager.warmup
 
 import core.actor.manager.BaseManager
 import core.api.SimulatorSettingsRegistry
-import core.entity.event.control.warmup.{
-  StartWarmUpWorkersEvent,
-  WarmUpAllDoneEvent,
-  WarmUpWorkerDoneEvent
-}
+import core.entity.event.control.warmup.{StartWarmUpWorkersEvent, WarmUpAllDoneEvent, WarmUpWorkerDoneEvent, WarmUpWorkerReadyEvent}
 import core.entity.state.DefaultState
+import core.runtime.accounting.RuntimeFailure
 import core.util.ManagerConstantsUtil.WARM_UP_MANAGER_ACTOR_NAME
-
-import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
-import org.apache.pekko.routing.{ Broadcast, RoundRobinPool }
+import org.apache.pekko.actor.{ActorRef, Props, Terminated}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
+import scala.collection.mutable
+import scala.util.control.NonFatal
 
-/** Cluster-singleton manager that orchestrates distributed JVM warm-up before simulation ticks.
-  *
-  * Protocol:
-  *   1. SimulationManager creates WarmUpManager (via createSingletonManager) and sends
-  *      [[StartWarmUpWorkersEvent]] with the list of targets.
-  *   2. WarmUpManager broadcasts [[StartWarmUpWorkersEvent]] to all [[WarmUpWorker]] routees
-  *      (one per cluster node, running on io-dispatcher).
-  *   3. Each worker invokes its targets locally (blocking the io-dispatcher thread).
-  *   4. Each worker replies with [[WarmUpWorkerDoneEvent]].
-  *   5. When all expected workers have replied, WarmUpManager sends [[WarmUpAllDoneEvent]]
-  *      to simulationManager so simulation ticks can start.
-  */
-class WarmUpManager(
-  val simulationManager: ActorRef,
-  val expectedWorkers: Int
-) extends BaseManager[DefaultState](
-      actorId = WARM_UP_MANAGER_ACTOR_NAME,
-      timeManager = null
-    ) {
+/** Pool creation is asynchronous: target dispatch follows each worker's ready handshake. */
+class WarmUpManager(val simulationManager: ActorRef, val expectedWorkers: Int)
+  extends BaseManager[DefaultState](actorId = WARM_UP_MANAGER_ACTOR_NAME, timeManager = null) {
+  private val workers = mutable.Map.empty[ActorRef, String]
+  private val issued = mutable.Set.empty[ActorRef]
+  private val done = mutable.Set.empty[ActorRef]
+  private var targets: Option[List[String]] = None
+  private var completed = false
+  private var failed = false
 
-  private var workersPool: ActorRef = _
-  private var pendingWorkers: Int   = 0
-  private var targets: List[String] = Nil
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    simulationManager ! RuntimeFailure(s"warm-up manager restarted: ${reason.getMessage}")
+    super.preRestart(reason, message)
+  }
 
   override def onStart(): Unit = {
-    val config             = context.system.settings.config
-    val maxInstancesPerNode = SimulatorSettingsRegistry
-      .getInt("htc.warmup.max-workers-per-node", config)
+    require(expectedWorkers > 0, "warm-up needs at least one worker")
+    val perNode = SimulatorSettingsRegistry.getInt("htc.warmup.max-workers-per-node", context.system.settings.config)
+    context.actorOf(ClusterRouterPool(RoundRobinPool(0), ClusterRouterPoolSettings(
+      totalInstances = expectedWorkers, maxInstancesPerNode = perNode, allowLocalRoutees = true
+    )).props(WarmUpWorker.props(self)), name = "warm-up-worker-pool")
+  }
 
-    workersPool = context.actorOf(
-      ClusterRouterPool(
-        RoundRobinPool(0),
-        ClusterRouterPoolSettings(
-          totalInstances      = expectedWorkers,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees   = true
-        )
-      ).props(WarmUpWorker.props),
-      name = "warm-up-worker-pool"
-    )
+  private def fail(reason: String): Unit = if (!failed && !completed) {
+    failed = true
+    simulationManager ! RuntimeFailure(s"warm-up failed: $reason")
+  }
+  private def protect(body: => Unit): Unit = try body catch { case NonFatal(e) => fail(e.getMessage) }
+  private def dispatch(worker: ActorRef): Unit = targets.foreach { values =>
+    if (issued.add(worker)) worker ! StartWarmUpWorkersEvent(values)
   }
 
   override def handleEvent: Receive = {
-    case StartWarmUpWorkersEvent(t) =>
-      targets        = t
-      pendingWorkers = expectedWorkers
-      logInfo(
-        s"[WarmUpManager] Broadcasting warm-up to $pendingWorkers worker(s), targets=$targets"
-      )
-      workersPool ! Broadcast(StartWarmUpWorkersEvent(targets))
-
-    case WarmUpWorkerDoneEvent(address) =>
-      pendingWorkers -= 1
-      logInfo(
-        s"[WarmUpManager] Worker done: $address ($pendingWorkers remaining)"
-      )
-      if (pendingWorkers <= 0) {
-        logInfo("[WarmUpManager] All workers complete — notifying SimulationManager")
-        simulationManager ! WarmUpAllDoneEvent()
-      }
-
     case _: StopSimulationEvent => selfDestruct()
+    case _ if failed || completed => ()
+    case StartWarmUpWorkersEvent(values) => protect {
+      require(targets.forall(_ == values), "warm-up targets changed during startup")
+      targets = Some(values)
+      workers.keys.foreach(dispatch)
+    }
+    case WarmUpWorkerReadyEvent(address) => protect {
+      require(address.nonEmpty, "worker has no node address")
+      workers.get(sender()) match {
+        case Some(existing) => require(existing == address, "worker changed node address")
+        case None =>
+          require(workers.size < expectedWorkers && !workers.valuesIterator.contains(address),
+            "duplicate or unexpected warm-up node")
+          workers(sender()) = address
+          context.watch(sender())
+          logInfo(s"[WarmUpManager] Worker ready: $address (${workers.size}/$expectedWorkers)")
+      }
+      dispatch(sender())
+    }
+    case WarmUpWorkerDoneEvent(address) => protect {
+      require(workers.get(sender()).contains(address) && issued.contains(sender()), "unannounced warm-up completion")
+      if (done.add(sender())) {
+        logInfo(s"[WarmUpManager] Worker done: $address (${expectedWorkers - done.size} remaining)")
+        if (done.size == expectedWorkers) {
+          completed = true
+          workers.keys.foreach(context.unwatch)
+          simulationManager ! WarmUpAllDoneEvent()
+        }
+      }
+    }
+    case Terminated(ref) if workers.contains(ref) => fail(s"worker lost: $ref")
+    case RuntimeFailure(reason) if workers.contains(sender()) => fail(reason)
   }
 }
 
 object WarmUpManager {
   def props(simulationManager: ActorRef, expectedWorkers: Int): Props =
-    Props(new WarmUpManager(simulationManager, expectedWorkers))
+    Props(classOf[WarmUpManager], simulationManager, Int.box(expectedWorkers))
 }

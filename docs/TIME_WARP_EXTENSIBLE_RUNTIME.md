@@ -67,7 +67,7 @@ serialization, process isolation, and cluster membership behavior.
 | 3 | Require report receipt and sink drain before successful conservative completion. | Implemented in the production conservative path. | Protocol tests delay report receipt and final flush independently; completion waits for both. Real Kafka/ClickHouse and crash-retry durability remain unvalidated. |
 | 4 | Reclaim committed history/read journals/identities and bound speculative execution. | Implemented in the production optimistic path: tick window, event/turn budgets and strict-boundary fossil collection. Hard heap limits and city-scale capacity remain open. | Long counter regression retains bounded records; cancellation exactly at GVT survives. See BOUNDED_OPTIMISTIC_VALIDATION_2026_10_23.md for narrow-window mobility and retained-record measurements. |
 | 5 | Implement accounted model-caused actor birth and its descendant effects; make it reversible in optimistic runs. | Implemented for one deterministic unique logical birth slot per child ID, with ordinary positive/anti cancellation and dormant retirement. | Birth/freeze ordering, cancellation before/after activation, descendant rollback, replay, selected-policy inheritance and retirement-fence regressions; see RUNTIME_ACTOR_BIRTH_VALIDATION_2026_10_24.md for transit scenario evidence. |
-| 6 | Verify the runtime across multiple JVMs/nodes under delayed and reordered transport. | Validation gap; both policies. | Repeat the sequential-reference cases over remoting, check all protocol serializers and identities, and demonstrate explicit failure on participant loss. |
+| 6 | Verify the runtime across multiple JVMs/nodes under delayed and reordered transport. | Bounded two-JVM loopback validation; multi-host/partition coverage remains open for both policies. | See MULTI_JVM_POLICY_VALIDATION_2026_10_24.md for cold-codec regressions, real Artery transport, physical references and registered-worker loss. This is not coordinated recovery or scale certification. |
 | 7 | Provide coordinated recovery, supported migration, and durable effect retry/deduplication. | Unsupported fault-tolerance features; especially optimistic histories and commitment. | Recover a consistent distributed state with channels, histories, schedules, membership, and committed effects preserved; an independent actor restart is insufficient. |
 | 8 | Bound and measure distributed optimistic execution, then replace paused global cuts if necessary. | Performance/architecture work; optimistic. Per-message ledgers are now LTM-owned. | Preserve safety tests; measure throughput, pause costs and retained memory before selecting a nonblocking GVT algorithm. Distributed routing alone is not a scale claim. |
 
@@ -479,7 +479,8 @@ strict report commitment, and reversible terminal intent. The implementation use
 No mobility imports were added to core. Model validation rejects unsupported effects
 before registration, and model snapshot/read hooks remain the adaptation boundary.
 
-Stage 3 still requires a multi-node transport campaign. Stage 4 now has cancellable
+Stage 3 now has a bounded [two-JVM campaign](MULTI_JVM_POLICY_VALIDATION_2026_10_24.md);
+multi-host partition coverage remains open. Stage 4 now has cancellable
 model birth under the restricted identity contract in RUNTIME_ACTOR_BIRTH.md;
 timestamped feedback and real Kafka/ClickHouse integration tests remain open. Conservative closure and sink drain now have their own
 [distributed LTM protocol](CONSERVATIVE_CHANNEL_RUNTIME.md); they do not use
