@@ -234,6 +234,7 @@ abstract class Movable[T <: MovableState](
     CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
 
   protected def microEntryVelocity: Double = 0.0
+  protected def microEntryRemainderSeconds: Double = 0.0
 
   protected def enterLink(): Unit = {
     if (state.movableCurrentPath.isEmpty) {
@@ -264,7 +265,8 @@ abstract class Movable[T <: MovableState](
                 actorSize = state.size,
                 actorCreationType = LoadBalancedDistributed,
                 initialVelocity = microEntryVelocity,
-                nextLinkId = getNextLink
+                nextLinkId = getNextLink,
+                initialRemainderSeconds = microEntryRemainderSeconds
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed

@@ -130,11 +130,12 @@ class LinkMicroSimulationHandler(
         linkId             = entityIdFn().toLong,
         finalPosition      = update.position,
         finalVelocity      = update.velocity,
-        travelTime         = elapsedTicks,
+        travelTime         = elapsedTicks * secondsPerGlobalTick,
         distanceTraveled   = state.length,
         averageSpeed       = avgSpeed,
         waitingTimeSeconds = accWaiting,
-        junctionPosition = state.junctionGeometry.map(_.positionAt(update.position))
+        junctionPosition = state.junctionGeometry.map(_.positionAt(update.position)),
+        remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0
       ),
       "MicroLeaveLink"
     )

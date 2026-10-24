@@ -50,7 +50,8 @@ object SimulationUtil {
   }
 
   private[util] def localScenarioSettings(configuration: Simulation): Map[String, String] =
-    Map("htc.simulation.duration" -> configuration.duration.toString) ++
+    Map("htc.simulation.duration" -> configuration.duration.toString,
+      SimulationClock.Setting -> SimulationClock.validateScenario(configuration).secondsPerTick.toString) ++
       configuration.cityMapFile.map("htc.mobility.city-map-file" -> _) ++
       configuration.transitMapFile.map("htc.mobility.transit-map-file" -> _) ++
       configuration.transitRoutesFile.map("htc.mobility.transit-routes-file" -> _)

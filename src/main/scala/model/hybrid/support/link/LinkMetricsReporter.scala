@@ -85,6 +85,7 @@ class LinkMetricsReporter(
 
   def emitSumoSummaryStep(tick: Tick): Unit = {
     val state   = getLinkStateFn()
+    val secondsPerTick = if (state.isMicroMode) state.microTimeStep * state.microTicksPerGlobalTick else 1.0
     val running = state.totalVehicles
     val halting = if (state.isMicroMode)
       state.vehiclesByLane.valuesIterator.map(_.count(_.velocity <= 0.1)).sum
@@ -97,7 +98,7 @@ class LinkMetricsReporter(
     val vehicleIds        = getRegisteredVehicleIdsFn().toVector
     val meanTravelTime =
       if (vehicleIds.nonEmpty)
-        vehicleIds.map(id => math.max(0L, tick - getVehicleEntryTickFn(id).getOrElse(tick)).toDouble).sum / vehicleIds.size
+        vehicleIds.map(id => math.max(0L, tick - getVehicleEntryTickFn(id).getOrElse(tick)).toDouble * secondsPerTick).sum / vehicleIds.size
       else 0.0
     val meanWaitingTime =
       if (vehicleIds.nonEmpty)
@@ -110,7 +111,7 @@ class LinkMetricsReporter(
         "scope"           -> "link",
         "link_id"         -> entityIdFn(),
         "mode"            -> state.simulationMode.toString,
-        "time"            -> tick,
+        "time"            -> (tick.toDouble * secondsPerTick),
         "loaded"          -> cumulativeLoadedVehicles,
         "inserted"        -> tickInserted,
         "running"         -> running,

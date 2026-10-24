@@ -20,5 +20,11 @@ case class CarJourneyState(
   var sumoCurrentMicroTimeStepSeconds: Double = 1.0,
   var sumoIsHalting: Boolean = false,
   var sumoRerouteNo: Int = 0,
-  var sumoTripInfoReported: Boolean = false
-)
+  var sumoTripInfoReported: Boolean = false,
+  var secondsPerTick: Double = 1.0,
+  var boundaryRemainderSeconds: Double = 0.0,
+  var boundaryExitTick: Option[Tick] = None
+) {
+  def entryRemainderAt(tick: Tick): Double =
+    if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0
+}

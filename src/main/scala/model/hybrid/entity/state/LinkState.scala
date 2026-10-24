@@ -85,13 +85,18 @@ case class LinkState(
   metrics: LinkMetricsState = LinkMetricsState(),
   junctionGeometry: Option[model.JunctionGeometry] = None,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Double])
-  exitSpeedLimitsMps: Map[Long, Double] = Map.empty
+  exitSpeedLimitsMps: Map[Long, Double] = Map.empty,
+  carryMicroRemainder: Boolean = false
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
+  require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "MICRO boundary remainder requires one physics step per runtime tick")
+  require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,
+    "MICRO remainder requires links longer than one speed-limit physics step")
   junctionGeometry.foreach { geometry =>
     require(from == geometry.nodeId && to == geometry.nodeId, "junction connector must stay at its node")
     require(math.abs(length - geometry.lengthMeters) <= 1e-6, "junction link length must match geometry")

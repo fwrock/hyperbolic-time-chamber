@@ -38,6 +38,7 @@ class CarJourneyReporter(
   private def journeyFinishedReported_=(value: Boolean): Unit = journeyStateFn().journeyFinishedReported = value
 
   def sumoDepartTick: Option[Tick] = journeyStateFn().sumoDepartTick
+  def secondsPerTick: Double = journeyStateFn().secondsPerTick
   def sumoDepartTick_=(value: Option[Tick]): Unit = journeyStateFn().sumoDepartTick = value
 
   def sumoDepartSpeed: Double = journeyStateFn().sumoDepartSpeed
@@ -99,6 +100,9 @@ class CarJourneyReporter(
     sumoIsHalting                   = false
     sumoRerouteNo                   = 0
     sumoTripInfoReported            = false
+    journeyStateFn().secondsPerTick = 1.0
+    journeyStateFn().boundaryRemainderSeconds = 0.0
+    journeyStateFn().boundaryExitTick = None
   }
 
   /** Explicit reset for callers discarding completion without restoring a state snapshot. */
@@ -208,10 +212,10 @@ class CarJourneyReporter(
     val origin        = tripOriginFn().getOrElse(state.origin)
     val plannedDepart = tripStartTickFn().getOrElse(state.startTick)
     val depart        = sumoDepartTick.getOrElse(plannedDepart)
-    val durationSecs  = math.max(0L, tick - depart).toDouble
+    val durationSecs  = math.max(0L, tick - depart).toDouble * secondsPerTick
     val timeLoss      = math.max(0.0, durationSecs - math.max(0.0, sumoIdealTravelTimeSeconds))
     val vaporized     = reason == "actor_destructed_before_completion"
-    val departDelay   = math.max(0L, depart - plannedDepart)
+    val departDelay   = math.max(0L, depart - plannedDepart).toDouble * secondsPerTick
 
     reportFn(
       Map(
@@ -223,8 +227,8 @@ class CarJourneyReporter(
         "destination"       -> destination,
         "final_node"        -> finalNode,
         "completion_reason" -> reason,
-        "depart"            -> depart,
-        "arrival"           -> tick,
+        "depart"            -> (depart.toDouble * secondsPerTick),
+        "arrival"           -> (tick.toDouble * secondsPerTick),
         "departLane"        -> sumoDepartLane.getOrElse(""),
         "departPos"         -> sumoDepartPos,
         "arrivalLane"       -> sumoArrivalLane.getOrElse(""),

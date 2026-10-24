@@ -13,7 +13,8 @@ object JourneyHorizonReporter {
     horizon: Tick,
     completedDistance: Double,
     activeLink: Option[Long],
-    reportFn: (Map[String, Any], String) => Unit
+    reportFn: (Map[String, Any], String) => Unit,
+    secondsPerTick: Double = 1.0
   ): Unit = {
     val common: Map[String, Any] = Map(
       "vehicle_id" -> vehicleId, s"${vehicleType}_id" -> vehicleId,
@@ -27,7 +28,8 @@ object JourneyHorizonReporter {
     // SUMO's -1 arrival denotes an unfinished trip; no position or partial-link distance is inferred.
     reportFn(common ++ Map(
       "event_type" -> "sumo_tripinfo", "vehicle_type" -> vehicleType, "vType" -> vehicleType,
-      "depart" -> departure, "arrival" -> -1L, "duration" -> math.max(0L, horizon - departure),
+      "depart" -> (departure.toDouble * secondsPerTick), "arrival" -> -1L,
+      "duration" -> (math.max(0L, horizon - departure).toDouble * secondsPerTick),
       "routeLength" -> completedDistance, "vaporized" -> false
     ), "sumo_tripinfo")
   }

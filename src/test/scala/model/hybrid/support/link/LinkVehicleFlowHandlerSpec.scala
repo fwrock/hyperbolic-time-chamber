@@ -281,4 +281,26 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
     restored.vehiclesByLane(0).head.exitSpeedLimitMps shouldBe Some(5.0)
   }
+
+  it should "acknowledge a safe physical remainder and retain it through a lane checkpoint" in {
+    val state = newMicroState("311", speedLimit = 36).copy(microTicksPerGlobalTick = 1, carryMicroRemainder = true)
+    val f = newFixture("311", state)
+    f.handler.handleEnterLinkMicro(event(1, "311"), enterData(1).copy(initialVelocity = 10, initialRemainderSeconds = 0.04))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    restored.vehiclesByLane(0).head.position shouldBe 0.4 +- 1e-9
+    f.sent.collectFirst { case d: model.hybrid.entity.event.data.MicroEnterLinkData => d.initialPosition }.get shouldBe 0.4 +- 1e-9
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "311"),
+      enterData(2).copy(initialVelocity = 10, initialRemainderSeconds = 0.2)))
+  }
+
+  it should "stop carried motion before a downstream rear bumper instead of inserting over it" in {
+    val state = newMicroState("312", speedLimit = 36).copy(microTicksPerGlobalTick = 1, carryMicroRemainder = true)
+      .initializeMicroLanes()
+    state.vehiclesByLane(0).enqueue(model.hybrid.entity.state.model.VehicleInLane(9, "cars", 6.7, 0, 0, 4.5))
+    val f = newFixture("312", state)
+    f.handler.handleEnterLinkMicro(event(1, "312"), enterData(1).copy(initialVelocity = 10, initialRemainderSeconds = 0.08))
+    val entered = f.getState().vehiclesByLane(0).find(_.actorId == 1).get
+    entered.position shouldBe 0.2 +- 1e-9
+    entered.velocity shouldBe 0.0
+  }
 }

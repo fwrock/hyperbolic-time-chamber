@@ -71,9 +71,18 @@ class Link(
       properties = properties
     ) {
 
-  override protected def validateRuntimeCapabilities(): Unit =
+  override protected def validateRuntimeCapabilities(): Unit = {
     model.hybrid.util.HybridRuntimeCapabilities.validateAccountedRouting(DynamicWeightCache.configuredStrategy,
       getCurrentTimeManagerType)
+    val clock = core.util.SimulationClock.current
+    if (clock.secondsPerTick != 1.0) {
+      require(state.isMicroMode, "fractional clocks require every road Link to use MICRO")
+      require(math.abs(state.microTimeStep * state.microTicksPerGlobalTick - clock.secondsPerTick) < 1e-9,
+        "Link physics interval must equal the scenario tickDuration")
+      require(DynamicWeightCache.configuredStrategy == "disabled",
+        "fractional clocks require disabled dynamic routing until routing cost units are adapted")
+    }
+  }
 
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
