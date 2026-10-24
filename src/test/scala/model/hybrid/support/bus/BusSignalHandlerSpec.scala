@@ -49,10 +49,12 @@ class BusSignalHandlerSpec extends AnyFlatSpec with Matchers {
     val outstanding = mutable.Map.empty[String, String]
     val consumed = mutable.ArrayBuffer.empty[String]
 
+    val journey = org.interscity.htc.model.hybrid.entity.state.BusJourneyState()
     val journeyReporter = new BusJourneyReporter(
       reportFn = (_, _) => (),
       entityIdFn = () => "htcaid:bus;bus_test",
-      currentTickFn = () => currentTick
+      currentTickFn = () => currentTick,
+      journeyStateFn = () => journey
     )
 
     val handler = new BusSignalHandler(

@@ -197,10 +197,31 @@ Reports commit strictly below GVT; completion waits for actual sink receipt and
 storage flush ACKs. The centralized coordinator remains only as a reference/test
 implementation; the production factory does not create it.
 
-The reference path requires fixed/preloaded LP membership and rejects independent
-restart/recovery. Models use `validateRuntimeCapabilities` to reject effects without
-an adapter. Hybrid shared routing feedback and live transit birth are currently
-rejected; static routing and preloaded cars/persons are validated. See
+Optimistic execution limits are fixed at startup: default 50 ticks ahead of GVT,
+256 uncommitted events per LP above GVT, and 64 inputs per actor turn. Work exactly
+at GVT and cancellations must remain executable. Only an authorized frozen commit
+can collect history; keep the checkpoint/replay prefix needed to cancel an event
+at GVT and reclaim identities strictly below it. Queued work constrains GVT;
+accepted dispatch slots waiting for a model reply do not pin it at their old tick.
+Reply counts still prevent settled completion and terminal retirement. See
+`docs/BOUNDED_OPTIMISTIC_EXECUTION.md`; these budgets are not a hard heap-byte cap.
+
+Production progressive JSON/SQLite input uses correlated windows. The accepted
+inclusive end caps execution; its successor constrains GVT until explicit producer
+closure. Enroll the next cohort only after committed retirement, with all owners
+paused and acknowledged. Initialization and ownership ACKs precede advancing the
+bound; the next fresh snapshot includes the new cohort. Never trust a requested
+horizon or a forwarded legacy EOF as accepted optimistic input. Actor timestamps
+below GVT fail. See `docs/PROGRESSIVE_OPTIMISTIC_RUNTIME.md`.
+
+The legacy reference path requires fixed/preloaded LP membership. Both paths reject
+independent restart/recovery. Models use `validateRuntimeCapabilities` to reject effects without
+an adapter. Hybrid shared routing feedback remains rejected. Model-created Bus/Subway
+birth uses an ordered positive/anti with a fixed unique birth slot; children remain
+inert until activation, and cancellation restores dormancy. The owning LTM accounts
+initialization; only the selected policy is inherited. Keep child behavior/reporting
+state checkpointed and retain it until GVT passes both birth and the monotone latest
+accepted-input fence. See `docs/RUNTIME_ACTOR_BIRTH.md`. Static routing is supported. See
 `docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md` for invariants, supported scope, and costs.
 
 ## Simulation Models

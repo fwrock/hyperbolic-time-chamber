@@ -3,6 +3,7 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegister, LinkMetricsState}
@@ -78,6 +79,7 @@ case class LinkState(
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,
+  @JsonDeserialize(keyAs = classOf[java.lang.Integer])
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
   laneConfigurations: List[LaneConfig] = List.empty,
   metrics: LinkMetricsState = LinkMetricsState()

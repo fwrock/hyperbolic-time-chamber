@@ -10,9 +10,11 @@ import org.htc.protobuf.core.entity.actor.Identify
 sealed trait RuntimeCommand
 
 final case class LogicalProcessId(model: String, id: Long)
-final case class JoinRuntime(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], startTick: Long = 0L, incarnation: String = "") extends RuntimeCommand
+final case class JoinRuntime(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], startTick: Long = 0L, incarnation: String = "",
+  birth: Option[RuntimeBirthOrigin] = None) extends RuntimeCommand
 final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef, distributed: Boolean = false) extends RuntimeCommand
 final case class SetRuntimeHorizon(horizon: Long) extends RuntimeCommand
+final case class SetOptimisticExecutionLimits(frontier: Long, ceiling: Long, limits: core.runtime.OptimisticExecutionLimits) extends RuntimeCommand
 final case class JoinRuntimeManager(ref: ActorRef) extends RuntimeCommand
 final case class RegisterOwnedProcess(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], logicalIdentity: Option[Identify] = None) extends RuntimeCommand
 final case class RouteInteraction(epoch: String, target: LogicalProcessId, event: ActorInteractionEvent) extends RuntimeCommand
@@ -23,7 +25,14 @@ final case class DeliveryAccepted(epoch: String, token: Long) extends RuntimeCom
 final case class FreezeRuntime(round: Long) extends RuntimeCommand
 final case class RuntimeFrozen(round: Long) extends RuntimeCommand
 final case class CollectRuntimeSnapshot(round: Long) extends RuntimeCommand
-final case class RuntimeSnapshot(round: Long, minimum: Option[Long], blocked: Int, callbacks: Int) extends RuntimeCommand
+final case class RuntimeRetention(checkpoints: Long = 0L, events: Long = 0L, reads: Long = 0L,
+  processedIds: Long = 0L, cancellations: Long = 0L, reports: Long = 0L, speculativeEvents: Long = 0L) {
+  def +(other: RuntimeRetention): RuntimeRetention = RuntimeRetention(checkpoints + other.checkpoints,
+    events + other.events, reads + other.reads, processedIds + other.processedIds,
+    cancellations + other.cancellations, reports + other.reports, speculativeEvents + other.speculativeEvents)
+}
+final case class RuntimeSnapshot(round: Long, minimum: Option[Long], blocked: Int, callbacks: Int,
+  queuedDispatches: Int = 0, retention: Option[RuntimeRetention] = None) extends RuntimeCommand
 final case class CommitRuntime(round: Long, gvt: Long) extends RuntimeCommand
 final case class RuntimeCommitted(round: Long, mayRetire: Boolean) extends RuntimeCommand
 final case class ResumeRuntime(round: Long) extends RuntimeCommand

@@ -295,6 +295,65 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     lp.underlyingActor.count shouldBe 1
   }
 
+  "a bounded distributed LP" should "apply tick/event budgets, accept cancellation at GVT and reclaim only strictly committed identities" in {
+    val global = TestProbe()
+    val owner = TestProbe()
+    val creator = TestProbe()
+    val sink = TestProbe()
+    val lp = TestActorRef(new LP(Properties(entityId = "108", actorType = CreationTypeEnum.PoolDistributed,
+      runtimeCoordinator = Some(global.ref), reporters = mutable.Map(ReportTypeEnum.parquet -> sink.ref),
+      timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> owner.ref)), finishOnEveryInput = false))
+    creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    lp ! InitializeEvent("108", creator.ref, InitializeData(RetirementState(), "test", creator.ref,
+      mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(TimeManagerTypeEnum.TIME_WARP -> owner.ref),
+      runtimeCoordinator = Some(global.ref)))
+    global.expectMsgType[JoinRuntime]
+    global.send(lp, RuntimeJoined("run", global.ref, owner.ref, distributed = true))
+    creator.expectMsgType[InitializeEntityAckEvent]
+    val limits = core.runtime.OptimisticExecutionLimits(2L, 2, 1, true)
+    owner.send(lp, SetRuntimeHorizon(100L))
+    owner.send(lp, SetOptimisticExecutionLimits(0L, 2L, limits))
+    def input(tick: Long) = ActorInteractionEvent(tick, 0L, 99L,
+      "example.Source", "", "example.Source", data = "observe", resourceId = "test", seq = tick,
+      order = Some(EventOrder.root(tick, "example.Source", 99L)))
+    for (tick <- 1L to 6L) {
+      owner.send(lp, RuntimeDelivery("run", tick, input(tick)))
+      owner.expectMsg(DeliveryAccepted("run", tick))
+    }
+    owner.send(lp, ResumeRuntime(0L))
+    owner.awaitAssert(lp.underlyingActor.count shouldBe 2)
+    owner.send(lp, FreezeRuntime(1L))
+    owner.expectMsg(RuntimeFrozen(1L))
+    owner.send(lp, SetOptimisticExecutionLimits(3L, 5L, limits))
+    owner.send(lp, CommitRuntime(1L, 3L))
+    owner.expectMsgType[PublishCommittedReport].event.tick shouldBe 1L
+    owner.expectMsgType[PublishCommittedReport].event.tick shouldBe 2L
+    owner.expectMsg(RuntimeCommitted(1L, false))
+    owner.send(lp, CollectRuntimeSnapshot(1L))
+    val cleaned = owner.expectMsgType[RuntimeSnapshot]
+    cleaned.minimum shouldBe Some(3L)
+    cleaned.retention.get.events shouldBe 0L
+    cleaned.retention.get.processedIds shouldBe 0L
+    cleaned.retention.get.checkpoints shouldBe 1L
+    owner.send(lp, ResumeRuntime(1L))
+    owner.awaitAssert(lp.underlyingActor.count shouldBe 4)
+    owner.send(lp, RuntimeDelivery("run", 7L, input(3L).copy(isAntiMessage = true, order = None)))
+    owner.expectMsg(DeliveryAccepted("run", 7L))
+    owner.expectMsgType[RouteControl]
+    owner.awaitAssert(lp.underlyingActor.count shouldBe 4)
+    owner.send(lp, FreezeRuntime(2L))
+    owner.expectMsg(RuntimeFrozen(2L))
+    owner.send(lp, CommitRuntime(2L, 3L))
+    owner.expectMsg(RuntimeCommitted(2L, false))
+    owner.send(lp, CollectRuntimeSnapshot(2L))
+    owner.expectMsgType[RuntimeSnapshot].retention.get.cancellations shouldBe 1L
+    owner.send(lp, SetOptimisticExecutionLimits(4L, 6L, limits))
+    owner.send(lp, CommitRuntime(3L, 4L))
+    owner.expectMsg(RuntimeCommitted(3L, false))
+    owner.send(lp, CollectRuntimeSnapshot(3L))
+    owner.expectMsgType[RuntimeSnapshot].retention.get.cancellations shouldBe 0L
+  }
+
   "a distributed LP" should "retain pre-start input beyond its finite horizon without executing or publishing it" in {
     val global = TestProbe()
     val owner = TestProbe()
@@ -319,7 +378,10 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     owner.send(lp, FreezeRuntime(1L))
     owner.expectMsg(RuntimeFrozen(1L))
     owner.send(lp, CollectRuntimeSnapshot(1L))
-    owner.expectMsg(RuntimeSnapshot(1L, Some(110L), 0, 0))
+    val snapshot = owner.expectMsgType[RuntimeSnapshot]
+    snapshot.minimum shouldBe Some(110L)
+    snapshot.blocked shouldBe 0
+    snapshot.retention.get.events shouldBe 0L
     lp.underlyingActor.count shouldBe 0
     owner.send(lp, CommitRuntime(1L, 101L))
     owner.expectMsg(RuntimeCommitted(1L, false))

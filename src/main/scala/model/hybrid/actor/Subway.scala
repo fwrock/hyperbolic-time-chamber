@@ -45,6 +45,8 @@ class Subway(
   // protected, not private: lets SubwayMigrationSnapshotSpec drive this directly, same rationale
   // as Car.scala's link-wait fields.
   protected var expectedUnloadResponses: Int = 0
+  private val loadReplyKey = "subway-stop:load"
+  private val unloadReplyKey = "subway-stop:unload"
 
   /** `Subway` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
     * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07) —
@@ -145,8 +147,11 @@ class Subway(
             state.status = Stopped
             // ActorTrace.trace(getEntityId, currentTick, "subway_stop_arrived", // #actor-trace
             //   s"line=${state.line} node=$nodeId passengers=${state.passengers.size}") // #actor-trace
+            expectedUnloadResponses = state.passengers.size
             passengerHandler.requestUnloadPeopleData()
+            if (expectedUnloadResponses > 0) registerAwaitedReply(unloadReplyKey, "SubwayUnloadPassengerData")
             passengerHandler.requestLoadPassenger(stationOpt)
+            registerAwaitedReply(loadReplyKey, "SubwayLoadPassengerData")
             onFinishSpontaneous(None)
           case None =>
             leavingLink()
@@ -159,11 +164,14 @@ class Subway(
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
-      case d: SubwayLoadPassengerData   => passengerHandler.handleLoadPeople(event, d)
+      case d: SubwayLoadPassengerData =>
+        passengerHandler.handleLoadPeople(event, d)
+        consumeAwaitedReply(loadReplyKey)
       case d: SubwayUnloadPassengerData =>
-        if (expectedUnloadResponses > 0)
+        if (expectedUnloadResponses > 0) {
           expectedUnloadResponses = passengerHandler.handleUnloadPassenger(event, d, expectedUnloadResponses)
-        else
+          if (expectedUnloadResponses == 0) consumeAwaitedReply(unloadReplyKey)
+        } else
           logWarn(s"[SUBWAY] Spurious SubwayUnloadPassengerData from ${event.actorRefId} — ignoring (no unload in progress) id=$getEntityId")
       case _                            => super.actInteractWith(event)
     }
@@ -177,39 +185,27 @@ class Subway(
     event: ActorInteractionEvent,
     data: LinkInfoData
   ): Unit = {
-    state.distance += data.linkLength
-    report(
-      data = Map(
-        "event_type" -> "leave_link",
-        "subway_id" -> getEntityId,
-        "link_id" -> event.actorRefId,
-        "line" -> state.line,
-        "passengers" -> state.passengers.size,
-        "total_distance" -> state.distance,
-        "tick" -> currentTick
-      ),
-      label = "leave_link"
-    )
-
-    import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum._
-    // Movable.leavingLink registers this reply (Movable.leaveLinkAwaitKey) for every Movable
-    // subclass, Subway included. Under conservative mode this keeps the original `state.status
-    // == Moving` gate unchanged. Under Time Warp, a rollback can restore state.status away from
-    // Moving from before this reply's originating LeaveLinkData was sent -- a status-only gate
-    // would then silently drop a genuine, un-retractable reply and never resolve
-    // onFinishSpontaneous again, orphaning this actor (docs/TIME_WARP_DESIGN.md §10; see
-    // CarSignalHandler.handleLinkAccess for the reference implementation of this pattern).
-    val isTimeWarpMode = getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP
     val awaitKey = Movable.leaveLinkAwaitKey(event.actorRefId)
-    val shouldProcess =
-      if (isTimeWarpMode) isAwaitingReply(awaitKey, "LeaveLinkData", data.requestSeq)
-      else state.status == Moving
-    if (shouldProcess) {
+    // A dwell ends in Stopped, not Moving. Match the request before changing distance
+    // or releasing its dispatch, including under conservative execution.
+    if (matchesAwaitedReply(awaitKey, "LeaveLinkData", data.requestSeq)) {
       consumeAwaitedReply(awaitKey)
+      state.distance += data.linkLength
+      report(
+        data = Map(
+          "event_type" -> "leave_link",
+          "subway_id" -> getEntityId,
+          "link_id" -> event.actorRefId,
+          "line" -> state.line,
+          "passengers" -> state.passengers.size,
+          "total_distance" -> state.distance,
+          "tick" -> currentTick
+        ),
+        label = "leave_link"
+      )
       state.status = Ready
       onFinishSpontaneous(Some(currentTick + 1))
     }
-
   }
 
   override def actHandleReceiveEnterLinkInfo(

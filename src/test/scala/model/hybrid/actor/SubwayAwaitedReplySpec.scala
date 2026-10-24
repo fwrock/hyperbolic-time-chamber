@@ -7,7 +7,7 @@ import core.enumeration.TimeManagerTypeEnum
 import core.types.Tick
 import model.hybrid.entity.event.data.link.LinkInfoData
 import model.hybrid.entity.state.SubwayState
-import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready }
+import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Moving, Ready, Stopped }
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
@@ -152,17 +152,18 @@ class SubwayAwaitedReplySpec extends AnyFlatSpec with Matchers with BeforeAndAft
     subway.testStatus shouldBe Moving // unchanged -- the reply was never accepted
   }
 
-  "a conservative-mode Subway" should "keep using the unchanged state.status == Moving gate" in {
+  "a conservative-mode Subway" should "resolve a registered leave request after its station dwell" in {
     val subway = newTestSubway(TimeManagerTypeEnum.DISCRETE_EVENT)
-    subway.testSetState(freshState(Moving))
+    subway.testSetState(freshState(Stopped))
 
+    subway.testRegisterAwaitedReply(Movable.leaveLinkAwaitKey(7L), "LeaveLinkData")
     subway.testLeaveLinkInfo(leaveLinkEvent(linkId = 7L), LinkInfoData(linkLength = 80.0, linkFreeSpeed = 10.0))
 
     subway.finishCalls should not be empty
     subway.testStatus shouldBe Ready
   }
 
-  it should "drop the reply when state.status is not Moving (pre-existing guard, unchanged)" in {
+  it should "drop an unregistered reply without changing state" in {
     val subway = newTestSubway(TimeManagerTypeEnum.DISCRETE_EVENT)
     subway.testSetState(freshState(Ready))
 

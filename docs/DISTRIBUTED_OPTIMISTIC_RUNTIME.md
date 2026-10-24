@@ -10,6 +10,11 @@ Each simulation still chooses one policy before startup; every actor uses that
 policy until the run ends. This implementation changes transport ownership and
 round aggregation, without changing the model's synchronization policy.
 
+The production path now also uses
+[startup execution limits and safe fossil collection](BOUNDED_OPTIMISTIC_EXECUTION.md).
+Queued work determines the frozen timestamp minimum; reply obligations remain
+separate completion/retirement constraints rather than pinning GVT at the old send tick.
+
 ## Ownership and data delivery
 
 The GTM fixes LTM membership, assigns typed logical process IDs to owners and waits
@@ -49,8 +54,10 @@ that transport cleanup is accounted before the cut is collected.
 Topology registration may send messages during loading. They use the same ledgers
 and queue into frozen LPs. The owner establishes the finite execution horizon
 before resuming startup work; future queued input remains pending for explicit
-horizon truncation. The current optimistic loader still exhausts all external
-input before execution. Overlapping progressive loading remains separate work.
+horizon truncation. Deterministic progressive input now uses
+[acknowledged enrollment windows](PROGRESSIVE_OPTIMISTIC_RUNTIME.md). The GTM
+includes the next unloaded tick in its cut and caps execution at accepted input.
+Loading the next cohort takes place between execution windows, while all LPs are frozen.
 
 ## Global safety without a central message ledger
 
@@ -63,8 +70,10 @@ input before execution. Overlapping progressive loading remains separate work.
    early worker freeze ACK is not reused as its snapshot. A later cross-LTM
    delivery must already have been accepted before its source could acknowledge
    freezing; therefore fresh collection follows its delivery causally. Every LTM
-   now collects its actual LP queues, cancellation queues, reply obligations and
-   callbacks, plus local queued/in-flight dispatches and future-horizon work.
+   now collects actual LP queues, cancellations, pending self-events, callbacks and
+   reply counts, plus local undispatched schedules and future-horizon work. Accepted
+   dispatches are represented by LP queues; a scheduler slot awaiting a reply does
+   not add its historical timestamp to the minimum. Orphaned slots fail the run.
 3. **Commit:** the GTM validates a nondecreasing minimum and broadcasts GVT. Only
    events strictly below GVT commit. LPs flush surviving reports to their owners;
    each owner waits for its LP commit ACKs and actual sink receipts before sending
@@ -79,9 +88,13 @@ input before execution. Overlapping progressive loading remains separate work.
    from owners. Only then does it publish successful completion.
 
 GVT remains a paused-round protocol. The algorithm relies on the stated frozen
-membership and per-sender ordering, not a network delay bound, idle polling or
-simultaneous snapshots. No callback blocks a Pekko thread. A new live producer,
-model birth or ownership migration requires a separate enrollment protocol.
+membership during collection/commitment/retirement and per-sender ordering, not a network delay bound,
+idle polling or simultaneous snapshots. No callback blocks a Pekko thread.
+Progressive enrollment happens after retirement and before resumption. Arbitrary
+live producers and ownership migration remain unsupported. Model-caused birth now
+has a separate [cancellable lifecycle adapter](RUNTIME_ACTOR_BIRTH.md): membership
+may grow during freezing only under its source-ledger/newborn-freeze ordering proof;
+collection, commitment and retirement retain fixed membership.
 
 ## Model reporting and costs
 
@@ -102,9 +115,10 @@ tested artifact, independent scenario acceptance and measured limitations.
 Per-message ledger and ACK work is distributed across LTMs. GTM round traffic
 depends on the number of LTMs rather than directly on the LP/event population;
 each LTM still traverses its own LPs when freezing and collecting. The slowest
-worker and sink can hold a round. Pauses, unbounded optimistic history and finite
-speculation controls remain scale limitations; a distributed data path alone does
-not establish city-scale throughput.
+worker and sink can hold a round. Pauses, model state, input queues and participant
+traversal remain scale limitations. Execution windows, event budgets and committed
+history collection now reduce retained speculative work; they are not a hard
+heap-byte cap or evidence of city-scale throughput.
 
 `[LTM-ACCOUNTING]` records cumulative transfer and receipt counts plus remaining
 ledger sizes. `[ACCOUNTED-ROUND]` records freeze, snapshot, commit and retirement

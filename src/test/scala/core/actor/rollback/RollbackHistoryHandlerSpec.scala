@@ -191,6 +191,49 @@ class RollbackHistoryHandlerSpec extends AnyFlatSpec with Matchers {
     handler.logSize shouldBe 5 // events with seq 2,3,4,5,6 remain (seq >= floor's seq=2)
   }
 
+  it should "never choose a later low-tick checkpoint past an earlier uncommitted event" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor, checkpointInterval = 1)
+    handler.initialize(0L)
+    record(handler, actor, 100L, 1L, "uncommitted")
+    record(handler, actor, 5L, 2L, "later-processing-earlier-tick")
+    handler.pruneBelow(10L)
+    handler.rollbackFrom(1L).map(_.seq) shouldBe Seq(1L, 2L)
+    actor.counter shouldBe 0
+  }
+
+  it should "reclaim journals and logs for ten thousand committed events while retaining one state floor" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor, checkpointInterval = 7)
+    handler.initialize(0L)
+    for (batch <- 0 until 500) {
+      for (offset <- 1 to 20) {
+        val seq = batch * 20L + offset
+        val event = TestEvent(seq, s"event-$seq")
+        actor.apply(event)
+        handler.recordProcessedEvent(event, seq, seq, recordedReads = Vector(RecordedRead("observation", "x" * 1024)))
+      }
+      handler.pruneBelow((batch + 1L) * 20L + 1L)
+      handler.retainedCounts shouldBe ((1, 0, 0))
+      handler.uncommittedEventCount shouldBe 0
+    }
+    record(handler, actor, 10001L, 10001L, "at-gvt")
+    handler.rollbackTo(10001L).map(_.seq) shouldBe Seq(10001L)
+    actor.counter shouldBe 10000
+  }
+
+  "the speculative event budget" should "track commitment and rollback even when fossil collection is disabled" in {
+    val actor = new FakeActor
+    val handler = newHandler(actor)
+    handler.initialize(0L)
+    for (i <- 1L to 10L) record(handler, actor, i, i, s"event-$i")
+    handler.markCommitted(5L)
+    handler.uncommittedEventCount shouldBe 6
+    handler.rollbackTo(8L)
+    handler.uncommittedEventCount shouldBe 3
+    handler.logSize shouldBe 7
+  }
+
   it should "retain a checkpoint before GVT when a checkpoint at GVT already contains events to undo" in {
     val actor = new FakeActor
     val handler = newHandler(actor, checkpointInterval = 2)

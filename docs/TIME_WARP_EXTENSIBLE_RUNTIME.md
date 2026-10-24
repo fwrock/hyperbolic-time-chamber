@@ -25,10 +25,10 @@ report drain precede successful completion. See
 [the implemented protocol and its limits](TIME_WARP_ACCOUNTED_RUNTIME.md).
 
 This is a bounded correctness baseline, not a certification of arbitrary models or
-distributed recovery. Optimistic runs currently require fixed/preloaded membership;
-live transit birth and shared dynamic routing feedback are rejected until they have
-cancellable/timestamped model adapters. Fossil collection and scalable asynchronous
-GVT remain later work. The production conservative factory now uses distributed
+distributed recovery. Production optimistic runs now enroll deterministic source actors
+in acknowledged input windows and reclaim committed history. Accounted transit birth now has a cancellable lifecycle adapter; shared dynamic
+routing feedback remains rejected pending a timestamped adapter. See
+[model-created actor birth](RUNTIME_ACTOR_BIRTH.md). Scalable asynchronous GVT remains later work. The production conservative factory now uses distributed
 LTM channel accounting and a GTM frontier barrier; see
 [the conservative protocol](CONSERVATIVE_CHANNEL_RUNTIME.md). Its simulator
 validation is [recorded separately](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md)
@@ -48,7 +48,12 @@ Each mode must satisfy independently expected outcomes before separate-run compa
 The roadmap below remains the architecture target. Per-actor policy selection and
 switching during execution are outside the design.
 
-## Remaining core policy work — status after 2026-10-23 validation
+## Remaining core policy work — status after 2026-10-24 follow-ups
+
+The [bounded-execution follow-up](BOUNDED_OPTIMISTIC_EXECUTION.md) enables startup
+execution budgets and committed-history reclamation. It also separates queued work
+from waiting obligations in distributed cuts so small windows cannot pin GVT at an
+old request tick. This changes resource controls, not whole-run policy selection.
 
 This roadmap concerns execution policies and their runtime contracts. The bounded
 Car MESO/MICRO results do not close the gaps below. Several LTMs already execute
@@ -58,18 +63,18 @@ serialization, process isolation, and cluster membership behavior.
 | Order | Gap | Kind / affected policy | Required completion evidence |
 |---|---|---|---|
 | 1 | Account conservative interactions and close the event frontier before execution advances. Independent same-tick events also need the established stable order. | Implemented in the production conservative path; bounded validation required below. | Injected two-LTM tests hold a delivery after its sender finishes and reverse noncommuting inputs against a sequential reference. Simulator acceptance is tracked in the conservative validation record. |
-| 2 | Restore progressive input loading during execution with explicit producer lower bounds and closure. | Unsupported feature; optimistic currently preloads everything. | Delay a window containing an earlier actor/event; prove GVT cannot pass the unloaded input, then load/register it and reach the same committed results as full preloading. |
+| 2 | Restore progressive input loading during execution with explicit producer lower bounds and closure. | Implemented for deterministic JSON/SQLite source windows; loading and execution alternate at paused enrollment barriers. Arbitrary live producers and background prefetch remain outside this implementation. | Delayed-window, enrollment-at-GVT, producer-loss and source-failure regressions; separate MESO/MICRO progressive-versus-preloaded outcome checks. See PROGRESSIVE_OPTIMISTIC_VALIDATION_2026_10_24.md. |
 | 3 | Require report receipt and sink drain before successful conservative completion. | Implemented in the production conservative path. | Protocol tests delay report receipt and final flush independently; completion waits for both. Real Kafka/ClickHouse and crash-retry durability remain unvalidated. |
-| 4 | Reclaim history, read journals, processed identities, and cancellation tombstones safely, and bound speculation. | Memory/scale limitation; optimistic. | Long runs retain bounded committed history while an event exactly at GVT remains cancellable and replay retains its required checkpoint floor. |
-| 5 | Implement accounted model-caused actor birth and its descendant effects; make it reversible in optimistic runs. | Unsupported lifecycle feature; both accounted paths reject live spawn. | Account birth and initialization before conservative advancement. In optimistic mode, roll back the creating event with child messages still in transit; cancel the child and its outputs without allowing resurrection, lost replies, or work below GVT. |
+| 4 | Reclaim committed history/read journals/identities and bound speculative execution. | Implemented in the production optimistic path: tick window, event/turn budgets and strict-boundary fossil collection. Hard heap limits and city-scale capacity remain open. | Long counter regression retains bounded records; cancellation exactly at GVT survives. See BOUNDED_OPTIMISTIC_VALIDATION_2026_10_23.md for narrow-window mobility and retained-record measurements. |
+| 5 | Implement accounted model-caused actor birth and its descendant effects; make it reversible in optimistic runs. | Implemented for one deterministic unique logical birth slot per child ID, with ordinary positive/anti cancellation and dormant retirement. | Birth/freeze ordering, cancellation before/after activation, descendant rollback, replay, selected-policy inheritance and retirement-fence regressions; see RUNTIME_ACTOR_BIRTH_VALIDATION_2026_10_24.md for transit scenario evidence. |
 | 6 | Verify the runtime across multiple JVMs/nodes under delayed and reordered transport. | Validation gap; both policies. | Repeat the sequential-reference cases over remoting, check all protocol serializers and identities, and demonstrate explicit failure on participant loss. |
 | 7 | Provide coordinated recovery, supported migration, and durable effect retry/deduplication. | Unsupported fault-tolerance features; especially optimistic histories and commitment. | Recover a consistent distributed state with channels, histories, schedules, membership, and committed effects preserved; an independent actor restart is insufficient. |
 | 8 | Bound and measure distributed optimistic execution, then replace paused global cuts if necessary. | Performance/architecture work; optimistic. Per-message ledgers are now LTM-owned. | Preserve safety tests; measure throughput, pause costs and retained memory before selecting a nonblocking GVT algorithm. Distributed routing alone is not a scale claim. |
 
-Items 1 and 3 share the implemented conservative closure protocol. Item 2 remains
-an independent optimistic work stream; it must not be bundled with model-caused
-birth or require a new mobility-specific core API. The conservative path preserves
-windowed external loading, which does not validate optimistic producer enrollment.
+Items 1 and 3 share the implemented conservative closure protocol. Item 2 uses a
+model-independent producer protocol, separate from speculative model-caused birth.
+See [the progressive optimistic protocol](PROGRESSIVE_OPTIMISTIC_RUNTIME.md).
+The conservative path retains its own windowed input protocol.
 
 ### Progressive input contract
 
@@ -92,10 +97,12 @@ creation. The producer must instead participate in safe-time accounting:
    final window. Empty LP queues cannot close an open source or terminate the run.
 
 An actor at the published GVT may still be introduced; one below it must fail the
-run. Sources cannot lower a bound that already authorized commitment. The current
-`TickWindowRequest(..., Long.MaxValue)` startup loop and fixed-membership join guard
-must be replaced by this producer protocol before optimistic loading can overlap
-execution. The existing creation ledger alone does not supply these guarantees.
+run. Sources cannot lower a bound that already authorized commitment. Production
+optimistic execution now implements this contract: the accepted inclusive window
+end caps execution, its successor constrains GVT, and new enrollment follows a
+committed, retired and paused round. The next snapshot includes the new cohort;
+no committing cut changes membership. It does not preload all source actors or
+read the next window concurrently with model execution.
 
 In contrast, an actor created by a speculative model event is causally owned by
 that event. Its birth, initialization effects, descendant messages, cancellation,
@@ -145,7 +152,7 @@ Paths in this table are relative to `src/main/scala`.
 | P1 | `OptimisticLocalTimeManager.localVirtualTime` ignores pending scheduled ticks while `runningEvents` is nonempty; a queued earlier tick can be omitted from the minimum. Passive/reactive LP activity and interaction mailboxes are not represented by spontaneous dispatch bookkeeping. | Queued schedules and actual in-flight dispatch ticks now participate in the minimum, including after rewind. The accounted snapshot also includes LP queues, passive LPs, and drained transport acceptance. |
 | P1 | `OptimisticGlobalTimeManager` assigns the newest estimate directly to `currentGvt`. Late reports can lower it; already committed effects cannot be reversed. Merely clamping with `max` does not make an unsafe estimator safe. | Fixed in the accounted coordinator: validate the frozen cut before publishing; a regression is fatal. |
 | P1 | `LinkMetricsReporter.publishDynamicCost` writes the shared routing cache during speculative execution and coast-forward. Recording reads makes a surviving event repeat its observations, but does not retract a cache write or correct another LP that consumed it. | Adapter remains open. The hybrid capability hook rejects shared feedback in accounted runs; static routing is supported. |
-| P1 | `BusStation`/`SubwayStation` defer child creation until GVT but can then initialize a child using an earlier planned start tick. Their polling and local pending/ACK variables are outside a general lifecycle log. Delaying creation alone does not prove absence of new work below GVT. | Adapter remains open. Accounted runs reject live spawn and transit station birth at validation; fixed/preloaded membership is supported. |
+| P1 | `BusStation`/`SubwayStation` defer child creation until GVT but can then initialize a child using an earlier planned start tick. Their polling and local pending/ACK variables are outside a general lifecycle log. Delaying creation alone does not prove absence of new work below GVT. | Implemented in the production accounted policies: ordered activation/cancellation, owner-accounted initialization and checkpointed birth replies replace GVT-deferred creation and polling. See RUNTIME_ACTOR_BIRTH.md. |
 | P1 | Completion guards in vehicle journey reporters and `Person.scheduleCompleteReported` were actor-local and cleared after rollback rather than restored with the exact state prefix. `Person.scheduleAlreadyTruncated` is also outside the snapshot. | Car's journey fields and completion guards now live in checkpointed `CarState.journey`; its reporter accesses that state through a callback. Person completion/truncation guards now live in `PersonState` and restore with the exact prefix. Other vehicle reporters still require the same audit. |
 | P1 | `CarMicroHandler` initializes an entry's velocity from `CarJourneyReporter.sumoArrivalSpeed` when no MICRO state is active. That value survived a rewind, so replay could use a future speed (the focused regression observed 5 m/s instead of the original 0 m/s). | Fixed by moving the complete journey record to `CarJourneyState` within `CarState`. The handler remains an adapter over model state; no core mobility fields or ad hoc replay overrides were added. |
 | P1 | Initial rollback checkpoints were captured before `onFinishInitialize` seeded Person's cursor. Restoring that floor produced an empty plan, so replay skipped the original decision and left recorded reads unused. | Fixed: finish state initialization before registering/capturing the floor. Regression tests reproduce the original exception, restore the exact plan and pending reply identity, and exercise cancellation/replacement through the runtime. |
@@ -472,9 +479,9 @@ strict report commitment, and reversible terminal intent. The implementation use
 No mobility imports were added to core. Model validation rejects unsupported effects
 before registration, and model snapshot/read hooks remain the adaptation boundary.
 
-Stage 3 still requires a multi-node transport campaign. Stage 4 still requires
-cancellable live birth, timestamped feedback, and real Kafka/ClickHouse integration
-tests. Conservative closure and sink drain now have their own
+Stage 3 still requires a multi-node transport campaign. Stage 4 now has cancellable
+model birth under the restricted identity contract in RUNTIME_ACTOR_BIRTH.md;
+timestamped feedback and real Kafka/ClickHouse integration tests remain open. Conservative closure and sink drain now have their own
 [distributed LTM protocol](CONSERVATIVE_CHANNEL_RUNTIME.md); they do not use
 optimistic rollback or commitment. Stage 5 still requires a second unrelated
 model. Passing the small mobility cases is evidence for those cases only.

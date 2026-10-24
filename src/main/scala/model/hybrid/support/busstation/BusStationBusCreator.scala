@@ -80,10 +80,7 @@ class BusStationBusCreator(
     toJson(busState)
   }
 
-  /** The one irrevocable step of bus creation. Under Time Warp the caller only invokes this once
-    * GVT has passed the tick `prepareBus` ran at, since a shard-region `StartEntity` for an
-    * already-live entity id cannot be undone by an anti-message.
-    */
+  /** Accounted runtimes journal activation; legacy callers gate physical initialization separately. */
   def spawnPrepared(bus: BusInformation, stateJson: String): Unit = {
     BusStationMetrics.busesCreated.labels(bus.label).inc()
     spawnDynamicActorFn("hybrid.actor.Bus", bus.actorId, stateJson)

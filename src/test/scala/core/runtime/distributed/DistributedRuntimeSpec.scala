@@ -17,6 +17,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration.*
 
 private case class HeldTransfer(target: ActorRef, source: ActorRef, transfer: OptimisticTransfer)
+private case class HeldResume(target: ActorRef, global: ActorRef, event: ResumeRuntime)
 
 class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private implicit val system: ActorSystem = ActorSystem("DistributedRuntimeSpec",
@@ -29,14 +30,23 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     override protected lazy val reportManagerRef: ActorRef = sink
     def ready: Boolean = recoveryFinished
   }
-  private class Worker(manager: ActorRef, global: ActorRef, gate: ActorRef)
+  private class Worker(manager: ActorRef, global: ActorRef, gate: ActorRef, holdResume: Boolean = false)
     extends AccountedOptimisticLocalTimeManager(100L, manager, global) {
+    private var waitingResume = holdResume
     def ready: Boolean = recoveryFinished
+    override def handleEvent: Receive = {
+      val delayed: Receive = {
+        case event: ResumeRuntime if waitingResume && sender() == global =>
+          waitingResume = false
+          gate ! HeldResume(self, global, event)
+      }
+      delayed.orElse(super.handleEvent)
+    }
     override protected def transferTo(destination: ActorRef, event: OptimisticTransfer): Unit =
       gate ! HeldTransfer(destination, self, event)
   }
   private var sequence = 0
-  private def run(anti: Boolean, failure: Option[String] = None): Unit = {
+  private def run(anti: Boolean, failure: Option[String] = None, staggeredResume: Boolean = false): Unit = {
     sequence += 1
     val manager = TestProbe()
     val flush = TestProbe()
@@ -46,7 +56,8 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     val destination = TestProbe()
     val gtm = TestActorRef(new GTM(manager.ref, flush.ref), s"gtm-$sequence")
     manager.awaitAssert(gtm.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
-    val workers = Vector("a", "b").map(n => TestActorRef(new Worker(manager.ref, gtm, gate.ref), s"worker-$sequence-$n"))
+    val workers = Vector("a", "b").map(n => TestActorRef(new Worker(manager.ref, gtm, gate.ref,
+      staggeredResume && n == "b"), s"worker-$sequence-$n"))
     manager.awaitAssert(workers.forall(_.underlyingActor.ready) shouldBe true, 5.seconds, 10.millis)
     val model = "org.interscity.htc.model.example.Model"
     val ids = (1L to 100L).toVector
@@ -71,8 +82,10 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     val held = gate.expectMsgType[HeldTransfer]
     gtm ! StartSimulationTimeEvent(startTick = 0L)
     source.expectMsg(SetRuntimeHorizon(100L))
+    source.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 50L
     source.expectMsg(ResumeRuntime(0L))
     destination.expectMsg(SetRuntimeHorizon(100L))
+    destination.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 50L
     destination.expectMsg(ResumeRuntime(0L))
     gtm ! RequestRuntimeRound()
     val round = source.expectMsgType[FreezeRuntime].round
@@ -97,8 +110,16 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     source.expectMsg(CollectRuntimeSnapshot(round))
     destination.expectMsg(CollectRuntimeSnapshot(round))
     source.send(a.owner, RuntimeSnapshot(round, None, 0, 0))
+    if (failure.contains("orphan-wait")) {
+      destination.send(b.owner, RuntimeSnapshot(round, None, 1, 0))
+      manager.expectMsgType[RuntimeFailure].reason should include ("unbounded reply obligation")
+      manager.expectNoMessage(100.millis)
+      return
+    }
     destination.send(b.owner, RuntimeSnapshot(round, Some(10L), 0, 0))
+    source.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 60L
     source.expectMsg(CommitRuntime(round, 10L))
+    destination.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 60L
     destination.expectMsg(CommitRuntime(round, 10L))
     source.send(a.owner, PublishCommittedReport(sink.ref, ReportEvent(first.toString, 9L, 0L, data = "committed")))
     source.send(a.owner, RuntimeCommitted(round, false))
@@ -107,6 +128,17 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     source.expectNoMessage(100.millis)
     sink.send(report.ackTo, DeliveryAccepted(report.epoch, report.token))
     source.expectMsg(ResumeRuntime(round))
+    if (staggeredResume) {
+      val resume = gate.expectMsgType[HeldResume]
+      source.send(a.owner, RouteInteraction(a.epoch, LogicalProcessId(model, second),
+        event.copy(tick = 11L, seq = 2L, order = Some(EventOrder.root(11L, model, first)))))
+      val next = gate.expectMsgType[HeldTransfer]
+      next.target.tell(next.transfer, next.source)
+      val queued = destination.expectMsgType[RuntimeDelivery]
+      destination.send(b.owner, DeliveryAccepted(b.epoch, queued.token))
+      manager.expectNoMessage(100.millis)
+      resume.target.tell(resume.event, resume.global)
+    }
     destination.expectMsg(ResumeRuntime(round))
 
     gtm ! RequestRuntimeRound()
@@ -118,7 +150,9 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     destination.expectMsg(CollectRuntimeSnapshot(last))
     source.send(a.owner, RuntimeSnapshot(last, None, 0, 0))
     destination.send(b.owner, RuntimeSnapshot(last, None, 0, 0))
+    source.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 100L
     source.expectMsg(CommitRuntime(last, Long.MaxValue))
+    destination.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 100L
     destination.expectMsg(CommitRuntime(last, Long.MaxValue))
     source.send(a.owner, RuntimeCommitted(last, true))
     destination.send(b.owner, RuntimeCommitted(last, true))
@@ -150,5 +184,11 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
   }
   it should "propagate final sink flush failure without reporting successful completion" in {
     run(false, Some("sink"))
+  }
+  it should "fail an unanswered wait with no queued future work instead of declaring completion" in {
+    run(false, Some("orphan-wait"))
+  }
+  it should "accept next-round traffic while the receiver's local resume is delayed" in {
+    run(false, staggeredResume = true)
   }
 }

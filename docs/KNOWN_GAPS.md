@@ -4,6 +4,98 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Accounted model-created birth follow-up (2026-10-24)
+
+Both production policies now support one deterministic unique logical birth slot
+per child ID. The owning LTM accounts initialization and buffers overtaking input;
+the existing GTM authorizes membership without routing model payloads. Children
+join inert and activate through an ordered positive. Optimistic cancellation uses
+normal antis, restores dormancy and retracts descendant effects; physical retirement
+waits for safe GVT and a monotone latest-accepted-input fence. Children inherit only
+the policy selected before the run. No new global time coordinator was added.
+
+Bus/Subway stations use this adapter instead of speculative initialization polling
+or GVT-deferred creation at an older timestamp. Real transit validation exposed and
+fixed additional model defects: null unload routing, subway speed units, conservative
+subway leave correlation, missing subway stop-barrier obligations, Bus reporting
+state outside checkpoints and Bus MICRO repeatedly entering an unconsumed path.
+The Bus cyclic next-link peek now follows its actual route cursor for capacity and
+signal checks. These defects affected independent outcomes, so mere engine completion
+or policy parity was insufficient acceptance.
+
+The latest build passes **571 tests across 121 suites**. Eight transit cases
+(MESO, MICRO, late input and multiple births under both policies) and four car
+regressions pass, with six matching full physical-report comparisons. Cyclic
+services explicitly truncate at the horizon. A MESO bus whose next wake is beyond
+the cap can lack final journey/SUMO output; uniform horizon finalization remains
+a reporting gap and the validator records it separately.
+
+See [the lifecycle contract](RUNTIME_ACTOR_BIRTH.md) and
+[the validation record](RUNTIME_ACTOR_BIRTH_VALIDATION_2026_10_24.md). Earlier entries
+below retain their milestone scope. ID recycling, shared speculative feedback,
+coordinated recovery/migration, multi-JVM validation and million-actor capacity
+remain open. PT person distance and Subway journey-completion telemetry also remain
+incomplete; validation uses actual boardings/alightings and cyclic rail traversal.
+
+## Progressive optimistic input follow-up (2026-10-24)
+
+Production Time Warp now alternates acknowledged deterministic source windows with
+execution. Accepted input caps the execution ceiling; its next unloaded tick stays
+in GVT accounting until explicit closure. New LPs enroll only after committed
+retirement with every owner paused, and the next fresh round includes them.
+That source change excluded independent model birth; the follow-up above now
+provides its separate reversible adapter. The existing GTM coordinates enrollment;
+there is no new coordinator actor or policy mixing.
+
+Source failures can no longer masquerade as successful empty windows. JSON and
+SQLite async results update state through the mailbox and verify indexed counts.
+The simulator matrix also exposed empty JSON arrays being decoded as records and
+whole-file buffering in the shared parser. Record-by-record stream binding fixes
+both, with buffer-refill and malformed/empty-input regressions.
+
+The progressive milestone suite passed **532 tests across 112 suites**. All **12** MESO/MICRO
+source-format/preloading cases complete 4/4 trips and 2/2 summaries with zero errors,
+null-state discards or stalls. Ten full physical-report multiset comparisons match
+the preloaded conservative references. Optimistic progressive cases start with
+only the first person/car pair and accept the later pair after reaching the source
+boundary. Conservative's larger bootstrap window preloads these particular cohorts;
+its cases here serve as format/policy references, not late-enrollment evidence.
+
+See [the protocol](PROGRESSIVE_OPTIMISTIC_RUNTIME.md) and
+[latest validation](PROGRESSIVE_OPTIMISTIC_VALIDATION_2026_10_24.md). Background
+prefetch, arbitrary live streams, shared feedback, recovery/migration,
+multi-JVM validation and million-actor capacity remain open. Older preloading-only
+claims and measurements below retain their historical scope.
+
+## Bounded optimistic execution follow-up (2026-10-23)
+
+Production optimistic runs now use a startup tick window, per-LP speculative-event
+budget and cooperative per-turn input budget, with fossil collection after safe
+GVT commitment. Queued work remains in the cut when throttled. Business reply
+obligations stay in completion/retirement checks; their historical send timestamps
+no longer pin distributed GVT below the future work needed to answer them. Orphaned
+dispatches and waits without future work fail explicitly.
+
+Strict-boundary collection retains a usable pre-GVT state floor and coast-forward
+journals, and removes older processed/cancelled identities. Populated Link lane-map
+snapshots now declare Integer key types: narrow-window rollback reproduced String
+keys where lane arithmetic expected Int, which empty-map snapshots missed.
+The larger bounded cohort also exposed next-round traffic arriving before the
+receiver's local resume. Paused owners now queue that traffic while LPs stay frozen;
+collection/commit/retirement remain closed. A held-resume regression covers the race.
+
+The bounded milestone build passes 508 tests. Eight mobility cases, including one-tick MESO
+and MICRO, and six repeated 32-person cohort runs pass strict output acceptance.
+The same-executable cohort comparison lowers median peak retained logs from 1384
+to 567 records and read journals from 128 to 64, with effectively unchanged timing
+and no consistent rollback reduction. These are record counts, not heap-byte bounds.
+
+See [the resource protocol](BOUNDED_OPTIMISTIC_EXECUTION.md) and
+[current validation](BOUNDED_OPTIMISTIC_VALIDATION_2026_10_23.md). That milestone
+did not provide a fixed heap budget, progressive optimistic input, model birth/recovery,
+or evidence for one million actors; the progressive source gap is addressed above.
+Earlier unbounded-history statements below describe the preceding reference implementations.
+
 ## Current production policy update (2026-10-23, distributed follow-up)
 
 Production optimistic execution now uses LTM-owned transport and report ledgers;
@@ -18,7 +110,7 @@ bug: Node's `Map[Long, Int]` values became boxed Longs under the shared Jackson
 configuration. Explicit Integer content annotations now preserve replay arithmetic;
 the regression fails with the original cast error before the fix.
 
-The current full suite passes 496 tests. See
+The distributed milestone suite passes 496 tests. See
 [the distributed protocol](DISTRIBUTED_OPTIMISTIC_RUNTIME.md) and
 [current validation](DISTRIBUTED_OPTIMISTIC_VALIDATION_2026_10_23.md) for the final
 artifact, scenario matrices and performance limitations. Historical baseline

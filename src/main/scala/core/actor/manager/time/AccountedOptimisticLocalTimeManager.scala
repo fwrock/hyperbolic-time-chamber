@@ -5,7 +5,9 @@ import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.runtime.accounting.*
 import core.runtime.distributed.*
+import core.actor.manager.load.RuntimeBirthInitializer
 import core.types.Tick
+import core.runtime.OptimisticExecutionLimits
 import core.util.StringUtil
 import org.apache.pekko.actor.{ActorRef, Props, Terminated}
 import org.htc.protobuf.core.entity.actor.Identify
@@ -19,7 +21,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
   extends OptimisticLocalTimeManager(duration, manager, Some(global), Some(global)) {
   private case class Process(id: LogicalProcessId, ref: ActorRef, handle: Long, incarnation: String)
   private case class Acceptance(process: Process, source: Option[(ActorRef, Long)])
-  private enum Phase { case Loading, Running, Freezing, Frozen, Collecting, Committing, Committed, Retiring, Paused, Stopped, Failed }
+  private enum Phase { case Loading, Enrolling, Running, Freezing, Frozen, Collecting, Committing, Committed, Retiring, Paused, Stopped, Failed }
   import Phase.*
   private var phase = Loading
   private var epoch = ""
@@ -43,15 +45,23 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
   private var transfers = 0L
   private var receipts = 0L
   private var retiringFinal = false
+  private var limits = OptimisticExecutionLimits()
+  private var executionFrontier = 0L
+  private var inputThrough = Long.MaxValue
+  private val unborn = mutable.Map.empty[LogicalProcessId, mutable.ArrayBuffer[(core.entity.event.ActorInteractionEvent, Option[(ActorRef, Long)])]]
+  private val births = mutable.Map.empty[LogicalProcessId, (RuntimeBirthOrigin, RuntimeBirthData, Option[ActorRef])]
   runtimeFrozen = true
 
   override protected def currentGvt: Option[Tick] = if (gvt == Long.MinValue) None else Some(gvt)
+  override protected def dispatchCeiling: Tick = math.min(inputThrough, limits.ceiling(executionFrontier, horizon))
   override protected def reportGlobalTimeManager(hasScheduled: Boolean = false): Unit = ()
   protected def transferTo(destination: ActorRef, event: OptimisticTransfer): Unit = destination ! event
   private def nextToken(): Long = { token = Math.addExact(token, 1L); token }
   private def owner(id: LogicalProcessId): ActorRef = managers(Math.floorMod(id.hashCode(), managers.size))
   private def checkEpoch(run: String): Unit = require(epoch.nonEmpty && run == epoch, "wrong optimistic epoch")
-  private def channelsDrained: Boolean = outgoing.isEmpty && accepting.isEmpty
+  private def channelsDrained: Boolean = outgoing.isEmpty && accepting.isEmpty && births.isEmpty
+  protected def createRuntimeBirthInitializer(target: LogicalProcessId, origin: RuntimeBirthOrigin, data: RuntimeBirthData): ActorRef =
+    context.actorOf(RuntimeBirthInitializer.props(self, global, target, origin, data))
   private def source(): Process = byRef.getOrElse(sender(), throw new IllegalArgumentException("unregistered local LP"))
   private def fail(error: Throwable): Unit = if (phase != Failed && phase != Stopped) {
     phase = Failed
@@ -82,7 +92,9 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
       }
       case RegisterLocalProcess(run, join) => protect {
         checkEpoch(run)
-        require(sender() == global && phase == Loading, "registration outside loading")
+        require(sender() == global && (phase == Loading || phase == Enrolling ||
+          (join.birth.nonEmpty && (phase == Running || phase == Freezing || phase == Paused))), "registration outside input enrollment")
+        require(join.startTick >= gvt && join.initialWake.forall(_.tick >= gvt), "new LP below GVT")
         val id = LogicalProcessId(join.identity.classType, join.identity.id)
         require(owner(id) == self && !processes.contains(id) && !byRef.contains(join.ref), "duplicate or wrong-owner LP")
         handle = Math.addExact(handle, 1L)
@@ -94,14 +106,61 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         registerOwnedProcess(join.identity.copy(id = handle), join.initialWake, join.identity)
         global ! LocalProcessRegistered(id)
         join.ref ! RuntimeJoined(epoch, global, self, distributed = true)
+        if (phase != Loading) {
+          join.ref ! SetRuntimeHorizon(horizon)
+          if (join.birth.nonEmpty) {
+            join.ref ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits)
+            if (phase == Running) join.ref ! ResumeRuntime(round)
+            else if (phase == Freezing) { pending += join.ref; join.ref ! FreezeRuntime(round) }
+          }
+        }
       }
-      case StartLocalRuntime(start, end) => protect {
+      case AuthorizeRuntimeBirth(run, target, origin) => protect {
+        checkEpoch(run)
+        require(sender() == global && births.get(target).exists(b => b._1 == origin && b._3.isEmpty), "invalid birth grant")
+        val data = births(target)._2
+        val initializer = createRuntimeBirthInitializer(target, origin, data)
+        context.watch(initializer)
+        births(target) = (origin, data, Some(initializer))
+      }
+      case RuntimeBirthInitialized(target, ref) => protect {
+        require(births.get(target).exists(_._3.contains(sender())) && processes.get(target).exists(_.ref == ref),
+          "birth initialized without owned registration")
+        births.remove(target)
+        context.unwatch(sender())
+        sender() ! StopRuntimeBirthInitializer
+        unborn.remove(target).get.foreach { case (event, source) => input(processes(target), event, source) }
+        maybeFrozen()
+      }
+      case StartLocalRuntime(start, end, executionLimits, through) => protect {
         require(sender() == global && phase == Loading, "duplicate runtime start")
         horizon = end
+        limits = executionLimits
+        executionFrontier = start
+        inputThrough = through
+        require(inputThrough >= start, "initial input window excludes the start tick")
         phase = Running
         runtimeFrozen = false
-        byRef.keys.foreach { ref => ref ! SetRuntimeHorizon(horizon); ref ! ResumeRuntime(0L) }
+        byRef.keys.foreach { ref =>
+          ref ! SetRuntimeHorizon(horizon)
+          ref ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits)
+          ref ! ResumeRuntime(0L)
+        }
         startSimulation(StartSimulationTimeEvent(startTick = start))
+      }
+      case BeginInputEnrollment(id) => protect {
+        require(sender() == global && phase == Paused && id == round && channelsDrained,
+          "input enrollment outside a paused, drained round")
+        phase = Enrolling
+        global ! InputEnrollmentOpened(round)
+      }
+      case CompleteInputEnrollment(id, through) => protect {
+        require(sender() == global && phase == Enrolling && id == round && through > inputThrough,
+          "invalid input enrollment completion")
+        inputThrough = through
+        byRef.keys.foreach(_ ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits))
+        phase = Paused
+        global ! InputEnrollmentCompleted(round)
       }
       case RouteInteraction(run, target, event) => protect {
         checkEpoch(run)
@@ -124,10 +183,30 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
       case event: OptimisticTransfer => protect {
         checkEpoch(event.epoch)
         require(managers.contains(sender()) && owner(event.target) == self, "unowned transfer")
-        require(phase == Loading || phase == Running || phase == Freezing || phase == Frozen, s"transfer after channel closure: $phase")
+        require(phase == Loading || phase == Running || phase == Freezing || phase == Frozen || phase == Paused,
+          s"transfer after channel closure: $phase")
         require(event.event.tick >= gvt && event.event.tick <= horizon, "transfer outside execution frontier")
-        input(processes.getOrElse(event.target, throw new IllegalArgumentException(s"unknown/retired LP ${event.target}")),
-          event.event, Some(sender() -> event.token))
+        processes.get(event.target) match {
+          case Some(process) => input(process, event.event, Some(sender() -> event.token))
+          case None =>
+            val queue = unborn.getOrElseUpdate(event.target, mutable.ArrayBuffer.empty)
+            event.event.data match {
+              case data: RuntimeBirthData if !event.event.isAntiMessage =>
+                val origin = RuntimeBirthOrigin(LogicalProcessId(event.event.actorClassType, event.event.actorRefId),
+                  event.event.order.get.key, event.event.tick, event.event.order.get.microstep)
+                if (!births.contains(event.target)) {
+                  births(event.target) = (origin, data, None)
+                  if (phase == Frozen) phase = Freezing
+                  global ! RequestRuntimeBirth(epoch, event.target, origin)
+                } else require(births(event.target)._1 == origin, "conflicting child birth slot")
+                queue += event.event -> Some(sender() -> event.token)
+              case _ =>
+                // The owner holds these inputs until the birth positive arrives. Its sender
+                // remains accounted separately until that positive reaches the initialized LP.
+                queue += event.event -> None
+                sender() ! OptimisticTransferAccepted(epoch, event.token)
+            }
+        }
       }
       case OptimisticTransferAccepted(run, id) => protect {
         checkEpoch(run)
@@ -156,7 +235,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
           case _ => false
         }
         require(phase == Loading || phase == Running || (phase == Freezing && pending.contains(sender())) ||
-          ((phase == Freezing || phase == Frozen) && obsoleteDispatch), "schedule update after local freeze acknowledgement")
+          ((phase == Freezing || phase == Frozen || phase == Paused) && obsoleteDispatch), "schedule update after local freeze acknowledgement")
         require(target == self && tick >= gvt, "schedule update to wrong owner/below GVT")
         def identity(value: Identify): Identify = {
           require(value.id == process.id.id && (value.classType == process.id.model ||
@@ -186,6 +265,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
       }
       case CollectRuntimeSnapshot(id) => protect {
         require(sender() == global && phase == Frozen && id == round && channelsDrained, "snapshot before channel closure")
+        require(unborn.isEmpty, "input to an unknown/retired LP without an accounted birth")
         phase = Collecting
         snapshots = Map.empty
         pending = byRef.keySet.toSet
@@ -202,10 +282,14 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         require(sender() == global && phase == Collecting && pending.isEmpty && id == round && frontier >= gvt,
           "commit outside collected round")
         gvt = frontier
+        executionFrontier = frontier
         phase = Committing
         eligible = Set.empty
         pending = byRef.keySet.toSet
-        pending.foreach(_ ! CommitRuntime(round, gvt))
+        pending.foreach { ref =>
+          ref ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits)
+          ref ! CommitRuntime(round, gvt)
+        }
         maybeCommitted()
       }
       case RuntimeCommitted(id, mayRetire) => protect {
@@ -247,6 +331,8 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
       }
       case Terminated(ref) if byRef.contains(ref) && !(phase == Retiring && pending.contains(ref)) =>
         fail(new IllegalStateException(s"LP lost before safe retirement: $ref"))
+      case Terminated(ref) if births.valuesIterator.exists(_._3.contains(ref)) =>
+        fail(new IllegalStateException(s"birth initializer lost: $ref"))
       case RuntimeFailure(reason) => fail(new IllegalStateException(reason))
     }
     distributed.orElse(super.handleEvent)
@@ -257,10 +343,18 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
     global ! RuntimeFrozen(round)
   }
   private def maybeSnapshot(): Unit = if (phase == Collecting && pending.isEmpty) {
-    val minimum = (nextTick.toSeq ++ runningEvents.iterator.map(a => inFlightTickOf(a.id)) ++
-      snapshots.valuesIterator.flatMap(_.minimum) ++ beyondHorizon).minOption
+    runningEvents.foreach { identity =>
+      val process = byHandle(identity.id)
+      val snapshot = snapshots(process.ref)
+      require(snapshot.blocked > 0 || snapshot.queuedDispatches > 0,
+        s"dispatch has neither queued input nor a reply obligation: ${process.id}")
+    }
+    // Accepted dispatches are counted by LP queues. A retained slot awaiting a model reply is
+    // not unfinished computation and must not pin GVT below that reply's future causal work.
+    val minimum = (nextTick.toSeq ++ snapshots.valuesIterator.flatMap(_.minimum) ++ beyondHorizon).minOption
+    val retention = snapshots.valuesIterator.flatMap(_.retention).foldLeft(RuntimeRetention())(_ + _)
     global ! RuntimeSnapshot(round, minimum, snapshots.valuesIterator.map(_.blocked).sum,
-      snapshots.valuesIterator.map(_.callbacks).sum)
+      snapshots.valuesIterator.map(_.callbacks).sum, retention = Some(retention))
   }
   private def maybeCommitted(): Unit = if (phase == Committing && pending.isEmpty && reports.isEmpty) {
     phase = Committed

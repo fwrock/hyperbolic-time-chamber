@@ -139,6 +139,9 @@ class OptimisticLocalTimeManager(
     * confirmed live via a freeze where all pool routees were simultaneously `isIdle=false` and
     * stuck. Filtering per-actor instead means an in-flight straggler only blocks itself.
     */
+  protected def dispatchCeiling: Tick =
+    if (accountedRuntime.nonEmpty) Math.addExact(initialTick, simulationDuration) else Long.MaxValue
+
   private def dispatchNextAvailable(): Unit = {
     if (runtimeFrozen) return
     val runningIds = scala.collection.mutable.Set.from(runningEvents.map(_.id))
@@ -150,8 +153,7 @@ class OptimisticLocalTimeManager(
       s"scheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")} runningIds=${runningIds.mkString(",")}"
     )
     var dispatchedAny = false
-    scheduledActors.keys.toSeq.sorted.filter(tick =>
-      accountedRuntime.isEmpty || tick <= Math.addExact(initialTick, simulationDuration)).foreach {
+    scheduledActors.keys.toSeq.sorted.filter(_ <= dispatchCeiling).foreach {
       tick =>
         scheduledActors.get(tick).foreach {
           actorsSet =>

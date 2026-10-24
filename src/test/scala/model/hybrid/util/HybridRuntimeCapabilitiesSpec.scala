@@ -12,8 +12,4 @@ class HybridRuntimeCapabilitiesSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "reject irreversible live transit creation" in {
-    intercept[UnsupportedOperationException](HybridRuntimeCapabilities.requireCancellableTransitBirth())
-      .getMessage should include ("cancellable birth adapter")
-  }
 }

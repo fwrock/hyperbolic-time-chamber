@@ -48,7 +48,6 @@ class BusStationBusCreatorSpec extends AnyFlatSpec with Matchers {
       getStateFn      = () => state,
       entityIdFn      = () => "station-1",
       currentTickFn   = () => tick,
-      getBlockingEcFn = () => scala.concurrent.ExecutionContext.global,
       logInfoFn       = _ => (),
       logWarnFn       = _ => (),
       logDebugFn      = _ => ()

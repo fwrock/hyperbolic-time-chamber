@@ -83,7 +83,8 @@ case class BusState(
   /** Speed factor applied in MICRO mode. Values < 1.0 = conservative; > 1.0 = aggressive.
     * Clamped to [0.5, 1.5] on use. Default: 1.0.
     */
-  val speedFactor: Double = 1.0
+  val speedFactor: Double = 1.0,
+  var journey: BusJourneyState = BusJourneyState()
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

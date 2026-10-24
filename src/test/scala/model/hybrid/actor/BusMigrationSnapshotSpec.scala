@@ -43,6 +43,8 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     def testSetState(s: BusState): Unit = state = s
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
+    def testIntern(s: BusState): BusState = internStateStrings(s)
+    def testNextLink: Long = getNextLink
 
     def testSetFields(
       linkId: Option[Long],
@@ -113,6 +115,30 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     snapshot.vehicleMesoExitTick shouldBe 37L
     snapshot.expectedUnloadResponses shouldBe 3
     snapshot.currentStopNode shouldBe 2001L
+  }
+
+  it should "preserve the proactive link-exit guard when interning a restored state" in {
+    val bus = newTestBus("bus-exit")
+    val restored = freshState()
+    restored.movableLinkExitReported = true
+    bus.testIntern(restored).movableLinkExitReported shouldBe true
+  }
+
+  it should "peek the actual next cyclic link for signal and capacity checks without consuming it" in {
+    val bus = newTestBus("bus-peek")
+    val s = freshState()
+    s.bestRoute = Some(scala.collection.mutable.Queue(5L -> 2L, 8L -> 3L))
+    s.currentPathPosition = 1
+    bus.testSetState(s)
+    bus.testNextLink shouldBe 8L
+    s.currentPathPosition shouldBe 1
+    bus.getNextPath shouldBe Some(8L -> 3L)
+    bus.testNextLink shouldBe 5L
+    bus.getNextPath shouldBe Some(5L -> 2L)
+    s.currentPathPosition shouldBe 1
+    s.bestRoute = Some(scala.collection.mutable.Queue.empty)
+    bus.getNextPath shouldBe None
+    bus.testNextLink shouldBe 0L
   }
 
   it should "produce sentinel values for a bus not currently at a stop or on a link" in {

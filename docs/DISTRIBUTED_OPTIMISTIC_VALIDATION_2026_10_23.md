@@ -1,5 +1,13 @@
 # Distributed optimistic validation — 2026-10-23
 
+The subsequent [progressive-input validation](PROGRESSIVE_OPTIMISTIC_VALIDATION_2026_10_24.md)
+records the new source-window protocol and streaming parser on a later artifact.
+The measurements below retain their original artifact and scope.
+
+The later [bounded-execution validation](BOUNDED_OPTIMISTIC_VALIDATION_2026_10_23.md)
+records startup limits, revised reply-wait accounting and enabled history collection.
+This document preserves the earlier unbounded reference artifact and measurements.
+
 This validates [LTM-owned optimistic accounting](DISTRIBUTED_OPTIMISTIC_RUNTIME.md).
 Each process selects one policy before startup. Production optimistic execution
 uses the existing GTM singleton for round aggregation and LTMs for model traffic;

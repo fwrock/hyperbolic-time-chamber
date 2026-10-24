@@ -23,6 +23,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private val epoch = java.util.UUID.randomUUID().toString
   private val workers = mutable.Set.empty[ActorRef]
   private val known = mutable.Set.empty[LogicalProcessId]
+  private val birthReservations = mutable.Map.empty[LogicalProcessId, RuntimeBirthOrigin]
   private val waitingJoins = mutable.ArrayBuffer.empty[JoinRuntime]
   private val ready = mutable.Map.empty[ActorRef, ConservativeReady]
   private var pending = Set.empty[ActorRef]
@@ -52,8 +53,11 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private def join(event: JoinRuntime): Unit = {
     val id = LogicalProcessId(event.identity.classType, event.identity.id)
     require(!known.contains(id), s"duplicate conservative LP $id")
-    require(!started || phase == WaitingInput, "unannounced actor creation during execution")
-    require(!started || lastStage.forall(s => event.startTick > s._1), "new LP below conservative frontier")
+    val birth = event.birth.exists(origin => birthReservations.get(id).contains(origin))
+    require(!started || phase == WaitingInput || (birth && phase == Executing), "unannounced actor creation during execution")
+    require(!started || lastStage.forall(s => if (birth) event.startTick >= s._1 else event.startTick > s._1),
+      "new LP below conservative frontier")
+    if (birth) require(event.initialWake.isEmpty && event.startTick == event.birth.get.tick, "invalid inert child enrollment")
     known.add(id)
     val owner = membership(Math.floorMod(id.hashCode(), membership.size))
     owner ! RegisterConservativeProcess(epoch, self, event)
@@ -84,6 +88,14 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     case event: JoinRuntime => protect {
       require(sender() == event.ref, "LP registration sender mismatch")
       if (workers.size < expectedWorkers) waitingJoins += event else join(event)
+    }
+    case RequestRuntimeBirth(run, target, origin) => protect {
+      require(run == epoch && phase == Executing && known.contains(origin.parent), "birth outside conservative execution")
+      require(membership(Math.floorMod(target.hashCode(), membership.size)) == sender() &&
+        lastStage.forall(origin.tick >= _._1), "invalid conservative birth authority/frontier")
+      require(!known.contains(target) && !birthReservations.contains(target), "duplicate birth reservation")
+      birthReservations(target) = origin
+      sender() ! AuthorizeRuntimeBirth(epoch, target, origin)
     }
     case event: RegisterProgressiveLoadManagerEvent => protect {
       require(!started && producer.isEmpty, "input producer registered after startup")

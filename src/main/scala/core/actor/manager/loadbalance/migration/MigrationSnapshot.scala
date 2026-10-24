@@ -157,5 +157,6 @@ case class MigrationSnapshot(
   modelSnapshot: Map[String, String] = Map.empty,
   logicalOrder: Option[core.runtime.EventOrder] = None,
   pendingSelf: Option[core.runtime.EventOrder] = None,
-  terminalIntent: Option[core.runtime.EventOrder] = None
+  terminalIntent: Option[core.runtime.EventOrder] = None,
+  runtimeBorn: Boolean = true
 )
