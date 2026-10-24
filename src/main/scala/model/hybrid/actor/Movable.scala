@@ -219,6 +219,8 @@ abstract class Movable[T <: MovableState](
     if (state != null) {
       state.movableBestRoute = None
       state.movableCurrentPath = None
+      state.movablePendingJunctionPath = None
+      state.movableCurrentPathIsJunction = false
     }
 
   /** Resolves a link ID to `(entityId, shardId)` for message routing.
@@ -233,7 +235,13 @@ abstract class Movable[T <: MovableState](
 
   protected def microEntryVelocity: Double = 0.0
 
-  protected def enterLink(): Unit =
+  protected def enterLink(): Unit = {
+    if (state.movableCurrentPath.isEmpty) {
+      state.takePendingJunctionPath().foreach { path =>
+        state.movableCurrentPath = Some(path)
+        state.movableCurrentPathIsJunction = true
+      }
+    }
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
         resolveLink(linkEdgeGraphId) match {
@@ -255,7 +263,8 @@ abstract class Movable[T <: MovableState](
                 actorType = state.actorType,
                 actorSize = state.size,
                 actorCreationType = LoadBalancedDistributed,
-                initialVelocity = microEntryVelocity
+                initialVelocity = microEntryVelocity,
+                nextLinkId = getNextLink
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
@@ -279,6 +288,7 @@ abstract class Movable[T <: MovableState](
         getNextPath match {
           case Some(nextPath) =>
             state.movableCurrentPath = Some(nextPath)
+            state.movableCurrentPathIsJunction = false
             enterLink()
           case None =>
             state.movableStatus = Finished
@@ -286,6 +296,7 @@ abstract class Movable[T <: MovableState](
             onFinishSpontaneous(None)
         }
     }
+  }
 
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
@@ -326,6 +337,9 @@ abstract class Movable[T <: MovableState](
             logWarn(s"${getEntityId} no edge label found for link $linkEdgeGraphId, scheduling tick+1")
             onFinishSpontaneous(Some(currentTick + 1))
         }
+      case None if state.movablePendingJunctionPath.nonEmpty =>
+        state.movableStatus = Ready
+        enterLink()
       case None =>
         if (state.movableBestRoute.forall(_.isEmpty)) {
           state.movableStatus = Finished
@@ -335,6 +349,7 @@ abstract class Movable[T <: MovableState](
           getNextPath match {
             case Some(nextPath) =>
               state.movableCurrentPath = Some(nextPath)
+              state.movableCurrentPathIsJunction = false
               state.movableStatus = Ready
               enterLink()
             case None =>

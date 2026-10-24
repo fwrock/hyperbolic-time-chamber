@@ -274,6 +274,11 @@ pool broadcast reaches remote routees that have not been created yet. See
 - Micro: IDM car-following + MOBIL lane change; Link actor drives via `MicroUpdateData` every sub-tick
 - Transition: `state.activateMicroMode()` / `state.deactivateMicroMode()`
 - `VehicleSimulationConfig` provides simulation-wide tuning from env vars / application.conf
+- Finite MICRO junctions are opt-in fixed Link connectors selected by Node's incoming/outgoing
+  road pair. Keep pending connector selection checkpointed, preserve the original road reply
+  identity and Bus cursor, and use stop-line road lengths to avoid counting junction distance
+  twice. Turn limits live on the approach road. See `docs/JUNCTION_GEOMETRY.md`; conflict
+  priority and fractional cross-link timing remain separate work.
 
 ## Key Utilities
 

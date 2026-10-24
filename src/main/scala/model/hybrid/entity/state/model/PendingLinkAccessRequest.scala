@@ -19,5 +19,7 @@ case class PendingLinkAccessRequest(
   actorRefId: Long,
   shardRefId: String,
   requestSeq: Long = 0L,
-  signalAlreadyCleared: Boolean = false
+  signalAlreadyCleared: Boolean = false,
+  targetLinkId: Long = 0L,
+  junctionLink: Option[PrecomputedRouteItem] = None
 )

@@ -1,5 +1,27 @@
 # Work recovery — 2026-10-24
 
+The latest completed milestone is
+[finite MICRO junction geometry](JUNCTION_GEOMETRY.md), on top of the pushed
+point-node fixes in `a06c1b6`. Fixed Link connectors model internal movement length,
+path coordinates and turn speed, with approach braking and checkpointed Node
+selection. The cyclic Bus cursor and original road request identities are preserved.
+
+`sbt test assembly` passes 635 tests in 133 suites; a subsequent six-test cold-codec
+run with non-default new IDs and all 11 Python harness tests pass. Executable SHA-256:
+`ab7d501e8ed104c1511386bc36732f744fc763201bb9bd7079a948ea4c1a0045`.
+Build log: `/tmp/htc-junction-build.log`. All 12 real-SUMO runs and two mixed MICRO
+transit runs on two JVMs pass; all seven full-report policy comparisons match.
+The Bus traverses 39 connectors per run, and the optimistic case exercises 129
+rollbacks. Full retained commands, input/output hashes, measurements and exclusions:
+[`validation/junction-geometry-2026-10-24.json`](validation/junction-geometry-2026-10-24.json).
+Raw inputs/output: `/tmp/htc-junction-20261024/`; `/tmp` may disappear on reboot.
+
+The next timing improvement is fractional cross-link carryover. Conflict priority,
+gap acceptance, multi-lane turning, turn-aware routing costs and general city-map
+geometry import remain separate model work. The accepted geometry reference uses
+protected movements; it does not establish accuracy for competing cross traffic.
+See the newest `KNOWN_GAPS.md` section before resuming broader calibration.
+
 The interrupted worktree was recovered on top of commit `240da8e` (cross-JVM codecs,
 scenario resources and warm-up readiness). The unfinished milestone was an accounted
 dynamic-routing adapter. The validated routing milestone was committed and pushed
@@ -24,7 +46,8 @@ tests. Ten real-SUMO runs and two mixed MICRO regressions pass; six complete
 conservative/optimistic report comparisons match. Accepted evidence is retained in
 `docs/validation/sumo-micro-2026-10-24.json`, including the isolated 30-tick node-wait
 reproducer and its correction. Remaining crossing errors include whole-tick
-rounding; finite junction geometry and broader SUMO calibration remain open.
+rounding; finite geometry was addressed by the subsequent opt-in milestone above.
+Broader SUMO calibration remains open.
 
 The preceding horizon/transit reporting milestone was committed and pushed as
 `c49b213` and is described in

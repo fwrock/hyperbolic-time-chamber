@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--mode', choices=('MESO', 'MICRO'), default='MESO')
     parser.add_argument('--horizon', type=int, default=1800)
     parser.add_argument('--case', choices=('mixed', 'boundary'), default='mixed')
+    parser.add_argument('--junction-geometry', action='store_true')
     args = parser.parse_args()
     root = args.output_dir.resolve()
     build_scenario(root, str(root), 3, 3, 4, 0, 0, 0, 1, 1, 0.0, None, 2, 'travel-time', 42)
@@ -55,6 +56,30 @@ def main():
         rail['dependencies']['from_node']['id'] = origin
         rail['dependencies']['to_node']['id'] = destination
     write('data/rail_links_0.json', rails)
+    if args.junction_geometry:
+        from generate_tiny_validation_scenario import link_actor
+        nodes = read('data/nodes_0.json')
+        for road in roads:
+            state = road['data']['content']
+            if {state['from'], state['to']} == {2, 3}:
+                state['length'] = 300.0
+        by_pair = {(r['data']['content']['from'], r['data']['content']['to']): r for r in roads}
+        movements = []
+        for connector_id, origin, destination in ((10001, 2, 6), (10002, 6, 2)):
+            incoming, outgoing = by_pair[origin, 5], by_pair[5, destination]
+            incoming['data']['content']['exitSpeedLimitsMps'] = {str(outgoing['id']): 8.0}
+            connector = link_actor(connector_id, 5, 5, 10.0, 28.8)
+            connector['data']['content'].update(simulationMode='MICRO', junctionGeometry=dict(
+                nodeId=5, incomingLinkId=incoming['id'], outgoingLinkId=outgoing['id'],
+                lengthMeters=10.0, speedLimitMps=8.0,
+                shape=[dict(x=0.0, y=0.0), dict(x=5.0, y=0.0), dict(x=5.0, y=5.0)]))
+            roads.append(connector)
+            movements.append(dict(incomingLinkId=incoming['id'], outgoingLinkId=outgoing['id'], connectorLinkId=connector_id))
+        node = next(n['data']['content'] for n in nodes if n['id'] == 5)
+        node['junctionMovements'] = movements
+        node['links'] += [m['connectorLinkId'] for m in movements]
+        write('data/nodes_0.json', nodes)
+        write('data/links_0.json', roads)
     write('data/city_map.json', city_map_payload(read('data/nodes_0.json'), roads, rails))
     node_by_stop = {s['id']: s['data']['content']['nodeId'] for s in stops + stations}
     nodes = {n['id']: n['data']['content'] for n in read('data/nodes_0.json')}

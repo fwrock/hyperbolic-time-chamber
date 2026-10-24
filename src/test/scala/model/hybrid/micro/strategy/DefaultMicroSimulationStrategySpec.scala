@@ -23,6 +23,21 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     lane shouldBe empty
   }
 
+  it should "brake before a lower turn-speed limit while preserving bounded deceleration" in {
+    val lane = mutable.Queue(VehicleInLane(1, "cars", 0, 50.0 / 3.6, 0, 4.5, exitSpeedLimitMps = Some(5.0)))
+    var exit: Option[MicroVehicleUpdate] = None
+    var brakedOnApproach = false
+    for (tick <- 1L to 30L if lane.nonEmpty) {
+      val updates = advance(lane, tick)
+      updates.find(_.reachedEnd).foreach(u => exit = Some(u))
+      if (lane.nonEmpty && lane.head.position > 85 && lane.head.velocity < 12) brakedOnApproach = true
+    }
+    brakedOnApproach shouldBe true
+    exit shouldBe defined
+    exit.get.velocity should be >= 5.0
+    exit.get.velocity should be <= 5.45
+  }
+
   it should "start integrating entries after their entry tick regardless of same-tick mailbox order" in {
     val lane = mutable.Queue(VehicleInLane(1L, "cars", 0.0, 0.0, 0.0, 4.5, entryTick = 35L))
     advance(lane, tick = 35L) shouldBe empty

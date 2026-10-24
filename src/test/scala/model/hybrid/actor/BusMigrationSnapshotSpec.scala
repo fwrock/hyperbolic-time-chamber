@@ -121,7 +121,12 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     val bus = newTestBus("bus-exit")
     val restored = freshState()
     restored.movableLinkExitReported = true
-    bus.testIntern(restored).movableLinkExitReported shouldBe true
+    restored.movablePendingJunctionPath = Some(model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2))
+    restored.movableCurrentPathIsJunction = true
+    val interned = bus.testIntern(restored)
+    interned.movableLinkExitReported shouldBe true
+    interned.movablePendingJunctionPath shouldBe restored.movablePendingJunctionPath
+    interned.movableCurrentPathIsJunction shouldBe true
   }
 
   it should "peek the actual next cyclic link for signal and capacity checks without consuming it" in {
@@ -129,7 +134,10 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     val s = freshState()
     s.bestRoute = Some(scala.collection.mutable.Queue(5L -> 2L, 8L -> 3L))
     s.currentPathPosition = 1
+    s.movablePendingJunctionPath = Some(model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2))
     bus.testSetState(s)
+    s.takePendingJunctionPath() shouldBe Some(700L -> 2L)
+    s.currentPathPosition shouldBe 1
     bus.testNextLink shouldBe 8L
     s.currentPathPosition shouldBe 1
     bus.getNextPath shouldBe Some(8L -> 3L)

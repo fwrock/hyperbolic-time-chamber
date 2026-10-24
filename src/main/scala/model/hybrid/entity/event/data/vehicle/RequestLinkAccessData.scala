@@ -8,5 +8,6 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   */
 case class RequestLinkAccessData(
   targetLinkId: Long,
-  signalAlreadyCleared: Boolean = false
+  signalAlreadyCleared: Boolean = false,
+  approachLinkId: Long = 0L
 ) extends BaseEventData

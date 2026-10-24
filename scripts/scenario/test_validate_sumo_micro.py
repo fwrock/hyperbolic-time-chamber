@@ -3,8 +3,11 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+import shutil
+import json
+import xml.etree.ElementTree as ET
 
-from validate_sumo_micro import compare, trajectory, run, model_checks
+from validate_sumo_micro import compare, trajectory, run, model_checks, generate, sumo_samples, geometry_checks
 
 
 class SumoComparisonTest(unittest.TestCase):
@@ -73,6 +76,53 @@ class SumoComparisonTest(unittest.TestCase):
         checks=model_checks(self.rows,metrics,self.canonical)
         self.assertFalse(checks['noArtificialNodeDelay'])
         self.assertFalse(checks['tripTimeWithinClockResolution'])
+
+    def test_multiple_sumo_internal_lanes_keep_one_continuous_connector_coordinate(self):
+        self.fcd.write_text('<fcd-export><timestep time="0"><vehicle id="v" lane=":2_11_0" pos="3.9" speed="8" odometer="196.7"/></timestep>'
+            '<timestep time="1"><vehicle id="v" lane=":2_15_0" pos="1" speed="8" odometer="197.87"/></timestep></fcd-export>')
+        canonical=dict(sumoLaneMap={':2_11_0':dict(linkId='700',offset=0),':2_15_0':dict(linkId='700',offset=4.07)})
+        samples=sumo_samples(self.fcd,canonical)
+        self.assertEqual(samples['v',0]['link'],'700')
+        self.assertEqual(samples['v',1]['link'],'700')
+        self.assertAlmostEqual(samples['v',1]['position'],5.07)
+
+    def test_an_off_path_junction_coordinate_is_rejected(self):
+        canonical=dict(vehicles=['v'],links=['4','700','6'],junctionGeometry=dict(
+            shape=[dict(x=0,y=0),dict(x=3,y=4)],lengthMeters=5,speedLimitMps=2,outgoingLinkId=6))
+        rows=[dict(event_type='enter_micro_link',data=dict(car_id='v',link_id=700,initial_velocity=2,
+            junction_x=100,junction_y=100)),dict(event_type='junction_connector_admitted',
+                data=dict(vehicle_id='v',connector_link_id=700,target_link_id=6))]
+        checks=geometry_checks(rows,canonical)
+        self.assertTrue(checks['junctionSelection'])
+        self.assertFalse(checks['junctionCoordinates'])
+        canonical['vehicles'].append('other')
+        rows.append(rows[-1])
+        self.assertFalse(geometry_checks(rows,canonical)['junctionSelection'])
+
+    def test_independent_transit_distance_accounts_for_connector_cost_on_a_movement(self):
+        from validate_walking_reports import shortest_distance
+        graph={1:dict(**{'from':1,'to':2},length=100),2:dict(**{'from':2,'to':3},length=100),
+               3:dict(**{'from':1,'to':3},length=250)}
+        self.assertEqual(shortest_distance(graph,1,3),200)
+        self.assertEqual(shortest_distance(graph,1,3,{(1,2):100}),250)
+
+    @unittest.skipUnless(shutil.which('netconvert'),'requires real netconvert')
+    def test_geometry_import_uses_trimmed_roads_and_every_internal_lane_without_double_counting(self):
+        for turn in ('straight','left','right'):
+            root=self.root/turn
+            canonical=generate(root,'crossing',True,turn)
+            geometry=canonical['junctionGeometry']
+            self.assertGreater(geometry['lengthMeters'],0)
+            self.assertLess(canonical['lengths'][0],200)
+            self.assertLess(canonical['lengths'][-1],100)
+            if turn=='straight': self.assertAlmostEqual(sum(canonical['lengths']),300)
+            net=ET.parse(root/'sumo/net.xml').getroot()
+            lengths={lane.get('id'):float(lane.get('length')) for edge in net.findall('edge') for lane in edge.findall('lane')}
+            self.assertAlmostEqual(sum(lengths[lane] for lane in canonical['sumoLaneMap']),geometry['lengthMeters'])
+            records=json.loads((root/'data/links_0.json').read_text())
+            connector=next(r['data']['content'] for r in records if str(r['id'])==canonical['links'][1])
+            self.assertEqual(connector['from'],connector['to'])
+            self.assertEqual(connector['junctionGeometry'],geometry)
 
 
 if __name__=='__main__': unittest.main()

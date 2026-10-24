@@ -46,9 +46,15 @@ case class NodeState(
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
   capacityWaitQueue: mutable.Map[Long, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
-  availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty
+  availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
+  junctionMovements: List[model.JunctionMovement] = Nil
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
-    )
+    ) {
+  require(junctionMovements.map(m => (m.incomingLinkId, m.outgoingLinkId)).distinct.size == junctionMovements.size,
+    "junction movements must have unique incoming/outgoing road pairs")
+  require(junctionMovements.map(_.connectorLinkId).distinct.size == junctionMovements.size,
+    "junction connector must belong to exactly one movement")
+}

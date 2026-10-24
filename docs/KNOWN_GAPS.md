@@ -4,6 +4,31 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Finite MICRO junction geometry (2026-10-24)
+
+Opt-in junction movements now traverse fixed Link connectors with measured length,
+metric paths and turn-speed limits. Approach physics brakes for the selected turn.
+Node capacity grants retain the original road request identity while checkpointing
+connector selection; replay, cancellation and cyclic Bus cursors preserve that
+selection. Road lengths stop at the junction boundary, so internal distance is
+counted exactly once. Existing point-node scenarios retain their defaults.
+
+The full suite passes **635 Scala tests in 133 suites**, six focused cold-codec
+follow-up tests and **11 Python harness tests**. Twelve real-SUMO runs with internal
+lanes (52 completed cars) and two mixed MICRO transit runs on two JVMs pass physical
+acceptance. All seven full-report policy comparisons match, including 39 Bus
+connector crossings and a run with 129 rollbacks. Protected straight/left/right
+movement trip-time errors are at most 1.7/1.2/1.2 s; queued right turns reach 1.9 s.
+See [the geometry contract, measurements and costs](JUNCTION_GEOMETRY.md) and
+[retained evidence](validation/junction-geometry-2026-10-24.json).
+
+The accepted junction fixtures protect the selected movement and hold other
+approaches red. Conflict priority/gap acceptance, shared conflict-area blocking,
+multi-lane junction choice, turn-aware routing costs and a general city-network
+geometry importer remain open. Whole-tick cross-link quantization also remains;
+geometry does not remove it. Each movement adds a fixed Link LP with lane/shape
+state and rollback history; these bounded tests establish no city-scale cost.
+
 ## Real SUMO comparison and MICRO node boundaries (2026-10-24)
 
 The old sibling comparison harness has measurement, identity and current-schema
@@ -27,8 +52,9 @@ crossing trip-time error falls from 5.7 to 1.7 s, queued signal error from 8.7 t
 transit/walking regressions also pass. All six complete policy report comparisons
 match. See [the real-SUMO validation and scope](SUMO_MICRO_VALIDATION_2026_10_24.md)
 and [retained evidence](validation/sumo-micro-2026-10-24.json).
-Whole-tick boundary quantization and finite junction geometry remain distinct
-model/runtime limitations; earlier SUMO artifacts are not current accuracy proof.
+Whole-tick boundary quantization remains a runtime limitation. This earlier
+point-node campaign did not validate finite geometry; the opt-in connector stage
+above covers that follow-up. Earlier SUMO artifacts are not current accuracy proof.
 
 ## Walking distance follow-up (2026-10-24)
 

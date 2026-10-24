@@ -147,7 +147,8 @@ class LinkVehicleFlowHandler(
       vehicleLength   = data.actorSize,
       entryTick       = event.tick,
       maxAcceleration = data.actorType.microMaxAcceleration,
-      maxDeceleration = data.actorType.microMaxDeceleration
+      maxDeceleration = data.actorType.microMaxDeceleration,
+      exitSpeedLimitMps = state.exitSpeedLimitsMps.get(data.nextLinkId)
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>
@@ -171,7 +172,8 @@ class LinkVehicleFlowHandler(
         numberOfLanes      = state.lanes,
         microTimeStep      = state.microTimeStep,
         ticksPerGlobalTick = state.microTicksPerGlobalTick,
-        initialVelocity = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId)).map(_.velocity)
+        initialVelocity = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId)).map(_.velocity),
+        junctionPosition = state.junctionGeometry.map(_.positionAt(0.0))
       ),
       "MicroEnterLink"
     )

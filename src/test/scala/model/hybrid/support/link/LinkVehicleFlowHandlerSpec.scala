@@ -274,4 +274,11 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.sent.collectFirst { case d: model.hybrid.entity.event.data.MicroEnterLinkData => d.initialVelocity }
       .get shouldBe Some(10.0)
   }
+
+  it should "select the exit speed for the actual next road and preserve it in the lane checkpoint" in {
+    val f = newFixture("310", newMicroState("310", speedLimit = 50).copy(exitSpeedLimitsMps = Map(99L -> 5.0)))
+    f.handler.handleEnterLinkMicro(event(1, "310"), enterData(1).copy(nextLinkId = 99))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    restored.vehiclesByLane(0).head.exitSpeedLimitMps shouldBe Some(5.0)
+  }
 }

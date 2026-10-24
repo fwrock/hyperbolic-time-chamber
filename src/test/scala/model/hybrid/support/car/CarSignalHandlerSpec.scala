@@ -116,6 +116,19 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     f.waitUntilTicks shouldBe empty
   }
 
+  it should "install a connector only after its capacity grant, keeping the road route intact" in {
+    val f = newFixture()
+    val state = newCarState()
+    val path = model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2)
+    state.bestRoute = Some(mutable.Queue(100L -> 3L))
+    f.handler.handleLinkAccess(LinkAccessData(Green, 100, capacityState = LinkCapacityStateEnum.Full,
+      junctionLink = Some(path)), state)
+    state.movablePendingJunctionPath shouldBe None
+    f.handler.handleLinkAccess(LinkAccessData(Green, 100, junctionLink = Some(path)), state)
+    state.movablePendingJunctionPath shouldBe Some(path)
+    state.bestRoute.get.toList shouldBe List(100L -> 3L)
+  }
+
   it should "discard cruising speed when a signal or downstream capacity makes the vehicle stop" in {
     for (reply <- Seq(LinkAccessData(phase = Red, nextTick = 130L),
       LinkAccessData(phase = Green, nextTick = 100L, capacityState = LinkCapacityStateEnum.Full))) {

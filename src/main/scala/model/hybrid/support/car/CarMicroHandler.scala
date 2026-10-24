@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.car
 
 import core.types.Tick
+import model.hybrid.entity.state.model.JunctionGeometry
 import org.interscity.htc.model.hybrid.entity.event.data.{MicroEnterLinkData, MicroLeaveLinkData, MicroUpdateData}
 import org.interscity.htc.model.hybrid.entity.state.{CarState, MicroCarState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Moving
@@ -86,7 +87,7 @@ class CarMicroHandler(
         "micro_time_step"       -> data.microTimeStep,
         "ticks_per_global_tick" -> data.ticksPerGlobalTick,
         "tick"                  -> tick
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -133,7 +134,7 @@ class CarMicroHandler(
             "lane"       -> data.currentLane,
             "sub_tick"   -> data.subTick,
             "tick"       -> currentTickFn()
-          ),
+          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -175,7 +176,7 @@ class CarMicroHandler(
         "waiting_time_seconds"   -> data.waitingTimeSeconds,
         "total_distance"         -> state.distance,
         "tick"                   -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

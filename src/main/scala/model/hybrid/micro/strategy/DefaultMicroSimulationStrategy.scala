@@ -178,7 +178,13 @@ class DefaultMicroSimulationStrategy(
           reactionTime = 1.0,
           deltaT = microTimeStep
         )
-        val safeTargetVel = if (rawSafe.isNaN || rawSafe.isInfinite) 0.0 else rawSafe
+        val turnSafe = vehicle.exitSpeedLimitMps.map { limit =>
+          val brakingStep = maxDeceleration * microTimeStep
+          // Include this step's travel before the remaining braking distance to avoid late turn braking.
+          math.max(limit, -brakingStep + math.sqrt(brakingStep * brakingStep + limit * limit +
+            2.0 * maxDeceleration * math.max(0.0, linkLength - vehicle.position)))
+        }.getOrElse(Double.PositiveInfinity)
+        val safeTargetVel = if (rawSafe.isNaN || rawSafe.isInfinite) 0.0 else math.min(rawSafe, turnSafe)
         val velDiff = safeTargetVel - vehicle.velocity
         val velChange =
           if (velDiff >= 0)

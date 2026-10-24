@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.bus
 
 import core.types.Tick
+import model.hybrid.entity.state.model.JunctionGeometry
 import org.interscity.htc.model.hybrid.entity.event.data.{MicroEnterLinkData, MicroLeaveLinkData, MicroUpdateData}
 import org.interscity.htc.model.hybrid.entity.state.{BusState, MicroBusState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Moving
@@ -96,7 +97,7 @@ class BusMicroHandler(
         "link_length"      -> data.linkLength,
         "initial_velocity" -> initialMicroState.velocity,
         "tick"             -> tick
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -136,7 +137,7 @@ class BusMicroHandler(
             "lane"       -> data.currentLane,
             "sub_tick"   -> data.subTick,
             "tick"       -> currentTickFn()
-          ),
+          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -173,7 +174,7 @@ class BusMicroHandler(
         "average_speed"     -> data.averageSpeed,
         "total_distance"    -> state.distance,
         "tick"              -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

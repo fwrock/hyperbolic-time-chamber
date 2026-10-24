@@ -33,6 +33,14 @@ abstract class MovableState(
   // MICRO exit is proactive; the subsequent LeaveLink cleanup does not produce another reply.
   var movableLinkExitReported: Boolean = false
   var movablePendingRouteQuery: Option[PendingRouteQuery] = None
+  var movablePendingJunctionPath: Option[model.PrecomputedRouteItem] = None
+  var movableCurrentPathIsJunction: Boolean = false
+
+  def takePendingJunctionPath(): Option[(Long, Long)] = {
+    val path = movablePendingJunctionPath.map(p => (p.linkId, p.nodeId))
+    movablePendingJunctionPath = None
+    path
+  }
 
   def getStatus: MovableStatusEnum = movableStatus
 
