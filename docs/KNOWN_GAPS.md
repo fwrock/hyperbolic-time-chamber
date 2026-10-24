@@ -4,6 +4,34 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Accounted dynamic routing follow-up (2026-10-24)
+
+Hybrid dynamic road feedback now has an explicit accounted adapter:
+`htc.routing.cache-strategy=accounted` uses fixed EAGER/STATIC `RoutingService` LPs.
+Link costs, mode decisions and direct vehicle queries cross the existing owner
+ledgers as ordered model messages. Worker cost versions and requester obligations
+are checkpointed; rollback retracts affected replies. Dynamic route calculations
+cannot reuse a shared cached path. Unaccounted Kafka/in-memory feedback remains
+rejected by production policies.
+
+The implementation also corrects MICRO feedback that treated empty links as stopped
+traffic and compared m/s lane speeds against km/h configured speeds. Published
+costs now normalize units and restore free-flow cost on empty MICRO links.
+Startup rejects absent, extra, duplicate, progressive, ephemeral or non-sharded
+routing workers. Independent cold-codec and anti-message regressions cover the
+new protocol. The full suite passes **596 tests across 128 suites**.
+Eight MESO/MICRO scenarios under both policies on one/two JVMs pass independent
+physical acceptance; all six full-report comparisons match their references,
+including delayed TCP. Each case completes 6/6 journeys and 3/3 Person trips
+with the expected 1300 m total and 12/12 matched link traversals.
+
+See [the protocol and costs](ACCOUNTED_ROUTING.md) and
+[validation/reproduction record](ACCOUNTED_ROUTING_VALIDATION_2026_10_24.md).
+This closes the missing adapter for sampled hybrid road feedback; replicated
+cost-map/checkpoint overhead, million-actor capacity, external live streams,
+recovery/migration and uniform horizon reporting remain open. The historical
+entries below retain their original milestone scope.
+
 ## Cross-JVM policy follow-up (2026-10-24)
 
 The separate-JVM campaign exposed gaps hidden by one-process tests: Kryo implicit

@@ -9,6 +9,7 @@ import model.hybrid.entity.event.data.bus.PTLineNotOperationalData
 import model.hybrid.entity.event.data.person.{ PersonScheduleCompleteData, TripCompletedData }
 import model.hybrid.entity.state.{ PTWaitState, PersonState, TripExecutionState }
 import model.hybrid.entity.state.plan._
+import model.hybrid.entity.event.data.routing.ModeDecisionQueryData
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
@@ -42,7 +43,8 @@ class PersonPlanManager(
   reportFn: (Map[String, Any], String) => Unit,
   sendMessageFn: (Long, String, Any, String, Any) => Unit,
   logDebug: String => Unit,
-  logWarn: String => Unit
+  logWarn: String => Unit,
+  deferDecisionsFn: () => Boolean = () => false
 ) {
 
   import PlanStepResult._
@@ -193,7 +195,12 @@ class PersonPlanManager(
     }
   }
 
-  private def resolvePending(pr: PendingResolutionRequired, state: PersonState, currentTick: Tick): PlanStepResult = {
+  private def resolvePending(
+    pr: PendingResolutionRequired,
+    state: PersonState,
+    currentTick: Tick,
+    resolved: Option[Either[NoViableJourney, List[AtomicLeg]]] = None
+  ): PlanStepResult = {
     val originNodeId = physicalNodeIdBefore(state)
     val destinationNodeId = peekNextActivity(pr.cursorWithoutHead.remaining).map(_.nodeId).getOrElse(originNodeId)
     val request = pr.pending.decision
@@ -212,7 +219,10 @@ class PersonPlanManager(
           currentTick = currentTick,
           entityId = personId
         )
-        engine.decide(originNodeId, destinationNodeId, request, ctx) match {
+        if (deferDecisionsFn() && resolved.isEmpty)
+          DecisionRequested(state, ModeDecisionQueryData(originNodeId, destinationNodeId, request, ctx),
+            PersonDecisionKind.PendingPlan)
+        else resolved.getOrElse(engine.decide(originNodeId, destinationNodeId, request, ctx)) match {
           case Right(legs) =>
             val expanded = PlanCursor.expandPending(pr, legs)
             step(state.copy(cursor = expanded), currentTick, pendingHint = Some((request.strategyId, request.allowedModes)))
@@ -243,7 +253,11 @@ class PersonPlanManager(
     * `DefaultReplanStrategyId`) for a fresh route from the person's current physical position to
     * the next `Activity`, discarding only the remaining legs of the current run.
     */
-  def replanAfterPTTimeout(state: PersonState, currentTick: Tick): PlanStepResult =
+  def replanAfterPTTimeout(
+    state: PersonState,
+    currentTick: Tick,
+    resolved: Option[Either[NoViableJourney, List[AtomicLeg]]] = None
+  ): PlanStepResult =
     state.tripExecution match {
       case t @ TripExecutionState.Traveling(physicalNodeId, _, _, Some(ptWait), replanStrategyId, replanAllowedModes, _) =>
         val waited = currentTick - ptWait.waitingSinceTick
@@ -276,7 +290,10 @@ class PersonPlanManager(
               entityId = personId
             )
             val request = ModeDecisionRequest(allowedModes = replanAllowedModes, strategyId = replanStrategyId)
-            engine.decide(physicalNodeId, destinationNodeId, request, ctx) match {
+            if (deferDecisionsFn() && resolved.isEmpty)
+              DecisionRequested(state, ModeDecisionQueryData(physicalNodeId, destinationNodeId, request, ctx),
+                PersonDecisionKind.PTTimeoutReplan)
+            else resolved.getOrElse(engine.decide(physicalNodeId, destinationNodeId, request, ctx)) match {
               case Right(legs) =>
                 reportFn(
                   Map(
@@ -309,6 +326,21 @@ class PersonPlanManager(
         logWarn(s"$personId replanAfterPTTimeout called without an active PT wait (tripExecution=$other) — resuming normal stepping")
         step(state, currentTick)
     }
+
+  def completeRoutingDecision(
+    state: PersonState,
+    currentTick: Tick,
+    kind: PersonDecisionKind,
+    result: Either[NoViableJourney, List[AtomicLeg]]
+  ): PlanStepResult = kind match {
+    case PersonDecisionKind.PendingPlan =>
+      PlanCursor.advance(state.cursor) match {
+        case pr: PendingResolutionRequired => resolvePending(pr, state, currentTick, Some(result))
+        case _ => step(state, currentTick)
+      }
+    case PersonDecisionKind.PTTimeoutReplan =>
+      replanAfterPTTimeout(state, currentTick, Some(result))
+  }
 
   /** Called when a person self-wakes while [[TripExecutionState.Traveling]] with no PT wait —
     * i.e. a walking leg has just arrived (private-vehicle legs never self-schedule; see

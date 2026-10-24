@@ -5,6 +5,11 @@ import core.enumeration.CreationTypeEnum
 import model.hybrid.entity.event.data.{ EnterLinkData, MicroUpdateData }
 import model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestUnloadPassengerData }
 import model.hybrid.entity.state.enumeration.ActorTypeEnum
+import model.hybrid.entity.event.data.routing.*
+import model.hybrid.entity.state.ModeChoiceWeights
+import model.hybrid.entity.state.model.PrecomputedRouteItem
+import model.hybrid.entity.state.plan.{ ConcreteMode, ModeDecisionRequest, WalkLeg }
+import model.hybrid.decision.{ DecisionContext, NoViableJourney }
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
@@ -36,18 +41,22 @@ import scala.compiletime.uninitialized
 class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private var _system: ActorSystem = uninitialized
+  private var peer: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
-  override def beforeAll(): Unit =
+  override def beforeAll(): Unit = {
     _system = ActorSystem(
       "KryoEventDataSerializationSpec",
       ConfigFactory
         .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
         .withFallback(ConfigFactory.load())
     )
+    peer = ActorSystem("KryoEventDataColdPeerSpec", system.settings.config)
+  }
 
   override def afterAll(): Unit = {
     _system.terminate()
+    peer.terminate()
     ()
   }
 
@@ -130,5 +139,31 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val roundTripped = serialization.deserialize(bytes, serializer.identifier, "").get
 
     roundTripped shouldBe original
+  }
+
+  it should "decode accounted routing payloads on an independent cold peer in a different order" in {
+    val serialization = SerializationExtension(system)
+    val reader = SerializationExtension(peer)
+    val context = DecisionContext(
+      ModeChoiceWeights(includedModes = Set("walk")), Map.empty, Map.empty, 12L, "42")
+    val payloads: Seq[AnyRef] = Seq(
+      LinkCostChangedData(7L, 123.0, 12L),
+      RouteQueryData(1L, 4L, 500000),
+      RouteReplyData(9L, Some(RouteResult(400.0,
+        List(PrecomputedRouteItem(7L, 3L), PrecomputedRouteItem(11L, 4L))))),
+      ModeDecisionQueryData(1L, 4L,
+        ModeDecisionRequest(Set(ConcreteMode.Walk), "travel-time"), context),
+      ModeDecisionReplyData(10L, Right(List(WalkLeg(1L, 4L, Some(Nil))))),
+      ModeDecisionReplyData(11L, Left(NoViableJourney("unreachable")))
+    )
+
+    val encoded = payloads.map { original =>
+      val bytes = serialization.serialize(original).get
+      val serializer = serialization.findSerializerFor(original)
+      (original, bytes, serializer.identifier)
+    }
+    encoded.reverse.foreach { case (original, bytes, identifier) =>
+      reader.deserialize(bytes, identifier, "").get shouldBe original
+    }
   }
 }

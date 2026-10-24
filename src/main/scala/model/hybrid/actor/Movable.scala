@@ -12,8 +12,9 @@ import model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import model.hybrid.entity.event.data.link.LinkInfoData
 import model.hybrid.entity.event.data.{ EnterLinkData, LeaveLinkData }
+import model.hybrid.entity.event.data.routing.{ RouteQueryData, RouteReplyData }
 import model.hybrid.entity.state.enumeration.EventTypeEnum
-import model.hybrid.util.{ CityMapUtil, GPSUtil }
+import model.hybrid.util.{ AccountedRoutingConfig, CityMapUtil, GPSUtil }
 import core.metrics.model.hybrid.GPSMetrics
 
 abstract class Movable[T <: MovableState](
@@ -28,6 +29,7 @@ abstract class Movable[T <: MovableState](
 
   protected def requestRoute(): Unit = {
     logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
+    if (requestAccountedRoute(state.origin, state.destination, 500_000)) return
     try
       GPSUtil
         .calcRouteCompact(
@@ -36,6 +38,20 @@ abstract class Movable[T <: MovableState](
           maxExpansions = 500_000
         )
         match {
+        case result @ Some(_) => handleCalculatedRouteResult(result)
+        case None             => handleCalculatedRouteResult(None)
+      }
+    catch {
+      case e: Exception =>
+        logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
+        state.movableStatus = Finished
+        onFinish(state.origin)
+    }
+  }
+
+  protected def handleCalculatedRouteResult(
+    result: Option[(Double, scala.collection.mutable.Queue[(Long, Long)])]
+  ): Unit = result match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
@@ -56,12 +72,27 @@ abstract class Movable[T <: MovableState](
           state.movableStatus = Finished
           onFinish(state.origin)
       }
-    catch {
-      case e: Exception =>
-        logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
-        state.movableStatus = Finished
-        onFinish(state.origin)
-    }
+
+  protected final def requestAccountedRoute(
+    originNodeId: Long,
+    destinationNodeId: Long,
+    maxExpansions: Int
+  ): Boolean = {
+    if (!AccountedRoutingConfig.enabled) return false
+    val workerId = AccountedRoutingConfig.workerFor(getEntityId.toLong)
+    state.movablePendingRouteQuery = Some(
+      model.hybrid.entity.state.PendingRouteQuery(workerId, originNodeId, destinationNodeId)
+    )
+    sendMessageTo(
+      entityId = workerId,
+      shardId = AccountedRoutingConfig.ActorClassType,
+      data = RouteQueryData(originNodeId, destinationNodeId, maxExpansions),
+      eventType = EventTypeEnum.RouteQuery.toString,
+      actorType = LoadBalancedDistributed
+    )
+    registerAwaitedReply(Movable.routeAwaitKey(workerId), "RouteQuery")
+    onFinishSpontaneous(None)
+    true
   }
 
   override def actSpontaneous(event: SpontaneousEvent): Unit =
@@ -118,6 +149,8 @@ abstract class Movable[T <: MovableState](
             !isAwaitingReply(Movable.leaveLinkAwaitKey(event.actorRefId), "LeaveLinkData", d.requestSeq)
           case _ => false
         }
+      case d: RouteReplyData =>
+        !isAwaitingReply(Movable.routeAwaitKey(event.actorRefId), "RouteQuery", d.requestSeq)
       case _ => false
     }
 
@@ -130,8 +163,22 @@ abstract class Movable[T <: MovableState](
     }
     event.data match {
       case d: LinkInfoData => handleLinkInfo(event, d)
+      case d: RouteReplyData => handleRouteReply(event, d)
       case _               => logWarn(s"Movable Event not handled: $event")
     }
+  }
+
+  private def handleRouteReply(event: ActorInteractionEvent, data: RouteReplyData): Unit = {
+    val pending = state.movablePendingRouteQuery
+    val key = Movable.routeAwaitKey(event.actorRefId)
+    if (pending.exists(_.workerId == event.actorRefId) &&
+        matchesAwaitedReply(key, "RouteQuery", data.requestSeq)) {
+      consumeAwaitedReply(key)
+      state.movablePendingRouteQuery = None
+      val result = data.result.map(r => (r.cost,
+        scala.collection.mutable.Queue.from(r.path.iterator.map(p => (p.linkId, p.nodeId)))))
+      handleCalculatedRouteResult(result)
+    } else logDebug(s"Ignoring superseded route reply from ${event.actorRefId}")
   }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
@@ -335,4 +382,6 @@ object Movable {
 
   /** Same as [[enterLinkAwaitKey]], for the `LeaveLinkData` -> `ReceiveLeaveLinkInfo` exchange. */
   def leaveLinkAwaitKey(entityId: Long): String = s"leave-link:$entityId"
+
+  def routeAwaitKey(entityId: Long): String = s"route:$entityId"
 }

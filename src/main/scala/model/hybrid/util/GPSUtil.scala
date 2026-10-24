@@ -456,14 +456,16 @@ object GPSUtil {
 
     val cacheKey = (originId, destinationId, false)
 
-    // Negative cache: avoid repeating searches that previously found no route.
-    if (isNoRouteKnown(originId, destinationId)) {
+    val cacheable = !useDynamicWeights
+
+    // Only immutable-topology routes may be cached. Dynamic paths depend on checkpointed costs.
+    if (cacheable && isNoRouteKnown(originId, destinationId)) {
       GPSMetrics.routeSource.labels("negative_cached").inc()
       return None
     }
 
     // Positive cache: return a fresh Queue copy so callers can drain it independently.
-    val cached = routeCache.get(cacheKey)
+    val cached = if (cacheable) routeCache.get(cacheKey) else null
     if (cached != null) {
       GPSMetrics.routeSource.labels("cached").inc()
       return cached.map { case (cost, pathList) => (cost, mutable.Queue(pathList: _*)) }
@@ -510,14 +512,13 @@ object GPSUtil {
             s"[GPSUtil][SLOW] compact A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
           )
         // Store path as immutable List; first writer wins (putIfAbsent is atomic).
-        routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
+        if (cacheable) routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
         Some((cost, path))
       case None =>
         System.err.println(
           s"[GPSUtil] compact A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
         )
         GPSMetrics.gpsNodeNotFound.labels("compact_no_route").inc()
-        markNoRoute(originId, destinationId)
         None
     }
   }

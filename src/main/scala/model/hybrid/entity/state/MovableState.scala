@@ -8,6 +8,8 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnu
 
 import scala.collection.mutable
 
+final case class PendingRouteQuery(workerId: Long, originNodeId: Long, destinationNodeId: Long)
+
 abstract class MovableState(
   val startTick: Long,
   val reporterType: ReportTypeEnum = null,
@@ -30,6 +32,7 @@ abstract class MovableState(
 
   // MICRO exit is proactive; the subsequent LeaveLink cleanup does not produce another reply.
   var movableLinkExitReported: Boolean = false
+  var movablePendingRouteQuery: Option[PendingRouteQuery] = None
 
   def getStatus: MovableStatusEnum = movableStatus
 

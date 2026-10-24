@@ -26,12 +26,14 @@ import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData }
+import org.interscity.htc.model.hybrid.entity.event.data.routing.LinkCostChangedData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
   LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
 }
 
 import scala.collection.mutable
+import scala.util.Success
 
 /** Hybrid link actor representing a road segment that can operate in MESO or MICRO simulation mode.
   *
@@ -166,8 +168,23 @@ class Link(
     getVehicleEntryTickFn      = id => vehicleEntryTick.get(id),
     getVehicleWaitingSecondsFn = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
     getRegisteredVehicleIdsFn  = () => state.registered.iterator.map(_.actorId).toIterable,
-    logWarnFn                  = msg => logWarn(msg)
+    logWarnFn                  = msg => logWarn(msg),
+    publishCostFn              = (cost, ttl) => publishRoutingCost(cost, ttl)
   )
+
+  private def publishRoutingCost(cost: DynamicLinkCost, ttl: Int): scala.util.Try[Unit] =
+    if (model.hybrid.util.AccountedRoutingConfig.enabled) {
+      model.hybrid.util.AccountedRoutingConfig.workerIds.foreach { workerId =>
+        sendMessageTo(
+          entityId = workerId,
+          shardId = model.hybrid.util.AccountedRoutingConfig.ActorClassType,
+          data = LinkCostChangedData(cost.linkId, cost.totalCost, currentTick),
+          eventType = EventTypeEnum.LinkCostChanged.toString,
+          actorType = LoadBalancedDistributed
+        )
+      }
+      Success(())
+    } else DynamicWeightCache.publishCost(cost, ttl)
 
   private lazy val microSimHandler = new LinkMicroSimulationHandler(
     entityIdFn                    = () => getEntityId,
@@ -211,7 +228,7 @@ class Link(
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
-    metricsReporter.publishDynamicCost()
+    if (!model.hybrid.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
     logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
   }
 
@@ -242,6 +259,7 @@ class Link(
       eventType = EventTypeEnum.RegisterLinkCapacity.toString,
       actorType = LoadBalancedDistributed
     )
+    if (model.hybrid.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =

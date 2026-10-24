@@ -48,6 +48,7 @@ class Car(
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
     copied.movableLinkExitReported   = s.movableLinkExitReported
+    copied.movablePendingRouteQuery  = s.movablePendingRouteQuery
     copied
   }
 
@@ -438,10 +439,25 @@ class Car(
       return
     }
 
+    if (requestAccountedRoute(origin, destination, Int.MaxValue)) return
+
     try
-      GPSUtil
-        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
-        match {
+      handleCalculatedRouteResult(
+        GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+      )
+    catch {
+      case e: Exception =>
+        logError(s"Exception during route request: ${e.getMessage}", e)
+        finishAndCleanup("exception_during_route_request", origin)
+    }
+  }
+
+  override protected def handleCalculatedRouteResult(
+    result: Option[(Double, mutable.Queue[(Long, Long)])]
+  ): Unit = {
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    result match {
         case Some((cost, pathQueue)) =>
           GPSMetrics.routeSource.labels("gps_calculated").inc()
           state.bestCost = cost
@@ -462,11 +478,6 @@ class Car(
           logError(s"Failed to calculate route from $origin to $destination")
           finishAndCleanup("teleported", destination, wasTeleported = true)
       }
-    catch {
-      case e: Exception =>
-        logError(s"Exception during route request: ${e.getMessage}", e)
-        finishAndCleanup("exception_during_route_request", origin)
-    }
   }
 
   private def finishAndCleanup(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit = {

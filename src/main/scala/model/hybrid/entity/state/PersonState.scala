@@ -173,6 +173,7 @@ case class PersonState(
   completedTrips: Int = 0,
   ptWaitTimeoutTicks: Long = 86400L,
   modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
+  pendingRoutingDecision: Option[PendingPersonRoutingDecision] = None,
   var scheduleAlreadyTruncated: Boolean = false,
   var scheduleCompleteReported: Boolean = false
 ) extends BaseState(
@@ -224,6 +225,8 @@ case class PersonState(
       tripExecution = TripExecutionState.Idle
     )
 }
+
+final case class PendingPersonRoutingDecision(workerId: Long, kind: String)
 
 object PersonState {
 
