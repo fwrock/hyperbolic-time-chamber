@@ -1,5 +1,11 @@
 # MICRO accuracy against real SUMO — 2026-10-24
 
+This is the historical point-node measurement audit. Finite geometry, fractional
+clock/remainder transfer and cross-link following were added in later milestones.
+See [current MICRO status](MICRO_VALIDATION_STATUS.md) for their accepted results,
+configuration and remaining scientific limits. The measurements below are retained
+as the original dated evidence.
+
 This campaign audits the earlier sibling `../tools/sumo_validation` harness and
 replaces its measurements with a tracked, reproducible comparison against real
 SUMO 1.27.1. The tracked entry point is

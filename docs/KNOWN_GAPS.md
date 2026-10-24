@@ -4,6 +4,10 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+Start with [MICRO implementation and validation status](MICRO_VALIDATION_STATUS.md)
+for the consolidated current scope, evidence, scientific interpretation and next
+acceptance gates. The dated sections below retain milestone history.
+
 ## Cross-link MICRO following and v2 validation (2026-10-25)
 
 Opt-in single-lane MICRO following now observes actual leaders across a Link
@@ -476,7 +480,7 @@ forwarding, acknowledges receiver acceptance, and holds the frontier until all
 relevant channel deliveries are settled. Fixed rounds, grace polls, and delays
 cannot prove this condition. Add an injected delayed-channel protocol regression
 to validate that independent gap. Details and protocol invariants are in
-[`TIME_WARP_ACCOUNTED_RUNTIME.md`](TIME_WARP_ACCOUNTED_RUNTIME.md#conservative-same-tick-closure-follow-up).
+[`TIME_WARP_ACCOUNTED_RUNTIME.md`](TIME_WARP_ACCOUNTED_RUNTIME.md#conservative-same-tick-closure-investigation-legacy-path).
 
 ## Conservative premature termination during vehicle activation (fixed 2026-10-22)
 

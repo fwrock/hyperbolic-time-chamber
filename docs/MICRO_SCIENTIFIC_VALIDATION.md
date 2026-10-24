@@ -1,5 +1,8 @@
 # MICRO timing and scientific validation
 
+The [consolidated status](MICRO_VALIDATION_STATUS.md) distinguishes completed
+verification/reference comparisons from the remaining empirical validation.
+
 The later [cross-link following revision and frozen v2 campaign](MICRO_CROSS_LINK_FOLLOWING.md)
 address the discharge discrepancy found here. This page retains the original v1
 methods and results, including its failed demand realizations.

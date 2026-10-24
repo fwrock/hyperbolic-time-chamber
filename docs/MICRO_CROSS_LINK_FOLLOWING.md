@@ -1,5 +1,9 @@
 # MICRO following across Link boundaries
 
+For the consolidated implementation status and remaining work, start with
+[MICRO validation status](MICRO_VALIDATION_STATUS.md). This page specifies the
+following protocol and its accepted v2 measurements.
+
 The opt-in `LinkState.downstreamLookahead` keeps a following vehicle constrained
 by its leader after the leader's front bumper enters another Link. Without this
 observation, the approach's front vehicle sees free road as soon as its leader
