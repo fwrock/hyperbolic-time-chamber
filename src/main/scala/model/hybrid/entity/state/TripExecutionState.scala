@@ -20,7 +20,11 @@ final case class PTWaitState(
   waitingSinceTick: Tick,
   timeoutTick: Tick,
   alightingNodeId: Long,
-  line: String
+  line: String,
+  boardedVehicleId: Option[Long] = None,
+  boardedVehicleClassType: Option[String] = None,
+  boardingDistance: Option[Double] = None,
+  boardingTick: Option[Tick] = None
 )
 
 /** What a [[model.hybrid.actor.Person]] is doing right now with respect to its plan.
@@ -80,12 +84,9 @@ object TripExecutionState {
     ptWait: Option[PTWaitState] = None,
     replanStrategyId: String = "travel-time",
     replanAllowedModes: Set[ConcreteMode] = ConcreteMode.values.toSet,
-    /** Real distance (metres) accumulated so far across every leg of the current contiguous run.
-      * Only private-vehicle legs ever contribute a non-zero amount (reported by the vehicle actor
-      * itself via `TripCompletedData.distanceTraveled`) — walk/PT legs always contribute 0, mirroring
-      * the pre-redesign behaviour where `PersonState.completeTrip` was always called with
-      * `distanceTraveled = 0.0` for those modes. Flushed into `PersonState.totalDistanceTraveled` by
-      * `PersonState.completeTrip` once the run ends at the next `Activity`.
+    /** Measured private-vehicle and transit distance, flushed into daily distance at the next
+      * Activity. Transit odometer differences survive transfers and rollback; walking distance
+      * is not yet included.
       */
     accumulatedDistance: Double = 0.0
   ) extends TripExecutionState

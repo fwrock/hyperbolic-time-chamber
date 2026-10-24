@@ -445,19 +445,29 @@ class PersonPlanManager(
             s"alightingNodeId=${ptWait.alightingNodeId} requestedNodeId=$nodeId " +
             s"-- no reply-identity check against the request this answers"
         )
-        val isArrival = ptHandler.handlePTUnloadRequest(event, nodeId, mode, ptWait.alightingNodeId)
+        val isArrival = ptHandler.handlePTUnloadRequest(event, nodeId, mode, ptWait.alightingNodeId,
+          ptWait.boardedVehicleId, ptWait.boardedVehicleClassType)
         if (!isArrival) {
           None
         } else {
           val travelTime = currentTick - t.legStartTick
+          val vehicleDistance = event.data match {
+            case d: model.hybrid.entity.event.data.bus.BusRequestUnloadPassengerData => d.vehicleDistance
+            case d: model.hybrid.entity.event.data.subway.SubwayRequestUnloadPassengerData => d.vehicleDistance
+            case _ => 0.0
+          }
+          val rideDistance = ptWait.boardingDistance.map { boarding =>
+            require(vehicleDistance.isFinite && vehicleDistance >= boarding, "PT odometer moved backwards")
+            vehicleDistance - boarding
+          }
           metricsReporter.reportTripAndLegMetrics(
             mode = modeLabel(mode),
             tripId = t.tripId,
             departureTime = t.legStartTick,
             arrivalTick = currentTick,
             travelTime = travelTime,
-            distance = None,
-            waitTime = Some(0L),
+            distance = rideDistance,
+            waitTime = ptWait.boardingTick.map(_ - t.legStartTick),
             currentTick = currentTick
           )
           reportFn(
@@ -467,11 +477,13 @@ class PersonPlanManager(
               "line" -> ptWait.line,
               "alighting_node" -> nodeId,
               "travel_time" -> travelTime,
+              "distance_traveled" -> rideDistance.getOrElse(0.0),
               "tick" -> currentTick
             ),
             "person_pt_trip_completed"
           )
-          val updated = state.copy(tripExecution = t.copy(physicalNodeId = nodeId, ptWait = None))
+          val updated = state.copy(tripExecution = t.copy(physicalNodeId = nodeId, ptWait = None,
+            accumulatedDistance = t.accumulatedDistance + rideDistance.getOrElse(0.0)))
           Some(step(updated, currentTick))
         }
       case tripExecution =>

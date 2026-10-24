@@ -70,7 +70,7 @@ class SubwayPassengerHandler(
       sendMessageFn(
         person.id,
         person.classType,
-        SubwayRequestUnloadPassengerData(nodeId = nodeId, nodeRef = selfRefFn())
+        SubwayRequestUnloadPassengerData(nodeId = nodeId, nodeRef = selfRefFn(), vehicleDistance = state.distance)
       )
     }
   }
@@ -84,7 +84,8 @@ class SubwayPassengerHandler(
       sendMessageFn(
         person.id,
         person.classType,
-        PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Subway")
+        PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Subway",
+          vehicleDistance = state.distance)
       )
 
     if (data.people.nonEmpty) {

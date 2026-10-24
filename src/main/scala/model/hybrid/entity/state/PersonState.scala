@@ -143,9 +143,8 @@ case class ModeChoiceWeights(
   *   current activity location (i.e. the start of the first day). Updated after each private
   *   vehicle trip so that a car left at home is unavailable from work.
   * @param totalDistanceTraveled
-  *   Total distance traveled today (meters). Only private-vehicle legs contribute a real,
-  *   non-zero distance here (reported by the vehicle actor itself on `TripCompletedData`) — this
-  *   mirrors the pre-redesign behaviour, where walk/PT legs always completed with `distance = 0.0`.
+  *   Measured private-vehicle and transit distance today (meters). Transit uses the boarded
+  *   vehicle's odometer difference; walking distance is not yet included.
   * @param completedTrips
   *   Number of trips completed today. Incremented once per contiguous leg run (not once per leg) —
   *   a multi-leg walk+transit+walk journey counts as a single trip.

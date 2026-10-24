@@ -76,7 +76,7 @@ class AccountedSchedulingIdentitySpec extends AnyFlatSpec with Matchers with Bef
     lp.expectMsg(CollectRuntimeSnapshot(freeze.round))
     lp.send(coordinator, RuntimeSnapshot(freeze.round, None, 0, 0))
     parent.expectMsg(RuntimeAdvanced(freeze.round, 1001L))
-    lp.expectMsg(CommitRuntime(freeze.round, 1001L))
+    lp.expectMsg(CommitRuntime(freeze.round, 1001L, Some(1000L)))
     lp.send(coordinator, RuntimeCommitted(freeze.round, false))
     lp.expectMsg(RetireRuntimeProcess(freeze.round, finalCut = true))
     lp.send(coordinator, RuntimeProcessRetired(freeze.round))

@@ -220,7 +220,9 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     }
     case PublishConservativeReport(target, report) => protect {
       require(byRef.contains(sender()), "report from unregistered LP")
-      require(!hasStarted || executing.contains(sender()), "model report outside an authorized batch")
+      require(!hasStarted || executing.contains(sender()) ||
+        (retirements.contains(sender()) && stopping.exists(_.finalHorizon.contains(report.tick))),
+        "model report outside an authorized batch/final horizon")
       val id = nextToken()
       reports.add(id)
       target ! CommittedReportDelivery(epoch, id, report, self)
@@ -230,13 +232,15 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       require(reports.remove(id), "unknown report receipt")
       sinks.add(sender())
       completeBatch()
+      completeStop()
     }
     case event: StopConservativeRuntime => protect {
       require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty && accepting.isEmpty && reports.isEmpty,
         "stop before worker channels drained")
       stopping = Some(event)
       retirements = byRef.keySet.toSet
-      retirements.foreach(_ ! RetireConservativeProcess(event.round, event.truncated))
+      require(event.finalHorizon.isEmpty || event.truncated, "horizon finalization without truncation")
+      retirements.foreach(_ ! RetireConservativeProcess(event.round, event.truncated, event.finalHorizon))
       completeStop()
     }
     case ConservativeProcessRetired(round) => protect {
@@ -289,7 +293,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     val next = (readyOrderedSchedules.map(_._3) ++ readyInputs.valuesIterator).minOption
     target ! ConservativeReady(round, next, blockedProcesses.size + runningEvents.size)
   }
-  private def completeStop(): Unit = if (stopping.nonEmpty && retirements.isEmpty) {
+  private def completeStop(): Unit = if (stopping.nonEmpty && retirements.isEmpty && reports.isEmpty) {
     logInfo(s"[CONSERVATIVE-ACCOUNTING] round=${stopping.get.round} transfers=$transfers receipts=$receipts outgoing=${outgoing.size} accepting=${accepting.size} crossOwnerTransfers=$crossOwnerTransfers")
     coordinator ! ConservativeRuntimeStopped(stopping.get.round, sinks.toSet)
   }

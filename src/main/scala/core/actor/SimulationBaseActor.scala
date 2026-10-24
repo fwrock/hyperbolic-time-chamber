@@ -141,6 +141,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var logicalOrder: Option[EventOrder] = None
   private var pendingSelf: Option[EventOrder] = None
   private var effectOrdinal = 0L
+  private var horizonReporting: Option[Tick] = None
+  private var finalizedHorizon: Option[Tick] = None
   private val inputQueue = new OrderedInputQueue
   private var drainingInputs = false
 
@@ -993,6 +995,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     eventType: String = "default",
     actorType: CreationTypeEnum = LoadBalancedDistributed
   ): Unit = {
+    require(horizonReporting.isEmpty, "model sends during horizon reporting")
     // Replay only rebuilds `state`: the original send of a surviving event was already delivered and
     // is never retracted, so repeating it would hand the receiver a duplicate. Sends of undone
     // events are retracted by anti-message, not resent here.
@@ -1379,7 +1382,7 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   private def runtimeMinimum: Option[Long] = {
     (inputQueue.minimumTick.toSeq ++ pendingSelf.map(_.tick) ++ pendingCancellations.map(_.tick) ++
-      (if (distributedRuntime) Iterable.empty else outstandingAwaitedReplies.values.map(_.sentAtTick)) ++ pendingCreationCallbacks.map(_._2) ++
+      (if (distributedRuntime || usesConservativeRuntime) Iterable.empty else outstandingAwaitedReplies.values.map(_.sentAtTick)) ++ pendingCreationCallbacks.map(_._2) ++
       pendingDynamicInits.values.map(_._2.data.data).map(_ => currentTick)).minOption
   }
 
@@ -1489,14 +1492,16 @@ abstract class SimulationBaseActor[T <: BaseState](
         if (!runtimeFailed) sender() ! ConservativeBatchProcessed(round, nextConservativeInput,
           outstandingAwaitedReplies.size, terminalIntent.nonEmpty)
       } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
-    case RetireConservativeProcess(round, truncated) =>
+    case RetireConservativeProcess(round, truncated, finalHorizon) =>
       if (!usesConservativeRuntime || sender() != currentTimeManager || runtimeFailed ||
         (!truncated && (inputQueue.nonEmpty || outstandingAwaitedReplies.nonEmpty))) {
         failRuntime(new IllegalStateException(s"unsafe conservative retirement of $getEntityId"))
-      } else {
+      } else try {
+        require(finalHorizon.isEmpty || truncated, "horizon reporting without truncation")
+        finalHorizon.foreach(finalizeHorizonReports)
         sender() ! ConservativeProcessRetired(round)
         physicallyRetire()
-      }
+      } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
     case RuntimeDelivery(epoch, token, event) =>
       try {
         require(runtimeAuthority.contains(sender()), "runtime delivery from non-owner")
@@ -1542,15 +1547,18 @@ abstract class SimulationBaseActor[T <: BaseState](
         pendingCreationCallbacks.size + pendingDynamicInits.size,
         queuedDispatches = if (distributedRuntime) inputQueue.queuedDispatchCount else 0,
         retention = if (distributedRuntime) Some(retainedRuntimeState) else None)
-    case CommitRuntime(round, gvt) =>
+    case CommitRuntime(round, gvt, finalHorizon) =>
       if (!runtimeAuthority.contains(sender()) || !runtimeFrozen || round <= runtimeCommitRound || gvt < runtimeGvt) {
         failRuntime(new IllegalStateException(
           s"unauthorized commit for $getEntityId at round=$round while frozen=$runtimeFrozen gvt=$gvt/$runtimeGvt"
         ))
-      } else {
+      } else try {
         runtimeCommitRound = round
         if (gvt != runtimeGvt) runtimeFrontierAt = System.nanoTime()
         runtimeGvt = gvt
+        require(finalHorizon.forall(h => gvt > h && (!distributedRuntime || h == runtimeHorizon)),
+          "horizon reporting outside a safe final cut")
+        finalHorizon.foreach(finalizeHorizonReports)
         flushBufferedReportsUpTo(gvt)
         executionLimits.foreach { grant =>
           if (grant.limits.fossilCollection) {
@@ -1565,9 +1573,10 @@ abstract class SimulationBaseActor[T <: BaseState](
         val eligible = mayRetireTerminal(gvt)
         committedRetirement = Some(round -> eligible)
         sender() ! RuntimeCommitted(round, eligible)
-      }
+      } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
     case ResumeRuntime(_) =>
-      if (!runtimeAuthority.contains(sender())) failRuntime(new IllegalStateException("resume from non-owner"))
+      if (!runtimeAuthority.contains(sender()) || finalizedHorizon.nonEmpty)
+        failRuntime(new IllegalStateException("resume from non-owner or after horizon finalization"))
       else {
         runtimeFrozen = false
         try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
@@ -1640,6 +1649,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     stateData: Any,
     relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
   ): Unit = {
+    require(horizonReporting.isEmpty, "model birth during horizon reporting")
     if (usesAccountedRuntime) {
       require(logicalOrder.nonEmpty && runtimeEpoch.nonEmpty, "birth outside an executing model event")
       val model = StringUtil.getModelClassName(classType)
@@ -1715,6 +1725,7 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   /** A terminal decision is speculative until a proven frontier passes its producing history. */
   override protected def selfDestruct(): Unit = {
+    require(horizonReporting.isEmpty, "model destruction during horizon reporting")
     if (isTimeWarp || usesAccountedRuntime) {
       terminalIntent = Some(logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong)))
       onFinishSpontaneous(None)
@@ -1779,6 +1790,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     scheduleTick: Option[Tick] = None,
     destruct: Boolean = false
   ): Unit = {
+    require(horizonReporting.isEmpty, "model completion during horizon reporting")
     // Time Warp replay (see isReplaying's doc): actSpontaneous calling this during
     // replayLoggedEvent must not re-signal the time manager -- that signal already happened, for
     // real, the first time this event was live-dispatched. Nothing to update here either:
@@ -1837,6 +1849,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The tick at which the event should be scheduled
     */
   protected def scheduleEvent(tick: Tick, resyncAfterRollback: Boolean = false): Unit = {
+    require(horizonReporting.isEmpty, "model scheduling during horizon reporting")
     // Time Warp replay: same reasoning as onFinishSpontaneous's isReplaying guard -- this actor's
     // real future schedule was already correctly registered with the time manager the first time
     // this event was live-dispatched; replaying it must not re-register (or double-register) it.
@@ -1862,6 +1875,24 @@ abstract class SimulationBaseActor[T <: BaseState](
       revision = nextScheduleRevision(),
       order = pendingSelf.map(o => org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(o.tick, o.microstep, o.key))
     ))
+  }
+
+  /** Only reporting is allowed: the globally closed final cut forbids new model effects. */
+  protected def onHorizonFinalization(horizon: Tick): Unit = ()
+
+  private def finalizeHorizonReports(horizon: Tick): Unit = {
+    require(finalizedHorizon.isEmpty && currentTick <= horizon && runtimeMinimum.forall(_ > horizon),
+      "horizon reporting before all in-horizon work is resolved or after finalization")
+    val previousTick = currentTick
+    horizonReporting = Some(horizon)
+    currentTick = horizon
+    try {
+      if (runtimeBorn) onHorizonFinalization(horizon)
+      finalizedHorizon = Some(horizon)
+    } finally {
+      currentTick = previousTick
+      horizonReporting = None
+    }
   }
 
   /** Reports data to the reporting system.
@@ -1921,6 +1952,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   private def reportToTarget(event: ReportEvent, target: ActorRef): Unit = {
+    require(horizonReporting.forall(_ == event.tick), "horizon report has a different timestamp")
     if (isReplaying) return
     if (usesConservativeRuntime && runtimeEpoch.nonEmpty) currentTimeManager ! PublishConservativeReport(target, event)
     else if (isTimeWarp || usesConservativeRuntime) reportBuffer += BufferedReport(event, target, currentEventSeq)

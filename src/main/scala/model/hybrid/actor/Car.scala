@@ -279,6 +279,14 @@ class Car(
     state.deactivateMicroMode()
   }
 
+  override protected def onHorizonFinalization(horizon: Tick): Unit =
+    if (state.status != Finished && state.status != model.hybrid.entity.state.enumeration.MovableStatusEnum.Parked &&
+      journeyReporter.sumoDepartTick.nonEmpty)
+      model.hybrid.support.JourneyHorizonReporter.report("car", getEntityId,
+        getTripOrigin.getOrElse(state.origin), getTripDestination.getOrElse(state.destination),
+        journeyReporter.sumoDepartTick.get, horizon, state.distance - getTripStartDistance,
+        state.currentPath.map(_._1), (data, label) => report(data, label))
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null || state.status == Parked) {
       onFinishSpontaneous(None)
@@ -286,7 +294,7 @@ class Car(
     }
 
     if (
-      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      !usesAccountedRuntime && !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logWarn(

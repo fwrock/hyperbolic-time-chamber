@@ -6,5 +6,6 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 
 case class BusRequestUnloadPassengerData(
   nodeId: Long,
-  nodeRef: ActorRef
+  nodeRef: ActorRef,
+  vehicleDistance: Double = 0.0
 ) extends BaseEventData

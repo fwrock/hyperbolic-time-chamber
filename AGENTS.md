@@ -197,6 +197,16 @@ Reports commit strictly below GVT; completion waits for actual sink receipt and
 storage flush ACKs. The centralized coordinator remains only as a reference/test
 implementation; the production factory does not create it.
 
+An authorized closed horizon cut invokes the reporting-only `onHorizonFinalization`
+hook before report draining. Optimistic grants require GVT strictly beyond the
+horizon; conservative stop waits for final report receipts before its flush ACK.
+No modeled sends, scheduling, birth or destruction are allowed in the hook.
+Events exactly at the inclusive horizon still execute. Censored journeys use
+`horizon_truncated=true` and SUMO arrival `-1`; never invent unfinished-link distance.
+PT distance uses checkpointed typed boarding identity and odometer differences.
+Subway counts physical arrival before boarding/unloading and guards cleanup against
+double counting. See `docs/HORIZON_AND_TRANSIT_REPORTING.md`.
+
 Optimistic execution limits are fixed at startup: default 50 ticks ahead of GVT,
 256 uncommitted events per LP above GVT, and 64 inputs per actor turn. Work exactly
 at GVT and cancellations must remain executable. Only an authorized frozen commit

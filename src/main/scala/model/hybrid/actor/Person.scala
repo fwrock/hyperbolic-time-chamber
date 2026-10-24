@@ -290,6 +290,15 @@ class Person(
             s"priorCurrentPTVehicleRef=$currentPTVehicleRef overwriting=${currentPTVehicleRef.isDefined}"
         )
         currentPTVehicleRef = Some((d.vehicleId, d.vehicleClassType))
+        require(d.vehicleDistance.isFinite && d.vehicleDistance >= 0.0, "invalid PT boarding odometer")
+        state.tripExecution match {
+          case t: TripExecutionState.Traveling if t.ptWait.nonEmpty =>
+            state = state.copy(tripExecution = t.copy(ptWait = t.ptWait.map(_.copy(
+              boardedVehicleId = Some(d.vehicleId), boardedVehicleClassType = Some(StringPool.intern(d.vehicleClassType)),
+              boardingDistance = Some(d.vehicleDistance),
+              boardingTick = Some(currentTick)))))
+          case _ =>
+        }
         state.pendingRoutingDecision match {
           case Some(pending) if pending.kind == PersonDecisionKind.PTTimeoutReplan.toString =>
             consumeAwaitedReply(routingAwaitKey(pending.workerId))

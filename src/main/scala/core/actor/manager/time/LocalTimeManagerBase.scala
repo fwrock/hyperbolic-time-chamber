@@ -182,7 +182,7 @@ abstract class LocalTimeManagerBase(
     case CollectRuntimeSnapshot(round) =>
       val minimum = (nextTick.toSeq ++ runningEvents.map(a => inFlightTickOf(a.id))).minOption
       sender() ! RuntimeSnapshot(round, minimum, blockedActors.size, 0)
-    case CommitRuntime(round, _) => sender() ! RuntimeCommitted(round, false)
+    case CommitRuntime(round, _, _) => sender() ! RuntimeCommitted(round, false)
     case ResumeRuntime(_) => runtimeFrozen = false; if (hasStarted) advanceToNextTick()
     case RuntimeStopManagers(round) =>
       runtimeFrozen = true

@@ -20,6 +20,10 @@ Hybrid dynamic routing can now participate through
 correlated replies use these same owner ledgers and rollback rules; unaccounted
 shared caches remain rejected.
 
+At a proven truncated final cut, `CommitRuntime.finalHorizon` authorizes
+[read-only horizon reporting](HORIZON_AND_TRANSIT_REPORTING.md) before the same
+report-receipt/flush barrier. It neither dispatches a model event nor changes GVT.
+
 ## Ownership and data delivery
 
 The GTM fixes LTM membership, assigns typed logical process IDs to owners and waits

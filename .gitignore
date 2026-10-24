@@ -49,6 +49,9 @@ scripts/scenario/*
 !scripts/scenario/generate_tiny_validation_scenario.py
 !scripts/scenario/generate_dynamic_routing_validation_scenario.py
 !scripts/scenario/validate_dynamic_routing_reports.py
+!scripts/scenario/generate_transit_reporting_validation_scenario.py
+!scripts/scenario/generate_horizon_vehicle_validation_scenario.py
+!scripts/scenario/validate_horizon_vehicle_reports.py
 
 ### VS Code ###
 .vscode/

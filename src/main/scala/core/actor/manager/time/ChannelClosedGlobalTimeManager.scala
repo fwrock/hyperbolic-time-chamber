@@ -193,7 +193,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       require(truncated || ready.valuesIterator.forall(_.blocked == 0), "unresolved replies without future work")
       phase = Stopping
       pending = workers.toSet
-      workers.foreach(_ ! StopConservativeRuntime(round, truncated))
+      workers.foreach(_ ! StopConservativeRuntime(round, truncated, Option.when(truncated)(horizon)))
     } else {
       val order = next.get
       val stage = order.tick -> order.microstep

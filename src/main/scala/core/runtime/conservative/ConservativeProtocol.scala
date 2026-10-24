@@ -21,7 +21,7 @@ final case class ExecuteConservativeBatch(round: Long, tick: Long, microstep: Lo
 final case class ConservativeBatchProcessed(round: Long, next: Option[EventOrder], blocked: Int, terminal: Boolean = false) extends ConservativeCommand
 final case class ConservativeBatchComplete(round: Long) extends ConservativeCommand
 final case class PublishConservativeReport(target: ActorRef, event: ReportEvent) extends ConservativeCommand
-final case class StopConservativeRuntime(round: Long, truncated: Boolean) extends ConservativeCommand
-final case class RetireConservativeProcess(round: Long, truncated: Boolean) extends ConservativeCommand
+final case class StopConservativeRuntime(round: Long, truncated: Boolean, finalHorizon: Option[Long] = None) extends ConservativeCommand
+final case class RetireConservativeProcess(round: Long, truncated: Boolean, finalHorizon: Option[Long] = None) extends ConservativeCommand
 final case class ConservativeProcessRetired(round: Long) extends ConservativeCommand
 final case class ConservativeRuntimeStopped(round: Long, sinks: Set[ActorRef]) extends ConservativeCommand

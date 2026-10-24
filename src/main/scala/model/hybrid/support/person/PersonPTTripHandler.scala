@@ -77,9 +77,13 @@ class PersonPTTripHandler(
     event: ActorInteractionEvent,
     nodeId: Long,
     mode: ConcreteMode,
-    alightingNodeId: Long
+    alightingNodeId: Long,
+    expectedVehicleId: Option[Long] = None,
+    expectedVehicleClassType: Option[String] = None
   ): Boolean = {
-    val isArrival = alightingNodeId == nodeId
+    val isArrival = alightingNodeId == nodeId && expectedVehicleId.forall(_ == event.actorRefId) &&
+      expectedVehicleClassType.forall(expected =>
+        core.util.StringUtil.getModelClassName(expected) == core.util.StringUtil.getModelClassName(event.actorClassType))
 
     val responseData =
       if (mode == ConcreteMode.Subway) SubwayUnloadPassengerData(isArrival = isArrival)
