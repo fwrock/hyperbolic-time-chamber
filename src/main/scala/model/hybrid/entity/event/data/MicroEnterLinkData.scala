@@ -36,5 +36,6 @@ case class MicroEnterLinkData(
   microTimeStep: Double,
   ticksPerGlobalTick: Int,
   initialVelocity: Option[Double] = None,
-  junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None
+  junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None,
+  initialPosition: Double = 0.0
 ) extends BaseEventData

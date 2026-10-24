@@ -34,7 +34,8 @@ class CarMicroHandler(
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
   private val getCurrentLinkIdFn: () => Option[Long],
-  private val microUpdateReportEvery: Int = 0
+  private val microUpdateReportEvery: Int = 0,
+  private val runtimeOwnsHorizonFn: () => Boolean = () => false
 ) {
 
   private var microUpdateReportCount: Long = 0L
@@ -51,7 +52,7 @@ class CarMicroHandler(
     val speedLimitMs = data.speedLimit / 3.6
 
     val initialMicroState = MicroCarState(
-      positionInLink = 0.0,
+      positionInLink = data.initialPosition,
       velocity       = data.initialVelocity.getOrElse(state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed)),
       acceleration   = 0.0,
       currentLane    = data.assignedLane,
@@ -63,6 +64,7 @@ class CarMicroHandler(
 
     state.activateMicroMode(initialMicroState)
     state.status = Moving
+    state.journey.secondsPerTick = data.microTimeStep * data.ticksPerGlobalTick
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     // Ideal travel time: length(m) / speed(m/s)
     journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
@@ -84,6 +86,7 @@ class CarMicroHandler(
         "link_length"           -> data.linkLength,
         "speed_limit"           -> data.speedLimit,
         "initial_velocity"      -> initialMicroState.velocity,
+        "initial_position"      -> data.initialPosition,
         "micro_time_step"       -> data.microTimeStep,
         "ticks_per_global_tick" -> data.ticksPerGlobalTick,
         "tick"                  -> tick
@@ -96,7 +99,7 @@ class CarMicroHandler(
 
   def handleMicroUpdate(data: MicroUpdateData, state: CarState): Unit = {
     if (
-      !extendSimulationFn()
+      !runtimeOwnsHorizonFn() && !extendSimulationFn()
       && currentTickFn() >= simulationEndTickFn()
       && state.status != org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Finished
     ) {
@@ -154,6 +157,8 @@ class CarMicroHandler(
     val travelTime = getLinkEntryTickFn().map(currentTickFn() - _).getOrElse(0L)
 
     state.movableLinkExitReported = true
+    state.journey.boundaryRemainderSeconds = data.remainingStepSeconds
+    state.journey.boundaryExitTick = Some(currentTickFn())
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")

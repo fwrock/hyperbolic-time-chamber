@@ -139,7 +139,7 @@ class Car(
     getTripDestinationFn        = () => getTripDestination,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
-    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks),
+    onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks, state.journey.secondsPerTick),
     isTimeWarpFn                = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
     registerAwaitedReplyFn      = (key, kind) => registerAwaitedReply(key, kind),
     isAwaitingReplyFn           = (key, kind, seq) => isAwaitingReply(key, kind, seq),
@@ -185,7 +185,8 @@ class Car(
     setLinkEntryTickFn    = tick => linkEntryTick = tick,
     getLinkEntryTickFn    = () => linkEntryTick,
     getCurrentLinkIdFn    = () => currentLinkId,
-    microUpdateReportEvery = microUpdateReportEvery
+    microUpdateReportEvery = microUpdateReportEvery,
+    runtimeOwnsHorizonFn = () => usesAccountedRuntime
   )
 
   private lazy val emissionHandler = new CarEmissionHandler(
@@ -289,7 +290,7 @@ class Car(
       model.hybrid.support.JourneyHorizonReporter.report("car", getEntityId,
         getTripOrigin.getOrElse(state.origin), getTripDestination.getOrElse(state.destination),
         journeyReporter.sumoDepartTick.get, horizon, state.distance - getTripStartDistance,
-        state.currentPath.map(_._1), (data, label) => report(data, label))
+        state.currentPath.map(_._1), (data, label) => report(data, label), state.journey.secondsPerTick)
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null || state.status == Parked) {
@@ -505,6 +506,8 @@ class Car(
     signalHandler.handleLinkAccess(data, state, eventTick = event.tick, eventSeq = event.seq)
 
   override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
+  override protected def microEntryRemainderSeconds: Double =
+    state.journey.entryRemainderAt(currentTick)
 
   override def leavingLink(): Unit = {
     mesoExitTick = None

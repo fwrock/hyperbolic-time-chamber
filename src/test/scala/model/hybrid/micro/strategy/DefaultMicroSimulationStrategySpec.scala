@@ -20,6 +20,7 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     update.subTick shouldBe 0
     update.velocity shouldBe 10.26 +- 1e-9
     update.position shouldBe 100.0
+    update.remainingStepSeconds shouldBe (1.026 - 0.5) / 10.26 +- 1e-9
     lane shouldBe empty
   }
 
@@ -43,6 +44,23 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     advance(lane, tick = 35L) shouldBe empty
     lane.head.position shouldBe 0.0
     advance(lane, tick = 36L).head.position shouldBe 1.43 +- 1e-9
+  }
+
+  it should "preserve distance over repeated fine-clock boundaries instead of discarding each step remainder" in {
+    val strategy = DefaultMicroSimulationStrategy()
+    val speed = 10.0
+    var lane = mutable.Queue(VehicleInLane(1L, "cars", 0.0, speed, 0.0, 4.5))
+    var completed = 0
+    for (tick <- 1L to 100L) {
+      val updates = strategy.executeSubTick(mutable.Map(0 -> lane), 0, tick, 7.3, speed * 3.6,
+        0.1, 1, mutable.Map.empty)
+      updates.find(_.reachedEnd).foreach { exit =>
+        completed += 1
+        lane = mutable.Queue(VehicleInLane(1L, "cars", speed * exit.remainingStepSeconds,
+          speed, 0.0, 4.5, entryTick = tick))
+      }
+    }
+    completed * 7.3 + lane.head.position shouldBe 100.0 +- 1e-8
   }
 
   it should "use the leader's rear bumper and its state at the start of the sub-tick" in {

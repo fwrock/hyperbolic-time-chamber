@@ -130,10 +130,11 @@ class CarSignalHandler(
     if (data.phase == Red) {
       journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
-      val headwayTicks     = 2L
+      val headwayTicks     = core.util.SimulationClock(journeyReporter.secondsPerTick).ticksCeil(2.0)
       val waitUntilTick    = data.nextTick + data.queuePosition.toLong * headwayTicks
       val waitTicks        = math.max(0L, waitUntilTick - tick)
-      if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0, deltaSeconds = waitTicks.toDouble)
+      if (waitTicks > 0) journeyReporter.updateHaltingState(speed = 0.0,
+        deltaSeconds = waitTicks.toDouble * journeyReporter.secondsPerTick)
       if (waitTicks > 0) onSignalWaitFn(waitTicks)
 
       reportFn(

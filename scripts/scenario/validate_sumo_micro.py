@@ -18,6 +18,7 @@ CASES = {
     'crossing': ([200.0, 100.0], [0, 10, 20, 30, 40, 50], False),
     'signal': ([200.0, 100.0], [0, 10, 20, 30, 40, 50], True),
     'signal-boundary': ([200.0, 100.0], [12], True),
+    'long-route': ([100.0] * 12, [0], False),
 }
 
 
@@ -28,14 +29,37 @@ def write_json(path, data):
 def input_hashes(root):
     files=list((root/'data').glob('*.json'))
     files += [root/name for name in ('canonical.json','discrete-event.json','time-warp.json')]
+    if (root/'experiment.json').exists(): files.append(root/'experiment.json')
     files += [p for p in (root/'sumo').glob('*') if p.suffix in ('.xml','.sumocfg')
               and p.name not in ('fcd.xml','tripinfo.xml')]
     return {str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(files)}
 
 
-def generate(root, case, junction_geometry=False, turn="straight"):
+def generate(root, case, junction_geometry=False, turn="straight", parameters=None):
+    parameters = parameters or {}
+    for key,value in dict(accelMps2=2.6,decelMps2=4.5,reactionSeconds=1,minGapM=2,vehicleLengthM=4.5,sumoSigma=0).items():
+        assert parameters.get(key,value)==value, ('unsupported physics override',key)
     lengths, departures, signal = CASES[case]
-    if junction_geometry and case == 'signal-boundary':
+    lengths = list(parameters.get('roadLengths', lengths))
+    departures = list(parameters.get('departuresSeconds', departures))
+    quantum = float(parameters.get('runtimeTickSeconds', 1.0))
+    physics_step = float(parameters.get('physicsStepSeconds', 0.1))
+    carry = bool(parameters.get('carryRemainder', False))
+    seed = int(parameters.get('seed', 42))
+    horizon = float(parameters.get('horizonSeconds', 180))
+    speed_limit_kmh = float(parameters.get('speedLimitKmh',50.0))
+    initial_speeds = list(parameters.get('initialSpeedsMps',[0.0]*len(departures)))
+    assert math.isfinite(speed_limit_kmh) and speed_limit_kmh > 0
+    assert len(initial_speeds)==len(departures) and all(math.isfinite(v) and 0<=v<=speed_limit_kmh/3.6+1e-9 for v in initial_speeds)
+    assert lengths and all(math.isfinite(x) and x > 0 for x in lengths)
+    assert departures and departures == sorted(set(departures)) and departures[0] >= 0
+    assert 0 < quantum <= 1 and physics_step > 0 and abs(quantum / physics_step - round(quantum / physics_step)) < 1e-8
+    assert not carry or abs(physics_step - quantum) < 1e-9
+    def ticks(seconds):
+        value = seconds / quantum
+        assert abs(value-round(value)) < 1e-7, ('time is not on the selected runtime clock',seconds,quantum)
+        return round(value)
+    if junction_geometry and case == 'signal-boundary' and 'departuresSeconds' not in parameters:
         # The compiled stop-line approach is shorter: retain a crossing just before red at t=30.
         departures = [13]
     if junction_geometry and len(lengths) != 2:
@@ -43,7 +67,7 @@ def generate(root, case, junction_geometry=False, turn="straight"):
     import generate_tiny_validation_scenario as tiny
     tiny._ID_REGISTRY = tiny.IdRegistry()
     build_scenario(root, str(root), 1, len(lengths) + 1, 0, len(departures), 0, 0, 0, 0,
-                   0.0, None, 2, 'travel-time', 42)
+                   0.0, None, 2, 'travel-time', seed)
     def read(name):
         return json.loads((root / 'data' / name).read_text())
     nodes, roads, cars = read('nodes_0.json'), read('links_0.json'), read('cars_0.json')
@@ -51,15 +75,16 @@ def generate(root, case, junction_geometry=False, turn="straight"):
     for road in roads:
         state = road['data']['content']
         state.update(simulationMode='MICRO', length=lengths[min(state['from'], state['to']) - 1],
-                     speedLimit=50.0, freeSpeed=50.0)
+                     speedLimit=speed_limit_kmh, freeSpeed=speed_limit_kmh)
         if state['from'] < state['to']:
             forward.append(road)
     forward.sort(key=lambda r: r['data']['content']['from'])
-    for car, depart in zip(cars, departures):
+    for car, depart, initial_speed in zip(cars, departures, initial_speeds):
         state = car['data']['content']
-        state.update(startTick=depart, scheduleOnTimeManager=True, origin=1, destination=len(nodes),
+        state.update(startTick=ticks(depart), scheduleOnTimeManager=True, origin=1, destination=len(nodes),
                      status='RouteWaiting', currentNode=1,
                      precomputedRoute=[dict(linkId=r['id'], nodeId=r['data']['content']['to']) for r in forward])
+        if initial_speed: state['journey']=dict(sumoArrivalSpeed=initial_speed)
         car['dependencies']={'from_node':dict(id=1,classType='hybrid.actor.Node'),
                              'to_node':dict(id=len(nodes),classType='hybrid.actor.Node')}
     for name, data in [('links_0.json', roads), ('cars_0.json', cars)]:
@@ -81,12 +106,17 @@ def generate(root, case, junction_geometry=False, turn="straight"):
             dataSource=dict(sourceType='json',info=dict(path=str(root/'data/traffic_signals_0.json')))))
     write_json(root / 'data/nodes_0.json', nodes)
     write_json(root / 'data/city_map.json', city_map_payload(nodes, roads, []))
-    config.update(duration=180, endTick=180, id='sumo-micro-' + case)
+    config.update(duration=ticks(horizon), endTick=ticks(horizon), tickDuration=quantum, id='sumo-micro-' + case,
+                  randomSeed=seed)
     for policy in ('discrete-event', 'time-warp'):
         write_json(root / (policy + '.json'), dict(config, timeManagerType=policy))
     canonical = dict(case=case, lengths=lengths, departures=departures, signal=signal,
         vehicles=[str(r['id']) for r in cars], links=[str(r['id']) for r in forward],
-        speedLimitMps=50/3.6, nodeGeometry='point junction; no internal links', seed=42)
+        speedLimitMps=speed_limit_kmh/3.6, nodeGeometry='point junction; no internal links', seed=seed,
+        initialSpeedsMps=initial_speeds,
+        runtimeTickSeconds=quantum, physicsStepSeconds=physics_step, carryRemainder=carry,
+        comparisonStepSeconds=parameters.get('comparisonStepSeconds', 1.0 if quantum == 1 else quantum),
+        horizonSeconds=horizon)
     write_json(root / 'canonical.json', canonical)
     road_links = list(canonical['links'])
     sumo = root / 'sumo'
@@ -116,12 +146,12 @@ def generate(root, case, junction_geometry=False, turn="straight"):
     for link in (roads if junction_geometry else forward):
         state = link['data']['content']
         attributes = {'id':str(link['id']), 'from':str(state['from']), 'to':str(state['to']),
-                      'numLanes':'1', 'speed':str(50/3.6)}
+                      'numLanes':'1', 'speed':str(speed_limit_kmh/3.6)}
         if not junction_geometry: attributes['length'] = str(state['length'])
         ET.SubElement(edges, 'edge', attributes)
     for node, edge in extra_arms:
-        ET.SubElement(edges, 'edge', {'id':edge, 'from':'2', 'to':node, 'numLanes':'1', 'speed':str(50/3.6)})
-        ET.SubElement(edges, 'edge', {'id':edge+'_in', 'from':node, 'to':'2', 'numLanes':'1', 'speed':str(50/3.6)})
+        ET.SubElement(edges, 'edge', {'id':edge, 'from':'2', 'to':node, 'numLanes':'1', 'speed':str(speed_limit_kmh/3.6)})
+        ET.SubElement(edges, 'edge', {'id':edge+'_in', 'from':node, 'to':'2', 'numLanes':'1', 'speed':str(speed_limit_kmh/3.6)})
     xml('edges.xml', edges)
     command = ['netconvert','--node-files',str(sumo/'nodes.xml'),'--edge-files',str(sumo/'edges.xml'),
                '--output-file',str(sumo/'net.xml'),'--no-turnarounds']
@@ -201,16 +231,36 @@ def generate(root, case, junction_geometry=False, turn="straight"):
             nodeGeometry='explicit internal connector; non-conflicting single movement',
             sumoLaneMap=lane_map, referenceControl='protected selected movement; all other approaches red')
         write_json(root/'canonical.json', canonical)
+    for road in roads:
+        road['data']['content'].update(microTimeStep=physics_step,
+            microTicksPerGlobalTick=round(quantum/physics_step), carryMicroRemainder=carry)
+    write_json(root/'data/links_0.json', roads)
+    if signal:
+        signals = read('traffic_signals_0.json')
+        for actor in signals:
+            state=actor['data']['content']
+            for key in ('startTick','cycleDuration','offset'): state[key]=ticks(state[key])
+            for phase in state['phases']:
+                for key in ('greenStart','greenDuration'): phase[key]=ticks(phase[key])
+            for value in state['signalStates'].values():
+                for key in ('remainingTime','nextTick'): value[key]=ticks(value[key])
+        write_json(root/'data/traffic_signals_0.json',signals)
+    if quantum != 1:
+        supported={'hybrid.actor.Node','hybrid.actor.Link','hybrid.actor.Car','hybrid.actor.TrafficSignal'}
+        config['actorsDataSources']=[s for s in config['actorsDataSources'] if s['classType'] in supported]
+        config['postLoadRegistrationClasses']=[]
+    for policy in ('discrete-event','time-warp'):
+        write_json(root/(policy+'.json'),dict(config,timeManagerType=policy))
     routes = ET.Element('routes')
     ET.SubElement(routes,'vType',id='car',carFollowModel='Krauss',accel='2.6',decel='4.5',
-                  minGap='2',tau='1',length='4.5',sigma='0',speedFactor='1',speedDev='0',maxSpeed=str(50/3.6))
-    for vehicle, depart in zip(canonical['vehicles'],departures):
-        item=ET.SubElement(routes,'vehicle',id=vehicle,type='car',depart=str(depart),departSpeed='0',departPos='0')
+                  minGap='2',tau='1',length='4.5',sigma='0',speedFactor='1',speedDev='0',maxSpeed=str(speed_limit_kmh/3.6))
+    for vehicle, depart, initial_speed in zip(canonical['vehicles'],departures,initial_speeds):
+        item=ET.SubElement(routes,'vehicle',id=vehicle,type='car',depart=str(depart),departSpeed=str(initial_speed),departPos='0')
         ET.SubElement(item,'route',edges=' '.join(road_links))
     xml('routes.xml', routes)
     cfg = ET.Element('configuration')
     for group, settings in [('input',{'net-file':'net.xml','route-files':'routes.xml'}),
-        ('time',{'end':'180','step-length':'0.1'}),
+        ('time',{'end':str(horizon),'step-length':str(physics_step)}),
         ('processing',{'time-to-teleport':'-1','collision.action':'warn'}),
         ('output',{'fcd-output':'fcd.xml','tripinfo-output':'tripinfo.xml','precision':'6',
                    'fcd-output.attributes':'id,speed,pos,lane,odometer' + (',x,y' if junction_geometry else '')})]:
@@ -230,9 +280,9 @@ def trajectory(rows, canonical):
     for row in rows:
         label, data = row['event_type'], row['data']
         if label not in ('enter_micro_link','micro_update','leave_micro_link'): continue
-        vehicle, tick = str(data['car_id']), float(data['tick'])
+        vehicle, tick = str(data['car_id']), round(float(data['tick']) * canonical.get('runtimeTickSeconds',1.0),9)
         link = str(data['link_id'])
-        if label == 'enter_micro_link': position,speed,priority = 0.0,data['initial_velocity'],0
+        if label == 'enter_micro_link': position,speed,priority = data.get('initial_position',0.0),data['initial_velocity'],0
         elif label == 'micro_update': position,speed,priority = data['position'],data['velocity'],1
         else: position,speed,priority = data['final_position'],data['final_velocity'],2
         key=(vehicle,tick)
@@ -249,10 +299,11 @@ def sumo_samples(path, canonical=None):
     for _, elem in ET.iterparse(path,events=('end',)):
         if elem.tag != 'timestep': continue
         tick=float(elem.attrib['time'])
-        if abs(tick-round(tick)) < 1e-6:
+        step=(canonical or {}).get('comparisonStepSeconds',1.0)
+        if abs(tick/step-round(tick/step)) < 1e-6:
             for v in elem.findall('vehicle'):
                 a=v.attrib
-                samples[(a['id'],float(round(tick)))]=dict(time=tick,vehicle=a['id'],link=(canonical or {}).get('sumoLaneMap',{}).get(a['lane'],{}).get('linkId',(canonical or {}).get('sumoLinkMap',{}).get(a['lane'].rsplit('_',1)[0],a['lane'].rsplit('_',1)[0])),
+                samples[(a['id'],round(tick,9))]=dict(time=tick,vehicle=a['id'],link=(canonical or {}).get('sumoLaneMap',{}).get(a['lane'],{}).get('linkId',(canonical or {}).get('sumoLinkMap',{}).get(a['lane'].rsplit('_',1)[0],a['lane'].rsplit('_',1)[0])),
                     position=float(a['pos'])+(canonical or {}).get('sumoLaneMap',{}).get(a['lane'],{}).get('offset',0.0),distance=float(a['odometer']),speed=float(a['speed']))
         elem.clear()
     return samples
@@ -275,7 +326,7 @@ def compare(rows, fcd, tripinfo, canonical):
         assert len(complete)==1 and not complete[0].get('horizon_truncated',False), (vehicle,'missing actual HTC completion')
         assert vehicle in trips, (vehicle,'missing actual SUMO completion')
         a,b=complete[0],trips[vehicle]
-        assert a['depart']==departure and float(b['depart'])==departure, 'departure mismatch must be explicit'
+        assert math.isclose(a['depart'],departure,abs_tol=1e-8) and math.isclose(float(b['depart']),departure,abs_tol=1e-8), 'departure mismatch must be explicit'
         assert math.isclose(a['routeLength'],sum(canonical['lengths']),abs_tol=1e-6)
         if canonical.get('junctionGeometry'):
             assert math.isclose(float(b['routeLength']),sum(canonical['lengths']),abs_tol=1e-5), 'junction distance counted twice or omitted'
@@ -295,6 +346,7 @@ def compare(rows, fcd, tripinfo, canonical):
             durationDelta=a['arrival']-a['depart']-float(b['duration']),
             htcNodeDelayTicks=[entries[i+1]['tick']-leaves[i]['tick'] for i in range(len(leaves)-1)],
             htcLinkEntryTicks=[r['tick'] for r in entries],htcLinkExitTicks=[r['tick'] for r in leaves],
+            htcLinkEntryPositions=[r.get('initial_position',0.0) for r in entries],
             htcExitSpeeds=[r['final_velocity'] for r in leaves]))
         result[-1]['sumoLinkEntryTimes']=[first_sumo_link_tick.get((vehicle,link)) for link in canonical['links']]
     assert {k[0] for k in htc}=={k[0] for k in sumo}==set(canonical['vehicles']), 'missing/unexpected vehicles'
@@ -316,7 +368,7 @@ def geometry_checks(rows, canonical):
     speed_ok=True
     for row in samples:
         data=row['data']
-        position=0.0 if row['event_type']=='enter_micro_link' else data.get('position',data.get('final_position'))
+        position=data.get('initial_position',0.0) if row['event_type']=='enter_micro_link' else data.get('position',data.get('final_position'))
         speed=data.get('velocity',data.get('final_velocity',data.get('initial_velocity')))
         speed_ok &= speed<=geometry['speedLimitMps']+1e-9
         target=position/geometry['lengthMeters']*shape_length
@@ -340,35 +392,42 @@ def geometry_checks(rows, canonical):
 
 
 def model_checks(rows, metrics, canonical):
+    quantum=canonical.get('runtimeTickSeconds',1.0)
     phases=sorted((r['data']['tick'],r['data']['phase_state']) for r in rows if r['event_type']=='signal_phase_change')
     timing_ok=True
     momentum_ok=True
     for vehicle in canonical['vehicles']:
         entries=sorted((r['data'] for r in rows if r['event_type']=='enter_micro_link' and str(r['data']['car_id'])==vehicle),key=lambda d:d['tick'])
         leaves=sorted((r['data'] for r in rows if r['event_type']=='leave_micro_link' and str(r['data']['car_id'])==vehicle),key=lambda d:d['tick'])
-        timing_ok &= all(r['travel_time_seconds']==r['tick']-entry['tick'] for entry,r in zip(entries,leaves))
+        timing_ok &= all(math.isclose(r['travel_time_seconds'],(r['tick']-entry['tick'])*quantum,abs_tol=1e-8) for entry,r in zip(entries,leaves))
         momentum_ok &= all(math.isclose(entry['initial_velocity'],min(leave['final_velocity'],canonical['speedLimitMps']),abs_tol=1e-9)
                            for leave,entry in zip(leaves,entries[1:]))
     checks=dict(noArtificialNodeDelay=all(delay==0 for v in metrics['vehicles'] for delay in v['htcNodeDelayTicks']),
         crossingMomentum=momentum_ok and all(speed>0 for v in metrics['vehicles'] for speed in v['htcExitSpeeds']),
         elapsedLinkTime=timing_ok,
-        inclusiveSignalPhases=phases==([(tick,'Green' if tick%60==0 else 'Red') for tick in range(0,181,30)] if canonical['signal'] else []),
-        noRedIntervalCrossing=not canonical['signal'] or all((tick-1)%60<30 for v in metrics['vehicles'] for tick in v['htcLinkExitTicks'][:1]),
-        tripTimeWithinClockResolution=metrics['maxAbsDurationDelta']<=len(canonical['links'])+0.1)
+        inclusiveSignalPhases=phases==([(round(tick/quantum),'Green' if tick%60==0 else 'Red') for tick in range(0,int(canonical.get('horizonSeconds',180))+1,30)] if canonical['signal'] else []),
+        noRedIntervalCrossing=not canonical['signal'] or all(((tick-1)*quantum+1e-8)%60<30 for v in metrics['vehicles'] for tick in v['htcLinkExitTicks'][:1]),
+        tripTimeWithinClockResolution=metrics['maxAbsDurationDelta']<=len(canonical['links'])*quantum+canonical.get('physicsStepSeconds',0.1)+1e-8)
     checks.update(geometry_checks(rows,canonical))
     if canonical.get('junctionGeometry'):
         limit=canonical['junctionGeometry']['speedLimitMps']
         checks['turnSpeedOnApproach']=all(v['htcExitSpeeds'][0]<=limit+0.45+1e-9 for v in metrics['vehicles'])
-        checks['finiteJunctionTraversal']=all(v['htcLinkExitTicks'][1]-v['htcLinkEntryTicks'][1]>=canonical['lengths'][1]/limit-1e-9 for v in metrics['vehicles'])
+        checks['finiteJunctionTraversal']=all((v['htcLinkExitTicks'][1]-v['htcLinkEntryTicks'][1])*quantum >=
+            (canonical['lengths'][1]-v.get('htcLinkEntryPositions',[0,0,0])[1])/limit-1e-9 for v in metrics['vehicles'])
     return checks
 
 
 def run(args):
     root=args.output.resolve()
     root.mkdir(parents=True,exist_ok=False)
-    canonical=generate(root,args.case,args.junction_geometry,args.turn)
+    parameters=json.loads(args.experiment.read_text()) if getattr(args,'experiment',None) else {}
+    assert parameters.get('case',args.case)==args.case, 'experiment and CLI case disagree'
+    assert parameters.get('turn',args.turn)==args.turn, 'experiment and CLI turn disagree'
+    assert parameters.get('junctionGeometry',args.junction_geometry)==args.junction_geometry, 'experiment and CLI geometry disagree'
+    if parameters: write_json(root/'experiment.json',parameters)
+    canonical=generate(root,args.case,args.junction_geometry,args.turn,parameters)
     sumo=root/'sumo'
-    command=['sumo','-c','scenario.sumocfg','--seed','42']
+    command=['sumo','-c','scenario.sumocfg','--seed',str(canonical['seed'])]
     write_json(sumo/'command.json',command)
     result=subprocess.run(command,cwd=sumo,capture_output=True,text=True,timeout=args.timeout)
     (sumo/'run.log').write_text(result.stdout+result.stderr)
@@ -392,11 +451,13 @@ def run(args):
     rows=read_htc(root/'htc/reports')
     metrics=compare(rows,sumo/'fcd.xml',sumo/'tripinfo.xml',canonical)
     checks=model_checks(rows,metrics,canonical)
-    record=dict(case=args.case,policy=args.policy,seed=42,jarSha256=runner['jarSha256'],
+    record=dict(case=args.case,policy=args.policy,seed=canonical['seed'],jarSha256=runner['jarSha256'],
         sumoVersion=subprocess.check_output(['sumo','--version'],text=True).splitlines()[0],
         canonical=canonical,rollbacks=log.count('[TW-ROLLBACK]'),measurementValid=True,
         modelChecks=checks,passed=all(checks.values()),**metrics)
     record['inputSha256']=input_hashes(root)
+    record['parameters']=parameters
+    record['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     write_json(root/'comparison.json',record)
     print(json.dumps(record,indent=2))
     assert args.measure_only or record['passed'], 'model checks failed; comparison.json preserves the measurements'
@@ -413,6 +474,7 @@ def main():
     parser.add_argument('--base-port',type=int,default=28500)
     parser.add_argument('--timeout',type=int,default=180)
     parser.add_argument('--measure-only',action='store_true',help='Record an old model baseline even when model checks fail; simulator/measurement failures still fail')
+    parser.add_argument('--experiment',type=Path,help='Frozen physical inputs and clock settings for a scientific benchmark case')
     args=parser.parse_args()
     run(args)
 

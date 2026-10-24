@@ -201,7 +201,8 @@ class DefaultMicroSimulationStrategy(
         )
 
         val rawNewPosition = vehicle.position + cappedVelocity * microTimeStep
-        val newPosition = math.min(rawNewPosition, linkLength)
+        val newPosition = if (math.abs(rawNewPosition - linkLength) < 1e-10) linkLength
+          else math.min(rawNewPosition, linkLength)
 
         val exitBlocked = signalAtExit.contains(Red)
         val reachedEnd = newPosition >= linkLength && !exitBlocked
@@ -234,7 +235,10 @@ class DefaultMicroSimulationStrategy(
             gapToLeader = gap,
             leaderVelocity = leaderVel,
             safeVelocity = actualVelocity,
-            reachedEnd = reachedEnd
+            reachedEnd = reachedEnd,
+            remainingStepSeconds = if (reachedEnd && cappedVelocity > 0.0)
+              math.max(0.0, math.min(microTimeStep, (rawNewPosition - linkLength) / cappedVelocity))
+            else 0.0
           )
         }
       }

@@ -86,6 +86,15 @@ class SumoComparisonTest(unittest.TestCase):
         self.assertEqual(samples['v',1]['link'],'700')
         self.assertAlmostEqual(samples['v',1]['position'],5.07)
 
+    def test_fine_runtime_ticks_and_carried_entry_positions_use_physical_trace_times(self):
+        self.fcd.write_text('<fcd-export><timestep time="0.1"><vehicle id="v" lane="6_0" pos="0.4" speed="10" odometer="200.4"/></timestep></fcd-export>')
+        canonical=dict(links=['4','6'],lengths=[200,100],runtimeTickSeconds=0.1,comparisonStepSeconds=0.1)
+        rows=[dict(event_type='enter_micro_link',data=dict(car_id='v',tick=1,link_id=6,initial_velocity=10,initial_position=0.4))]
+        a=trajectory(rows,canonical)
+        b=sumo_samples(self.fcd,canonical)
+        self.assertEqual(set(a),set(b))
+        self.assertAlmostEqual(a['v',0.1]['distance'],b['v',0.1]['distance'])
+
     def test_an_off_path_junction_coordinate_is_rejected(self):
         canonical=dict(vehicles=['v'],links=['4','700','6'],junctionGeometry=dict(
             shape=[dict(x=0,y=0),dict(x=3,y=4)],lengthMeters=5,speedLimitMps=2,outgoingLinkId=6))

@@ -127,5 +127,6 @@ case class MicroVehicleUpdate(
   gapToLeader: Double,
   leaderVelocity: Double,
   safeVelocity: Double,
-  reachedEnd: Boolean = false
+  reachedEnd: Boolean = false,
+  remainingStepSeconds: Double = 0.0
 )

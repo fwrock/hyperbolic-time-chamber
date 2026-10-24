@@ -15,12 +15,14 @@ class LocalScenarioSettingsSpec extends AnyFlatSpec with Matchers {
     SimulationUtil.localScenarioSettings(scenario.copy(cityMapFile = Some("city.json"),
       transitMapFile = Some("stops.json"), transitRoutesFile = Some("routes.json"))) shouldBe Map(
       "htc.simulation.duration" -> "2200",
+      SimulationClock.Setting -> "1.0",
       "htc.mobility.city-map-file" -> "city.json",
       "htc.mobility.transit-map-file" -> "stops.json",
       "htc.mobility.transit-routes-file" -> "routes.json")
   }
 
   it should "leave absent resource overrides to the configured environment" in {
-    SimulationUtil.localScenarioSettings(scenario) shouldBe Map("htc.simulation.duration" -> "2200")
+    SimulationUtil.localScenarioSettings(scenario) shouldBe Map("htc.simulation.duration" -> "2200",
+      SimulationClock.Setting -> "1.0")
   }
 }

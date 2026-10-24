@@ -112,6 +112,11 @@ class LinkVehicleFlowHandler(
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     require(data.initialVelocity.isFinite && data.initialVelocity >= 0.0, "invalid MICRO entry velocity")
+    require(data.initialRemainderSeconds.isFinite && data.initialRemainderSeconds >= 0.0,
+      "invalid MICRO boundary remainder")
+    require(data.initialRemainderSeconds == 0.0 || (getLinkStateFn().carryMicroRemainder &&
+      data.initialRemainderSeconds <= getLinkStateFn().microTimeStep + 1e-9),
+      "MICRO remainder cannot cross an incompatible physics interval")
     findVehicleLaneFn(event.actorRefId) match {
       case Some(existingLane) =>
         sendMicroEnterAck(event, existingLane)
@@ -138,11 +143,16 @@ class LinkVehicleFlowHandler(
     if (state.vehiclesByLane.isEmpty) setLinkStateFn(state.initializeMicroLanes())
 
     val assignedLane = findLeastOccupiedLaneFn()
+    val entryVelocity = math.min(data.initialVelocity, state.speedLimit / 3.6)
+    val requestedPosition = entryVelocity * data.initialRemainderSeconds
+    val availablePosition = getLinkStateFn().vehiclesByLane.get(assignedLane).toSeq.flatMap(_.iterator)
+      .map(v => v.position - v.vehicleLength - 2.0).minOption.getOrElse(state.length)
+    val entryPosition = math.max(0.0, math.min(requestedPosition, availablePosition))
     val vehicle = VehicleInLane(
       actorId         = event.actorRefId,
       shardId         = event.shardRefId,
-      position        = 0.0,
-      velocity        = math.min(data.initialVelocity, state.speedLimit / 3.6),
+      position        = entryPosition,
+      velocity        = if (entryPosition + 1e-9 < requestedPosition) 0.0 else entryVelocity,
       acceleration    = 0.0,
       vehicleLength   = data.actorSize,
       entryTick       = event.tick,
@@ -161,6 +171,8 @@ class LinkVehicleFlowHandler(
 
   def sendMicroEnterAck(event: ActorInteractionEvent, lane: Int): Unit = {
     val state = getLinkStateFn()
+    val vehicle = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId))
+    val initialPosition = vehicle.map(_.position).getOrElse(0.0)
     sendMessageFn(
       event.actorRefId, event.shardRefId,
       MicroEnterLinkData(
@@ -172,8 +184,9 @@ class LinkVehicleFlowHandler(
         numberOfLanes      = state.lanes,
         microTimeStep      = state.microTimeStep,
         ticksPerGlobalTick = state.microTicksPerGlobalTick,
-        initialVelocity = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId)).map(_.velocity),
-        junctionPosition = state.junctionGeometry.map(_.positionAt(0.0))
+        initialVelocity = vehicle.map(_.velocity),
+        junctionPosition = state.junctionGeometry.map(_.positionAt(initialPosition)),
+        initialPosition = initialPosition
       ),
       "MicroEnterLink"
     )
@@ -194,7 +207,8 @@ class LinkVehicleFlowHandler(
 
     if (wasRegistered) {
       val travelTicks = if (entryTick >= 0) (currentTickFn() - entryTick).toDouble else 0.0
-      metricsReporter.onVehicleArrived(isMicro = state.isMicroMode, travelTime = travelTicks)
+      val secondsPerTick = if (state.isMicroMode) state.microTimeStep * state.microTicksPerGlobalTick else 1.0
+      metricsReporter.onVehicleArrived(isMicro = state.isMicroMode, travelTime = travelTicks * secondsPerTick)
       // Exact count, never an estimate — the Node uses this to drain any vehicles it has
       // buffered waiting for capacity on this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
       sendMessageFn(

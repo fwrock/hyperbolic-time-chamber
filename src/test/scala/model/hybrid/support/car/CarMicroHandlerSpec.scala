@@ -29,7 +29,8 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       size = 4.5
     )
 
-  private def newHandler(reported: scala.collection.mutable.ArrayBuffer[Map[String, Any]]): (CarMicroHandler, CarJourneyReporter) = {
+  private def newHandler(reported: scala.collection.mutable.ArrayBuffer[Map[String, Any]],
+                         endTick: Long = 180L, runtimeOwnsHorizon: Boolean = false): (CarMicroHandler, CarJourneyReporter) = {
     var currentLinkId: Option[Long] = None
     var currentLinkLength: Double = 0.0
     var linkEntryTick: Option[Tick] = None
@@ -50,12 +51,12 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
       currentTickFn = () => 0L,
-      simulationEndTickFn = () => 180L,
+      simulationEndTickFn = () => endTick,
       extendSimulationFn = () => false,
       journeyReporter = journeyReporter,
       requestSignalStateFn = () => (),
       onFinishSpontaneousFn = _ => (),
-      finishAndCleanupFn = (_, _) => (),
+      finishAndCleanupFn = (_, _) => reported += Map("event_type" -> "forced_cleanup"),
       onFinishPrivateVehicleFn = _ => (),
       selfDestructFn = () => (),
       finishJourneyFn = (_, _) => (),
@@ -65,7 +66,8 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       setCurrentLinkLengthFn = v => currentLinkLength = v,
       setLinkEntryTickFn = v => linkEntryTick = v,
       getLinkEntryTickFn = () => linkEntryTick,
-      getCurrentLinkIdFn = () => currentLinkId
+      getCurrentLinkIdFn = () => currentLinkId,
+      runtimeOwnsHorizonFn = () => runtimeOwnsHorizon
     )
     (handler, journeyReporter)
   }
@@ -128,5 +130,16 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val enterEvent = reported.find(_.get("event_type").contains("enter_micro_link"))
     enterEvent shouldBe defined
     enterEvent.get("initial_velocity") shouldBe 0.0
+  }
+
+  it should "execute an inclusive-horizon update while the accounted runtime owns finalization" in {
+    val reported = scala.collection.mutable.ArrayBuffer.empty[Map[String, Any]]
+    val (handler, _) = newHandler(reported, endTick = 0L, runtimeOwnsHorizon = true)
+    val state = newCarState()
+    handler.handleMicroEnterLink(enterLinkData(100), state)
+    handler.handleMicroUpdate(model.hybrid.entity.event.data.MicroUpdateData(
+      0, 1.0, 5.0, 1.0, 0, None, 100.0, 10.0, 10.0), state)
+    state.microState.get.positionInLink shouldBe 1.0
+    reported.exists(_.get("event_type").contains("forced_cleanup")) shouldBe false
   }
 }

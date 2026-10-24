@@ -34,6 +34,29 @@ class CarJourneyReporterSpec extends AnyWordSpec with Matchers {
     )
 
   "CarJourneyReporter" should {
+    "report physical seconds while retaining integer runtime ticks and checkpointed remainders" in {
+      val reports = mutable.ArrayBuffer.empty[Map[String, Any]]
+      val state = newState()
+      state.journey.secondsPerTick = 0.1
+      state.journey.sumoDepartTick = Some(20L)
+      state.journey.boundaryExitTick = Some(99L)
+      state.journey.boundaryRemainderSeconds = 0.04
+      state.journey.sumoArrivalSpeed = 12.5
+      val restored = JsonUtil.fromJson[CarState](JsonUtil.toJson(state))
+      restored.journey.boundaryRemainderSeconds shouldBe 0.04
+      restored.journey.boundaryExitTick shouldBe Some(99L)
+      restored.journey.entryRemainderAt(99) shouldBe 0.04
+      restored.journey.entryRemainderAt(100) shouldBe 0.0
+      restored.journey.sumoArrivalSpeed = 0.0
+      restored.journey.entryRemainderAt(99) shouldBe 0.0
+      newReporter(reports, restored.journey).finishJourney("reached_destination", 2L, restored)
+      val trip = reports.find(_("event_type") == "sumo_tripinfo").get
+      trip("depart") shouldBe 2.0
+      trip("arrival") shouldBe 10.0
+      trip("duration") shouldBe 8.0
+      trip("tick") shouldBe 100L
+    }
+
     "report SUMO route length per trip while preserving the lifetime odometer" in {
       val reports = mutable.ArrayBuffer.empty[Map[String, Any]]
       val state = newState()
