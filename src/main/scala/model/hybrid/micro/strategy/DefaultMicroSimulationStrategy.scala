@@ -57,7 +57,9 @@ class DefaultMicroSimulationStrategy(
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
     vehicleWaitingSeconds: mutable.Map[Long, Double],
-    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
+    downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
+    stopLineGapM: Double = 0.0
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
@@ -76,7 +78,9 @@ class DefaultMicroSimulationStrategy(
               microTimeStep = microTimeStep,
               microTicksPerGlobalTick = nSubTicks,
               vehicleWaitingSeconds = vehicleWaitingSeconds,
-              signalAtExit = signalAtExit
+              signalAtExit = signalAtExit,
+              downstreamLeaders = downstreamLeaders,
+              stopLineGapM = stopLineGapM
             )
             laneUpdates.foreach(
               u => lastUpdateByVehicle.put(u.vehicleId, u)
@@ -128,7 +132,9 @@ class DefaultMicroSimulationStrategy(
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
     vehicleWaitingSeconds: mutable.Map[Long, Double],
-    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
+    downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
+    stopLineGapM: Double = 0.0
   ): Seq[MicroVehicleUpdate] = {
     VehicleInLane.sortFrontToBack(vehicles)
 
@@ -140,7 +146,7 @@ class DefaultMicroSimulationStrategy(
             actorId         = SignalBlockerId,
             shardId         = "",
             // A signal is a stop line, so it has no vehicle-to-vehicle standstill gap.
-            position        = linkLength + 2.0,
+            position        = linkLength - stopLineGapM + 2.0,
             velocity        = 0.0,
             acceleration    = 0.0,
             vehicleLength   = 0.0,
@@ -152,10 +158,26 @@ class DefaultMicroSimulationStrategy(
     val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
     val previous = vehicles.toVector
 
+    def safeBehind(vehicle: VehicleInLane, leader: VehicleInLane): Double =
+      carFollowingModel.calculateSafeVelocity(
+        currentVelocity = vehicle.velocity,
+        desiredVelocity = speedLimit / 3.6,
+        gap = math.max(0.1, vehicle.gapTo(leader)),
+        leaderVelocity = leader.velocity,
+        maxAcceleration = vehicle.maxAcceleration,
+        maxDeceleration = vehicle.maxDeceleration,
+        minGap = 2.0,
+        reactionTime = 1.0,
+        deltaT = microTimeStep
+      )
+
     for (i <- vehicles.indices) {
       val vehicle = previous(i)
       if (vehicle.entryTick < tick) {
-        val leader = if (i > 0) Some(previous(i - 1)) else signalLeader
+        val leader = if (i > 0) Some(previous(i - 1))
+          // A nearer moving vehicle must not hide the stricter stopped signal constraint.
+          else (signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId))
+            .minByOption(v => (safeBehind(vehicle, v), v.rearPosition, v.actorId))
 
         val (rawGap, leaderVel) = leader match {
           case Some(l) =>
@@ -167,17 +189,7 @@ class DefaultMicroSimulationStrategy(
 
         val maxAcceleration = vehicle.maxAcceleration
         val maxDeceleration = vehicle.maxDeceleration
-        val rawSafe = if (leader.isEmpty) speedLimit / 3.6 else carFollowingModel.calculateSafeVelocity(
-          currentVelocity = vehicle.velocity,
-          desiredVelocity = speedLimit / 3.6,
-          gap = gap,
-          leaderVelocity = leaderVel,
-          maxAcceleration = maxAcceleration,
-          maxDeceleration = maxDeceleration,
-          minGap = 2.0,
-          reactionTime = 1.0,
-          deltaT = microTimeStep
-        )
+        val rawSafe = leader.fold(speedLimit / 3.6)(safeBehind(vehicle, _))
         val turnSafe = vehicle.exitSpeedLimitMps.map { limit =>
           val brakingStep = maxDeceleration * microTimeStep
           // Include this step's travel before the remaining braking distance to avoid late turn braking.

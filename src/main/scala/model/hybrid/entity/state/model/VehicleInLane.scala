@@ -33,7 +33,8 @@ case class VehicleInLane(
   maxAcceleration: Double = 2.6,
   maxDeceleration: Double = 4.5,
   microStateRef: Option[Any] = None, // Can hold MicroCarState, MicroBusState, etc.
-  exitSpeedLimitMps: Option[Double] = None
+  exitSpeedLimitMps: Option[Double] = None,
+  nextLinkId: Long = 0L
 ) {
 
   /** Calculate the rear position of the vehicle */

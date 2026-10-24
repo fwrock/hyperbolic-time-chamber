@@ -25,11 +25,11 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
-import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData }
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData, MicroBoundaryUpdateData }
 import org.interscity.htc.model.hybrid.entity.event.data.routing.LinkCostChangedData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
-  LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
+  LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler, LinkFollowingHandler
 }
 
 import scala.collection.mutable
@@ -75,6 +75,8 @@ class Link(
     model.hybrid.util.HybridRuntimeCapabilities.validateAccountedRouting(DynamicWeightCache.configuredStrategy,
       getCurrentTimeManagerType)
     val clock = core.util.SimulationClock.current
+    require(!state.downstreamLookahead || math.abs(state.microTimeStep - clock.secondsPerTick) < 1e-9,
+      "downstream lookahead requires one physics step per scenario tick")
     if (clock.secondsPerTick != 1.0) {
       require(state.isMicroMode, "fractional clocks require every road Link to use MICRO")
       require(math.abs(state.microTimeStep * state.microTicksPerGlobalTick - clock.secondsPerTick) < 1e-9,
@@ -204,6 +206,14 @@ class Link(
       Success(())
     } else DynamicWeightCache.publishCost(cost, ttl)
 
+  private lazy val followingHandler = new LinkFollowingHandler(
+    stateFn = () => state,
+    entityIdFn = () => getEntityId.toLong,
+    currentTickFn = () => currentTick,
+    sendFn = (id, shard, data, eventType) => sendMessageTo(
+      entityId = id, shardId = shard, data = data, eventType = eventType, actorType = LoadBalancedDistributed)
+  )
+
   private lazy val microSimHandler = new LinkMicroSimulationHandler(
     entityIdFn                    = () => getEntityId,
     currentTickFn                 = () => currentTick,
@@ -219,7 +229,8 @@ class Link(
     setMicroScheduledFn           = v => microTickScheduled = v,
     getSignalAtExitFn             = () => signalForMicroIntervalEndingAt(currentTick),
     metricsReporter               = metricsReporter,
-    logDebugFn                    = msg => logDebug(msg)
+    logDebugFn                    = msg => logDebug(msg),
+    downstreamLeadersFn           = tick => followingHandler.leaders(tick)
   )
 
   private lazy val vehicleFlowHandler = new LinkVehicleFlowHandler(
@@ -284,6 +295,8 @@ class Link(
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
+      case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId)
+      case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
       case d: LinkSignalStateData =>
         // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.
         if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
@@ -331,6 +344,7 @@ class Link(
     emptyGraceTick = 0
     microTickScheduled = true
     microSimHandler.handleGlobalTick(currentTick)
+    followingHandler.publish()
 
     val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0
     if (hasVehiclesAfterTick) {
@@ -362,6 +376,8 @@ class Link(
     )
     if (state.isMicroMode) vehicleFlowHandler.handleEnterLinkMicro(event, data)
     else vehicleFlowHandler.handleEnterLinkMeso(event, data)
+    followingHandler.observeNextRoad(data.nextLinkId)
+    followingHandler.publish()
   }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
@@ -379,6 +395,7 @@ class Link(
       "vehicle_link_flow"
     )
     vehicleFlowHandler.handleLeaveLink(event, data, wasRegistered)
+    followingHandler.publish()
   }
   /** Handles link destruction on simulation termination.
     *

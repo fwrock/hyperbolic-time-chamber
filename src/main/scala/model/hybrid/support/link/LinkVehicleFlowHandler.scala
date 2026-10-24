@@ -158,7 +158,8 @@ class LinkVehicleFlowHandler(
       entryTick       = event.tick,
       maxAcceleration = data.actorType.microMaxAcceleration,
       maxDeceleration = data.actorType.microMaxDeceleration,
-      exitSpeedLimitMps = state.exitSpeedLimitsMps.get(data.nextLinkId)
+      exitSpeedLimitMps = state.exitSpeedLimitsMps.get(data.nextLinkId),
+      nextLinkId = data.nextLinkId
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>

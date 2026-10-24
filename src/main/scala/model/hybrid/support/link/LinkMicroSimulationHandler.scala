@@ -34,7 +34,8 @@ class LinkMicroSimulationHandler(
   setMicroScheduledFn:         Boolean => Unit,
   getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
-  logDebugFn:                  String => Unit
+  logDebugFn:                  String => Unit,
+  downstreamLeadersFn: Tick => Map[Long, model.hybrid.entity.state.model.VehicleInLane] = _ => Map.empty
 ) {
 
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
@@ -87,7 +88,9 @@ class LinkMicroSimulationHandler(
         microTimeStep            = state.microTimeStep,
         microTicksPerGlobalTick  = state.microTicksPerGlobalTick,
         vehicleWaitingSeconds    = vehicleWaitingSeconds,
-        signalAtExit             = getSignalAtExitFn()
+        signalAtExit             = getSignalAtExitFn(),
+        downstreamLeaders        = downstreamLeadersFn(tick),
+        stopLineGapM             = state.stopLineGapM
       )
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)

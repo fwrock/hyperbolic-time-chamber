@@ -45,6 +45,8 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
     quantum = float(parameters.get('runtimeTickSeconds', 1.0))
     physics_step = float(parameters.get('physicsStepSeconds', 0.1))
     carry = bool(parameters.get('carryRemainder', False))
+    lookahead = bool(parameters.get('downstreamLookahead', False))
+    stop_gap = float(parameters.get('stopLineGapM', 0.0))
     seed = int(parameters.get('seed', 42))
     horizon = float(parameters.get('horizonSeconds', 180))
     speed_limit_kmh = float(parameters.get('speedLimitKmh',50.0))
@@ -55,6 +57,8 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
     assert departures and departures == sorted(set(departures)) and departures[0] >= 0
     assert 0 < quantum <= 1 and physics_step > 0 and abs(quantum / physics_step - round(quantum / physics_step)) < 1e-8
     assert not carry or abs(physics_step - quantum) < 1e-9
+    assert not lookahead or abs(physics_step - quantum) < 1e-9
+    assert math.isfinite(stop_gap) and stop_gap >= 0
     def ticks(seconds):
         value = seconds / quantum
         assert abs(value-round(value)) < 1e-7, ('time is not on the selected runtime clock',seconds,quantum)
@@ -115,6 +119,8 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
         speedLimitMps=speed_limit_kmh/3.6, nodeGeometry='point junction; no internal links', seed=seed,
         initialSpeedsMps=initial_speeds,
         runtimeTickSeconds=quantum, physicsStepSeconds=physics_step, carryRemainder=carry,
+        downstreamLookahead=lookahead, stopLineGapM=stop_gap,
+        sumoStopLineGapM=float(parameters.get('stopLineGapM', 1.0)),
         comparisonStepSeconds=parameters.get('comparisonStepSeconds', 1.0 if quantum == 1 else quantum),
         horizonSeconds=horizon)
     write_json(root / 'canonical.json', canonical)
@@ -220,6 +226,7 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
         connector['data']['content'].update(simulationMode='MICRO', junctionGeometry=geometry)
         roads.append(connector)
         forward[0]['data']['content']['exitSpeedLimitsMps'] = {road_links[1]: speed}
+        forward[0]['data']['content']['downstreamConnectors'] = {road_links[1]: connector_id}
         nodes[1]['data']['content']['junctionMovements'] = [dict(incomingLinkId=int(road_links[0]),
             outgoingLinkId=int(road_links[1]), connectorLinkId=connector_id)]
         nodes[1]['data']['content']['links'].append(connector_id)
@@ -233,7 +240,8 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
         write_json(root/'canonical.json', canonical)
     for road in roads:
         road['data']['content'].update(microTimeStep=physics_step,
-            microTicksPerGlobalTick=round(quantum/physics_step), carryMicroRemainder=carry)
+            microTicksPerGlobalTick=round(quantum/physics_step), carryMicroRemainder=carry,
+            downstreamLookahead=lookahead, stopLineGapM=stop_gap)
     write_json(root/'data/links_0.json', roads)
     if signal:
         signals = read('traffic_signals_0.json')
@@ -253,7 +261,8 @@ def generate(root, case, junction_geometry=False, turn="straight", parameters=No
         write_json(root/(policy+'.json'),dict(config,timeManagerType=policy))
     routes = ET.Element('routes')
     ET.SubElement(routes,'vType',id='car',carFollowModel='Krauss',accel='2.6',decel='4.5',
-                  minGap='2',tau='1',length='4.5',sigma='0',speedFactor='1',speedDev='0',maxSpeed=str(speed_limit_kmh/3.6))
+                  minGap='2',tau='1',length='4.5',sigma='0',speedFactor='1',speedDev='0',maxSpeed=str(speed_limit_kmh/3.6),
+                  jmStoplineGap=str(parameters.get('stopLineGapM', 1.0)))
     for vehicle, depart, initial_speed in zip(canonical['vehicles'],departures,initial_speeds):
         item=ET.SubElement(routes,'vehicle',id=vehicle,type='car',depart=str(depart),departSpeed=str(initial_speed),departPos='0')
         ET.SubElement(item,'route',edges=' '.join(road_links))
