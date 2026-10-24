@@ -15,6 +15,11 @@ The production path now also uses
 Queued work determines the frozen timestamp minimum; reply obligations remain
 separate completion/retirement constraints rather than pinning GVT at the old send tick.
 
+Hybrid dynamic routing can now participate through
+[accounted routing LPs](ACCOUNTED_ROUTING.md). Link costs, route/mode queries and
+correlated replies use these same owner ledgers and rollback rules; unaccounted
+shared caches remain rejected.
+
 ## Ownership and data delivery
 
 The GTM fixes LTM membership, assigns typed logical process IDs to owners and waits

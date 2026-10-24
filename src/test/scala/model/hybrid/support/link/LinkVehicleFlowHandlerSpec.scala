@@ -203,7 +203,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
     val published = DynamicWeightCache.getCost(linkId)
     published shouldBe defined
-    published.get.currentSpeed shouldBe f.getState().currentSpeed
+    published.get.currentSpeed shouldBe f.getState().currentSpeed / 3.6
+    published.get.freeFlowSpeed shouldBe f.getState().freeSpeed / 3.6
     published.get.congestionFactor shouldBe f.getState().congestionFactor
   }
 
@@ -221,7 +222,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.handler.handleEnterLinkMeso(event(2L, linkId), enterData(2L))
     val published = DynamicWeightCache.getCost(linkId)
     published shouldBe defined
-    published.get.currentSpeed shouldBe f.getState().currentSpeed
+    published.get.currentSpeed shouldBe f.getState().currentSpeed / 3.6
   }
 
   /** Regression coverage for docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 6:

@@ -72,6 +72,10 @@ object DynamicWeightCache {
         println("[DynamicWeightCache] Dynamic weights DISABLED — using static weights only.")
         new DisabledCacheStrategy()
 
+      case "accounted" =>
+        println("[DynamicWeightCache] Accounted routing enabled — shared cache access disabled.")
+        new DisabledCacheStrategy()
+
       case other =>
         println(
           s"[DynamicWeightCache] Unknown cache strategy '$other' — falling back to InMemory."
@@ -89,7 +93,7 @@ object DynamicWeightCache {
     strategyType.toLowerCase match {
       case "kafka"                  => new KafkaCacheStrategy()
       case "inmemory"               => new InMemoryCacheStrategy()
-      case "disabled" | "none" | "off" => new DisabledCacheStrategy()
+      case "disabled" | "none" | "off" | "accounted" => new DisabledCacheStrategy()
       case _                        => new InMemoryCacheStrategy()
     }
   }
@@ -136,6 +140,18 @@ object DynamicWeightCache {
     new ThreadLocal[scala.collection.mutable.Map[String, Double]]()
   private val overrideMap: ThreadLocal[Map[String, Double]] =
     new ThreadLocal[Map[String, Double]]()
+  private val accountedWeights: ThreadLocal[Long => Option[Double]] =
+    new ThreadLocal[Long => Option[Double]]()
+
+  /** Installs one immutable routing-LP state view for the duration of a synchronous route query. */
+  def withAccountedWeights[A](lookup: Long => Option[Double])(body: => A): A = {
+    val previous = accountedWeights.get()
+    accountedWeights.set(lookup)
+    try body
+    finally accountedWeights.set(previous)
+  }
+
+  private[util] def hasAccountedWeights: Boolean = accountedWeights.get() != null
 
   /** Runs `body` with every `getWeight` read observed during it recorded into `sink` (the caller's
     * own mutable map — typically an actor's per-event read buffer, flushed into its
@@ -172,7 +188,12 @@ object DynamicWeightCache {
       if (activeOverride != null) {
         val ov = activeOverride.get(linkIdKey)
         (ov.getOrElse(staticWeight), ov.isDefined)
+      } else if (accountedWeights.get() != null) {
+        val ov = accountedWeights.get().apply(linkId)
+        (ov.getOrElse(staticWeight), ov.isDefined)
       } else {
+        if (configuredStrategy.equalsIgnoreCase("accounted"))
+          throw new IllegalStateException("accounted dynamic weights may only be read inside RoutingService")
         val costOpt = strategy.getCost(linkIdKey)
         (costOpt.map(_.totalCost).getOrElse(staticWeight), costOpt.isDefined)
       }

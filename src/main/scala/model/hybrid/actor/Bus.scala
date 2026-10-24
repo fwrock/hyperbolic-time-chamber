@@ -68,6 +68,7 @@ class Bus(
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
     copied.movableLinkExitReported = s.movableLinkExitReported
+    copied.movablePendingRouteQuery = s.movablePendingRouteQuery
     copied
   }
 

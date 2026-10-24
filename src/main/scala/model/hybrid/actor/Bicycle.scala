@@ -68,6 +68,8 @@ class Bicycle(
     copied.movableCurrentNode        = s.movableCurrentNode
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
+    copied.movableLinkExitReported   = s.movableLinkExitReported
+    copied.movablePendingRouteQuery  = s.movablePendingRouteQuery
     copied
   }
 
@@ -458,11 +460,27 @@ class Bicycle(
     if (journeyReporter.sumoDepartTick.nonEmpty) {
       journeyReporter.sumoRerouteNo += 1
     }
+    if (requestAccountedRoute(origin, destination, Int.MaxValue)) return
     try
-      GPSUtil
-        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+      handleCalculatedRouteResult(
+        GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+      )
+    catch {
+      case e: Exception =>
+        logError(s"Exception during bicycle route request: ${e.getMessage}", e)
+        finishJourney("exception", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
+    }
+  }
 
-        match {
+  override protected def handleCalculatedRouteResult(
+    result: Option[(Double, scala.collection.mutable.Queue[(Long, Long)])]
+  ): Unit = {
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    result match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
@@ -500,14 +518,6 @@ class Bicycle(
           onFinishSpontaneous(None)
           if (!isPersonCentric) selfDestruct()
       }
-    catch {
-      case e: Exception =>
-        logError(s"Exception during bicycle route request: ${e.getMessage}", e)
-        finishJourney("exception", origin)
-        onFinishPrivateVehicle(origin)
-        onFinishSpontaneous(None)
-        if (!isPersonCentric) selfDestruct()
-    }
   }
 
   private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {

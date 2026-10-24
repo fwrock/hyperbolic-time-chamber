@@ -39,6 +39,16 @@ build/
 !**/src/test/**/build/
 
 scripts/*
+!scripts/scenario/
+scripts/scenario/*
+!scripts/scenario/compare_policy_reports.py
+!scripts/scenario/run_cluster_validation.py
+!scripts/scenario/validate_meso_reports.py
+!scripts/scenario/validate_transit_birth_reports.py
+!scripts/scenario/generate_hybrid_scenario.py
+!scripts/scenario/generate_tiny_validation_scenario.py
+!scripts/scenario/generate_dynamic_routing_validation_scenario.py
+!scripts/scenario/validate_dynamic_routing_reports.py
 
 ### VS Code ###
 .vscode/

@@ -31,7 +31,8 @@ class BusStationRouteCalculator(
           locally {
             // Bounded expansion budget: enough for city-block inter-stop routes without
             // risking dirty-array overflow on fully disconnected subgraphs.
-            GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode, maxExpansions = 500_000) match {
+            GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode,
+              useDynamicWeights = false, maxExpansions = 500_000) match {
               case Some((_, pathQueue)) =>
                 val identifyPath = pathQueue.map { case (f, t) => (Identify(id = f), Identify(id = t)) }
                 Some(SubRoutePair(originStop, destStop) -> identifyPath)

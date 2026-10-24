@@ -92,4 +92,16 @@ class DynamicWeightCacheReplaySpec extends AnyFlatSpec with Matchers {
     // Outside the block, the override must no longer apply -- the real live cache value again.
     DynamicWeightCache.getWeight(linkId, staticWeight = 999.0) shouldBe liveWeight
   }
+
+  "withAccountedWeights" should "read one checkpointed view and restore the prior scope" in {
+    val linkId = freshLinkId()
+    DynamicWeightCache.withAccountedWeights(id => Option.when(id == linkId)(321.0)) {
+      DynamicWeightCache.getWeight(linkId, staticWeight = 42.0) shouldBe 321.0
+      DynamicWeightCache.getWeight(linkId + 1, staticWeight = 43.0) shouldBe 43.0
+      DynamicWeightCache.withAccountedWeights(_ => Some(999.0)) {
+        DynamicWeightCache.getWeight(linkId, staticWeight = 42.0) shouldBe 999.0
+      }
+      DynamicWeightCache.getWeight(linkId, staticWeight = 42.0) shouldBe 321.0
+    }
+  }
 }

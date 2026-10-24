@@ -216,7 +216,10 @@ below GVT fail. See `docs/PROGRESSIVE_OPTIMISTIC_RUNTIME.md`.
 
 The legacy reference path requires fixed/preloaded LP membership. Both paths reject
 independent restart/recovery. Models use `validateRuntimeCapabilities` to reject effects without
-an adapter. Hybrid shared routing feedback remains rejected. Model-created Bus/Subway
+an adapter. Hybrid dynamic routing uses `htc.routing.cache-strategy=accounted` and
+fixed EAGER/STATIC `RoutingService` LPs; unaccounted shared caches remain rejected.
+Costs, queries and correlated replies use ordinary positive/anti transport, with
+checkpointed worker and requester state. See `docs/ACCOUNTED_ROUTING.md`. Model-created Bus/Subway
 birth uses an ordered positive/anti with a fixed unique birth slot; children remain
 inert until activation, and cancellation restores dormancy. The owning LTM accounts
 initialization; only the selected policy is inherited. Keep child behavior/reporting

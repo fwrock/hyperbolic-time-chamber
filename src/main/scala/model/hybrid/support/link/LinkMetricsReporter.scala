@@ -7,6 +7,8 @@ import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 
+import scala.util.Try
+
 /** Counters belong to checkpointed LinkState so replay cannot count an entry twice. */
 class LinkMetricsReporter(
   reportFn:                   (Map[String, Any], String) => Unit,
@@ -18,7 +20,9 @@ class LinkMetricsReporter(
   getVehicleEntryTickFn:      Long => Option[Tick],
   getVehicleWaitingSecondsFn: Long => Double,
   getRegisteredVehicleIdsFn:  () => Iterable[Long],
-  logWarnFn:                  String => Unit
+  logWarnFn:                  String => Unit,
+  publishCostFn:              (DynamicLinkCost, Int) => Try[Unit] =
+    (cost, ttl) => DynamicWeightCache.publishCost(cost, ttl)
 ) {
 
   private def metrics = getLinkStateFn().metrics
@@ -141,17 +145,22 @@ class LinkMetricsReporter(
 
   def publishDynamicCost(): Unit = {
     val state       = getLinkStateFn()
+    val freeFlowSpeed = state.freeSpeed / 3.6
+    // MICRO velocity is m/s; MESO speed is km/h. An empty link has no stopped traffic.
+    val routingSpeed = if (state.isMicroMode) {
+      if (state.totalVehiclesInMicro == 0) freeFlowSpeed else state.currentSpeed
+    } else state.currentSpeed / 3.6
     val dynamicCost = DynamicLinkCost.fromLinkState(
       linkId          = entityIdFn().toLong,
       length          = state.length,
-      currentSpeed    = state.currentSpeed,
-      freeFlowSpeed   = state.freeSpeed,
+      currentSpeed    = routingSpeed,
+      freeFlowSpeed   = freeFlowSpeed,
       vehicleCount    = state.registered.size,
       capacity        = state.capacity,
       congestionFactor = state.congestionFactor,
       tick            = currentTickFn()
     )
-    DynamicWeightCache.publishCost(dynamicCost, cacheTtl) match {
+    publishCostFn(dynamicCost, cacheTtl) match {
       case scala.util.Success(_) =>
       case scala.util.Failure(e) =>
         logWarnFn(s"Failed to publish dynamic cost to Kafka: ${e.getMessage}")

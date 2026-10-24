@@ -38,7 +38,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
   private val noop: String => Unit = _ => ()
 
-  private def newManager(personId: String = "1"): PersonPlanManager = {
+  private def newManager(personId: String = "1", deferDecisions: Boolean = false): PersonPlanManager = {
     val metricsReporter = new PersonMetricsReporter(personId, (m, l) => reports += ((m, l)), noop)
     val walkingHandler = new PersonWalkingTripHandler(personId, (m, l) => reports += ((m, l)), noop, noop)
     val ptHandler = new PersonPTTripHandler(
@@ -61,7 +61,8 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       reportFn = (m, l) => reports += ((m, l)),
       sendMessageFn = (e, s, d, t, a) => sentMessages += ((e, s, d, t, a)),
       logDebug = noop,
-      logWarn = noop
+      logWarn = noop,
+      deferDecisionsFn = () => deferDecisions
     )
   }
 
@@ -264,5 +265,41 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     awaiting.state.cursor.executed.last shouldBe Activity("work", 2L, AtTick(500))
     awaiting.state.tripExecution shouldBe TripExecutionState.Idle
     reports.exists { case (_, label) => label == "person_trip_aborted" } shouldBe true
+  }
+
+  it should "defer a pending decision to the routing LP and apply exactly the supplied reply" in {
+    val engineId = "test-deferred-engine"
+    var localCalls = 0
+    ModeDecisionEngineRegistry.register(engineId, new ModeDecisionEngine {
+      override val id: String = engineId
+      override def validateForScenario(ctx: ScenarioValidationContext) = Right(())
+      override def decide(originNodeId: Long, destinationNodeId: Long, request: ModeDecisionRequest,
+        ctx: DecisionContext) = {
+        localCalls += 1
+        Left(NoViableJourney("must execute in routing service"))
+      }
+    })
+    val plan: List[PlanElement] = List(
+      Activity("home", 1L, AtTick(10)),
+      PendingDecision(ModeDecisionRequest(Set(ConcreteMode.Walk), engineId)),
+      Activity("work", 2L, AtTick(100))
+    )
+    val manager = newManager(deferDecisions = true)
+    val PlanStepResult.Awaiting(atHome, _) = manager.step(stateWithPlan(plan), 0L): @unchecked
+    val requested = manager.step(atHome, 10L).asInstanceOf[PlanStepResult.DecisionRequested]
+
+    requested.query.originNodeId shouldBe 1L
+    requested.query.destinationNodeId shouldBe 2L
+    requested.kind shouldBe PersonDecisionKind.PendingPlan
+    localCalls shouldBe 0
+
+    val completed = manager.completeRoutingDecision(
+      requested.state,
+      10L,
+      requested.kind,
+      Right(List(WalkLeg(1L, 2L, precomputedRoute = Some(Nil))))
+    )
+    completed shouldBe a[PlanStepResult.LegStarted]
+    localCalls shouldBe 0
   }
 }

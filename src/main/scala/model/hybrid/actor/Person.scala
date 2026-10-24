@@ -7,13 +7,15 @@ import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.types.Tick
 import core.entity.actor.properties.Properties
 import core.util.StringPool
-import model.hybrid.entity.state.{ PersonState, TripExecutionState }
+import model.hybrid.entity.state.{ PendingPersonRoutingDecision, PersonState, TripExecutionState }
 import model.hybrid.entity.state.plan.{ Activity, AtTick, ConcreteMode, PlanCursor, RemainingQueue, WalkLeg }
 import model.hybrid.entity.event.data.person.{ PassengerBoardedVehicleData, PersonScheduleCompleteData, TripCompletedData }
+import model.hybrid.entity.event.data.routing.ModeDecisionReplyData
 import model.hybrid.entity.event.data.bus.{ BusRequestUnloadPassengerData, BusUnloadPassengerData, PTLineNotOperationalData }
 import model.hybrid.entity.event.data.subway.{ SubwayRequestUnloadPassengerData, SubwayUnloadPassengerData }
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
-import model.hybrid.support.person.{ PersonMetricsReporter, PersonPTTripHandler, PersonPlanManager, PersonPrivateVehicleTripHandler, PersonWalkingTripHandler, PlanStepResult }
+import model.hybrid.support.person.{ PersonDecisionKind, PersonMetricsReporter, PersonPTTripHandler, PersonPlanManager, PersonPrivateVehicleTripHandler, PersonWalkingTripHandler, PlanStepResult }
+import model.hybrid.util.AccountedRoutingConfig
 
 import org.interscity.htc.core.api.SimulatorSettingsRegistry
 import org.interscity.htc.core.metrics.core.ActorMetrics
@@ -99,8 +101,18 @@ class Person(
     reportFn = report,
     sendMessageFn = sendMessage,
     logDebug = logDebug,
-    logWarn = logWarn
+    logWarn = logWarn,
+    deferDecisionsFn = () => AccountedRoutingConfig.enabled
   )
+
+  private def routingAwaitKey(workerId: Long): String = s"person-routing:$workerId"
+
+  override protected def isKnownSupersededReply(event: ActorInteractionEvent): Boolean =
+    event.data match {
+      case d: ModeDecisionReplyData =>
+        !isAwaitingReply(routingAwaitKey(event.actorRefId), "ModeDecisionQuery", d.requestSeq)
+      case _ => super.isKnownSupersededReply(event)
+    }
 
   /** Person should only re-register on the TM after migration if it was actually registered at
     * migration time. During private-vehicle trips, Person calls onFinishSpontaneous(None) and
@@ -110,7 +122,7 @@ class Person(
     * Activity, so those are allowed.
     */
   override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean =
-    state != null && state.isSetScheduleOnTimeManager && (
+    state != null && state.isSetScheduleOnTimeManager && state.pendingRoutingDecision.isEmpty && (
       state.tripExecution match {
         case TripExecutionState.Idle => true
         case _: TripExecutionState.Traveling =>
@@ -278,6 +290,23 @@ class Person(
             s"priorCurrentPTVehicleRef=$currentPTVehicleRef overwriting=${currentPTVehicleRef.isDefined}"
         )
         currentPTVehicleRef = Some((d.vehicleId, d.vehicleClassType))
+        state.pendingRoutingDecision match {
+          case Some(pending) if pending.kind == PersonDecisionKind.PTTimeoutReplan.toString =>
+            consumeAwaitedReply(routingAwaitKey(pending.workerId))
+            state = state.copy(pendingRoutingDecision = None)
+          case _ =>
+        }
+
+      case d: ModeDecisionReplyData =>
+        state.pendingRoutingDecision match {
+          case Some(pending) if pending.workerId == event.actorRefId &&
+              matchesAwaitedReply(routingAwaitKey(pending.workerId), "ModeDecisionQuery", d.requestSeq) =>
+            consumeAwaitedReply(routingAwaitKey(pending.workerId))
+            val kind = PersonDecisionKind.valueOf(pending.kind)
+            state = state.copy(pendingRoutingDecision = None)
+            dispatch(planManager.completeRoutingDecision(state, currentTick, kind, d.result))
+          case _ => logDebug(s"Ignoring superseded mode-decision reply from ${event.actorRefId}")
+        }
 
       case d: BusRequestUnloadPassengerData =>
         // #timewarp-trace
@@ -338,6 +367,21 @@ class Person(
 
     case PlanStepResult.LegStarted(newState, None) =>
       state = newState
+      onFinishSpontaneous(None)
+
+    case PlanStepResult.DecisionRequested(newState, query, kind) =>
+      val workerId = AccountedRoutingConfig.workerFor(getEntityId.toLong)
+      state = newState.copy(
+        pendingRoutingDecision = Some(PendingPersonRoutingDecision(workerId, kind.toString))
+      )
+      sendMessageTo(
+        entityId = workerId,
+        shardId = AccountedRoutingConfig.ActorClassType,
+        data = query,
+        eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.ModeDecisionQuery.toString,
+        actorType = org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+      )
+      registerAwaitedReply(routingAwaitKey(workerId), "ModeDecisionQuery")
       onFinishSpontaneous(None)
 
     case PlanStepResult.Finished(newState) =>

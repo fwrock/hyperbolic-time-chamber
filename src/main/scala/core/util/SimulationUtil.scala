@@ -13,9 +13,41 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.util.ActorCreatorUtil.createShardRegion
 
 import java.util.UUID
+import java.io.{ BufferedInputStream, FileInputStream }
 import scala.language.postfixOps
 
 object SimulationUtil {
+
+  private[util] def validateAccountedRoutingSources(configuration: Simulation, workerIds: Vector[Long]): Unit = {
+    val className = StringUtil.getModelClassName(model.hybrid.util.AccountedRoutingConfig.ActorClassType)
+    val sources = configuration.actorsDataSources.filter(s => StringUtil.getModelClassName(s.classType) == className)
+    require(sources.nonEmpty, "accounted routing requires an EAGER RoutingService actor source")
+    require(sources.forall(_.loadingStrategy == core.enumeration.LoadingStrategyEnum.EAGER),
+      "RoutingService sources must use EAGER loading")
+    require(sources.forall(_.entityLifecycle == core.enumeration.EntityLifecycleEnum.STATIC),
+      "RoutingService sources must use STATIC lifecycle")
+    require(sources.forall(s => s.creationType == null || s.creationType == CreationTypeEnum.LoadBalancedDistributed),
+      "RoutingService sources must use LoadBalancedDistributed creation")
+
+    val loadedIds = sources.iterator.flatMap { source =>
+      val path = source.dataSource.info("path").asInstanceOf[String]
+      source.dataSource.sourceType match {
+        case core.enumeration.DataSourceTypeEnum.json =>
+          val input = new BufferedInputStream(new FileInputStream(path))
+          val (parser, actors) = JsonStreamingUtil.createParser(input)
+          try actors.map(_.id).toVector.iterator
+          finally { parser.close(); input.close() }
+        case core.enumeration.DataSourceTypeEnum.sqlite =>
+          val (connection, actors) = SqliteActorSimulationUtil.openIterator(path)
+          try actors.map(_.id).toVector.iterator
+          finally connection.close()
+      }
+    }.toVector
+    require(loadedIds.distinct.size == loadedIds.size, "RoutingService source ids must be unique")
+    val expected = workerIds.toSet
+    require(loadedIds.toSet == expected,
+      s"RoutingService source ids $loadedIds must exactly match htc.routing.accounted.worker-ids $expected")
+  }
 
   private[util] def localScenarioSettings(configuration: Simulation): Map[String, String] =
     Map("htc.simulation.duration" -> configuration.duration.toString) ++
@@ -67,6 +99,8 @@ object SimulationUtil {
 
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
     val simulationConfig = loadSimulationConfig(configuration)
+    if (model.hybrid.util.AccountedRoutingConfig.enabled)
+      validateAccountedRoutingSources(simulationConfig, model.hybrid.util.AccountedRoutingConfig.workerIds)
     // Remote shard actors can initialize lazy process-wide resources before the
     // SimulationManager's singleton runs; its registry writes reach only its own JVM.
     installLocalScenarioSettings(simulationConfig)
