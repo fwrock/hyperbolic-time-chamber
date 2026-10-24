@@ -3,7 +3,7 @@ package core.util
 
 import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
-import core.api.ApiConfigRegistry
+import core.api.{ApiConfigRegistry, SimulatorSettingsRegistry}
 
 import com.typesafe.config.ConfigFactory
 import org.interscity.htc.core.entity.configuration.{ Simulation, SimulationWrapper }
@@ -16,6 +16,15 @@ import java.util.UUID
 import scala.language.postfixOps
 
 object SimulationUtil {
+
+  private[util] def localScenarioSettings(configuration: Simulation): Map[String, String] =
+    Map("htc.simulation.duration" -> configuration.duration.toString) ++
+      configuration.cityMapFile.map("htc.mobility.city-map-file" -> _) ++
+      configuration.transitMapFile.map("htc.mobility.transit-map-file" -> _) ++
+      configuration.transitRoutesFile.map("htc.mobility.transit-routes-file" -> _)
+
+  def installLocalScenarioSettings(configuration: Simulation): Unit =
+    SimulatorSettingsRegistry.setAll(localScenarioSettings(configuration))
 
   def loadSimulationConfig(configuration: String = null): Simulation = {
     val path = if (configuration == null || configuration.isEmpty) null else configuration
@@ -58,6 +67,9 @@ object SimulationUtil {
 
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
     val simulationConfig = loadSimulationConfig(configuration)
+    // Remote shard actors can initialize lazy process-wide resources before the
+    // SimulationManager's singleton runs; its registry writes reach only its own JVM.
+    installLocalScenarioSettings(simulationConfig)
 
     // Register shard regions for all actor types declared in actorsDataSources.
     simulationConfig.actorsDataSources

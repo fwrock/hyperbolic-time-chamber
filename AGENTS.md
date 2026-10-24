@@ -224,6 +224,22 @@ state checkpointed and retain it until GVT passes both birth and the monotone la
 accepted-input fence. See `docs/RUNTIME_ACTOR_BIRTH.md`. Static routing is supported. See
 `docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md` for invariants, supported scope, and costs.
 
+## Cluster startup and codecs
+
+Production pool workers use class-based `Props` with serializable constructor
+arguments. A by-name creator closure is unsuitable for remote deployment. Kryo
+uses `automatic` fallback for unlisted classes; keep the existing ordered explicit
+registrations identical across nodes and append new entries rather than reordering.
+Round-trip tests must use independent cold codecs, since a shared codec can hide
+missing class registration. Run the same executable/configuration on all nodes.
+
+`SimulationUtil.startShards` installs scenario resource settings on each JVM before
+creating model shard actors. Writes made only by a cluster singleton do not update
+other processes' `SimulatorSettingsRegistry` values. Startup warm-up uses worker
+ready messages, one dispatch per worker and unique completion ACKs. Never assume a
+pool broadcast reaches remote routees that have not been created yet. See
+`docs/MULTI_JVM_POLICY_VALIDATION_2026_10_24.md` for tested scope and limitations.
+
 ## Simulation Models
 
 ### Hybrid (micro+meso) — `model.hybrid`

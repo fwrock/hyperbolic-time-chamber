@@ -1,9 +1,12 @@
 package org.interscity.htc
 package core.actor.manager.warmup
 
-import core.entity.event.control.warmup.{ StartWarmUpWorkersEvent, WarmUpWorkerDoneEvent }
+import core.entity.event.control.warmup.{ StartWarmUpWorkersEvent, WarmUpWorkerDoneEvent, WarmUpWorkerReadyEvent }
+import core.runtime.accounting.RuntimeFailure
 
-import org.apache.pekko.actor.{ Actor, ActorLogging, Props }
+import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef, Props }
+import org.apache.pekko.cluster.Cluster
+import scala.util.control.NonFatal
 
 /** Pool worker actor — one instance per cluster node (maxInstancesPerNode = 1).
   *
@@ -13,17 +16,29 @@ import org.apache.pekko.actor.{ Actor, ActorLogging, Props }
   *
   * Reports completion via [[WarmUpWorkerDoneEvent]] back to the sender (WarmUpManager).
   */
-class WarmUpWorker extends Actor with ActorLogging {
+class WarmUpWorker(manager: ActorRef) extends Actor with ActorLogging {
+  protected def nodeAddress: String = Cluster(context.system).selfAddress.toString
+  override def preStart(): Unit = manager ! WarmUpWorkerReadyEvent(nodeAddress)
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    manager ! RuntimeFailure(s"warm-up worker restarted: ${reason.getMessage}")
+    super.preRestart(reason, message)
+  }
 
   override def receive: Receive = {
-    case StartWarmUpWorkersEvent(targets) =>
-      val address = self.path.address.toString
+    case StartWarmUpWorkersEvent(targets) if sender() == manager =>
+      val address = nodeAddress
       log.info(s"[WarmUpWorker] Starting warm-up on $address (${targets.size} target(s))")
       val t0 = System.currentTimeMillis()
-      targets.foreach(invokeTarget)
-      val elapsed = System.currentTimeMillis() - t0
-      log.info(s"[WarmUpWorker] Warm-up complete on $address in ${elapsed}ms")
-      sender() ! WarmUpWorkerDoneEvent(address)
+      try {
+        targets.foreach(invokeTarget)
+        val elapsed = System.currentTimeMillis() - t0
+        log.info(s"[WarmUpWorker] Warm-up complete on $address in ${elapsed}ms")
+        manager ! WarmUpWorkerDoneEvent(address)
+      } catch {
+        case NonFatal(error) =>
+          val cause = Option(error.getCause).getOrElse(error)
+          manager ! RuntimeFailure(s"target failed on $address: ${cause.getClass.getName}: ${cause.getMessage}")
+      }
   }
 
   /** Invokes a warm-up target via reflection.
@@ -34,18 +49,14 @@ class WarmUpWorker extends Actor with ActorLogging {
     val parts      = target.split("#", 2)
     val className  = parts(0).trim + "$"
     val methodName = if (parts.length > 1) parts(1).trim else "warmUp"
-    try {
-      val clazz    = Class.forName(className)
-      val instance = clazz.getField("MODULE$").get(null)
-      clazz.getMethod(methodName).invoke(instance)
-      log.info(s"[WarmUpWorker] '$target' OK")
-    } catch {
-      case e: Exception =>
-        log.error(e, s"[WarmUpWorker] Failed to invoke '$target': ${e.getMessage}")
-    }
+    val clazz    = Class.forName(className)
+    val instance = clazz.getField("MODULE$").get(null)
+    clazz.getMethod(methodName).invoke(instance)
+    log.info(s"[WarmUpWorker] '$target' OK")
   }
 }
 
 object WarmUpWorker {
-  def props: Props = Props[WarmUpWorker]().withDispatcher("pekko.actor.io-dispatcher")
+  def props(manager: ActorRef): Props =
+    Props(classOf[WarmUpWorker], manager).withDispatcher("pekko.actor.io-dispatcher")
 }

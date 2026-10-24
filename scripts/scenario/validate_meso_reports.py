@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate bounded person-owned Car MESO runs against their actual input plans."""
+"""Validate bounded person-owned Car MESO/MICRO runs against their actual input plans."""
 
 import argparse
 from collections import Counter
@@ -43,18 +43,20 @@ def validate(args):
     links = {str(entity["id"]): entity["data"]["content"] for entity in
              load_entities(config, "hybrid.actor.Link", args.simulation.parent)}
     assert persons and links, "scenario must exercise persons and links"
-    assert all(link["simulationMode"] == "MESO" for link in links.values())
+    mode = getattr(args, "mode", "MESO")
+    assert all(link["simulationMode"] == mode for link in links.values())
     rows = [json.loads(line) for path in args.reports.rglob("*.jsonl")
             for line in path.read_text().splitlines() if line.strip()]
     events = {}
     for row in rows:
         events.setdefault(row["event_type"], []).append(row["data"])
-    assert not events.get("enter_micro_link") and not events.get("leave_micro_link"), "unexpected MICRO traversal"
-    entries = events.get("enter_link", [])
-    exits = events.get("leave_link", [])
-    assert entries and all(row["mode"] == "MESO" and "car_id" in row for row in entries), "Car MESO scope required"
+    if mode == "MESO":
+        assert not events.get("enter_micro_link") and not events.get("leave_micro_link"), "unexpected MICRO traversal"
+    entries = events.get("enter_micro_link" if mode == "MICRO" else "enter_link", [])
+    exits = events.get("leave_micro_link" if mode == "MICRO" else "leave_link", [])
+    assert entries and all(row["mode"] == mode and "car_id" in row for row in entries), "Car traversal scope required"
     assert Counter((str(r["car_id"]), str(r["link_id"])) for r in entries) == Counter(
-        (str(r["car_id"]), str(r["link_id"])) for r in exits), "unmatched MESO entries/exits"
+        (str(r["car_id"]), str(r["link_id"])) for r in exits), "unmatched entries/exits"
     expected_trips = expected_traversals = 0
     trip_ticks = {}
     trip_distances = {}
@@ -98,12 +100,20 @@ def validate(args):
                 assert link["from"] == node, "route is not connected"
                 node = link["to"]
                 distance += link["length"]
+                assert entry["tick"] >= next_entry, "next link started before previous leave completed"
+                if mode == "MICRO":
+                    assert exit_event["tick"] > entry["tick"]
+                    assert exit_event["travel_time_ticks"] == exit_event["tick"] - entry["tick"]
+                    assert exit_event["travel_time_seconds"] > 0 and exit_event["average_speed"] > 0
+                    for actual in (entry["link_length"], exit_event["distance_traveled"], exit_event["final_position"]):
+                        assert math.isclose(actual, link["length"], abs_tol=1e-6), "MICRO link geometry"
+                    next_entry = exit_event["tick"] + 1
+                    continue
                 speed = 1.0 if entry["cars_in_link"] >= link["capacity"] else (
                     link["freeSpeed"] * (1.0 - entry["cars_in_link"] / link["capacity"]))
                 travel = link["length"] / (speed / 3.6)
                 assert math.isclose(entry["travel_time"], travel, rel_tol=1e-9), entry
                 minimum_exit = entry["tick"] + math.ceil(travel)
-                assert entry["tick"] >= next_entry, "next link started before previous leave completed"
                 assert exit_event["tick"] >= minimum_exit, "MESO travel time was skipped"
                 if args.free_flow:
                     assert entry["tick"] == next_entry, ("unexpected handoff delay", entry, next_entry)
@@ -120,7 +130,7 @@ def validate(args):
         assert math.isclose(summaries[0]["total_distance"], total_distance, abs_tol=1e-6), summaries
         trip_ticks[person_id] = [r["tick"] for r in trips]
         trip_distances[person_id] = [r["distance_traveled"] for r in trips]
-    assert len(entries) == len(exits) == expected_traversals, "unattributed MESO traversal"
+    assert len(entries) == len(exits) == expected_traversals, "unattributed traversal"
     assert len(events.get("person_trip_completed", [])) == expected_trips
     assert len(events.get("person_schedule_complete", [])) == len(persons)
     assert len(events.get("journey_completed", [])) == expected_trips
@@ -138,7 +148,7 @@ def validate(args):
         assert completed in log and log.index(completed) < log.index(stop)
     return {"passed": True, "policy": config["timeManagerType"], "seed": config["randomSeed"],
             "persons": len(persons), "expectedTrips": expected_trips, "completedTrips": expected_trips,
-            "dailySummaries": len(persons), "mesoEntries": len(entries), "mesoExits": len(exits),
+            "dailySummaries": len(persons), f"{mode.lower()}Entries": len(entries), f"{mode.lower()}Exits": len(exits),
             "tripCompletionTicks": trip_ticks, "tripDistances": trip_distances,
             "rollbacks": log.count("[TW-ROLLBACK]"), "freeFlowTimingChecked": args.free_flow,
             "engineStopped": True, "errors": 0, "nullStateDiscards": 0, "stalls": 0}
@@ -150,8 +160,11 @@ def main():
     parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--mode", choices=("MESO", "MICRO"), default="MESO")
     parser.add_argument("--free-flow", action="store_true", help="require exact travel and handoff ticks on an unsignaled route")
     args = parser.parse_args()
+    if args.mode == "MICRO" and args.free_flow:
+        parser.error("--free-flow checks the MESO speed law; MICRO uses sub-tick physics")
     try:
         result = validate(args)
     except (AssertionError, KeyError, ValueError, OSError) as error:

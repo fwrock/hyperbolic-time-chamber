@@ -118,3 +118,8 @@ Horizon truncation can leave a MESO bus without a final journey/SUMO report when
 its next scheduled exit is beyond the cap. The runtime does not execute that exit
 or invent a destination completion. Uniform model finalization at the horizon
 remains a reporting gap, recorded explicitly by the transit validator.
+
+A subsequent [two-JVM campaign](MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) validates
+transit birth and late input over Artery after fixing cold codecs, per-node
+resource settings and startup warm-up readiness. Its scope and artifact are
+recorded separately from the single-JVM birth milestone.
