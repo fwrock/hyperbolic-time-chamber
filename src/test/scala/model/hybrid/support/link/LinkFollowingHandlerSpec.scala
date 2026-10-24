@@ -88,12 +88,30 @@ class LinkFollowingHandlerSpec extends AnyFlatSpec with Matchers {
     s.following.requested shouldBe List(8, 9)
   }
 
-  it should "reject an unsupported or unsolicited boundary instead of interpreting it as an empty road" in {
+  it should "reject incompatible requested boundaries instead of interpreting them as an empty road" in {
     val s = state
     val handler = new LinkFollowingHandler(() => s, () => 7, () => 5, (_, _, _, _) => ())
-    intercept[IllegalArgumentException](handler.receive(8, observation(4)))
     handler.observeNextRoad(9)
     intercept[IllegalArgumentException](handler.receive(8, observation(4).copy(supported = false)))
     intercept[IllegalArgumentException](handler.receive(9, observation(4)))
+  }
+
+  it should "ignore a late positive publication after rollback undoes its subscription" in {
+    var s = state
+    val checkpoint = JsonUtil.toJson(s)
+    var sends = 0
+    val handler = new LinkFollowingHandler(() => s, () => 7, () => 5, (_, _, _, _) => sends += 1)
+    handler.observeNextRoad(9)
+    val late = observation(5, vehicle = Some(MicroBoundaryVehicle(12, 0.026, 0.26, 4.5)))
+    handler.receive(8, late)
+    s = JsonUtil.fromJson[LinkState](checkpoint)
+    handler.receive(8, late)
+    s.following.observations shouldBe empty
+    s.following.requested shouldBe empty
+    sends shouldBe 2
+    handler.observeNextRoad(9)
+    handler.receive(8, late.copy(sequence = 2))
+    handler.leaders(6)(13).actorId shouldBe 12
+    sends shouldBe 4
   }
 }

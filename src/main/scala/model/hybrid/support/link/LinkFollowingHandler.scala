@@ -49,9 +49,11 @@ class LinkFollowingHandler(
 
   def receive(source: Long, snapshot: MicroBoundarySnapshot): Unit = {
     val state = stateFn()
-    require(source == snapshot.linkId && snapshot.supported, "unsupported downstream MICRO boundary")
+    require(source == snapshot.linkId, "downstream MICRO boundary source mismatch")
+    // A positive publication can outlive an undone subscription until its anti-message arrives.
+    if (!state.following.requested.contains(source)) return
+    require(snapshot.supported, "unsupported downstream MICRO boundary")
     require(math.abs(snapshot.stepSeconds - state.microTimeStep) < 1e-9, "downstream MICRO timestep mismatch")
-    require(state.following.requested.contains(source), "unsolicited downstream MICRO boundary")
     val history = state.following.observations.getOrElse(source, MicroBoundaryHistory())
     history.accept(snapshot)
     state.following.observations = state.following.observations.updated(source, history)
