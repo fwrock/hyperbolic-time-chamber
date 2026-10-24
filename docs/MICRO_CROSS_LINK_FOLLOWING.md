@@ -63,6 +63,9 @@ branches continue to finish independently. Subscriber IDs, requested IDs,
 publication sequence and observation histories all live in `LinkState`, and
 JSON restore retains numeric map keys and typed snapshots. Existing owner-ledger,
 positive/anti-message, GVT and report-commit paths remain authoritative.
+If rollback undoes a subscription, a positive publication can still arrive before
+its anti-message. The receiver consumes and ignores that publication while it has
+no requested boundary, without creating state, new output or a wait obligation.
 
 ## Scope and cost
 
