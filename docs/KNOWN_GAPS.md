@@ -4,7 +4,37 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
-## Fractional MICRO timing and scientific workflow (2026-10-25)
+## Cross-link MICRO following and v2 validation (2026-10-25)
+
+Opt-in single-lane MICRO following now observes actual leaders across a Link
+boundary and through an optional connector onto the next road. It requires one
+physics step per runtime tick. Explicit stop-line gaps match the SUMO reference;
+defaults preserve the existing mixed-model mode. On the inspected v1 seed 101,
+trip-time MAE drops from 1.325 to 0.081 s and the final queued car changes from
+3.2 s early to 0.1 s late, without a fitted node delay or car-following coefficient.
+
+All four predeclared v2 physical cases and all five fresh 18-car demand seeds
+pass the unchanged provisional criteria. The five-seed mean HTC-minus-SUMO
+duration is +0.064 s, with exploratory 95% interval [+0.046, +0.083] s. A small
+positive bias remains. These are different demand realizations from v1 below.
+
+The final build passes **653 Scala tests in 135 suites** and **18 Python tests**.
+All **19 SUMO comparisons** produce valid measurements for **260 completed cars**;
+all **17 full-report comparisons** match, including two-JVM execution with 3,297
+rollbacks, unchanged conservative physics across the stale-publication repair,
+and legacy Car and cyclic transit behavior. An initial v2 Time Warp failure from
+a publication outliving its rolled-back subscription was repaired and retained
+as excluded evidence; all final validation uses the repaired executable.
+
+**Empirical following/discharge validity remains open.** Competing junction
+movements, multi-lane selection, capacity-blocked handoff/spillback and vehicles
+waiting outside lane queues need separate representation and validation. Very
+short successive roads can require an observation horizon beyond the next road.
+Messaging/checkpoint costs at city scale are unmeasured. See the
+[contract, ablations and reproduction](MICRO_CROSS_LINK_FOLLOWING.md) and
+[retained v2 evidence](validation/micro-discharge-2026-10-25.json).
+
+## Fractional MICRO timing and scientific workflow — prior v1 milestone (2026-10-25)
 
 Opt-in 0.1-second runtime ticks and checkpointed step-remainder transfer correct
 the accumulated boundary loss in the supported MICRO Car scope. Integer event

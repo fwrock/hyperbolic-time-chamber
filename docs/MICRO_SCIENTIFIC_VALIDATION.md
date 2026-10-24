@@ -1,5 +1,9 @@
 # MICRO timing and scientific validation
 
+The later [cross-link following revision and frozen v2 campaign](MICRO_CROSS_LINK_FOLLOWING.md)
+address the discharge discrepancy found here. This page retains the original v1
+methods and results, including its failed demand realizations.
+
 This stage separates implementation checks, agreement with SUMO and empirical
 traffic validation. Passing a regression tolerance does not establish accuracy for
 an arbitrary traffic study. Scientific criteria in
