@@ -33,6 +33,26 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
       .withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
 
+  "conservative final reporting" should "wait for the final sink receipt after the LP retires" in {
+    val gtm = TestProbe(); val manager = TestProbe(); val sink = TestProbe(); val lp = TestProbe()
+    val worker = TestActorRef(new Worker(gtm.ref, manager.ref, TestProbe().ref))
+    gtm.awaitAssert(worker.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    gtm.send(worker, ConservativeMembership("final", Vector(worker)))
+    gtm.send(worker, RegisterConservativeProcess("final", gtm.ref,
+      JoinRuntime(org.htc.protobuf.core.entity.actor.Identify(id = 42L, classType = "example.Horizon"), lp.ref, None)))
+    lp.expectMsgType[RuntimeJoined]
+    gtm.receiveWhile(idle = 50.millis) { case _ => () }
+    gtm.send(worker, StopConservativeRuntime(1L, true, Some(1000L)))
+    lp.expectMsg(RetireConservativeProcess(1L, true, Some(1000L)))
+    lp.send(worker, PublishConservativeReport(sink.ref,
+      core.entity.event.control.report.ReportEvent("42", 1000L, 0L, data = "censored", label = "horizon")))
+    val delivery = sink.expectMsgType[CommittedReportDelivery]
+    lp.send(worker, ConservativeProcessRetired(1L))
+    gtm.expectNoMessage(100.millis)
+    sink.send(worker, DeliveryAccepted("final", delivery.token))
+    gtm.expectMsg(ConservativeRuntimeStopped(1L, Set(sink.ref)))
+  }
+
   private class GTM(manager: ActorRef, sink: ActorRef) extends ChannelClosedGlobalTimeManager(1000L, false, manager) {
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 2

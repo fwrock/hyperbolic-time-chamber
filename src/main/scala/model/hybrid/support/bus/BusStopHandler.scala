@@ -72,7 +72,8 @@ class BusStopHandler(
         sendMessageFn(
           person.id,
           person.classType,
-          PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Bus"),
+          PassengerBoardedVehicleData(vehicleId = entityIdFn().toLong, vehicleClassType = "hybrid.actor.Bus",
+            vehicleDistance = state.distance),
           "PassengerBoardedVehicle"
         )
 
@@ -186,7 +187,7 @@ class BusStopHandler(
       sendMessageFn(
         person.id,
         person.classType,
-        BusRequestUnloadPassengerData(nodeId = nodeId, nodeRef = selfRefFn()),
+        BusRequestUnloadPassengerData(nodeId = nodeId, nodeRef = selfRefFn(), vehicleDistance = state.distance),
         "RequestUnloadPassenger"
       )
     }

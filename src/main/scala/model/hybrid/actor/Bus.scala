@@ -284,6 +284,12 @@ class Bus(
     setExpectedUnloadResponsesFn = v => expectedUnloadResponses = v
   )
 
+  override protected def onHorizonFinalization(horizon: Tick): Unit =
+    if (state.status != Finished && journeyReporter.sumoDepartTick.nonEmpty)
+      model.hybrid.support.JourneyHorizonReporter.report("bus", getEntityId, state.origin, state.destination,
+        journeyReporter.sumoDepartTick.get, horizon, state.distance, state.currentPath.map(_._1),
+        (data, label) => report(data, label))
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
       logWarn(
@@ -294,7 +300,7 @@ class Bus(
     }
 
     if (
-      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      !usesAccountedRuntime && !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logWarn(

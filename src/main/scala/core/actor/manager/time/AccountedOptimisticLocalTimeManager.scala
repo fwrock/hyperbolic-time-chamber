@@ -281,9 +281,10 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         pending -= sender()
         maybeSnapshot()
       }
-      case CommitRuntime(id, frontier) => protect {
+      case CommitRuntime(id, frontier, finalHorizon) => protect {
         require(sender() == global && phase == Collecting && pending.isEmpty && id == round && frontier >= gvt,
           "commit outside collected round")
+        require(finalHorizon.forall(h => h == horizon && frontier > h), "invalid horizon finalization")
         gvt = frontier
         executionFrontier = frontier
         phase = Committing
@@ -291,7 +292,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         pending = byRef.keySet.toSet
         pending.foreach { ref =>
           ref ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits)
-          ref ! CommitRuntime(round, gvt)
+          ref ! CommitRuntime(round, gvt, finalHorizon)
         }
         maybeCommitted()
       }

@@ -7,5 +7,6 @@ import org.apache.pekko.actor.ActorRef
 
 case class SubwayRequestUnloadPassengerData(
   nodeId: Long,
-  nodeRef: ActorRef
+  nodeRef: ActorRef,
+  vehicleDistance: Double = 0.0
 ) extends BaseEventData

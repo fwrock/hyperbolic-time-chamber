@@ -74,6 +74,37 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       ptWaitTimeoutTicks = ptWaitTimeoutTicks
     )
 
+  for (mode <- Seq(ConcreteMode.Bus, ConcreteMode.Subway)) {
+    "PT ride distance" should s"use a checkpointed boarding baseline for $mode and ignore another vehicle" in {
+      val leg = TransitLeg(mode, "L1", StopRef(801L, "stop", 1L), StopRef(802L, "stop", 3L))
+      val manager = newManager()
+      val plan = List(Activity("home", 1L, AtTick(10L)), leg, Activity("work", 3L, AtTick(500L)))
+      val first = manager.step(stateWithPlan(plan), 0L).asInstanceOf[PlanStepResult.Awaiting].state
+      val waiting = manager.step(first, 10L).asInstanceOf[PlanStepResult.LegStarted].state
+      val traveling = waiting.tripExecution.asInstanceOf[TripExecutionState.Traveling]
+      val boarded = waiting.copy(tripExecution = traveling.copy(ptWait = traveling.ptWait.map(_.copy(
+        boardedVehicleId = Some(16L), boardedVehicleClassType = Some(s"hybrid.actor.$mode"),
+        boardingDistance = Some(1200.0), boardingTick = Some(20L)))))
+      val restored = core.util.JsonUtil.fromJson[PersonState](core.util.JsonUtil.toJson(boarded))
+      def request(vehicle: Long, distance: Double, classType: String = s"hybrid.actor.$mode"): core.entity.event.ActorInteractionEvent = {
+        val data = if (mode == ConcreteMode.Bus)
+          model.hybrid.entity.event.data.bus.BusRequestUnloadPassengerData(3L, null, distance)
+        else model.hybrid.entity.event.data.subway.SubwayRequestUnloadPassengerData(3L, null, distance)
+        core.entity.event.ActorInteractionEvent(100L, 0L, vehicle, "", "", classType, data = data, resourceId = "")
+      }
+      manager.handlePTUnloadRequest(request(99L, 1600.0), 3L, mode, restored, 100L) shouldBe None
+      manager.handlePTUnloadRequest(request(16L, 1600.0, "other.Model"), 3L, mode, restored, 100L) shouldBe None
+      val result = manager.handlePTUnloadRequest(request(16L, 1600.0), 3L, mode, restored, 100L).get
+        .asInstanceOf[PlanStepResult.Awaiting].state
+      result.totalDistanceTraveled shouldBe 400.0
+      result.completedTrips shouldBe 1
+      reports.find(_._2 == "person_pt_trip_completed").get._1("distance_traveled") shouldBe 400.0
+      intercept[IllegalArgumentException] {
+        manager.handlePTUnloadRequest(request(16L, 1000.0), 3L, mode, restored, 100L)
+      }.getMessage should include ("odometer moved backwards")
+    }
+  }
+
   // ---------------------------------------------------------------------------------------------
   // (a) A full day: a fixed (already-resolved) private-vehicle leg, an activity, then a
   //     PendingDecision resolved dynamically into a walk leg, ending at a final activity.

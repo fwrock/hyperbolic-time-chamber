@@ -298,7 +298,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     phase = Committing
     phaseStartedAt = System.nanoTime()
     pending = workers.toSet
-    workers.foreach(_ ! CommitRuntime(roundId, gvt))
+    workers.foreach(_ ! CommitRuntime(roundId, gvt, Option.when(truncated)(horizon)))
   }
   private def afterRetire(): Unit = if (phase == Retiring && pending.isEmpty && flushed) {
     val retireNanos = System.nanoTime() - phaseStartedAt

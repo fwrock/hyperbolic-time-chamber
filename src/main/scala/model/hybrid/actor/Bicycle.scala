@@ -288,6 +288,14 @@ class Bicycle(
 
   // ===== End Accessor Methods =====
 
+  override protected def onHorizonFinalization(horizon: Tick): Unit =
+    if (state.status != Finished && state.status != model.hybrid.entity.state.enumeration.MovableStatusEnum.Parked &&
+      journeyReporter.sumoDepartTick.nonEmpty)
+      model.hybrid.support.JourneyHorizonReporter.report("bicycle", getEntityId,
+        getTripOrigin.getOrElse(state.origin), getTripDestination.getOrElse(state.destination),
+        journeyReporter.sumoDepartTick.get, horizon, state.distance - getTripStartDistance,
+        state.currentPath.map(_._1), (data, label) => report(data, label))
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null) {
       logWarn(
@@ -303,7 +311,7 @@ class Bicycle(
     }
 
     if (
-      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      !usesAccountedRuntime && !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logDebug(

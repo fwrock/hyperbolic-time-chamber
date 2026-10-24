@@ -16,5 +16,6 @@ import core.entity.event.data.BaseEventData
   */
 case class PassengerBoardedVehicleData(
   vehicleId: Long,
-  vehicleClassType: String
+  vehicleClassType: String,
+  vehicleDistance: Double = 0.0
 ) extends BaseEventData

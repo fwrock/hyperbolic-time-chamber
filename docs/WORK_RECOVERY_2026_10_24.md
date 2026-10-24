@@ -2,10 +2,19 @@
 
 The interrupted worktree was recovered on top of commit `240da8e` (cross-JVM codecs,
 scenario resources and warm-up readiness). The unfinished milestone was an accounted
-dynamic-routing adapter. The validated routing milestone is ready as a commit
-checkpoint; preserve it when continuing with the remaining gaps.
+dynamic-routing adapter. The validated routing milestone was committed and pushed
+as `6b59a5d` on `feat/time-warp`.
 
-## Current milestone
+The subsequent horizon/transit reporting milestone is complete and described in
+[the reporting contract](HORIZON_AND_TRANSIT_REPORTING.md). Its full test run passes
+605 tests across 130 suites (`/tmp/htc-horizon-pt-full-tests.log`). All 14 simulator
+cases pass independent physical acceptance, with eight matching full-report
+comparisons, including delayed two-JVM MICRO transit. The accepted record is
+`docs/validation/horizon-pt-2026-10-24.json`; raw logs and generated inputs are under
+`/tmp/htc-horizon-pt-20261024/`. See
+[validation and reproduction](HORIZON_TRANSIT_VALIDATION_2026_10_24.md).
+
+## Completed routing milestone
 
 Read [accounted routing](ACCOUNTED_ROUTING.md), then its
 [validation record](ACCOUNTED_ROUTING_VALIDATION_2026_10_24.md). The new adapter uses
@@ -29,10 +38,10 @@ are not accepted evidence; use the cases named in the final validation record.
 
 ## Remaining work after this milestone
 
-- Uniform horizon finalization: a MESO bus whose next wake is beyond the horizon
-  can miss final journey/SUMO output. Cyclic service truncation needs a consistent
-  reporting contract.
-- PT Person distance and Subway journey-completion telemetry remain incomplete.
+- Walking distance remains excluded from Person daily totals. Censored SUMO
+  records contain confirmed terminal fields, without invented waiting/lane/speed
+  statistics. Horizon finalization and PT/Subway reporting are now covered by the
+  reporting milestone above.
 - Replicated routing maps and full snapshots need measured memory/throughput
   validation before making city-scale or million-actor claims.
 - Multi-host partitions, coordinated recovery, ownership migration and arbitrary

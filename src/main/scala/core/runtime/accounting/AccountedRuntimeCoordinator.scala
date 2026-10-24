@@ -282,7 +282,7 @@ final class AccountedRuntimeCoordinator(expectedManagers: Int, duration: Long, r
     phase = Committing
     eligibleRetire = Set.empty
     pendingCommit = members
-    members.foreach(_ ! CommitRuntime(roundId, gvt))
+    members.foreach(_ ! CommitRuntime(roundId, gvt, Option.when(truncated)(horizon)))
     afterCommit()
   }
 

@@ -100,9 +100,15 @@ class Subway(
   override protected def resolveLink(linkId: Long): Option[(Long, String)] =
     Some((linkId, "hybrid.actor.RailLink"))
 
+  override protected def onHorizonFinalization(horizon: Tick): Unit =
+    if (state.status != Finished && state.departureTick.nonEmpty)
+      model.hybrid.support.JourneyHorizonReporter.report("subway", getEntityId, state.origin, state.destination,
+        state.departureTick.get, horizon, state.distance, state.currentPath.map(_._1),
+        (data, label) => report(data ++ Map("line" -> state.line), label))
+
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (
-      !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      !usesAccountedRuntime && !model.hybrid.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
       && currentTick >= simulationEndTick && state.status != Finished
     ) {
       logWarn(
@@ -140,6 +146,14 @@ class Subway(
           enterLink()
         }
       case Moving =>
+        if (!state.linkArrivalCounted) {
+          state.distance += state.currentLinkLength
+          state.linkArrivalCounted = true
+          report(Map("event_type" -> "subway_arrival", "subway_id" -> getEntityId,
+            "link_id" -> state.currentPath.map(_._1).getOrElse(0L), "line" -> state.line,
+            "distance_traveled" -> state.currentLinkLength, "total_distance" -> state.distance,
+            "tick" -> currentTick), "subway_arrival")
+        }
         val nodeId = getCurrentNode
         val stationOpt = retrieveSubwayStationFromNodeId(nodeId)
         stationOpt match {
@@ -190,7 +204,8 @@ class Subway(
     // or releasing its dispatch, including under conservative execution.
     if (matchesAwaitedReply(awaitKey, "LeaveLinkData", data.requestSeq)) {
       consumeAwaitedReply(awaitKey)
-      state.distance += data.linkLength
+      if (!state.linkArrivalCounted) state.distance += data.linkLength
+      state.currentLinkLength = 0.0
       report(
         data = Map(
           "event_type" -> "leave_link",
@@ -227,6 +242,9 @@ class Subway(
       return
     }
     val effectiveVelocity = state.velocity * math.max(0.5, math.min(1.5, state.speedFactor))
+    if (state.departureTick.isEmpty) state.departureTick = Some(currentTick)
+    state.currentLinkLength = data.linkLength
+    state.linkArrivalCounted = false
     val time = timeToNextStation(
       distance = data.linkLength,
       velocity = effectiveVelocity

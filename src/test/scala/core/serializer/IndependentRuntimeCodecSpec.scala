@@ -26,7 +26,9 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
       RuntimeSnapshot(7L, Some(20L), 1, 2, retention = Some(RuntimeRetention(events = 3L))),
       RuntimeBirthOrigin(LogicalProcessId("example.Parent", 10L), "birth", 20L, 2L),
       ConservativeReady(7L, Some(core.runtime.EventOrder(20L, 2L, "key")), 1),
-      PauseRuntimeExecution()
+      PauseRuntimeExecution(), CommitRuntime(7L, 21L, Some(20L)),
+      core.runtime.conservative.StopConservativeRuntime(7L, true, Some(20L)),
+      core.runtime.conservative.RetireConservativeProcess(7L, true, Some(20L))
     )
     messages.foreach { original =>
       val serializer = from.findSerializerFor(original)

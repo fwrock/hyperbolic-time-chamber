@@ -33,7 +33,7 @@ final case class RuntimeRetention(checkpoints: Long = 0L, events: Long = 0L, rea
 }
 final case class RuntimeSnapshot(round: Long, minimum: Option[Long], blocked: Int, callbacks: Int,
   queuedDispatches: Int = 0, retention: Option[RuntimeRetention] = None) extends RuntimeCommand
-final case class CommitRuntime(round: Long, gvt: Long) extends RuntimeCommand
+final case class CommitRuntime(round: Long, gvt: Long, finalHorizon: Option[Long] = None) extends RuntimeCommand
 final case class RuntimeCommitted(round: Long, mayRetire: Boolean) extends RuntimeCommand
 final case class ResumeRuntime(round: Long) extends RuntimeCommand
 final case class RetireRuntimeProcess(round: Long, finalCut: Boolean = false) extends RuntimeCommand

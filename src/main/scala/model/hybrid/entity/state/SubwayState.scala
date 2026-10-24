@@ -39,7 +39,10 @@ case class SubwayState(
     * Values < 1.0 = conservative (slower); > 1.0 = aggressive (faster).
     * Clamped to [0.5, 1.5] on use. Default: 1.0.
     */
-  val speedFactor: Double = 1.0
+  val speedFactor: Double = 1.0,
+  var departureTick: Option[Tick] = None,
+  var currentLinkLength: Double = 0.0,
+  var linkArrivalCounted: Boolean = false
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

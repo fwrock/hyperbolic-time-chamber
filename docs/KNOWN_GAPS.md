@@ -4,6 +4,33 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Horizon finalization and transit distance follow-up (2026-10-24)
+
+Production policies now authorize reporting at the globally closed final horizon
+cut, so an active vehicle whose next wake lies beyond the cap still emits a
+censored journey/SUMO record. The shared hook covers Car, Bicycle, Motorcycle, Bus
+and Subway, cannot send or schedule model work, and preserves normal execution at
+the inclusive horizon. Optimistic reports flush strictly below GVT; conservative
+completion also waits for final report receipts before storage draining. Censored
+records cannot claim a destination arrival or unfinished-link distance.
+
+Person transit distance now comes from checkpointed typed boarding identity and
+vehicle odometer differences. Bus/Subway messages carry their existing cumulative
+physical distance without adding another request/reply exchange. Subway counts a
+rail arrival before station dwell, publishes arrival telemetry and checkpoints
+the guard preventing cleanup from adding that link twice. Cyclic trains now have
+explicit final journey/SUMO telemetry. Walking distance remains outside daily totals.
+
+The full suite passes **605 tests across 130 suites**. All 14 bounded simulator
+cases pass physical acceptance, including both policies with delayed two-JVM
+MICRO transit. All eight physical-report comparisons match their references.
+Measured rides are 400 m by Bus and 1400 m by Subway; exact-cap rail arrival and
+interrupted Car/Bicycle/Motorcycle cases have explicit acceptance. See
+[the reporting contract](HORIZON_AND_TRANSIT_REPORTING.md) and
+[validation record](HORIZON_TRANSIT_VALIDATION_2026_10_24.md) for independent distance,
+exact-horizon and interrupted-journey acceptance. Earlier milestone entries retain
+their historical scope and reporting limitations.
+
 ## Accounted dynamic routing follow-up (2026-10-24)
 
 Hybrid dynamic road feedback now has an explicit accounted adapter:

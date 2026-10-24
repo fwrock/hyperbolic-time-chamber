@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import re
+import heapq
 
 
 def validate(args):
@@ -32,6 +33,21 @@ def validate(args):
               if station['data']['content']['garage'] for queue in station['data']['content']['subways'].values() for train in queue}
     assert buses and trains
     links = {str(r['id']): r['data']['content'] for kind in ('Link', 'RailLink') for r in entities(kind)}
+    horizon = config['startTick'] + config['duration']
+    def ride_distance(mode, origin, destination):
+        graph = [r['data']['content'] for r in entities('Link' if mode == 'Bus' else 'RailLink')]
+        queue, visited = [(0.0, origin)], set()
+        while queue:
+            distance, node = heapq.heappop(queue)
+            if node == destination:
+                return distance
+            if node in visited:
+                continue
+            visited.add(node)
+            for link in graph:
+                if link['from'] == node:
+                    heapq.heappush(queue, (distance + link['length'], link['to']))
+        raise AssertionError('unreachable expected transit trip')
     rows = [json.loads(line) for file in args.reports.rglob('*.jsonl') for line in file.read_text().splitlines() if line.strip()]
     def events(label):
         return [row['data'] for row in rows if row['event_type'] == label]
@@ -39,7 +55,7 @@ def validate(args):
     assert Counter(str(r['subway_id']) for r in events('subway_created')) == Counter(trains.keys()), 'subway birth identity/count'
     assert not events('person_pt_replanned'), 'PT retry/replanning must not conceal a missed service'
     modes = Counter()
-    completion_ticks = {}
+    completion_ticks = {}; person_distances = {}; expected_summaries = 0
     for person in persons:
         pid = str(person['id'])
         plan = person['data']['content']['originalPlan']
@@ -53,10 +69,17 @@ def validate(args):
         completed = [r for r in events('person_pt_trip_completed') if str(r['person_id']) == pid]
         summaries = [r for r in events('person_schedule_complete') if str(r['person_id']) == pid]
         actual_activities = sorted((r for r in events('person_activity_start') if str(r['person_id']) == pid), key=lambda r: r['activity_sequence'])
-        assert len(starts) == len(completed) == len(summaries) == 1, f'person {pid}: missing/duplicate PT completion'
+        expected_summary = int(activities[-1]['endTime']['tick'] <= horizon)
+        expected_summaries += expected_summary
+        assert len(starts) == len(completed) == 1 and len(summaries) == expected_summary, f'person {pid}: missing/duplicate PT completion'
         assert starts[0]['mode'] == mode and completed[0]['alighting_node'] == activities[-1]['nodeId']
         assert completed[0]['line'] == starts[0]['line'] and completed[0]['tick'] >= starts[0]['tick']
-        assert summaries[0]['total_trips'] == 1
+        expected_distance = ride_distance(mode, activities[0]['nodeId'], activities[-1]['nodeId'])
+        assert math.isclose(completed[0]['distance_traveled'], expected_distance, abs_tol=1e-6), 'PT ride distance'
+        for summary in summaries:
+            assert summary['total_trips'] == 1
+            assert math.isclose(summary['total_distance'], expected_distance, abs_tol=1e-6), 'PT daily distance'
+        person_distances[pid] = expected_distance
         assert [a['node_id'] for a in actual_activities] == [a['nodeId'] for a in activities]
         completion_ticks[pid] = completed[0]['tick']
     for mode, prefix in (('Bus', 'bus'), ('Subway', 'subway')):
@@ -97,34 +120,36 @@ def validate(args):
                 line = station['lines'][vehicle['line']]
                 tick = max(station['startTick'], line['nextTick']) + (position + 1) * line['interval']
                 expected_entries, expected_exits = [], []
-                while tick < horizon:
+                expected_arrivals = []
+                while tick <= horizon:
                     link_id = route[len(expected_entries) % len(route)]['railLinkId']
                     link = links[str(link_id)]
                     expected_entries.append((link_id, tick))
                     arrival = tick + math.ceil(link['length'] / speed)
+                    if arrival <= horizon:
+                        expected_arrivals.append((link_id, arrival))
                     exit_tick = arrival + vehicle['stopTime']
-                    if exit_tick >= horizon:
+                    if exit_tick > horizon:
                         break
                     expected_exits.append((link_id, exit_tick))
                     tick = exit_tick + 1
                 assert [(r['link_id'], r['tick']) for r in entered] == expected_entries, 'cyclic subway entry timetable'
                 assert [(r['link_id'], r['tick']) for r in left] == expected_exits, 'cyclic subway exit timetable'
-                assert len(left) >= len(route), 'subway did not complete even one circuit'
-                assert math.isclose(left[-1]['total_distance'], distance), 'subway distance'
-            else:
-                completed = [r for r in events('journey_completed') if str(r.get(field)) == vehicle_id]
-                assert len(completed) <= 1, 'duplicate Bus completion'
-                if completed:
-                    assert completed[0]['tick'] == horizon and completed[0]['completion_reason'] == 'simulation_time_exceeded'
-                    assert math.isclose(completed[0]['total_distance'], distance, abs_tol=1e-6), 'Bus completed-link distance'
-                else:
-                    # MESO can have no wake exactly at the finite horizon. Its known
-                    # physical exit must be beyond the cap, not silently missing inside it.
-                    assert len(entered) == len(left) + 1 and 'travel_time' in entered[-1], 'Bus without completion or provable horizon censor'
-                    assert entered[-1]['tick'] + int(entered[-1]['travel_time']) > horizon, 'missing Bus exit before the horizon'
-                    missing_horizon_reports.append(vehicle_id)
-                if len(entered) > len(left):
-                    assert entered[-1]['tick'] < horizon, 'censored Bus traversal starts beyond horizon'
+                arrivals = sorted((r for r in events('subway_arrival') if str(r['subway_id']) == vehicle_id), key=lambda r: r['tick'])
+                assert [(r['link_id'], r['tick']) for r in arrivals] == expected_arrivals, 'physical subway arrivals'
+                distance = sum(links[str(link_id)]['length'] for link_id, _ in expected_arrivals)
+                assert arrivals and math.isclose(arrivals[-1]['total_distance'], distance), 'subway distance'
+            completed = [r for r in events('journey_completed') if str(r.get(field)) == vehicle_id]
+            sumo = [r for r in events('sumo_tripinfo') if str(r.get('vehicle_id')) == vehicle_id]
+            assert len(completed) == len(sumo) == 1, 'missing/duplicate final journey or SUMO report'
+            assert completed[0]['tick'] == horizon and completed[0]['completion_reason'] == 'horizon_truncated'
+            assert completed[0]['horizon_truncated'] and not completed[0]['reached_destination']
+            assert completed[0]['final_node'] is None, 'censored service invented an arrival node'
+            assert math.isclose(completed[0]['total_distance'], distance, abs_tol=1e-6), 'completed physical distance'
+            assert sumo[0]['arrival'] == -1 and sumo[0]['horizon_truncated'], 'SUMO invented a completed arrival'
+            assert math.isclose(sumo[0]['routeLength'], distance, abs_tol=1e-6), 'SUMO distance'
+            if len(entered) > len(left):
+                assert entered[-1]['tick'] <= horizon, 'censored traversal starts beyond horizon'
             traversals[vehicle_id] = {'entries': len(entered), 'exits': len(left), 'completedLinkDistance': distance}
             censored[vehicle_id] = len(entered) - len(left)
     log = args.log.read_text(errors='replace')
@@ -142,6 +167,7 @@ def validate(args):
     assert marker in log and log.index(marker) < log.index(stop), 'unacknowledged engine completion'
     return dict(passed=True, policy=config['timeManagerType'], seed=config['randomSeed'], persons=len(persons),
                 expectedTrips=len(persons), completedPTTrips=len(events('person_pt_trip_completed')), dailySummaries=len(events('person_schedule_complete')),
+                expectedDailySummaries=expected_summaries, personDistances=person_distances,
                 busBirths=len(buses), subwayBirths=len(trains), boardings=dict(modes), alightings=dict(modes),
                 completionTicks=completion_ticks, traversals=traversals, horizonCensoredEntries=censored, missingHorizonJourneyReports=missing_horizon_reports,
                 rollbacks=log.count('[TW-ROLLBACK]'), errors=0, nullStateDiscards=0, stalls=0, physicalRows=len(rows), engineStopped=True)
