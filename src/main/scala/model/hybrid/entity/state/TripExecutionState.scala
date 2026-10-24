@@ -6,6 +6,8 @@ import org.interscity.htc.model.hybrid.entity.state.plan.ConcreteMode
 
 import com.fasterxml.jackson.annotation.{ JsonSubTypes, JsonTypeInfo }
 
+final case class WalkingLegProgress(distance: Double, arrivalTick: Tick)
+
 /** Snapshot of a PT wait in progress: [[model.hybrid.actor.Person]] registered at a boarding stop
   * and is waiting for the corresponding bus/subway to actually arrive and load it.
   *
@@ -84,10 +86,10 @@ object TripExecutionState {
     ptWait: Option[PTWaitState] = None,
     replanStrategyId: String = "travel-time",
     replanAllowedModes: Set[ConcreteMode] = ConcreteMode.values.toSet,
-    /** Measured private-vehicle and transit distance, flushed into daily distance at the next
-      * Activity. Transit odometer differences survive transfers and rollback; walking distance
-      * is not yet included.
+    /** Completed-leg distance, flushed into daily distance at the next Activity or abort.
+      * An in-flight walking leg stays separate until its arrival is processed.
       */
-    accumulatedDistance: Double = 0.0
+    accumulatedDistance: Double = 0.0,
+    walking: Option[WalkingLegProgress] = None
   ) extends TripExecutionState
 }

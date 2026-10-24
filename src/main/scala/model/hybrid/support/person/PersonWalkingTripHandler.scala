@@ -3,6 +3,7 @@ package model.hybrid.support.person
 
 import core.types.Tick
 import model.hybrid.entity.state.plan.WalkLeg
+import model.hybrid.entity.state.WalkingLegProgress
 import model.hybrid.util.{ CityMapUtil, GPSUtil }
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
 
@@ -25,7 +26,10 @@ class PersonWalkingTripHandler(
   personId: String,
   reportFn: (Map[String, Any], String) => Unit,
   logDebug: String => Unit,
-  logError: String => Unit
+  logError: String => Unit,
+  linkLengthFn: Long => Option[Double] = id => CityMapUtil.edgeLabelsById.get(id).map(_.length),
+  routeFn: (Long, Long) => Option[(Double, mutable.Queue[(Long, Long)])] =
+    (origin, destination) => GPSUtil.calcRouteCompactWalking(origin, destination, maxExpansions = Int.MaxValue)
 ) {
 
   private val walkingSpeed: Double = 1.4 // m/s (typical human walking speed)
@@ -36,56 +40,60 @@ class PersonWalkingTripHandler(
     * @param logWarn Warning logging function
     * @return Total distance in meters
     */
-  def calculateRouteDistance(routeQueue: mutable.Queue[(Long, Long)], logWarn: String => Unit): Double = {
+  def calculateRouteDistance(routeQueue: mutable.Queue[(Long, Long)], logWarn: String => Unit): Option[Double] = {
     var totalDistance = 0.0
-    val routeCopy = routeQueue.clone()
-
-    while (routeCopy.nonEmpty) {
-      val (linkEdgeGraphId, _) = routeCopy.dequeue()
-
-      CityMapUtil.edgeLabelsById.get(linkEdgeGraphId) match {
-        case Some(edgeLabel) =>
-          totalDistance += edgeLabel.length
+    val links = routeQueue.iterator
+    while (links.hasNext) {
+      val (linkId, _) = links.next()
+      linkLengthFn(linkId).filter(length => length.isFinite && length >= 0.0) match {
+        case Some(length) =>
+          totalDistance += length
+          if (!totalDistance.isFinite) {
+            logWarn("Walking route distance overflow")
+            return None
+          }
         case None =>
-          logWarn(s"Edge label $linkEdgeGraphId not found")
+          logWarn(s"Walking link $linkId has no valid length")
+          return None
       }
     }
-
-    totalDistance
+    Some(totalDistance)
   }
 
   /** Initiate a walking leg (mesoscopic).
     *
     * Calculates a route using the road network (or reuses `leg.precomputedRoute`), computes
-    * walking time based on distance and walking speed, and returns the arrival tick.
+    * walking time based on distance and walking speed, and returns both for checkpointing.
     *
     * @param leg Walking leg to execute
     * @param currentTick Current simulation tick
     * @param logWarn Warning logging function
-    * @return Some(arrivalTick) if a route was found, None if no route exists between the leg's
-    *         origin and destination
+    * @return measured distance and arrival tick, or None when the route cannot be measured
     */
   def initiateWalkingTrip(
     leg: WalkLeg,
     currentTick: Tick,
     logWarn: String => Unit
-  ): Option[Tick] = {
+  ): Option[WalkingLegProgress] = {
     val routeResult: Option[(Double, mutable.Queue[(Long, Long)])] =
       leg.precomputedRoute match {
         case Some(route) => Some((0.0, mutable.Queue(route: _*)))
-        case None => GPSUtil.calcRouteCompactWalking(
-            originId = leg.originNodeId,
-            destinationId = leg.destinationNodeId,
-            maxExpansions = Int.MaxValue
-          )
+        case None => routeFn(leg.originNodeId, leg.destinationNodeId)
       }
 
-    routeResult match {
-      case Some((_, routeQueue)) =>
-        val totalDistance = calculateRouteDistance(routeQueue, logWarn)
-        val walkingTimeSeconds = totalDistance / walkingSpeed
-        val walkingTimeTicks = math.ceil(walkingTimeSeconds).toLong
-        val arrivalTick = currentTick + walkingTimeTicks
+    val measured = routeResult.flatMap { case (_, route) =>
+      calculateRouteDistance(route, logWarn).flatMap { distance =>
+        val duration = math.ceil(distance / walkingSpeed)
+        if (!duration.isFinite || duration >= Long.MaxValue.toDouble) None
+        else scala.util.Try(Math.addExact(currentTick, duration.toLong)).toOption
+          .map(arrival => WalkingLegProgress(distance, arrival))
+      }
+    }
+    measured match {
+      case Some(progress) =>
+        val totalDistance = progress.distance
+        val arrivalTick = progress.arrivalTick
+        val walkingTimeTicks = arrivalTick - currentTick
 
         logDebug(
           s"$personId walking from ${leg.originNodeId} to ${leg.destinationNodeId}: " +
@@ -107,10 +115,10 @@ class PersonWalkingTripHandler(
           "person_walking_start"
         )
 
-        Some(arrivalTick)
+        Some(progress)
 
       case None =>
-        logError(s"$personId cannot find walking route from ${leg.originNodeId} to ${leg.destinationNodeId}")
+        logError(s"$personId cannot measure walking route from ${leg.originNodeId} to ${leg.destinationNodeId}")
         GPSMetrics.gpsCannotFindRoute.labels("person_walking").inc()
         None
     }
@@ -121,12 +129,13 @@ class PersonWalkingTripHandler(
     * @param travelTime Travel time in ticks
     * @param currentTick Current simulation tick
     */
-  def reportWalkingCompleted(travelTime: Long, currentTick: Tick): Unit = {
+  def reportWalkingCompleted(travelTime: Long, currentTick: Tick, distance: Double): Unit = {
     reportFn(
       Map(
         "event_type" -> "walking_trip_completed",
         "person_id" -> personId,
         "travel_time" -> travelTime,
+        "distance" -> distance,
         "arrival_tick" -> currentTick,
         "tick" -> currentTick
       ),

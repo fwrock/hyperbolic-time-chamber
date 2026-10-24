@@ -71,7 +71,7 @@ class Person(
     logInfo = logInfo
   )
 
-  private lazy val walkingHandler = new PersonWalkingTripHandler(
+  protected lazy val walkingHandler = new PersonWalkingTripHandler(
     personId = getEntityId,
     reportFn = reportMirrored,
     logDebug = logDebug,

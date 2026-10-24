@@ -19,10 +19,7 @@ import scala.collection.mutable
   *
   * Deliberately exercises the manager directly (no `Person` actor, no Pekko `TestKit`) per this
   * repo's testing convention: handlers are stateless, lambda-injected classes with no Pekko
-  * dependency, so plain ScalaTest is both cheaper and less brittle than standing up an actor. Every
-  * `WalkLeg` here uses `precomputedRoute = Some(Nil)` specifically to avoid touching
-  * `CityMapUtil` (a JVM-wide singleton that throws if `city_map.json` isn't present — see
-  * `RaptorMultiModalEngineSpec`'s doc for the same constraint).
+  * dependency, so plain ScalaTest can inject route lengths without loading the process-wide map.
   */
 class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
 
@@ -38,9 +35,11 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
   private val noop: String => Unit = _ => ()
 
-  private def newManager(personId: String = "1", deferDecisions: Boolean = false): PersonPlanManager = {
+  private def newManager(personId: String = "1", deferDecisions: Boolean = false,
+    linkLengths: Map[Long, Double] = Map.empty): PersonPlanManager = {
     val metricsReporter = new PersonMetricsReporter(personId, (m, l) => reports += ((m, l)), noop)
-    val walkingHandler = new PersonWalkingTripHandler(personId, (m, l) => reports += ((m, l)), noop, noop)
+    val walkingHandler = new PersonWalkingTripHandler(personId, (m, l) => reports += ((m, l)), noop, noop,
+      linkLengthFn = linkLengths.get)
     val ptHandler = new PersonPTTripHandler(
       personId,
       (m, l) => reports += ((m, l)),
@@ -73,6 +72,98 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       ownedVehicles = ownedVehicles,
       ptWaitTimeoutTicks = ptWaitTimeoutTicks
     )
+
+  "Walking distance" should "preserve access, transfer, ride and egress distances across checkpoint restoration" in {
+    val manager = newManager(linkLengths = Map(11L -> 140.0, 12L -> 280.0, 13L -> 70.0))
+    def walk(from: Long, to: Long, link: Long) = WalkLeg(from, to, Some(List(link -> to)))
+    def transit(mode: ConcreteMode, from: Long, to: Long) =
+      TransitLeg(mode, "L1", StopRef(801L, "stop", from), StopRef(802L, "stop", to))
+    val plan = List(Activity("home", 1L, AtTick(10)), walk(1, 2, 11),
+      transit(ConcreteMode.Bus, 2, 3), walk(3, 4, 12), transit(ConcreteMode.Subway, 4, 5),
+      walk(5, 6, 13), Activity("work", 6L, AtTick(1000)))
+    val home = manager.step(stateWithPlan(plan), 0).asInstanceOf[PlanStepResult.Awaiting].state
+    val access = manager.step(home, 10).asInstanceOf[PlanStepResult.LegStarted].state
+    val restored = core.util.JsonUtil.fromJson[PersonState](core.util.JsonUtil.toJson(access))
+    // Arrival consumes the checkpointed measurement even when live map data is unavailable.
+    val bus = newManager().continueAfterWalkArrival(restored, 110).asInstanceOf[PlanStepResult.LegStarted].state
+    bus.tripExecution.asInstanceOf[TripExecutionState.Traveling].accumulatedDistance shouldBe 140.0
+    def alight(state: PersonState, mode: ConcreteMode, node: Long, tick: Long, baseline: Double, end: Double): PersonState = {
+      val traveling = state.tripExecution.asInstanceOf[TripExecutionState.Traveling]
+      val boarded = state.copy(tripExecution = traveling.copy(ptWait = traveling.ptWait.map(_.copy(
+        boardedVehicleId = Some(16L), boardedVehicleClassType = Some(s"hybrid.actor.$mode"),
+        boardingDistance = Some(baseline), boardingTick = Some(traveling.legStartTick + 1)))))
+      val data = if (mode == ConcreteMode.Bus)
+        model.hybrid.entity.event.data.bus.BusRequestUnloadPassengerData(node, null, end)
+      else model.hybrid.entity.event.data.subway.SubwayRequestUnloadPassengerData(node, null, end)
+      val event = core.entity.event.ActorInteractionEvent(tick, 0L, 16L, "", "", s"hybrid.actor.$mode", data = data, resourceId = "")
+      manager.handlePTUnloadRequest(event, node, mode, boarded, tick).get match {
+        case PlanStepResult.LegStarted(s, _) => s
+        case PlanStepResult.Awaiting(s, _) => s
+        case other => fail(s"Unexpected result $other")
+      }
+    }
+    val transfer = alight(bus, ConcreteMode.Bus, 3, 160, 2000, 2400)
+    transfer.tripExecution.asInstanceOf[TripExecutionState.Traveling].accumulatedDistance shouldBe 540.0
+    val subway = manager.continueAfterWalkArrival(transfer, 360).asInstanceOf[PlanStepResult.LegStarted].state
+    val egress = alight(subway, ConcreteMode.Subway, 5, 450, 20000, 20700)
+    egress.totalDistanceTraveled shouldBe 0.0
+    egress.tripExecution.asInstanceOf[TripExecutionState.Traveling].accumulatedDistance shouldBe 1520.0
+    val arrived = manager.continueAfterWalkArrival(egress, 500).asInstanceOf[PlanStepResult.Awaiting].state
+    arrived.totalDistanceTraveled shouldBe 1590.0
+    arrived.completedTrips shouldBe 1
+    reports.filter(_._2 == "person_walking_completed").map(_._1("distance")) shouldBe Seq(140.0, 280.0, 70.0)
+  }
+
+  it should "ignore early or duplicate wakes and leave unfinished walking distance uncredited" in {
+    val manager = newManager(linkLengths = Map(11L -> 140.0, 12L -> 280.0))
+    val plan = List(Activity("home", 1L, AtTick(10)), WalkLeg(1, 2, Some(List(11L -> 2L))),
+      WalkLeg(2, 3, Some(List(12L -> 3L))), Activity("work", 3L, AtTick(1000)))
+    val home = manager.step(stateWithPlan(plan), 0).asInstanceOf[PlanStepResult.Awaiting].state
+    val first = manager.step(home, 10).asInstanceOf[PlanStepResult.LegStarted].state
+    manager.continueAfterWalkArrival(first, 109) shouldBe PlanStepResult.LegStarted(first, Some(110L))
+    val second = manager.continueAfterWalkArrival(first, 110).asInstanceOf[PlanStepResult.LegStarted].state
+    manager.continueAfterWalkArrival(second, 110) shouldBe PlanStepResult.LegStarted(second, Some(310L))
+    second.totalDistanceTraveled shouldBe 0.0
+    second.tripExecution.asInstanceOf[TripExecutionState.Traveling].accumulatedDistance shouldBe 140.0
+    reports.count(_._2 == "person_walking_completed") shouldBe 1
+    val arrived = manager.continueAfterWalkArrival(second, 310).asInstanceOf[PlanStepResult.Awaiting].state
+    arrived.totalDistanceTraveled shouldBe 420.0
+    arrived.completedTrips shouldBe 1
+    manager.continueAfterWalkArrival(arrived, 310) shouldBe PlanStepResult.LegStarted(arrived, None)
+    reports.count(_._2 == "person_walking_completed") shouldBe 2
+  }
+
+  it should "retain only completed distance when the next walking route fails" in {
+    val manager = newManager(linkLengths = Map(11L -> 140.0))
+    val plan = List(Activity("home", 1L, AtTick(10)), WalkLeg(1, 2, Some(List(11L -> 2L))),
+      WalkLeg(2, 3, Some(List(12L -> 3L))), Activity("work", 3L, AtTick(1000)))
+    val home = manager.step(stateWithPlan(plan), 0).asInstanceOf[PlanStepResult.Awaiting].state
+    val walking = manager.step(home, 10).asInstanceOf[PlanStepResult.LegStarted].state
+    val aborted = manager.continueAfterWalkArrival(walking, 110).asInstanceOf[PlanStepResult.Awaiting].state
+    aborted.totalDistanceTraveled shouldBe 140.0
+    aborted.completedTrips shouldBe 0
+    aborted.tripExecution shouldBe TripExecutionState.Idle
+    reports.count(_._2 == "person_trip_aborted") shouldBe 1
+  }
+
+  it should "retain an access walk through both successful and failed PT timeout replans" in {
+    val manager = newManager(linkLengths = Map(11L -> 140.0, 12L -> 280.0))
+    val plan = List(Activity("home", 1L, AtTick(10)), WalkLeg(1, 2, Some(List(11L -> 2L))),
+      TransitLeg(ConcreteMode.Bus, "L1", StopRef(801L, "stop", 2L), StopRef(802L, "stop", 3L)),
+      Activity("work", 3L, AtTick(1000)))
+    val home = manager.step(stateWithPlan(plan), 0).asInstanceOf[PlanStepResult.Awaiting].state
+    val walk = manager.step(home, 10).asInstanceOf[PlanStepResult.LegStarted].state
+    val waiting = manager.continueAfterWalkArrival(walk, 110).asInstanceOf[PlanStepResult.LegStarted].state
+    val failed = manager.replanAfterPTTimeout(waiting, 160, Some(Left(NoViableJourney("no service"))))
+      .asInstanceOf[PlanStepResult.Awaiting].state
+    failed.totalDistanceTraveled shouldBe 140.0
+    failed.completedTrips shouldBe 0
+    val replanned = manager.replanAfterPTTimeout(waiting, 160,
+      Some(Right(List(WalkLeg(2, 3, Some(List(12L -> 3L))))))).asInstanceOf[PlanStepResult.LegStarted].state
+    val arrived = manager.continueAfterWalkArrival(replanned, 360).asInstanceOf[PlanStepResult.Awaiting].state
+    arrived.totalDistanceTraveled shouldBe 420.0
+    arrived.completedTrips shouldBe 1
+  }
 
   for (mode <- Seq(ConcreteMode.Bus, ConcreteMode.Subway)) {
     "PT ride distance" should s"use a checkpointed boarding baseline for $mode and ignore another vehicle" in {

@@ -39,6 +39,9 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
   override def afterAll(): Unit = { system.terminate(); () }
 
   private class TestPerson(properties: Properties) extends Person(properties) {
+    override protected lazy val walkingHandler = new model.hybrid.support.person.PersonWalkingTripHandler(
+      getEntityId, (data, label) => report(data = data, label = label), _ => (), _ => (),
+      id => Map(11L -> 140.0, 12L -> 280.0).get(id))
     override protected def sendMessageTo(
       entityId: Long, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum
     ): Unit = super.sendMessageTo(entityId, shardId, data, eventType, CreationTypeEnum.PoolDistributed)
@@ -66,7 +69,7 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
     }
   }
 
-  private def newRig(): Rig = {
+  private def newRig(initialPlan: Option[List[PlanElement]] = None): Rig = {
     nextId += 2
     val personId = nextId
     val vehicleId = nextId + 1
@@ -87,7 +90,7 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
       decision, Activity("home", 1L, AtTick(800)))
     val ack = TestProbe()
     person ! InitializeEvent(personId.toString, ack.ref, InitializeData(
-      data = PersonState(originalPlan = plan,
+      data = PersonState(originalPlan = initialPlan.getOrElse(plan),
         ownedVehicles = Map("car" -> Identify(id = vehicleId, classType = "hybrid.actor.Car")),
         vehicleCurrentNode = Map("car" -> 1L)),
       resourceId = "replay-test", creatorManager = ack.ref, reporters = mutable.Map.empty,
@@ -120,6 +123,32 @@ class PersonReplayInitializationSpec extends AnyFlatSpec with Matchers with Befo
     rig.person.underlyingActor.testRollback(0L)
 
     rig.person.underlyingActor.testState shouldBe initialized
+  }
+
+  it should "restore a pending walk and count each completed leg once after rollback and replay" in {
+    val rig = newRig(Some(List(Activity("home", 1L, AtTick(10)),
+      WalkLeg(1L, 2L, Some(List(11L -> 2L))), WalkLeg(2L, 3L, Some(List(12L -> 3L))),
+      Activity("work", 3L, AtTick(1000)))))
+    wake(rig, 0L)
+    wake(rig, 10L)
+    val departure = rig.person.underlyingActor.testState
+    wake(rig, 110L)
+    val transfer = rig.person.underlyingActor.testState
+    wake(rig, 310L)
+    val arrival = rig.person.underlyingActor.testState
+    arrival.totalDistanceTraveled shouldBe 420.0
+    arrival.completedTrips shouldBe 1
+
+    rig.person.underlyingActor.testRollback(200L)
+    rig.person.underlyingActor.testState shouldBe transfer
+    wake(rig, 310L)
+    rig.person.underlyingActor.testState shouldBe arrival
+
+    rig.person.underlyingActor.testRollback(50L)
+    rig.person.underlyingActor.testState shouldBe departure
+    wake(rig, 110L)
+    wake(rig, 310L)
+    rig.person.underlyingActor.testState shouldBe arrival
   }
 
   it should "replay a pending decision with the same observations and StartTrip identity" in {
