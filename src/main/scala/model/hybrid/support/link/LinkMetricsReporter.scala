@@ -94,8 +94,10 @@ class LinkMetricsReporter(
       val all = state.vehiclesByLane.valuesIterator.flatMap(_.iterator).toVector
       if (all.nonEmpty) all.map(_.velocity).sum / all.size else 0.0
     } else state.currentSpeed
-    val meanSpeedRelative = if (state.freeSpeed > 0) meanSpeed / state.freeSpeed else 0.0
-    val vehicleIds        = getRegisteredVehicleIdsFn().toVector
+    val freeSpeedMps = if (state.isMicroMode) state.freeSpeed / 3.6 else state.freeSpeed
+    val meanSpeedRelative = if (freeSpeedMps > 0) meanSpeed / freeSpeedMps else 0.0
+    // Registration sets can have a different traversal order after replay; floating sums must not.
+    val vehicleIds        = getRegisteredVehicleIdsFn().toVector.sorted
     val meanTravelTime =
       if (vehicleIds.nonEmpty)
         vehicleIds.map(id => math.max(0L, tick - getVehicleEntryTickFn(id).getOrElse(tick)).toDouble * secondsPerTick).sum / vehicleIds.size

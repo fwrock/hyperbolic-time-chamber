@@ -27,6 +27,7 @@ class CsvReportData(
 
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
+  private val simulationClock = core.util.SimulationClock.current
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
   private lazy val simulationId: String = {
@@ -100,8 +101,7 @@ class CsvReportData(
         val cleanData =
           report.data.toString.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ")
         writer.write(
-          s"${report.entityId},${report.tick},${startRealTime
-              .plusSeconds(report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\"\n"
+          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\"\n"
         )
       }
       writer.close()
