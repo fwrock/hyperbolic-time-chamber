@@ -231,6 +231,8 @@ abstract class Movable[T <: MovableState](
   protected def resolveLink(linkId: Long): Option[(Long, String)] =
     CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
 
+  protected def microEntryVelocity: Double = 0.0
+
   protected def enterLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, _)) =>
@@ -252,7 +254,8 @@ abstract class Movable[T <: MovableState](
               data = EnterLinkData(
                 actorType = state.actorType,
                 actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed
+                actorCreationType = LoadBalancedDistributed,
+                initialVelocity = microEntryVelocity
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed
@@ -317,7 +320,8 @@ abstract class Movable[T <: MovableState](
               return
             }
             state.movableCurrentPath = None
-            onFinishSpontaneous(Some(currentTick + 1))
+            // MICRO already confirmed arrival; a point node adds no modeled dwell time.
+            onFinishSpontaneous(Some(currentTick))
           case _ =>
             logWarn(s"${getEntityId} no edge label found for link $linkEdgeGraphId, scheduling tick+1")
             onFinishSpontaneous(Some(currentTick + 1))

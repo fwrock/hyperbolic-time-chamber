@@ -147,6 +147,10 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val context = DecisionContext(
       ModeChoiceWeights(includedModes = Set("walk")), Map.empty, Map.empty, 12L, "42")
     val payloads: Seq[AnyRef] = Seq(
+      model.hybrid.entity.event.data.vehicle.RequestLinkAccessData(7L, signalAlreadyCleared = true),
+      EnterLinkData(ActorTypeEnum.Car, CreationTypeEnum.LoadBalancedDistributed, 4.5, 12.5),
+      model.hybrid.entity.event.data.MicroEnterLinkData(7L,
+        model.hybrid.entity.state.enumeration.SimulationModeEnum.MICRO, 0, 200.0, 50.0, 1, 0.1, 10, Some(12.5)),
       model.hybrid.entity.event.data.person.PassengerBoardedVehicleData(77L, "hybrid.actor.Bus", 1200.0),
       LinkCostChangedData(7L, 123.0, 12L),
       RouteQueryData(1L, 4L, 500000),

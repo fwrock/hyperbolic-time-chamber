@@ -57,7 +57,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     leavingLinkCalls: mutable.ArrayBuffer[Unit],
     waitUntilTicks: mutable.ArrayBuffer[Option[Tick]],
     needsReverifyCalls: mutable.ArrayBuffer[Boolean],
-    reported: mutable.ArrayBuffer[Map[String, Any]]
+    reported: mutable.ArrayBuffer[Map[String, Any]],
+    journeyReporter: CarJourneyReporter
   )
 
   private def newFixture(currentTick: Tick = 100L): Fixture = {
@@ -99,7 +100,7 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       onSignalWaitFn = _ => ()
     )
 
-    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported)
+    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported, journeyReporter)
   }
 
   "handleLinkAccess" should "ignore a reply when the car is neither WaitingSignalState nor WaitingCapacity (stale/duplicate guard)" in {
@@ -113,6 +114,16 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     f.scheduleEventCalls shouldBe empty
     f.leavingLinkCalls shouldBe empty
     f.waitUntilTicks shouldBe empty
+  }
+
+  it should "discard cruising speed when a signal or downstream capacity makes the vehicle stop" in {
+    for (reply <- Seq(LinkAccessData(phase = Red, nextTick = 130L),
+      LinkAccessData(phase = Green, nextTick = 100L, capacityState = LinkCapacityStateEnum.Full))) {
+      val f = newFixture()
+      f.journeyReporter.sumoArrivalSpeed = 12.5
+      f.handler.handleLinkAccess(reply, newCarState())
+      f.journeyReporter.sumoArrivalSpeed shouldBe 0.0
+    }
   }
 
   it should "accept a reply while WaitingCapacity (the later, unsolicited grant), not just WaitingSignalState" in {

@@ -83,6 +83,11 @@ class NodeEventHandler(
 
   def handleRequestLinkAccess(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit =
     if (state != null) {
+      if (data.signalAlreadyCleared) {
+        // MICRO's Link already authorized the physical crossing within the preceding interval.
+        replyGreenOrBufferForCapacity(event, data.targetLinkId, signalAlreadyCleared = true)
+        return
+      }
       state.connections.get(data.targetLinkId) match {
         case Some(identify) =>
           state.signals.get(identify.id) match {
@@ -145,7 +150,8 @@ class NodeEventHandler(
     * `availableCapacity`'s doc on `NodeState`), decrementing Node's own counter; otherwise
     * buffers the requester FIFO and replies with `capacityState = Full`.
     */
-  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: Long): Unit = {
+  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: Long,
+                                           signalAlreadyCleared: Boolean = false): Unit = {
     val capacityKnown = state.availableCapacity.contains(targetLinkId)
     val hasCapacity   = !capacityKnown || state.availableCapacity(targetLinkId) > 0
     if (hasCapacity) {
@@ -159,7 +165,8 @@ class NodeEventHandler(
     } else {
       state.capacityWaitQueue
         .getOrElseUpdate(targetLinkId, mutable.Queue.empty)
-        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId, requestSeq = event.seq))
+        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId,
+          requestSeq = event.seq, signalAlreadyCleared = signalAlreadyCleared))
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
@@ -183,13 +190,10 @@ class NodeEventHandler(
       )
     }
 
-  /** Grants access to buffered vehicles up to `availableCapacity`, FIFO, only while the relevant
-    * signal (if any) is currently Green — checked against this Node's own already-in-memory
-    * `state.signals`, at zero message cost. This closes the gap where a signal could have cycled
-    * back to Red while a vehicle sat in the capacity buffer: if Red right now, nothing is
-    * dequeued; the buffer is picked up again either on the next freed-slots notification or the
-    * next time `handleReceiveSignalChangeStatus` sees this movement turn Green. See
-    * docs/CONGESTION_PROPAGATION_DESIGN.md.
+  /** Capacity waiting cannot retroactively invalidate a MICRO crossing already authorized by
+    * its approach Link. Other requests still need the current Green phase. Retaining FIFO and
+    * the original reply identity lets a freed-slot or signal transition drain the same wait
+    * obligation without another model round-trip. See docs/CONGESTION_PROPAGATION_DESIGN.md.
     */
   private def tryDrainCapacityQueue(linkId: Long): Unit = {
     val signalCurrentlyGreen: Boolean =
@@ -197,11 +201,9 @@ class NodeEventHandler(
         case Some(sig) => sig.state == Green
         case None      => true // no signal registered — uncontrolled intersection, always passable
       }
-    if (!signalCurrentlyGreen) return
-
     state.capacityWaitQueue.get(linkId).foreach { queue =>
       var available = state.availableCapacity.getOrElse(linkId, 0)
-      while (available > 0 && queue.nonEmpty) {
+      while (available > 0 && queue.nonEmpty && (signalCurrentlyGreen || queue.front.signalAlreadyCleared)) {
         val pending = queue.dequeue()
         available -= 1
         sendMessageFn(

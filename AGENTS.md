@@ -96,6 +96,13 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - Preserve `Traveling.accumulatedDistance` across every leg transition and PT replan. Flush completed legs into daily distance at the next activity or abort; only activity arrival completes a trip.
 - See `docs/WALKING_DISTANCE.md` for the reporting and rollback contract.
 
+### MICRO boundaries and node timing
+
+- A Link's tick-t physics batch integrates (t-1, t]; entries and signal changes effective at t affect the next interval. Checkpoint the previous/current signal phase and its effective tick.
+- Preserve physical exit velocity through `EnterLinkData` and acknowledge the actual capped lane velocity. A real signal, capacity or passenger stop clears carried speed.
+- A confirmed MICRO crossing adds no artificial tick at a point node. Its `signalAlreadyCleared` request still requires Node capacity; preserve clearance and reply identity in a checkpointed capacity wait. MESO retains Node signal checks.
+- Red stop-line vehicles stay in their lane until a green interval authorizes crossing. See `docs/SUMO_MICRO_VALIDATION_2026_10_24.md` and its real-SUMO benchmark.
+
 ### Actor State
 - State (`T <: BaseState`) is reconstructed from JSON on load via Kryo/Jackson
 - `var` fields inside state classes are fine for mutable simulation state

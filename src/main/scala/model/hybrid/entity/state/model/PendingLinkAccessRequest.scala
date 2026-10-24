@@ -11,9 +11,13 @@ package model.hybrid.entity.state.model
   *   request identity even though the grant fires long after the original request event is gone
   *   (see `LinkAccessData.requestSeq`'s doc and `AwaitedReply.sendSeq`'s doc). `0L` outside Time
   *   Warp, where this field is never consulted.
+  * @param signalAlreadyCleared
+  *   retain MICRO's completed crossing while waiting for capacity, including across rollback;
+  *   a later red phase cannot undo a crossing already authorized by the approach Link.
   */
 case class PendingLinkAccessRequest(
   actorRefId: Long,
   shardRefId: String,
-  requestSeq: Long = 0L
+  requestSeq: Long = 0L,
+  signalAlreadyCleared: Boolean = false
 )

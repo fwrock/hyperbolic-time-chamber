@@ -95,6 +95,33 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     data shouldBe LinkAccessData(phase = Green, nextTick = 100L)
   }
 
+  it should "preserve MICRO crossing clearance when the node's phase changed after the physical crossing" in {
+    val state = newState(connections = mutable.Map(100L -> Identify(id = 500L)),
+      signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L)),
+      availableCapacity = mutable.Map(100L -> 1))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77L), RequestLinkAccessData(100L, signalAlreadyCleared = true))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, requestSeq = 77L)
+    state.availableCapacity(100L) shouldBe 0
+    state.signalWaitingCounts shouldBe empty
+  }
+
+  it should "retain crossing clearance and reply identity through a checkpointed capacity wait" in {
+    val state = newState(connections = mutable.Map(100L -> Identify(id = 500L)),
+      signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L)),
+      availableCapacity = mutable.Map(100L -> 0))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77L), RequestLinkAccessData(100L, signalAlreadyCleared = true))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full, requestSeq = 77L)
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    restored.capacityWaitQueue(100L).head.signalAlreadyCleared shouldBe true
+    val (afterRestore, granted) = newHandler(restored)
+    afterRestore.handleLinkCapacityFreed(LinkCapacityFreedData(100L, 1))
+    granted.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, requestSeq = 77L)
+    restored.capacityWaitQueue shouldBe empty
+    restored.availableCapacity(100L) shouldBe 0
+  }
+
   it should "reply with a Green fallback when the connection exists but no signal is registered for it" in {
     val connections = mutable.Map(100L -> Identify(id = 500L))
     val (handler, sent) = newHandler(newState(connections = connections))

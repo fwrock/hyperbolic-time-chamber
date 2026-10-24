@@ -111,6 +111,7 @@ class LinkVehicleFlowHandler(
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    require(data.initialVelocity.isFinite && data.initialVelocity >= 0.0, "invalid MICRO entry velocity")
     findVehicleLaneFn(event.actorRefId) match {
       case Some(existingLane) =>
         sendMicroEnterAck(event, existingLane)
@@ -141,7 +142,7 @@ class LinkVehicleFlowHandler(
       actorId         = event.actorRefId,
       shardId         = event.shardRefId,
       position        = 0.0,
-      velocity        = 0.0,
+      velocity        = math.min(data.initialVelocity, state.speedLimit / 3.6),
       acceleration    = 0.0,
       vehicleLength   = data.actorSize,
       entryTick       = event.tick,
@@ -169,7 +170,8 @@ class LinkVehicleFlowHandler(
         speedLimit         = state.speedLimit,
         numberOfLanes      = state.lanes,
         microTimeStep      = state.microTimeStep,
-        ticksPerGlobalTick = state.microTicksPerGlobalTick
+        ticksPerGlobalTick = state.microTicksPerGlobalTick,
+        initialVelocity = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId)).map(_.velocity)
       ),
       "MicroEnterLink"
     )

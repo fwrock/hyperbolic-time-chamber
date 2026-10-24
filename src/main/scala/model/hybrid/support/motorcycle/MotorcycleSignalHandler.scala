@@ -73,7 +73,7 @@ class MotorcycleSignalHandler(
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestLinkAccessData(targetLinkId = linkId),
+                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
                 registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
@@ -111,6 +111,7 @@ class MotorcycleSignalHandler(
     if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
       val waitUntilTick = data.nextTick
       val waitTicks = math.max(0L, waitUntilTick - tick)
@@ -134,6 +135,7 @@ class MotorcycleSignalHandler(
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
       val tick = currentTickFn()

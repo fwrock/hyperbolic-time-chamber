@@ -127,6 +127,11 @@ class Link(
 
   /** Current signal phase at the exit node of this link; None when uncontrolled. */
   private var signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var previousSignalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var signalAtExitSinceTick: Tick = Long.MinValue
+
+  protected def signalForMicroIntervalEndingAt(tick: Tick): Option[TrafficSignalPhaseStateEnum] =
+    if (tick <= signalAtExitSinceTick) previousSignalAtExit else signalAtExit
 
   /** Grace-period counter for MICRO links: stays alive for MICRO_GRACE_TICKS extra ticks when empty
     * to avoid race conditions with late-arriving vehicles from previous batches.
@@ -138,6 +143,8 @@ class Link(
     super.captureModelSnapshot() ++ Map(
       "hybrid.link.v1.microTickScheduled" -> microTickScheduled.toString,
       "hybrid.link.v1.signalAtExit" -> signalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.previousSignalAtExit" -> previousSignalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.signalAtExitSinceTick" -> signalAtExitSinceTick.toString,
       "hybrid.link.v1.emptyGraceTick" -> emptyGraceTick.toString
     )
 
@@ -145,6 +152,8 @@ class Link(
     super.restoreModelSnapshot(metadata)
     microTickScheduled = metadata.get("hybrid.link.v1.microTickScheduled").exists(_.toBoolean)
     signalAtExit = metadata.get("hybrid.link.v1.signalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    previousSignalAtExit = metadata.get("hybrid.link.v2.previousSignalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    signalAtExitSinceTick = metadata.get("hybrid.link.v2.signalAtExitSinceTick").fold(Long.MinValue)(_.toLong)
     emptyGraceTick = metadata.get("hybrid.link.v1.emptyGraceTick").fold(0)(_.toInt)
   }
 
@@ -199,7 +208,7 @@ class Link(
     vehicleWaitingSeconds         = vehicleWaitingSeconds,
     isMicroScheduledFn            = () => microTickScheduled,
     setMicroScheduledFn           = v => microTickScheduled = v,
-    getSignalAtExitFn             = () => signalAtExit,
+    getSignalAtExitFn             = () => signalForMicroIntervalEndingAt(currentTick),
     metricsReporter               = metricsReporter,
     logDebugFn                    = msg => logDebug(msg)
   )
@@ -266,7 +275,11 @@ class Link(
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
-      case d: LinkSignalStateData  => signalAtExit = Some(d.phase)
+      case d: LinkSignalStateData =>
+        // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.
+        if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
+        signalAtExitSinceTick = event.tick
+        signalAtExit = Some(d.phase)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }

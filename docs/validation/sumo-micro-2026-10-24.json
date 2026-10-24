@@ -1,0 +1,2864 @@
+{
+  "date": "2026-10-24",
+  "passed": true,
+  "baseCommit": "85d9343",
+  "branch": "feat/time-warp",
+  "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+  "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+  "seed": 42,
+  "build": {
+    "command": "sbt test assembly",
+    "tests": 626,
+    "suites": 132,
+    "passed": true,
+    "log": "/tmp/htc-sumo-accepted-build.log"
+  },
+  "harnessTests": {
+    "command": "python3 -m unittest discover -s scripts/scenario -p test_validate_sumo_micro.py -v",
+    "tests": 7,
+    "passed": true
+  },
+  "rawArtifacts": "/tmp/htc-sumo-audit-20261024",
+  "baselines": [
+    {
+      "name": "baseline-v2-free",
+      "case": "free",
+      "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+      "measurementValid": true,
+      "modelChecks": {
+        "noArtificialNodeDelay": true,
+        "crossingMomentum": false,
+        "elapsedLinkTime": false,
+        "inclusiveSignalPhases": true,
+        "noRedIntervalCrossing": true,
+        "tripTimeWithinClockResolution": true
+      },
+      "passed": false,
+      "vehicles": [
+        {
+          "vehicle": "5",
+          "samples": 25,
+          "sameLinkSamples": 25,
+          "differentLinkSamples": 0,
+          "htcSamples": 26,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 0.2569940162280561,
+          "sameLinkPositionRmseM": 0.2569940162280561,
+          "speedRmseMps": 0.5512372203392742,
+          "htcDuration": 25,
+          "sumoDuration": 24.3,
+          "durationDelta": 0.6999999999999993,
+          "htcNodeDelayTicks": [],
+          "htcLinkEntryTicks": [
+            0
+          ],
+          "htcLinkExitTicks": [
+            25
+          ],
+          "htcExitSpeeds": [
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            0.0
+          ]
+        }
+      ],
+      "meanRouteDistanceRmseM": 0.2569940162280561,
+      "maxAbsDurationDelta": 0.6999999999999993,
+      "meanSpeedRmseMps": 0.5512372203392742
+    },
+    {
+      "name": "baseline-v2-crossing",
+      "case": "crossing",
+      "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+      "measurementValid": true,
+      "modelChecks": {
+        "noArtificialNodeDelay": false,
+        "crossingMomentum": false,
+        "elapsedLinkTime": false,
+        "inclusiveSignalPhases": true,
+        "noRedIntervalCrossing": true,
+        "tripTimeWithinClockResolution": false
+      },
+      "passed": false,
+      "vehicles": [
+        {
+          "vehicle": "8",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            0,
+            19
+          ],
+          "htcLinkExitTicks": [
+            18,
+            30
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            0.0,
+            17.1
+          ]
+        },
+        {
+          "vehicle": "9",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            10,
+            29
+          ],
+          "htcLinkExitTicks": [
+            28,
+            40
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            10.0,
+            27.1
+          ]
+        },
+        {
+          "vehicle": "10",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            20,
+            39
+          ],
+          "htcLinkExitTicks": [
+            38,
+            50
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            20.0,
+            37.1
+          ]
+        },
+        {
+          "vehicle": "11",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            30,
+            49
+          ],
+          "htcLinkExitTicks": [
+            48,
+            60
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            30.0,
+            47.1
+          ]
+        },
+        {
+          "vehicle": "12",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            40,
+            59
+          ],
+          "htcLinkExitTicks": [
+            58,
+            70
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            40.0,
+            57.1
+          ]
+        },
+        {
+          "vehicle": "13",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            50,
+            69
+          ],
+          "htcLinkExitTicks": [
+            68,
+            80
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            50.0,
+            67.1
+          ]
+        }
+      ],
+      "meanRouteDistanceRmseM": 25.418386639155077,
+      "maxAbsDurationDelta": 5.699999999999999,
+      "meanSpeedRmseMps": 5.100387498728084
+    },
+    {
+      "name": "baseline-v2-signal",
+      "case": "signal",
+      "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+      "measurementValid": true,
+      "modelChecks": {
+        "noArtificialNodeDelay": false,
+        "crossingMomentum": false,
+        "elapsedLinkTime": false,
+        "inclusiveSignalPhases": false,
+        "noRedIntervalCrossing": true,
+        "tripTimeWithinClockResolution": false
+      },
+      "passed": false,
+      "vehicles": [
+        {
+          "vehicle": "8",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            0,
+            19
+          ],
+          "htcLinkExitTicks": [
+            18,
+            30
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            0.0,
+            17.1
+          ]
+        },
+        {
+          "vehicle": "9",
+          "samples": 25,
+          "sameLinkSamples": 24,
+          "differentLinkSamples": 1,
+          "htcSamples": 31,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 25.418386639155077,
+          "sameLinkPositionRmseM": 25.793683397068612,
+          "speedRmseMps": 5.100387498728084,
+          "htcDuration": 30,
+          "sumoDuration": 24.3,
+          "durationDelta": 5.699999999999999,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            10,
+            29
+          ],
+          "htcLinkExitTicks": [
+            28,
+            40
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            10.0,
+            27.1
+          ]
+        },
+        {
+          "vehicle": "10",
+          "samples": 50,
+          "sameLinkSamples": 47,
+          "differentLinkSamples": 3,
+          "htcSamples": 56,
+          "sumoSamples": 50,
+          "routeDistanceRmseM": 15.959357063772032,
+          "sameLinkPositionRmseM": 16.323559934174714,
+          "speedRmseMps": 2.9866428879760134,
+          "htcDuration": 55,
+          "sumoDuration": 49.8,
+          "durationDelta": 5.200000000000003,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            20,
+            64
+          ],
+          "htcLinkExitTicks": [
+            63,
+            75
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            20.0,
+            60.8
+          ]
+        },
+        {
+          "vehicle": "11",
+          "samples": 42,
+          "sameLinkSamples": 38,
+          "differentLinkSamples": 4,
+          "htcSamples": 49,
+          "sumoSamples": 42,
+          "routeDistanceRmseM": 23.18933856031573,
+          "sameLinkPositionRmseM": 23.479417080369505,
+          "speedRmseMps": 3.9328516867614614,
+          "htcDuration": 48,
+          "sumoDuration": 41.2,
+          "durationDelta": 6.799999999999997,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            30,
+            67
+          ],
+          "htcLinkExitTicks": [
+            66,
+            78
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            30.0,
+            62.9
+          ]
+        },
+        {
+          "vehicle": "12",
+          "samples": 33,
+          "sameLinkSamples": 28,
+          "differentLinkSamples": 5,
+          "htcSamples": 42,
+          "sumoSamples": 33,
+          "routeDistanceRmseM": 27.532467224120953,
+          "sameLinkPositionRmseM": 25.724281819026526,
+          "speedRmseMps": 4.9837382150764,
+          "htcDuration": 41,
+          "sumoDuration": 32.5,
+          "durationDelta": 8.5,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            40,
+            70
+          ],
+          "htcLinkExitTicks": [
+            69,
+            81
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            40.0,
+            64.4
+          ]
+        },
+        {
+          "vehicle": "13",
+          "samples": 25,
+          "sameLinkSamples": 21,
+          "differentLinkSamples": 4,
+          "htcSamples": 34,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 33.227452364292404,
+          "sameLinkPositionRmseM": 31.089755771470784,
+          "speedRmseMps": 6.330453356646905,
+          "htcDuration": 33,
+          "sumoDuration": 24.3,
+          "durationDelta": 8.7,
+          "htcNodeDelayTicks": [
+            1
+          ],
+          "htcLinkEntryTicks": [
+            50,
+            72
+          ],
+          "htcLinkExitTicks": [
+            71,
+            83
+          ],
+          "htcExitSpeeds": [
+            0.0,
+            0.0
+          ],
+          "sumoLinkEntryTimes": [
+            50.0,
+            67.1
+          ]
+        }
+      ],
+      "meanRouteDistanceRmseM": 25.124231415135213,
+      "maxAbsDurationDelta": 8.7,
+      "meanSpeedRmseMps": 4.739076857319492
+    },
+    {
+      "name": "pre-clearance-boundary",
+      "case": "signal-boundary",
+      "jarSha256": "59ab0ab7a6dba1da7a4c4dbb4020d1793af1a9d1a3f38fd94b517ec250b82eda",
+      "measurementValid": true,
+      "modelChecks": {
+        "noArtificialNodeDelay": false,
+        "crossingMomentum": true,
+        "elapsedLinkTime": true,
+        "inclusiveSignalPhases": true,
+        "noRedIntervalCrossing": true,
+        "tripTimeWithinClockResolution": false
+      },
+      "passed": false,
+      "vehicles": [
+        {
+          "vehicle": "8",
+          "samples": 19,
+          "sameLinkSamples": 18,
+          "differentLinkSamples": 1,
+          "htcSamples": 28,
+          "sumoSamples": 25,
+          "routeDistanceRmseM": 3.118881436823833,
+          "sameLinkPositionRmseM": 2.11143569425832e-07,
+          "speedRmseMps": 9.190779935423953e-08,
+          "htcDuration": 56,
+          "sumoDuration": 24.3,
+          "durationDelta": 31.7,
+          "htcNodeDelayTicks": [
+            30
+          ],
+          "htcLinkEntryTicks": [
+            12,
+            60
+          ],
+          "htcLinkExitTicks": [
+            30,
+            68
+          ],
+          "htcExitSpeeds": [
+            13.88888888888889,
+            13.88888888888889
+          ],
+          "sumoLinkEntryTimes": [
+            12.0,
+            29.1
+          ]
+        }
+      ],
+      "meanRouteDistanceRmseM": 3.118881436823833,
+      "maxAbsDurationDelta": 31.7,
+      "meanSpeedRmseMps": 9.190779935423953e-08
+    }
+  ],
+  "sumoRuns": [
+    {
+      "name": "final-free-de",
+      "comparison": {
+        "case": "free",
+        "policy": "discrete-event",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "free",
+          "lengths": [
+            300.0
+          ],
+          "departures": [
+            0
+          ],
+          "signal": false,
+          "vehicles": [
+            "5"
+          ],
+          "links": [
+            "3"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 0,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "5",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              0
+            ],
+            "htcLinkExitTicks": [
+              25
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 2.474562544501158e-07,
+        "maxAbsDurationDelta": 0.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "604e91c52e7f2fa11df760cc9e0af37a6e6a0bf559570b1010bbfff2da0dc826",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "ea0f538de1db3e0087183320a62513f8c5a74a9e4c55bc0d804677e890fd954c",
+          "data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+          "data/links_0.json": "ce2c7d4082f0195794b9b52ddd5b9ede5be1feb478497d51e2745048bb4ab89d",
+          "data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "420ec56aee6828995de640df1e53d70221125cb2830184809e9c6013f6d9501d",
+          "sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+          "sumo/net.xml": "c287a23e1718c70a2363933e4eb9ab16a2d8ee2ce37500a5763b4c4d8752d46f",
+          "sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+          "sumo/routes.xml": "c43afc6a1830ae7797b292d065a0856eb60791c7dfbf261864c6e7b0032edf5c",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "c7d278268016b4caf7b58d9d59d13f131d2424b9680fb5028b35777b16bd675a"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-free-de/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          31800
+        ],
+        "bindPorts": [
+          31800
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 48.7,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-free-tw",
+      "comparison": {
+        "case": "free",
+        "policy": "time-warp",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "free",
+          "lengths": [
+            300.0
+          ],
+          "departures": [
+            0
+          ],
+          "signal": false,
+          "vehicles": [
+            "5"
+          ],
+          "links": [
+            "3"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 1,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "5",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              0
+            ],
+            "htcLinkExitTicks": [
+              25
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 2.474562544501158e-07,
+        "maxAbsDurationDelta": 0.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "604e91c52e7f2fa11df760cc9e0af37a6e6a0bf559570b1010bbfff2da0dc826",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "ea0f538de1db3e0087183320a62513f8c5a74a9e4c55bc0d804677e890fd954c",
+          "data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+          "data/links_0.json": "ce2c7d4082f0195794b9b52ddd5b9ede5be1feb478497d51e2745048bb4ab89d",
+          "data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "861f616daf03c4d29ab450e11a447134d58162a7687b708fc7835249bc42358f",
+          "sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+          "sumo/net.xml": "1655f814daf710d425f88d036d2398caaefb0f59c077952745c0f5396390832c",
+          "sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+          "sumo/routes.xml": "c43afc6a1830ae7797b292d065a0856eb60791c7dfbf261864c6e7b0032edf5c",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "71c512973d80e3f7878da2ef45a2ec34cc811e1c2741e03ede3725a8fbc3a1bd"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-free-tw/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          32100
+        ],
+        "bindPorts": [
+          32100
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 48.5,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-following-de",
+      "comparison": {
+        "case": "following",
+        "policy": "discrete-event",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "following",
+          "lengths": [
+            300.0
+          ],
+          "departures": [
+            0,
+            6,
+            12,
+            18
+          ],
+          "signal": false,
+          "vehicles": [
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "links": [
+            "3"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 0,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "5",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              0
+            ],
+            "htcLinkExitTicks": [
+              25
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0
+            ]
+          },
+          {
+            "vehicle": "6",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              6
+            ],
+            "htcLinkExitTicks": [
+              31
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              6.0
+            ]
+          },
+          {
+            "vehicle": "7",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              12
+            ],
+            "htcLinkExitTicks": [
+              37
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              12.0
+            ]
+          },
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              18
+            ],
+            "htcLinkExitTicks": [
+              43
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              18.0
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 2.474562544501158e-07,
+        "maxAbsDurationDelta": 0.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "0b3a6a53b79cf452043ffe745f9015e7a0e074c28abe41a07fe7682d8a337098",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "0d7384a5024fb98fdf555bb5f349a5918e4ca43421412d090eb0ac56926804ba",
+          "data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+          "data/links_0.json": "ce2c7d4082f0195794b9b52ddd5b9ede5be1feb478497d51e2745048bb4ab89d",
+          "data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "eba915de04f0ed218e8e07b29d26c109315fbdf4d2bbd67cc0eaeec6ec0fbf86",
+          "sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+          "sumo/net.xml": "2cf619c2b73ebdf2ec03b2b84d22b012aef5f4ad5663fd5c98e3551efcee3ead",
+          "sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+          "sumo/routes.xml": "e44e3b92be8cb4910905a82032a1601d37e93668ee10560d8d92aa62f88e608f",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "496d26676de70ee15371f8d8456dc9ad8baab4a1b80c442ac451942cacca6a30"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-following-de/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          32400
+        ],
+        "bindPorts": [
+          32400
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 49.02,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-following-tw",
+      "comparison": {
+        "case": "following",
+        "policy": "time-warp",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "following",
+          "lengths": [
+            300.0
+          ],
+          "departures": [
+            0,
+            6,
+            12,
+            18
+          ],
+          "signal": false,
+          "vehicles": [
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "links": [
+            "3"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 6,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "5",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              0
+            ],
+            "htcLinkExitTicks": [
+              25
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0
+            ]
+          },
+          {
+            "vehicle": "6",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              6
+            ],
+            "htcLinkExitTicks": [
+              31
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              6.0
+            ]
+          },
+          {
+            "vehicle": "7",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              12
+            ],
+            "htcLinkExitTicks": [
+              37
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              12.0
+            ]
+          },
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 26,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 2.474562544501158e-07,
+            "sameLinkPositionRmseM": 2.474562544501158e-07,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 25,
+            "sumoDuration": 24.3,
+            "durationDelta": 0.6999999999999993,
+            "htcNodeDelayTicks": [],
+            "htcLinkEntryTicks": [
+              18
+            ],
+            "htcLinkExitTicks": [
+              43
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              18.0
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 2.474562544501158e-07,
+        "maxAbsDurationDelta": 0.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "0b3a6a53b79cf452043ffe745f9015e7a0e074c28abe41a07fe7682d8a337098",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "0d7384a5024fb98fdf555bb5f349a5918e4ca43421412d090eb0ac56926804ba",
+          "data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+          "data/links_0.json": "ce2c7d4082f0195794b9b52ddd5b9ede5be1feb478497d51e2745048bb4ab89d",
+          "data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "fdadbf536f4c00e5e0276f8fc1f3ebfe747df70803b5941539f8143673a4e00c",
+          "sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+          "sumo/net.xml": "8b4ee00f10411782e37245247a95ef8bf73eb713502b24951338486720a52028",
+          "sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+          "sumo/routes.xml": "e44e3b92be8cb4910905a82032a1601d37e93668ee10560d8d92aa62f88e608f",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "a5e5f8917a2c0ee203f4580fa2caadbc3e2c57256529853ffc192fdb4af8d02c"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-following-tw/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          32700
+        ],
+        "bindPorts": [
+          32700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 50.07,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-crossing-de",
+      "comparison": {
+        "case": "crossing",
+        "policy": "discrete-event",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "crossing",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "signal": false,
+          "vehicles": [
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 0,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              0,
+              18
+            ],
+            "htcLinkExitTicks": [
+              18,
+              26
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0,
+              17.1
+            ]
+          },
+          {
+            "vehicle": "9",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              10,
+              28
+            ],
+            "htcLinkExitTicks": [
+              28,
+              36
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              10.0,
+              27.1
+            ]
+          },
+          {
+            "vehicle": "10",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              20,
+              38
+            ],
+            "htcLinkExitTicks": [
+              38,
+              46
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              20.0,
+              37.1
+            ]
+          },
+          {
+            "vehicle": "11",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              30,
+              48
+            ],
+            "htcLinkExitTicks": [
+              48,
+              56
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              30.0,
+              47.1
+            ]
+          },
+          {
+            "vehicle": "12",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              40,
+              58
+            ],
+            "htcLinkExitTicks": [
+              58,
+              66
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              40.0,
+              57.1
+            ]
+          },
+          {
+            "vehicle": "13",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              50,
+              68
+            ],
+            "htcLinkExitTicks": [
+              68,
+              76
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              50.0,
+              67.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 7.193739028710277,
+        "maxAbsDurationDelta": 1.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920871e-08,
+        "inputSha256": {
+          "canonical.json": "c28cb6cd95e5ab88ae94d51fc9015185443ea00c683602859f69e913c6d94da4",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "a2e6e38c33d035f4ad69266f172048ee1b5bf74171c6abb9c6de551028a411a5",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "c9ebddde23838822c68d607d6c6ea037777bb9db176366688f761d0eec1b0a5d",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "750cf783c26151c6ae1fdc8cca0014a164343c81efff87a1a4a7ff7baa2b1bdc",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "07795b988d1ee7aa7ee4cd86580347dd0bcfe2115736724c43c48ad13099c1ec",
+          "sumo/nodes.xml": "2e8ad0b77153905b59ba4d4358223e4c8a0d41e365c4a5588abbe5d36fb901b5",
+          "sumo/routes.xml": "39763aaec70d54ea2d418c3d455ce18a88759da2d8f97fa00311b63475cd424e",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "dafc942075cc1a7e3b05455de3b52f7c131f4bb79b0edb1ec406522dee084697"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-crossing-de/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33000
+        ],
+        "bindPorts": [
+          33000
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 58.89,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-crossing-tw",
+      "comparison": {
+        "case": "crossing",
+        "policy": "time-warp",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "crossing",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "signal": false,
+          "vehicles": [
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 47,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              0,
+              18
+            ],
+            "htcLinkExitTicks": [
+              18,
+              26
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0,
+              17.1
+            ]
+          },
+          {
+            "vehicle": "9",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              10,
+              28
+            ],
+            "htcLinkExitTicks": [
+              28,
+              36
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              10.0,
+              27.1
+            ]
+          },
+          {
+            "vehicle": "10",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              20,
+              38
+            ],
+            "htcLinkExitTicks": [
+              38,
+              46
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              20.0,
+              37.1
+            ]
+          },
+          {
+            "vehicle": "11",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              30,
+              48
+            ],
+            "htcLinkExitTicks": [
+              48,
+              56
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              30.0,
+              47.1
+            ]
+          },
+          {
+            "vehicle": "12",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              40,
+              58
+            ],
+            "htcLinkExitTicks": [
+              58,
+              66
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              40.0,
+              57.1
+            ]
+          },
+          {
+            "vehicle": "13",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              50,
+              68
+            ],
+            "htcLinkExitTicks": [
+              68,
+              76
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              50.0,
+              67.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 7.193739028710277,
+        "maxAbsDurationDelta": 1.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920871e-08,
+        "inputSha256": {
+          "canonical.json": "c28cb6cd95e5ab88ae94d51fc9015185443ea00c683602859f69e913c6d94da4",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "a2e6e38c33d035f4ad69266f172048ee1b5bf74171c6abb9c6de551028a411a5",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "c9ebddde23838822c68d607d6c6ea037777bb9db176366688f761d0eec1b0a5d",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "ef2dcc7a300c484ba33f9619aec3988361eac8bc0d7ea26b01ab86baf9fbaa36",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "c0f54c1ff4eeac4df4c4fa322d27db5099a02bb6cb5d7213907b6c95ad7cee19",
+          "sumo/nodes.xml": "2e8ad0b77153905b59ba4d4358223e4c8a0d41e365c4a5588abbe5d36fb901b5",
+          "sumo/routes.xml": "39763aaec70d54ea2d418c3d455ce18a88759da2d8f97fa00311b63475cd424e",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "time-warp.json": "ef10b87880f32ee3c10be44aece797ad2877febd79e94248f1388925eba9618a"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-crossing-tw/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33300
+        ],
+        "bindPorts": [
+          33300
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 65.08,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-signal-de",
+      "comparison": {
+        "case": "signal",
+        "policy": "discrete-event",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "signal",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "signal": true,
+          "vehicles": [
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 0,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              0,
+              18
+            ],
+            "htcLinkExitTicks": [
+              18,
+              26
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0,
+              17.1
+            ]
+          },
+          {
+            "vehicle": "9",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              10,
+              28
+            ],
+            "htcLinkExitTicks": [
+              28,
+              36
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              10.0,
+              27.1
+            ]
+          },
+          {
+            "vehicle": "10",
+            "samples": 50,
+            "sameLinkSamples": 50,
+            "differentLinkSamples": 0,
+            "htcSamples": 52,
+            "sumoSamples": 50,
+            "routeDistanceRmseM": 4.400279246797154,
+            "sameLinkPositionRmseM": 4.400279246797155,
+            "speedRmseMps": 0.9912414436794584,
+            "htcDuration": 51,
+            "sumoDuration": 49.8,
+            "durationDelta": 1.2000000000000028,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              20,
+              61
+            ],
+            "htcLinkExitTicks": [
+              61,
+              71
+            ],
+            "htcExitSpeeds": [
+              0.26000000083835517,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              20.0,
+              60.8
+            ]
+          },
+          {
+            "vehicle": "11",
+            "samples": 42,
+            "sameLinkSamples": 42,
+            "differentLinkSamples": 0,
+            "htcSamples": 44,
+            "sumoSamples": 42,
+            "routeDistanceRmseM": 4.793734096903752,
+            "sameLinkPositionRmseM": 4.793734096903756,
+            "speedRmseMps": 0.9393109614833793,
+            "htcDuration": 43,
+            "sumoDuration": 41.2,
+            "durationDelta": 1.7999999999999972,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              30,
+              63
+            ],
+            "htcLinkExitTicks": [
+              63,
+              73
+            ],
+            "htcExitSpeeds": [
+              5.720017365092192,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              30.0,
+              62.9
+            ]
+          },
+          {
+            "vehicle": "12",
+            "samples": 33,
+            "sameLinkSamples": 32,
+            "differentLinkSamples": 1,
+            "htcSamples": 35,
+            "sumoSamples": 33,
+            "routeDistanceRmseM": 4.109244851047422,
+            "sameLinkPositionRmseM": 4.146112023974138,
+            "speedRmseMps": 0.9821265242107726,
+            "htcDuration": 34,
+            "sumoDuration": 32.5,
+            "durationDelta": 1.5,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              40,
+              64
+            ],
+            "htcLinkExitTicks": [
+              64,
+              74
+            ],
+            "htcExitSpeeds": [
+              8.020622499540064,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              40.0,
+              64.4
+            ]
+          },
+          {
+            "vehicle": "13",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              50,
+              68
+            ],
+            "htcLinkExitTicks": [
+              68,
+              76
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              50.0,
+              67.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 5.81407921347986,
+        "maxAbsDurationDelta": 1.7999999999999972,
+        "meanSpeedRmseMps": 0.48544653666114573,
+        "inputSha256": {
+          "canonical.json": "d0d097cf3be428bc2a62be063a024ecd9032bc8a00d8e35a95037c19beff3d20",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "a2e6e38c33d035f4ad69266f172048ee1b5bf74171c6abb9c6de551028a411a5",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "f6c14b61cb591d9408de19ee852b51b288621837420be3b87e2082eb31a84ad2",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/traffic_signals_0.json": "7f6db92a2680bc7d374e51c8a5b2eda51f95ac6fc6e2891e889097f0243749e2",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "b4df18cb6e81cf32c287785935f82dd88ed0e5a63a5dc08ae6278953f3825b04",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "1c1e4e8d7136320dbba7d14cfbdcd24ffd9e23099308de83bf907fc2abec8535",
+          "sumo/nodes.xml": "3e26e2c7db898ecca2703ba4d87c4a6dfbd21e3094b7c1a581f0bb44f3c8d446",
+          "sumo/routes.xml": "39763aaec70d54ea2d418c3d455ce18a88759da2d8f97fa00311b63475cd424e",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "sumo/tls.xml": "1d08fed3c2417d4405e5db1d32333f65990b1c59fb8440799be4508e662ea8b7",
+          "time-warp.json": "69c77a877a1aa7eb30ea5d1555ae9fa36e8bb6541067a3f45791f0e413fa9a26"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-signal-de/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33600
+        ],
+        "bindPorts": [
+          33600
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 61.88,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-signal-tw",
+      "comparison": {
+        "case": "signal",
+        "policy": "time-warp",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "signal",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "signal": true,
+          "vehicles": [
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 99,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              0,
+              18
+            ],
+            "htcLinkExitTicks": [
+              18,
+              26
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              0.0,
+              17.1
+            ]
+          },
+          {
+            "vehicle": "9",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              10,
+              28
+            ],
+            "htcLinkExitTicks": [
+              28,
+              36
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              10.0,
+              27.1
+            ]
+          },
+          {
+            "vehicle": "10",
+            "samples": 50,
+            "sameLinkSamples": 50,
+            "differentLinkSamples": 0,
+            "htcSamples": 52,
+            "sumoSamples": 50,
+            "routeDistanceRmseM": 4.400279246797154,
+            "sameLinkPositionRmseM": 4.400279246797155,
+            "speedRmseMps": 0.9912414436794584,
+            "htcDuration": 51,
+            "sumoDuration": 49.8,
+            "durationDelta": 1.2000000000000028,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              20,
+              61
+            ],
+            "htcLinkExitTicks": [
+              61,
+              71
+            ],
+            "htcExitSpeeds": [
+              0.26000000083835517,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              20.0,
+              60.8
+            ]
+          },
+          {
+            "vehicle": "11",
+            "samples": 42,
+            "sameLinkSamples": 42,
+            "differentLinkSamples": 0,
+            "htcSamples": 44,
+            "sumoSamples": 42,
+            "routeDistanceRmseM": 4.793734096903752,
+            "sameLinkPositionRmseM": 4.793734096903756,
+            "speedRmseMps": 0.9393109614833793,
+            "htcDuration": 43,
+            "sumoDuration": 41.2,
+            "durationDelta": 1.7999999999999972,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              30,
+              63
+            ],
+            "htcLinkExitTicks": [
+              63,
+              73
+            ],
+            "htcExitSpeeds": [
+              5.720017365092192,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              30.0,
+              62.9
+            ]
+          },
+          {
+            "vehicle": "12",
+            "samples": 33,
+            "sameLinkSamples": 32,
+            "differentLinkSamples": 1,
+            "htcSamples": 35,
+            "sumoSamples": 33,
+            "routeDistanceRmseM": 4.109244851047422,
+            "sameLinkPositionRmseM": 4.146112023974138,
+            "speedRmseMps": 0.9821265242107726,
+            "htcDuration": 34,
+            "sumoDuration": 32.5,
+            "durationDelta": 1.5,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              40,
+              64
+            ],
+            "htcLinkExitTicks": [
+              64,
+              74
+            ],
+            "htcExitSpeeds": [
+              8.020622499540064,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              40.0,
+              64.4
+            ]
+          },
+          {
+            "vehicle": "13",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              50,
+              68
+            ],
+            "htcLinkExitTicks": [
+              68,
+              76
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              50.0,
+              67.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 5.81407921347986,
+        "maxAbsDurationDelta": 1.7999999999999972,
+        "meanSpeedRmseMps": 0.48544653666114573,
+        "inputSha256": {
+          "canonical.json": "d0d097cf3be428bc2a62be063a024ecd9032bc8a00d8e35a95037c19beff3d20",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "a2e6e38c33d035f4ad69266f172048ee1b5bf74171c6abb9c6de551028a411a5",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "f6c14b61cb591d9408de19ee852b51b288621837420be3b87e2082eb31a84ad2",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/traffic_signals_0.json": "7f6db92a2680bc7d374e51c8a5b2eda51f95ac6fc6e2891e889097f0243749e2",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "e2aac78aa0754ea66099d45706c94821559f43ea0efc4180d72647e37bdcecd6",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "c5e0e03e3f94d82e0605bdbae15ac27c6f8c0af62561b39ef359b8263ea020ce",
+          "sumo/nodes.xml": "3e26e2c7db898ecca2703ba4d87c4a6dfbd21e3094b7c1a581f0bb44f3c8d446",
+          "sumo/routes.xml": "39763aaec70d54ea2d418c3d455ce18a88759da2d8f97fa00311b63475cd424e",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "sumo/tls.xml": "1d08fed3c2417d4405e5db1d32333f65990b1c59fb8440799be4508e662ea8b7",
+          "time-warp.json": "24bf1c72fbb481dae70c3e98a45802e1a8739af160c646b82928d67060cceb65"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-signal-tw/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33900
+        ],
+        "bindPorts": [
+          33900
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 74.04,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-signal-boundary-de",
+      "comparison": {
+        "case": "signal-boundary",
+        "policy": "discrete-event",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "signal-boundary",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            12
+          ],
+          "signal": true,
+          "vehicles": [
+            "8"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 0,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              12,
+              30
+            ],
+            "htcLinkExitTicks": [
+              30,
+              38
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              12.0,
+              29.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 7.193739028710277,
+        "maxAbsDurationDelta": 1.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "fba6a6a1bbdb161d0898f804782c6559de46af2ffbde389162905cb94edd3ed9",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "3b685f7d35d90126a2c36766f41cc683c8323d5b52038456981f8577d2189115",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "bfac6708a5efefba5de0c7b8b6e585837172435a4c1de57f67251cf61c4ed09a",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/traffic_signals_0.json": "b9dae0771ccedf0d807a1b3d56cdafc723df0fc22cbec43e1787314426223076",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "61f4a1396fda00090394af38b54c6f1058297f92e5e99927be6f43308c79e5d2",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "052b02bb94745e8d36f57015f96f9a0ac77def10a3ce770c4793dd190bed3270",
+          "sumo/nodes.xml": "3e26e2c7db898ecca2703ba4d87c4a6dfbd21e3094b7c1a581f0bb44f3c8d446",
+          "sumo/routes.xml": "847fcb024fc0bdd5aa4eec90d7d4648da2cca0aef9d89eb42ede749211608da0",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "sumo/tls.xml": "1d08fed3c2417d4405e5db1d32333f65990b1c59fb8440799be4508e662ea8b7",
+          "time-warp.json": "1e355dae1856303c31fbea96c6e861ff2a8b7cd27d4151f9c52444841d070b0b"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-signal-boundary-de/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          34200
+        ],
+        "bindPorts": [
+          34200
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 52.72,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "final-signal-boundary-tw",
+      "comparison": {
+        "case": "signal-boundary",
+        "policy": "time-warp",
+        "seed": 42,
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "sumoVersion": "Eclipse SUMO sumo 1.27.1",
+        "canonical": {
+          "case": "signal-boundary",
+          "lengths": [
+            200.0,
+            100.0
+          ],
+          "departures": [
+            12
+          ],
+          "signal": true,
+          "vehicles": [
+            "8"
+          ],
+          "links": [
+            "4",
+            "6"
+          ],
+          "speedLimitMps": 13.88888888888889,
+          "nodeGeometry": "point junction; no internal links",
+          "seed": 42
+        },
+        "rollbacks": 8,
+        "measurementValid": true,
+        "modelChecks": {
+          "noArtificialNodeDelay": true,
+          "crossingMomentum": true,
+          "elapsedLinkTime": true,
+          "inclusiveSignalPhases": true,
+          "noRedIntervalCrossing": true,
+          "tripTimeWithinClockResolution": true
+        },
+        "passed": true,
+        "vehicles": [
+          {
+            "vehicle": "8",
+            "samples": 25,
+            "sameLinkSamples": 25,
+            "differentLinkSamples": 0,
+            "htcSamples": 27,
+            "sumoSamples": 25,
+            "routeDistanceRmseM": 7.193739028710277,
+            "sameLinkPositionRmseM": 7.193739028710275,
+            "speedRmseMps": 9.686442123920873e-08,
+            "htcDuration": 26,
+            "sumoDuration": 24.3,
+            "durationDelta": 1.6999999999999993,
+            "htcNodeDelayTicks": [
+              0
+            ],
+            "htcLinkEntryTicks": [
+              12,
+              30
+            ],
+            "htcLinkExitTicks": [
+              30,
+              38
+            ],
+            "htcExitSpeeds": [
+              13.88888888888889,
+              13.88888888888889
+            ],
+            "sumoLinkEntryTimes": [
+              12.0,
+              29.1
+            ]
+          }
+        ],
+        "meanRouteDistanceRmseM": 7.193739028710277,
+        "maxAbsDurationDelta": 1.6999999999999993,
+        "meanSpeedRmseMps": 9.686442123920873e-08,
+        "inputSha256": {
+          "canonical.json": "fba6a6a1bbdb161d0898f804782c6559de46af2ffbde389162905cb94edd3ed9",
+          "data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/cars_0.json": "3b685f7d35d90126a2c36766f41cc683c8323d5b52038456981f8577d2189115",
+          "data/city_map.json": "38ad03e58af0c7abcf142652c3e392dad6079f552fb26b4da59a1fb22820303c",
+          "data/links_0.json": "56ecd469f143d9087a14fe3b20fc16edcc25c033ff3dc0914e9289906741cd70",
+          "data/nodes_0.json": "bfac6708a5efefba5de0c7b8b6e585837172435a4c1de57f67251cf61c4ed09a",
+          "data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/traffic_signals_0.json": "b9dae0771ccedf0d807a1b3d56cdafc723df0fc22cbec43e1787314426223076",
+          "data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "discrete-event.json": "be5bf43b869704838aa3369b9bea0a95e4e2221c9e190b6066b4de59fb3cbd05",
+          "sumo/edges.xml": "52c94b87ca500d399c05526fd4bef6a194e1eb070b47a0cf09a30916a5bdfd8d",
+          "sumo/net.xml": "4e81930091fcf2801901c624e6350597c7d8fbce62957f10086f3b4c5ea19d67",
+          "sumo/nodes.xml": "3e26e2c7db898ecca2703ba4d87c4a6dfbd21e3094b7c1a581f0bb44f3c8d446",
+          "sumo/routes.xml": "847fcb024fc0bdd5aa4eec90d7d4648da2cca0aef9d89eb42ede749211608da0",
+          "sumo/scenario.sumocfg": "9feb0f069d106dbea3413ce8ccfb550951dfcec9f88f092fd3025dcb440cd49e",
+          "sumo/tls.xml": "1d08fed3c2417d4405e5db1d32333f65990b1c59fb8440799be4508e662ea8b7",
+          "time-warp.json": "d651d72cfada72cef4fdb26af402c410b667adfb326e42d0c4e780aa0f48f05c"
+        }
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/final-signal-boundary-tw/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          34500
+        ],
+        "bindPorts": [
+          34500
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 53.49,
+        "returncodes": [
+          -9
+        ]
+      }
+    }
+  ],
+  "hybridRegressionRuns": [
+    {
+      "name": "hybrid-micro-de",
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 691,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 85,
+        "microBusExits": 84,
+        "physicalRows": 2077,
+        "rollbacks": 0,
+        "engineStopped": true
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/hybrid-micro/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          34800
+        ],
+        "bindPorts": [
+          34800
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 91.59,
+        "returncodes": [
+          -9
+        ]
+      }
+    },
+    {
+      "name": "hybrid-micro-tw",
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 691,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 85,
+        "microBusExits": 84,
+        "physicalRows": 2077,
+        "rollbacks": 226,
+        "engineStopped": true
+      },
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "6433e68ee8183fc1616f367880ce56bec77ad866f4185b2c2452e6f510f1e0bd",
+        "simulationFile": "/tmp/htc-sumo-audit-20261024/hybrid-micro/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          35100
+        ],
+        "bindPorts": [
+          35100
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 107.22,
+        "returncodes": [
+          -9
+        ]
+      }
+    }
+  ],
+  "policyComparisons": [
+    {
+      "case": "free",
+      "passed": true,
+      "conservativeRows": 56,
+      "optimisticRows": 56,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "case": "following",
+      "passed": true,
+      "conservativeRows": 167,
+      "optimisticRows": 167,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "case": "crossing",
+      "passed": true,
+      "conservativeRows": 314,
+      "optimisticRows": 314,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "case": "signal",
+      "passed": true,
+      "conservativeRows": 354,
+      "optimisticRows": 354,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "case": "signal-boundary",
+      "passed": true,
+      "conservativeRows": 66,
+      "optimisticRows": 66,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "case": "hybrid",
+      "passed": true,
+      "conservativeRows": 2077,
+      "optimisticRows": 2077,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    }
+  ],
+  "limitations": [
+    "Controlled single-lane Car scenarios against real SUMO with point junctions and no internal links.",
+    "Single-JVM simulator comparisons; cold independent codec tests cover the added wire fields.",
+    "Boundary clearance is also covered by checkpointed capacity-wait and signal-history regressions.",
+    "Trip-time acceptance is one HTC global tick per road link plus one SUMO 0.1 s step for these fixtures.",
+    "Residual integer-tick boundary rounding and simplified car-following remain; no arbitrary-network calibration claim.",
+    "No finite junction conflict geometry, lane-changing, dense insertion-demand or non-Car SUMO calibration.",
+    "Mixed MICRO Bus/Subway/walking cases validate model integration, not Bus/Subway agreement with SUMO.",
+    "Harness terminates JVMs after acknowledged engine stop; process return codes do not prove clean application shutdown.",
+    "Failed first parked-car fixture attempts and intermediate fixes are excluded from accepted final runs.",
+    "Raw /tmp artifacts may disappear on reboot. Tracked generators, validators and this summary preserve reproduction."
+  ]
+}

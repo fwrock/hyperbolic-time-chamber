@@ -47,12 +47,14 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       freeSpeed = freeSpeed
     )
 
-  private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String, setTick: Tick => Unit)
+  private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String,
+                            setTick: Tick => Unit, sent: mutable.Buffer[AnyRef])
 
   private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0): Fixture = {
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
+    val sent = mutable.Buffer.empty[AnyRef]
     val vehicleEntryTick = mutable.Map.empty[Long, Tick]
     val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
@@ -72,7 +74,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val handler = new LinkVehicleFlowHandler(
       entityIdFn = () => linkId,
       currentTickFn = () => tick,
-      sendMessageFn = (_, _, _, _) => (),
+      sendMessageFn = (_, _, data, _) => { sent += data; () },
       scheduleEventFn = _ => (),
       getLinkStateFn = () => state,
       setLinkStateFn = s => state = s,
@@ -90,7 +92,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       logDebugFn = _ => ()
     )
 
-    Fixture(handler, () => state, linkId, t => tick = t)
+    Fixture(handler, () => state, linkId, t => tick = t, sent)
   }
 
   private def event(carId: Long, linkId: String): ActorInteractionEvent =
@@ -263,5 +265,13 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.handler.handleEnterLinkMicro(event(13L, linkId), enterData(13L))
 
     f.getState().vehiclesByLane(0).map(_.actorId) shouldBe Seq(13L, 15L)
+  }
+
+  it should "carry an entry speed into the lane and acknowledge the actual capped speed" in {
+    val f = newFixture("309", newMicroState("309", speedLimit = 36.0))
+    f.handler.handleEnterLinkMicro(event(1L, "309"), enterData(1L).copy(initialVelocity = 12.5))
+    f.getState().vehiclesByLane.values.flatten.find(_.actorId == 1L).get.velocity shouldBe 10.0
+    f.sent.collectFirst { case d: model.hybrid.entity.event.data.MicroEnterLinkData => d.initialVelocity }
+      .get shouldBe Some(10.0)
   }
 }

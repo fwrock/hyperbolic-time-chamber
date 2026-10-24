@@ -63,7 +63,7 @@ class TrafficSignalPhaseHandler(
       }
     }
 
-    if (nextTickTime < simulationEnd) scheduleNextFn(nextTickTime)
+    if (nextTickTime <= simulationEnd) scheduleNextFn(nextTickTime)
     else finishFn()
   }
 

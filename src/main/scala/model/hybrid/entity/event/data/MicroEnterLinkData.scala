@@ -34,5 +34,6 @@ case class MicroEnterLinkData(
   speedLimit: Double,
   numberOfLanes: Int,
   microTimeStep: Double,
-  ticksPerGlobalTick: Int
+  ticksPerGlobalTick: Int,
+  initialVelocity: Option[Double] = None
 ) extends BaseEventData
