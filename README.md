@@ -97,26 +97,39 @@ schedule their own departure tick.  No per-vehicle position or velocity is track
 
 ### Microscopic (MICRO)
 
-Links in MICRO mode own a `LinkMicroTimeManager` that wakes up **every global tick** and
-executes *N* sub-ticks (default 10 × 0.1 s).  Each sub-tick runs:
+Active MICRO Links schedule their own spontaneous events through the simulation
+Time Manager. `LinkMicroSimulationHandler` delegates each batch to
+`DefaultMicroSimulationStrategy`, with default 10 × 0.1-second physics steps per
+one-second runtime tick. Each lane uses the simplified Krauss car-following model
+and updates vehicle positions and velocities. The handler sends the final
+`MicroUpdateData` for each vehicle in that batch, or `MicroLeaveLinkData` on exit.
+The active default uses `NoLaneChangeStrategy`; integrated MOBIL lane changing is
+not established by the presence of the model interfaces.
 
-1. **Car-following** — Krauss model (default); pluggable via `CarFollowingModel` interface
-2. **Lane-change** — MOBIL model; pluggable via `LaneChangeModel` interface
-3. **Position/velocity update** — per vehicle per lane
-4. **MicroUpdateData** sent to vehicle actor; `MicroLeaveLinkData` when position ≥ link length
+Opt-in 0.1-second runtime ticks, boundary remainder transfer, finite junction
+connectors and downstream leader observations provide the validated single-lane
+Car configuration. All four predeclared v2 cases and five fresh demand seeds pass
+the provisional SUMO criteria; independent empirical following/discharge validation
+remains open. Default mixed-model scenarios retain one-second clocks. See
+[MICRO implementation and validation status](docs/MICRO_VALIDATION_STATUS.md) for
+configuration, evidence, limitations and remaining work.
 
 ### Hybrid Strategy
 
-Every `Link` carries a `simulationMode: SimulationModeEnum` flag (`MESO` | `MICRO`).  **All
-vehicle types** (Car, Bus, Bicycle, Motorcycle, Subway) adopt the mode of the link they enter.
-A single city map can freely mix MESO (city-wide background) and MICRO (high-fidelity
-corridors, BRT lanes, intersections).
+Every road `Link` carries a `simulationMode: SimulationModeEnum` flag (`MESO` | `MICRO`).
+Road vehicles adopt the mode of the Link they enter. Existing one-second scenarios
+can mix MESO roads and MICRO corridors alongside transit and Person actors.
+The fractional-clock configuration has the narrower Car/Link/Node/TrafficSignal
+scope described in the [validation status](docs/MICRO_VALIDATION_STATUS.md).
 
 #### Krauss safe-velocity formula
 
 $$v_{safe} = -\tau b + \sqrt{(\tau b)^2 + v_{leader}^2 + 2 b \cdot gap}$$
 
 where $\tau$ = reaction time (1.0 s), $b$ = max deceleration (4.5 m/s²).
+Here `gap` is bumper spacing after subtracting the minimum standstill gap. This
+continuous stopping-distance approximation does not reproduce every discrete
+detail of SUMO's Krauss implementation.
 
 ---
 
@@ -246,28 +259,36 @@ A scenario is a **directory of JSON files** read at startup:
 
 ```json
 {
-  "id": "htcaid:link;downtown_main_st",
+  "id": 1001,
   "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.LinkState",
     "content": {
-      "from": "htcaid:node;intersection_01",
-      "to":   "htcaid:node;intersection_02",
+      "startTick": 0,
+      "from": 1,
+      "to": 2,
       "length": 500.0,
       "lanes": 3,
-      "speedLimit": 13.89,
+      "speedLimit": 50.0,
+      "capacity": 150.0,
+      "freeSpeed": 50.0,
       "simulationMode": "MICRO",
       "microTimeStep": 0.1,
       "microTicksPerGlobalTick": 10,
       "laneConfigurations": [
-        {"laneId": 0, "type": "normal"},
-        {"laneId": 1, "type": "normal"},
-        {"laneId": 2, "type": "bus_lane"}
+        {"laneId": 0, "laneType": "NORMAL"},
+        {"laneId": 1, "laneType": "NORMAL"},
+        {"laneId": 2, "laneType": "BUS_LANE"}
       ]
     }
   }
 }
 ```
+
+This example uses the existing one-second, three-lane MICRO configuration.
+Link speeds are in km/h; microscopic vehicle velocities are in m/s. For the
+validated single-lane 0.1-second configuration and its additional constraints,
+see [MICRO status and configuration](docs/MICRO_VALIDATION_STATUS.md#scope-and-configuration).
 
 ### Person actor JSON (plan-based)
 
@@ -480,6 +501,11 @@ src/main/scala/
 
 | Document | Description |
 |---|---|
+| [MICRO Validation Status](docs/MICRO_VALIDATION_STATUS.md) | Consolidated implementation, four scientific priorities, current results, configuration, limits and next acceptance gates |
+| [MICRO Cross-Link Following](docs/MICRO_CROSS_LINK_FOLLOWING.md) | Leader observations, checkpoint/replay contract, v2 ablations, fresh demand results and reproduction |
+| [MICRO Scientific Validation](docs/MICRO_SCIENTIFIC_VALIDATION.md) | Original v1 clock/convergence study, measurement definitions and retained field pilot |
+| [Junction Geometry](docs/JUNCTION_GEOMETRY.md) | Fixed MICRO connectors, distance and turn-speed contract, and original geometry evidence |
+| [Work Recovery](docs/WORK_RECOVERY_2026_10_24.md) | Accepted implementation/build references, evidence locations and recovered milestone history |
 | [Extensible Time Warp Runtime](docs/TIME_WARP_EXTENSIBLE_RUNTIME.md) | Current core/model audit, conservative and optimistic architecture, implementation stages and acceptance gates |
 | [Time Warp Validation](docs/TIME_WARP_VALIDATION_2026_10_22.md) | Regression tests and bounded scenario evidence for the runtime foundations |
 | [Scenario Modeling Guide](docs/SCENARIO_MODELING.md) | Full JSON schema for all entity types, dependency graph, ID conventions |

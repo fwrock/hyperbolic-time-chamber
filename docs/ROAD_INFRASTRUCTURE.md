@@ -1,5 +1,12 @@
 # Infraestrutura Viária — `Link`, `Node`, `TrafficSignal`
 
+Estado consolidado em 2026-10-25:
+[implementação e validação MICRO](MICRO_VALIDATION_STATUS.md). O contrato de
+[geometria](JUNCTION_GEOMETRY.md) e o de
+[seguimento entre Links](MICRO_CROSS_LINK_FOLLOWING.md) detalham os recursos
+opcionais e seus limites. A validação atual usa uma faixa, relógio de 0,1 s e
+movimentos protegidos; não estabelece validade empírica geral.
+
 > Arquivos principais:
 > - [src/main/scala/model/hybrid/actor/Link.scala](../src/main/scala/model/hybrid/actor/Link.scala)
 > - [src/main/scala/model/hybrid/actor/Node.scala](../src/main/scala/model/hybrid/actor/Node.scala)
@@ -11,16 +18,24 @@
 
 O mapa da cidade é um **grafo dirigido** onde:Dois modos completamente distintos de operação:
 
-MESO: sem TM próprio. Veículo entra → link adiciona ao registered → calcula v = vfree × (1 - n/C) → devolve LinkInfoData com tempo de travessia → veículo sai quando acordar. O link é passivo.
-MICRO: TM próprio, acorda a cada tick. Mantém posição/velocidade de cada veículo por faixa (VehicleInLane), executa 10 sub-ticks de car-following Krauss a cada tick global, envia MicroUpdateData a cada sub-tick e MicroLeaveLinkData quando o veículo atinge o fim.
+MESO: o Link registra entrada/saída, atualiza métricas e responde com
+`LinkInfoData`. O veículo calcula a velocidade/duração e agenda sua saída;
+o Link não mantém um loop espontâneo para percorrer a via.
+MICRO: o próprio Link agenda eventos espontâneos no TM da simulação e delega a
+física a `LinkMicroSimulationHandler`. Mantém posição/velocidade por faixa em
+`VehicleInLane`; por padrão executa 10 passos de 0,1 s por tick de um segundo.
+Envia a atualização final de cada veículo no lote ou `MicroLeaveLinkData` na saída.
 Node — a interseção
 Puramente reativo. Três funções:
 
 Armazena referências de BusStop e SubwayStation que se registram ao inicializar.
 Mantém o estado atual de cada semáforo (signals), atualizado pelo TrafficSignal.
-Responde a RequestSignalStateData dos veículos — se não houver sinal, responde Green imediatamente.
+Responde a `RequestLinkAccessData` com `LinkAccessData`, verificando sinal e
+capacidade. A ausência de sinal permite Green, mas não dispensa a capacidade.
 TrafficSignal — o semáforo
-Acorda uma vez por ciclo (ex: 90 ticks) — não a cada tick. Calcula currentCycleTick = (tick - start + offset) % cycle, determina Green/Red para cada fase, e notifica os Nodes. Veículos nunca falam diretamente com o semáforo — sempre via Node.
+Acorda nas transições de fase, calcula Green/Red e notifica os Nodes. O Node
+também propaga o sinal à aproximação MICRO; o intervalo físico do Link determina
+a travessia autorizada. Veículos consultam admissão pelo Node.
 
 - **`Node`** = vértice (interseção, entroncamento, ponto de interesse)
 - **`Link`** = aresta dirigida (trecho de via entre dois nós)
@@ -49,7 +64,8 @@ O `Link` representa um segmento de via e é responsável por:
 1. **Controle de entrada/saída** de veículos (MESO e MICRO).
 2. **Cálculo de velocidade** no modo MESO (modelo BPR-like via `SpeedUtil`).
 3. **Simulação microscópica** no modo MICRO: sub-ticks, car-following, gerenciamento de faixas.
-4. **Custo dinâmico** para roteamento: publica periodicamente para `DynamicWeightCache` (Kafka).
+4. **Custo dinâmico** para roteamento: publica conforme a estratégia configurada;
+   a validação com relógio fracionário mantém o roteamento dinâmico desabilitado.
 5. **Métricas** estilo SUMO: resumo por tick de veículos carregados, saídos, tempo de viagem.
 
 ## 1.2 Modo MESO vs. MICRO
@@ -58,7 +74,7 @@ O campo `simulationMode: SimulationModeEnum` determina o comportamento do link:
 
 | Aspecto | MESO | MICRO |
 |---|---|---|
-| Controle de tempo | **Sem TM próprio** — veículo controla seu tick | **TM próprio** — link acorda a cada tick |
+| Controle de tempo | Veículo agenda sua travessia | Link agenda eventos espontâneos no TM da simulação |
 | Velocidade | `SpeedUtil.linkDensitySpeed` (agregado) | Krauss car-following por sub-tick |
 | Veículos rastreados | `registered: Set[LinkRegister]` (só contagem) | `vehiclesByLane: Map[Int, Queue[VehicleInLane]]` (posição, velocidade) |
 | Faixas | Não distingue | Múltiplas faixas, cada uma com fila de veículos |
@@ -66,19 +82,23 @@ O campo `simulationMode: SimulationModeEnum` determina o comportamento do link:
 
 ## 1.3 Estado (`LinkState`)
 
+Trecho dos campos relevantes; a assinatura completa e as validações estão em
+[`LinkState.scala`](../src/main/scala/model/hybrid/entity/state/LinkState.scala).
+
 ```scala
 case class LinkState(
   // Topologia
-  from: String,        // ID do nó de origem
-  to: String,          // ID do nó de destino
+  startTick: Tick,
+  from: Long,          // ID numérico do nó de origem
+  to: Long,            // ID numérico do nó de destino
   length: Double,      // Comprimento (metros)
   lanes: Int,          // Número de faixas
 
   // Parâmetros de tráfego (MESO)
-  speedLimit: Double,  // Limite de velocidade (m/s)
+  speedLimit: Double,  // Limite de velocidade (km/h)
   capacity: Double,    // Capacidade máxima de veículos
-  freeSpeed: Double,   // Velocidade em fluxo livre (m/s)
-  currentSpeed: Double,       // Velocidade atual calculada
+  freeSpeed: Double,   // Velocidade em fluxo livre (km/h)
+  currentSpeed: Double,       // MESO em km/h; MICRO em m/s
   congestionFactor: Double,   // Fator de congestionamento
 
   // Modo de simulação
@@ -89,14 +109,21 @@ case class LinkState(
   microTimeStep: Double,           // Duração do sub-tick (s), padrão 0.1s
   microTicksPerGlobalTick: Int,    // Sub-ticks por tick global, padrão 10
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]],
-  laneConfigurations: List[LaneConfig]
+  laneConfigurations: List[LaneConfig],
+  junctionGeometry: Option[JunctionGeometry],
+  exitSpeedLimitsMps: Map[Long, Double],
+  carryMicroRemainder: Boolean = false,
+  downstreamLookahead: Boolean = false,
+  downstreamConnectors: Map[Long, Long],
+  stopLineGapM: Double = 0.0,
+  following: MicroFollowingState
 )
 ```
 
 ### `LinkRegister` (MESO)
 ```scala
 case class LinkRegister(
-  actorId: String,
+  actorId: Long,
   shardId: String,
   actorType: ActorTypeEnum,
   actorCreationType: CreationTypeEnum,
@@ -107,13 +134,15 @@ case class LinkRegister(
 ### `VehicleInLane` (MICRO)
 ```scala
 case class VehicleInLane(
-  actorId: String,
+  actorId: Long,
   shardId: String,
   position: Double,      // metros desde o início do link
   velocity: Double,      // m/s
   acceleration: Double,  // m/s²
   vehicleLength: Double, // metros
-  entryTick: Tick
+  entryTick: Tick,
+  exitSpeedLimitMps: Option[Double],
+  nextLinkId: Long
 ) {
   def rearPosition: Double = position - vehicleLength
   def gapTo(leader: VehicleInLane): Double = leader.rearPosition - this.position
@@ -139,10 +168,10 @@ com $\alpha = \beta = 1$ (simplificação linear):
 $$v = v_{free} \times \left(1 - \frac{n}{C}\right)$$
 
 onde:
-- $v_{free}$ = velocidade em fluxo livre (`freeSpeed`, m/s)
+- $v_{free}$ = velocidade em fluxo livre (`freeSpeed`, km/h)
 - $n$ = número de veículos no link (`registered.size`)
 - $C$ = capacidade do link (`capacity`)
-- Mínimo de `1.0 m/s` quando $n \geq C$
+- Retorna `1.0 km/h` quando $n \geq C$
 
 ```scala
 // SpeedUtil.scala
@@ -151,19 +180,40 @@ def linkDensitySpeed(length, capacity, numberOfCars, freeSpeed, lanes): Double =
   else freeSpeed * pow(1 - pow(numberOfCars / capacity, beta=1), alpha=1)
 ```
 
-O tempo de travessia no modo MESO é:
+Para o Car em MESO com o relógio suportado de um segundo, o handler converte
+km/h para m/s e agenda a saída após:
 
-$$t = \left\lceil \frac{\text{length}}{v} \right\rceil + 1 \quad \text{(ticks)}$$
+$$t_{link} = \left\lceil \frac{\text{length}}{v/3.6} \right\rceil \quad \text{(ticks)}$$
+
+Espera por sinal ou capacidade é tratada separadamente no Node.
 
 ## 1.5 Modo MICRO — Sub-ticks e Car-Following
 
 No modo MICRO:
 
-1. O `Link` possui TM próprio — acorda a cada tick global.
+1. O `Link` agenda seu próximo evento espontâneo no TM da simulação.
 2. Cada tick global executa `microTicksPerGlobalTick` sub-ticks de `microTimeStep` segundos.
 3. Para cada sub-tick, `MicroSimulationStrategy` (padrão: `DefaultMicroSimulationStrategy`)
    calcula a nova velocidade e posição de cada veículo via modelo de Krauss.
 4. Quando um veículo atinge `position >= length`, o link envia proativamente `MicroLeaveLinkData`.
+
+O caminho ativo usa `NoLaneChangeStrategy`; a existência de helpers MOBIL/IDM
+não estabelece troca de faixa integrada. Um lote terminado em t integra
+`(t-1,t]`; entradas e mudanças de sinal efetivas em t regem o próximo intervalo.
+Posição e velocidade MICRO usam metros e m/s.
+
+O modo validado de 0,1 s usa `Simulation.tickDuration=0.1`,
+`microTimeStep=0.1` e `microTicksPerGlobalTick=1`. A transferência opcional de
+resto de passo preserva distância em uma continuação imediata no mesmo tick;
+espera real invalida essa continuação. `downstreamLookahead=true` mantém o líder
+observável através de um conector opcional e da próxima via, usando snapshots
+anteriores ao tick integrado. Subscrições e histórico ficam no estado
+checkpointado; não introduzem espera por resposta.
+
+Consulte [configuração e escopo](MICRO_VALIDATION_STATUS.md#scope-and-configuration)
+para restrições de atores, faixas, relógio, roteamento e comprimentos mínimos.
+Veículos esperando no Node fora das filas de faixa ainda exigem representação e
+validação próprias para handoff bloqueado e spillback.
 
 ### Período de graça (grace period)
 
@@ -173,12 +223,20 @@ não chegaram.
 
 ## 1.6 Custo Dinâmico para Roteamento
 
-A cada `costPublishInterval` ticks (padrão: 10), o link calcula e publica seu custo:
+A publicação é limitada por `costPublishInterval` (padrão: 10 ticks). O custo
+de [`DynamicLinkCost`](../src/main/scala/model/hybrid/entity/state/model/DynamicLinkCost.scala) é:
 
-$$\text{cost} = \text{length} \times \text{congestionFactor} + \frac{\text{length}}{\text{currentSpeed}}$$
+$$
+\text{cost} = \text{length} \times \text{congestionFactor} \times \text{speedPenalty}
++ 2 \times \text{incidentFactor} \times \text{length}
+$$
 
-O custo é enviado ao `DynamicWeightCache` (via Kafka) para uso pelos algoritmos de roteamento
-(`GPSUtil.calcRoute`). TTL do cache configurável (`cache-ttl`, padrão: 60 ticks).
+Com velocidade positiva, `speedPenalty=max(1, freeFlowSpeed/currentSpeed)`;
+com tráfego parado, vale 10. O reporter converte as velocidades de roteamento
+para m/s; Link MICRO vazio usa velocidade livre. Estratégias compartilhadas e
+o adaptador reversível `accounted` seguem contratos distintos. Veja
+[roteamento contabilizado](ACCOUNTED_ROUTING.md). Os testes fracionários atuais
+usam rotas explícitas e `htc.routing.cache-strategy=disabled`.
 
 ## 1.7 Comunicação entre Atores
 
@@ -188,6 +246,9 @@ O custo é enviado ao `DynamicWeightCache` (via Kafka) para uso pelos algoritmos
 |---|---|---|
 | `EnterLinkData` | Qualquer `Movable` | `handleEnterLink` → MESO ou MICRO |
 | `LeaveLinkData` | Qualquer `Movable` | `handleLeaveLink` → MESO ou MICRO |
+| `LinkSignalStateData` | Node | Armazena fase atual/anterior e tick efetivo |
+| `SubscribeMicroBoundaryData` | Link a montante | Registra observador e publica snapshot inicial, sem espera |
+| `MicroBoundaryUpdateData` | Link a jusante | Atualiza histórico checkpointado; publicação tardia sem subscrição ativa é ignorada |
 
 ### Mensagens enviadas pelo `Link`
 
@@ -195,8 +256,10 @@ O custo é enviado ao `DynamicWeightCache` (via Kafka) para uso pelos algoritmos
 |---|---|---|---|
 | `LinkInfoData` | Veículo | MESO | `linkLength`, `travelTime`, `speed` |
 | `MicroEnterLinkData` | Veículo | MICRO | `lane`, `linkLength`, `speedLimit`, parâmetros micro |
-| `MicroUpdateData` | Veículo | MICRO | posição, velocidade, aceleração por sub-tick |
+| `MicroUpdateData` | Veículo | MICRO | posição, velocidade e aceleração finais no lote |
 | `MicroLeaveLinkData` | Veículo | MICRO | tempo de viagem, tempo de espera |
+| `SubscribeMicroBoundaryData` | Link a jusante | MICRO opcional | Interesse no próximo trecho/conector, fire-and-forget |
+| `MicroBoundaryUpdateData` | Observadores a montante | MICRO opcional | Tick, sequência, comprimento e veículo mais próximo da entrada |
 
 ## 1.8 Métricas SUMO (`emitSumoSummaryStep`)
 
@@ -218,18 +281,19 @@ A cada tick, o link emite um resumo com:
 ### Modo MESO (padrão)
 ```json
 {
-  "id": "htcaid:link;2067",
+  "id": 2067,
   "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.LinkState",
     "content": {
-      "from": "htcaid:node;60609822",
-      "to": "htcaid:node;4922987596",
+      "startTick": 0,
+      "from": 60609822,
+      "to": 4922987596,
       "length": 500.0,
       "lanes": 2,
-      "speedLimit": 13.89,
+      "speedLimit": 50.0,
       "capacity": 100.0,
-      "freeSpeed": 13.89,
+      "freeSpeed": 50.0,
       "simulationMode": "MESO"
     }
   }
@@ -239,18 +303,19 @@ A cada tick, o link emite um resumo com:
 ### Modo MICRO
 ```json
 {
-  "id": "htcaid:link;downtown_main",
+  "id": 1001,
   "typeActor": "hybrid.actor.Link",
   "data": {
     "dataType": "model.hybrid.entity.state.LinkState",
     "content": {
-      "from": "htcaid:node;n01",
-      "to": "htcaid:node;n02",
+      "startTick": 0,
+      "from": 1,
+      "to": 2,
       "length": 500.0,
       "lanes": 3,
-      "speedLimit": 13.89,
+      "speedLimit": 50.0,
       "capacity": 150.0,
-      "freeSpeed": 13.89,
+      "freeSpeed": 50.0,
       "simulationMode": "MICRO",
       "microTimeStep": 0.1,
       "microTicksPerGlobalTick": 10,
@@ -276,23 +341,30 @@ O `Node` é o ator de **interseção** — o ponto de convergência de links, pa
 estações de metrô e semáforos. Suas responsabilidades:
 
 1. **Registro de infraestrutura PT**: recebe e armazena referências de `BusStop` e `SubwayStation`.
-2. **Mediador de semáforo**: responde a pedidos de estado de sinal dos veículos, consultando
-   `state.signals` atualizado pelo `TrafficSignal`.
+2. **Admissão**: responde a `RequestLinkAccessData` com fase, capacidade e eventual
+   conector; mantém obrigações de capacidade pendentes no estado checkpointado.
 3. **Associação de sinais a links**: `connections` mapeia `linkId → phaseOrigin` para que um
-   veículo saiba qual sinal consultar ao entrar no nó.
+   veículo possa obter admissão; `approachConnections` propaga fases às aproximações MICRO.
 
 ## 2.2 Estado (`NodeState`)
+
+Trecho simplificado; campos de identificação numérica, capacidade e movimentos
+estão completos em [`NodeState.scala`](../src/main/scala/model/hybrid/entity/state/NodeState.scala).
 
 ```scala
 case class NodeState(
   latitude: Double,
   longitude: Double,
-  links: List[String],   // IDs dos links que chegam/saem deste nó
+  links: List[Long],     // IDs dos links que chegam/saem deste nó
 
-  connections: mutable.Map[String, Identify],  // linkId → Identify do semáforo/fase
-  signals: mutable.Map[String, SignalState],   // phaseOrigin → estado atual do sinal
+  connections: mutable.Map[Long, Identify],  // linkId → Identify da fase
+  approachConnections: mutable.Map[Long, Identify],
+  signals: mutable.Map[Long, SignalState],   // phaseOrigin → estado atual
   busStops: mutable.Map[String, Identify],     // label → Identify do BusStop
-  subwayStations: mutable.Map[String, Identify]// line → Identify da SubwayStation
+  subwayStations: mutable.Map[String, Identify], // line → Identify da SubwayStation
+  capacityWaitQueue: mutable.Map[Long, mutable.Queue[PendingLinkAccessRequest]],
+  availableCapacity: mutable.Map[Long, Int],
+  junctionMovements: List[JunctionMovement]
 )
 ```
 
@@ -305,18 +377,21 @@ case class SignalState(
 )
 ```
 
-## 2.3 Fluxo de Consulta de Semáforo
+## 2.3 Fluxo de Admissão por Sinal e Capacidade
 
 ```
-Veículo ──[RequestSignalStateData(targetLinkId)]──► Node
-Node: connections.get(targetLinkId) → Identify(phaseOrigin)
-      signals.get(phaseOrigin) → SignalState
-Node ──[SignalStateData(phase, nextTick)]──► Veículo
+Veículo ──[RequestLinkAccessData(targetLinkId, signalAlreadyCleared, approachLinkId)]──► Node
+Node: identifica fase, eventual conector e capacidade do destino efetivo
+Node ──[LinkAccessData(phase, nextTick, capacityState, requestSeq, junctionLink)]──► Veículo
 ```
 
-Se não houver sinal configurado para o link (`connections` sem entrada, ou `signals` sem o
-phaseOrigin), o Node responde com **Green imediato** (`phase=Green, nextTick=currentTick`). Isso
-garante que ausência de configuração não bloqueia o trânsito.
+Sem sinal aplicável, a fase é Green; a capacidade continua obrigatória. Red
+permite uma nova tentativa no tick indicado. Full mantém o pedido original na
+fila checkpointada até uma concessão ou cancelamento, preservando `requestSeq`,
+alvo original, autorização MICRO e seleção de conector. Uma travessia MICRO já
+confirmada usa `signalAlreadyCleared=true` e não recebe um atraso artificial de
+ponto-nó nem perde autorização por uma mudança posterior de fase. Isso não
+dispensa a admissão do conector/próxima via.
 
 ## 2.4 Registro de Infraestrutura PT
 
@@ -344,34 +419,39 @@ TrafficSignal ──[TrafficSignalChangeStatusData(phaseOrigin, signalState)]─
 Node: state.signals.put(phaseOrigin, signalState)
 ```
 
-O `Node` armazena o estado mais recente de cada fase. Veículos sempre consultam o estado atual
-diretamente no Node (pull model) — não há push para os veículos.
+O `Node` armazena o estado de cada fase, responde à admissão dos veículos e envia
+`LinkSignalStateData` às aproximações MICRO registradas em `approachConnections`.
+O Link preserva fase atual/anterior e tick efetivo para integrar o intervalo correto.
 
 ## 2.6 TimeManager
 
-O `Node` **não usa o TimeManager** para operação normal. Ao receber um evento espontâneo, chama
-`onFinishSpontaneous(None)` imediatamente.
+O `Node` é reativo e não mantém uma agenda espontânea recorrente. Continua sendo
+um processo lógico do runtime selecionado; suas interações atravessam o transporte
+e a contabilização do TM. Ao receber um evento espontâneo, chama
+`onFinishSpontaneous(None)`.
 
 ## 2.7 Configuração JSON
 
 ```json
 {
-  "id": "htcaid:node;60609822",
+  "id": 2,
   "typeActor": "hybrid.actor.Node",
   "data": {
     "dataType": "model.hybrid.entity.state.NodeState",
     "content": {
+      "startTick": 0,
       "latitude": -23.5505,
       "longitude": -46.6333,
       "links": [
-        "htcaid:link;2067",
-        "htcaid:link;2068"
+        1001, 1002, 1003, 1004
       ],
       "connections": {
-        "htcaid:link;2068": {
-          "id": "htcaid:trafficsignal;signal_01",
-          "classType": "hybrid.actor.TrafficSignal"
-        }
+        "1002": {"id": 3001},
+        "1003": {"id": 3002}
+      },
+      "approachConnections": {
+        "1001": {"id": 3001},
+        "1004": {"id": 3002}
       }
     }
   }
@@ -397,18 +477,18 @@ O `TrafficSignal` controla o ciclo semafórico de uma interseção. A cada mudan
 ```scala
 case class TrafficSignalState(
   startTick: Tick,
-  cycleDuration: Tick,  // Duração total do ciclo (ticks = segundos)
+  cycleDuration: Tick,  // Ticks do runtime; segundos apenas no relógio de 1 s
   offset: Tick,         // Deslocamento inicial do ciclo
-  nodes: List[String],  // IDs dos nós controlados por este sinal
+  nodes: List[Long],    // IDs dos nós controlados por este sinal
   phases: List[Phase],  // Fases configuradas
-  signalStates: mutable.Map[String, SignalState]  // phaseOrigin → estado atual
+  signalStates: mutable.Map[Long, SignalState]  // phaseOrigin → estado atual
 )
 ```
 
 ### `Phase`
 ```scala
 case class Phase(
-  origin: String,      // ID do link de origem controlado por esta fase
+  origin: Long,        // Identidade numérica da fase, usada pelas conexões do Node
   greenStart: Tick,    // Início do verde no ciclo (ticks desde início do ciclo)
   greenDuration: Tick, // Duração do verde (ticks)
   state: TrafficSignalPhaseStateEnum
@@ -467,29 +547,34 @@ Nenhuma — o `TrafficSignal` só age espontaneamente via TM. É um ator **unidi
 O veículo **nunca fala diretamente com o `TrafficSignal`**. O fluxo é sempre via `Node`:
 
 ```
-Veículo ──[RequestSignalStateData(linkId)]──► Node ──► SignalStateData(phase, nextTick) ──► Veículo
+Veículo ──[RequestLinkAccessData]──► Node ──[LinkAccessData]──► Veículo
 
 TrafficSignal ──[ChangeStatus]──► Node  (atualiza state.signals)
+Node ──[LinkSignalStateData]──► Link de aproximação MICRO
 ```
 
-Se `phase == Red`, o veículo dorme até `nextTick` antes de cruzar o link de saída.
+Em MESO, uma resposta Red agenda nova tentativa em `nextTick`. Em MICRO, o Link
+mantém o veículo antes da linha durante Red e autoriza a travessia no intervalo
+Green; o Node ainda controla capacidade e seleção de conector.
 
 ## 3.7 TimeManager
 
 | Situação | Ação |
 |---|---|
 | Inicialização | `scheduleEvent(startTick + offset)` |
-| Após cada ciclo | `onFinishSpontaneous(Some(nextTickTime))` |
+| Após cada transição de fase | `onFinishSpontaneous(Some(nextTickTime))` |
 | Fim da simulação | `onFinishSpontaneous(None)` |
 
-`extendSimulationIfPendingEventsAfterEnd=true` na config → `simulationEndTick = Long.MaxValue`
-(sinal nunca para).
+O campo legado `extendSimulationIfPendingEventsAfterEnd=true` faz o limite local
+do modelo usar `Long.MaxValue`. Nos runtimes contabilizados, o horizonte e o
+encerramento continuam sob controle do runtime; veja
+[horizonte e relatórios finais](HORIZON_AND_TRANSIT_REPORTING.md).
 
 ## 3.8 Configuração JSON
 
 ```json
 {
-  "id": "htcaid:trafficsignal;signal_01",
+  "id": 3000,
   "typeActor": "hybrid.actor.TrafficSignal",
   "data": {
     "dataType": "model.hybrid.entity.state.TrafficSignalState",
@@ -498,35 +583,37 @@ Se `phase == Red`, o veículo dorme até `nextTick` antes de cruzar o link de sa
       "cycleDuration": 90,
       "offset": 0,
       "nodes": [
-        "htcaid:node;n01",
-        "htcaid:node;n02"
+        2
       ],
       "phases": [
         {
-          "origin": "htcaid:link;link_norte_sul",
+          "origin": 3001,
           "greenStart": 0,
           "greenDuration": 40,
           "state": "Green"
         },
         {
-          "origin": "htcaid:link;link_leste_oeste",
+          "origin": 3002,
           "greenStart": 45,
           "greenDuration": 40,
           "state": "Red"
         }
       ],
       "signalStates": {
-        "htcaid:link;link_norte_sul": { "state": "Green", "remainingTime": 40, "nextTick": 40 },
-        "htcaid:link;link_leste_oeste": { "state": "Red", "remainingTime": 45, "nextTick": 45 }
+        "3001": { "state": "Green", "remainingTime": 40, "nextTick": 40 },
+        "3002": { "state": "Red", "remainingTime": 45, "nextTick": 45 }
       }
     }
   },
   "dependencies": {
-    "htcaid:node;n01": { "id": "htcaid:node;n01", "classType": "hybrid.actor.Node" },
-    "htcaid:node;n02": { "id": "htcaid:node;n02", "classType": "hybrid.actor.Node" }
+    "2": { "id": 2, "classType": "hybrid.actor.Node" }
   }
 }
 ```
+
+Este exemplo de semáforo usa o relógio de um segundo. Com 0,1 s por tick,
+`cycleDuration`, `offset`, `greenStart`, `greenDuration` e os ticks do estado
+precisam da conversão correspondente; um ciclo físico de 90 s usa 900 ticks.
 
 ---
 
@@ -534,23 +621,30 @@ Se `phase == Red`, o veículo dorme até `nextTick` antes de cruzar o link de sa
 
 # 4. Interação Completa — Veículo Atravessando Interseção com Semáforo
 
+O exemplo MICRO abaixo mostra uma concessão imediata com geometria finita:
+
+```mermaid
+sequenceDiagram
+    participant L as Link de aproximação
+    participant C as Car
+    participant N as Node
+    participant J as Link conector
+    L->>C: MicroLeaveLinkData (velocidade e resto do passo)
+    C->>N: RequestLinkAccessData (via alvo, autorização MICRO, aproximação)
+    N->>C: LinkAccessData (Green, Available, conector, identidade)
+    C->>J: EnterLinkData (velocidade, resto, próxima via)
+    J->>C: MicroEnterLinkData (posição e velocidade efetivas)
+    Note over L,J: Observações entre Links preservam o líder para quem segue
+    Note over J,C: Passos físicos percorrem a distância interna
+    J->>C: MicroLeaveLinkData
+    Note over C,N: Nova admissão obtém capacidade da via de saída
 ```
-Veículo     Link(A→B)       Node(B)      TrafficSignal    Link(B→C)
-    │              │              │               │              │
-    │─EnterLink───►│              │               │              │
-    │◄─LinkInfoData(t=30ticks)────│               │              │
-    │  (dorme 30 ticks)           │               │              │
-    │─LeaveLinkData──────────────►│               │              │
-    │◄─LinkInfoData(MESO: next)   │               │              │
-    │                             │◄ChangeStatus──│(ciclo novo)  │
-    │                             │ signals["linkB→C"]=Red       │
-    │─RequestSignalState(B→C)────►│               │              │
-    │◄─SignalStateData(Red, next=tick+20)──────────│              │
-    │  (dorme até nextTick)        │               │              │
-    │─RequestSignalState(B→C)────►│               │              │
-    │◄─SignalStateData(Green)──────│               │              │
-    │─EnterLink───────────────────────────────────────────────►│
-```
+
+Uma espera real invalida a continuação imediata do resto do passo. Filas de
+capacidade e mensagens de cancelamento preservam sua identidade durante rollback.
+O diagrama não estabelece spillback físico para veículos esperando fora de filas
+de faixa; esse caso permanece nos
+[próximos critérios de aceitação](MICRO_VALIDATION_STATUS.md#remaining-work-and-proposed-acceptance-gates).
 
 ---
 

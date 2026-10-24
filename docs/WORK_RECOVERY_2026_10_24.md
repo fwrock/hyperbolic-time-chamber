@@ -1,5 +1,11 @@
 # Work recovery — 2026-10-24
 
+The consolidated current entry point is
+[MICRO implementation and validation status](MICRO_VALIDATION_STATUS.md). It
+records completed work, configuration, the four scientific priorities, current
+claim boundaries and the next model/field acceptance gates. This ledger preserves
+the exact build and milestone history needed to resume a session.
+
 ## Cross-link following completed on 2026-10-25
 
 The current milestone is [MICRO cross-link following](MICRO_CROSS_LINK_FOLLOWING.md).

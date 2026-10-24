@@ -1,5 +1,11 @@
 # Junction geometry — 2026-10-24
 
+This page retains the original geometry-stage results. Fractional clocks and
+boundary remainder transfer were subsequently implemented, followed by cross-link
+leader observations. See [current MICRO status](MICRO_VALIDATION_STATUS.md),
+[clock methods](MICRO_SCIENTIFIC_VALIDATION.md) and
+[v2 following results](MICRO_CROSS_LINK_FOLLOWING.md) for the later scope and evidence.
+
 The first stage models finite movement paths and turn-speed constraints. Conflicting
 movement priority and gap acceptance are separate from geometry. Fractional runtime
 crossing times remain a later stage.
