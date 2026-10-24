@@ -66,8 +66,9 @@ The train's first physical departure tick is also checkpointed for final telemet
 All these messages use the existing `sendMessageTo` ordering, delivery and anti
 accounting. Restoring a checkpoint restores passenger baselines and train distance;
 replaying or cancelling a boarding/arrival does not retain a discarded odometer.
-Daily distance now includes measured private-vehicle and transit legs. Walking
-distance remains outside that total.
+Daily distance includes measured private-vehicle and transit legs. The subsequent
+[walking follow-up](WALKING_DISTANCE.md) adds completed walking legs and preserves
+the accumulated prefix across every leg transition; an unfinished walk is excluded.
 
 See the [validation record](HORIZON_TRANSIT_VALIDATION_2026_10_24.md) for bounded
 physical checks, policy comparisons and remaining limits.

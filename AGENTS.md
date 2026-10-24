@@ -89,6 +89,13 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - `scheduleEvent(tick)` registers with the LocalTimeManager
 - Micro mode: `LinkMicroTimeManager` drives sub-tick updates via `MicroUpdateData`
 
+### Person distance
+
+- Walking departure checkpoints measured route-link distance and arrival tick in `WalkingLegProgress`.
+- Credit walking distance only when arrival executes; never count a planned unfinished walk at the horizon.
+- Preserve `Traveling.accumulatedDistance` across every leg transition and PT replan. Flush completed legs into daily distance at the next activity or abort; only activity arrival completes a trip.
+- See `docs/WALKING_DISTANCE.md` for the reporting and rollback contract.
+
 ### Actor State
 - State (`T <: BaseState`) is reconstructed from JSON on load via Kryo/Jackson
 - `var` fields inside state classes are fine for mutable simulation state

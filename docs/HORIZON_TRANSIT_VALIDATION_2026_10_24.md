@@ -148,7 +148,8 @@ match the intended physical test. Generation now preserves those requirements.
 
 This validates bounded loopback/JSON scenarios and explicit censor semantics.
 It does not establish multi-host fault recovery, migration, city-scale throughput,
-or full SUMO terminal statistics. Walking distance remains excluded from daily
-totals. Cyclic Subway finalization is a censored service summary, not a fabricated
+or full SUMO terminal statistics. This milestone excluded walking distance from
+daily totals; the subsequent [walking follow-up](WALKING_DISTANCE.md) closes that
+gap. Cyclic Subway finalization is a censored service summary, not a fabricated
 destination-completed train journey. Raw `/tmp` artifacts can disappear on reboot;
 tracked generators, validators and the final validation summary preserve reproduction.

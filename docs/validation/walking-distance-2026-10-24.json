@@ -1,0 +1,724 @@
+{
+  "date": "2026-10-24",
+  "passed": true,
+  "baseCommit": "c49b213",
+  "branch": "feat/time-warp",
+  "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+  "build": {
+    "command": "sbt test assembly",
+    "tests": 614,
+    "suites": 131,
+    "passed": true,
+    "log": "/tmp/htc-walking-full-build.log"
+  },
+  "seed": 42,
+  "rawArtifacts": "/tmp/htc-walking-20261024",
+  "generationCommands": [
+    "python3 scripts/scenario/generate_walking_validation_scenario.py --output-dir /tmp/htc-walking-20261024/meso --mode MESO",
+    "python3 scripts/scenario/generate_walking_validation_scenario.py --output-dir /tmp/htc-walking-20261024/micro --mode MICRO",
+    "python3 scripts/scenario/generate_walking_validation_scenario.py --output-dir /tmp/htc-walking-20261024/before --case boundary --horizon 152",
+    "python3 scripts/scenario/generate_walking_validation_scenario.py --output-dir /tmp/htc-walking-20261024/exact --case boundary --horizon 153"
+  ],
+  "inputSha256": {
+    "meso/data/bus_stations_0.json": "d1911742538b70c0a99f2e16d20f53d4573422500b38db1e93c3109b134818d2",
+    "meso/data/bus_stops_0.json": "81e5339256c90af6e13d80d6dddb08f23dfd1a973bdc1f7df47abfa08715eb0e",
+    "meso/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "meso/data/city_map.json": "cb5733e180aff52be431f944054186f8c0770ff35fe9c5acc3e9d16ef1f3d104",
+    "meso/data/links_0.json": "f9506e9e04ad5e778acc7b01044d2241f1c5c1581b04b2490fa07b3e727d9c64",
+    "meso/data/nodes_0.json": "91c15bd46d47840c6820d411a8519eaaec0928d6467a9b191d7f1c74c27def7f",
+    "meso/data/persons_0.json": "912efa581455ad191e169bae193f833f46ec8b71bdcc44204e88c7cfbc23e6cc",
+    "meso/data/rail_links_0.json": "4e3bb1a8947c4f8f6af499f5b73cdd76259da70bcde05e9f2f83a49a45b78d03",
+    "meso/data/subway_stations_0.json": "2df29b0425a4c254f78bb41eab0ba2e90c0636a5788b6253594fcc44c629dc8a",
+    "meso/data/transit_map.json": "c93339e7fc9849dd6cca4a198b4ef64891f8518bfec4707767a2f385fc4678b7",
+    "meso/data/transit_routes.json": "3d3749b272cb9d30e10d052941b8c891c4b40b49e6b0711334db6fc7500150ec",
+    "meso/discrete-event.json": "281564fe23ece45c0c2bbb9e660bd5399e01abf60d252246e6f13dd7119c520a",
+    "meso/time-warp.json": "a4dfb40041847979a7b811e0d7193443fe1a91eb233d2134d789984c31c7643e",
+    "micro/data/bus_stations_0.json": "d1911742538b70c0a99f2e16d20f53d4573422500b38db1e93c3109b134818d2",
+    "micro/data/bus_stops_0.json": "81e5339256c90af6e13d80d6dddb08f23dfd1a973bdc1f7df47abfa08715eb0e",
+    "micro/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "micro/data/city_map.json": "cb5733e180aff52be431f944054186f8c0770ff35fe9c5acc3e9d16ef1f3d104",
+    "micro/data/links_0.json": "5d0247c2ebd255ca8a5086f06d94944ef396e02ddd38f6296bda6412f75d070c",
+    "micro/data/nodes_0.json": "91c15bd46d47840c6820d411a8519eaaec0928d6467a9b191d7f1c74c27def7f",
+    "micro/data/persons_0.json": "912efa581455ad191e169bae193f833f46ec8b71bdcc44204e88c7cfbc23e6cc",
+    "micro/data/rail_links_0.json": "4e3bb1a8947c4f8f6af499f5b73cdd76259da70bcde05e9f2f83a49a45b78d03",
+    "micro/data/subway_stations_0.json": "2df29b0425a4c254f78bb41eab0ba2e90c0636a5788b6253594fcc44c629dc8a",
+    "micro/data/transit_map.json": "c93339e7fc9849dd6cca4a198b4ef64891f8518bfec4707767a2f385fc4678b7",
+    "micro/data/transit_routes.json": "3d3749b272cb9d30e10d052941b8c891c4b40b49e6b0711334db6fc7500150ec",
+    "micro/discrete-event.json": "4a0b7353597e113791d76c844300447f6a17818af1faf9f8f3f1261420e46dd9",
+    "micro/time-warp.json": "385d8108e913f4e53410dc84db62409d16aef2f3d8c937c32f8d2e20cbd8f0f2",
+    "before/data/bus_stations_0.json": "d1911742538b70c0a99f2e16d20f53d4573422500b38db1e93c3109b134818d2",
+    "before/data/bus_stops_0.json": "81e5339256c90af6e13d80d6dddb08f23dfd1a973bdc1f7df47abfa08715eb0e",
+    "before/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "before/data/city_map.json": "cb5733e180aff52be431f944054186f8c0770ff35fe9c5acc3e9d16ef1f3d104",
+    "before/data/links_0.json": "f9506e9e04ad5e778acc7b01044d2241f1c5c1581b04b2490fa07b3e727d9c64",
+    "before/data/nodes_0.json": "91c15bd46d47840c6820d411a8519eaaec0928d6467a9b191d7f1c74c27def7f",
+    "before/data/persons_0.json": "5c967bd9c69d0d187017887edf47aae147ae5bf6aec8b42a52a2f840eae026b6",
+    "before/data/rail_links_0.json": "4e3bb1a8947c4f8f6af499f5b73cdd76259da70bcde05e9f2f83a49a45b78d03",
+    "before/data/subway_stations_0.json": "2df29b0425a4c254f78bb41eab0ba2e90c0636a5788b6253594fcc44c629dc8a",
+    "before/data/transit_map.json": "c93339e7fc9849dd6cca4a198b4ef64891f8518bfec4707767a2f385fc4678b7",
+    "before/data/transit_routes.json": "3d3749b272cb9d30e10d052941b8c891c4b40b49e6b0711334db6fc7500150ec",
+    "before/discrete-event.json": "1bdba33f06d1d2bfc70ccae773bacb0e4b4eb001e20abba8de3733f3d9077cae",
+    "before/time-warp.json": "b241895e8b5596f4605743502eb9bc5182f081e3ea144c0d00d6e3c16c42e6e9",
+    "exact/data/bus_stations_0.json": "d1911742538b70c0a99f2e16d20f53d4573422500b38db1e93c3109b134818d2",
+    "exact/data/bus_stops_0.json": "81e5339256c90af6e13d80d6dddb08f23dfd1a973bdc1f7df47abfa08715eb0e",
+    "exact/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "exact/data/city_map.json": "cb5733e180aff52be431f944054186f8c0770ff35fe9c5acc3e9d16ef1f3d104",
+    "exact/data/links_0.json": "f9506e9e04ad5e778acc7b01044d2241f1c5c1581b04b2490fa07b3e727d9c64",
+    "exact/data/nodes_0.json": "91c15bd46d47840c6820d411a8519eaaec0928d6467a9b191d7f1c74c27def7f",
+    "exact/data/persons_0.json": "5c967bd9c69d0d187017887edf47aae147ae5bf6aec8b42a52a2f840eae026b6",
+    "exact/data/rail_links_0.json": "4e3bb1a8947c4f8f6af499f5b73cdd76259da70bcde05e9f2f83a49a45b78d03",
+    "exact/data/subway_stations_0.json": "2df29b0425a4c254f78bb41eab0ba2e90c0636a5788b6253594fcc44c629dc8a",
+    "exact/data/transit_map.json": "c93339e7fc9849dd6cca4a198b4ef64891f8518bfec4707767a2f385fc4678b7",
+    "exact/data/transit_routes.json": "3d3749b272cb9d30e10d052941b8c891c4b40b49e6b0711334db6fc7500150ec",
+    "exact/discrete-event.json": "2e2aa0dddc124af902b4c1c682eb7576ffb9f09c33ad8531c5ff4b39821dc872",
+    "exact/time-warp.json": "2d8ae137bc119ae10b1eb866ae825573324635ab946295e0529f04a76c9d36e0"
+  },
+  "runs": [
+    {
+      "name": "meso-de",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/meso/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          24600
+        ],
+        "bindPorts": [
+          24600
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 30.31,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 567,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 360,
+        "rollbacks": 0,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "meso-tw",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/meso/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          24900
+        ],
+        "bindPorts": [
+          24900
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 45.0,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 567,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 360,
+        "rollbacks": 13,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "micro-de",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/micro/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          25200
+        ],
+        "bindPorts": [
+          25200
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 47.39,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 691,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 73,
+        "microBusExits": 72,
+        "physicalRows": 1984,
+        "rollbacks": 0,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "micro-tw",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/micro/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          25500
+        ],
+        "bindPorts": [
+          25500
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 61.52,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 691,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 73,
+        "microBusExits": 72,
+        "physicalRows": 1984,
+        "rollbacks": 199,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "before-de",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/before/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          25800
+        ],
+        "bindPorts": [
+          25800
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 49.67,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 152,
+        "personCompletedDistances": {
+          "43": 0.0
+        },
+        "personArrivalTicks": {
+          "43": null
+        },
+        "walkingCompletions": 0,
+        "walkingDistance": 0,
+        "dailySummaries": 0,
+        "boardings": {},
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 31,
+        "rollbacks": 0,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "before-tw",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/before/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          26100
+        ],
+        "bindPorts": [
+          26100
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 50.88,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 152,
+        "personCompletedDistances": {
+          "43": 0.0
+        },
+        "personArrivalTicks": {
+          "43": null
+        },
+        "walkingCompletions": 0,
+        "walkingDistance": 0,
+        "dailySummaries": 0,
+        "boardings": {},
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 31,
+        "rollbacks": 3,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "exact-de",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/exact/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          26400
+        ],
+        "bindPorts": [
+          26400
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 33.16,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 153,
+        "personCompletedDistances": {
+          "43": 200.0
+        },
+        "personArrivalTicks": {
+          "43": 153
+        },
+        "walkingCompletions": 1,
+        "walkingDistance": 200.0,
+        "dailySummaries": 0,
+        "boardings": {},
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 35,
+        "rollbacks": 0,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "exact-tw",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/exact/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          26700
+        ],
+        "bindPorts": [
+          26700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 36.08,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 153,
+        "personCompletedDistances": {
+          "43": 200.0
+        },
+        "personArrivalTicks": {
+          "43": 153
+        },
+        "walkingCompletions": 1,
+        "walkingDistance": 200.0,
+        "dailySummaries": 0,
+        "boardings": {},
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 35,
+        "rollbacks": 2,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "delayed-de",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/meso/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          27000,
+          27001
+        ],
+        "bindPorts": [
+          27100,
+          27101
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 102.38,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 8432,
+          "bytes": 3963263
+        }
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "discrete-event",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 567,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 360,
+        "rollbacks": 0,
+        "engineStopped": true
+      }
+    },
+    {
+      "name": "delayed-tw",
+      "runner": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "8e23aece11ae8dea46f3d2dc67a954e0c1b621857eaf43d83861fd31f82d94b3",
+        "simulationFile": "/tmp/htc-walking-20261024/meso/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          27300,
+          27301
+        ],
+        "bindPorts": [
+          27400,
+          27401
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 82.78,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 3956,
+          "bytes": 6176947
+        }
+      },
+      "acceptance": {
+        "passed": true,
+        "seed": 42,
+        "policy": "time-warp",
+        "horizon": 1800,
+        "personCompletedDistances": {
+          "43": 800.0,
+          "44": 800.0,
+          "45": 1700.0,
+          "46": 400.0
+        },
+        "personArrivalTicks": {
+          "43": 582,
+          "44": 582,
+          "45": 567,
+          "46": 296
+        },
+        "walkingCompletions": 7,
+        "walkingDistance": 2600.0,
+        "dailySummaries": 4,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "microBusEntries": 0,
+        "microBusExits": 0,
+        "physicalRows": 360,
+        "rollbacks": 14,
+        "engineStopped": true
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "reference": "meso-de",
+      "candidate": "meso-tw",
+      "passed": true,
+      "conservativeRows": 360,
+      "optimisticRows": 360,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "micro-de",
+      "candidate": "micro-tw",
+      "passed": true,
+      "conservativeRows": 1984,
+      "optimisticRows": 1984,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "before-de",
+      "candidate": "before-tw",
+      "passed": true,
+      "conservativeRows": 31,
+      "optimisticRows": 31,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "exact-de",
+      "candidate": "exact-tw",
+      "passed": true,
+      "conservativeRows": 35,
+      "optimisticRows": 35,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "delayed-de",
+      "candidate": "delayed-tw",
+      "passed": true,
+      "conservativeRows": 360,
+      "optimisticRows": 360,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "meso-de",
+      "candidate": "delayed-de",
+      "passed": true,
+      "conservativeRows": 360,
+      "optimisticRows": 360,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    },
+    {
+      "reference": "meso-tw",
+      "candidate": "delayed-tw",
+      "passed": true,
+      "conservativeRows": 360,
+      "optimisticRows": 360,
+      "differentConservativeRows": 0,
+      "differentOptimisticRows": 0,
+      "conservativeExamples": [],
+      "optimisticExamples": []
+    }
+  ],
+  "limitations": [
+    "Small loopback JSON scenarios; no city-scale performance conclusion.",
+    "MICRO cases exercise a Bus, with no private Car cohort.",
+    "Harness terminates JVMs after acknowledged engine stop; return codes do not prove clean JVM shutdown.",
+    "Unfinished walking distance is not estimated. Migration remains disabled.",
+    "Raw /tmp inputs and logs can disappear on reboot; tracked scripts reproduce the campaign."
+  ]
+}

@@ -5,7 +5,17 @@ scenario resources and warm-up readiness). The unfinished milestone was an accou
 dynamic-routing adapter. The validated routing milestone was committed and pushed
 as `6b59a5d` on `feat/time-warp`.
 
-The subsequent horizon/transit reporting milestone is complete and described in
+The walking-distance follow-up now checkpoints measured routes, counts completed
+walks in daily totals and preserves distance across multimodal leg transitions.
+Its full suite passes 614 tests in 131 suites. All ten bounded simulator cases
+pass, with seven identical full-report comparisons, including delayed two-JVM
+MESO execution. See [the walking contract](WALKING_DISTANCE.md) and
+[accepted evidence](validation/walking-distance-2026-10-24.json). Build log:
+`/tmp/htc-walking-full-build.log`; generated validation inputs and raw output:
+`/tmp/htc-walking-20261024/`.
+
+The preceding horizon/transit reporting milestone was committed and pushed as
+`c49b213` and is described in
 [the reporting contract](HORIZON_AND_TRANSIT_REPORTING.md). Its full test run passes
 605 tests across 130 suites (`/tmp/htc-horizon-pt-full-tests.log`). All 14 simulator
 cases pass independent physical acceptance, with eight matching full-report
@@ -38,10 +48,9 @@ are not accepted evidence; use the cases named in the final validation record.
 
 ## Remaining work after this milestone
 
-- Walking distance remains excluded from Person daily totals. Censored SUMO
-  records contain confirmed terminal fields, without invented waiting/lane/speed
-  statistics. Horizon finalization and PT/Subway reporting are now covered by the
-  reporting milestone above.
+- Censored SUMO records contain confirmed terminal fields, without invented
+  waiting/lane/speed statistics or partial-walk distance. Horizon finalization,
+  PT/Subway reporting and completed walking distance are covered above.
 - Replicated routing maps and full snapshots need measured memory/throughput
   validation before making city-scale or million-actor claims.
 - Multi-host partitions, coordinated recovery, ownership migration and arbitrary

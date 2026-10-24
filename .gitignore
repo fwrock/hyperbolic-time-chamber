@@ -52,6 +52,8 @@ scripts/scenario/*
 !scripts/scenario/generate_transit_reporting_validation_scenario.py
 !scripts/scenario/generate_horizon_vehicle_validation_scenario.py
 !scripts/scenario/validate_horizon_vehicle_reports.py
+!scripts/scenario/generate_walking_validation_scenario.py
+!scripts/scenario/validate_walking_reports.py
 
 ### VS Code ###
 .vscode/

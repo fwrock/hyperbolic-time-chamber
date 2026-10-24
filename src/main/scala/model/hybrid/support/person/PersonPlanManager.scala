@@ -149,20 +149,26 @@ class PersonPlanManager(
     metricsReporter.reportTripStarted(tripId, modeLabel(leg.mode), currentTick)
 
     val origin = physicalNodeIdBefore(state)
+    val accumulatedDistance = state.tripExecution match {
+      case t: TripExecutionState.Traveling => t.accumulatedDistance
+      case _ => 0.0
+    }
 
     leg match {
       case w: WalkLeg =>
         walkingHandler.initiateWalkingTrip(w, currentTick, logWarn) match {
-          case Some(arrivalTick) =>
+          case Some(progress) =>
             val traveling = TripExecutionState.Traveling(
               physicalNodeId = w.originNodeId,
               tripId = tripId,
               legStartTick = currentTick,
               ptWait = None,
               replanStrategyId = replanStrategyId,
-              replanAllowedModes = replanAllowedModes
+              replanAllowedModes = replanAllowedModes,
+              accumulatedDistance = accumulatedDistance,
+              walking = Some(progress)
             )
-            LegStarted(state.copy(cursor = next, tripExecution = traveling), Some(arrivalTick))
+            LegStarted(state.copy(cursor = next, tripExecution = traveling), Some(progress.arrivalTick))
           case None =>
             abortCurrentRun(next, state, currentTick, s"no walking route ${w.originNodeId} -> ${w.destinationNodeId}")
         }
@@ -176,7 +182,8 @@ class PersonPlanManager(
           legStartTick = currentTick,
           ptWait = None,
           replanStrategyId = replanStrategyId,
-          replanAllowedModes = replanAllowedModes
+          replanAllowedModes = replanAllowedModes,
+          accumulatedDistance = accumulatedDistance
         )
         LegStarted(state.copy(cursor = next, tripExecution = traveling), None)
 
@@ -189,7 +196,8 @@ class PersonPlanManager(
           legStartTick = currentTick,
           ptWait = Some(PTWaitState(currentTick, timeoutTick, t.alightingStop.nodeId, t.line)),
           replanStrategyId = replanStrategyId,
-          replanAllowedModes = replanAllowedModes
+          replanAllowedModes = replanAllowedModes,
+          accumulatedDistance = accumulatedDistance
         )
         LegStarted(state.copy(cursor = next, tripExecution = traveling), Some(timeoutTick))
     }
@@ -244,7 +252,7 @@ class PersonPlanManager(
       Map("event_type" -> "trip_aborted", "person_id" -> personId, "reason" -> reason, "tick" -> currentTick),
       "person_trip_aborted"
     )
-    step(state.copy(cursor = pr.cursorWithoutHead, tripExecution = TripExecutionState.Idle), currentTick)
+    abortToNextActivity(state.copy(cursor = pr.cursorWithoutHead), currentTick)
   }
 
   /** Called when a person, self-woken while [[TripExecutionState.Traveling]] with a live
@@ -259,7 +267,7 @@ class PersonPlanManager(
     resolved: Option[Either[NoViableJourney, List[AtomicLeg]]] = None
   ): PlanStepResult =
     state.tripExecution match {
-      case t @ TripExecutionState.Traveling(physicalNodeId, _, _, Some(ptWait), replanStrategyId, replanAllowedModes, _) =>
+      case t @ TripExecutionState.Traveling(physicalNodeId, _, _, Some(ptWait), replanStrategyId, replanAllowedModes, _, _) =>
         val waited = currentTick - ptWait.waitingSinceTick
         logWarn(s"$personId PT wait for line ${ptWait.line} timed out after $waited ticks — triggering replan")
 
@@ -349,11 +357,18 @@ class PersonPlanManager(
   def continueAfterWalkArrival(state: PersonState, currentTick: Tick): PlanStepResult =
     (state.cursor.executed.lastOption, state.tripExecution) match {
       case (Some(w: WalkLeg), t: TripExecutionState.Traveling) =>
-        walkingHandler.reportWalkingCompleted(currentTick - t.legStartTick, currentTick)
-        step(state.copy(tripExecution = t.copy(physicalNodeId = w.destinationNodeId)), currentTick)
+        val progress = t.walking.getOrElse(throw new IllegalStateException("walking arrival without recorded route distance"))
+        if (currentTick < progress.arrivalTick) LegStarted(state, Some(progress.arrivalTick))
+        else {
+          walkingHandler.reportWalkingCompleted(currentTick - t.legStartTick, currentTick, progress.distance)
+          metricsReporter.reportTripAndLegMetrics("walk", t.tripId, t.legStartTick, currentTick,
+            currentTick - t.legStartTick, Some(progress.distance), Some(0L), currentTick)
+          step(state.copy(tripExecution = t.copy(physicalNodeId = w.destinationNodeId,
+            accumulatedDistance = t.accumulatedDistance + progress.distance, walking = None)), currentTick)
+        }
       case _ =>
-        logWarn(s"$personId woke mid-travel but the last executed element was not a WalkLeg — resuming stepping anyway")
-        step(state, currentTick)
+        logWarn(s"$personId woke without an active walking leg — keeping its current plan position")
+        LegStarted(state, None)
     }
 
   /** Called on [[TripCompletedData]] from a private vehicle. */
@@ -519,11 +534,17 @@ class PersonPlanManager(
       "person_trip_aborted"
     )
     val (_, rest) = cursor.remaining.dropCurrentLegRun
-    step(state.copy(cursor = cursor.copy(remaining = rest), tripExecution = TripExecutionState.Idle), currentTick)
+    abortToNextActivity(state.copy(cursor = cursor.copy(remaining = rest)), currentTick)
   }
 
-  private def abortToNextActivity(state: PersonState, currentTick: Tick): PlanStepResult =
-    step(state.copy(tripExecution = TripExecutionState.Idle), currentTick)
+  private def abortToNextActivity(state: PersonState, currentTick: Tick): PlanStepResult = {
+    val completedDistance = state.tripExecution match {
+      case t: TripExecutionState.Traveling => t.accumulatedDistance
+      case _ => 0.0
+    }
+    step(state.copy(totalDistanceTraveled = state.totalDistanceTraveled + completedDistance,
+      tripExecution = TripExecutionState.Idle), currentTick)
+  }
 
   /** Send schedule complete notification to all owned vehicles. */
   def notifyVehiclesScheduleComplete(state: PersonState): Unit =

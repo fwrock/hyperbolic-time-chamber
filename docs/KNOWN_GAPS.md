@@ -4,6 +4,24 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Walking distance follow-up (2026-10-24)
+
+Person now checkpoints the actual walking route's measured distance and arrival
+tick, credits it only on arrival, and includes walking in leg metrics and daily
+totals. Transitions between access walks, rides, transfers and egress walks preserve
+the accumulated distance; the previous fresh-leg initialization reset that prefix.
+Aborts retain completed legs without counting a completed trip. An unfinished walk
+at the horizon remains uncounted, while an arrival exactly at the cap executes.
+
+The full suite passes **614 tests across 131 suites**, including nonzero walking
+checkpoint/replay, multimodal prefix preservation and failed-route/replan cases.
+All ten bounded simulator cases pass physical acceptance; all seven full-report
+comparisons match, including delayed two-JVM MESO and single-JVM MICRO Bus runs.
+See [the walking contract](WALKING_DISTANCE.md) and
+[machine-readable evidence](validation/walking-distance-2026-10-24.json) for scope
+and reproduction.
+This supersedes the walking exclusion in the historical milestone below.
+
 ## Horizon finalization and transit distance follow-up (2026-10-24)
 
 Production policies now authorize reporting at the globally closed final horizon
