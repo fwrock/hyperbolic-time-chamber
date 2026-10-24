@@ -57,8 +57,8 @@ class Bicycle(
 
   override protected def internStateStrings(s: BicycleState): BicycleState = {
     val copied = s.copy(
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
     // copy() only replicates BicycleState constructor params; restore MovableState vars
     // that are not in the constructor (otherwise they reset to their defaults).
@@ -76,34 +76,74 @@ class Bicycle(
     * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
     * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
     */
+  /** Adds this class's own link/signal-wait bookkeeping on top of `PrivateVehicle`'s
+    * `captureMigrationFields`. Same fix as `Car.scala`'s `captureCarMigrationFields`/
+    * `restoreCarMigrationFields` (see that doc for the full rationale) — `docs/
+    * TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07) found `currentLinkId`/
+    * `linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/`signalWaitNeedsReverify` uncaptured here
+    * too. Reuses `MigrationSnapshot`'s `vehicle*` fields (named generically, not `Car`-specific, for
+    * exactly this reuse) — `currentLinkLength` doesn't apply here (Bicycle doesn't track it), so
+    * that one field is simply left at its default (`0.0`) on capture and ignored on restore.
+    */
+  private def captureBicycleMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify
+    )
+
+  /** Restores what [[captureBicycleMigrationFields]] captured. */
+  private def restoreBicycleMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+  }
+
   override protected def buildMigrationSnapshot(): MigrationSnapshot =
-    captureMigrationFields(super.buildMigrationSnapshot())
+    captureBicycleMigrationFields(captureMigrationFields(super.buildMigrationSnapshot()))
 
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     super.applyMigrationSnapshot(snapshot)
     restoreMigrationFields(snapshot)
+    restoreBicycleMigrationFields(snapshot)
+  }
+
+  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported is actor-local, not
+  // `state`, so a Time Warp rollback restoring `state` never resets it -- without this, a trip
+  // whose completion already fired once before the rollback's target can never report its
+  // (corrected, replayed) completion again for the rest of the simulation.
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    journeyReporter.clearCompletionGuards()
   }
 
   /** Current link being traversed.
     */
-  private var currentLinkId: Option[String] = None
+  // protected, not private: lets BicycleLinkWaitMigrationSnapshotSpec drive these directly,
+  // same rationale as Car.scala's identical fields.
+  protected var currentLinkId: Option[Long] = None
 
   /** Link entry tick.
     */
-  private var linkEntryTick: Option[Tick] = None
+  protected var linkEntryTick: Option[Tick] = None
 
   /** MESO exit tick — the tick at which link traversal completes. Used to prevent stale
     * Waiting-poll ticks from triggering premature requestSignalState.
     */
-  private var mesoExitTick: Option[Tick] = None
+  protected var mesoExitTick: Option[Tick] = None
 
   /** Maximum simulation end tick - vehicles must finish by this tick. */
   private lazy val simulationEndTick: Tick =
     model.hybrid.util.VehicleSimulationConfig.simulationEndTick
 
-  private var signalWaitUntilTick: Option[Tick] = None
+  protected var signalWaitUntilTick: Option[Tick] = None
   // See Car.scala's signalWaitNeedsReverify for what this flags and why.
-  private var signalWaitNeedsReverify: Boolean = false
+  protected var signalWaitNeedsReverify: Boolean = false
 
   /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
     * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
@@ -159,7 +199,10 @@ class Bicycle(
     finishJourneyFn          = (reason, node) => journeyReporter.finishJourney(reason, node, state),
     setMesoExitTickFn        = t => mesoExitTick = t,
     getTripDestinationFn     = () => getTripDestination,
-    logDebugFn               = msg => logDebug(msg)
+    logDebugFn               = msg => logDebug(msg),
+    isTimeWarpFn             = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isAwaitingReplyFn        = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn    = key => consumeAwaitedReply(key)
   )
 
   private lazy val signalHandler = new BicycleSignalHandler(
@@ -180,7 +223,11 @@ class Bicycle(
     finishJourneyFn              = (reason, node) => journeyReporter.finishJourney(reason, node, state),
     onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
     setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t,
-    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
+    isTimeWarpFn                 = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    registerAwaitedReplyFn       = (key, kind) => registerAwaitedReply(key, kind),
+    isAwaitingReplyFn            = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn        = key => consumeAwaitedReply(key)
   )
 
   override protected def getVehicleStatus
@@ -199,7 +246,7 @@ class Bicycle(
   override protected def isVehicleStateNull: Boolean                     = state == null
   override protected def getCurrentDistance: Double = state.distance
   override protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -222,7 +269,7 @@ class Bicycle(
     */
   /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
     */
-  override protected def applyPrecomputedRoute(route: List[(String, String)]): Unit =
+  override protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit =
     state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
 
   override protected def resetTripState(): Unit = {
@@ -412,7 +459,10 @@ class Bicycle(
       journeyReporter.sumoRerouteNo += 1
     }
     try
-      GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue) match {
+      GPSUtil
+        .calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+
+        match {
         case Some((cost, pathQueue)) =>
           state.bestRoute = Some(pathQueue)
           state.bestCost = cost
@@ -460,8 +510,10 @@ class Bicycle(
     }
   }
 
-  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit =
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)
+  }
 
   private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
     microHandler.handleMicroUpdate(data, state)
@@ -479,7 +531,7 @@ class Bicycle(
     data: LinkInfoData
   ): Unit = linkHandler.handleLeaveLink(event.actorRefId, data, state)
 
-  private def finishJourney(reason: String, finalNode: String): Unit =
+  private def finishJourney(reason: String, finalNode: Long): Unit =
     journeyReporter.finishJourney(reason, finalNode, state)
 
   override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
@@ -493,7 +545,7 @@ class Bicycle(
     }
   }
 
-  override protected def onFinish(nodeId: String): Unit = {
+  override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
     onFinishPrivateVehicle(nodeId)
   }
@@ -503,7 +555,7 @@ class Bicycle(
     if (state != null && state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)
         .orElse(state.currentPath.map(_._2))
-        .getOrElse("unknown")
+        .getOrElse(0L)
       journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
       onFinishPrivateVehicle(fallbackNode)
     }

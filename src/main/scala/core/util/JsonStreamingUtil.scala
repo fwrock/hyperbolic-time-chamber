@@ -2,30 +2,44 @@ package org.interscity.htc
 package core.util
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.core.{JsonParser, JsonToken}
 import org.interscity.htc.core.entity.actor.ActorSimulation
 
 import java.io.InputStream
-import scala.jdk.CollectionConverters.*
 
 object JsonStreamingUtil {
   private val mapper = new ObjectMapper()
   mapper.registerModule(com.fasterxml.jackson.module.scala.DefaultScalaModule)
 
-  /** Creates a streaming parser over ActorSimulation objects from a JSON array.
-    *
-    * Reads the full InputStream into a byte[] before creating the parser to avoid a Jackson bug
-    * where the internal 4000-byte read buffer refill at exact multiples of 4000 bytes (e.g. offset
-    * 96000 = 4000×24) causes spurious parse errors on otherwise valid JSON.
-    */
+  /** The caller owns the parser and stream for the lifetime of the iterator. */
   def createParser(is: InputStream): (JsonParser, Iterator[ActorSimulation]) = {
-    val bytes = is.readAllBytes()
-    val parser = mapper.getFactory.createParser(bytes)
-    if (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.START_ARRAY) {
-      throw new IllegalStateException("JSON deve começar com '['")
+    val parser = mapper.getFactory.createParser(is)
+    require(parser.nextToken() == JsonToken.START_ARRAY, "Actor source JSON must start with '['")
+    // Own the array boundary explicitly: a MappingIterator positioned at END_ARRAY tries
+    // decoding it as a record. Per-record binding also works across stream buffer refills.
+    val iter = new Iterator[ActorSimulation] {
+      private var token = parser.nextToken()
+      private var endChecked = false
+      override def hasNext: Boolean = {
+        require(token != null, "Truncated actor source JSON array")
+        if (token == JsonToken.END_ARRAY) {
+          if (!endChecked) {
+            require(parser.nextToken() == null, "Trailing content after actor source JSON array")
+            endChecked = true
+          }
+          false
+        } else {
+          require(token == JsonToken.START_OBJECT, "Actor source JSON array must contain objects")
+          true
+        }
+      }
+      override def next(): ActorSimulation = {
+        if (!hasNext) throw new NoSuchElementException("End of actor source JSON array")
+        val actor = mapper.readValue(parser, classOf[ActorSimulation])
+        token = parser.nextToken()
+        actor
+      }
     }
-    parser.nextToken()
-    val iter = mapper.readValues[ActorSimulation](parser, classOf[ActorSimulation]).asScala
     (parser, iter)
   }
 }

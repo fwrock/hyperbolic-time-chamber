@@ -5,7 +5,9 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.actor.properties.Properties
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
-import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData }
+import model.hybrid.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData, TripCompletedData }
+import core.enumeration.CreationTypeEnum
+import core.util.JsonUtil
 import model.hybrid.entity.state.CarState
 import model.hybrid.entity.state.DriverAttributes
 import model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
@@ -60,23 +62,30 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     */
   private class TestCar(properties: Properties) extends Car(properties) {
     override protected def registerOnTimeManager(tick: Tick): Unit = ()
+    override protected def getActorEntityId: String = "101"
+    val sentPayloads = scala.collection.mutable.ArrayBuffer.empty[AnyRef]
+    override protected def sendVehicleMessage(
+      entityId: Long, shardId: String, data: AnyRef, eventType: String, actorType: CreationTypeEnum
+    ): Unit = { sentPayloads += data }
 
     def testSetState(s: CarState): Unit = state = s
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
     def testHandleStartTrip(event: ActorInteractionEvent, data: StartTripData): Unit = handleStartTrip(event, data)
     def testHandleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = handleParkVehicle(event, data)
-    def testGetTripOrigin: Option[String] = getTripOrigin
-    def testGetTripDestination: Option[String] = getTripDestination
+    def testGetTripOrigin: Option[Long] = getTripOrigin
+    def testGetTripDestination: Option[Long] = getTripDestination
     def testGetTripStartTick: Option[Tick] = getTripStartTick
     def testIsPersonCentric: Boolean = isPersonCentric
+    def testDriverAttributes: DriverAttributes = driverAttributes
+    def testCompleteTrip(): Unit = reportTripCompletion("reached_destination", 1002L)
   }
 
   private def freshParkedState(): CarState = {
     val s = CarState(
       startTick = 0L,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
@@ -91,11 +100,11 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     TestActorRef(new TestCar(Properties(entityId = entityId)), s"$entityId-$nextEntitySuffix").underlyingActor
   }
 
-  private def startTripEvent(personId: String, personClassType: String): (ActorInteractionEvent, StartTripData) = {
+  private def startTripEvent(personId: Long, personClassType: String): (ActorInteractionEvent, StartTripData) = {
     val data = StartTripData(
       personId = personId,
-      origin = "nodeA",
-      destination = "nodeB",
+      origin = 1001L,
+      destination = 1002L,
       driverAttributes = DriverAttributes(),
       startTick = 5L
     )
@@ -104,7 +113,7 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
       lamportTick = 5L,
       actorRefId = personId,
       shardRefId = personClassType,
-      actorPathRef = s"/user/$personId",
+      actorPathRef = s"/user/person-$personId",
       actorClassType = personClassType,
       data = data,
       resourceId = "res-1"
@@ -116,16 +125,16 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     val car = newTestCar("car-1")
     car.testSetState(freshParkedState())
 
-    val (event, data) = startTripEvent("person-1", "hybrid.actor.Person")
+    val (event, data) = startTripEvent(1L, "hybrid.actor.Person")
     car.testHandleStartTrip(event, data)
 
     val snapshot = car.testBuildMigrationSnapshot()
 
-    snapshot.ownerPersonRefId shouldBe "person-1"
+    snapshot.ownerPersonRefId shouldBe 1L
     snapshot.ownerPersonRefClassType shouldBe "hybrid.actor.Person"
     snapshot.personCentric shouldBe true
-    snapshot.tripOrigin shouldBe "nodeA"
-    snapshot.tripDestination shouldBe "nodeB"
+    snapshot.tripOrigin shouldBe 1001L
+    snapshot.tripDestination shouldBe 1002L
     snapshot.tripStartTick shouldBe 5L
     snapshot.destroyAfterNextPark shouldBe false
   }
@@ -136,17 +145,17 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
 
     val snapshot = car.testBuildMigrationSnapshot()
 
-    snapshot.ownerPersonRefId shouldBe ""
+    snapshot.ownerPersonRefId shouldBe 0L
     snapshot.personCentric shouldBe false
-    snapshot.tripOrigin shouldBe ""
-    snapshot.tripDestination shouldBe ""
+    snapshot.tripOrigin shouldBe 0L
+    snapshot.tripDestination shouldBe 0L
     snapshot.tripStartTick shouldBe Long.MinValue
   }
 
   "PrivateVehicle.applyMigrationSnapshot" should "restore the reply-linkage fields on a freshly-constructed actor" in {
     val sourceCar = newTestCar("car-3")
     sourceCar.testSetState(freshParkedState())
-    val (event, data) = startTripEvent("person-42", "hybrid.actor.Person")
+    val (event, data) = startTripEvent(42L, "hybrid.actor.Person")
     sourceCar.testHandleStartTrip(event, data)
 
     val snapshot = sourceCar.testBuildMigrationSnapshot()
@@ -154,13 +163,13 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     val rehydratedCar = newTestCar("car-3")
     rehydratedCar.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedCar.testGetTripOrigin shouldBe Some("nodeA")
-    rehydratedCar.testGetTripDestination shouldBe Some("nodeB")
+    rehydratedCar.testGetTripOrigin shouldBe Some(1001L)
+    rehydratedCar.testGetTripDestination shouldBe Some(1002L)
     rehydratedCar.testGetTripStartTick shouldBe Some(5L)
     rehydratedCar.testIsPersonCentric shouldBe true
 
     val rebuilt = rehydratedCar.testBuildMigrationSnapshot()
-    rebuilt.ownerPersonRefId shouldBe "person-42"
+    rebuilt.ownerPersonRefId shouldBe 42L
     rebuilt.ownerPersonRefClassType shouldBe "hybrid.actor.Person"
   }
 
@@ -176,17 +185,34 @@ class PrivateVehicleMigrationSnapshotSpec extends AnyFlatSpec with Matchers with
     rehydratedCar.testIsPersonCentric shouldBe false
   }
 
+  it should "restore the original reply identity and driver after another trip has overwritten them" in {
+    val car = newTestCar("101")
+    car.testSetState(freshParkedState())
+    val (event, data) = startTripEvent(42L, "hybrid.actor.Person")
+    val originalDriver = DriverAttributes(aggressiveness = 0.8, reactionTime = 1.4)
+    car.testHandleStartTrip(event.copy(seq = 11L), data.copy(driverAttributes = originalDriver))
+    val snapshot = JsonUtil.fromJson[MigrationSnapshot](JsonUtil.toJson(car.testBuildMigrationSnapshot()))
+
+    car.testSetState(freshParkedState())
+    car.testHandleStartTrip(event.copy(seq = 22L), data.copy(driverAttributes = DriverAttributes()))
+    car.testApplyMigrationSnapshot(snapshot)
+    car.testCompleteTrip()
+
+    car.sentPayloads.collect { case d: TripCompletedData => d.requestSeq }.toList shouldBe List(11L)
+    car.testDriverAttributes shouldBe originalDriver
+  }
+
   "PrivateVehicle migration round trip" should "preserve destroyAfterNextPark set by an owner's schedule-complete signal mid-trip" in {
     val car = newTestCar("car-5")
     car.testSetState(freshParkedState())
-    val (event, data) = startTripEvent("person-7", "hybrid.actor.Person")
+    val (event, data) = startTripEvent(7L, "hybrid.actor.Person")
     car.testHandleStartTrip(event, data)
 
     car.actInteractWith(
       ActorInteractionEvent(
         tick = 6L,
         lamportTick = 6L,
-        actorRefId = "person-7",
+        actorRefId = 7L,
         shardRefId = "hybrid.actor.Person",
         actorPathRef = "/user/person-7",
         actorClassType = "hybrid.actor.Person",

@@ -25,18 +25,30 @@ class CarSignalHandler(
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val scheduleEventFn: Tick => Unit,
   private val leavingLinkFn: () => Unit,
-  private val selfDestructFn: () => Unit,
-  private val isPersonCentricFn: () => Boolean,
   private val logWarnFn: String => Unit,
   private val logStaleEventDebugFn: String => Unit,
-  private val sendMessageFn: (String, String, AnyRef, String) => Unit,
-  private val getCurrentNodeFn: () => String,
-  private val getNextLinkFn: () => String,
-  private val getTripDestinationFn: () => Option[String],
+  private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  private val getCurrentNodeFn: () => Long,
+  private val getNextLinkFn: () => Long,
+  private val getTripDestinationFn: () => Option[Long],
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val setSignalWaitNeedsReverifyFn: Boolean => Unit,
-  private val onSignalWaitFn: Long => Unit
+  private val onSignalWaitFn: Long => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged; Car.scala's real construction site passes all
+  // four explicitly.
+  private val isTimeWarpFn: () => Boolean = () => false,
+  private val registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
+  private val isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  private val consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
+
+  /** Correlation key for the one outstanding `RequestLinkAccessData` -> `LinkAccessData` exchange
+    * for a given target link. Keyed on `linkId` (not e.g. entityId, which is constant per car) so a
+    * request to a *different* link never supersedes/consumes this one, while a second request to
+    * the *same* link correctly does (docs/TIME_WARP_DESIGN.md's rollback-orphaned-reply fix).
+    */
+  private def linkAccessAwaitKey(linkId: Long): String = s"link-access:$linkId"
 
   def requestSignalState(state: CarState): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
@@ -54,21 +66,21 @@ class CarSignalHandler(
 
     if (getTripDestinationFn().getOrElse(state.destination) == currentPathNode || routeDepleted) {
       leavingLinkFn()
-      if (!isPersonCentricFn()) selfDestructFn()
     } else {
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
-      if (nodeId != null) {
+      if (nodeId != 0L) {
         CityMapUtil.nodesById.get(nodeId) match {
           case Some(node) =>
             val linkId = getNextLinkFn()
-            if (linkId != null) {
+            if (linkId != 0L) {
               sendMessageFn(
                 node.id,
                 node.classType,
                 RequestLinkAccessData(targetLinkId = linkId),
                 EventTypeEnum.RequestLinkAccess.toString
               )
+              registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
               onFinishSpontaneousFn(None)
             } else {
               leavingLinkFn()
@@ -82,14 +94,38 @@ class CarSignalHandler(
     }
   }
 
-  def handleLinkAccess(data: LinkAccessData, state: CarState): Unit = {
-    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
-      logStaleEventDebugFn(
-        s"${entityIdFn()}: Ignoring stale LinkAccessData " +
-          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
+  /** @param eventTick the sender's tick for this reply (`ActorInteractionEvent.tick`) -- logged,
+    *   not otherwise used, to diagnose the suspected Time-Warp rollback/reply-drop mechanism
+    *   (`docs/TIME_WARP_DESIGN.md` §10): a rollback that restores `state.status` from before this
+    *   reply's originating `RequestLinkAccess` was sent can make a genuinely-awaited reply look
+    *   "stale" to the guard below, even though the request it answers was never retracted.
+    * @param eventSeq the sender's Time-Warp send sequence (`ActorInteractionEvent.seq`), logged for
+    *   the same reason; `0L` outside Time Warp.
+    */
+  def handleLinkAccess(data: LinkAccessData, state: CarState, eventTick: Tick = 0L, eventSeq: Long = 0L): Unit = {
+    val linkId = getNextLinkFn()
+    val awaitKey = linkAccessAwaitKey(linkId)
+    val isStale =
+      if (isTimeWarpFn())
+        !isAwaitingReplyFn(awaitKey, "LinkAccessData", data.requestSeq)
+      else
+        state.status != WaitingSignalState && state.status != WaitingCapacity
+    if (isStale) {
+      logWarnFn(
+        s"${entityIdFn()}: Ignoring stale LinkAccessData at currentTick=${currentTickFn()} " +
+          s"(eventTick=$eventTick, eventSeq=$eventSeq, actual state.status=${state.status}, " +
+          s"expected WaitingSignalState/WaitingCapacity) -- possible rollback-orphaned reply, see " +
+          s"docs/TIME_WARP_DESIGN.md §10"
       )
       return
     }
+
+    // Full/WaitingCapacity is NOT a terminal reply: NodeEventHandler buffers this request and
+    // sends a second, unsolicited LinkAccessData later (the capacity-freed grant) for the SAME
+    // key -- consuming here would make that later, genuinely-awaited reply look stale. Every other
+    // branch below resolves the wait (self-schedules via scheduleEventFn instead), so it's safe to
+    // consume there.
+    if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
       val tick = currentTickFn()
@@ -137,7 +173,7 @@ class CarSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

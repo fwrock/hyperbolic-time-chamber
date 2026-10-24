@@ -22,22 +22,22 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
   private def newBicycleState(): BicycleState =
     BicycleState(
       startTick = 0L,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Bicycle,
       size = 2.0
     )
 
   private def newHandler(reported: mutable.ArrayBuffer[Map[String, Any]]): (BicycleMicroHandler, BicycleJourneyReporter) = {
-    var currentLinkId: Option[String] = None
+    var currentLinkId: Option[Long] = None
     var linkEntryTick: Option[Tick] = None
 
     val journeyReporter = new BicycleJourneyReporter(
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:bicycle;bike_test",
       currentTickFn = () => 0L,
-      tripOriginFn = () => Some("n_origin"),
-      tripDestFn = () => Some("n_dest"),
+      tripOriginFn = () => Some(1L),
+      tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
       driverAttrsFn = () => DriverAttributes()
     )
@@ -62,7 +62,7 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
     (handler, journeyReporter)
   }
 
-  private def enterLinkData(linkId: String, speedLimitKmh: Double = 30.0): MicroEnterLinkData =
+  private def enterLinkData(linkId: Long, speedLimitKmh: Double = 30.0): MicroEnterLinkData =
     MicroEnterLinkData(
       linkId = linkId,
       mode = SimulationModeEnum.MICRO,
@@ -79,7 +79,7 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBicycleState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     state.microState.map(_.velocity) shouldBe Some(0.0)
   }
@@ -89,10 +89,10 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBicycleState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_ab"), state)
+    handler.handleMicroEnterLink(enterLinkData(101L), state)
     handler.handleMicroLeaveLink(
       MicroLeaveLinkData(
-        linkId = "link_ab",
+        linkId = 101L,
         finalPosition = 300.0,
         finalVelocity = 4.2,
         travelTime = 60.0,
@@ -102,7 +102,7 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
       state
     )
 
-    handler.handleMicroEnterLink(enterLinkData("link_bc"), state)
+    handler.handleMicroEnterLink(enterLinkData(102L), state)
 
     state.microState.map(_.velocity) shouldBe Some(4.2)
   }
@@ -112,7 +112,7 @@ class BicycleMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBicycleState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     val enterEvent = reported.find(_.get("event_type").contains("enter_micro_link"))
     enterEvent shouldBe defined

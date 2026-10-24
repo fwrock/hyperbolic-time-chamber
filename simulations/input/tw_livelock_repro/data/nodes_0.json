@@ -1,0 +1,206 @@
+[
+  {
+    "id": 1,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.55,
+        "longitude": -46.63,
+        "links": [
+          10,
+          12
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 2,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.55,
+        "longitude": -46.627,
+        "links": [
+          11,
+          14,
+          16
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 3,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.55,
+        "longitude": -46.624,
+        "links": [
+          15,
+          18
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 4,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.547,
+        "longitude": -46.63,
+        "links": [
+          13,
+          20,
+          22
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 5,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.547,
+        "longitude": -46.627,
+        "links": [
+          17,
+          21,
+          24,
+          26
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 6,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.547,
+        "longitude": -46.624,
+        "links": [
+          19,
+          25,
+          28
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 7,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.544,
+        "longitude": -46.63,
+        "links": [
+          23,
+          30
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 8,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.544,
+        "longitude": -46.627,
+        "links": [
+          27,
+          31,
+          32
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  },
+  {
+    "id": 9,
+    "typeActor": "hybrid.actor.Node",
+    "data": {
+      "dataType": "model.hybrid.entity.state.NodeState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "latitude": -23.544,
+        "longitude": -46.624,
+        "links": [
+          29,
+          33
+        ],
+        "connections": {},
+        "signals": {},
+        "busStops": {},
+        "subwayStations": {}
+      }
+    },
+    "dependencies": {}
+  }
+]

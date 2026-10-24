@@ -28,20 +28,23 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
       capacity = 40,
       busStops = Map.empty,
       numberOfPorts = 2,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Bus,
       size = 12.0
     )
 
-  private def newHandler(reported: mutable.ArrayBuffer[Map[String, Any]]): (BusMicroHandler, BusJourneyReporter) = {
-    var currentLinkId: Option[String] = None
+  private def newHandler(reported: mutable.ArrayBuffer[Map[String, Any]],
+    signal: () => Unit = () => (), finish: Option[Tick] => Unit = _ => ()): (BusMicroHandler, BusJourneyReporter) = {
+    var currentLinkId: Option[Long] = None
     var linkEntryTick: Option[Tick] = None
 
+    val journey = org.interscity.htc.model.hybrid.entity.state.BusJourneyState()
     val journeyReporter = new BusJourneyReporter(
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:bus;bus_test",
-      currentTickFn = () => 0L
+      currentTickFn = () => 0L,
+      journeyStateFn = () => journey
     )
 
     val handler = new BusMicroHandler(
@@ -49,7 +52,8 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
       entityIdFn = () => "htcaid:bus;bus_test",
       currentTickFn = () => 0L,
       journeyReporter = journeyReporter,
-      onFinishSpontaneousFn = _ => (),
+      onFinishSpontaneousFn = finish,
+      requestSignalStateFn = signal,
       logDebugFn = _ => (),
       setCurrentLinkIdFn = v => currentLinkId = v,
       setLinkEntryTickFn = v => linkEntryTick = v,
@@ -64,7 +68,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     (handler, journeyReporter)
   }
 
-  private def enterLinkData(linkId: String, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
+  private def enterLinkData(linkId: Long, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
     MicroEnterLinkData(
       linkId = linkId,
       mode = SimulationModeEnum.MICRO,
@@ -81,7 +85,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     state.microState.map(_.velocity) shouldBe Some(0.0)
   }
@@ -91,10 +95,10 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_ab"), state)
+    handler.handleMicroEnterLink(enterLinkData(101L), state)
     handler.handleMicroLeaveLink(
       MicroLeaveLinkData(
-        linkId = "link_ab",
+        linkId = 101L,
         finalPosition = 300.0,
         finalVelocity = 9.5,
         travelTime = 30.0,
@@ -104,7 +108,7 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
       state
     )
 
-    handler.handleMicroEnterLink(enterLinkData("link_bc"), state)
+    handler.handleMicroEnterLink(enterLinkData(102L), state)
 
     state.microState.map(_.velocity) shouldBe Some(9.5)
   }
@@ -114,10 +118,34 @@ class BusMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newBusState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     val enterEvent = reported.find(_.get("event_type").contains("enter_micro_link"))
     enterEvent shouldBe defined
     enterEvent.get("initial_velocity") shouldBe 0.0
+  }
+
+  "handleMicroLeaveLink" should "hand the completed path to signal cleanup once without directly rescheduling Ready" in {
+    val reports = mutable.ArrayBuffer.empty[Map[String, Any]]
+    val state = newBusState()
+    state.currentPath = Some(101L -> 2L)
+    var signals = 0
+    var finishes = 0
+    val (handler, _) = newHandler(reports, signal = () => {
+      signals += 1
+      state.currentPath shouldBe Some(101L -> 2L)
+      state.movableLinkExitReported shouldBe true
+      state.isMicroMode shouldBe false
+    }, finish = _ => finishes += 1)
+    handler.handleMicroEnterLink(enterLinkData(101L), state)
+    finishes = 0
+    val exit = MicroLeaveLinkData(linkId = 101L, finalPosition = 300.0,
+      finalVelocity = 9.5, travelTime = 30.0, distanceTraveled = 300.0, averageSpeed = 10.0)
+    handler.handleMicroLeaveLink(exit, state)
+    handler.handleMicroLeaveLink(exit, state)
+    signals shouldBe 1
+    finishes shouldBe 0
+    state.distance shouldBe 300.0
+    reports.count(_.get("event_type").contains("leave_micro_link")) shouldBe 1
   }
 }

@@ -85,7 +85,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
       velocity = 8.0,
       acceleration = 0.5,
       currentLane = 1,
-      leaderVehicle = Some("car-99"),
+      leaderVehicle = Some(99L),
       gapToLeader = 5.0,
       leaderVelocity = 7.5,
       safeVelocity = 8.2
@@ -105,8 +105,8 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
 
     val original = BusLoadPassengerData(
       people = mutable.Buffer(
-        Identify(id = "person-1", classType = "Person"),
-        Identify(id = "person-2", classType = "Person")
+        Identify(id = 1L, classType = "Person"),
+        Identify(id = 2L, classType = "Person")
       )
     )
 
@@ -121,7 +121,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val serialization = SerializationExtension(system)
 
     val original = BusRequestUnloadPassengerData(
-      nodeId = "node-1",
+      nodeId = 1L,
       nodeRef = system.deadLetters
     )
 

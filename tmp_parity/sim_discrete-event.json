@@ -1,0 +1,157 @@
+{
+  "id": "tw_livelock_repro",
+  "name": "Hybrid grid smoke-test scenario (3x3)",
+  "description": "Generated 3x3 grid: 24 links (0 MICRO), 30 persons (2 trips/day each), 20 car(s), 5 bicycle(s), 5 motorcycle(s), 1 bus line(s), 0 subway line(s), seed=42.",
+  "startTick": 0,
+  "endTick": 3600,
+  "startRealTime": "2025-01-01T00:00:00.000",
+  "timeUnit": "seconds",
+  "timeStep": 1.0,
+  "duration": 3600,
+  "tickDuration": 1.0,
+  "randomSeed": 42,
+  "actorsDataSources": [
+    {
+      "id": "nodes_0",
+      "classType": "hybrid.actor.Node",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/nodes_0.json"
+        }
+      }
+    },
+    {
+      "id": "links_0",
+      "classType": "hybrid.actor.Link",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/links_0.json"
+        }
+      }
+    },
+    {
+      "id": "persons_0",
+      "classType": "hybrid.actor.Person",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/persons_0.json"
+        }
+      }
+    },
+    {
+      "id": "cars_0",
+      "classType": "hybrid.actor.Car",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/cars_0.json"
+        }
+      }
+    },
+    {
+      "id": "bus_stops_0",
+      "classType": "hybrid.actor.BusStop",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/bus_stops_0.json"
+        }
+      }
+    },
+    {
+      "id": "bus_stations_0",
+      "classType": "hybrid.actor.BusStation",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/bus_stations_0.json"
+        }
+      }
+    },
+    {
+      "id": "subway_stations_0",
+      "classType": "hybrid.actor.SubwayStation",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/subway_stations_0.json"
+        }
+      }
+    },
+    {
+      "id": "rail_links_0",
+      "classType": "hybrid.actor.RailLink",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "EAGER",
+      "entityLifecycle": "STATIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/rail_links_0.json"
+        }
+      }
+    },
+    {
+      "id": "bicycles_0",
+      "classType": "hybrid.actor.Bicycle",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/bicycles_0.json"
+        }
+      }
+    },
+    {
+      "id": "motorcycles_0",
+      "classType": "hybrid.actor.Motorcycle",
+      "creationType": "LoadBalancedDistributed",
+      "loadingStrategy": "PROGRESSIVE",
+      "entityLifecycle": "DYNAMIC",
+      "dataSource": {
+        "sourceType": "json",
+        "info": {
+          "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/motorcycles_0.json"
+        }
+      }
+    }
+  ],
+  "cityMapFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/city_map.json",
+  "warmupTargets": [
+    "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
+  ],
+  "postLoadRegistrationClasses": [
+    "org.interscity.htc.model.hybrid.actor.BusStop",
+    "org.interscity.htc.model.hybrid.actor.BusStation",
+    "org.interscity.htc.model.hybrid.actor.SubwayStation"
+  ],
+  "transitMapFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/transit_map.json",
+  "transitRoutesFile": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/simulations/input/tw_livelock_repro/data/transit_routes.json",
+  "timeManagerType": "discrete-event"
+}

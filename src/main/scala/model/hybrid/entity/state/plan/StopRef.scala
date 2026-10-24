@@ -7,7 +7,7 @@ package model.hybrid.entity.state.plan
   * consistent with the project rule that simulation state must not carry live actor references.
   */
 final case class StopRef(
-  actorId: String,
+  actorId: Long,
   actorClassType: String,
-  nodeId: String
+  nodeId: Long
 )

@@ -208,7 +208,19 @@ class ParquetReportData(
       case e: Exception =>
         logError(s"Failed to write Parquet report: ${e.getMessage}", e)
         closeWriter()
+        throw e
     }
+  }
+
+  override protected def flushCommittedReports(): scala.concurrent.Future[Unit] = {
+    flushBuffer()
+    if (writer != null) { writer.close(); writer = null }
+    val path = Paths.get(currentFilePath)
+    if (Files.exists(path)) {
+      val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
+      try channel.force(true) finally channel.close()
+    }
+    scala.concurrent.Future.successful(())
   }
 
   override def postStop(): Unit = {

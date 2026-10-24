@@ -3,9 +3,10 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
+import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegister, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
 
@@ -65,8 +66,8 @@ case class LinkState(
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
   scheduleOnTimeManager: Boolean = false,
-  from: String,
-  to: String,
+  from: Long,
+  to: Long,
   length: Double,
   lanes: Int,
   speedLimit: Double,
@@ -78,8 +79,10 @@ case class LinkState(
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,
+  @JsonDeserialize(keyAs = classOf[java.lang.Integer])
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
-  laneConfigurations: List[LaneConfig] = List.empty
+  laneConfigurations: List[LaneConfig] = List.empty,
+  metrics: LinkMetricsState = LinkMetricsState()
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
@@ -144,8 +147,8 @@ object LinkState {
   /** Create a hybrid link in MESO mode (default, backward compatible) */
   def createMeso(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,
@@ -167,8 +170,8 @@ object LinkState {
   /** Create a hybrid link in MICRO mode with initialized lane structure */
   def createMicro(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,

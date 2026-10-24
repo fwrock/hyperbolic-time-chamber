@@ -8,14 +8,11 @@ import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.types.Tick
 import core.actor.trace.ActorTrace
 import scala.collection.mutable
-import scala.concurrent.{ Await, ExecutionContext, Future }
-import scala.concurrent.duration.*
 
 class BusStationRouteCalculator(
   getStateFn:      () => BusStationState,
   entityIdFn:      () => String,
   currentTickFn:   () => Tick,
-  getBlockingEcFn: () => ExecutionContext,
   logInfoFn:       String => Unit,
   logWarnFn:       String => Unit,
   logDebugFn:      String => Unit
@@ -23,28 +20,15 @@ class BusStationRouteCalculator(
 
   private def state: BusStationState = getStateFn()
 
-  def orderedBusStopIds: List[String] = {
-    def suffixNumber(id: String): Option[Long] = {
-      val digits = id.reverse.takeWhile(_.isDigit).reverse
-      if (digits.nonEmpty) Some(digits.toLong) else None
-    }
-    state.busStops.keys.toList.sortBy { id =>
-      suffixNumber(id) match {
-        case Some(num) => (0L, num, id)
-        case None      => (1L, Long.MaxValue, id)
-      }
-    }
-  }
+  def orderedBusStopIds: List[Long] = state.busStops.keys.toList.sorted
 
-  private def mkRouteFutures(stops: List[String], going: Boolean)(implicit
-    ec: ExecutionContext
-  ): List[Future[Option[(SubRoutePair, mutable.Queue[(Identify, Identify)])]]] =
+  private def calculateSegments(stops: List[Long], going: Boolean): List[Option[(SubRoutePair, mutable.Queue[(Identify, Identify)])]] =
     stops.sliding(2).toList.map { pair =>
       val originStop = pair.head
       val destStop   = pair.last
       (state.busStops.get(originStop), state.busStops.get(destStop)) match {
         case (Some(originNode), Some(destNode)) =>
-          Future {
+          locally {
             // Bounded expansion budget: enough for city-block inter-stop routes without
             // risking dirty-array overflow on fully disconnected subgraphs.
             GPSUtil.calcRouteCompact(originId = originNode, destinationId = destNode, maxExpansions = 500_000) match {
@@ -59,24 +43,17 @@ class BusStationRouteCalculator(
         case (originOpt, destOpt) =>
           if (originOpt.isEmpty) logWarnFn(s"Origin bus stop $originStop has no node mapping")
           if (destOpt.isEmpty)   logWarnFn(s"Destination bus stop $destStop has no node mapping")
-          Future.successful(None)
+          None
       }
     }
 
   def calculateRoutes(): Unit = {
-    logDebugFn(s"BusStation ${entityIdFn()} calculating routes in parallel")
+    logDebugFn(s"BusStation ${entityIdFn()} calculating routes")
 
-    implicit val blockingEc: ExecutionContext = getBlockingEcFn()
-
-    val goingFutures  = mkRouteFutures(orderedBusStopIds, going = true)
-    val returnFutures = mkRouteFutures(orderedBusStopIds.reverse, going = false)
-
-    val (goingResults, returnResults) = scala.concurrent.blocking {
-      (
-        Await.result(Future.sequence(goingFutures), 30.minutes).flatten,
-        Await.result(Future.sequence(returnFutures), 30.minutes).flatten
-      )
-    }
+    // Route observations must stay in the owning event's read journal. Worker-thread
+    // futures lose that context, and awaiting them blocks the actor's control mailbox.
+    val goingResults = calculateSegments(orderedBusStopIds, going = true).flatten
+    val returnResults = calculateSegments(orderedBusStopIds.reverse, going = false).flatten
 
     goingResults.foreach  { case (pair, path) => state.goingRoute.foreach(_.put(pair, path))     }
     returnResults.foreach { case (pair, path) => state.returningRoute.foreach(_.put(pair, path)) }

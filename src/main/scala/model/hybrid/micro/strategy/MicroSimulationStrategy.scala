@@ -47,7 +47,7 @@ trait MicroSimulationStrategy {
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double],
+    vehicleWaitingSeconds: mutable.Map[Long, Double],
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
   ): Seq[MicroVehicleUpdate]
 
@@ -83,7 +83,7 @@ trait MicroSimulationStrategy {
     */
   def selectEntryLane(
     vehiclesByLane: mutable.Map[Int, mutable.Queue[VehicleInLane]],
-    vehicleId: String,
+    vehicleId: Long,
     vehicleLength: Double
   ): Int =
     if (vehiclesByLane.isEmpty) 0
@@ -116,14 +116,14 @@ trait MicroSimulationStrategy {
   *   Safe velocity calculated by car-following model
   */
 case class MicroVehicleUpdate(
-  vehicleId: String,
+  vehicleId: Long,
   shardId: String,
   subTick: Int,
   position: Double,
   velocity: Double,
   acceleration: Double,
   currentLane: Int,
-  leaderVehicle: Option[String],
+  leaderVehicle: Option[Long],
   gapToLeader: Double,
   leaderVelocity: Double,
   safeVelocity: Double,

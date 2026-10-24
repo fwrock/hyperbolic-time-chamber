@@ -24,8 +24,10 @@ import scala.util.{Failure, Success}
 class LoadDataManager(
   val timeSingletonManager: ActorRef,
   val poolTimeManager: ActorRef,
+  val timeManagerType: String,
   val simulationManager: ActorRef,
-  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+  val runtimeCoordinator: Option[ActorRef] = None
 ) extends BaseManager[DefaultState](
       timeManager = timeSingletonManager,
       actorId = "load-data-manager"
@@ -169,7 +171,7 @@ class LoadDataManager(
             Properties(
               entityId = s"loader-${source.dataSource.hashCode()}",
               resourceId = "",
-              timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+              timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
               creatorManager = null,
               reporters = mutable.Map.empty
             )
@@ -201,7 +203,8 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-load-data",
             loadDataManager = getSelfProxy,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            runtimeCoordinator = runtimeCoordinator,
             reporters = reporters,
             postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
@@ -228,7 +231,8 @@ class LoadDataManager(
           CreatorProperties(
             entityId = "creator-pool-load-data",
             loadDataManager = getSelfProxy,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            runtimeCoordinator = runtimeCoordinator,
             reporters = reporters,
             postLoadCoordinator = postLoadRegistrationManagerProxy,
             postLoadRegistrationClasses = postLoadRegistrationClassesConfig
@@ -312,14 +316,18 @@ object LoadDataManager {
   def props(
     timeSingletonManager: ActorRef,
     poolTimeManager: ActorRef,
+    timeManagerType: String,
     simulationManager: ActorRef,
-    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+    runtimeCoordinator: Option[ActorRef] = None
   ): Props =
     Props(
       classOf[LoadDataManager],
       timeSingletonManager,
       poolTimeManager,
+      timeManagerType,
       simulationManager,
-      poolReporters
+      poolReporters,
+      runtimeCoordinator
     )
 }

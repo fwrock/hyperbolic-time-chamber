@@ -17,8 +17,8 @@ class TrafficSignalPhaseHandler(
   currentTickFn:  () => Tick,
   simulationEnd:  Tick,
   reportFn:       (Map[String, Any], String) => Unit,
-  sendMessageFn:  (String, String, AnyRef, String) => Unit,
-  getDependencyFn: String => ShardActorId,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getDependencyFn: Long => ShardActorId,
   scheduleNextFn:  Tick => Unit,
   finishFn:        () => Unit,
   logDebugFn:      String => Unit
@@ -69,8 +69,8 @@ class TrafficSignalPhaseHandler(
 
   private def notifyNodes(
     signalState: SignalState,
-    nodes:       List[String],
-    phaseOrigin: String,
+    nodes:       List[Long],
+    phaseOrigin: Long,
     nextTick:    Tick
   ): Unit = {
     reportFn(

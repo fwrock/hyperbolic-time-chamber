@@ -74,8 +74,8 @@ final class RaptorMultiModalEngine extends ModeDecisionEngine {
     else Right(())
 
   override def decide(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     request: ModeDecisionRequest,
     ctx: DecisionContext
   ): Either[NoViableJourney, List[AtomicLeg]] =
@@ -127,8 +127,8 @@ object RaptorMultiModalEngine {
     * `result.legs` is non-empty.
     */
   def translateResult(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     result: RaptorRouter.RaptorResult
   ): List[AtomicLeg] = {
     val legs = result.legs

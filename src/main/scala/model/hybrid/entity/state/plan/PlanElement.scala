@@ -52,7 +52,7 @@ sealed trait ExecutedElement extends PlanElement
   */
 final case class Activity(
   activityType: String,
-  nodeId: String,
+  nodeId: Long,
   endTime: EndTimeSpec
 ) extends ExecutedElement
 
@@ -70,9 +70,9 @@ sealed trait AtomicLeg extends ExecutedElement {
   * so the walk doesn't need to re-run routing at execution time.
   */
 final case class WalkLeg(
-  originNodeId: String,
-  destinationNodeId: String,
-  precomputedRoute: Option[List[(String, String)]] = None
+  originNodeId: Long,
+  destinationNodeId: Long,
+  precomputedRoute: Option[List[(Long, Long)]] = None
 ) extends AtomicLeg {
   val mode: ConcreteMode = ConcreteMode.Walk
 }

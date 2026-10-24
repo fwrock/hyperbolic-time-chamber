@@ -1,6 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
+import org.interscity.htc.core.actor.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
@@ -18,24 +19,24 @@ object GPSUtil {
     * Stores List (not Queue) so each caller gets a fresh Queue copy.
     * Thread-safe ConcurrentHashMap; None value means "no route exists".
     */
-  private val routeCache: java.util.concurrent.ConcurrentHashMap[String, Option[(Double, List[(String, String)])]] =
+  private val routeCache: java.util.concurrent.ConcurrentHashMap[(Long, Long, Boolean), Option[(Double, List[(Long, Long)])]] =
     new java.util.concurrent.ConcurrentHashMap()
 
-  /** Negative cache: pairs (origin, dest) for which no route was ever found.
+  /** Negative cache: pairs (origin, dest, isWalking) for which no route was ever found.
     * Prevents repeated expensive searches on disconnected node pairs.
     * Thread-safe; bounded to 100K entries to avoid unbounded memory growth.
     */
-  private val noRouteCache: java.util.concurrent.ConcurrentHashMap.KeySetView[String, java.lang.Boolean] =
-    java.util.concurrent.ConcurrentHashMap.newKeySet[String]()
+  private val noRouteCache: java.util.concurrent.ConcurrentHashMap.KeySetView[(Long, Long, Boolean), java.lang.Boolean] =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[(Long, Long, Boolean)]()
   private val NO_ROUTE_CACHE_MAX = 100_000
 
-  private def noRouteCacheKey(originId: String, destinationId: String): String =
-    s"$originId|$destinationId"
+  private def noRouteCacheKey(originId: Long, destinationId: Long): (Long, Long, Boolean) =
+    (originId, destinationId, false)
 
-  private def isNoRouteKnown(originId: String, destinationId: String): Boolean =
+  private def isNoRouteKnown(originId: Long, destinationId: Long): Boolean =
     noRouteCache.contains(noRouteCacheKey(originId, destinationId))
 
-  private def markNoRoute(originId: String, destinationId: String): Unit =
+  private def markNoRoute(originId: Long, destinationId: Long): Unit =
     if (noRouteCache.size() < NO_ROUTE_CACHE_MAX)
       noRouteCache.add(noRouteCacheKey(originId, destinationId))
 
@@ -52,10 +53,10 @@ object GPSUtil {
     *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
     */
   def calcRoute(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) {
       return Some((0.0, mutable.Queue.empty))
@@ -146,10 +147,10 @@ object GPSUtil {
   private val MAX_ROUTE_EXPANSIONS = 150_000
 
   def calcRouteALT(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) {
       return Some((0.0, mutable.Queue.empty))
@@ -176,7 +177,7 @@ object GPSUtil {
           maxExpansions = MAX_ROUTE_EXPANSIONS
         ) match {
           case Some((staticCost, path)) =>
-            val routeQueue = mutable.Queue[(String, String)]()
+            val routeQueue = mutable.Queue[(Long, Long)]()
             path.foreach {
               case (edgeObject, targetNodeOfEdgeInPath) =>
                 routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
@@ -227,10 +228,10 @@ object GPSUtil {
     *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
     */
   def calcRouteAStar(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) {
       return Some((0.0, mutable.Queue.empty))
@@ -244,7 +245,7 @@ object GPSUtil {
       case (Some(originNode), Some(destinationNode)) =>
         CityMapUtil.cityMap.aStarEdgeTargetsOptimized(originNode, destinationNode, heuristicFunc) match {
           case Some((staticCost, path)) =>
-            val routeQueue = mutable.Queue[(String, String)]()
+            val routeQueue = mutable.Queue[(Long, Long)]()
             path.foreach {
               case (edgeObject, targetNodeOfEdgeInPath) =>
                 routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
@@ -294,9 +295,9 @@ object GPSUtil {
     *   Option contendo (custo estático, fila de rota) ou None se a rota não for encontrada.
     */
   def calcRouteCHAStar(
-    originId: String,
-    destinationId: String
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+    originId: Long,
+    destinationId: Long
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
@@ -308,7 +309,7 @@ object GPSUtil {
       case (Some(originNode), Some(destinationNode)) =>
         CityMapUtil.chIndex.queryAStar(originNode, destinationNode, heuristicFunc) match {
           case Some((cost, path)) =>
-            val routeQueue = mutable.Queue[(String, String)]()
+            val routeQueue = mutable.Queue[(Long, Long)]()
             path.foreach {
               case (edgeLabel, targetNode) =>
                 routeQueue.enqueue((edgeLabel.id, targetNode.id))
@@ -359,11 +360,11 @@ object GPSUtil {
     *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
     */
   def calcRouteCHAStarAdaptive(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     currentTick: Int,
     policy: CHRebuildPolicy = CHRebuildPolicy.fromConfig
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
@@ -377,7 +378,7 @@ object GPSUtil {
           .getOrRebuildCHIndex(currentTick, policy)
           .queryAStar(originNode, destinationNode, heuristicFunc) match {
           case Some((cost, path)) =>
-            val routeQueue = mutable.Queue[(String, String)]()
+            val routeQueue = mutable.Queue[(Long, Long)]()
             path.foreach {
               case (edgeLabel, targetNode) =>
                 routeQueue.enqueue((edgeLabel.id, targetNode.id))
@@ -426,15 +427,34 @@ object GPSUtil {
     * @return Option contendo (custo, Queue[(linkId, nodeId)]) ou None se não houver rota.
     */
   def calcRouteCompact(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.compact:$originId:$destinationId:$useDynamicWeights:$maxExpansions") {
+      calcRouteCompactLive(originId, destinationId, useDynamicWeights, maxExpansions)
+    }
+
+  private[util] def observeRoute(key: String)(live: => Option[(Double, mutable.Queue[(Long, Long)])])
+    : Option[(Double, mutable.Queue[(Long, Long)])] = {
+    if (!EventReadJournal.isActive) return live
+    val frozen = EventReadJournal.read(key) {
+      live.map { case (cost, path) => (cost, path.toVector) }
+    }
+    frozen.map { case (cost, path) => (cost, mutable.Queue.from(path)) }
+  }
+
+  private def calcRouteCompactLive(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean,
+    maxExpansions: Int
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
-    val cacheKey = s"$originId|$destinationId"
+    val cacheKey = (originId, destinationId, false)
 
     // Negative cache: avoid repeating searches that previously found no route.
     if (isNoRouteKnown(originId, destinationId)) {
@@ -469,7 +489,13 @@ object GPSUtil {
         (u, t) => cli.heuristic(u, t),
         useDynamicWeights,
         maxExpansions,
-        maxNanos = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+        // Deterministic replacement for the old wall-clock (System.nanoTime()) deadline — see
+        // CompactGraph.runAStar's doc on maxEdgeRelaxations. Same insurance-cap intent (bound total
+        // work regardless of maxExpansions alone), but a pure function of graph topology instead of
+        // machine load, so replaying this exact search under Time Warp always returns the same
+        // route. Not independently measured yet (docs/TIME_WARP_DESIGN.md's placeholder-config
+        // posture): 32x maxExpansions assumes a road-network out-degree well under that factor.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
       )
     }
     val elapsed = (System.nanoTime() - t0) / 1e9
@@ -508,14 +534,23 @@ object GPSUtil {
     * pedestrian walking speed).
     */
   def calcRouteCompactWalking(
-    originId:      String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     maxExpansions: Int = 200_000
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.walking:$originId:$destinationId:$maxExpansions") {
+      calcRouteCompactWalkingLive(originId, destinationId, maxExpansions)
+    }
+
+  private def calcRouteCompactWalkingLive(
+    originId: Long,
+    destinationId: Long,
+    maxExpansions: Int
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
 
     if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
 
-    val cacheKey = s"w:$originId|$destinationId"
+    val cacheKey = (originId, destinationId, true)
 
     // Negative cache
     if (noRouteCache.contains(cacheKey)) {
@@ -549,7 +584,9 @@ object GPSUtil {
         altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
         useDynamicWeights = false,
         maxExpansions     = maxExpansions,
-        maxNanos          = 2_000_000_000L  // 2 s cap: disconnected-graph failures abort fast
+        // See calcRouteCompact's identical maxEdgeRelaxations comment: deterministic replacement
+        // for the old wall-clock deadline, required for Time Warp replay-safety.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
       )
     }
     val elapsed = (System.nanoTime() - t0) / 1e9

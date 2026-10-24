@@ -3,6 +3,7 @@ package model.hybrid.actor
 
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
+import core.util.JsonUtil
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import model.hybrid.entity.state.{ DriverAttributes, MovableState }
 import model.hybrid.entity.state.enumeration.MovableStatusEnum
@@ -51,11 +52,11 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Current trip origin (override state's immutable origin).
     */
-  private var tripOrigin: Option[String] = None
+  private var tripOrigin: Option[Long] = None
 
   /** Current trip destination (override state's immutable destination).
     */
-  private var tripDestination: Option[String] = None
+  private var tripDestination: Option[Long] = None
 
   /** Current trip driver attributes (overrides defaults).
     */
@@ -64,6 +65,13 @@ trait PrivateVehicle[T <: MovableState] {
   /** Track when trip started (for travel time calculation).
     */
   private var tripStartTick: Option[Tick] = None
+
+  /** The `ActorInteractionEvent.seq` of the `StartTrip` request currently being served, echoed
+    * back on [[TripCompletedData.requestSeq]] so the owning Person can tell this trip's genuine
+    * completion apart from a rollback-orphaned reply to an earlier, since-retracted `StartTrip`
+    * (see `TripCompletedData.requestSeq`'s doc). `0L` outside Time Warp, where it's never read.
+    */
+  private var tripRequestSeq: Long = 0L
 
   /** Track trip start distance (for distance calculation).
     */
@@ -85,7 +93,7 @@ trait PrivateVehicle[T <: MovableState] {
   protected def selfDestructVehicle(): Unit
   protected def isVehicleStateNull: Boolean
   protected def sendVehicleMessage(
-    entityId: String,
+    entityId: Long,
     shardId: String,
     data: AnyRef,
     eventType: String,
@@ -115,7 +123,7 @@ trait PrivateVehicle[T <: MovableState] {
     *
     * Subclasses must set the appropriate route field on their state object.
     */
-  protected def applyPrecomputedRoute(route: List[(String, String)]): Unit
+  protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit
 
   /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
     * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
@@ -156,6 +164,7 @@ trait PrivateVehicle[T <: MovableState] {
       driverAttributes = data.driverAttributes.validate()
       tripStartTick = Some(data.startTick)
       tripStartDistance = getCurrentDistance
+      tripRequestSeq = event.seq
 
       applyDriverAttributes(driverAttributes)
 
@@ -175,15 +184,17 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Get current trip origin (for route calculation).
     */
-  protected def getTripOrigin: Option[String] = tripOrigin
+  protected def getTripOrigin: Option[Long] = tripOrigin
 
   /** Get current trip destination (for route calculation).
     */
-  protected def getTripDestination: Option[String] = tripDestination
+  protected def getTripDestination: Option[Long] = tripDestination
 
   /** Get current trip start tick (for trip metrics).
     */
   protected def getTripStartTick: Option[Tick] = tripStartTick
+
+  protected def getTripStartDistance: Double = tripStartDistance
 
   /** Get current driver attributes (for speed factor metrics).
     */
@@ -203,7 +214,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Report trip completion back to Person.
     */
-  protected def reportTripCompletion(reason: String, finalNode: String, wasTeleported: Boolean = false): Unit =
+  protected def reportTripCompletion(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit =
     ownerPersonRef.foreach {
       personRef =>
         val travelTime = tripStartTick
@@ -217,14 +228,15 @@ trait PrivateVehicle[T <: MovableState] {
           entityId = personRef.id,
           shardId = personRef.classType,
           data = TripCompletedData(
-            vehicleId = getActorEntityId,
+            vehicleId = getActorEntityId.toLong,
             personId = personRef.id,
             distanceTraveled = distanceTraveled,
             travelTime = travelTime,
             finalNode = finalNode,
             completionTick = getActorCurrentTick,
             completionReason = reason,
-            wasTeleported = wasTeleported
+            wasTeleported = wasTeleported,
+            requestSeq = tripRequestSeq
           ),
           eventType = "TripCompleted",
           actorType = LoadBalancedDistributed
@@ -270,7 +282,7 @@ trait PrivateVehicle[T <: MovableState] {
 
   /** Override onFinish to report trip completion.
     */
-  protected def onFinishPrivateVehicle(nodeId: String, wasTeleported: Boolean = false): Unit = {
+  protected def onFinishPrivateVehicle(nodeId: Long, wasTeleported: Boolean = false): Unit = {
     val reason =
       if (wasTeleported) "teleported"
       else if (tripDestination.contains(nodeId)) "reached_destination"
@@ -309,14 +321,18 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def captureMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
     base.copy(
-      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(""),
+      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(0L),
       ownerPersonRefClassType = ownerPersonRef.map(_.classType).getOrElse(""),
       personCentric = personCentric,
-      tripOrigin = tripOrigin.getOrElse(""),
-      tripDestination = tripDestination.getOrElse(""),
+      tripOrigin = tripOrigin.getOrElse(0L),
+      tripDestination = tripDestination.getOrElse(0L),
       tripStartTick = tripStartTick.getOrElse(Long.MinValue),
       tripStartDistance = tripStartDistance,
-      destroyAfterNextPark = destroyAfterNextPark
+      destroyAfterNextPark = destroyAfterNextPark,
+      modelSnapshot = base.modelSnapshot ++ Map(
+        "hybrid.private-vehicle.v1.tripRequestSeq" -> tripRequestSeq.toString,
+        "hybrid.private-vehicle.v1.driverAttributes" -> JsonUtil.toJson(driverAttributes)
+      )
     )
 
   /** Restores reply-linkage and lifecycle-intent fields from a migration snapshot. See
@@ -324,15 +340,18 @@ trait PrivateVehicle[T <: MovableState] {
     */
   protected def restoreMigrationFields(snapshot: MigrationSnapshot): Unit = {
     ownerPersonRef =
-      if (snapshot.ownerPersonRefId.nonEmpty)
+      if (snapshot.ownerPersonRefId != 0L)
         Some(Identify(id = snapshot.ownerPersonRefId, classType = snapshot.ownerPersonRefClassType))
       else None
     personCentric = snapshot.personCentric
-    tripOrigin = if (snapshot.tripOrigin.nonEmpty) Some(snapshot.tripOrigin) else None
-    tripDestination = if (snapshot.tripDestination.nonEmpty) Some(snapshot.tripDestination) else None
+    tripOrigin = if (snapshot.tripOrigin != 0L) Some(snapshot.tripOrigin) else None
+    tripDestination = if (snapshot.tripDestination != 0L) Some(snapshot.tripDestination) else None
     tripStartTick = if (snapshot.tripStartTick != Long.MinValue) Some(snapshot.tripStartTick) else None
     tripStartDistance = snapshot.tripStartDistance
     destroyAfterNextPark = snapshot.destroyAfterNextPark
+    tripRequestSeq = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.tripRequestSeq").fold(0L)(_.toLong)
+    driverAttributes = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.driverAttributes")
+      .fold(DriverAttributes())(JsonUtil.fromJson[DriverAttributes])
   }
 
   /** Private vehicles should only re-register on the TM after migration when they are NOT parked.

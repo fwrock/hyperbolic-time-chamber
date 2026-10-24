@@ -4,7 +4,7 @@ package model.hybrid.support.bus
 import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.{MicroEnterLinkData, MicroLeaveLinkData, MicroUpdateData}
 import org.interscity.htc.model.hybrid.entity.state.{BusState, MicroBusState}
-import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{Moving, Ready}
+import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Moving
 
 /** Handles all microscopic simulation events for Bus actors.
   *
@@ -19,16 +19,17 @@ class BusMicroHandler(
   private val currentTickFn: () => Tick,
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
+  private val requestSignalStateFn: () => Unit,
   private val logDebugFn: String => Unit,
-  private val setCurrentLinkIdFn: Option[String] => Unit,
+  private val setCurrentLinkIdFn: Option[Long] => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
-  private val setCurrentStopNodeFn: Option[String] => Unit,
+  private val setCurrentStopNodeFn: Option[Long] => Unit,
   private val getCurrentLinkLengthFn: () => Double,
-  private val findNextBusStopFn: () => Option[String],
+  private val findNextBusStopFn: () => Option[Long],
   private val checkBusStopAtPositionFn: Double => Unit,
   private val microUpdateLogEvery: Int,
-  private val getCurrentLinkIdFn: () => Option[String] = () => None,
+  private val getCurrentLinkIdFn: () => Option[Long] = () => None,
   private val microUpdateReportEvery: Int = 0
 ) {
 
@@ -128,7 +129,7 @@ class BusMicroHandler(
           Map(
             "event_type" -> "micro_update",
             "bus_id"     -> entityIdFn(),
-            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"       -> "MICRO",
             "position"   -> data.position,
             "velocity"   -> data.velocity,
@@ -144,10 +145,15 @@ class BusMicroHandler(
     }
 
   def handleMicroLeaveLink(data: MicroLeaveLinkData, state: BusState): Unit = {
+    if (!getCurrentLinkIdFn().contains(data.linkId)) {
+      logDebugFn(s"Ignoring stale Bus MicroLeaveLink for ${data.linkId}")
+      return
+    }
     logDebugFn(s"Bus leaving MICRO link ${data.linkId}")
 
     val travelTime = getLinkEntryTickFn().map(currentTickFn() - _).getOrElse(0L)
 
+    state.movableLinkExitReported = true
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
@@ -176,10 +182,11 @@ class BusMicroHandler(
     setCurrentStopNodeFn(state.currentPath.map(_._2))
 
     state.deactivateMicroMode()
-    state.status = Ready
     setCurrentLinkIdFn(None)
     setLinkEntryTickFn(None)
 
-    onFinishSpontaneousFn(Some(currentTickFn() + 1))
+    // Keep the completed path until signal/capacity handling calls leavingLink.
+    // That path sends cleanup and advances the route before the next Ready wake.
+    requestSignalStateFn()
   }
 }

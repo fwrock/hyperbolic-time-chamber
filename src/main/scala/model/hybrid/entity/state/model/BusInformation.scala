@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.entity.state.model
 
 case class BusInformation(
-  actorId: String,
+  actorId: Long,
   label: String = null,
   capacity: Int,
   numberOfPorts: Int,

@@ -36,7 +36,7 @@ abstract class TimeManagerBase(
   protected var isPaused: Boolean = false
   protected var isStopped: Boolean = false
 
-  protected val registeredActors = mutable.Set[String]()
+  protected val registeredActors = mutable.Set[Long]()
   protected val scheduledActors = mutable.Map[Tick, mutable.Set[Identify]]()
   protected val scheduledTicksOnFinish = mutable.Set[Tick]()
   protected val runningEvents = mutable.Set[Identify]()

@@ -58,8 +58,8 @@ import scala.collection.mutable
   */
 case class RailLinkState(
   startTick: Tick,
-  from: String,
-  to: String,
+  from: Long,
+  to: Long,
   length: Double,
   lanes: Int,
   speedLimit: Double,
@@ -67,8 +67,8 @@ case class RailLinkState(
   freeSpeed: Double,
   railType: String = "SUBWAY",
   subwayLine: String = "",
-  fromStation: String = "",
-  toStation: String = "",
+  fromStation: Long = 0L,
+  toStation: Long = 0L,
   gradient: Double = 0.0,
   curvature: Double = 0.0,
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,

@@ -6,13 +6,15 @@ import core.actor.manager.BaseManager
 import core.entity.actor.properties.{ CreatorProperties, Properties }
 import core.entity.configuration.ActorDataSource
 import core.entity.event.control.load.*
+import core.runtime.distributed.{LoadOptimisticInputWindow, OptimisticInputWindowOpened, OptimisticInputWindowReady}
+import core.runtime.accounting.RuntimeFailure
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum
 import core.types.Tick
 import core.util.ManagerConstantsUtil
 import core.util.ManagerConstantsUtil.{ POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME }
 
-import org.apache.pekko.actor.{ ActorRef, Deploy, Props }
+import org.apache.pekko.actor.{ ActorRef, Deploy, Props, Terminated }
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.remote.RemoteScope
@@ -43,8 +45,10 @@ import scala.util.{ Failure, Success }
   */
 class ProgressiveLoadDataManager(
   val poolTimeManager: ActorRef,
+  val timeManagerType: String,
   val simulationManager: ActorRef,
-  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+  val poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+  val runtimeCoordinator: Option[ActorRef] = None
 ) extends BaseManager[DefaultState](
       actorId = PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME,
       timeManager = null
@@ -68,6 +72,9 @@ class ProgressiveLoadDataManager(
   private val MIN_LOOK_AHEAD_TICKS: Tick = 100
 
   private var pendingWindowRequest: Option[TickWindowRequest] = None
+  private var optimisticWindow: Option[LoadOptimisticInputWindow] = None
+  private var optimisticRequester: Option[ActorRef] = None
+  private var sourceFailed = false
   private val pendingRangeResponses = mutable.Map[String, Boolean]()
   private var pendingRangeActorsCount: Long = 0L
 
@@ -128,7 +135,29 @@ class ProgressiveLoadDataManager(
   override def onStart(): Unit =
     reporters = poolReporters
 
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    val failure = RuntimeFailure(s"progressive producer restart requires coordinated recovery: ${reason.getMessage}")
+    optimisticRequester.orElse(Option(globalTimeManagerRef)).orElse(runtimeCoordinator).foreach(_ ! failure)
+    simulationManager ! failure
+    super.preRestart(reason, message)
+  }
+
   override def handleEvent: Receive = {
+    case _: LoadOptimisticInputWindow if sourceFailed => ()
+    case request: LoadOptimisticInputWindow =>
+      require(optimisticWindow.isEmpty && optimisticRequester.forall(_ == sender()), "overlapping/foreign optimistic input request")
+      optimisticRequester = Some(sender())
+      optimisticWindow = Some(request)
+      sender() ! OptimisticInputWindowOpened(request.epoch, request.window)
+      handleTickWindowRequest(TickWindowRequest(request.fromTick, request.throughTick))
+    case Terminated(ref) if loaders.valuesIterator.contains(ref) && !allSourcesFullyLoaded =>
+      self ! ProgressiveSourceFailed(loaders.find(_._2 == ref).get._1, "loader lost before input closure")
+    case event: ProgressiveSourceFailed =>
+      sourceFailed = true
+      val failure = RuntimeFailure(s"progressive source ${event.sourceId}: ${event.reason}")
+      optimisticRequester.orElse(Option(globalTimeManagerRef)).orElse(runtimeCoordinator).foreach(_ ! failure)
+      simulationManager ! failure
+    case _: TickRangeLoadedEvent | _: TickIndexBuiltEvent if sourceFailed => ()
     case event: StartProgressiveLoadingEvent                  => startProgressiveLoading(event)
     case event: TickIndexBuiltEvent                           => handleTickIndexBuilt(event)
     case event: TickWindowRequest                              => handleTickWindowRequest(event)
@@ -149,7 +178,7 @@ class ProgressiveLoadDataManager(
     if (event.progressiveSources.isEmpty) {
       logInfo("No progressive data sources configured. Progressive loading complete.")
       allSourcesFullyLoaded = true
-      notifyTimeManagerReady(0L, 0)
+      pendingWindowRequest.foreach(req => notifyTimeManagerReady(req.horizonTick, 0))
       return
     }
 
@@ -240,7 +269,7 @@ class ProgressiveLoadDataManager(
           Properties(
             entityId = s"progressive-loader-${source.id.hashCode}",
             resourceId = "",
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
             creatorManager = null,
             reporters = mutable.Map.empty
           )
@@ -249,6 +278,7 @@ class ProgressiveLoadDataManager(
         ).withDispatcher("pekko.actor.io-dispatcher")
 
         val loader = context.system.actorOf(loaderProps)
+        context.watch(loader)
         loaders.put(source.id, loader)
         loaderSources.put(source.id, source)
 
@@ -439,6 +469,9 @@ class ProgressiveLoadDataManager(
     * the next one from the queue starts.
     */
   private def handleTickRangeLoaded(event: TickRangeLoadedEvent): Unit = {
+    require(loadInFlight && pendingRangeResponses.get(event.sourceId).contains(false) &&
+      event.fromTick == currentLoadFromTick && event.toTick == currentLoadToTick,
+      "unknown, duplicate or stale progressive source completion")
     pendingRangeResponses.put(event.sourceId, true)
     pendingRangeActorsCount += event.actorsLoaded
     totalActorsCreated += event.actorsLoaded
@@ -571,10 +604,13 @@ class ProgressiveLoadDataManager(
   private def notifyTimeManagerReady(readyUpToTick: Tick, actorsCreated: Long): Unit = {
     ProgressiveLoadingMetrics.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
     ProgressiveLoadingMetrics.progressiveWindowsLoaded.inc()
-    globalTimeManagerRef ! TickWindowReady(
-      readyUpToTick = readyUpToTick,
-      actorsCreated = actorsCreated
-    )
+    optimisticWindow match {
+      case Some(request) =>
+        optimisticRequester.get ! OptimisticInputWindowReady(request.epoch, request.window,
+          readyUpToTick, allSourcesFullyLoaded, actorsCreated)
+        optimisticWindow = None
+      case None => globalTimeManagerRef ! TickWindowReady(readyUpToTick, actorsCreated)
+    }
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {}
@@ -616,8 +652,9 @@ class ProgressiveLoadDataManager(
           CreatorProperties(
             entityId = "progressive-creator-load-data",
             loadDataManager = self,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
-            reporters = poolReporters
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            reporters = poolReporters,
+            runtimeCoordinator = runtimeCoordinator
           )
         )
       ),
@@ -648,8 +685,9 @@ class ProgressiveLoadDataManager(
           CreatorProperties(
             entityId = "progressive-creator-pool-load-data",
             loadDataManager = self,
-            timeManagers = mutable.Map("discrete-event" -> poolTimeManager),
-            reporters = poolReporters
+            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+            reporters = poolReporters,
+            runtimeCoordinator = runtimeCoordinator
           )
         )
       ),
@@ -671,13 +709,17 @@ object ProgressiveLoadDataManager {
 
   def props(
     poolTimeManager: ActorRef,
+    timeManagerType: String,
     simulationManager: ActorRef,
-    poolReporters: mutable.Map[ReportTypeEnum, ActorRef]
+    poolReporters: mutable.Map[ReportTypeEnum, ActorRef],
+    runtimeCoordinator: Option[ActorRef] = None
   ): Props =
     Props(
       classOf[ProgressiveLoadDataManager],
       poolTimeManager,
+      timeManagerType,
       simulationManager,
-      poolReporters
+      poolReporters,
+      runtimeCoordinator
     )
 }

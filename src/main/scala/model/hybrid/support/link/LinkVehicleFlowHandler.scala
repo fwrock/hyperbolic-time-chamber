@@ -22,20 +22,20 @@ import scala.collection.mutable
 class LinkVehicleFlowHandler(
   entityIdFn:                     () => String,
   currentTickFn:                  () => Tick,
-  sendMessageFn:                  (String, String, AnyRef, String) => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
   scheduleEventFn:                Tick => Unit,
   getLinkStateFn:                 () => LinkState,
   setLinkStateFn:                 LinkState => Unit,
-  putVehicleEntryTickFn:          (String, Tick) => Unit,
-  getVehicleEntryTickFn:          String => Option[Tick],
-  removeVehicleEntryTickFn:       String => Unit,
-  getOrUpdateVehicleWaitingFn:    String => Double,
-  removeVehicleWaitingFn:         String => Unit,
-  getVehicleWaitingSecondsFn:     String => Double,
+  putVehicleEntryTickFn:          (Long, Tick) => Unit,
+  getVehicleEntryTickFn:          Long => Option[Tick],
+  removeVehicleEntryTickFn:       Long => Unit,
+  getOrUpdateVehicleWaitingFn:    Long => Double,
+  removeVehicleWaitingFn:         Long => Unit,
+  getVehicleWaitingSecondsFn:     Long => Double,
   isMicroScheduledFn:             () => Boolean,
   setMicroScheduledFn:            Boolean => Unit,
   metricsReporter:                LinkMetricsReporter,
-  findVehicleLaneFn:              String => Option[Int],
+  findVehicleLaneFn:              Long => Option[Int],
   findLeastOccupiedLaneFn:        () => Int,
   logDebugFn:                     String => Unit
 ) {
@@ -75,7 +75,8 @@ class LinkVehicleFlowHandler(
           linkCapacity     = state.capacity,
           linkNumberOfCars = state.registered.size,
           linkFreeSpeed    = state.freeSpeed,
-          linkLanes        = state.lanes
+          linkLanes        = state.lanes,
+          requestSeq       = event.seq
         ),
         EventTypeEnum.ReceiveEnterLinkInfo.toString
       )
@@ -102,7 +103,8 @@ class LinkVehicleFlowHandler(
         linkCapacity     = state.capacity,
         linkNumberOfCars = state.registered.size,
         linkFreeSpeed    = state.freeSpeed,
-        linkLanes        = state.lanes
+        linkLanes        = state.lanes,
+        requestSeq       = event.seq
       ),
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
@@ -148,8 +150,7 @@ class LinkVehicleFlowHandler(
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>
-      val idx = queue.indexWhere(_.position < vehicle.position)
-      if (idx >= 0) queue.insert(idx, vehicle) else queue.enqueue(vehicle)
+      VehicleInLane.insertFrontToBack(queue, vehicle)
     }
 
     sendMicroEnterAck(event, assignedLane)
@@ -161,7 +162,7 @@ class LinkVehicleFlowHandler(
     sendMessageFn(
       event.actorRefId, event.shardRefId,
       MicroEnterLinkData(
-        linkId             = entityIdFn(),
+        linkId             = entityIdFn().toLong,
         mode               = SimulationModeEnum.MICRO,
         assignedLane       = lane,
         linkLength         = state.length,
@@ -195,7 +196,7 @@ class LinkVehicleFlowHandler(
       sendMessageFn(
         state.from,
         "hybrid.actor.Node",
-        model.hybrid.entity.event.data.link.LinkCapacityFreedData(linkId = entityIdFn(), freedCount = 1),
+        model.hybrid.entity.event.data.link.LinkCapacityFreedData(linkId = entityIdFn().toLong, freedCount = 1),
         EventTypeEnum.LinkCapacityFreed.toString
       )
     }
@@ -234,7 +235,7 @@ class LinkVehicleFlowHandler(
     sendMessageFn(
       event.actorRefId, event.shardRefId,
       MicroLeaveLinkData(
-        linkId             = entityIdFn(),
+        linkId             = entityIdFn().toLong,
         finalPosition      = state.length,
         finalVelocity      = vehicleVelocity,
         travelTime         = elapsedTicks,
@@ -258,7 +259,8 @@ class LinkVehicleFlowHandler(
         linkCapacity     = state.capacity,
         linkNumberOfCars = state.registered.size,
         linkFreeSpeed    = state.freeSpeed,
-        linkLanes        = state.lanes
+        linkLanes        = state.lanes,
+        requestSeq       = event.seq
       ),
       EventTypeEnum.ReceiveLeaveLinkInfo.toString
     )

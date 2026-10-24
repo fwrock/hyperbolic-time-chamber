@@ -63,7 +63,7 @@ class LinkMicroTimeManager(
 
   /** Vehicle actor references for sending updates. Key: vehicle ID Value: actor reference
     */
-  private val vehicleActors: mutable.Map[String, ActorRef[MicroUpdateData]] = mutable.Map.empty
+  private val vehicleActors: mutable.Map[Long, ActorRef[MicroUpdateData]] = mutable.Map.empty
 
   /** Current global tick being executed.
     */
@@ -99,7 +99,7 @@ class LinkMicroTimeManager(
   /** Register vehicle entering link.
     */
   private def registerVehicle(
-    vehicleId: String,
+    vehicleId: Long,
     lane: Int,
     position: Double,
     velocity: Double,
@@ -122,12 +122,7 @@ class LinkMicroTimeManager(
 
     vehiclesByLane.get(lane) match {
       case Some(queue) =>
-        val insertIndex = queue.indexWhere(_.position < position)
-        if (insertIndex >= 0) {
-          queue.insert(insertIndex, vehicle)
-        } else {
-          queue.enqueue(vehicle)
-        }
+        VehicleInLane.insertFrontToBack(queue, vehicle)
       case None =>
         context.log.error(s"[$linkId] Invalid lane $lane for vehicle $vehicleId")
     }
@@ -138,7 +133,7 @@ class LinkMicroTimeManager(
   /** Unregister vehicle leaving link.
     */
   private def unregisterVehicle(
-    vehicleId: String
+    vehicleId: Long
   )(implicit context: ActorContext[Command]): Unit = {
     context.log.debug(s"[$linkId] Unregistering vehicle $vehicleId")
 
@@ -192,6 +187,7 @@ class LinkMicroTimeManager(
   )(implicit context: ActorContext[Command]): Unit = {
 
     if (vehicles.isEmpty) return
+    VehicleInLane.sortFrontToBack(vehicles)
 
     for (i <- vehicles.indices) {
       val vehicle = vehicles(i)
@@ -238,12 +234,14 @@ class LinkMicroTimeManager(
         context.log.debug(s"[$linkId] Vehicle ${vehicle.actorId} reached end of link")
       }
     }
+
+    VehicleInLane.sortFrontToBack(vehicles)
   }
 
   /** Update vehicle state from external source.
     */
   private def updateVehicleState(
-    vehicleId: String,
+    vehicleId: Long,
     position: Double,
     velocity: Double,
     lane: Int
@@ -254,6 +252,7 @@ class LinkMicroTimeManager(
         if (index >= 0) {
           val oldVehicle = queue(index)
           queue(index) = oldVehicle.copy(position = position, velocity = velocity)
+          VehicleInLane.sortFrontToBack(queue)
           context.log.trace(s"[$linkId] Updated vehicle $vehicleId: pos=$position, vel=$velocity")
         }
     }
@@ -261,7 +260,7 @@ class LinkMicroTimeManager(
   /** Process lane change request.
     */
   private def processLaneChangeRequest(
-    vehicleId: String,
+    vehicleId: Long,
     fromLane: Int,
     toLane: Int
   )(implicit context: ActorContext[Command]): Unit = {
@@ -277,12 +276,7 @@ class LinkMicroTimeManager(
 
               vehiclesByLane.get(toLane).foreach {
                 toQueue =>
-                  val insertIndex = toQueue.indexWhere(_.position < vehicle.position)
-                  if (insertIndex >= 0) {
-                    toQueue.insert(insertIndex, vehicle)
-                  } else {
-                    toQueue.enqueue(vehicle)
-                  }
+                  VehicleInLane.insertFrontToBack(toQueue, vehicle)
               }
 
               context.log
@@ -304,7 +298,7 @@ object LinkMicroTimeManager {
   sealed trait Command
 
   case class RegisterVehicle(
-    vehicleId: String,
+    vehicleId: Long,
     lane: Int,
     position: Double,
     velocity: Double,
@@ -312,19 +306,19 @@ object LinkMicroTimeManager {
     actor: ActorRef[MicroUpdateData]
   ) extends Command
 
-  case class UnregisterVehicle(vehicleId: String) extends Command
+  case class UnregisterVehicle(vehicleId: Long) extends Command
 
   case class ExecuteGlobalTick(globalTick: Tick) extends Command
 
   case class UpdateVehicleState(
-    vehicleId: String,
+    vehicleId: Long,
     position: Double,
     velocity: Double,
     lane: Int
   ) extends Command
 
   case class RequestLaneChange(
-    vehicleId: String,
+    vehicleId: Long,
     fromLane: Int,
     toLane: Int
   ) extends Command

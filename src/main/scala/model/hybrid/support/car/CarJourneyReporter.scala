@@ -4,15 +4,15 @@ package model.hybrid.support.car
 import core.types.Tick
 import core.actor.trace.ActorTrace
 import org.interscity.htc.core.metrics.model.hybrid.MovableMetrics
-import org.interscity.htc.model.hybrid.entity.state.{CarState, DriverAttributes}
+import org.interscity.htc.model.hybrid.entity.state.{CarJourneyState, CarState, DriverAttributes}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Finished
 
 import scala.collection.mutable
 
 /** Tracks journey metrics and SUMO-compatible trip statistics for a Car actor.
   *
-  * Owns all SUMO TripInfo variables and provides finishJourney / reportSumoTripInfo
-  * so Car.scala stays free of tracking boilerplate.
+  * Reads journey data from checkpointed model state through a callback, so a restored actor
+  * cannot retain physics inputs or completion guards from its discarded future.
   *
   * @param reportFn       Actor report callback
   * @param entityIdFn     Supplier for the car's entity ID
@@ -26,30 +26,61 @@ class CarJourneyReporter(
   private val reportFn: (Map[String, Any], String) => Unit,
   private val entityIdFn: () => String,
   private val currentTickFn: () => Tick,
-  private val tripOriginFn: () => Option[String],
-  private val tripDestFn: () => Option[String],
+  private val tripOriginFn: () => Option[Long],
+  private val tripDestFn: () => Option[Long],
   private val tripStartTickFn: () => Option[Tick],
-  private val driverAttrsFn: () => DriverAttributes
+  private val driverAttrsFn: () => DriverAttributes,
+  private val journeyStateFn: () => CarJourneyState,
+  private val tripStartDistanceFn: () => Double = () => 0.0
 ) {
 
-  private var journeyFinishedReported: Boolean = false
+  private def journeyFinishedReported: Boolean = journeyStateFn().journeyFinishedReported
+  private def journeyFinishedReported_=(value: Boolean): Unit = journeyStateFn().journeyFinishedReported = value
 
-  // SUMO TripInfo variables
-  var sumoDepartTick: Option[Tick]  = None
-  var sumoDepartSpeed: Double        = 0.0
-  var sumoArrivalSpeed: Double       = 0.0
-  var sumoDepartLane: Option[String] = None
-  var sumoDepartPos: Double          = 0.0
-  var sumoArrivalLane: Option[String] = None
-  var sumoArrivalPos: Double          = 0.0
-  var sumoWaitingTimeSeconds: Double  = 0.0
-  var sumoWaitingCount: Int           = 0
-  var sumoStopTimeSeconds: Double     = 0.0
-  var sumoIdealTravelTimeSeconds: Double      = 0.0
-  var sumoCurrentMicroTimeStepSeconds: Double = 1.0
-  var sumoIsHalting: Boolean = false
-  var sumoRerouteNo: Int     = 0
-  private var sumoTripInfoReported: Boolean = false
+  def sumoDepartTick: Option[Tick] = journeyStateFn().sumoDepartTick
+  def sumoDepartTick_=(value: Option[Tick]): Unit = journeyStateFn().sumoDepartTick = value
+
+  def sumoDepartSpeed: Double = journeyStateFn().sumoDepartSpeed
+  def sumoDepartSpeed_=(value: Double): Unit = journeyStateFn().sumoDepartSpeed = value
+
+  def sumoArrivalSpeed: Double = journeyStateFn().sumoArrivalSpeed
+  def sumoArrivalSpeed_=(value: Double): Unit = journeyStateFn().sumoArrivalSpeed = value
+
+  def sumoDepartLane: Option[String] = journeyStateFn().sumoDepartLane
+  def sumoDepartLane_=(value: Option[String]): Unit = journeyStateFn().sumoDepartLane = value
+
+  def sumoDepartPos: Double = journeyStateFn().sumoDepartPos
+  def sumoDepartPos_=(value: Double): Unit = journeyStateFn().sumoDepartPos = value
+
+  def sumoArrivalLane: Option[String] = journeyStateFn().sumoArrivalLane
+  def sumoArrivalLane_=(value: Option[String]): Unit = journeyStateFn().sumoArrivalLane = value
+
+  def sumoArrivalPos: Double = journeyStateFn().sumoArrivalPos
+  def sumoArrivalPos_=(value: Double): Unit = journeyStateFn().sumoArrivalPos = value
+
+  def sumoWaitingTimeSeconds: Double = journeyStateFn().sumoWaitingTimeSeconds
+  def sumoWaitingTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoWaitingTimeSeconds = value
+
+  def sumoWaitingCount: Int = journeyStateFn().sumoWaitingCount
+  def sumoWaitingCount_=(value: Int): Unit = journeyStateFn().sumoWaitingCount = value
+
+  def sumoStopTimeSeconds: Double = journeyStateFn().sumoStopTimeSeconds
+  def sumoStopTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoStopTimeSeconds = value
+
+  def sumoIdealTravelTimeSeconds: Double = journeyStateFn().sumoIdealTravelTimeSeconds
+  def sumoIdealTravelTimeSeconds_=(value: Double): Unit = journeyStateFn().sumoIdealTravelTimeSeconds = value
+
+  def sumoCurrentMicroTimeStepSeconds: Double = journeyStateFn().sumoCurrentMicroTimeStepSeconds
+  def sumoCurrentMicroTimeStepSeconds_=(value: Double): Unit = journeyStateFn().sumoCurrentMicroTimeStepSeconds = value
+
+  def sumoIsHalting: Boolean = journeyStateFn().sumoIsHalting
+  def sumoIsHalting_=(value: Boolean): Unit = journeyStateFn().sumoIsHalting = value
+
+  def sumoRerouteNo: Int = journeyStateFn().sumoRerouteNo
+  def sumoRerouteNo_=(value: Int): Unit = journeyStateFn().sumoRerouteNo = value
+
+  private def sumoTripInfoReported: Boolean = journeyStateFn().sumoTripInfoReported
+  private def sumoTripInfoReported_=(value: Boolean): Unit = journeyStateFn().sumoTripInfoReported = value
 
   def reset(): Unit = {
     journeyFinishedReported         = false
@@ -70,6 +101,12 @@ class CarJourneyReporter(
     sumoTripInfoReported            = false
   }
 
+  /** Explicit reset for callers discarding completion without restoring a state snapshot. */
+  def clearCompletionGuards(): Unit = {
+    journeyFinishedReported = false
+    sumoTripInfoReported    = false
+  }
+
   def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {
@@ -80,10 +117,10 @@ class CarJourneyReporter(
   }
 
   def reportRouteEvents(
-    route: mutable.Queue[(String, String)],
+    route: mutable.Queue[(Long, Long)],
     source: String,
-    origin: String,
-    destination: String,
+    origin: Long,
+    destination: Long,
     bestCost: Double = 0.0,
     cost: Double = 0.0
   ): Unit = {
@@ -119,7 +156,7 @@ class CarJourneyReporter(
     )
   }
 
-  def finishJourney(reason: String, finalNode: String, state: CarState): Unit = {
+  def finishJourney(reason: String, finalNode: Long, state: CarState): Unit = {
     if (journeyFinishedReported) return
     journeyFinishedReported = true
 
@@ -129,7 +166,7 @@ class CarJourneyReporter(
     val origin      = tripOriginFn().getOrElse(state.origin)
 
     MovableMetrics.journeysCompleted.labels("Car").inc()
-    MovableMetrics.journeyDistanceMeters.labels("Car").observe(state.distance)
+    MovableMetrics.journeyDistanceMeters.labels("Car").observe(state.distance - tripStartDistanceFn())
     if (destination == finalNode) MovableMetrics.journeySuccesses.labels("Car").inc()
     else MovableMetrics.journeyFailures.labels("Car", reason).inc()
 
@@ -163,7 +200,7 @@ class CarJourneyReporter(
     state.status = Finished
   }
 
-  private def reportSumoTripInfo(reason: String, finalNode: String, state: CarState): Unit = {
+  private def reportSumoTripInfo(reason: String, finalNode: Long, state: CarState): Unit = {
     if (sumoTripInfoReported) return
     val entityId      = entityIdFn()
     val tick          = currentTickFn()
@@ -193,7 +230,7 @@ class CarJourneyReporter(
         "arrivalLane"       -> sumoArrivalLane.getOrElse(""),
         "arrivalPos"        -> sumoArrivalPos,
         "duration"          -> durationSecs,
-        "routeLength"       -> state.distance,
+        "routeLength"       -> (state.distance - tripStartDistanceFn()),
         "waitingTime"       -> sumoWaitingTimeSeconds,
         "waitingCount"      -> sumoWaitingCount,
         "stopTime"          -> sumoStopTimeSeconds,

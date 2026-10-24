@@ -8,7 +8,11 @@ object SubwayUtil {
   def timeToNextStation(
     distance: Double,
     velocity: Double
-  ): Tick = Math.ceil((distance / velocity) * 3600).toLong
+  ): Tick = {
+    require(distance.isFinite && distance >= 0.0 && velocity.isFinite && velocity > 0.0,
+      "subway travel requires nonnegative metres and positive metres per second")
+    Math.ceil(distance / velocity).toLong
+  }
 
   def numberOfPassengerToBoarding(
     numberOfPorts: Int,

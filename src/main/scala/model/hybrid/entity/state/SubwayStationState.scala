@@ -14,7 +14,7 @@ import scala.collection.mutable
 case class SubwayStationState(
   startTick: Tick,
   name: String,
-  nodeId: String,
+  nodeId: Long,
   terminal: Boolean,
   garage: Boolean,
   lines: mutable.Map[String, SubwayLineInformation],

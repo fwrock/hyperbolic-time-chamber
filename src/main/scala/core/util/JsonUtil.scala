@@ -24,7 +24,7 @@ object JsonUtil {
       val parts = key.split(":")
       if (parts.length == 2) {
         try
-          org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0), parts(1))
+          org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0).toLong, parts(1).toLong)
         catch {
           case _: Exception =>
             org.interscity.htc.model.mobility.entity.state.model.SubRoutePair(parts(0), parts(1))

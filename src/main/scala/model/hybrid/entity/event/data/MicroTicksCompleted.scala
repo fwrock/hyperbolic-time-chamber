@@ -15,7 +15,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   Number of sub-ticks executed
   */
 case class MicroTicksCompleted(
-  linkId: String,
+  linkId: Long,
   globalTick: Long,
   totalSubTicks: Int
 ) extends BaseEventData
