@@ -103,6 +103,14 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - A confirmed MICRO crossing adds no artificial tick at a point node. Its `signalAlreadyCleared` request still requires Node capacity; preserve clearance and reply identity in a checkpointed capacity wait. MESO retains Node signal checks.
 - Red stop-line vehicles stay in their lane until a green interval authorizes crossing. See `docs/SUMO_MICRO_VALIDATION_2026_10_24.md` and its real-SUMO benchmark.
 
+### Fractional MICRO clocks and scientific comparisons
+
+- `Simulation.tickDuration` is physical seconds per integer runtime tick; default 1 s remains supported. Scale scenario departures, signal phases and the horizon to the selected ticks. Install the clock on every JVM before shard creation. Runtime budgets/windows remain measured in ticks.
+- Fractional-clock support currently covers MICRO Car/Link/Node/TrafficSignal with static routing and no plugins or model births. Startup rejects unsupported actor sources, MESO and mismatched physics intervals; Person/Bus/Subway/Bicycle/Motorcycle still require one-second clocks.
+- Boundary remainder transfer requires one physics step per runtime tick and links longer than a speed-limit step. Keep the remainder and exit tick checkpointed. Only an immediate same-tick continuation can consume it; a real stop or delayed grant clears its use. Entry ACKs must report actual position/velocity after downstream spacing and speed limits.
+- Preserve raw `tick` fields for ordering; physical duration/arrival/summary fields use seconds. Sort vehicle IDs before floating summary reductions so replay cannot change committed output. Accounted horizon updates execute before runtime-owned censored finalization.
+- `scripts/scenario/sumo_scientific_protocol_v1.json` is frozen. Keep scientific failures and engine/measurement failures distinct; do not tune thresholds on evaluated cases. The five v1 randomized-demand cases expose an open discharge bias. See `docs/MICRO_SCIENTIFIC_VALIDATION.md` and its retained evidence before claiming traffic accuracy.
+
 ### Actor State
 - State (`T <: BaseState`) is reconstructed from JSON on load via Kryo/Jackson
 - `var` fields inside state classes are fine for mutable simulation state

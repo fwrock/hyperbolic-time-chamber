@@ -437,7 +437,7 @@ def run(args):
     extra.write_text('htc.report-manager.kafka.micro-update-report-every=1\n')
     simulation=root/(args.policy+'.json')
     command=[sys.executable,str(Path(__file__).with_name('run_cluster_validation.py')),'--jar',str(args.jar.resolve()),
-        '--simulation',str(simulation),'--output',str(root/'htc'),'--base-port',str(args.base_port),'--nodes','1',
+        '--simulation',str(simulation),'--output',str(root/'htc'),'--base-port',str(args.base_port),'--nodes',str(getattr(args,'nodes',1)),
         '--extra-config',str(extra),'--timeout',str(args.timeout)]
     write_json(root/'htc-command.json',command)
     result=subprocess.run(command,capture_output=True,text=True,timeout=args.timeout+40)
@@ -473,6 +473,7 @@ def main():
     parser.add_argument('--policy',choices=('discrete-event','time-warp'),default='discrete-event')
     parser.add_argument('--base-port',type=int,default=28500)
     parser.add_argument('--timeout',type=int,default=180)
+    parser.add_argument('--nodes',type=int,choices=(1,2),default=1)
     parser.add_argument('--measure-only',action='store_true',help='Record an old model baseline even when model checks fail; simulator/measurement failures still fail')
     parser.add_argument('--experiment',type=Path,help='Frozen physical inputs and clock settings for a scientific benchmark case')
     args=parser.parse_args()

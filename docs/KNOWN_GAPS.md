@@ -4,6 +4,45 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Fractional MICRO timing and scientific workflow (2026-10-25)
+
+Opt-in 0.1-second runtime ticks and checkpointed step-remainder transfer correct
+the accumulated boundary loss in the supported MICRO Car scope. Integer event
+ordering, owner ledgers, cancellation and report commit rules are retained. On a
+1.2 km development route, trip-time bias drops from 8.9 s at one-second ticks to
+below 0.001 s at 0.1 s; remainder transfer also removes the remaining observed
+position drift in that controlled case. The default one-second mixed-model mode
+remains available. Fractional clocks currently reject Person, transit, two-wheelers,
+MESO, dynamic routing feedback and plugins until their time-unit adapters exist.
+
+The full suite passes **644 Scala tests in 134 suites** and **17 Python tests**.
+All 21 real-SUMO runs produce valid measurements (169 completed cars). All four
+frozen held-out scenarios meet the provisional numerical-equivalence criteria.
+Eleven full-report comparisons match, including fractional-clock execution on
+one/two JVMs, conservative/optimistic policies, legacy cyclic Bus service and a
+censored field-initialized trajectory. The two-JVM optimistic geometry case
+exercises 135 rollbacks and cross-owner transport. CSV physical timestamps and
+MICRO relative-speed units are corrected; floating summaries use stable reduction
+order rather than relaxing report comparison.
+
+**General microscopic traffic accuracy is still unestablished.** All five frozen
+randomized-demand realizations fail the trip-time/trajectory equivalence targets.
+Their paired scenario-level mean HTC-minus-SUMO duration is −1.185 s, with an
+exploratory 95% Student-t interval [−1.292, −1.078] s. In seed 101, error accumulates
+through queued vehicles to 3.2 s early for the final vehicle. Following/discharge
+dynamics need a focused audit and a new frozen validation set after any revision.
+Matching halted-queue counts and completed-cohort throughput does not close that
+gap or establish saturated capacity.
+
+Three NGSIM field forecasts now use disjoint initialization/prediction intervals,
+documented feet-to-metres conversion and continuity/lane/leader checks. Position
+RMSE is 2.35–7.57 m over ten seconds. This conditional isolated-cruising pilot has
+no field-derived acceptance threshold; it does not validate following or networks.
+The original bounded responses, metadata, hashes and CC BY-SA attribution are
+retained in a replayable snapshot. See
+[methods, results and reproduction](MICRO_SCIENTIFIC_VALIDATION.md) and
+[retained evidence](validation/micro-scientific-2026-10-25.json).
+
 ## Finite MICRO junction geometry (2026-10-24)
 
 Opt-in junction movements now traverse fixed Link connectors with measured length,

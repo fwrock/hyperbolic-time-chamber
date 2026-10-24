@@ -1,5 +1,10 @@
 import unittest
-from ngsim_field_pilot import quality_control
+import json
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
+from ngsim_field_pilot import quality_control, run, PROTOCOL
 
 
 class FieldQualityTest(unittest.TestCase):
@@ -24,6 +29,18 @@ class FieldQualityTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'missing'): quality_control(rows[:-1],1000)
         rows[40]['lane_id']='2'
         with self.assertRaisesRegex(ValueError,'lane change'): quality_control(rows,1000)
+
+    def test_an_altered_field_snapshot_fails_before_network_access_or_simulation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            snapshot=root/'snapshot';snapshot.mkdir()
+            (snapshot/'metadata.json').write_text('{}')
+            source=dict(file='metadata.json',sha256='0'*64)
+            frozen=dict(protocol=PROTOCOL,metadataSource=source,candidateSource=source,selected=[])
+            (snapshot/'quality-control.json').write_text(json.dumps(frozen))
+            args=SimpleNamespace(output=root/'output',snapshot=snapshot,jar=root/'unused.jar',base_port=23500)
+            with patch('ngsim_field_pilot.urlopen',side_effect=AssertionError('unexpected network access')):
+                with self.assertRaisesRegex(AssertionError,'snapshot hash mismatch'): run(args)
 
 
 if __name__=='__main__': unittest.main()

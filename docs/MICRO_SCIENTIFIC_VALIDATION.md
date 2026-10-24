@@ -52,6 +52,11 @@ it never fits a time shift. At an inclusive horizon, the accounted runtime owns
 finalization: a final MICRO update must not prematurely finish the Car in its
 legacy local cap branch.
 
+Summary reductions sort registered vehicle IDs before adding floating-point
+values, so replay cannot change a physical report through set iteration order.
+MICRO relative speed normalizes both quantities to m/s. CSV calendar timestamps
+use physical clock time; JSON's `real_time` remains wall-clock time.
+
 ## Experiment design
 
 The convergence experiment holds 0.1-second integration fixed, compares runtime
@@ -78,6 +83,9 @@ mean errors, not vehicles/time samples as independent observations. A 95% Studen
 interval with four degrees of freedom is exploratory and assumes approximately
 normal independent scenario-level differences. It measures variability conditional
 on the specified demand distribution, not broader model or field-data uncertainty.
+Trajectory RMSE uses common observed timestamps and averages per-vehicle RMSEs;
+full terminal durations and per-trip sample counts are retained separately.
+Percentiles use linear interpolation between ordered observations.
 
 ## Empirical pilot
 
@@ -101,6 +109,15 @@ inconsistency is reported. There is no field-derived acceptance threshold or
 empirical-validity claim. General traffic validation still needs study-specific
 targets, appropriate observed conditions and independent validation data, consistent
 with [FHWA validation guidance](https://ops.fhwa.dot.gov/trafficanalysistools/tat_vol3/sect0.htm).
+Forecast errors include the estimated desired-speed assumption and unmodeled
+context. These three subjects share an observation window and are not independent
+network-validation replications.
+
+The retained
+[`ngsim-free-flow-pilot-snapshot-2026-10-25.zip`](validation/ngsim-free-flow-pilot-snapshot-2026-10-25.zip)
+contains the original bounded responses, metadata, attribution/license and quality
+rules. Snapshot replay rechecks every source hash and reruns quality control before
+simulation. Tampered observations fail before network access or model execution.
 
 ## Reproduction
 
@@ -109,16 +126,21 @@ sbt test assembly
 python3 -m unittest discover -s scripts/scenario -p 'test_*.py' -v
 python3 scripts/scenario/run_sumo_scientific_campaign.py \
   --jar target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar \
-  --output /tmp/micro-convergence --stage convergence --base-port 44000
+  --output /tmp/micro-convergence --stage convergence --base-port 20000
 python3 scripts/scenario/run_sumo_scientific_campaign.py \
   --jar target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar \
-  --output /tmp/micro-held-out --stage held-out --base-port 45000
+  --output /tmp/micro-held-out --stage held-out --base-port 21000
 python3 scripts/scenario/run_sumo_scientific_campaign.py \
   --jar target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar \
-  --output /tmp/micro-stochastic --stage stochastic --base-port 46000
+  --output /tmp/micro-stochastic --stage stochastic --base-port 22500
 python3 scripts/scenario/ngsim_field_pilot.py \
   --jar target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar \
-  --output /tmp/micro-field-pilot --base-port 47000
+  --output /tmp/micro-field-pilot --base-port 23500
+python3 -m zipfile -e \
+  docs/validation/ngsim-free-flow-pilot-snapshot-2026-10-25.zip /tmp/ngsim-pilot-snapshot
+python3 scripts/scenario/ngsim_field_pilot.py \
+  --jar target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar \
+  --output /tmp/micro-field-replay --base-port 23500 --snapshot /tmp/ngsim-pilot-snapshot
 ```
 
 Use fresh output directories and the same executable on all JVMs. The campaign
@@ -129,3 +151,122 @@ whether three eligible forecasts completed and always records that empirical
 validity has not been established. Raw observations and simulator output belong
 under temporary directories; retained acceptance records must identify any
 excluded attempt and why it was excluded.
+
+## Measured findings
+
+The four priorities are implemented as a reproducible workflow. The tests support
+the clock correction and the specified held-out comparisons. They also identify
+a remaining discharge-dynamics discrepancy; they do not establish general traffic
+accuracy or empirical calibration.
+
+The final executable passes **644 Scala tests in 134 suites** and **17 Python
+regressions**. SHA-256:
+`0e5e51c14d3246e58b3cae1da4b171f2e83316aefe63fa4146607254689f6763`.
+Build log: `/tmp/htc-scientific-20261024/reporting-fix-build.log`. Final inputs and
+raw output: `/tmp/htc-scientific-final-20261025/`. The
+[retained record](validation/micro-scientific-2026-10-25.json) includes all criteria,
+successful measurements and failed equivalence hypotheses, commands, hashes,
+per-trip sample coverage, seed-level inference and excluded diagnostic attempts.
+
+The final campaign contains **21 real-SUMO comparison runs**, **169 completed
+cars**, three field forecasts, one optimistic field replication, one CSV check
+and two legacy transit regressions: **28 HTC runs** in total. All measurements
+complete successfully. The four held-out cases pass; the five independent
+randomized-demand realizations fail their equivalence criteria. These results
+must not be summarized as all traffic-accuracy tests passing.
+
+All **11 full-report comparisons match**, including four held-out policy pairs,
+the stochastic policy pair, the finest convergence pair, one/two-JVM layouts
+under each policy, two-JVM policy parity, legacy Bus service and field-horizon
+replication. The two-JVM left-turn pair has 2298 reports per run; the optimistic
+case exercises 135 rollbacks and records up to 459 cross-owner transfers. The
+legacy one-second Bus runs each traverse 39 connectors and complete four Person
+schedules, matching all 2183 reports across policies. Field-horizon replication
+matches 205 reports; the CSV check independently verifies all 205 calendar times.
+The comparator retains physical durations and only excludes wall-clock/simulation
+IDs and the SUMO summary's CPU duration.
+
+Initial held-out execution exposed a TCP bind failure on an auxiliary management
+port and floating summary-reduction differences. They remain labeled diagnostic
+artifacts. Only reporting order/units, CSV formatting and snapshot replay were
+corrected after first held-out execution; physical parameters/dynamics and frozen
+criteria were unchanged. The complete final campaign was rerun on the executable
+above, using ports below the OS ephemeral range.
+
+![Timing convergence, stochastic discrepancy and empirical pilot](validation/figures/micro-scientific-2026-10-25.png)
+
+The figure and its [SVG version](validation/figures/micro-scientific-2026-10-25.svg)
+are CC BY-SA 3.0, with NGSIM attribution. Regenerate them with
+`python3 scripts/scenario/plot_micro_scientific_validation.py` from the retained
+record. Numerical agreement, demand variability and empirical forecasts have
+different scopes; none of these panels establishes general urban-traffic validity.
+
+### Time convergence and boundary transfer
+
+On the 1.2 km development route, with 0.1 s physics held fixed:
+
+| Runtime tick | Remainder transfer | Trip-time bias | Route-distance RMSE |
+|---|---|---:|---:|
+| 1.0 s | Disabled | +8.9 s | 57.912 m |
+| 0.5 s | Disabled | +3.4 s | 24.463 m |
+| 0.1 s | Disabled | Below 0.001 s | 1.032 m |
+| 0.1 s | Enabled | Below 0.001 s | Below 0.000001 m |
+
+This is numerical agreement in a controlled constant-speed case. It does not
+establish real-world position accuracy at sub-micrometre precision.
+
+### Held-out cases
+
+The physical model and parameters were frozen before these cases. All criteria
+pass for both policies, with full completion coverage and matching cohort counts.
+
+| Case | Cars per policy | Maximum trip-time difference | Route-distance RMSE | Speed RMSE |
+|---|---:|---:|---:|---:|
+| Short left turn | 6 | Below 0.001 s | 0.043 m | 0.016 m/s |
+| Longer right turn | 6 | Below 0.001 s | 0.091 m | 0.022 m/s |
+| Dense protected straight signal | 12 | 0.2 s | 0.928 m | 0.307 m/s |
+| Heterogeneous ten-link route | 4 | Below 0.001 s | Below 0.000001 m | Below 0.000001 m/s |
+
+The signal case reaches six halted approach vehicles in each simulator, with
+queue-count RMSE 0.209 vehicles and matched discharge-headway MAE 0.070 s. Halted
+vehicle-time is 96.3 versus 104.0 vehicle-seconds; a similar maximum queue does not
+imply identical queue evolution.
+
+### Stochastic demand exposes a remaining model gap
+
+The five independent demand realizations each contain 16 cars making protected
+right turns. Every realization completes and is measurable, but each fails the
+frozen trip-time/trajectory equivalence criteria. Across seed-level pairs:
+
+- Mean signed HTC-minus-SUMO trip time: **−1.185 s**.
+- Exploratory 95% Student-t interval: **[−1.292, −1.078] s**, five seed-level pairs.
+- Per-seed mean absolute trip-time error: **1.106–1.325 s**.
+- Per-seed 95th-percentile absolute error: **2.55–3.05 s**.
+- Mean route-distance RMSE: **7.093–8.444 m**.
+- Halted queue-count RMSE: **0.160–0.219 vehicles**.
+- Discharge-headway MAE: **0.171–0.214 s**.
+
+In seed 101, the early free-flow vehicles agree within 0.1 s, while the final
+queued vehicle finishes 3.2 s earlier in HTC. Error accumulation through discharge
+points to following/discharge dynamics, rather than the corrected whole-tick
+boundary loss. Identifying the responsible model term still requires a focused
+audit. Thresholds and physical parameters were not changed to make these results
+pass. These cases are now diagnostic development data for any subsequent model
+revision; a new revision needs fresh validation cases and demand seeds.
+
+### Empirical forecasts
+
+The three NGSIM subjects each supply 100 held-out forecast observations after the
+one-second initialization prefix:
+
+| Subject | Position RMSE | Speed RMSE | Position bias at 10 s |
+|---|---:|---:|---:|
+| 5 | 4.284 m | 0.947 m/s | +6.048 m |
+| 2 | 2.355 m | 1.129 m/s | −4.471 m |
+| 9 | 7.574 m | 1.774 m/s | −14.699 m |
+
+All trajectories pass the stated continuity, lane and recorded-leader checks.
+Annotation speed versus position-derivative MAE is 0.082–0.126 m/s. There are no
+exact duplicates in the selected three intervals, although preliminary dataset
+inspection found duplicate records elsewhere. This remains an exploratory
+forecast with estimated cruising speed; no empirical acceptance claim follows.

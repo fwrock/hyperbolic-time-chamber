@@ -1,6 +1,46 @@
 # Work recovery — 2026-10-24
 
-The latest completed milestone is
+## Scientific follow-up completed on 2026-10-25
+
+The four-priority workflow is implemented in
+[MICRO scientific validation](MICRO_SCIENTIFIC_VALIDATION.md). Protocol `b68e5e0`
+froze cases/criteria before evaluation. Clock/remainder implementation `9d71be9`,
+campaign/field tools `e76ae78` and deterministic-report/snapshot follow-up `eacf12d`
+form the implementation history. Physical parameters/dynamics were not changed
+after first held-out execution; final runs use one executable after reporting fixes.
+
+`sbt test assembly` passes **644 tests in 134 suites**; all **17 Python tests** pass.
+Build log: `/tmp/htc-scientific-20261024/reporting-fix-build.log`. Executable SHA-256:
+`0e5e51c14d3246e58b3cae1da4b171f2e83316aefe63fa4146607254689f6763`.
+Final raw campaign: `/tmp/htc-scientific-final-20261025/`; preliminary/diagnostic
+runs: `/tmp/htc-scientific-20261024/`. Do not treat diagnostic executables or the
+auxiliary TCP-bind failure as final acceptance. The retained record lists exclusions.
+
+All **21 SUMO runs produce valid measurements**, covering 169 completed cars.
+The four held-out physical scenarios pass their criteria. All **11 full-report
+comparisons match**, including actual fractional-clock one/two-JVM layouts and
+policies, 39 legacy Bus connector crossings and censored field input. The final
+two-JVM optimistic left-turn case has 135 rollbacks and 459 maximum recorded
+cross-owner transfers. CSV verification checks 205 physical calendar timestamps.
+
+**Scientific acceptance remains partial:** all five randomized-demand realizations
+fail the frozen trip-time/trajectory targets, with paired mean bias −1.185 s.
+Three field forecasts complete but remain exploratory, with position RMSE
+2.35–7.57 m. Read the newest `KNOWN_GAPS.md` section before further calibration.
+The next model audit should address discharge/following dynamics using v1 results
+as diagnostic data; use a new protocol and fresh cases/seeds for a revised model.
+
+Full commands, input/output hashes, per-trip coverage and durations, criterion
+failures, seed-level inference and exclusions:
+[`validation/micro-scientific-2026-10-25.json`](validation/micro-scientific-2026-10-25.json).
+The original NGSIM responses and quality rules survive reboot in
+[`validation/ngsim-free-flow-pilot-snapshot-2026-10-25.zip`](validation/ngsim-free-flow-pilot-snapshot-2026-10-25.zip).
+The summary figure and its plotting script are tracked. `/tmp` can disappear;
+use the reproduction commands in the methods document and the frozen snapshot.
+
+## Earlier geometry milestone
+
+The preceding completed milestone is
 [finite MICRO junction geometry](JUNCTION_GEOMETRY.md), on top of the pushed
 point-node fixes in `a06c1b6`. Fixed Link connectors model internal movement length,
 path coordinates and turn speed, with approach braking and checkpointed Node
