@@ -147,6 +147,10 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val context = DecisionContext(
       ModeChoiceWeights(includedModes = Set("walk")), Map.empty, Map.empty, 12L, "42")
     val payloads: Seq[AnyRef] = Seq(
+      model.hybrid.entity.event.data.link.SubscribeMicroBoundaryData(),
+      model.hybrid.entity.event.data.link.MicroBoundaryUpdateData(
+        model.hybrid.entity.state.model.MicroBoundarySnapshot(7, 12, 3, 9.03,
+          Some(model.hybrid.entity.state.model.MicroBoundaryVehicle(42, 0.026, 0.26, 4.5)))),
       model.hybrid.entity.event.node.LinkAccessData(
         model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green, 12L, requestSeq = 77L,
         junctionLink = Some(PrecomputedRouteItem(700L, 2L))),

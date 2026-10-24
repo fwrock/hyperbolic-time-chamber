@@ -92,6 +92,39 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     lane shouldBe empty
   }
 
+  it should "retain the following constraint after the leader enters a connector" in {
+    val lane = mutable.Queue(VehicleInLane(13, "cars", 159.3, 0, 0, 4.5))
+    val leader = VehicleInLane(12, "cars", 165.826, 0.26, 0, 4.5)
+    val update = DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, 602,
+      165.8, 50, 0.1, 1, mutable.Map.empty, downstreamLeaders = Map(13L -> leader)).head
+    update.leaderVehicle shouldBe Some(12L)
+    update.velocity should be < 0.04
+    update.velocity should be > 0.0
+  }
+
+  it should "stop at the configured distance before a red stop line" in {
+    import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+    val lane = mutable.Queue(VehicleInLane(1, "cars", 65, 10, 0, 4.5))
+    for (tick <- 1L to 300L) {
+      val update = DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, tick,
+        100, 50, 0.1, 1, mutable.Map.empty, Some(Red), stopLineGapM = 1).head
+      update.reachedEnd shouldBe false
+      update.position should be <= 99.000001
+    }
+    lane.head.position shouldBe 99.0 +- 0.01
+    lane.head.velocity shouldBe 0.0 +- 0.01
+  }
+
+  it should "obey red even when a nearer downstream vehicle is moving away" in {
+    import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+    val lane = mutable.Queue(VehicleInLane(13, "cars", 98.95, 0, 0, 4.5))
+    val leader = VehicleInLane(12, "cars", 104.6, 13, 0, 4.5)
+    val update = DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, 1,
+      100, 50, 0.1, 1, mutable.Map.empty, Some(Red), Map(13L -> leader), stopLineGapM = 1).head
+    update.velocity should be < 0.06
+    update.position should be < 99.0
+  }
+
   "MICRO lane ordering" should "choose the same leader for equal-position vehicles regardless of arrival order" in {
     val lane = mutable.Queue.empty[VehicleInLane]
     VehicleInLane.insertFrontToBack(lane, VehicleInLane(15L, "cars", 0.0, 0.0, 0.0, 4.5))

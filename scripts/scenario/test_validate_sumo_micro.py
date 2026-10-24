@@ -116,6 +116,21 @@ class SumoComparisonTest(unittest.TestCase):
         self.assertEqual(shortest_distance(graph,1,3,{(1,2):100}),250)
 
     @unittest.skipUnless(shutil.which('netconvert'),'requires real netconvert')
+    def test_lookahead_topology_and_stop_gap_are_explicit_in_both_simulators(self):
+        canonical=generate(self.root/'lookahead','signal',True,'right',dict(
+            runtimeTickSeconds=0.1,physicsStepSeconds=0.1,carryRemainder=True,
+            downstreamLookahead=True,stopLineGapM=1.0))
+        records=json.loads((self.root/'lookahead/data/links_0.json').read_text())
+        approach=next(r['data']['content'] for r in records if str(r['id'])==canonical['links'][0])
+        self.assertEqual(approach['downstreamConnectors'],{canonical['links'][2]:int(canonical['links'][1])})
+        self.assertTrue(all(r['data']['content']['downstreamLookahead'] for r in records))
+        self.assertTrue(all(r['data']['content']['stopLineGapM']==1.0 for r in records))
+        vehicle_type=ET.parse(self.root/'lookahead/sumo/routes.xml').getroot().find('vType')
+        self.assertEqual(vehicle_type.get('jmStoplineGap'),'1.0')
+        with self.assertRaises(AssertionError):
+            generate(self.root/'coarse','signal',parameters=dict(downstreamLookahead=True))
+
+    @unittest.skipUnless(shutil.which('netconvert'),'requires real netconvert')
     def test_geometry_import_uses_trimmed_roads_and_every_internal_lane_without_double_counting(self):
         for turn in ('straight','left','right'):
             root=self.root/turn

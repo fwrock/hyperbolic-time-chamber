@@ -86,13 +86,21 @@ case class LinkState(
   junctionGeometry: Option[model.JunctionGeometry] = None,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Double])
   exitSpeedLimitsMps: Map[Long, Double] = Map.empty,
-  carryMicroRemainder: Boolean = false
+  carryMicroRemainder: Boolean = false,
+  downstreamLookahead: Boolean = false,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Long])
+  downstreamConnectors: Map[Long, Long] = Map.empty,
+  stopLineGapM: Double = 0.0,
+  following: model.MicroFollowingState = model.MicroFollowingState()
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
+  require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
+  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
+    "downstream lookahead requires single-lane MICRO with one physics step per runtime tick")
   require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
     "MICRO boundary remainder requires one physics step per runtime tick")
   require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,

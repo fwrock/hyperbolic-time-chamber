@@ -32,4 +32,6 @@ enum EventTypeEnum:
     RouteQuery,
     RouteReply,
     ModeDecisionQuery,
-    ModeDecisionReply
+    ModeDecisionReply,
+    SubscribeMicroBoundary,
+    MicroBoundaryUpdate
