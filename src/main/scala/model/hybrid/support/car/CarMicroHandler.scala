@@ -51,7 +51,7 @@ class CarMicroHandler(
 
     val initialMicroState = MicroCarState(
       positionInLink = 0.0,
-      velocity       = state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed),
+      velocity       = data.initialVelocity.getOrElse(state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed)),
       acceleration   = 0.0,
       currentLane    = data.assignedLane,
       leaderVehicle  = None,

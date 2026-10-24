@@ -4,6 +4,32 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+## Real SUMO comparison and MICRO node boundaries (2026-10-24)
+
+The old sibling comparison harness has measurement, identity and current-schema
+problems. A tracked replacement now compares fresh real-SUMO runs using matched
+physical inputs, route-distance trajectories and actual terminal trip times. It
+fails on invalid/missing output and includes explicit node/clock checks rather
+than accepting a small RMSE computed over a partial trace.
+
+MICRO now preserves physical crossing speed, stops adding a tick at a point node,
+uses synchronous leader states and the leader's rear bumper, and applies entries
+and signal phases to their correct physics intervals. A previously authorized
+green crossing is retained when its rounded report reaches Node after red begins;
+downstream capacity and reply identity remain accounted and checkpointed. Real
+stops clear carried speed, and red stop-line vehicles cannot retire from the lane.
+Link travel-time reports no longer count both endpoint ticks as extra elapsed time.
+
+The accepted suite passes **626 Scala tests in 132 suites** and seven Python
+measurement regressions. All ten real-SUMO cases pass bounded acceptance; ordinary
+crossing trip-time error falls from 5.7 to 1.7 s, queued signal error from 8.7 to
+1.8 s, and the isolated phase-boundary error from 31.7 to 1.7 s. Two mixed MICRO
+transit/walking regressions also pass. All six complete policy report comparisons
+match. See [the real-SUMO validation and scope](SUMO_MICRO_VALIDATION_2026_10_24.md)
+and [retained evidence](validation/sumo-micro-2026-10-24.json).
+Whole-tick boundary quantization and finite junction geometry remain distinct
+model/runtime limitations; earlier SUMO artifacts are not current accuracy proof.
+
 ## Walking distance follow-up (2026-10-24)
 
 Person now checkpoints the actual walking route's measured distance and arrival

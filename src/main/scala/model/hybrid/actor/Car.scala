@@ -500,6 +500,8 @@ class Car(
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
     signalHandler.handleLinkAccess(data, state, eventTick = event.tick, eventSeq = event.seq)
 
+  override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None

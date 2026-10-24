@@ -39,7 +39,7 @@ class BicycleMicroHandler(
     val bikeLane = if (data.numberOfLanes >= 3) Some(0) else None
     val initialMicroState = MicroBicycleState(
       positionInLink   = 0.0,
-      velocity         = journeyReporter.sumoArrivalSpeed,
+      velocity         = data.initialVelocity.getOrElse(journeyReporter.sumoArrivalSpeed),
       acceleration     = 0.0,
       currentLane      = bikeLane.getOrElse(data.assignedLane),
       leaderVehicle    = None,

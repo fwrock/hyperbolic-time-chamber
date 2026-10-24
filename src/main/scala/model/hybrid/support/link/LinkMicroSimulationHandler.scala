@@ -116,7 +116,7 @@ class LinkMicroSimulationHandler(
     removeVehicleWaitingSecondsFn(update.vehicleId)
 
     val entryTick    = getVehicleEntryTickFn(update.vehicleId).getOrElse(currentTickFn())
-    val elapsedTicks = math.max(1L, currentTickFn() - entryTick + 1)
+    val elapsedTicks = math.max(1L, currentTickFn() - entryTick)
     val secondsPerGlobalTick = state.microTicksPerGlobalTick * state.microTimeStep
     val avgSpeed =
       if (elapsedTicks > 0 && secondsPerGlobalTick > 0)

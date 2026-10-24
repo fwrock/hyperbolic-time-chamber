@@ -66,7 +66,7 @@ class BusSignalHandler(
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestLinkAccessData(targetLinkId = linkId),
+                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
                 registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
@@ -107,6 +107,7 @@ class BusSignalHandler(
     if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
       val waitUntilTick = data.nextTick
       val waitTicks = math.max(0L, waitUntilTick - tick)
@@ -130,6 +131,7 @@ class BusSignalHandler(
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
       // Green + Available: already fully verified at reply time, no re-verification needed.

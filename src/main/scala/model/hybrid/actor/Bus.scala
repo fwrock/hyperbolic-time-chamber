@@ -336,6 +336,7 @@ class Bus(
       case Ready =>
         val nodeId = currentStopNode.getOrElse(0L)
         if (findBusStopAtNode(nodeId).isDefined) {
+          journeyReporter.sumoArrivalSpeed = 0.0
           stopArrivalCount += 1
           // ActorTrace.trace(getEntityId, currentTick, "bus_stop_arrived", // #actor-trace
           //   s"node=$nodeId stop=${findBusStopAtNode(nodeId).getOrElse("none")} passengers=${state.people.size} label=${state.label}") // #actor-trace
@@ -484,6 +485,8 @@ class Bus(
     */
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
     signalHandler.handleLinkAccess(data, state)
+
+  override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
 
   override def leavingLink(): Unit = {
     mesoExitTick = None

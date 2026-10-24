@@ -54,6 +54,8 @@ scripts/scenario/*
 !scripts/scenario/validate_horizon_vehicle_reports.py
 !scripts/scenario/generate_walking_validation_scenario.py
 !scripts/scenario/validate_walking_reports.py
+!scripts/scenario/validate_sumo_micro.py
+!scripts/scenario/test_validate_sumo_micro.py
 
 ### VS Code ###
 .vscode/

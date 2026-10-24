@@ -14,6 +14,18 @@ MESO execution. See [the walking contract](WALKING_DISTANCE.md) and
 `/tmp/htc-walking-full-build.log`; generated validation inputs and raw output:
 `/tmp/htc-walking-20261024/`.
 
+Walking was committed and pushed as `85d9343`. The subsequent real-SUMO audit and
+MICRO boundary fixes are described in
+[the current comparison contract](SUMO_MICRO_VALIDATION_2026_10_24.md).
+Its accepted-build log is `/tmp/htc-sumo-accepted-build.log`; raw old/current
+comparisons and exact per-run commands are under `/tmp/htc-sumo-audit-20261024/`.
+The final build passes 626 Scala tests in 132 suites and seven Python measurement
+tests. Ten real-SUMO runs and two mixed MICRO regressions pass; six complete
+conservative/optimistic report comparisons match. Accepted evidence is retained in
+`docs/validation/sumo-micro-2026-10-24.json`, including the isolated 30-tick node-wait
+reproducer and its correction. Remaining crossing errors include whole-tick
+rounding; finite junction geometry and broader SUMO calibration remain open.
+
 The preceding horizon/transit reporting milestone was committed and pushed as
 `c49b213` and is described in
 [the reporting contract](HORIZON_AND_TRANSIT_REPORTING.md). Its full test run passes

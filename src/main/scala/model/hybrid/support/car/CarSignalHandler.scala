@@ -77,7 +77,7 @@ class CarSignalHandler(
               sendMessageFn(
                 node.id,
                 node.classType,
-                RequestLinkAccessData(targetLinkId = linkId),
+                RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported),
                 EventTypeEnum.RequestLinkAccess.toString
               )
               registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
@@ -128,6 +128,7 @@ class CarSignalHandler(
     if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
 
     if (data.phase == Red) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
       val headwayTicks     = 2L
       val waitUntilTick    = data.nextTick + data.queuePosition.toLong * headwayTicks
@@ -154,6 +155,7 @@ class CarSignalHandler(
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
       val tick = currentTickFn()

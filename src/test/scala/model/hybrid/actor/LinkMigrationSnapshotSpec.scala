@@ -49,6 +49,7 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
 
     def testVehicleEntryTick: Map[Long, Tick] = vehicleEntryTick.toMap
     def testVehicleWaitingSeconds: Map[Long, Double] = vehicleWaitingSeconds.toMap
+    def testSignalAt(tick: Tick) = signalForMicroIntervalEndingAt(tick)
   }
 
   private def freshState(): LinkState =
@@ -115,14 +116,41 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
     val controls = Map(
       "hybrid.link.v1.microTickScheduled" -> "true",
       "hybrid.link.v1.signalAtExit" -> "Red",
+      "hybrid.link.v2.previousSignalAtExit" -> "Green",
+      "hybrid.link.v2.signalAtExitSinceTick" -> "30",
       "hybrid.link.v1.emptyGraceTick" -> "4"
     )
     val encoded = core.util.JsonUtil.toJson(original.copy(modelSnapshot = controls))
     link.testApplyMigrationSnapshot(core.util.JsonUtil.fromJson[MigrationSnapshot](encoded))
     link.testBuildMigrationSnapshot().modelSnapshot shouldBe controls
+    link.testSignalAt(30L).map(_.toString) shouldBe Some("Green")
+    link.testSignalAt(31L).map(_.toString) shouldBe Some("Red")
 
     link.testApplyMigrationSnapshot(original)
     link.testBuildMigrationSnapshot().modelSnapshot shouldBe original.modelSnapshot
+  }
+
+  it should "apply a signal transition to the following interval regardless of same-tick tick delivery" in {
+    val link = newTestLink("signal-interval")
+    link.testSetState(freshState())
+    def signal(tick: Long, phase: model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum): Unit =
+      link.actInteractWith(core.entity.event.ActorInteractionEvent(tick, 0L, 1L, "", "", "",
+        data = model.hybrid.entity.event.data.link.LinkSignalStateData(phase, tick + 30L), resourceId = "test"))
+    import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
+    signal(0L, Green)
+    link.testSignalAt(30L) shouldBe Some(Green)
+    signal(30L, Red)
+    link.testSignalAt(30L) shouldBe Some(Green)
+    link.testSignalAt(31L) shouldBe Some(Red)
+    val beforeGreen = link.testBuildMigrationSnapshot()
+    signal(60L, Green)
+    link.testSignalAt(60L) shouldBe Some(Red)
+    link.testSignalAt(61L) shouldBe Some(Green)
+    link.testApplyMigrationSnapshot(beforeGreen)
+    link.testSignalAt(31L) shouldBe Some(Red)
+    signal(60L, Green)
+    link.testSignalAt(60L) shouldBe Some(Red)
+    link.testSignalAt(61L) shouldBe Some(Green)
   }
 
   it should "leave a rehydrated link with empty maps when none were registered" in {

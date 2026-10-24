@@ -41,7 +41,7 @@ class MotorcycleMicroHandler(
     val speedLimitMs = data.speedLimit / 3.6
     val initialMicroState = MicroMotorcycleState(
       positionInLink       = 0.0,
-      velocity             = journeyReporter.sumoArrivalSpeed,
+      velocity             = data.initialVelocity.getOrElse(journeyReporter.sumoArrivalSpeed),
       acceleration         = 0.0,
       currentLane          = data.assignedLane,
       leaderVehicle        = None,

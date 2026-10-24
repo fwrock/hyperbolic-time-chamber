@@ -31,7 +31,7 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
   private val greenStart     = 0L
   private val greenDuration  = 30L
 
-  private class Harness {
+  private class Harness(endTick: Long = 10000L) {
     val scheduledTicks: mutable.ListBuffer[Tick] = mutable.ListBuffer.empty
     val notifiedStates: mutable.ListBuffer[(Tick, TrafficSignalPhaseStateEnum)] = mutable.ListBuffer.empty
     var finished = false
@@ -50,7 +50,7 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
       getStateFn = () => state,
       entityIdFn = () => "sig_b",
       currentTickFn = () => currentTick,
-      simulationEnd = 10000L,
+      simulationEnd = endTick,
       reportFn = (_, _) => (),
       sendMessageFn = (_, _, data, _) =>
         data match {
@@ -114,5 +114,16 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
     h.fireAt(0)
 
     h.finished shouldBe false
+  }
+
+  it should "execute a phase transition exactly at the inclusive horizon" in {
+    val h = new Harness(endTick = 60L)
+    h.fireAt(0L)
+    h.fireAt(30L)
+    h.scheduledTicks.last shouldBe 60L
+    h.finished shouldBe false
+    h.fireAt(60L)
+    h.state.signalStates(phaseOrigin).state shouldBe Green
+    h.finished shouldBe true
   }
 }

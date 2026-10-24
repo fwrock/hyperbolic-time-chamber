@@ -8,6 +8,57 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 
 class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
+  private def advance(lane: mutable.Queue[VehicleInLane], tick: Long = 1L, length: Double = 100.0,
+                      signal: Option[model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum] = None) =
+    DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, tick,
+      length, 50.0, 0.1, 10, mutable.Map.empty, signal)
+
+  "MICRO boundary kinematics" should "keep a free vehicle's crossing speed and retire it at its first crossing sub-tick" in {
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 99.5, 10.0, 0.0, 4.5))
+    val update = advance(lane).head
+    update.reachedEnd shouldBe true
+    update.subTick shouldBe 0
+    update.velocity shouldBe 10.26 +- 1e-9
+    update.position shouldBe 100.0
+    lane shouldBe empty
+  }
+
+  it should "start integrating entries after their entry tick regardless of same-tick mailbox order" in {
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 0.0, 0.0, 0.0, 4.5, entryTick = 35L))
+    advance(lane, tick = 35L) shouldBe empty
+    lane.head.position shouldBe 0.0
+    advance(lane, tick = 36L).head.position shouldBe 1.43 +- 1e-9
+  }
+
+  it should "use the leader's rear bumper and its state at the start of the sub-tick" in {
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 50.0, 0.0, 0.0, 12.0),
+      VehicleInLane(2L, "cars", 20.0, 0.0, 0.0, 2.0))
+    val updates = DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, 1L,
+      100.0, 50.0, 0.1, 1, mutable.Map.empty)
+    updates.find(_.vehicleId == 2L).get.gapToLeader shouldBe 18.0
+  }
+
+  it should "stop the front bumper at a red stop line without subtracting the follower's length" in {
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 65.0, 10.0, 0.0, 4.5))
+    for (tick <- 1L to 30L) {
+      advance(lane, tick, signal = Some(model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red))
+      lane should have size 1
+      lane.head.position should be <= 100.0
+    }
+    lane.head.position shouldBe 100.0 +- 0.01
+    lane.head.velocity shouldBe 0.0 +- 0.01
+  }
+
+  it should "keep a vehicle at the stop line under red and authorize its departure only after green" in {
+    import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Red, Green }
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 100.0, 0.0, 0.0, 4.5))
+    advance(lane, 1L, signal = Some(Red)).head.reachedEnd shouldBe false
+    lane should have size 1
+    lane.head.velocity shouldBe 0.0
+    advance(lane, 2L, signal = Some(Green)).head.reachedEnd shouldBe true
+    lane shouldBe empty
+  }
+
   "MICRO lane ordering" should "choose the same leader for equal-position vehicles regardless of arrival order" in {
     val lane = mutable.Queue.empty[VehicleInLane]
     VehicleInLane.insertFrontToBack(lane, VehicleInLane(15L, "cars", 0.0, 0.0, 0.0, 4.5))
