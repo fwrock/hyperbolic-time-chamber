@@ -90,7 +90,7 @@ class PersonPTTripHandler(
       event.actorClassType,
       responseData,
       "UnloadPassengerResponse",
-      null
+      LoadBalancedDistributed
     )
 
     logDebug(

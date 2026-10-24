@@ -14,5 +14,6 @@ case class InitializeData(
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
   relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId](),
   timeManagers: mutable.Map[String, ActorRef] = null,
-  runtimeCoordinator: Option[ActorRef] = None
+  runtimeCoordinator: Option[ActorRef] = None,
+  runtimeBirth: Option[core.runtime.accounting.RuntimeBirthOrigin] = None
 ) extends BaseEventData

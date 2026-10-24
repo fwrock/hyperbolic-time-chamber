@@ -100,6 +100,9 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var runtimeFrozen = false
   private var distributedRuntime = false
   private var runtimeHorizon = Long.MaxValue
+  private var executionLimits: Option[SetOptimisticExecutionLimits] = None
+  private case object ContinueOptimisticExecution
+  private var continuationQueued = false
   private var runtimeGvt = Long.MinValue
   private var runtimeCommitRound = 0L
   private var committedRetirement: Option[(Long, Boolean)] = None
@@ -107,6 +110,11 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var runtimeDiagnosticAt = 0L
   private var runtimeFailed = false
   private var terminalIntent: Option[EventOrder] = None
+  private var runtimeBirth: Option[RuntimeBirthOrigin] = None
+  private var runtimeBorn = true
+  // Rollback can erase the latest input while its peer still owes a later cancellation.
+  // This actor-lifetime receipt fence must never rewind with the model checkpoint.
+  private var retirementFence = Long.MinValue
   private val pendingCancellations = mutable.Queue.empty[ActorInteractionEvent]
   private val initializationAcks = mutable.ArrayBuffer.empty[(ActorRef, AnyRef)]
   private val pendingCreationCallbacks = mutable.Queue.empty[(String, Long)]
@@ -155,9 +163,15 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def drainInputs(): Unit = {
     if (drainingInputs || runtimeFrozen || runtimeFailed || (usesAccountedRuntime && runtimeEpoch.isEmpty)) return
     drainingInputs = true
+    val turnBudget = executionLimits.fold(Int.MaxValue)(_.limits.maxEventsPerTurn)
+    var executed = 0
     try {
-      pendingCancellations.dequeueAll(_.tick <= runtimeHorizon).foreach { event =>
-        if (!runtimeFailed) handleInteractWith(event)
+      var cancelling = true
+      while (executed < turnBudget && !runtimeFailed && cancelling) {
+        pendingCancellations.dequeueFirst(_.tick <= runtimeHorizon) match {
+          case Some(event) => handleInteractWith(event); executed += 1
+          case None => cancelling = false
+        }
       }
       while (pendingCreationCallbacks.nonEmpty && !runtimeFailed) {
         val (id, _) = pendingCreationCallbacks.dequeue()
@@ -165,7 +179,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         onDynamicActorInitialized(id, classType)
       }
       var ready = true
-      while (!runtimeFailed && ready && inputQueue.nonEmpty) {
+      while (!runtimeFailed && ready && inputQueue.nonEmpty && executed < turnBudget) {
         // Transport release cannot wait behind a model input that needs the replacement slot.
         inputQueue.discardDispatchesWhere(e =>
           (e.order.nonEmpty && e.scheduleRevision < scheduleRevision) ||
@@ -176,18 +190,35 @@ abstract class SimulationBaseActor[T <: BaseState](
           case e: SpontaneousEvent => e.order
           case _ => None
         }
-        val withinHorizon = head.forall {
-          case e: ActorInteractionEvent => e.tick <= runtimeHorizon
-          case e: SpontaneousEvent => e.tick <= runtimeHorizon
+        val headTick = head.map {
+          case e: ActorInteractionEvent => e.tick
+          case e: SpontaneousEvent => e.tick
         }
-        ready = head.nonEmpty && withinHorizon && !pendingSelf.exists(p => headOrder.exists(p < _))
-        if (ready) inputQueue.dequeue() match {
-          case e: ActorInteractionEvent => handleInteractWith(e)
-          case e: SpontaneousEvent => handleSpontaneous(e)
-          case _ => ()
+        val withinLimits = headTick.forall(tick => tick <= runtimeHorizon && executionLimits.forall { granted =>
+          tick <= granted.ceiling && (tick <= granted.frontier ||
+            rollbackHandler.uncommittedEventCount < granted.limits.maxUncommittedEvents)
+        })
+        val birthReady = head.forall {
+          case e: ActorInteractionEvent if cancelledMessages.contains(e.messageId) || processedMessages.contains(e.messageId) => true
+          case e: ActorInteractionEvent if e.data.isInstanceOf[RuntimeBirthData] => !runtimeBorn
+          case _ => runtimeBorn
+        }
+        ready = head.nonEmpty && birthReady && withinLimits && !pendingSelf.exists(p => headOrder.exists(p < _))
+        if (ready) {
+          inputQueue.dequeue() match {
+            case e: ActorInteractionEvent => handleInteractWith(e)
+            case e: SpontaneousEvent => handleSpontaneous(e)
+            case _ => ()
+          }
+          executed += 1
         }
       }
     } finally drainingInputs = false
+    if (executed >= turnBudget && !runtimeFailed && !continuationQueued &&
+      (inputQueue.nonEmpty || pendingCancellations.nonEmpty)) {
+      continuationQueued = true
+      self ! ContinueOptimisticExecution
+    }
   }
 
 
@@ -269,7 +300,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     * returned only so this method is total rather than throwing.
     */
   protected def isAwaitingReply(key: String, kind: String, requestSeq: Long): Boolean =
-    isTimeWarp && outstandingAwaitedReplies.get(key).exists(r => r.kind == kind && r.sendSeq == requestSeq)
+    isTimeWarp && matchesAwaitedReply(key, kind, requestSeq)
+
+  protected def matchesAwaitedReply(key: String, kind: String, requestSeq: Long): Boolean =
+    outstandingAwaitedReplies.get(key).exists(r => r.kind == kind && r.sendSeq == requestSeq)
 
   /** Removes the entry for `key` if present; no-op otherwise. */
   protected def consumeAwaitedReply(key: String): Unit =
@@ -345,7 +379,7 @@ abstract class SimulationBaseActor[T <: BaseState](
             if (interaction.tick > currentTick) {
               currentTick = interaction.tick
             }
-            actInteractWith(interaction)
+            dispatchRuntimeInteraction(interaction)
           case other =>
             logWarn(s"$getEntityId: replayLoggedEvent doesn't know how to replay a ${other.getClass.getName}")
         }
@@ -627,6 +661,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       currentTick = currentTick,
       logicalOrder = logicalOrder,
       terminalIntent = terminalIntent,
+      runtimeBorn = runtimeBorn,
       pendingSelf = pendingSelf,
       startTick = startTick,
       lamportClock = lamportClock.getClock,
@@ -660,6 +695,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentTick = snapshot.currentTick
     logicalOrder = snapshot.logicalOrder
     terminalIntent = snapshot.terminalIntent
+    runtimeBorn = snapshot.runtimeBorn
     pendingSelf = snapshot.pendingSelf
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
@@ -809,7 +845,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def registerPassivelyOnTimeManager(): Unit = {
     if (isTimeWarp) rollbackHandler.initialize(startTick)
     if (usesAccountedRuntime) {
-      accountedCoordinator.get ! JoinRuntime(schedulingIdentity(), self, None, startTick, runtimeIncarnation)
+      accountedCoordinator.get ! JoinRuntime(schedulingIdentity(), self, None, startTick, runtimeIncarnation, runtimeBirth)
       return
     }
     val timeManager = getTimeManager(currentTimeManagerType)
@@ -820,6 +856,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   override protected def onInitialize(event: InitializeEvent): Unit = {
     entityId = event.id
     accountedCoordinator = event.data.runtimeCoordinator.orElse(accountedCoordinator)
+    runtimeBirth = event.data.runtimeBirth
+    runtimeBorn = runtimeBirth.isEmpty
     if (event.data.timeManagers != null) {
       timeManagers = event.data.timeManagers
       currentTimeManagerType = timeManagers.keys.headOption.getOrElse(TimeManagerTypeEnum.DISCRETE_EVENT)
@@ -850,7 +888,11 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (usesAccountedRuntime) initializationAcks += event.actorRef -> InitializeEntityAckEvent(entityId = entityId)
     if (state != null) {
       startTick = state.getStartTick
-      if (state.isSetScheduleOnTimeManager) {
+      if (runtimeBirth.nonEmpty) {
+        startTick = runtimeBirth.get.tick
+        currentTick = startTick
+        registerPassivelyOnTimeManager()
+      } else if (state.isSetScheduleOnTimeManager) {
         try
           registerOnTimeManager()
         catch {
@@ -879,7 +921,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       )
     }
 
-    if (requiresPostLoadRegistration && creatorManager != null && state != null) {
+    if (requiresPostLoadRegistration && runtimeBirth.isEmpty && creatorManager != null && state != null) {
       creatorManager ! NeedsPostLoadRegistrationEvent(
         entityId = entityId,
         classType = getClass.getName
@@ -1270,8 +1312,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       currentEventScheduleOutcome = None
     }
     try
-      if (isTimeWarp) EventReadJournal.withRecording(currentEventReads)(actInteractWith(event))
-      else actInteractWith(event)
+      if (isTimeWarp) EventReadJournal.withRecording(currentEventReads)(dispatchRuntimeInteraction(event))
+      else dispatchRuntimeInteraction(event)
     catch
       case e: Exception =>
         if (usesAccountedRuntime) { failRuntime(e); return }
@@ -1304,26 +1346,83 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   def actInteractWith(event: ActorInteractionEvent): Unit = ()
 
+  private def birthReplyKey(child: LogicalProcessId): String = s"runtime-birth:${child.model}:${child.id}"
+
+  private def dispatchRuntimeInteraction(event: ActorInteractionEvent): Unit = event.data match {
+    case birth: RuntimeBirthData =>
+      val origin = runtimeBirth.getOrElse(throw new IllegalStateException("birth addressed an existing source LP"))
+      require(!runtimeBorn && event.order.contains(origin.order) &&
+        origin.parent == LogicalProcessId(event.actorClassType, event.actorRefId), "conflicting birth identity")
+      state = internStateStrings(JsonUtil.convertValue[T](birth.stateJson))
+      require(state != null && (!state.isSetScheduleOnTimeManager || state.getStartTick >= event.tick),
+        "child schedules before its creating event")
+      relationships.clear()
+      relationships ++= birth.relationships
+      runtimeBorn = true
+      if (requiresPostLoadRegistration) handlePostLoadRegistration()
+      if (state.isSetScheduleOnTimeManager) scheduleEvent(state.getStartTick)
+      sendMessageTo(event.actorRefId, event.actorClassType,
+        RuntimeBirthAccepted(LogicalProcessId(getClass.getName, getEntityId.toLong), event.seq),
+        actorType = CreationTypeEnum.valueOf(event.actorType))
+    case accepted: RuntimeBirthAccepted =>
+      require(accepted.child == LogicalProcessId(event.actorClassType, event.actorRefId), "birth reply identity mismatch")
+      val key = birthReplyKey(accepted.child)
+      if (matchesAwaitedReply(key, "runtime-birth", accepted.requestSeq)) {
+        consumeAwaitedReply(key)
+        onDynamicActorInitialized(accepted.child.id.toString, accepted.child.model)
+        if (pendingSelf.isEmpty && outstandingAwaitedReplies.isEmpty) onFinishSpontaneous(None)
+      }
+    case _ =>
+      require(runtimeBorn, "model input before an active birth")
+      actInteractWith(event)
+  }
+
   private def runtimeMinimum: Option[Long] = {
     (inputQueue.minimumTick.toSeq ++ pendingSelf.map(_.tick) ++ pendingCancellations.map(_.tick) ++
-      outstandingAwaitedReplies.values.map(_.sentAtTick) ++ pendingCreationCallbacks.map(_._2) ++
+      (if (distributedRuntime) Iterable.empty else outstandingAwaitedReplies.values.map(_.sentAtTick)) ++ pendingCreationCallbacks.map(_._2) ++
       pendingDynamicInits.values.map(_._2.data.data).map(_ => currentTick)).minOption
   }
 
   // Later interactions can extend history beyond the terminal decision without scheduling
   // another wake. Their state and reports must remain rollbackable until they also commit.
   private def mayRetireTerminal(gvt: Long): Boolean =
-    terminalIntent.exists(_.tick < gvt) && currentTick < gvt && runtimeMinimum.isEmpty
+    (terminalIntent.exists(_.tick < gvt) || (runtimeBirth.exists(_.tick < gvt) && !runtimeBorn)) &&
+      currentTick < gvt && retirementFence < gvt && runtimeMinimum.isEmpty && outstandingAwaitedReplies.isEmpty
 
-  private def acceptRuntimeInput(event: AnyRef): Unit = event match {
+  private def retainedRuntimeState: RuntimeRetention = {
+    val (checkpoints, events, reads) = rollbackHandler.retainedCounts
+    RuntimeRetention(checkpoints, events, reads, processedMessages.size, cancelledMessages.size,
+      reportBuffer.size, rollbackHandler.uncommittedEventCount)
+  }
+
+  private def acceptRuntimeInput(event: AnyRef): Unit = {
+    val tick = event match {
+      case e: SpontaneousEvent => e.tick
+      case e: ActorInteractionEvent => e.tick
+      case _ => throw new IllegalArgumentException(s"unsupported runtime LP input ${event.getClass.getName}")
+    }
+    runtimeBirth.foreach { origin =>
+      val order = event match {
+        case e: SpontaneousEvent => e.order
+        case e: ActorInteractionEvent => e.order
+      }
+      require(tick >= origin.tick && order.forall(_ >= origin.order), "input precedes the child's birth order")
+    }
+    retirementFence = math.max(retirementFence, tick)
+    event match {
     case e: SpontaneousEvent if (e.order.nonEmpty && e.scheduleRevision < scheduleRevision) ||
       (e.generation > 0L && e.generation <= currentGeneration) =>
       sendTimeManager(e.actorRef, FinishEvent(self, schedulingIdentity(), currentTick,
         timeManager = e.actorRef, generation = e.generation, discardedDispatch = true))
     case e: SpontaneousEvent => inputQueue.enqueue(e)
     case e: ActorInteractionEvent if e.isAntiMessage => pendingCancellations.enqueue(e)
-    case e: ActorInteractionEvent => inputQueue.enqueue(e)
+    case e: ActorInteractionEvent =>
+      if (e.data.isInstanceOf[RuntimeBirthData]) require(runtimeBirth.exists(origin =>
+        e.order.contains(origin.order) &&
+          origin.parent == LogicalProcessId(e.actorClassType, e.actorRefId)), "conflicting birth addressed an existing LP")
+      inputQueue.enqueue(e)
     case other => throw new IllegalArgumentException(s"unsupported runtime LP input ${other.getClass.getName}")
+    }
   }
 
   private def nextConservativeInput: Option[EventOrder] = inputQueue.headOption.map {
@@ -1332,6 +1431,19 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   override def receive: Receive = {
+    case ContinueOptimisticExecution =>
+      continuationQueued = false
+      try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
+    case grant: SetOptimisticExecutionLimits =>
+      require(distributedRuntime && runtimeAuthority.contains(sender()) && runtimeFrozen,
+        "execution limits outside an authorized frozen phase")
+      require(executionLimits.forall(previous => grant.frontier >= previous.frontier && grant.limits == previous.limits),
+        "execution limits changed during a run")
+      // At an input boundary the frozen frontier can be one tick beyond loaded coverage.
+      val minimumCeiling = if (grant.frontier == Long.MinValue) Long.MinValue else grant.frontier - 1L
+      require(grant.ceiling >= math.min(minimumCeiling, runtimeHorizon) && grant.ceiling <= runtimeHorizon,
+        "execution ceiling outside the run horizon")
+      executionLimits = Some(grant)
     case SetRuntimeHorizon(horizon) =>
       require(distributedRuntime && runtimeAuthority.contains(sender()) && runtimeFrozen && runtimeCommitRound == 0L,
         "execution horizon outside runtime startup")
@@ -1427,7 +1539,9 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"round=$round minimum=$minimum pendingSelf=$pendingSelf logicalOrder=$logicalOrder " +
           s"queued=${inputQueue.headOption} awaited=${outstandingAwaitedReplies.toMap} terminal=$terminalIntent")
       sender() ! RuntimeSnapshot(round, runtimeMinimum, outstandingAwaitedReplies.size,
-        pendingCreationCallbacks.size + pendingDynamicInits.size)
+        pendingCreationCallbacks.size + pendingDynamicInits.size,
+        queuedDispatches = if (distributedRuntime) inputQueue.queuedDispatchCount else 0,
+        retention = if (distributedRuntime) Some(retainedRuntimeState) else None)
     case CommitRuntime(round, gvt) =>
       if (!runtimeAuthority.contains(sender()) || !runtimeFrozen || round <= runtimeCommitRound || gvt < runtimeGvt) {
         failRuntime(new IllegalStateException(
@@ -1438,6 +1552,16 @@ abstract class SimulationBaseActor[T <: BaseState](
         if (gvt != runtimeGvt) runtimeFrontierAt = System.nanoTime()
         runtimeGvt = gvt
         flushBufferedReportsUpTo(gvt)
+        executionLimits.foreach { grant =>
+          if (grant.limits.fossilCollection) {
+            rollbackHandler.pruneBelow(gvt)
+            processedMessages.filterInPlace(_.tick >= gvt)
+            cancelledMessages.filterInPlace(_.tick >= gvt)
+            inputQueue.compactDiscarded()
+            currentEventReads.clear()
+            currentEventSentMessages.clear()
+          } else rollbackHandler.markCommitted(gvt)
+        }
         val eligible = mayRetireTerminal(gvt)
         committedRetirement = Some(round -> eligible)
         sender() ! RuntimeCommitted(round, eligible)
@@ -1517,8 +1641,15 @@ abstract class SimulationBaseActor[T <: BaseState](
     relationships: mutable.Map[String, ShardActorId] = mutable.Map.empty
   ): Unit = {
     if (usesAccountedRuntime) {
-      val adapter = if (isTimeWarp) "cancellable lifecycle" else "accounted birth/initialization"
-      failRuntime(new UnsupportedOperationException(s"live dynamic birth requires a $adapter adapter; precreate inert LPs before startup"))
+      require(logicalOrder.nonEmpty && runtimeEpoch.nonEmpty, "birth outside an executing model event")
+      val model = StringUtil.getModelClassName(classType)
+      val child = LogicalProcessId(model, entityId)
+      val json = stateData match { case value: String => value; case value => JsonUtil.toJson(value) }
+      val selectedManager = Option(timeManagers).flatMap(_.get(currentTimeManagerType)).getOrElse(currentTimeManager)
+      sendMessageTo(entityId, model, RuntimeBirthData(json, relationships.toMap, properties.resourceId,
+        Map(currentTimeManagerType -> selectedManager),
+        Option(reporters).fold(Map.empty[ReportTypeEnum, ActorRef])(_.toMap)), eventType = "runtime_birth")
+      registerAwaitedReply(birthReplyKey(child), "runtime-birth")
       return
     }
     if (isReplaying) return

@@ -30,6 +30,11 @@ object SimulatorSettingsRegistry {
 
   /** Catalog of all known settings exposed via the API. */
   val catalog: List[SettingDef] = List(
+    SettingDef("htc.time-warp.max-ahead-ticks", "HTC_TIME_WARP_MAX_AHEAD_TICKS", "Optimistic tick window ahead of GVT, fixed at startup", "50"),
+    SettingDef("htc.time-warp.input-window-ticks", "HTC_TIME_WARP_INPUT_WINDOW_TICKS", "Maximum tick span for progressive optimistic input enrollment", "1000"),
+    SettingDef("htc.time-warp.max-uncommitted-events", "HTC_TIME_WARP_MAX_UNCOMMITTED_EVENTS", "Speculative events per LP above GVT; frontier work may exceed this budget", "256"),
+    SettingDef("htc.time-warp.max-events-per-turn", "HTC_TIME_WARP_MAX_EVENTS_PER_TURN", "Maximum optimistic inputs before yielding the actor mailbox", "64"),
+    SettingDef("htc.time-warp.fossil-collection-enabled", "HTC_TIME_WARP_FOSSIL_COLLECTION_ENABLED", "Reclaim committed optimistic history after a proven GVT cut", "true"),
     SettingDef(
       "htc.time-manager.total-instances",
       "HTC_TIME_MANAGER_INSTANCES",

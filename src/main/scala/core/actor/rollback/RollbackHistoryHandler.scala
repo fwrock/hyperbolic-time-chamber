@@ -63,6 +63,9 @@ final class RollbackHistoryHandler(
   private val log: mutable.ArrayBuffer[LoggedEvent] = mutable.ArrayBuffer.empty
   private val checkpoints: mutable.ArrayBuffer[Checkpoint] = mutable.ArrayBuffer.empty
   private var eventsSinceCheckpoint: Int = 0
+  private var committedBefore: Tick = Long.MinValue
+  private var speculativeCount = 0
+  private var floorScheduleOutcome: Option[Option[Tick]] = None
 
   /** Establishes the floor checkpoint "before anything happened," at `startTick`. Must be called
     * once, before the first [[recordProcessedEvent]] — without it, a rollback targeting the
@@ -75,6 +78,9 @@ final class RollbackHistoryHandler(
     log.clear()
     checkpoints.clear()
     eventsSinceCheckpoint = 0
+    committedBefore = Long.MinValue
+    speculativeCount = 0
+    floorScheduleOutcome = None
     checkpoints += Checkpoint(seq = 0L, tick = startTick, snapshot = captureSnapshotFn())
   }
 
@@ -103,6 +109,7 @@ final class RollbackHistoryHandler(
       scheduleOutcome = scheduleOutcome
     )
     eventsSinceCheckpoint += 1
+    if (tick >= committedBefore) speculativeCount += 1
     if (eventsSinceCheckpoint >= checkpointInterval) {
       checkpoints += Checkpoint(seq = seq, tick = tick, snapshot = captureSnapshotFn())
       eventsSinceCheckpoint = 0
@@ -173,6 +180,7 @@ final class RollbackHistoryHandler(
     toReplay.foreach(replayEventFn)
 
     log --= undone
+    speculativeCount -= undone.count(_.tick >= committedBefore)
     checkpoints.filterInPlace(_.seq < firstUndoneSeq)
     eventsSinceCheckpoint = toReplay.size
 
@@ -182,12 +190,37 @@ final class RollbackHistoryHandler(
   /** Retain a floor strictly before GVT: a checkpoint at GVT already includes events that a
     * rollback to GVT must undo. Call only with a proven watermark including in-transit work.
     */
-  def pruneBelow(gvt: Tick): Unit =
-    checkpoints.filter(_.tick < gvt).sortBy(_.seq).lastOption.foreach {
-      floor =>
+  def pruneBelow(gvt: Tick): Unit = {
+    require(gvt >= committedBefore, "fossil frontier regression")
+    val firstLive = log.iterator.filter(_.tick >= gvt).map(_.seq).minOption
+    if (log.nonEmpty && firstLive.isEmpty) {
+      val last = log.maxBy(_.seq)
+      floorScheduleOutcome = lastScheduleOutcome
+      // Quiescent commitment can checkpoint the complete committed prefix, including passive LPs.
+      val floor = Checkpoint(last.seq, last.tick, captureSnapshotFn())
+      checkpoints.clear()
+      checkpoints += floor
+      log.clear()
+      eventsSinceCheckpoint = 0
+    } else {
+      checkpoints.filter(c => c.tick < gvt && firstLive.forall(c.seq < _)).maxByOption(_.seq).foreach { floor =>
+        val dropped = log.iterator.filter(_.seq < floor.seq).toVector
+        floorScheduleOutcome = dropped.reverseIterator.flatMap(_.scheduleOutcome).nextOption().orElse(floorScheduleOutcome)
         checkpoints.filterInPlace(_.seq >= floor.seq)
         log.filterInPlace(_.seq >= floor.seq)
+      }
     }
+    markCommitted(gvt)
+  }
+
+  def markCommitted(gvt: Tick): Unit = {
+    require(gvt >= committedBefore, "commit frontier regression")
+    committedBefore = gvt
+    speculativeCount = log.count(_.tick >= gvt)
+  }
+
+  def uncommittedEventCount: Int = speculativeCount
+  def retainedCounts: (Int, Int, Int) = (checkpoints.size, log.size, log.iterator.map(_.recordedReads.size).sum)
 
   /** Finds the logged event (if any) matching `predicate` — used to locate the original event an
     * incoming anti-message refers to, by matching its `MessageId` against each logged event's own
@@ -201,7 +234,7 @@ final class RollbackHistoryHandler(
     * [[LoggedEvent.scheduleOutcome]]); `None` if no retained event ever did.
     */
   def lastScheduleOutcome: Option[Option[Tick]] =
-    log.sortBy(_.seq).reverseIterator.flatMap(_.scheduleOutcome).nextOption()
+    log.sortBy(_.seq).reverseIterator.flatMap(_.scheduleOutcome).nextOption().orElse(floorScheduleOutcome)
 
   /** Test/diagnostic hook — how many full-copy checkpoints are currently retained. */
   private[rollback] def checkpointCount: Int = checkpoints.size

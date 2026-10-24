@@ -5,6 +5,7 @@ import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
+import core.actor.manager.load.RuntimeBirthInitializer
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 import org.apache.pekko.actor.{ActorRef, Props, Terminated}
@@ -44,6 +45,10 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private val retiring = mutable.Map.empty[ActorRef, Long]
   private var failed = false
   private var readyRequest: Option[(Long, ActorRef)] = None
+  private val unborn = mutable.Map.empty[LogicalProcessId, mutable.ArrayBuffer[(core.entity.event.ActorInteractionEvent, Option[(ActorRef, Long)])]]
+  private val births = mutable.Map.empty[LogicalProcessId, (RuntimeBirthOrigin, RuntimeBirthData, Option[ActorRef])]
+  protected def createRuntimeBirthInitializer(target: LogicalProcessId, origin: RuntimeBirthOrigin, data: RuntimeBirthData): ActorRef =
+    context.actorOf(RuntimeBirthInitializer.props(self, coordinator, target, origin, data))
 
   private def nextToken(): Long = { token = Math.addExact(token, 1L); token }
   private def owner(id: LogicalProcessId): ActorRef = members(Math.floorMod(id.hashCode(), members.size))
@@ -89,6 +94,23 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       registerOwnedProcess(join.identity.copy(id = handle), join.initialWake, join.identity)
       join.ref ! RuntimeJoined(epoch, coordinator, self)
     }
+    case AuthorizeRuntimeBirth(run, target, origin) => protect {
+      checkEpoch(run)
+      require(sender() == coordinator && births.get(target).exists(b => b._1 == origin && b._3.isEmpty), "invalid birth grant")
+      val data = births(target)._2
+      val initializer = createRuntimeBirthInitializer(target, origin, data)
+      context.watch(initializer)
+      births(target) = (origin, data, Some(initializer))
+    }
+    case RuntimeBirthInitialized(target, ref) => protect {
+      require(births.get(target).exists(_._3.contains(sender())) && processes.get(target).exists(_.ref == ref),
+        "birth initialized without owned registration")
+      births.remove(target)
+      context.unwatch(sender())
+      sender() ! StopRuntimeBirthInitializer
+      unborn.remove(target).get.foreach { case (event, source) => input(processes(target), event, source) }
+      completeBatch()
+    }
     case RouteInteraction(run, target, event) => protect {
       checkEpoch(run)
       val source = byRef.getOrElse(sender(), throw new IllegalArgumentException("unregistered model sender"))
@@ -107,10 +129,25 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     case event: ConservativeTransfer => protect {
       checkEpoch(event.epoch)
       require(members.contains(sender()) && owner(event.target) == self, "unowned channel delivery")
-      val process = processes.getOrElse(event.target,
-        throw new IllegalArgumentException(s"interaction to unregistered LP ${event.target}"))
-      require(!retiring.contains(process.ref), s"interaction to terminal LP ${event.target}")
-      input(process, event.event, Some(sender() -> event.token))
+      processes.get(event.target) match {
+        case Some(process) =>
+          require(!retiring.contains(process.ref), s"interaction to terminal LP ${event.target}")
+          input(process, event.event, Some(sender() -> event.token))
+        case None =>
+          val queue = unborn.getOrElseUpdate(event.target, mutable.ArrayBuffer.empty)
+          event.event.data match {
+            case data: RuntimeBirthData =>
+              val origin = RuntimeBirthOrigin(LogicalProcessId(event.event.actorClassType, event.event.actorRefId),
+                event.event.order.get.key, event.event.tick, event.event.order.get.microstep)
+              require(!births.contains(event.target), "duplicate child birth slot")
+              births(event.target) = (origin, data, None)
+              queue += event.event -> Some(sender() -> event.token)
+              coordinator ! RequestRuntimeBirth(epoch, event.target, origin)
+            case _ =>
+              queue += event.event -> None
+              sender() ! ConservativeTransferAccepted(epoch, event.token)
+          }
+      }
     }
     case ConservativeInputAccepted(run, id, next) => protect {
       checkEpoch(run)
@@ -148,6 +185,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     case CollectConservativeReady(round) => protect {
       require(sender() == coordinator && batch.isEmpty, "frontier requested during execution")
       readyRequest = Some(round -> sender())
+      require(unborn.isEmpty || births.nonEmpty, "input to an unknown/retired LP without an accounted birth")
       reportReady()
     }
     case event: ExecuteConservativeBatch => protect {
@@ -214,6 +252,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     }
     case Terminated(ref) if byRef.contains(ref) && stopping.isEmpty && !retiring.contains(ref) =>
       fail(new IllegalStateException(s"LP lost: $ref"))
+    case Terminated(ref) if births.valuesIterator.exists(_._3.contains(ref)) =>
+      fail(new IllegalStateException(s"birth initializer lost: $ref"))
     case failure: RuntimeFailure => fail(new IllegalStateException(failure.reason))
     }
     conservative.orElse(super.handleEvent)
@@ -230,13 +270,13 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     completeBatch()
   }
   private def completeBatch(): Unit = if (batch.nonEmpty && !preparing && executing.isEmpty &&
-    outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty) {
+    outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty) {
     val round = batch.get.round
     batch = None
     coordinator ! ConservativeBatchComplete(round)
   } else reportReady()
   private def reportReady(): Unit = if (readyRequest.nonEmpty && batch.isEmpty && outgoing.isEmpty &&
-    accepting.isEmpty && reports.isEmpty) {
+    accepting.isEmpty && reports.isEmpty && births.isEmpty) {
     val (round, target) = readyRequest.get
     readyRequest = None
     val next = (readyOrderedSchedules.map(_._3) ++ readyInputs.valuesIterator).minOption

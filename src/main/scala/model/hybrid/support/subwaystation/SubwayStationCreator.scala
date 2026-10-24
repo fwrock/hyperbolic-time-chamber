@@ -35,7 +35,7 @@ class SubwayStationCreator(
 
   def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Int = {
     var spawned = 0
-    lines.keys.foreach { line =>
+    lines.keys.toList.sorted.foreach { line =>
       state.subways.get(line) match
         case Some(subwayQueue) =>
           if (subwayQueue.nonEmpty && state.garage) {
@@ -71,7 +71,7 @@ class SubwayStationCreator(
     */
   def prepareSubwaysFrom(lines: mutable.Map[String, SubwayLineInformation]): Seq[PreparedSubway] = {
     val prepared = mutable.ListBuffer.empty[PreparedSubway]
-    lines.keys.foreach { line =>
+    lines.keys.toList.sorted.foreach { line =>
       state.subways.get(line) match
         case Some(subwayQueue) =>
           if (subwayQueue.nonEmpty && state.garage) {
@@ -140,7 +140,7 @@ class SubwayStationCreator(
         line         = subway.line,
         subwayStations = subwayStations,
         origin       = state.nodeId,
-        destination  = subwayStations.values.last,
+        destination  = route.last._2,
         speedFactor  = subway.speedFactor
       )
       s.bestRoute    = Some(route)
@@ -167,10 +167,7 @@ class SubwayStationCreator(
     toJson(subwayState)
   }
 
-  /** The one irrevocable step of subway creation. Under Time Warp the caller only invokes this
-    * once GVT has passed the tick `prepareSubway` ran at, since a shard-region `StartEntity` for
-    * an already-live entity id cannot be undone by an anti-message.
-    */
+  /** Accounted runtimes journal activation; legacy callers gate physical initialization separately. */
   def spawnPreparedSubway(subway: SubwayInformation, stateJson: String): Unit = {
     SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
     spawnDynamicActorFn("hybrid.actor.Subway", subway.actorId, stateJson)

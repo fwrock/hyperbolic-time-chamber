@@ -149,4 +149,22 @@ class SubwayStationCreatorSpec extends AnyFlatSpec with Matchers {
     spawnCalls should have size 1
     spawnCalls.head._2 shouldBe 42L
   }
+  "birth preparation" should "derive the destination from route order rather than station-map iteration" in {
+    val state = stateWithRoute()
+    state.linesRoute("line-1") = mutable.Queue(
+      SubwayRouteEntry(SubwayStationNode(3L, 10L), 1000L),
+      SubwayRouteEntry(SubwayStationNode(1L, 20L), 1001L))
+    val creator = newCreator(state, mutable.ListBuffer.empty)
+    val json = creator.prepareSubway(subwayInfo(), "line-1", startTick = 200L)
+    core.util.JsonUtil.convertValue[model.hybrid.entity.state.SubwayState](json).destination shouldBe 20L
+  }
+  it should "prepare simultaneous lines in stable order across map representations" in {
+    val a = stateWithRoute("line-a")
+    val z = stateWithRoute("line-z")
+    val state = a.copy(lines = mutable.LinkedHashMap("line-z" -> z.lines("line-z"), "line-a" -> a.lines("line-a")),
+      subways = mutable.Map("line-z" -> z.subways("line-z"), "line-a" -> a.subways("line-a")),
+      linesRoute = mutable.Map("line-z" -> z.linesRoute("line-z"), "line-a" -> a.linesRoute("line-a")))
+    newCreator(state, mutable.ListBuffer.empty).prepareSubwaysFrom(state.lines).map(_.line) shouldBe Seq("line-a", "line-z")
+  }
+
 }

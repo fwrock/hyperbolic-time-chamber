@@ -26,9 +26,6 @@ class BusStation(
       properties = properties
     ) {
 
-  override protected def validateRuntimeCapabilities(): Unit =
-    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireAccountedBirth(getCurrentTimeManagerType)
-
   override protected def internStateStrings(s: BusStationState): BusStationState =
     s.copy(
       name        = StringPool.intern(s.name),
@@ -51,7 +48,6 @@ class BusStation(
     getStateFn      = () => state,
     entityIdFn      = () => getEntityId,
     currentTickFn   = () => currentTick,
-    getBlockingEcFn = () => context.system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher"),
     logInfoFn       = logInfo,
     logWarnFn       = logWarn,
     logDebugFn      = logDebug
@@ -99,11 +95,11 @@ class BusStation(
             val bus = state.buses.dequeue()
             try {
               createOrStashBus(bus)
-              if (!isTimeWarp) {
+              if (!isTimeWarp && !usesAccountedRuntime) {
                 pendingSpawnTick = Some(currentTick + state.interval)
                 awaitingDynamicInit = true
               }
-              onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+              onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
             } catch {
               case e: IllegalStateException =>
                 logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -138,11 +134,11 @@ class BusStation(
         try {
           createOrStashBus(bus)
           state.status = Working
-          if (!isTimeWarp) {
+          if (!isTimeWarp && !usesAccountedRuntime) {
             pendingSpawnTick = Some(currentTick + state.interval)
             awaitingDynamicInit = true
           }
-          onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+          onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -208,11 +204,11 @@ class BusStation(
         try {
           createOrStashBus(bus)
           state.status = Working
-          if (!isTimeWarp) {
+          if (!isTimeWarp && !usesAccountedRuntime) {
             pendingSpawnTick = Some(currentTick + state.interval)
             awaitingDynamicInit = true
           }
-          onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+          onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable even with partial: ${e.getMessage}")
@@ -246,15 +242,9 @@ class BusStation(
     }
   }
 
-  /** Prepares the bus eagerly (route validation + state build + `report()`, all pure/GVT-buffer
-    * safe) in both modes, but only performs the irrevocable `spawnDynamicActor` immediately under
-    * conservative (non-Time-Warp) execution. Under Time Warp the prepared bus is stashed in
-    * [[pendingBusSpawn]] and only spawned once [[firePendingBusSpawn]] fires, gated on
-    * `event.gvt` passing the dequeue tick — see `docs/TIME_WARP_DESIGN.md`'s dynamic-actor-spawn
-    * entry for why this is safe.
-    */
+  // Legacy time managers lack reversible birth and still defer physical creation.
   private def createOrStashBus(bus: BusInformation): Unit =
-    if (isTimeWarp) {
+    if (isTimeWarp && !usesAccountedRuntime) {
       val stateJson = busCreator.prepareBus(bus)
       pendingBusSpawn = Some(PendingBusSpawn(currentTick, bus, stateJson))
     } else {

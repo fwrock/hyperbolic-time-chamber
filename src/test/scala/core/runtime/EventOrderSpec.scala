@@ -43,4 +43,22 @@ class EventOrderSpec extends AnyFlatSpec with Matchers {
         order = Some(EventOrder(10L, 0L, "x"))))
     }
   }
+
+  it should "reclaim obsolete dispatch entries behind earlier live work without changing queue order" in {
+    val queue = new OrderedInputQueue
+    val earlier = SpontaneousEvent(1L, ActorRef.noSender, generation = 1L)
+    val obsolete = SpontaneousEvent(100L, ActorRef.noSender, generation = 2L)
+    val later = SpontaneousEvent(200L, ActorRef.noSender, generation = 3L)
+    Vector(later, obsolete, earlier).foreach(queue.enqueue)
+    queue.discardDispatchesWhere(_.generation == 2L) shouldBe Vector(obsolete)
+    queue.retainedEntryCount shouldBe 3
+    queue.compactDiscarded()
+    queue.retainedEntryCount shouldBe 2
+    queue.queuedDispatchCount shouldBe 2
+    queue.dequeue() shouldBe earlier
+    queue.discardDispatchesWhere(_.generation == 3L)
+    queue.headOption shouldBe None
+    queue.compactDiscarded()
+    queue.retainedEntryCount shouldBe 0
+  }
 }

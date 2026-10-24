@@ -31,9 +31,6 @@ class SubwayStation(
       properties = properties
     ) {
 
-  override protected def validateRuntimeCapabilities(): Unit =
-    org.interscity.htc.model.hybrid.util.HybridRuntimeCapabilities.requireAccountedBirth(getCurrentTimeManagerType)
-
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
   private var pendingSubwayAckCount: Int  = 0
   private var pendingSubwayNextTick: Option[Tick] = None
@@ -125,16 +122,18 @@ class SubwayStation(
     } else if (pendingSubwaySpawns.nonEmpty) {
       event.gvt.foreach(firePendingSubwaySpawns)
       onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
-    } else if (pendingSubwayNextTick.exists(currentTick < _)) {
+    } else if (!usesAccountedRuntime && pendingSubwayNextTick.exists(currentTick < _)) {
       onFinishSpontaneous(pendingSubwayNextTick)
     } else
       state.status match
         case Start =>
           state.status = Working
-          if (isTimeWarp) stashPendingSubways(state.lines) else pendingSubwayAckCount = subwayCreator.createSubwayFrom(state.lines)
+          if (usesAccountedRuntime) subwayCreator.createSubwayFrom(state.lines)
+          else if (isTimeWarp) stashPendingSubways(state.lines) else pendingSubwayAckCount = subwayCreator.createSubwayFrom(state.lines)
           scheduleNextTick()
         case Working =>
-          if (isTimeWarp) stashPendingSubways(subwayCreator.filterLinesByNextTick())
+          if (usesAccountedRuntime) subwayCreator.createSubwayFrom(subwayCreator.filterLinesByNextTick())
+          else if (isTimeWarp) stashPendingSubways(subwayCreator.filterLinesByNextTick())
           else pendingSubwayAckCount = subwayCreator.createSubwayFrom(subwayCreator.filterLinesByNextTick())
           scheduleNextTick()
         case _ =>

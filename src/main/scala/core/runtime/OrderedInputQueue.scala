@@ -14,6 +14,7 @@ final class OrderedInputQueue {
   private val pending = mutable.PriorityQueue.empty[Entry]
   private val dispatches = mutable.LongMap.empty[Entry]
   private var arrival = 0L
+  private var discardedEntries = 0
 
   def enqueue(event: AnyRef): Unit = {
     val (tick, order) = event match {
@@ -32,13 +33,17 @@ final class OrderedInputQueue {
     val obsolete = dispatches.valuesIterator.filter(e => predicate(e.event.asInstanceOf[SpontaneousEvent])).toVector
     obsolete.map { entry =>
       entry.discarded = true
+      discardedEntries += 1
       dispatches.remove(entry.arrival)
       entry.event.asInstanceOf[SpontaneousEvent]
     }
   }
 
   private def trimHead(): Unit =
-    while (pending.headOption.exists(_.discarded)) pending.dequeue()
+    while (pending.headOption.exists(_.discarded)) {
+      pending.dequeue()
+      discardedEntries -= 1
+    }
 
   def headOption: Option[AnyRef] = { trimHead(); pending.headOption.map(_.event) }
   def dequeue(): AnyRef = {
@@ -49,4 +54,12 @@ final class OrderedInputQueue {
   }
   def nonEmpty: Boolean = { trimHead(); pending.nonEmpty }
   def minimumTick: Option[Long] = { trimHead(); pending.headOption.map(_.tick) }
+  def queuedDispatchCount: Int = dispatches.size
+  private[runtime] def retainedEntryCount: Int = pending.size
+  def compactDiscarded(): Unit = if (discardedEntries > 0) {
+    val live = pending.iterator.filterNot(_.discarded).toVector
+    pending.clear()
+    pending.enqueue(live*)
+    discardedEntries = 0
+  }
 }

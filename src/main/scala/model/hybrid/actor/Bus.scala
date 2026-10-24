@@ -67,6 +67,7 @@ class Bus(
     copied.movableCurrentNode        = s.movableCurrentNode
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
+    copied.movableLinkExitReported = s.movableLinkExitReported
     copied
   }
 
@@ -110,15 +111,6 @@ class Bus(
   override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
     super.applyMigrationSnapshot(snapshot)
     restoreBusMigrationFields(snapshot)
-  }
-
-  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported/sumoTripInfoReported
-  // are actor-local, not `state`, so a Time Warp rollback restoring `state` never resets them --
-  // without this, a trip whose completion already fired once before the rollback's target can never
-  // report its (corrected, replayed) completion again for the rest of the simulation.
-  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
-    super.onRollbackDiscardPending(targetTick)
-    journeyReporter.clearCompletionGuards()
   }
 
   /** Current link being traversed.
@@ -208,7 +200,8 @@ class Bus(
   private lazy val journeyReporter = new BusJourneyReporter(
     reportFn      = (data, label) => report(data = data, label = label),
     entityIdFn    = () => getEntityId,
-    currentTickFn = () => currentTick
+    currentTickFn = () => currentTick,
+    journeyStateFn = () => state.journey
   )
 
   private lazy val microHandler = new BusMicroHandler(
@@ -217,6 +210,7 @@ class Bus(
     currentTickFn          = () => currentTick,
     journeyReporter        = journeyReporter,
     onFinishSpontaneousFn  = nextTick => onFinishSpontaneous(nextTick),
+    requestSignalStateFn   = () => requestSignalState(),
     logDebugFn             = msg => logDebug(msg),
     setCurrentLinkIdFn     = id => currentLinkId = id,
     setLinkEntryTickFn     = tick => linkEntryTick = tick,
@@ -508,19 +502,16 @@ class Bus(
     super.enterLink()
   }
 
+  override protected def viewNextPath: Option[(Long, Long)] =
+    state.bestRoute.filter(_.nonEmpty).map { path =>
+      path(if (state.currentPathPosition < path.size) state.currentPathPosition else 0)
+    }
+
   override def getNextPath: Option[(Long, Long)] =
-    state.bestRoute match {
-      case Some(path) =>
-        if (state.currentPathPosition < path.size) {
-          val nextPath = path(state.currentPathPosition)
-          state.currentPathPosition += 1
-          Some(nextPath)
-        } else {
-          state.currentPathPosition = 1
-          Some(path(0))
-        }
-      case None =>
-        None
+    viewNextPath.map { nextPath =>
+      val size = state.bestRoute.get.size
+      state.currentPathPosition = if (state.currentPathPosition < size) state.currentPathPosition + 1 else 1
+      nextPath
     }
 
   /** Check if bus is at a bus stop (for MICRO mode).
