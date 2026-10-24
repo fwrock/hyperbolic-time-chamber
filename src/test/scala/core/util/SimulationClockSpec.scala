@@ -28,4 +28,11 @@ class SimulationClockSpec extends AnyFlatSpec with Matchers {
       actorsDataSources = List(source.copy(classType = "hybrid.actor.Person")))))
     intercept[IllegalArgumentException](SimulationClock.validateScenario(fine.copy(dynamicActorTypes = List("hybrid.actor.Bus"))))
   }
+
+  it should "derive calendar timestamps from physical time without multiplying large ticks into nanoseconds" in {
+    val start = LocalDateTime.of(2025, 1, 1, 0, 0)
+    SimulationClock(0.1).at(start, 243) shouldBe start.plusSeconds(24).plusNanos(300000000)
+    SimulationClock(0.1).at(start, -1) shouldBe start.minusNanos(100000000)
+    SimulationClock(1).at(start, 10000000000L) shouldBe start.plusSeconds(10000000000L)
+  }
 }

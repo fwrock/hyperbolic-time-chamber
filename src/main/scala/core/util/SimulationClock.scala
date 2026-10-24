@@ -10,8 +10,13 @@ final case class SimulationClock(secondsPerTick: Double = 1.0) {
     "tickDuration must be finite seconds in (0, 1]")
   require(math.abs(1.0 / secondsPerTick - math.rint(1.0 / secondsPerTick)) < 1e-8,
     "tickDuration must divide one second into an integer number of ticks")
+  require(1.0 / secondsPerTick <= Long.MaxValue.toDouble, "tickDuration resolution exceeds integer clock range")
+  private val ticksPerSecond = math.round(1.0 / secondsPerTick)
 
   def seconds(ticks: Tick): Double = ticks.toDouble * secondsPerTick
+  def at(start: java.time.LocalDateTime, tick: Tick): java.time.LocalDateTime =
+    start.plusSeconds(Math.floorDiv(tick, ticksPerSecond))
+      .plusNanos(math.round(Math.floorMod(tick, ticksPerSecond).toDouble * secondsPerTick * 1e9))
   def ticksCeil(seconds: Double): Tick = {
     require(seconds.isFinite && seconds >= 0.0 && seconds / secondsPerTick < Long.MaxValue.toDouble)
     math.ceil(seconds / secondsPerTick - 1e-9).toLong

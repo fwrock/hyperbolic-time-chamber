@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Exploratory, initialized free-flow forecasts against official NGSIM field observations."""
 import argparse
-from collections import Counter
 import hashlib
 import json
 import math
@@ -79,17 +78,41 @@ def run(args):
     root.mkdir(parents=True,exist_ok=False)
     # Persist the selection and evaluation rules before downloading observations or seeing forecast errors.
     write_json(root/'pilot-protocol.json',PROTOCOL)
-    metadata,metadata_source=fetch(METADATA,root/'metadata.json')
+    snapshot=getattr(args,'snapshot',None)
+    if snapshot:
+        frozen=json.loads((snapshot/'quality-control.json').read_text())
+        assert frozen['protocol']==PROTOCOL, 'snapshot uses different selection/initialization rules'
+        sources=[frozen['metadataSource'],frozen['candidateSource']]+[s['source'] for s in frozen['selected']]
+        for source in sources:
+            name=source['file']
+            assert Path(name).name==name, 'snapshot path must stay inside its directory'
+            raw=(snapshot/name).read_bytes()
+            assert hashlib.sha256(raw).hexdigest()==source['sha256'], 'field snapshot hash mismatch'
+            (root/name).write_bytes(raw)
+        metadata=json.loads((root/'metadata.json').read_text())
+        metadata_source=frozen['metadataSource']
+    else:
+        metadata,metadata_source=fetch(METADATA,root/'metadata.json')
     columns={c.get('fieldName'):c for c in metadata['columns']}
     assert 'feet' in columns['local_y']['description'] and 'feet/second' in columns['v_vel']['description']
     assert metadata.get('licenseId')=='CC_30_BY_SA'
     query=API+'?'+urlencode({'$where':PROTOCOL['candidateQuery'],'$limit':PROTOCOL['candidateLimit']})
-    candidates,candidate_source=fetch(query,root/'candidates.json')
+    if snapshot:
+        candidates=json.loads((root/'candidates.json').read_text())
+        candidate_source=frozen['candidateSource']
+    else:
+        candidates,candidate_source=fetch(query,root/'candidates.json')
     candidates=sorted(candidates,key=lambda r:(int(r['global_time']),int(r['vehicle_id'])))
     candidates=list({(r['vehicle_id'],int(r['global_time'])//900_000):r for r in reversed(candidates)}.values())
     candidates.sort(key=lambda r:(int(r['global_time']),int(r['vehicle_id'])))
     selected,rejected=[],[]
-    for index,candidate in enumerate(candidates[:PROTOCOL['maxCandidates']]):
+    if snapshot:
+        for subject in frozen['selected']:
+            data=quality_control(json.loads((root/subject['source']['file']).read_text()),subject['startMilliseconds'])
+            selected.append(dict(subject=subject['subject'],startMilliseconds=subject['startMilliseconds'],
+                                 source=subject['source'],**data))
+        rejected=frozen['rejected']
+    for index,candidate in enumerate([] if snapshot else candidates[:PROTOCOL['maxCandidates']]):
         if len(selected)>=PROTOCOL['targetSubjects']: break
         subject,start=int(candidate['vehicle_id']),int(candidate['global_time'])
         url=API+'?'+urlencode({'$where':f"location='us-101' and vehicle_id='{subject}' and global_time>={start} and global_time<={start+11_000}",
@@ -160,6 +183,7 @@ def main():
     parser.add_argument('--jar',required=True,type=Path)
     parser.add_argument('--output',required=True,type=Path)
     parser.add_argument('--base-port',required=True,type=int)
+    parser.add_argument('--snapshot',type=Path,help='Re-run a frozen, hash-checked observation snapshot without querying the live dataset')
     raise SystemExit(run(parser.parse_args()))
 
 
