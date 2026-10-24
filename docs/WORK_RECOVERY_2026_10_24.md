@@ -1,6 +1,39 @@
 # Work recovery — 2026-10-24
 
-## Scientific follow-up completed on 2026-10-25
+## Cross-link following completed on 2026-10-25
+
+The current milestone is [MICRO cross-link following](MICRO_CROSS_LINK_FOLLOWING.md).
+Protocol `4c9f105` froze v2 cases/seeds before physics implementation `8ba005d`.
+Runtime guard repair `222f2d0` handles publications that outlive an undone
+subscription. No traffic parameters or acceptance thresholds were changed after
+first held-out execution; conservative report comparisons verify unchanged
+physics across that repair. The initial failure remains in the evidence.
+
+The accepted executable SHA-256 is
+`c13c6c51f73b4689bf151cbca5146bf41697f21de5c3d870fd3ec0453ac2696d`.
+The full build passes **653 Scala tests / 135 suites**, and all **18 Python tests**
+pass. All four v2 physical cases and five independent 18-car demand seeds pass.
+Across 23 HTC runs, all 19 SUMO comparisons cover 260 completed matched cars;
+all 17 full-report comparisons match. Two-JVM Time Warp exercises 3,297 rollbacks.
+The seed-level mean duration bias is +0.064 s, exploratory 95% interval
+[+0.046, +0.083] s. The paired old seed-101 diagnostic improves the final car's
+error from −3.2 to +0.1 s and trip-time MAE from 1.325 to 0.081 s.
+
+Retained commands, per-car comparisons, hashes, exclusions and the figure:
+[`validation/micro-discharge-2026-10-25.json`](validation/micro-discharge-2026-10-25.json).
+Accepted raw artifacts: `/tmp/htc-discharge-accepted-20261025/`, including `build.log`.
+Earlier diagnostic builds: `/tmp/htc-discharge-20261025/` and
+`/tmp/htc-discharge-final-20261025/`; the latter includes the initial failed v2 run.
+Do not count those as accepted final runs. `/tmp` may disappear; the frozen
+protocol and implementation revisions reproduce the main campaign.
+
+The supported correction is opt-in fine-clock, single-lane MICRO; default mixed
+mode is preserved. General empirical validity, competing junctions, multi-lane
+following, blocked handoff/spillback and city-scale costs remain open. Reserve a
+new validation set before revising traffic physics again. The historical v1
+failure and the independent field pilot below are retained unchanged.
+
+## Earlier scientific workflow completed on 2026-10-25
 
 The four-priority workflow is implemented in
 [MICRO scientific validation](MICRO_SCIENTIFIC_VALIDATION.md). Protocol `b68e5e0`
