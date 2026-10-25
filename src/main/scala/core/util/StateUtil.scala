@@ -35,7 +35,7 @@ object StateUtil {
     }
 
   def getRelationshipValue(state: State, relationshipName: String): Option[String] =
-    state.relationships.get(relationshipName).map(_.entityId)
+    state.relationships.get(relationshipName).map(_.entityId.toString)
 
   def getProperty(state: State, propertyName: String): Option[Property] =
     state.properties.get(propertyName)

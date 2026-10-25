@@ -11,8 +11,8 @@ class BicycleJourneyReporter(
   reportFn:        (Map[String, Any], String) => Unit,
   entityIdFn:      () => String,
   currentTickFn:   () => Tick,
-  tripOriginFn:    () => Option[String],
-  tripDestFn:      () => Option[String],
+  tripOriginFn: () => Option[Long],
+  tripDestFn: () => Option[Long],
   tripStartTickFn: () => Option[Tick],
   driverAttrsFn:   () => DriverAttributes
 ) {
@@ -51,6 +51,15 @@ class BicycleJourneyReporter(
     journeyFinishedReported           = false
   }
 
+  /** See `CarJourneyReporter.clearCompletionGuards`'s doc for the full rationale: this flag is
+    * actor-local, not `state`, so a Time Warp rollback never resets it on its own, silently
+    * blocking a replayed trip completion from ever being reported again. Deliberately narrower than
+    * `reset()` -- must not wipe accumulated SUMO metrics for the surviving, not-undone portion of
+    * the current trip.
+    */
+  def clearCompletionGuards(): Unit =
+    journeyFinishedReported = false
+
   def updateHaltingState(speed: Double, deltaSeconds: Double): Unit = {
     val isHaltingNow = speed < 0.1
     if (isHaltingNow) {
@@ -60,7 +69,7 @@ class BicycleJourneyReporter(
     sumoIsHalting = isHaltingNow
   }
 
-  def finishJourney(reason: String, finalNode: String, state: BicycleState): Unit = {
+  def finishJourney(reason: String, finalNode: Long, state: BicycleState): Unit = {
     if (journeyFinishedReported) return
     journeyFinishedReported = true
     val destination = tripDestFn().getOrElse(state.destination)
@@ -94,7 +103,7 @@ class BicycleJourneyReporter(
 
   private def reportSumoTripInfo(
     reason: String,
-    finalNode: String,
+    finalNode: Long,
     state: BicycleState
   ): Unit = {
     val destination   = tripDestFn().getOrElse(state.destination)

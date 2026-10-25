@@ -16,6 +16,7 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.BusStationStateE
 import org.interscity.htc.model.hybrid.entity.state.model.{ BusInformation, SubRoutePair }
 import org.interscity.htc.core.metrics.model.hybrid.BusStationMetrics
 import org.interscity.htc.model.hybrid.support.busstation.{ BusStationBusCreator, BusStationRouteCalculator }
+import org.interscity.htc.core.enumeration.TimeManagerTypeEnum
 import scala.collection.mutable
 import core.util.StringPool
 
@@ -28,8 +29,8 @@ class BusStation(
   override protected def internStateStrings(s: BusStationState): BusStationState =
     s.copy(
       name        = StringPool.intern(s.name),
-      origin      = StringPool.intern(s.origin),
-      destination = StringPool.intern(s.destination)
+      origin      = s.origin,
+      destination = s.destination
     )
 
   private lazy val simulationEnd: Tick = SimulationUtil.loadSimulationConfig().duration
@@ -38,11 +39,15 @@ class BusStation(
   private var awaitingDynamicInit: Boolean = false
   private val dynamicInitPollIntervalTicks: Tick = 1L
 
+  private case class PendingBusSpawn(creationTick: Tick, bus: BusInformation, stateJson: String)
+  private var pendingBusSpawn: Option[PendingBusSpawn] = None
+
+  private def isTimeWarp: Boolean = getCurrentTimeManagerType == TimeManagerTypeEnum.TIME_WARP
+
   private lazy val routeCalculator = new BusStationRouteCalculator(
     getStateFn      = () => state,
     entityIdFn      = () => getEntityId,
     currentTickFn   = () => currentTick,
-    getBlockingEcFn = () => context.system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher"),
     logInfoFn       = logInfo,
     logWarnFn       = logWarn,
     logDebugFn      = logDebug
@@ -71,6 +76,11 @@ class BusStation(
       onFinishSpontaneous(None)
     } else if (awaitingDynamicInit) {
       onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    } else if (pendingBusSpawn.isDefined && event.gvt.exists(_ >= pendingBusSpawn.get.creationTick)) {
+      firePendingBusSpawn()
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+    } else if (pendingBusSpawn.isDefined) {
+      onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
     } else if (pendingSpawnTick.exists(currentTick < _)) {
       onFinishSpontaneous(pendingSpawnTick)
     } else
@@ -84,14 +94,12 @@ class BusStation(
           if (state.buses.nonEmpty) {
             val bus = state.buses.dequeue()
             try {
-              busCreator.createBus(bus)
-              dependencies(bus.actorId) = ShardActorId(
-                entityId = bus.actorId,
-                classType = classOf[Bus].getName
-              )
-              pendingSpawnTick = Some(currentTick + state.interval)
-              awaitingDynamicInit = true
-              onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+              createOrStashBus(bus)
+              if (!isTimeWarp && !usesAccountedRuntime) {
+                pendingSpawnTick = Some(currentTick + state.interval)
+                awaitingDynamicInit = true
+              }
+              onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
             } catch {
               case e: IllegalStateException =>
                 logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -124,15 +132,13 @@ class BusStation(
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
         try {
-          busCreator.createBus(bus)
-          dependencies(bus.actorId) = ShardActorId(
-            entityId = bus.actorId,
-            classType = classOf[Bus].getName
-          )
+          createOrStashBus(bus)
           state.status = Working
-          pendingSpawnTick = Some(currentTick + state.interval)
-          awaitingDynamicInit = true
-          onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+          if (!isTimeWarp && !usesAccountedRuntime) {
+            pendingSpawnTick = Some(currentTick + state.interval)
+            awaitingDynamicInit = true
+          }
+          onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable: ${e.getMessage}")
@@ -152,7 +158,7 @@ class BusStation(
     } else if (routeCalculator.hasAnyRouteSegment) {
       def badSegments(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
-        stops: List[String]
+        stops: List[Long]
       ): String =
         stops.sliding(2).filterNot { pair =>
           route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
@@ -167,8 +173,8 @@ class BusStation(
 
       def skippedDestinations(
         route: Option[mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]]],
-        stops: List[String]
-      ): Set[String] =
+        stops: List[Long]
+      ): Set[Long] =
         stops.sliding(2).filterNot { pair =>
           route.exists(_.get(SubRoutePair(pair.head, pair.last)).exists(_.nonEmpty))
         }.map(_.last).toSet
@@ -196,15 +202,13 @@ class BusStation(
       if (state.buses.nonEmpty) {
         val bus = state.buses.dequeue()
         try {
-          busCreator.createBus(bus)
-          dependencies(bus.actorId) = ShardActorId(
-            entityId = bus.actorId,
-            classType = classOf[Bus].getName
-          )
+          createOrStashBus(bus)
           state.status = Working
-          pendingSpawnTick = Some(currentTick + state.interval)
-          awaitingDynamicInit = true
-          onFinishSpontaneous(Some(currentTick + dynamicInitPollIntervalTicks))
+          if (!isTimeWarp && !usesAccountedRuntime) {
+            pendingSpawnTick = Some(currentTick + state.interval)
+            awaitingDynamicInit = true
+          }
+          onFinishSpontaneous(Some(currentTick + (if (usesAccountedRuntime) state.interval else dynamicInitPollIntervalTicks)))
         } catch {
           case e: IllegalStateException =>
             logWarn(s"Skipping bus ${bus.actorId} — route unavailable even with partial: ${e.getMessage}")
@@ -237,6 +241,41 @@ class BusStation(
       onFinishSpontaneous(None)
     }
   }
+
+  // Legacy time managers lack reversible birth and still defer physical creation.
+  private def createOrStashBus(bus: BusInformation): Unit =
+    if (isTimeWarp && !usesAccountedRuntime) {
+      val stateJson = busCreator.prepareBus(bus)
+      pendingBusSpawn = Some(PendingBusSpawn(currentTick, bus, stateJson))
+    } else {
+      busCreator.createBus(bus)
+      dependencies(bus.actorId.toString) = ShardActorId(
+        entityId = bus.actorId,
+        classType = classOf[Bus].getName
+      )
+    }
+
+  private def firePendingBusSpawn(): Unit =
+    pendingBusSpawn.foreach {
+      p =>
+        busCreator.spawnPrepared(p.bus, p.stateJson)
+        dependencies(p.bus.actorId.toString) = ShardActorId(
+          entityId = p.bus.actorId,
+          classType = classOf[Bus].getName
+        )
+        pendingSpawnTick = Some(currentTick + state.interval)
+        awaitingDynamicInit = true
+        pendingBusSpawn = None
+    }
+
+  /** GVT monotonicity (`docs/TIME_WARP_DESIGN.md` §3: GVT never decreases and no rollback can
+    * ever reach a tick at or below it again) guarantees that once a rollback target is at or
+    * before a stashed bus's dequeue tick, that dequeue never happened from the restored state's
+    * perspective — nothing external was ever created for it, so the stash entry is simply
+    * dropped rather than replayed.
+    */
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit =
+    pendingBusSpawn = pendingBusSpawn.filter(_.creationTick < targetTick)
 
   override def onDestruct(event: DestructEvent): Unit =
     state.status = Finish

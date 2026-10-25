@@ -5,6 +5,11 @@ import core.enumeration.CreationTypeEnum
 import model.hybrid.entity.event.data.{ EnterLinkData, MicroUpdateData }
 import model.hybrid.entity.event.data.bus.{ BusLoadPassengerData, BusRequestUnloadPassengerData }
 import model.hybrid.entity.state.enumeration.ActorTypeEnum
+import model.hybrid.entity.event.data.routing.*
+import model.hybrid.entity.state.ModeChoiceWeights
+import model.hybrid.entity.state.model.PrecomputedRouteItem
+import model.hybrid.entity.state.plan.{ ConcreteMode, ModeDecisionRequest, WalkLeg }
+import model.hybrid.decision.{ DecisionContext, NoViableJourney }
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
@@ -36,18 +41,22 @@ import scala.compiletime.uninitialized
 class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private var _system: ActorSystem = uninitialized
+  private var peer: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
-  override def beforeAll(): Unit =
+  override def beforeAll(): Unit = {
     _system = ActorSystem(
       "KryoEventDataSerializationSpec",
       ConfigFactory
         .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
         .withFallback(ConfigFactory.load())
     )
+    peer = ActorSystem("KryoEventDataColdPeerSpec", system.settings.config)
+  }
 
   override def afterAll(): Unit = {
     _system.terminate()
+    peer.terminate()
     ()
   }
 
@@ -85,7 +94,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
       velocity = 8.0,
       acceleration = 0.5,
       currentLane = 1,
-      leaderVehicle = Some("car-99"),
+      leaderVehicle = Some(99L),
       gapToLeader = 5.0,
       leaderVelocity = 7.5,
       safeVelocity = 8.2
@@ -105,8 +114,8 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
 
     val original = BusLoadPassengerData(
       people = mutable.Buffer(
-        Identify(id = "person-1", classType = "Person"),
-        Identify(id = "person-2", classType = "Person")
+        Identify(id = 1L, classType = "Person"),
+        Identify(id = 2L, classType = "Person")
       )
     )
 
@@ -121,7 +130,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val serialization = SerializationExtension(system)
 
     val original = BusRequestUnloadPassengerData(
-      nodeId = "node-1",
+      nodeId = 1L,
       nodeRef = system.deadLetters
     )
 
@@ -130,5 +139,49 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
     val roundTripped = serialization.deserialize(bytes, serializer.identifier, "").get
 
     roundTripped shouldBe original
+  }
+
+  it should "decode accounted routing payloads on an independent cold peer in a different order" in {
+    val serialization = SerializationExtension(system)
+    val reader = SerializationExtension(peer)
+    val context = DecisionContext(
+      ModeChoiceWeights(includedModes = Set("walk")), Map.empty, Map.empty, 12L, "42")
+    val payloads: Seq[AnyRef] = Seq(
+      model.hybrid.entity.event.data.link.SubscribeMicroBoundaryData(),
+      model.hybrid.entity.event.data.link.MicroBoundaryUpdateData(
+        model.hybrid.entity.state.model.MicroBoundarySnapshot(7, 12, 3, 9.03,
+          Some(model.hybrid.entity.state.model.MicroBoundaryVehicle(42, 0.026, 0.26, 4.5)))),
+      model.hybrid.entity.event.node.LinkAccessData(
+        model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green, 12L, requestSeq = 77L,
+        junctionLink = Some(PrecomputedRouteItem(700L, 2L))),
+      model.hybrid.entity.event.data.MicroUpdateData(9, 3.0, 5.0, 0.0, 0, None, 10.0, 5.0, 5.0,
+        junctionPosition = Some(model.hybrid.entity.state.model.MetricPoint(3.0, 4.0))),
+      model.hybrid.entity.event.data.vehicle.RequestLinkAccessData(7L, signalAlreadyCleared = true, approachLinkId = 50L),
+      EnterLinkData(ActorTypeEnum.Car, CreationTypeEnum.LoadBalancedDistributed, 4.5, 12.5,
+        nextLinkId = 7L, initialRemainderSeconds = 0.04),
+      model.hybrid.entity.event.data.MicroEnterLinkData(7L,
+        model.hybrid.entity.state.enumeration.SimulationModeEnum.MICRO, 0, 200.0, 50.0, 1, 0.1, 1, Some(12.5),
+        initialPosition = 0.5),
+      model.hybrid.entity.event.data.MicroLeaveLinkData(7L, 200.0, 12.5, 15.1, 200.0, 12.0,
+        remainingStepSeconds = 0.04),
+      model.hybrid.entity.event.data.person.PassengerBoardedVehicleData(77L, "hybrid.actor.Bus", 1200.0),
+      LinkCostChangedData(7L, 123.0, 12L),
+      RouteQueryData(1L, 4L, 500000),
+      RouteReplyData(9L, Some(RouteResult(400.0,
+        List(PrecomputedRouteItem(7L, 3L), PrecomputedRouteItem(11L, 4L))))),
+      ModeDecisionQueryData(1L, 4L,
+        ModeDecisionRequest(Set(ConcreteMode.Walk), "travel-time"), context),
+      ModeDecisionReplyData(10L, Right(List(WalkLeg(1L, 4L, Some(Nil))))),
+      ModeDecisionReplyData(11L, Left(NoViableJourney("unreachable")))
+    )
+
+    val encoded = payloads.map { original =>
+      val bytes = serialization.serialize(original).get
+      val serializer = serialization.findSerializerFor(original)
+      (original, bytes, serializer.identifier)
+    }
+    encoded.reverse.foreach { case (original, bytes, identifier) =>
+      reader.deserialize(bytes, identifier, "").get shouldBe original
+    }
   }
 }

@@ -6,6 +6,8 @@ import org.interscity.htc.model.hybrid.entity.state.plan.ConcreteMode
 
 import com.fasterxml.jackson.annotation.{ JsonSubTypes, JsonTypeInfo }
 
+final case class WalkingLegProgress(distance: Double, arrivalTick: Tick)
+
 /** Snapshot of a PT wait in progress: [[model.hybrid.actor.Person]] registered at a boarding stop
   * and is waiting for the corresponding bus/subway to actually arrive and load it.
   *
@@ -19,8 +21,12 @@ import com.fasterxml.jackson.annotation.{ JsonSubTypes, JsonTypeInfo }
 final case class PTWaitState(
   waitingSinceTick: Tick,
   timeoutTick: Tick,
-  alightingNodeId: String,
-  line: String
+  alightingNodeId: Long,
+  line: String,
+  boardedVehicleId: Option[Long] = None,
+  boardedVehicleClassType: Option[String] = None,
+  boardingDistance: Option[Double] = None,
+  boardingTick: Option[Tick] = None
 )
 
 /** What a [[model.hybrid.actor.Person]] is doing right now with respect to its plan.
@@ -74,19 +80,16 @@ object TripExecutionState {
     *                           `replanStrategyId`.
     */
   final case class Traveling(
-    physicalNodeId: String,
+    physicalNodeId: Long,
     tripId: String,
     legStartTick: Tick,
     ptWait: Option[PTWaitState] = None,
     replanStrategyId: String = "travel-time",
     replanAllowedModes: Set[ConcreteMode] = ConcreteMode.values.toSet,
-    /** Real distance (metres) accumulated so far across every leg of the current contiguous run.
-      * Only private-vehicle legs ever contribute a non-zero amount (reported by the vehicle actor
-      * itself via `TripCompletedData.distanceTraveled`) — walk/PT legs always contribute 0, mirroring
-      * the pre-redesign behaviour where `PersonState.completeTrip` was always called with
-      * `distanceTraveled = 0.0` for those modes. Flushed into `PersonState.totalDistanceTraveled` by
-      * `PersonState.completeTrip` once the run ends at the next `Activity`.
+    /** Completed-leg distance, flushed into daily distance at the next Activity or abort.
+      * An in-flight walking leg stays separate until its arrival is processed.
       */
-    accumulatedDistance: Double = 0.0
+    accumulatedDistance: Double = 0.0,
+    walking: Option[WalkingLegProgress] = None
   ) extends TripExecutionState
 }

@@ -3,9 +3,10 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
+import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegister, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
 
@@ -65,8 +66,8 @@ case class LinkState(
   startTick: Tick,
   reporterType: ReportTypeEnum = null,
   scheduleOnTimeManager: Boolean = false,
-  from: String,
-  to: String,
+  from: Long,
+  to: Long,
   length: Double,
   lanes: Int,
   speedLimit: Double,
@@ -78,13 +79,37 @@ case class LinkState(
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,
+  @JsonDeserialize(keyAs = classOf[java.lang.Integer])
   vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
-  laneConfigurations: List[LaneConfig] = List.empty
+  laneConfigurations: List[LaneConfig] = List.empty,
+  metrics: LinkMetricsState = LinkMetricsState(),
+  junctionGeometry: Option[model.JunctionGeometry] = None,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Double])
+  exitSpeedLimitsMps: Map[Long, Double] = Map.empty,
+  carryMicroRemainder: Boolean = false,
+  downstreamLookahead: Boolean = false,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Long])
+  downstreamConnectors: Map[Long, Long] = Map.empty,
+  stopLineGapM: Double = 0.0,
+  following: model.MicroFollowingState = model.MicroFollowingState()
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
+  require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
+  require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
+  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
+    "downstream lookahead requires single-lane MICRO with one physics step per runtime tick")
+  require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "MICRO boundary remainder requires one physics step per runtime tick")
+  require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,
+    "MICRO remainder requires links longer than one speed-limit physics step")
+  junctionGeometry.foreach { geometry =>
+    require(from == geometry.nodeId && to == geometry.nodeId, "junction connector must stay at its node")
+    require(math.abs(length - geometry.lengthMeters) <= 1e-6, "junction link length must match geometry")
+    require(math.abs(speedLimit / 3.6 - geometry.speedLimitMps) <= 1e-6, "junction speed must match geometry")
+  }
 
   /** Check if link is in microscopic mode */
   def isMicroMode: Boolean = simulationMode == SimulationModeEnum.MICRO
@@ -144,8 +169,8 @@ object LinkState {
   /** Create a hybrid link in MESO mode (default, backward compatible) */
   def createMeso(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,
@@ -167,8 +192,8 @@ object LinkState {
   /** Create a hybrid link in MICRO mode with initialized lane structure */
   def createMicro(
     startTick: Tick,
-    from: String,
-    to: String,
+    from: Long,
+    to: Long,
     length: Double,
     lanes: Int,
     speedLimit: Double,

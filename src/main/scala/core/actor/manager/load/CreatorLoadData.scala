@@ -40,14 +40,31 @@ class CreatorLoadData(
   private val reporters: mutable.Map[org.interscity.htc.core.enumeration.ReportTypeEnum, ActorRef] =
     creatorProperties.reporters
 
-  private val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
-  private val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
-  private val pendingInitAck = mutable.Map[String, String]()
-  private var amountActors = 0
+  private[load] val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
+  private[load] val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
 
-  private val actorsToCreate: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
-  private val actorsBatches: mutable.Map[String, String] = mutable.Map.empty
-  private val batchesLoad: mutable.Map[String, ActorRef] = mutable.Map.empty
+  /** entityId -> FIFO queue of (batchId, classType) awaiting this entity's InitializeEntityAckEvent,
+    * one entry per StartEntityAck this actor has already forwarded as an InitializeEvent. A queue
+    * (not a single value) because the same entityId can legitimately have more than one in-flight
+    * registration across overlapping batches — see `actorsBatches` below for why a bare-entityId
+    * key silently drops the earlier registration.
+    */
+  private[load] val pendingInitAck: mutable.Map[String, mutable.Queue[(String, String)]] = mutable.Map.empty
+  private[load] var amountActors = 0
+
+  private[load] val actorsToCreate: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
+
+  /** entityId -> FIFO queue of batchIds with an outstanding StartEntity/StartEntityAck round-trip
+    * for that entity. Keyed by entityId only (like `pendingInitAck`) but the *value* is a queue,
+    * not a bare batchId: if a StartEntity for the same entity is redelivered/retried while its
+    * original ack is still outstanding, or the same entity is legitimately part of two
+    * back-to-back batches, a bare `Map[String, String]` here would let the second registration
+    * clobber the first — the original batch's ack then resolves to the wrong (or since-removed)
+    * batch and silently never unblocks. FIFO matches Pekko's per-shard-region ordered delivery of
+    * StartEntity, so the oldest outstanding registration for an entity is popped first.
+    */
+  private[load] val actorsBatches: mutable.Map[String, mutable.Queue[String]] = mutable.Map.empty
+  private[load] val batchesLoad: mutable.Map[String, ActorRef] = mutable.Map.empty
   private val batchesToCreate: mutable.Map[String, Seq[ActorSimulationCreation]] = mutable.Map.empty
 
   private val CREATE_CHUNK_SIZE = 500
@@ -134,9 +151,10 @@ class CreatorLoadData(
           actorCreation =>
             val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
             SpatialEntityData(
-              spatialEntityId = actorCreation.actor.id,
+              spatialEntityId = actorCreation.actor.id.toString,
               lon = position._1,
-              lat = position._2
+              lat = position._2,
+              entityClassType = actorCreation.actor.typeActor
             )
         }
 
@@ -206,11 +224,12 @@ class CreatorLoadData(
     chunk.foreach {
       actorCreation =>
         val initialization = Initialization(
-          id = actorCreation.actor.id,
+          id = actorCreation.actor.id.toString,
           resourceId = actorCreation.resourceId,
           classType = actorCreation.actor.typeActor,
           data = actorCreation.actor.data.content,
           timeManagers = timeManagers,
+          runtimeCoordinator = creatorProperties.runtimeCoordinator,
           creatorManager = self,
           reporters = reporters,
           relationships = {
@@ -221,29 +240,30 @@ class CreatorLoadData(
               case (label, rel) =>
                 val bucket =
                   if (rel.shardBucket.nonEmpty) rel.shardBucket
-                  else SpatialShardIdRegistry.getShardId(rel.entityId).getOrElse("")
+                  else SpatialShardIdRegistry.getShardId(rel.entityId.toString).getOrElse("")
                 label -> rel.copy(shardBucket = bucket)
             }
           }
         )
 
-        addInitializeData(actorCreation.actor.id, batchId, initialization)
-        addToInitializedAcknowledges(batchId, actorCreation.actor.id)
+        addInitializeData(actorCreation.actor.id.toString, batchId, initialization)
+        addToInitializedAcknowledges(batchId, actorCreation.actor.id.toString)
 
         val fullClassName = StringUtil.getModelClassName(actorCreation.actor.typeActor)
-        SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id, fullClassName)
+        SpatialShardIdRegistry.putEntityClassName(actorCreation.actor.id.toString, fullClassName)
 
         val shardRegion = createShardRegion(
           system = context.system,
           resourceId = actorCreation.resourceId,
           actorClassName = actorCreation.actor.typeActor,
-          entityId = actorCreation.actor.id,
+          entityId = actorCreation.actor.id.toString,
           timeManagers = timeManagers,
+          runtimeCoordinator = creatorProperties.runtimeCoordinator,
           creatorManager = self,
           reporters = reporters
         )
 
-        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id)
+        shardRegion ! ShardRegion.StartEntity(actorCreation.actor.id.toString)
     }
 
   /** Advances to the next chunk or finishes if no more actors remain. */
@@ -383,7 +403,7 @@ class CreatorLoadData(
     }
   }
 
-  private def addInitializeData(
+  private[load] def addInitializeData(
     entityId: String,
     batchId: String,
     initialization: Initialization
@@ -393,12 +413,12 @@ class CreatorLoadData(
       case None       => initializeData.put(batchId, mutable.Map(entityId -> initialization))
     }
 
-  private def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
+  private[load] def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
     initializedAcknowledges.get(batchId) match {
       case Some(acknowledge) => initializedAcknowledges.put(batchId, acknowledge :+ entityId)
       case None              => initializedAcknowledges.put(batchId, mutable.Seq(entityId))
     }
-    actorsBatches.put(entityId, batchId)
+    actorsBatches.getOrElseUpdate(entityId, mutable.Queue.empty) += batchId
   }
 
   private def removeOfInitializedAcknowledges(batchId: String, entityId: String): Unit =
@@ -408,17 +428,28 @@ class CreatorLoadData(
       case None =>
     }
 
-  private def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
+  private[load] def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
     val classTypeForLog = {
-      val bId = actorsBatches.getOrElse(event.entityId, "")
-      if (bId.nonEmpty)
-        initializeData.get(bId).flatMap(_.get(event.entityId)).map(_.classType).getOrElse("unknown")
-      else pendingInitAck.getOrElse(event.entityId, "not-found")
+      actorsBatches.get(event.entityId).filter(_.nonEmpty) match {
+        case Some(queue) =>
+          initializeData
+            .get(queue.head)
+            .flatMap(_.get(event.entityId))
+            .map(_.classType)
+            .getOrElse("unknown")
+        case None =>
+          pendingInitAck.get(event.entityId).flatMap(_.headOption).map(_._2).getOrElse("not-found")
+      }
     }
-    actorsBatches.get(event.entityId) match {
-      case Some(batchId) =>
+    actorsBatches.get(event.entityId).filter(_.nonEmpty) match {
+      case Some(queue) =>
+        // FIFO: resolve the oldest outstanding registration for this entity first, matching the
+        // order StartEntity was sent — same entity can be mid-flight for more than one batch.
+        val batchId = queue.head
         initializeData.get(batchId).flatMap(_.get(event.entityId)) match {
           case Some(data) =>
+            queue.dequeue()
+            if (queue.isEmpty) actorsBatches.remove(event.entityId)
             try {
               val initializeEvent = InitializeEvent(
                 id = data.id,
@@ -427,6 +458,7 @@ class CreatorLoadData(
                   data = data.data,
                   resourceId = data.resourceId,
                   timeManagers = data.timeManagers,
+                  runtimeCoordinator = data.runtimeCoordinator,
                   creatorManager = data.creatorManager,
                   reporters = data.reporters,
                   relationships = data.relationships.map {
@@ -440,11 +472,11 @@ class CreatorLoadData(
                 event = initializeEvent
               )
 
-              pendingInitAck.put(event.entityId, data.classType)
+              pendingInitAck.getOrElseUpdate(event.entityId, mutable.Queue.empty) += (batchId -> data.classType)
             } catch {
               case e: Exception =>
                 logError(
-                  s"Failed to build InitializeEvent for ${event.entityId} (${data.classType}): ${e.getMessage}. Bypassing to unblock batch.",
+                  s"Failed to build InitializeEvent for ${event.entityId} (${data.classType}, batch=$batchId): ${e.getMessage}. Bypassing to unblock batch.",
                   e
                 )
                 // Bypass the stuck entity so the batch can complete
@@ -455,40 +487,61 @@ class CreatorLoadData(
             checkAndSendFinish(batchId)
 
           case None =>
+            // batchId was tracked in actorsBatches but its initializeData was already consumed/lost
+            // (e.g. a duplicate/redelivered StartEntityAck for a registration already resolved).
+            // Bypass rather than silently leaving that batch stuck forever.
+            logError(
+              s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) matched batch=$batchId in actorsBatches " +
+                s"but no initializeData found for it. Bypassing to unblock batch."
+            )
+            queue.dequeue()
+            if (queue.isEmpty) actorsBatches.remove(event.entityId)
+            removeOfInitializedAcknowledges(batchId, event.entityId)
+            checkAndSendFinish(batchId)
         }
       case None =>
-        logWarn(
-          s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) NOT FOUND in actorsBatches! Known batches: ${actorsBatches.size}"
+        logError(
+          s"StartEntityAck for ${event.entityId} (classType=$classTypeForLog) NOT FOUND in actorsBatches! " +
+            s"No batchId is known for this entity, so no batch can be unblocked for it. Known batches: ${actorsBatches.size}"
         )
     }
   }
 
-  private def handleFinishInitialization(event: InitializeEntityAckEvent): Unit = {
-    val classTypeOpt = pendingInitAck.remove(event.entityId)
-    if (
-      classTypeOpt.isDefined &&
-      creatorProperties.postLoadCoordinator != null &&
-      creatorProperties.postLoadRegistrationClasses.contains(classTypeOpt.get)
-    ) {
-      creatorProperties.postLoadCoordinator ! NeedsPostLoadRegistrationEvent(
-        entityId = event.entityId,
-        classType = classTypeOpt.get
-      )
+  private[load] def handleFinishInitialization(event: InitializeEntityAckEvent): Unit =
+    // FIFO: this entity's InitializeEntityAckEvent replies arrive in the same order its
+    // InitializeEvents were sent out (handleInitialize), so resolve the oldest pending
+    // (batchId, classType) pair first — same reasoning as `actorsBatches`.
+    pendingInitAck.get(event.entityId).filter(_.nonEmpty) match {
+      case Some(queue) =>
+        val (batchId, classType) = queue.dequeue()
+        if (queue.isEmpty) pendingInitAck.remove(event.entityId)
+        if (
+          creatorProperties.postLoadCoordinator != null &&
+          creatorProperties.postLoadRegistrationClasses.contains(classType)
+        ) {
+          creatorProperties.postLoadCoordinator ! NeedsPostLoadRegistrationEvent(
+            entityId = event.entityId,
+            classType = classType
+          )
+        }
+        removeOfInitializedAcknowledges(batchId, event.entityId)
+        checkAndSendFinish(batchId)
+
+      case None =>
+        // No tracked (batchId, classType) for this entity — orphaned/duplicate ack. Fall back to
+        // scanning initializedAcknowledges so a stray reply still unblocks whatever batch is
+        // actually still waiting on it, instead of leaving that batch stuck forever.
+        logError(
+          s"InitializeEntityAckEvent for ${event.entityId} NOT FOUND in pendingInitAck! Falling back to scanning initializedAcknowledges."
+        )
+        initializedAcknowledges.foreach {
+          case (bId, acks) =>
+            if (acks.contains(event.entityId)) {
+              removeOfInitializedAcknowledges(bId, event.entityId)
+              checkAndSendFinish(bId)
+            }
+        }
     }
-    val batchId = actorsBatches.getOrElse(event.entityId, "")
-    if (batchId.nonEmpty) {
-      removeOfInitializedAcknowledges(batchId, event.entityId)
-      checkAndSendFinish(batchId)
-    } else {
-      initializedAcknowledges.foreach {
-        case (bId, acks) =>
-          if (acks.contains(event.entityId)) {
-            removeOfInitializedAcknowledges(bId, event.entityId)
-            checkAndSendFinish(bId)
-          }
-      }
-    }
-  }
 
   /** Forwards NeedsPostLoadRegistrationEvent directly to PostLoadRegistrationCoordinator so it can
     * accumulate registrations during the loading phase (before being triggered). The coordinator is
@@ -506,7 +559,7 @@ class CreatorLoadData(
       )
     }
 
-  private def checkAndSendFinish(batchId: String): Unit = {
+  private[load] def checkAndSendFinish(batchId: String): Unit = {
     val hasPendingCreation = actorsToCreate.get(batchId).exists(_.nonEmpty)
     val hasPendingAcks = initializedAcknowledges.get(batchId).exists(_.nonEmpty)
     val hasPendingInitData = initializeData.contains(batchId)
@@ -525,12 +578,26 @@ class CreatorLoadData(
       batchesLoad.remove(batchId)
       batchesToCreate.remove(batchId)
       actorsToCreate.remove(batchId)
+      initializedAcknowledges.remove(batchId)
 
-      actorsBatches.filterInPlace(
-        (_, bId) => bId != batchId
-      )
+      pruneBatchFromQueues(actorsBatches, batchId)(identity)
+      pruneBatchFromQueues(pendingInitAck, batchId)(_._1)
     }
   }
+
+  /** Removes every occurrence of `batchId` from a `entityId -> Queue[A]` correlation map
+    * (`actorsBatches`/`pendingInitAck`), dropping the entityId key entirely once its queue is
+    * empty. Prevents these maps from accumulating stale entries for completed batches.
+    */
+  private def pruneBatchFromQueues[A](
+    map: mutable.Map[String, mutable.Queue[A]],
+    batchId: String
+  )(batchIdOf: A => String): Unit =
+    map.keys.toList.foreach {
+      entityId =>
+        val remaining = map(entityId).filterNot(a => batchIdOf(a) == batchId)
+        if (remaining.isEmpty) map.remove(entityId) else map(entityId) = remaining
+    }
 }
 
 object CreatorLoadData {

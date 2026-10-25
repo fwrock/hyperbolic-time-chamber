@@ -27,4 +27,11 @@ enum EventTypeEnum:
     LinkSignalState,
     LinkCapacityFreed,
     RegisterLinkCapacity,
-    CancelLinkAccessRequest
+    CancelLinkAccessRequest,
+    LinkCostChanged,
+    RouteQuery,
+    RouteReply,
+    ModeDecisionQuery,
+    ModeDecisionReply,
+    SubscribeMicroBoundary,
+    MicroBoundaryUpdate

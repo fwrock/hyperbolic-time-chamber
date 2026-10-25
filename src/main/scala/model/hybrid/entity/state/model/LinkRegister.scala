@@ -5,7 +5,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.enumeration.ActorTypeEnum
 
 case class LinkRegister(
-  actorId: String,
+  actorId: Long,
   shardId: String,
   actorType: ActorTypeEnum,
   actorCreationType: CreationTypeEnum,

@@ -1,0 +1,1071 @@
+{
+  "date": "2026-10-24",
+  "tests": 605,
+  "suites": 130,
+  "seed": 42,
+  "cases": [
+    {
+      "name": "accepted-meso-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/accepted-meso/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          32200
+        ],
+        "bindPorts": [
+          32200
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 57.57,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "discrete-event",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 100,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 50,
+            "exits": 50,
+            "completedLinkDistance": 10000.0
+          },
+          "1001": {
+            "entries": 50,
+            "exits": 49,
+            "completedLinkDistance": 9800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 0,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 0,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 339,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-meso-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/accepted-meso/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          32500
+        ],
+        "bindPorts": [
+          32500
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 69.57,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "time-warp",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 100,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 50,
+            "exits": 50,
+            "completedLinkDistance": 10000.0
+          },
+          "1001": {
+            "entries": 50,
+            "exits": 49,
+            "completedLinkDistance": 9800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 0,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 262,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 339,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-micro-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-micro/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          34600
+        ],
+        "bindPorts": [
+          34600
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 52.45,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "discrete-event",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 120,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "1001": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 0,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 3477,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-micro-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-micro/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          34900
+        ],
+        "bindPorts": [
+          34900
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 59.26,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "time-warp",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 120,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "1001": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 446,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 3477,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-boundary-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/accepted-boundary/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33400
+        ],
+        "bindPorts": [
+          33400
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 40.59,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "discrete-event",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 0,
+        "expectedDailySummaries": 0,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 1,
+        "subwayBirths": 1,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 100,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 7,
+            "exits": 6,
+            "completedLinkDistance": 1200.0
+          },
+          "21": {
+            "entries": 2,
+            "exits": 1,
+            "completedLinkDistance": 2400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "21": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 0,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 48,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-boundary-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/accepted-boundary/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          33700
+        ],
+        "bindPorts": [
+          33700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 41.73,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "time-warp",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 0,
+        "expectedDailySummaries": 0,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 1,
+        "subwayBirths": 1,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 100,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 7,
+            "exits": 6,
+            "completedLinkDistance": 1200.0
+          },
+          "21": {
+            "entries": 2,
+            "exits": 1,
+            "completedLinkDistance": 2400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "21": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 2,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 48,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-car-cap-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-car-cap/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          35200
+        ],
+        "bindPorts": [
+          35200
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 40.07,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 7,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "car",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-car-cap-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-car-cap/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          35500
+        ],
+        "bindPorts": [
+          35500
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 39.53,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 7,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "car",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-bicycle-cap-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-bicycle-cap/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          35800
+        ],
+        "bindPorts": [
+          35800
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 41.52,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 6,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "bicycle",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-bicycle-cap-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-bicycle-cap/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          36100
+        ],
+        "bindPorts": [
+          36100
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 41.71,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 6,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "bicycle",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-motorcycle-cap-discrete-event",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-motorcycle-cap/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          36400
+        ],
+        "bindPorts": [
+          36400
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 39.16,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 6,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "motorcycle",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "verified-motorcycle-cap-time-warp",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/verified-motorcycle-cap/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          36700
+        ],
+        "bindPorts": [
+          36700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 40.89,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "passed": true,
+        "physicalRows": 6,
+        "horizon": 310,
+        "vehicleJourneys": 1,
+        "vehicleType": "motorcycle",
+        "personTrips": 0,
+        "completedDistance": 0.0,
+        "linkEntries": 1,
+        "linkExits": 0,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "network-micro-discrete-event-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/network-micro/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          38000,
+          38001
+        ],
+        "bindPorts": [
+          38100,
+          38101
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 146.89,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 20666,
+          "bytes": 11249623
+        }
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "discrete-event",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 120,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "1001": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 0,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 3477,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "network-micro-time-warp-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "42c96c0cfb6b23881f9287fc0f3c29e5d7487252be7d51480651aafd66f9d049",
+        "simulationFile": "/tmp/htc-horizon-pt-20261024/network-micro/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          38300,
+          38301
+        ],
+        "bindPorts": [
+          38400,
+          38401
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 88.78,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 9843,
+          "bytes": 18330600
+        }
+      },
+      "acceptance": {
+        "passed": true,
+        "policy": "time-warp",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 120,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "1001": {
+            "entries": 40,
+            "exits": 39,
+            "completedLinkDistance": 7800.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 1741,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 3477,
+        "engineStopped": true
+      },
+      "runtimeProblems": [],
+      "passed": true
+    }
+  ],
+  "comparisons": [
+    {
+      "reference": "accepted-meso-discrete-event",
+      "actual": "accepted-meso-time-warp",
+      "referenceRows": 339,
+      "actualRows": 339,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-micro-discrete-event",
+      "actual": "verified-micro-time-warp",
+      "referenceRows": 3477,
+      "actualRows": 3477,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "accepted-boundary-discrete-event",
+      "actual": "accepted-boundary-time-warp",
+      "referenceRows": 48,
+      "actualRows": 48,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-car-cap-discrete-event",
+      "actual": "verified-car-cap-time-warp",
+      "referenceRows": 7,
+      "actualRows": 7,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-bicycle-cap-discrete-event",
+      "actual": "verified-bicycle-cap-time-warp",
+      "referenceRows": 6,
+      "actualRows": 6,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-motorcycle-cap-discrete-event",
+      "actual": "verified-motorcycle-cap-time-warp",
+      "referenceRows": 6,
+      "actualRows": 6,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-micro-discrete-event",
+      "actual": "network-micro-discrete-event-2jvm",
+      "referenceRows": 3477,
+      "actualRows": 3477,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "verified-micro-discrete-event",
+      "actual": "network-micro-time-warp-2jvm",
+      "referenceRows": 3477,
+      "actualRows": 3477,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

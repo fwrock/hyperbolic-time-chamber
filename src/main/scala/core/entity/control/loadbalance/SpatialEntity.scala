@@ -14,6 +14,11 @@ trait SpatialEntity {
   /** Unique identifier of this spatial entity. */
   def spatialEntityId: String
 
+  /** Actor class type (e.g. `hybrid.actor.Node`). Used to classify Static vs Dynamic without
+    * parsing the id string (ids are now opaque `Long`s). Empty when unknown.
+    */
+  def entityClassType: String = ""
+
   /** Current position as (x, y) or (longitude, latitude). */
   def position: (Double, Double)
 

@@ -27,12 +27,15 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEn
   *   Sub-ticks per global tick
   */
 case class MicroEnterLinkData(
-  linkId: String,
+  linkId: Long,
   mode: SimulationModeEnum,
   assignedLane: Int,
   linkLength: Double,
   speedLimit: Double,
   numberOfLanes: Int,
   microTimeStep: Double,
-  ticksPerGlobalTick: Int
+  ticksPerGlobalTick: Int,
+  initialVelocity: Option[Double] = None,
+  junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None,
+  initialPosition: Double = 0.0
 ) extends BaseEventData

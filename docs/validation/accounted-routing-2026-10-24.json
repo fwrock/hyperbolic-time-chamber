@@ -1,0 +1,785 @@
+{
+  "date": "2026-10-24",
+  "tests": 596,
+  "suites": 128,
+  "seed": 42,
+  "cases": [
+    {
+      "name": "final-meso-discrete-event-1jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/final-meso-input/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          26700
+        ],
+        "bindPorts": [
+          26700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 57.59,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 0,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "final-meso-time-warp-1jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/final-meso-input/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          26800
+        ],
+        "bindPorts": [
+          26800
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 65.79,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 0,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-meso-discrete-event-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/final-meso-input/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          28000,
+          28001
+        ],
+        "bindPorts": [
+          28100,
+          28101
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 101.33,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 2411,
+          "bytes": 1298188
+        }
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 0,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "final-meso-time-warp-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/final-meso-input/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          27200,
+          27201
+        ],
+        "bindPorts": [
+          27300,
+          27301
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 92.6,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 1987,
+          "bytes": 1589425
+        }
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 0,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-micro-discrete-event-1jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/accepted-micro-input/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          28400
+        ],
+        "bindPorts": [
+          28400
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0.0,
+        "elapsedSeconds": 36.31,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 258,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-micro-time-warp-1jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/accepted-micro-input/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          28700
+        ],
+        "bindPorts": [
+          28700
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0.0,
+        "elapsedSeconds": 43.67,
+        "returncodes": [
+          -9
+        ]
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 258,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-micro-discrete-event-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/accepted-micro-input/discrete-event.json",
+        "policy": "discrete-event",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          29000,
+          29001
+        ],
+        "bindPorts": [
+          29100,
+          29101
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 117.17,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 7052,
+          "bytes": 4731330
+        }
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 258,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    },
+    {
+      "name": "accepted-micro-time-warp-2jvm",
+      "run": {
+        "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar",
+        "jarSha256": "3309f4a90aa118b6ddfe691f4b7b3b2bf67774c063b03f6d143303b095589e89",
+        "simulationFile": "/tmp/htc-routing-recovery-20261024/accepted-micro-input/time-warp.json",
+        "policy": "time-warp",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          29300,
+          29301
+        ],
+        "bindPorts": [
+          29400,
+          29401
+        ],
+        "engineReportedStop": true,
+        "runtimeFailed": false,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 3.0,
+        "elapsedSeconds": 45.56,
+        "returncodes": [
+          -9,
+          143
+        ],
+        "relay": {
+          "connections": 4,
+          "chunks": 2008,
+          "bytes": 3573033
+        }
+      },
+      "acceptance": {
+        "actualRoutes": {
+          "13": [
+            [
+              7,
+              11
+            ],
+            [
+              10,
+              6
+            ],
+            [
+              5,
+              9
+            ]
+          ],
+          "9000002": [
+            [
+              5,
+              9
+            ]
+          ],
+          "9000003": [
+            [
+              7,
+              11
+            ]
+          ],
+          "9000004": [
+            [
+              5,
+              9
+            ]
+          ]
+        },
+        "badReportRows": 0,
+        "dailySummary": {
+          "event_type": "schedule_complete",
+          "person_id": "14",
+          "tick": 1700,
+          "total_distance": 1300.0,
+          "total_trips": 3
+        },
+        "distancePass": true,
+        "journeysPass": true,
+        "linkEntries": 12,
+        "linkExits": 12,
+        "microPass": true,
+        "microUpdates": 258,
+        "routePass": true,
+        "strictPass": true,
+        "sumoPass": true,
+        "traversalPass": true,
+        "tripsPass": true,
+        "vehicleJourneys": 6
+      },
+      "runtimeProblems": [],
+      "passed": true
+    }
+  ],
+  "comparisons": [
+    {
+      "reference": "final-meso-discrete-event-1jvm",
+      "actual": "final-meso-time-warp-1jvm",
+      "referenceRows": 71,
+      "actualRows": 71,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "final-meso-discrete-event-1jvm",
+      "actual": "accepted-meso-discrete-event-2jvm",
+      "referenceRows": 71,
+      "actualRows": 71,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "final-meso-discrete-event-1jvm",
+      "actual": "final-meso-time-warp-2jvm",
+      "referenceRows": 71,
+      "actualRows": 71,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "accepted-micro-discrete-event-1jvm",
+      "actual": "accepted-micro-time-warp-1jvm",
+      "referenceRows": 551,
+      "actualRows": 551,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "accepted-micro-discrete-event-1jvm",
+      "actual": "accepted-micro-discrete-event-2jvm",
+      "referenceRows": 551,
+      "actualRows": 551,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    },
+    {
+      "reference": "accepted-micro-discrete-event-1jvm",
+      "actual": "accepted-micro-time-warp-2jvm",
+      "referenceRows": 551,
+      "actualRows": 551,
+      "missing": 0,
+      "extra": 0,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

@@ -27,7 +27,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
 case class IntersectionMicroData(
   intersectionId: String,
   conflictZoneId: String,
-  vehicleId: String,
+  vehicleId: Long,
   entryLink: String,
   exitLink: String,
   estimatedArrivalTime: Double,

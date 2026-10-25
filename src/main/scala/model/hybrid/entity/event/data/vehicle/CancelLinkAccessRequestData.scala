@@ -12,5 +12,5 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   * docs/CONGESTION_PROPAGATION_DESIGN.md.
   */
 case class CancelLinkAccessRequestData(
-  targetLinkId: String
+  targetLinkId: Long
 ) extends BaseEventData

@@ -2,9 +2,12 @@ FROM eclipse-temurin:21-jdk
 
 WORKDIR /app
 
+ARG HTC_VERSION=3.2.0
+ARG SCALA_VERSION=3.3.5
+
 RUN mkdir -p /app/logs
 
-COPY target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar app.jar
+COPY target/scala-${SCALA_VERSION}/hyperbolic-time-chamber-${HTC_VERSION}.jar app.jar
 
 EXPOSE 1600-2700
 

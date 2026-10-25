@@ -1,7 +1,7 @@
 import sbt.Keys.libraryDependencies
 import scala.collection.Seq
 
-ThisBuild / version := "2.0.0"
+ThisBuild / version := "3.2.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
@@ -15,10 +15,10 @@ val scalaTestVersion = "3.2.20"
 val scalapbVersion = "0.11.11"
 
 // Apache Pekko
-val pekkoVersion = "1.5.0"
+val pekkoVersion = "1.7.1"
 val pekkoManagementVersion = "1.2.1"
-val jacksonVersion = "2.21.2"
-val pekkoHttpVersion = "1.3.0"
+val jacksonVersion = "2.22.4"
+val pekkoHttpVersion = "1.4.2"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
@@ -28,24 +28,24 @@ val logbackVersion = "1.5.32"
 val jacksonModuleVersion = "2.18.3"
 val jacksonDatabindVersion = "2.18.3"
 val jacksonDataTypeVersion = "2.18.3"
-val kryoVersion = "1.5.1"
-val protobufVersion = "4.34.1"
+val kryoVersion = "1.5.2"
+val protobufVersion = "4.36.2"
 val pekkoProtobuf = "1.0.3"
 val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
 // Parquet
-val parquetVersion = "1.17.0"
-val avroVersion2 = "1.12.1"
-val snappyVersion = "1.1.10.8"
-val zstdVersion = "1.5.7-7"
+val parquetVersion = "1.18.1"
+val avroVersion2 = "1.12.2"
+val snappyVersion = "1.1.10.12"
+val zstdVersion = "1.5.7-24"
 val hadoopVersion = "3.5.0"
 
 // Connectors
-val kafkaConnectorsVersion = "1.1.0"
-val jedisVersion = "7.4.1"
+val kafkaConnectorsVersion = "1.2.0"
+val jedisVersion = "8.0.2"
 val levelDBVersion = "1.8"
-val sqliteJdbcVersion = "3.47.1.0"
+val sqliteJdbcVersion = "3.53.4.0"
 
 // Prometheus Metrics
 val prometheusVersion = "0.16.0"
@@ -58,7 +58,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    assembly / assemblyJarName := "hyperbolic-time-chamber-1.24.3.jar",
+    assembly / assemblyJarName := s"${name.value}-${version.value}.jar",
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "services", "org.slf4j.spi.SLF4JServiceProvider") => MergeStrategy.first
@@ -111,7 +111,7 @@ lazy val root = (project in file("."))
       // Protobuf
       "com.google.protobuf" % "protobuf-java" % protobufVersion,
       "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.2",
+      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.12.3",
 
       // Parquet columnar format with Avro schema support
       "org.apache.parquet" % "parquet-avro" % parquetVersion,
@@ -126,9 +126,9 @@ lazy val root = (project in file("."))
       // Logs
       "ch.qos.logback" % "logback-classic" % logbackVersion,
       "ch.qos.logback" % "logback-core" % logbackVersion,
-      "org.slf4j" % "slf4j-api" % "2.0.17",
+      "org.slf4j" % "slf4j-api" % "2.0.20",
 
-      "com.typesafe" % "config" % "1.4.6",
+      "com.typesafe" % "config" % "1.4.9",
 
       // Observability
       "org.openjdk.jol" % "jol-core" % "0.17",
@@ -146,7 +146,8 @@ lazy val root = (project in file("."))
     ),
     
     dependencyOverrides ++= Seq(
-      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion
+      "org.apache.pekko" %% "pekko-discovery" % pekkoVersion,
+      "org.apache.pekko" %% "pekko-http-spray-json" % pekkoHttpVersion
     ),
     
     Compile / PB.protoSources := Seq(

@@ -33,7 +33,7 @@ object RandomSeedManager {
     println(s"Random seed $seed configurado para reprodutibilidade")
   }
 
-  /** Gera UUID determinístico baseado no seed + contador
+  /** Gera ID determinístico baseado no seed + contador
     */
   private var uuidCounter: Long = 0
 
@@ -44,6 +44,12 @@ object RandomSeedManager {
     f"htc-$uuidValue%016x-$uuidCounter%08x"
   }
 
+  /** Gera um entity id `Long` determinístico baseado no seed + contador. */
+  def deterministicId(): Long = {
+    uuidCounter += 1
+    currentSeed.getOrElse(0L) + uuidCounter
+  }
+
   /** Gera ID determinístico para simulação
     */
   def deterministicSimulationId(simulationName: String): String = {
@@ -51,47 +57,9 @@ object RandomSeedManager {
     s"${simulationName}_seed_${seedPart}"
   }
 
-  /** Obter instância determinística do Java Random
-    */
-  def getJavaRandom(): JavaRandom =
-    javaRandom.getOrElse {
-      println("⚠️ Random não inicializado! Usando seed padrão")
-      initialize(createDefaultSimulation())
-      javaRandom.get
-    }
-
-  /** Obter instância determinística do Scala Random
-    */
-  def getScalaRandom(): ScalaRandom =
-    scalaRandom.getOrElse {
-      println("⚠️ Random não inicializado! Usando seed padrão")
-      initialize(createDefaultSimulation())
-      scalaRandom.get
-    }
-
   /** Retorna o seed atual sendo usado
     */
   def getCurrentSeed(): Option[Long] = currentSeed
-
-  /** Cria simulação padrão com seed fixo para casos de emergência
-    */
-  private def createDefaultSimulation(): Simulation = {
-    import core.types.Tick
-    import java.time.LocalDateTime
-
-    Simulation(
-      name = "default",
-      description = "Default simulation for random seed initialization",
-      id = None,
-      startTick = 0L,
-      startRealTime = LocalDateTime.now(),
-      timeUnit = "seconds",
-      timeStep = 1L,
-      duration = 100L,
-      randomSeed = Some(42L),
-      actorsDataSources = List.empty
-    )
-  }
 
   /** Reset completo do sistema (útil para testes)
     */

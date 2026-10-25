@@ -49,9 +49,9 @@ final class CompactGraph private (
   private val edgeIdx: Array[Int],
   private val nodeLat: Array[Float],
   private val nodeLon: Array[Float],
-  val nodeIds: Array[String],
-  val edgeIds: Array[String],
-  val nodeIndex: java.util.HashMap[String, Int],
+  val nodeIds: Array[Long],
+  val edgeIds: Array[Long],
+  val nodeIndex: java.util.HashMap[Long, Int],
   /** NodeGraph objects parallel to nodeIds — used to bridge into the LandmarkIndex heuristic. */
   val nodeGraphs: Array[NodeGraph]
 ) {
@@ -92,8 +92,8 @@ final class CompactGraph private (
     altH: (Int, Int) => Double,
     maxExpansions: Int,
     useDynamicWeights: Boolean,
-    deadlineNanos: Long = Long.MaxValue
-  ): Option[(Double, List[(String, String)])] = {
+    maxEdgeRelaxations: Long = Long.MaxValue
+  ): Option[(Double, List[(Long, Long)])] = {
 
     if (source == target) return Some((0.0, List.empty))
 
@@ -111,6 +111,7 @@ final class CompactGraph private (
     heap.push(0.0, source)
 
     var expansions = 0
+    var edgeRelaxations = 0L
 
     while (!heap.isEmpty) {
       val (fU, u) = heap.pop()
@@ -119,7 +120,7 @@ final class CompactGraph private (
         // stale entry — skip
       } else if (u == target) {
         // Reconstruct path
-        val path = mutable.ArrayBuffer[(String, String)]()
+        val path = mutable.ArrayBuffer[(Long, Long)]()
         var cur  = target
         while (cur != source) {
           val e = prevEdg(cur)
@@ -132,13 +133,20 @@ final class CompactGraph private (
         visited.set(u)
         expansions += 1
         if (expansions >= maxExpansions) return None
-        // Time-cap: check every 5 000 expansions to limit overhead.
-        // Avoids blocking dispatcher threads for >deadlineNanos on disconnected graphs.
-        if ((expansions & 0x1FFF) == 0 && System.nanoTime() > deadlineNanos) return None
 
         var e = rowPtr(u)
         val end = rowPtr(u + 1)
         while (e < end) {
+          // Work-cap: bounds total edges examined, not just node expansions, so a search that
+          // stays under maxExpansions but hits nodes with unusually high out-degree still has a
+          // hard, deterministic ceiling — a pure function of graph topology and visitation order,
+          // not of wall-clock time (docs/TIME_WARP_DESIGN.md's model-level audit found the previous
+          // System.nanoTime() deadline here made replay non-deterministic: the same event replayed
+          // under different CPU contention, e.g. during a Time Warp rollback cascade, could time
+          // out at a different point and return a different route, or none, than the original run
+          // — this replaces that with a count that reproduces identically every time).
+          edgeRelaxations += 1
+          if (edgeRelaxations >= maxEdgeRelaxations) return None
           val v  = colIdx(e)
           if (!visited.get(v)) {
             val baseW  = edgeWeight(e)
@@ -163,17 +171,16 @@ final class CompactGraph private (
 
   /** A* search using built-in Euclidean heuristic (fast, no precomputed index). */
   def aStarEuclidean(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
-    maxNanos: Long = Long.MaxValue
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+    maxEdgeRelaxations: Long = Long.MaxValue
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
-    runAStar(src, dst, null, maxExpansions, useDynamicWeights, deadline)
+    runAStar(src, dst, null, maxExpansions, useDynamicWeights, maxEdgeRelaxations)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 
@@ -183,23 +190,22 @@ final class CompactGraph private (
     *              Build it from [[CompactLandmarkIndex]] for best results.
     */
   def aStarALT(
-    originId: String,
-    destinationId: String,
+    originId: Long,
+    destinationId: Long,
     altH: (Int, Int) => Double,
     useDynamicWeights: Boolean = true,
     maxExpansions: Int = 150_000,
-    maxNanos: Long = Long.MaxValue
-  ): Option[(Double, mutable.Queue[(String, String)])] = {
+    maxEdgeRelaxations: Long = Long.MaxValue
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
     val src = nodeIndex.getOrDefault(originId, -1)
     val dst = nodeIndex.getOrDefault(destinationId, -1)
     if (src == -1 || dst == -1) return None
-    val deadline = if (maxNanos == Long.MaxValue) Long.MaxValue else System.nanoTime() + maxNanos
-    runAStar(src, dst, altH, maxExpansions, useDynamicWeights, deadline)
+    runAStar(src, dst, altH, maxExpansions, useDynamicWeights, maxEdgeRelaxations)
       .map { case (cost, path) => (cost, mutable.Queue.from(path)) }
   }
 
   /** Node index for a given node ID string, or -1 if not found. */
-  def indexOf(nodeId: String): Int = nodeIndex.getOrDefault(nodeId, -1)
+  def indexOf(nodeId: Long): Int = nodeIndex.getOrDefault(nodeId, -1)
 }
 
 // ── Companion object ──────────────────────────────────────────────────────────
@@ -347,15 +353,15 @@ object CompactGraph {
     * This is called once at startup (lazy) and does not change the JSON-loading pipeline.
     */
   def fromLoaded(
-    data: LoadedGraphData[NodeGraph, String, Double, EdgeGraph]
+    data: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]
   ): CompactGraph = {
 
     val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
     val n                         = nodeList.length
 
     // Assign a stable Int index to each NodeGraph
-    val nodeIdxMap = new java.util.HashMap[String, Int](n * 2)
-    val nodeIdArr  = new Array[String](n)
+    val nodeIdxMap = new java.util.HashMap[Long, Int](n * 2)
+    val nodeIdArr  = new Array[Long](n)
     val latArr     = new Array[Float](n)
     val lonArr     = new Array[Float](n)
 
@@ -388,8 +394,8 @@ object CompactGraph {
     }
 
     // Collect edge label IDs (deduplicated, assign edge-label index)
-    val edgeLabelIdxMap = new java.util.HashMap[String, Int](m * 2)
-    val edgeLabelIdList = mutable.ArrayBuffer[String]()
+    val edgeLabelIdxMap = new java.util.HashMap[Long, Int](m * 2)
+    val edgeLabelIdList = mutable.ArrayBuffer[Long]()
     data.edgeLabelsById.foreachEntry { (id, _) =>
       if (!edgeLabelIdxMap.containsKey(id)) {
         edgeLabelIdxMap.put(id, edgeLabelIdList.size)
@@ -451,14 +457,14 @@ object CompactGraph {
     * admissible) rather than [[aStarALT]] for pedestrian searches.
     */
   def fromLoadedBidirectional(
-    data: LoadedGraphData[NodeGraph, String, Double, EdgeGraph]
+    data: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]
   ): CompactGraph = {
 
     val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
     val n                         = nodeList.length
 
-    val nodeIdxMap = new java.util.HashMap[String, Int](n * 2)
-    val nodeIdArr  = new Array[String](n)
+    val nodeIdxMap = new java.util.HashMap[Long, Int](n * 2)
+    val nodeIdArr  = new Array[Long](n)
     val latArr     = new Array[Float](n)
     val lonArr     = new Array[Float](n)
 
@@ -474,8 +480,8 @@ object CompactGraph {
 
     // Edge label index (same as directed builder)
     val m               = data.graph.edges.size
-    val edgeLabelIdxMap = new java.util.HashMap[String, Int](m * 2)
-    val edgeLabelIdList = mutable.ArrayBuffer[String]()
+    val edgeLabelIdxMap = new java.util.HashMap[Long, Int](m * 2)
+    val edgeLabelIdList = mutable.ArrayBuffer[Long]()
     data.edgeLabelsById.foreachEntry { (id, _) =>
       if (!edgeLabelIdxMap.containsKey(id)) {
         edgeLabelIdxMap.put(id, edgeLabelIdList.size)

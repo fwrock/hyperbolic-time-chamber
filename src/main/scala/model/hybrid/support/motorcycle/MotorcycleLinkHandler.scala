@@ -13,16 +13,25 @@ class MotorcycleLinkHandler(
   currentTickFn:           () => Tick,
   journeyReporter:         MotorcycleJourneyReporter,
   onFinishSpontaneousFn:   Option[Tick] => Unit,
-  onFinishPrivateVehicleFn: String => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   selfDestructFn:          () => Unit,
   isPersonCentricFn:       () => Boolean,
-  finishJourneyFn:         (String, String) => Unit,
+  finishJourneyFn: (String, Long) => Unit,
   setMesoExitTickFn:       Option[Tick] => Unit,
-  getTripDestinationFn:    () => Option[String],
-  logDebugFn:              String => Unit
+  getTripDestinationFn: () => Option[Long],
+  logDebugFn:              String => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged -- same pattern as CarSignalHandler/CarLinkHandler.
+  isTimeWarpFn: () => Boolean = () => false,
+  isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: MotorcycleState): Unit = {
+  private def enterLinkAwaitKey(linkId: Long): String = model.hybrid.actor.Movable.enterLinkAwaitKey(linkId)
+  private def leaveLinkAwaitKey(linkId: Long): String = model.hybrid.actor.Movable.leaveLinkAwaitKey(linkId)
+
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
+    consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
     val baseSpeed       = linkDensitySpeed(
       length        = data.linkLength,
       capacity      = data.linkCapacity,
@@ -63,14 +72,21 @@ class MotorcycleLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: MotorcycleState): Unit = {
-    if (state.status == Parked || state.status == Finished) {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
+    val awaitKey = leaveLinkAwaitKey(linkId)
+    val isStale =
+      if (isTimeWarpFn())
+        !isAwaitingReplyFn(awaitKey, "LeaveLinkData", data.requestSeq)
+      else
+        state.status == Parked || state.status == Finished
+    if (isStale) {
       logDebugFn(
         s"${entityIdFn()}: Discarding stale ReceiveLeaveLinkInfo for link $linkId " +
           s"(status=${state.status}, trip already finalized)."
       )
       return
     }
+    consumeAwaitedReplyFn(awaitKey)
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")

@@ -48,7 +48,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 123L,
         lamportTick = 7L,
-        actorRefId = "car-42",
+        actorRefId = 42L,
         // Real senders always set shardRefId = IdUtil.format(getShardId) = getClass.getName of the
         // *same* actor that produced actorClassType below — i.e. this value is never independent
         // of actorClassType in production traffic.
@@ -72,6 +72,38 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
     roundTripped shouldBe original
   }
 
+  it should "preserve logical order on both interaction wire paths" in {
+    val serialization = SerializationExtension(system)
+    val order = core.runtime.EventOrder(123L, 17L, "stable-logical-key")
+    val original = ActorInteractionEvent(tick = 123L, lamportTick = 5L, actorRefId = 42L,
+      shardRefId = "org.interscity.htc.model.Car", actorPathRef = "car-42", actorClassType = "Car",
+      sourceEpoch = "simulation-run", sourceIncarnation = "source-incarnation",
+      data = LinkInfoData(linkLength = 100.0, linkCapacity = 10.0, linkNumberOfCars = 3,
+        linkFreeSpeed = 13.9, linkLanes = 2), resourceId = "test", seq = 99L, order = Some(order))
+    Seq(original, EntityEnvelopeEvent("car-43", original)).foreach { event =>
+      val serializer = serialization.findSerializerFor(event)
+        .asInstanceOf[org.apache.pekko.serialization.SerializerWithStringManifest]
+      serialization.deserialize(serializer.toBinary(event), serializer.identifier, serializer.manifest(event)).get shouldBe event
+    }
+  }
+
+  it should "round-trip revisioned dispatch and schedule control messages with CBOR" in {
+    val serialization = SerializationExtension(system)
+    val probe = org.apache.pekko.testkit.TestProbe()(system)
+    val order = core.runtime.EventOrder(10L, 2L, "self-key")
+    val identity = org.htc.protobuf.core.entity.actor.Identify(id = 1L, classType = "test.Actor")
+    val messages: Seq[AnyRef] = Seq(
+      core.entity.event.SpontaneousEvent(10L, probe.ref, generation = 4L, scheduleRevision = 7L, order = Some(order)),
+      core.entity.event.FinishEvent(probe.ref, identity, 10L, scheduleTick = Some("10"), timeManager = probe.ref,
+        scheduleRevision = 8L, nextOrder = Some(order)),
+      core.entity.event.control.execution.ReplaceScheduleEvent(identity, 9L, Some(order), 4L, false))
+    messages.foreach { msg =>
+      val serializer = serialization.findSerializerFor(msg)
+        .asInstanceOf[org.apache.pekko.serialization.SerializerWithStringManifest]
+      serialization.deserialize(serialization.serialize(msg).get, serializer.identifier, serializer.manifest(msg)).get shouldBe msg
+    }
+  }
+
   it should "derive shardRefId from actorClassType on the wire, ignoring whatever value the sender happened to pass (recommendation 9)" in {
     val serialization = SerializationExtension(system)
 
@@ -80,7 +112,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 123L,
         lamportTick = 7L,
-        actorRefId = "car-42",
+        actorRefId = 42L,
         // Deliberately a stale/unrelated value: proves the wire no longer carries shardRefId
         // verbatim — the receiver reconstructs it from actorClassType instead.
         shardRefId = "this-value-must-not-survive-the-wire",
@@ -101,7 +133,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
     roundTripped.event.asInstanceOf[ActorInteractionEvent].shardRefId shouldBe "org.interscity.htc.model.Car"
   }
 
-  it should "strip and reconstruct the htcaid_<type>_ prefix on entityId and actorRefId (recommendation 10)" in {
+  it should "strip and reconstruct the htcaid_<type>_ prefix on entityId (recommendation 10) while writing actorRefId as a plain int64" in {
     val serialization = SerializationExtension(system)
 
     val original = EntityEnvelopeEvent(
@@ -109,7 +141,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 1L,
         lamportTick = 1L,
-        actorRefId = "htcaid_car_42_v_car",
+        actorRefId = 42L,
         shardRefId = "org.interscity.htc.model.Car",
         actorPathRef = "pekko://sys/user/car-42",
         actorClassType = "Car",
@@ -127,10 +159,12 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
 
     roundTripped shouldBe original
 
+    // actorRefId is now a Long -- Identify.id/Dependency.id like every other migrated actor-id
+    // field, so it's written as a plain int64 on the wire (no more "htcaid_<type>_" prefix to
+    // strip; that optimization only ever applied to the String-era id shape).
     val proto = org.htc.protobuf.core.entity.event.communication.ActorInteraction.parseFrom(bytes)
     proto.entityId shouldBe "9001"
-    proto.actorRefId shouldBe "42_v_car"
-    proto.actorRefIdPrefixStripped shouldBe true
+    proto.actorRefId shouldBe 42L
   }
 
   it should "leave a non-matching entityId/actorRefId untouched on the wire (control-plane ids, best-effort only)" in {
@@ -141,7 +175,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 1L,
         lamportTick = 1L,
-        actorRefId = "loader-123",
+        actorRefId = 123L,
         shardRefId = "org.interscity.htc.model.Car",
         actorPathRef = "pekko://sys/user/loader-123",
         actorClassType = "Car",
@@ -168,7 +202,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 100L,
         lamportTick = 3L,
-        actorRefId = "htcaid_car_42_v_car",
+        actorRefId = 42L,
         shardRefId = "org.interscity.htc.model.Car",
         actorPathRef = "pekko://sys/user/car-42",
         actorClassType = "Car",
@@ -183,15 +217,17 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
     val compactBytes = serializer.toBinary(compact)
 
     // Pre-compaction shape: same logical message, but with the redundant shardRefId populated and
-    // the full "htcaid_<type>_" prefix left on entityId/actorRefId — i.e. what recommendations 9/10
-    // eliminated. Built directly against the proto to bypass the new serializer logic.
+    // the full "htcaid_<type>_" prefix left on entityId — i.e. what recommendations 9/10
+    // eliminated (actorRefId's own former prefix-stripping, recommendation 10's other half, is
+    // moot now that actorRefId is a plain int64 with no string prefix to strip in the first
+    // place). Built directly against the proto to bypass the new serializer logic.
     val (actorClassTypeProto, _) = ActorInteractionCodec.encodeActorClassType("Car")
     val (eventTypeProto, _) = ActorInteractionCodec.encodeEventType("enter")
     val legacyShapeBytes = org.htc.protobuf.core.entity.event.communication
       .ActorInteraction(
         tick = 100L,
         lamportTick = 3L,
-        actorRefId = "htcaid_car_42_v_car",
+        actorRefId = 42L,
         shardRefId = "org.interscity.htc.model.Car",
         actorRef = "pekko://sys/user/car-42",
         actorClassType = actorClassTypeProto,
@@ -230,7 +266,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
       event = ActorInteractionEvent(
         tick = 9L,
         lamportTick = 2L,
-        actorRefId = "unknown-actor-1",
+        actorRefId = 1L,
         shardRefId = "org.interscity.htc.model.SomeFutureManagerActor",
         actorPathRef = "pekko://sys/user/unknown-actor-1",
         actorClassType = "SomeFutureManagerActor",
@@ -255,7 +291,7 @@ class EntityEnvelopeSerializerSpec extends AnyFlatSpec with Matchers with Before
     val original = ActorInteractionEvent(
       tick = 5L,
       lamportTick = 1L,
-      actorRefId = "bus-1",
+      actorRefId = 1L,
       shardRefId = "org.interscity.htc.model.Bus",
       actorPathRef = "pekko://sys/user/bus-1",
       actorClassType = "Bus",

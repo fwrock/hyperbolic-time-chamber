@@ -78,7 +78,7 @@ class TypeAwareStrategy extends BalancingStrategy {
     * processing by the LoadBalanceManager).
     */
   override def assignShard(entity: SpatialEntity): String = {
-    val entityType = extractType(entity.spatialEntityId)
+    val entityType = extractType(entity)
     val bucket = typeBucket.getOrElse(entityType, 0)
     val shardId = s"$entityType-shard-$bucket"
 
@@ -217,10 +217,22 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   // ── Internal helpers ───────────────────────────────────────────────────────
 
-  /** Extracts the entity type from an ID of the form `htcaid:{type};{id}`. Falls back to
-    * `"unknown"` if the convention is not matched.
+  /** Derives a stable, per-type shard key from the entity's `classType` (e.g. `hybrid.actor.Node`
+    * → `node`). Falls back to parsing the legacy `htcaid:{type};{id}` convention when `classType` is
+    * absent.
     */
-  private def extractType(entityId: String): String = {
+  private def extractType(entity: SpatialEntity): String = {
+    val ct = entity.entityClassType
+    if (ct != null && ct.nonEmpty) {
+      val idx = ct.lastIndexOf('.')
+      (if (idx >= 0) ct.substring(idx + 1) else ct).toLowerCase
+    } else {
+      extractTypeFromId(entity.spatialEntityId)
+    }
+  }
+
+  /** Legacy fallback: extracts the entity type from an ID of the form `htcaid:{type};{id}`. */
+  private def extractTypeFromId(entityId: String): String = {
     val lower = entityId.toLowerCase
     val colonIdx = lower.indexOf(':')
     val semicolonIdx = lower.indexOf(';')

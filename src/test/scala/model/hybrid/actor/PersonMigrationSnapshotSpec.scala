@@ -32,22 +32,13 @@ import scala.compiletime.uninitialized
   */
 class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
-  // Plain local provider — the project's default application.conf enables cluster/remoting
-  // (Artery on a fixed port), which isn't needed here and would collide across parallel suites.
-  // Created in beforeAll (not a field initializer): SBT/ScalaTest instantiate a Suite class an
-  // extra time purely for test-name discovery, and an ActorSystem built as part of that throwaway
-  // instantiation would double-create (and double-bind ports / double-run the mixed-version
-  // check).
+
   private var _system: ActorSystem = uninitialized
   private implicit def system: ActorSystem = _system
 
   override def beforeAll(): Unit =
     _system = ActorSystem(
       "PersonMigrationSnapshotSpec",
-      // ActorSystem(name, config) does NOT auto-load application.conf the way ActorSystem(name)
-      // does — only library reference.confs — so the project's own application.conf (which
-      // configures the in-mem persistence journal Car/Person need as PersistentActors) must be
-      // pulled in explicitly via ConfigFactory.load() as the fallback.
       ConfigFactory
         .parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off")
         .withFallback(ConfigFactory.load())
@@ -72,13 +63,13 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
     TestActorRef(new TestPerson(Properties(entityId = entityId)), s"$entityId-$nextEntitySuffix").underlyingActor
   }
 
-  private def boardedEvent(vehicleId: String, vehicleClassType: String): ActorInteractionEvent =
+  private def boardedEvent(vehicleId: Long, vehicleClassType: String): ActorInteractionEvent =
     ActorInteractionEvent(
       tick = 3L,
       lamportTick = 3L,
       actorRefId = vehicleId,
       shardRefId = vehicleClassType,
-      actorPathRef = s"/user/$vehicleId",
+      actorPathRef = s"/user/vehicle-$vehicleId",
       actorClassType = vehicleClassType,
       data = PassengerBoardedVehicleData(vehicleId = vehicleId, vehicleClassType = vehicleClassType),
       resourceId = "res-1"
@@ -87,11 +78,11 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
   "Person.buildMigrationSnapshot" should "capture currentPTVehicleRef after boarding a Bus/Subway" in {
     val person = newTestPerson("person-1")
     person.testSetState(PersonState())
-    person.actInteractWith(boardedEvent("bus-1", "hybrid.actor.Bus"))
+    person.actInteractWith(boardedEvent(1L, "hybrid.actor.Bus"))
 
     val snapshot = person.testBuildMigrationSnapshot()
 
-    snapshot.currentPTVehicleRefId shouldBe "bus-1"
+    snapshot.currentPTVehicleRefId shouldBe 1L
     snapshot.currentPTVehicleRefClassType shouldBe "hybrid.actor.Bus"
   }
 
@@ -101,26 +92,22 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
 
     val snapshot = person.testBuildMigrationSnapshot()
 
-    snapshot.currentPTVehicleRefId shouldBe ""
+    snapshot.currentPTVehicleRefId shouldBe 0L
     snapshot.currentPTVehicleRefClassType shouldBe ""
   }
 
   "Person.applyMigrationSnapshot" should "restore currentPTVehicleRef on a freshly-constructed actor so onDestruct can still answer the boarding barrier" in {
     val sourcePerson = newTestPerson("person-3")
     sourcePerson.testSetState(PersonState())
-    sourcePerson.actInteractWith(boardedEvent("subway-9", "hybrid.actor.Subway"))
+    sourcePerson.actInteractWith(boardedEvent(9L, "hybrid.actor.Subway"))
 
     val snapshot = sourcePerson.testBuildMigrationSnapshot()
 
-    // Simulates rehydration on the destination node after a shard migration: a brand-new actor
-    // instance restored purely from the snapshot, as BaseActor.restoreMigrationState does.
     val rehydratedPerson = newTestPerson("person-3")
     rehydratedPerson.testApplyMigrationSnapshot(snapshot)
 
-    // Round-trip fidelity proves the field survived internally (no public getter exists — the
-    // real consumer is Person.onDestruct, which sends a reply using exactly this pair).
     val rebuilt = rehydratedPerson.testBuildMigrationSnapshot()
-    rebuilt.currentPTVehicleRefId shouldBe "subway-9"
+    rebuilt.currentPTVehicleRefId shouldBe 9L
     rebuilt.currentPTVehicleRefClassType shouldBe "hybrid.actor.Subway"
   }
 
@@ -132,6 +119,6 @@ class PersonMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeA
     val rehydratedPerson = newTestPerson("person-4")
     rehydratedPerson.testApplyMigrationSnapshot(snapshot)
 
-    rehydratedPerson.testBuildMigrationSnapshot().currentPTVehicleRefId shouldBe ""
+    rehydratedPerson.testBuildMigrationSnapshot().currentPTVehicleRefId shouldBe 0L
   }
 }

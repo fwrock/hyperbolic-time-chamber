@@ -1,6 +1,7 @@
 package org.interscity.htc
 package model.hybrid.entity.state
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.types.Tick
 import org.interscity.htc.model.hybrid.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
@@ -9,6 +10,11 @@ import org.interscity.htc.model.hybrid.entity.state.model.SubwayNodeState
 
 import scala.collection.mutable
 
+/** `subwayStations` / `passengers` carry `@JsonDeserialize(keyAs = classOf[java.lang.Long])`: on
+  * Scala 3, jackson-module-scala only preserves a case class's full Map key/value generics for
+  * the *first* constructor parameter, so any later `Map[Long, _]` field silently deserializes its
+  * keys as `String` without this annotation (see `BusStationState` for the full explanation).
+  */
 case class SubwayState(
   override val startTick: Tick = 0,
   capacity: Int,
@@ -17,13 +23,15 @@ case class SubwayState(
   var distance: Double = 0.0,
   boardingTimeByPassenger: Double = 1.5,
   stopTime: Tick,
-  subwayStations: mutable.Map[String, String] = mutable.Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  subwayStations: mutable.Map[Long, Long] = mutable.Map.empty,
   var countUnloadPassenger: Int = 0,
   var countUnloadReceived: Int = 0,
-  override val origin: String,
-  override val destination: String,
+  override val origin: Long,
+  override val destination: Long,
   nodeState: SubwayNodeState = SubwayNodeState(),
-  passengers: mutable.Map[String, Identify] = mutable.Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  passengers: mutable.Map[Long, Identify] = mutable.Map.empty,
   var currentPathPosition: Int = 0,
   line: String,
   override val actorType: ActorTypeEnum = Subway,
@@ -31,7 +39,10 @@ case class SubwayState(
     * Values < 1.0 = conservative (slower); > 1.0 = aggressive (faster).
     * Clamped to [0.5, 1.5] on use. Default: 1.0.
     */
-  val speedFactor: Double = 1.0
+  val speedFactor: Double = 1.0,
+  var departureTick: Option[Tick] = None,
+  var currentLinkLength: Double = 0.0,
+  var linkArrivalCounted: Boolean = false
 ) extends MovableState(
       startTick = startTick,
       origin = origin,
@@ -40,11 +51,11 @@ case class SubwayState(
       size = -1
     ) {
 
-  def bestRoute: Option[mutable.Queue[(String, String)]] = movableBestRoute
-  def bestRoute_=(v: Option[mutable.Queue[(String, String)]]): Unit = movableBestRoute = v
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
 
-  def currentPath: Option[(String, String)] = movableCurrentPath
-  def currentPath_=(v: Option[(String, String)]): Unit = movableCurrentPath = v
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
 
   def bestCost: Double = movableBestCost
   def bestCost_=(v: Double): Unit = movableBestCost = v

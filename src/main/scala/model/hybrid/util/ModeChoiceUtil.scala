@@ -46,8 +46,8 @@ object ModeChoiceUtil {
     *   re-evaluation is skipped (see class-level docs).
     */
   def chooseBestLogistics(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     currentLogistics: ArrivalLogistics,
     weights: ModeChoiceWeights
   ): ArrivalLogistics = {
@@ -60,18 +60,17 @@ object ModeChoiceUtil {
   }
 
   private def shouldSkipModeChoice(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     currentLogistics: ArrivalLogistics
   ): Boolean =
     if (currentLogistics.fixedMode) true
     else if (!TransitMapUtil.isAvailable) true
-    else if (originNodeId.isEmpty || destinationNodeId.isEmpty) true
     else false
 
   private def evaluateBestCandidate(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     currentLogistics: ArrivalLogistics,
     weights: ModeChoiceWeights
   ): Option[ArrivalLogistics] =

@@ -23,11 +23,13 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   Total time spent halting (velocity < 0.1 m/s) in seconds
   */
 case class MicroLeaveLinkData(
-  linkId: String,
+  linkId: Long,
   finalPosition: Double,
   finalVelocity: Double,
   travelTime: Double,
   distanceTraveled: Double,
   averageSpeed: Double,
-  waitingTimeSeconds: Double = 0.0
+  waitingTimeSeconds: Double = 0.0,
+  junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None,
+  remainingStepSeconds: Double = 0.0
 ) extends BaseEventData

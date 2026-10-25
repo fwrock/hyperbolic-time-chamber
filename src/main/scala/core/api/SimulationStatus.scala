@@ -16,3 +16,6 @@ enum SimulationStatus:
 
   /** StopSimulationEvent sent or simulation ended naturally */
   case Stopped
+
+  /** Runtime invariant or durable report commitment failed. */
+  case Failed

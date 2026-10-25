@@ -36,7 +36,7 @@ class TrafficSignal(
     simulationEnd  = simulationEnd,
     reportFn       = (data, label) => report(data, label),
     sendMessageFn  = (eid, shardId, data, eventType) => sendMessageTo(eid, shardId, data, eventType),
-    getDependencyFn = node => getDependency(node),
+    getDependencyFn = node => getDependency(node.toString),
     scheduleNextFn  = tick => onFinishSpontaneous(Some(tick)),
     finishFn        = () => onFinishSpontaneous(),
     logDebugFn      = logDebug

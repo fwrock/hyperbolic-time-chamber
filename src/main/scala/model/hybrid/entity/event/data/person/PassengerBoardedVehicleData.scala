@@ -15,6 +15,7 @@ import core.entity.event.data.BaseEventData
   *   Shard / class type of the vehicle (e.g. "hybrid.actor.Bus" or "hybrid.actor.Subway")
   */
 case class PassengerBoardedVehicleData(
-  vehicleId: String,
-  vehicleClassType: String
+  vehicleId: Long,
+  vehicleClassType: String,
+  vehicleDistance: Double = 0.0
 ) extends BaseEventData

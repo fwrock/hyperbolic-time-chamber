@@ -7,14 +7,14 @@ import org.scalatest.matchers.should.Matchers
 
 class PrivateVehicleCandidatesSpec extends AnyFlatSpec with Matchers {
 
-  private val car = Identify(id = "car-1")
-  private val bicycle = Identify(id = "bicycle-1")
+  private val car = Identify(id = 501L)
+  private val bicycle = Identify(id = 502L)
 
   "available" should "include a vehicle parked at the origin node" in {
     val result = PrivateVehicleCandidates.available(
-      originNodeId       = "n1",
+      originNodeId       = 1L,
       ownedVehicles      = Map("car" -> car),
-      vehicleCurrentNode = Map("car" -> "n1")
+      vehicleCurrentNode = Map("car" -> 1L)
     )
 
     result shouldBe Map("car" -> car)
@@ -22,9 +22,9 @@ class PrivateVehicleCandidatesSpec extends AnyFlatSpec with Matchers {
 
   it should "exclude a vehicle parked at a different node" in {
     val result = PrivateVehicleCandidates.available(
-      originNodeId       = "n1",
+      originNodeId       = 1L,
       ownedVehicles      = Map("car" -> car),
-      vehicleCurrentNode = Map("car" -> "n2")
+      vehicleCurrentNode = Map("car" -> 2L)
     )
 
     result shouldBe empty
@@ -32,7 +32,7 @@ class PrivateVehicleCandidatesSpec extends AnyFlatSpec with Matchers {
 
   it should "treat a vehicle with no vehicleCurrentNode entry as available (never moved from start)" in {
     val result = PrivateVehicleCandidates.available(
-      originNodeId       = "n1",
+      originNodeId       = 1L,
       ownedVehicles      = Map("car" -> car),
       vehicleCurrentNode = Map.empty
     )
@@ -42,9 +42,9 @@ class PrivateVehicleCandidatesSpec extends AnyFlatSpec with Matchers {
 
   it should "evaluate each owned vehicle independently" in {
     val result = PrivateVehicleCandidates.available(
-      originNodeId       = "n1",
+      originNodeId       = 1L,
       ownedVehicles      = Map("car" -> car, "bicycle" -> bicycle),
-      vehicleCurrentNode = Map("car" -> "n2") // bicycle has no entry -> available
+      vehicleCurrentNode = Map("car" -> 2L) // bicycle has no entry -> available
     )
 
     result shouldBe Map("bicycle" -> bicycle)

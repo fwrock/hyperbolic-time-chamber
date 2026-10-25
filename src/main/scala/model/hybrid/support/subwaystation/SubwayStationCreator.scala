@@ -13,12 +13,18 @@ import org.interscity.htc.core.metrics.model.hybrid.SubwayStationMetrics
 import core.actor.trace.ActorTrace
 import scala.collection.mutable
 
+/** A dequeued-and-prepared subway (state built, route validated, `report()` already emitted)
+  * whose irrevocable [[SubwayStationCreator.spawnPreparedSubway]] step has not yet run. See
+  * `SubwayStationCreator.prepareSubwaysFrom`.
+  */
+case class PreparedSubway(subway: SubwayInformation, line: String, stateJson: String)
+
 class SubwayStationCreator(
   getStateFn:          () => SubwayStationState,
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
   reportFn:            (Map[String, Any], String) => Unit,
-  spawnDynamicActorFn: (String, String, String) => Unit,
+  spawnDynamicActorFn: (String, Long, String) => Unit,
   addDependencyFn:     (String, ShardActorId) => Unit,
   logWarnFn:           String => Unit,
   logDebugFn:          String => Unit,
@@ -29,7 +35,7 @@ class SubwayStationCreator(
 
   def createSubwayFrom(lines: mutable.Map[String, SubwayLineInformation]): Int = {
     var spawned = 0
-    lines.keys.foreach { line =>
+    lines.keys.toList.sorted.foreach { line =>
       state.subways.get(line) match
         case Some(subwayQueue) =>
           if (subwayQueue.nonEmpty && state.garage) {
@@ -40,7 +46,7 @@ class SubwayStationCreator(
               spawned += 1
               // ActorTrace.trace(entityIdFn(), currentTickFn(), "subway_station_train_created", // #actor-trace
               //   s"trainId=${subway.actorId} line=$line nextTick=$subwayStartTick") // #actor-trace
-              addDependencyFn(subway.actorId, ShardActorId(subway.actorId, "hybrid.actor.Subway"))
+              addDependencyFn(subway.actorId.toString, ShardActorId(subway.actorId, "hybrid.actor.Subway"))
               lines(line).nextTick = subwayStartTick
             } catch {
               case e: IllegalStateException =>
@@ -55,6 +61,39 @@ class SubwayStationCreator(
           logWarnFn(s"Subway not found for line $line")
     }
     spawned
+  }
+
+  /** Dequeues and prepares (route + state-object + `report()`, all pure/GVT-buffer-safe — see
+    * `SimulationBaseActor.reportBuffer`) at most one subway per line in `lines`, without ever
+    * calling the irrevocable `spawnDynamicActorFn`. The dequeue itself is safe to run eagerly
+    * under Time Warp because `state.subways`/`state.lines` are checkpointed and restored
+    * correctly by rollback; only the actual spawn is deferred by the caller.
+    */
+  def prepareSubwaysFrom(lines: mutable.Map[String, SubwayLineInformation]): Seq[PreparedSubway] = {
+    val prepared = mutable.ListBuffer.empty[PreparedSubway]
+    lines.keys.toList.sorted.foreach { line =>
+      state.subways.get(line) match
+        case Some(subwayQueue) =>
+          if (subwayQueue.nonEmpty && state.garage) {
+            val subway = subwayQueue.dequeue()
+            val subwayStartTick = currentTickFn() + lines(line).interval
+            try {
+              val stateJson = prepareSubway(subway, line, subwayStartTick)
+              prepared += PreparedSubway(subway, line, stateJson)
+              lines(line).nextTick = subwayStartTick
+            } catch {
+              case e: IllegalStateException =>
+                logErrorFn(s"Failed to prepare subway ${subway.actorId} for line $line: ${e.getMessage}")
+                subwayQueue.enqueue(subway)
+              case e: Exception =>
+                logErrorFn(s"Unexpected error preparing subway ${subway.actorId} for line $line: ${e.getMessage}")
+                subwayQueue.enqueue(subway)
+            }
+          }
+        case None =>
+          logWarnFn(s"Subway not found for line $line")
+    }
+    prepared.toSeq
   }
 
   def filterLinesByNextTick(): mutable.Map[String, SubwayLineInformation] =
@@ -72,17 +111,23 @@ class SubwayStationCreator(
       .sorted
       .headOption
 
-  private def createSubway(subway: SubwayInformation, startTick: Long): Unit = {
-    val route = convertLineRouteToPath(subway.line)
+  /** Everything about creating a subway that is pure/idempotent and safe to run eagerly under
+    * Time Warp: route lookup, state-object construction, and `report()` (already GVT-buffered —
+    * see `SimulationBaseActor.reportBuffer`). Deliberately excludes the one irrevocable step,
+    * `spawnDynamicActorFn`, which the caller defers separately under Time Warp; see
+    * `docs/TIME_WARP_DESIGN.md`'s dynamic-actor-spawn entry.
+    */
+  def prepareSubway(subway: SubwayInformation, line: String, startTick: Long): String = {
+    val route = convertLineRouteToPath(line)
     if (route.isEmpty) {
-      logWarnFn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no valid route available")
-      throw new IllegalStateException(s"No route available for subway line ${subway.line}")
+      logWarnFn(s"Cannot create subway ${subway.actorId} for line $line - no valid route available")
+      throw new IllegalStateException(s"No route available for subway line $line")
     }
 
-    val subwayStations = convertLineToSubwayStations(subway.line)
+    val subwayStations = convertLineToSubwayStations(line)
     if (subwayStations.isEmpty) {
-      logWarnFn(s"Cannot create subway ${subway.actorId} for line ${subway.line} - no subway stations available")
-      throw new IllegalStateException(s"No subway stations available for line ${subway.line}")
+      logWarnFn(s"Cannot create subway ${subway.actorId} for line $line - no subway stations available")
+      throw new IllegalStateException(s"No subway stations available for line $line")
     }
 
     val subwayState = {
@@ -95,7 +140,7 @@ class SubwayStationCreator(
         line         = subway.line,
         subwayStations = subwayStations,
         origin       = state.nodeId,
-        destination  = subwayStations.values.last,
+        destination  = route.last._2,
         speedFactor  = subway.speedFactor
       )
       s.bestRoute    = Some(route)
@@ -119,20 +164,28 @@ class SubwayStationCreator(
       "subway_created"
     )
 
-    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
-    spawnDynamicActorFn("hybrid.actor.Subway", IdUtil.format(subway.actorId), toJson(subwayState))
+    toJson(subwayState)
   }
 
-  private def convertLineToSubwayStations(line: String): mutable.Map[String, String] = {
+  /** Accounted runtimes journal activation; legacy callers gate physical initialization separately. */
+  def spawnPreparedSubway(subway: SubwayInformation, stateJson: String): Unit = {
+    SubwayStationMetrics.subwaysCreated.labels(subway.line).inc()
+    spawnDynamicActorFn("hybrid.actor.Subway", subway.actorId, stateJson)
+  }
+
+  private def createSubway(subway: SubwayInformation, startTick: Long): Unit =
+    spawnPreparedSubway(subway, prepareSubway(subway, subway.line, startTick))
+
+  private def convertLineToSubwayStations(line: String): mutable.Map[Long, Long] = {
     val lineRoute     = state.linesRoute(line)
-    val subwayStations = mutable.Map[String, String]()
+    val subwayStations = mutable.Map[Long, Long]()
     for (i <- lineRoute.indices)
-      subwayStations.put(lineRoute(i)._1.stationId, lineRoute(i)._1.nodeId)
+      subwayStations.put(lineRoute(i).stationNode.stationId, lineRoute(i).stationNode.nodeId)
     subwayStations
   }
 
-  private def convertLineRouteToPath(line: String): mutable.Queue[(String, String)] = {
-    val route     = mutable.Queue[(String, String)]()
+  private def convertLineRouteToPath(line: String): mutable.Queue[(Long, Long)] = {
+    val route     = mutable.Queue[(Long, Long)]()
     val lineRoute = state.linesRoute.get(line)
     lineRoute match {
       case Some(routeQueue) =>

@@ -93,7 +93,7 @@ class SqliteLoadDataSpec
   }
 
   "SqliteLoadData" should "stream every row through CreateActorsEvent and report FinishLoadDataEvent with the total count" in {
-    val dbPath = buildDb(List(("p1", "P1", 10L), ("p2", "P2", 20L), ("p3", "P3", 30L)))
+    val dbPath = buildDb(List(("1", "P1", 10L), ("2", "P2", 20L), ("3", "P3", 30L)))
 
     val managerProbe = TestProbe()
     val creatorProbe = TestProbe()
@@ -123,7 +123,7 @@ class SqliteLoadDataSpec
     )
 
     val createEvent = creatorProbe.expectMsgType[CreateActorsEvent](10.seconds)
-    createEvent.actors.map(_.actor.id).toSet shouldBe Set("p1", "p2", "p3")
+    createEvent.actors.map(_.actor.id).toSet shouldBe Set(1L, 2L, 3L)
     createEvent.actors should have size 3
 
     creatorProbe.reply(

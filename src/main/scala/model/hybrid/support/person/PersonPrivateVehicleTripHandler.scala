@@ -21,14 +21,31 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistribu
   * @param personId Person actor ID
   * @param sendMessageFn Function to send messages to other actors
   * @param logDebug Debug logging function
+  * @param registerAwaitedReplyFn Registers this Person's outstanding `StartTrip` -> `TripCompleted`
+  *   exchange for the leg's vehicle, so `Person.actInteractWith`'s `TripCompletedData` guard can
+  *   tell a genuine reply apart from a rollback-orphaned one to an earlier, since-retracted
+  *   `StartTrip` (see `TripCompletedData.requestSeq`'s doc). Also tracks pending work for
+  *   conservative termination while the vehicle is being activated or driven by MICRO links.
   */
 class PersonPrivateVehicleTripHandler(
   personId: String,
-  sendMessageFn: (String, String, Any, String, Any) => Unit,
-  logDebug: String => Unit
+  sendMessageFn: (Long, String, Any, String, Any) => Unit,
+  logDebug: String => Unit,
+  registerAwaitedReplyFn: (String, String) => Unit = (_, _) => ()
 ) {
 
+  /** Correlation key for the one outstanding `StartTrip` -> `TripCompletedData` exchange with a
+    * given vehicle. Keyed on `vehicleId` (not e.g. `personId`, which is constant per Person) so a
+    * trip started with a *different* owned vehicle never supersedes/consumes this one, mirroring
+    * `CarSignalHandler.linkAccessAwaitKey`.
+    */
+  def vehicleTripAwaitKey(vehicleId: Long): String = s"vehicle-trip:$vehicleId"
+
   /** Sends StartTrip to the leg's vehicle.
+    *
+    * `registerAwaitedReplyFn` is called after `sendMessageFn`, not before -- see
+    * `Movable.enterLink`'s identical ordering, whose doc explains why registering before the send
+    * would capture the *previous* send's sequence number instead of this one's.
     *
     * @param origin Origin node ID (person's current physical position)
     * @param destination Destination node ID (the next Activity's node, or origin if none found)
@@ -36,13 +53,13 @@ class PersonPrivateVehicleTripHandler(
     * @param currentTick Current simulation tick
     */
   def initiatePrivateVehicleTrip(
-    origin: String,
-    destination: String,
+    origin: Long,
+    destination: Long,
     leg: PrivateVehicleLeg,
     currentTick: Tick
   ): Unit = {
     val startTripData = StartTripData(
-      personId = personId,
+      personId = personId.toLong,
       origin = origin,
       destination = destination,
       driverAttributes = leg.driverAttributes,
@@ -56,6 +73,7 @@ class PersonPrivateVehicleTripHandler(
       "StartTrip",
       LoadBalancedDistributed
     )
+    registerAwaitedReplyFn(vehicleTripAwaitKey(leg.vehicle.id), "TripCompletedData")
 
     logDebug(
       s"$personId sent StartTrip to ${leg.vehicle.id} (mode=${leg.mode}, $origin -> $destination)"
@@ -82,11 +100,8 @@ class PersonPrivateVehicleTripHandler(
     */
   def updateVehicleLocation(
     mode: ConcreteMode,
-    destinationNodeId: String,
+    destinationNodeId: Long,
     state: PersonState
   ): PersonState =
-    if (destinationNodeId.nonEmpty)
-      state.copy(vehicleCurrentNode = state.vehicleCurrentNode + (vehicleModeKey(mode) -> destinationNodeId))
-    else
-      state
+    state.copy(vehicleCurrentNode = state.vehicleCurrentNode + (vehicleModeKey(mode) -> destinationNodeId))
 }

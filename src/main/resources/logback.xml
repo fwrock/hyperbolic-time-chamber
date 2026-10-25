@@ -54,6 +54,10 @@
     <!-- To mute entirely at logback level regardless of config: change level to "OFF" -->
     <logger name="org.interscity.htc.actor.trace" level="INFO" />
 
+    <!-- Time Warp rollback/dispatch/reply-matching trace. Gated by htc.timewarp-trace.enabled -->
+    <!-- (default: off) and this DEBUG level; see core.actor.trace.TimeWarpTrace scaladoc. -->
+    <logger name="org.interscity.htc.timewarp.trace" level="DEBUG" />
+
     <root level="INFO">
 <!--        <appender-ref ref="FILE" />-->
         <!-- Usar ASYNC em vez de STDOUT direto -->

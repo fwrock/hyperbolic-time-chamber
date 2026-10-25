@@ -143,9 +143,8 @@ case class ModeChoiceWeights(
   *   current activity location (i.e. the start of the first day). Updated after each private
   *   vehicle trip so that a car left at home is unavailable from work.
   * @param totalDistanceTraveled
-  *   Total distance traveled today (meters). Only private-vehicle legs contribute a real,
-  *   non-zero distance here (reported by the vehicle actor itself on `TripCompletedData`) — this
-  *   mirrors the pre-redesign behaviour, where walk/PT legs always completed with `distance = 0.0`.
+  *   Measured completed-leg distance today (meters), including walking, private vehicles and
+  *   transit. Flushed from the current trip on activity arrival or abort; unfinished walks are excluded.
   * @param completedTrips
   *   Number of trips completed today. Incremented once per contiguous leg run (not once per leg) —
   *   a multi-leg walk+transit+walk journey counts as a single trip.
@@ -168,11 +167,14 @@ case class PersonState(
   cursor: PlanCursor = PlanCursor(executed = Nil, remaining = RemainingQueue(Nil)),
   tripExecution: TripExecutionState = TripExecutionState.Idle,
   ownedVehicles: Map[String, Identify] = Map.empty,
-  vehicleCurrentNode: Map[String, String] = Map.empty,
+  vehicleCurrentNode: Map[String, Long] = Map.empty,
   totalDistanceTraveled: Double = 0.0,
   completedTrips: Int = 0,
   ptWaitTimeoutTicks: Long = 86400L,
-  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights()
+  modeChoiceWeights: ModeChoiceWeights = ModeChoiceWeights(),
+  pendingRoutingDecision: Option[PendingPersonRoutingDecision] = None,
+  var scheduleAlreadyTruncated: Boolean = false,
+  var scheduleCompleteReported: Boolean = false
 ) extends BaseState(
       startTick = startTick,
       scheduleOnTimeManager = scheduleOnTimeManager
@@ -185,7 +187,7 @@ case class PersonState(
     * [[model.hybrid.entity.state.plan.Activity]]'s node — the same node the person will depart
     * from once [[model.hybrid.entity.state.plan.LatenessPolicy]] resolves the departure tick.
     */
-  def currentPhysicalNodeId: Option[String] =
+  def currentPhysicalNodeId: Option[Long] =
     tripExecution match {
       case t: TripExecutionState.Traveling => Some(t.physicalNodeId)
       case TripExecutionState.Idle =>
@@ -223,6 +225,8 @@ case class PersonState(
     )
 }
 
+final case class PendingPersonRoutingDecision(workerId: Long, kind: String)
+
 object PersonState {
 
   private def drainRemaining(queue: RemainingQueue): List[PlanElement] =
@@ -233,24 +237,24 @@ object PersonState {
 
   private def internExecuted(e: ExecutedElement): ExecutedElement = e match {
     case a: PlanActivity =>
-      a.copy(activityType = StringPool.intern(a.activityType), nodeId = StringPool.intern(a.nodeId))
+      a.copy(activityType = StringPool.intern(a.activityType), nodeId = a.nodeId)
     case w: WalkLeg =>
       w.copy(
-        originNodeId = StringPool.intern(w.originNodeId),
-        destinationNodeId = StringPool.intern(w.destinationNodeId)
+        originNodeId = w.originNodeId,
+        destinationNodeId = w.destinationNodeId
       )
     case t: TransitLeg =>
       t.copy(
         line = StringPool.intern(t.line),
         boardingStop = t.boardingStop.copy(
-          actorId = StringPool.intern(t.boardingStop.actorId),
+          actorId = t.boardingStop.actorId,
           actorClassType = StringPool.intern(t.boardingStop.actorClassType),
-          nodeId = StringPool.intern(t.boardingStop.nodeId)
+          nodeId = t.boardingStop.nodeId
         ),
         alightingStop = t.alightingStop.copy(
-          actorId = StringPool.intern(t.alightingStop.actorId),
+          actorId = t.alightingStop.actorId,
           actorClassType = StringPool.intern(t.alightingStop.actorClassType),
-          nodeId = StringPool.intern(t.alightingStop.nodeId)
+          nodeId = t.alightingStop.nodeId
         )
       )
     case p: PrivateVehicleLeg => p
@@ -299,11 +303,11 @@ case class ArrivalLogistics(
   instant: Boolean = false,
   driverAttributes: DriverAttributes = DriverAttributes(),
   line: Option[String] = None,
-  boardingStopId: Option[String] = None,
+  boardingStopId: Option[Long] = None,
   boardingStopClassType: Option[String] = None,
-  alightingNodeId: Option[String] = None,
+  alightingNodeId: Option[Long] = None,
   fixedMode: Boolean = false,  // when true, skips dynamic mode choice even if the person flag is on
-  precomputedRoute: Option[List[(String, String)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
+  precomputedRoute: Option[List[(Long, Long)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
 ) {
   /** Type-safe view of [[mode]]. Use this for match expressions instead of raw strings. */
   def travelMode: TravelMode = TravelMode.fromString(mode)
@@ -312,9 +316,9 @@ case class ArrivalLogistics(
   def interned: ArrivalLogistics = copy(
     mode                  = StringPool.intern(mode),
     line                  = StringPool.internOpt(line),
-    boardingStopId        = StringPool.internOpt(boardingStopId),
+    boardingStopId        = boardingStopId,
     boardingStopClassType = StringPool.internOpt(boardingStopClassType),
-    alightingNodeId       = StringPool.internOpt(alightingNodeId)
+    alightingNodeId       = alightingNodeId
   )
 }
 

@@ -60,18 +60,20 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
         simulationManager = ActorRef.noSender,
         parentManager = parentManager
       ) {
+    def testRecoveryFinished: Boolean = recoveryFinished
     def testStart(startTick: Tick): Unit =
       startSimulation(StartSimulationTimeEvent(startTick = startTick, actorRef = "", data = None))
     def testRegister(identity: Identify, startTick: Tick): Unit =
       registerActor(RegisterActorEvent(startTick = startTick, actorId = identity.id, identify = Some(identity)))
     def testSchedule(identity: Identify, tick: Tick): Unit =
-      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id, identify = Some(identity)))
+      scheduleEvent(ScheduleEvent(tick = tick, actorRef = identity.id.toString, identify = Some(identity)))
     def testFinish(finish: FinishEvent): Unit = finishEvent(finish)
-    def testRunningEventIds: Set[String] = runningEvents.map(_.id).toSet
+    def testReplace(event: core.entity.event.control.execution.ReplaceScheduleEvent): Unit = replaceSchedule(event)
+    def testRunningEventIds: Set[Long] = runningEvents.map(_.id).toSet
     def testScheduledTicks: Set[Tick] = scheduledActors.keySet.toSet
   }
 
-  private def identityFor(id: String, probe: TestProbe): Identify =
+  private def identityFor(id: Long, probe: TestProbe): Identify =
     Identify(
       id = id,
       resourceId = "",
@@ -80,8 +82,58 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
       actorType = "PoolDistributed"
     )
 
-  private def newManager(parentProbe: TestProbe): TestActorRef[TestLocalTimeManager] =
-    TestActorRef(new TestLocalTimeManager(Some(parentProbe.ref)))
+  private def newManager(parentProbe: TestProbe): TestActorRef[TestLocalTimeManager] = {
+    val ref = TestActorRef(new TestLocalTimeManager(Some(parentProbe.ref)))
+    parentProbe.awaitAssert(ref.underlyingActor.testRecoveryFinished shouldBe true, 5.seconds, 10.millis)
+    ref
+  }
+
+  "a late-joining conservative LTM" should "report a revisioned successor after its first barrier permission" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(91L, actor)
+    ltm.underlyingActor.testRegister(identity, 0L)
+    parent.receiveWhile(idle = 100.millis) { case _ => () }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(0L)
+    val dispatch = actor.expectMsgType[core.entity.event.SpontaneousEvent]
+    val next = dispatch.order.get.child(5L, 1L)
+    ltm.underlyingActor.testFinish(FinishEvent(actor.ref, identity, 0L, scheduleTick = Some("5"),
+      timeManager = ltm, generation = dispatch.generation, scheduleRevision = 1L, nextOrder = Some(next)))
+    parent.fishForMessage(1.second) {
+      case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent => e.hasScheduled && e.tick == 5L
+      case _ => false
+    }
+  }
+
+  "a queued conservative batch" should "discard a replaced self-event before allocating a dispatch" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identities = (1L to 501L).map(id => identityFor(id, actor))
+    identities.foreach(i => ltm.underlyingActor.testRegister(i, 0L))
+    ltm.underlyingActor.testStart(0L)
+    actor.receiveN(500, 5.seconds)
+    val running = ltm.underlyingActor.testRunningEventIds
+    running.size shouldBe 500
+    val queued = identities.find(i => !running.contains(i.id)).get
+    val next = core.runtime.EventOrder(5L, 0L, "replaced-in-batch")
+    ltm.underlyingActor.testReplace(core.entity.event.control.execution.ReplaceScheduleEvent(
+      queued, 1L, Some(next), 0L, false))
+    identities.filter(i => running.contains(i.id)).foreach { identity =>
+      ltm.underlyingActor.testFinish(FinishEvent(actor.ref, identity, 0L, timeManager = ltm, generation = 1L))
+    }
+    actor.expectNoMessage(100.millis)
+    parent.fishForMessage(1.second) {
+      case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent => e.hasScheduled && e.tick == 5L
+      case _ => false
+    }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(5L)
+    val dispatch = actor.expectMsgType[SpontaneousEvent]
+    dispatch.tick shouldBe 5L
+    dispatch.order shouldBe Some(next)
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(queued.id)
+  }
 
   "LocalDiscreteEventTimeManager" should "not hold the batch open once a genuinely-disengaged actor sends its FinishEvent -- runningEvents clears and the LTM advances to a sibling's next tick" in {
     val parentProbe = TestProbe()
@@ -89,8 +141,8 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     val actorBProbe = TestProbe()
     val ltm = newManager(parentProbe)
 
-    val identityA = identityFor("actor-a", actorAProbe)
-    val identityB = identityFor("actor-b", actorBProbe)
+    val identityA = identityFor(1L, actorAProbe)
+    val identityB = identityFor(2L, actorBProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identityA, 0L)
@@ -99,7 +151,7 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     parentProbe.receiveWhile(idle = 200.millis) { case _ => () }
     ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
 
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a", "actor-b")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L, 2L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -111,7 +163,7 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
         generation = 1L
       )
     )
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(
@@ -134,18 +186,52 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     }
   }
 
+  it should "report pending replies without holding runningEvents or inventing a scheduled tick" in {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(42L, actor)
+    ltm.underlyingActor.testStart(0L)
+    ltm.underlyingActor.testRegister(identity, 0L)
+    parent.receiveWhile(idle = 50.millis) { case _ => () }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
+    actor.expectMsgType[SpontaneousEvent]
+
+    ltm.underlyingActor.testFinish(FinishEvent(
+      actorRef = actor.ref, identify = identity, end = 0L, timeManager = ltm,
+      generation = 1L, awaitingReply = true
+    ))
+    ltm.underlyingActor.testRunningEventIds shouldBe empty
+    ltm.underlyingActor.testScheduledTicks shouldBe empty
+    parent.fishForMessage(1.second) {
+      case report: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
+        !report.hasScheduled && report.hasPendingWork
+      case _ => false
+    }
+
+    ltm.underlyingActor.testFinish(FinishEvent(
+      actorRef = actor.ref, identify = identity, end = 1L, timeManager = ltm,
+      generation = 1L, awaitingReply = false
+    ))
+    parent.fishForMessage(1.second) {
+      case report: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent =>
+        !report.hasScheduled && !report.hasPendingWork
+      case _ => false
+    }
+  }
+
   it should "let a fully-disengaged actor (no FinishEvent scheduleTick at all) be re-woken later via a fresh ScheduleEvent, re-notifying an idle parent -- the exact protocol BusStation/SubwayStation depend on after a dynamic-actor-spawn ack" in {
     val parentProbe = TestProbe()
     val actorProbe = TestProbe()
     val ltm = newManager(parentProbe)
-    val identity = identityFor("actor-a", actorProbe)
+    val identity = identityFor(1L, actorProbe)
 
     ltm.underlyingActor.testStart(0L)
     ltm.underlyingActor.testRegister(identity, 0L)
     parentProbe.receiveWhile(idle = 200.millis) { case _ => () }
     ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(tick = 0L)
 
-    ltm.underlyingActor.testRunningEventIds shouldBe Set("actor-a")
+    ltm.underlyingActor.testRunningEventIds shouldBe Set(1L)
 
     ltm.underlyingActor.testFinish(
       FinishEvent(

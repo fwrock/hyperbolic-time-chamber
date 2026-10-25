@@ -85,8 +85,8 @@ trait ModeChoiceStrategy {
     *   Fully resolved [[ArrivalLogistics]] with a concrete mode.
     */
   def choose(
-    originNodeId: String,
-    destinationNodeId: String,
+    originNodeId: Long,
+    destinationNodeId: Long,
     weights: ModeChoiceWeights,
     ownedVehicles: Map[String, Identify] = Map.empty
   ): ModeChoiceResult

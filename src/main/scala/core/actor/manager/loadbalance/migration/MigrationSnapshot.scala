@@ -1,6 +1,8 @@
 package org.interscity.htc
 package core.actor.manager.loadbalance.migration
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+
 /** Encapsulates all actor data that must survive shard migration.
   *
   * This case class is serializable by Jackson (all primitive types and simple maps) without
@@ -61,6 +63,56 @@ package core.actor.manager.loadbalance.migration
   * @param currentPTVehicleRefClassType
   *   [[org.interscity.htc.model.hybrid.actor.Person]] only: the boarded Bus/Subway's actor class
   *   type, paired with [[currentPTVehicleRefId]].
+  * @param vehicleCurrentLinkId
+  *   [[org.interscity.htc.model.hybrid.actor.Car]]/`Motorcycle`/`Bicycle`/`Bus` only: the link this
+  *   vehicle currently occupies, empty when not on a link (e.g. still routing). Found uncaptured by
+  *   `docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07) — without this, a Time
+  *   Warp rollback restores `state.status` correctly but leaves this actor-local field at whatever
+  *   value live execution left it at, desynchronizing replay from the original run.
+  * @param vehicleCurrentLinkLength
+  *   Same audit, `Car` only (`Motorcycle`/`Bicycle`/`Bus` don't track this separately): the occupied
+  *   link's length, paired with [[vehicleCurrentLinkId]].
+  * @param vehicleLinkEntryTick
+  *   Same audit: the tick this vehicle entered [[vehicleCurrentLinkId]], `Long.MinValue` when not
+  *   on a link. Feeds travel-time/emission math on leave.
+  * @param vehicleMesoExitTick
+  *   Same audit: the tick a MESO-mode vehicle is scheduled to exit its current link,
+  *   `Long.MinValue` when not mid-MESO-traversal. Gates `actSpontaneous`'s `Moving` branch — see
+  *   `Car.scala`'s `mesoExitTick` match.
+  * @param vehicleSignalWaitUntilTick
+  *   Same audit: the tick a vehicle in `WaitingSignal` is scheduled to re-check, `Long.MinValue`
+  *   when not waiting on a signal.
+  * @param vehicleSignalWaitNeedsReverify
+  *   Same audit: whether the vehicle's signal wait must re-request signal state (vs. proceeding
+  *   directly) once its wait tick arrives.
+  * @param expectedUnloadResponses
+  *   [[org.interscity.htc.model.hybrid.actor.Bus]]/[[org.interscity.htc.model.hybrid.actor.Subway]]
+  *   only: how many onboard-passenger unload responses this vehicle is still waiting for before a
+  *   stop cycle completes (a reply-count barrier), `0` when no unload round is in progress. Same
+  *   audit as the `vehicle*` fields above — losing this on a Time Warp rollback desyncs the barrier
+  *   from `state.countUnloadReceived`, which IS captured (it's a `BusState`/`SubwayState` field).
+  * @param currentStopNode
+  *   [[org.interscity.htc.model.hybrid.actor.Bus]] only: the node ID of the stop this bus is
+  *   currently at, saved before `leavingLink` clears the current path; empty when not at a stop.
+  * @param linkVehicleEntryTick
+  *   [[org.interscity.htc.model.hybrid.actor.Link]] only: tick each currently-registered vehicle
+  *   (keyed by entity id) entered this link, feeding travel-time math sent to the vehicle on leave
+  *   (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`). Same audit as
+  *   the `vehicle*` fields above — uncaptured, this desyncs from `LinkState.registered` (which IS
+  *   captured) after a Time Warp rollback, computing a different travel time for the same logical
+  *   leave event than the original live run did.
+  * @param linkVehicleWaitingSeconds
+  *   [[org.interscity.htc.model.hybrid.actor.Link]] only: accumulated waiting time per
+  *   currently-registered vehicle (keyed by entity id), same audit and same reasoning as
+  *   [[linkVehicleEntryTick]].
+  * @param awaitedReplies
+  *   The actor's outstanding awaited-reply registry (`key` -> `kind|sentAtTick|
+  *   sendSeq`), i.e. its pending reply obligations. It lives in the snapshot, not as a bare actor
+  *   var, so a rollback restores it together with `state` and a shard migration cannot drop it.
+  *   Both policies use this registry to distinguish pending replies from completed work.
+  * @param modelSnapshot
+  *   Namespaced, versioned model metadata from SimulationBaseActor's snapshot hooks. Values are
+  *   strings (including model-owned JSON) so adding a model does not expand the core schema.
   */
 case class MigrationSnapshot(
   stateJson: String,
@@ -74,14 +126,37 @@ case class MigrationSnapshot(
   dependencyTypes: Map[String, String] = Map.empty,
   dependencyResourceIds: Map[String, String] = Map.empty,
   dependencyActorTypes: Map[String, String] = Map.empty,
-  ownerPersonRefId: String = "",
+  ownerPersonRefId: Long = 0L,
   ownerPersonRefClassType: String = "",
   personCentric: Boolean = false,
-  tripOrigin: String = "",
-  tripDestination: String = "",
+  tripOrigin: Long = 0L,
+  tripDestination: Long = 0L,
   tripStartTick: Long = Long.MinValue,
   tripStartDistance: Double = 0.0,
   destroyAfterNextPark: Boolean = false,
-  currentPTVehicleRefId: String = "",
-  currentPTVehicleRefClassType: String = ""
+  currentPTVehicleRefId: Long = 0L,
+  currentPTVehicleRefClassType: String = "",
+  vehicleCurrentLinkId: Long = 0L,
+  vehicleCurrentLinkLength: Double = 0.0,
+  vehicleLinkEntryTick: Long = Long.MinValue,
+  vehicleMesoExitTick: Long = Long.MinValue,
+  vehicleSignalWaitUntilTick: Long = Long.MinValue,
+  vehicleSignalWaitNeedsReverify: Boolean = false,
+  expectedUnloadResponses: Int = 0,
+  currentStopNode: Long = 0L,
+  awaitedReplies: Map[String, String] = Map.empty,
+  // Non-first-position Map[Long, _] constructor params: jackson-module-scala on Scala 3 only
+  // preserves full Map key/value generics for the *first* constructor parameter, so later ones
+  // need @JsonDeserialize(keyAs = ...) or the key silently deserializes as String and every
+  // real-Long-key lookup either misses silently or throws ClassCastException once unboxed (see
+  // BusStationState for the full explanation).
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  linkVehicleEntryTick: Map[Long, Long] = Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  linkVehicleWaitingSeconds: Map[Long, Double] = Map.empty,
+  modelSnapshot: Map[String, String] = Map.empty,
+  logicalOrder: Option[core.runtime.EventOrder] = None,
+  pendingSelf: Option[core.runtime.EventOrder] = None,
+  terminalIntent: Option[core.runtime.EventOrder] = None,
+  runtimeBorn: Boolean = true
 )

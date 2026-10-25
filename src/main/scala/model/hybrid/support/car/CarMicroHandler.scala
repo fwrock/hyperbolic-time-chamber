@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.car
 
 import core.types.Tick
+import model.hybrid.entity.state.model.JunctionGeometry
 import org.interscity.htc.model.hybrid.entity.event.data.{MicroEnterLinkData, MicroLeaveLinkData, MicroUpdateData}
 import org.interscity.htc.model.hybrid.entity.state.{CarState, MicroCarState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Moving
@@ -22,18 +23,19 @@ class CarMicroHandler(
   private val journeyReporter: CarJourneyReporter,
   private val requestSignalStateFn: () => Unit,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
-  private val finishAndCleanupFn: (String, String) => Unit,
-  private val onFinishPrivateVehicleFn: String => Unit,
+  private val finishAndCleanupFn: (String, Long) => Unit,
+  private val onFinishPrivateVehicleFn: Long => Unit,
   private val selfDestructFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
-  private val setCurrentLinkIdFn: Option[String] => Unit,
+  private val setCurrentLinkIdFn: Option[Long] => Unit,
   private val setCurrentLinkLengthFn: Double => Unit,
   private val setLinkEntryTickFn: Option[Tick] => Unit,
   private val getLinkEntryTickFn: () => Option[Tick],
-  private val getCurrentLinkIdFn: () => Option[String],
-  private val microUpdateReportEvery: Int = 0
+  private val getCurrentLinkIdFn: () => Option[Long],
+  private val microUpdateReportEvery: Int = 0,
+  private val runtimeOwnsHorizonFn: () => Boolean = () => false
 ) {
 
   private var microUpdateReportCount: Long = 0L
@@ -50,8 +52,8 @@ class CarMicroHandler(
     val speedLimitMs = data.speedLimit / 3.6
 
     val initialMicroState = MicroCarState(
-      positionInLink = 0.0,
-      velocity       = state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed),
+      positionInLink = data.initialPosition,
+      velocity       = data.initialVelocity.getOrElse(state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed)),
       acceleration   = 0.0,
       currentLane    = data.assignedLane,
       leaderVehicle  = None,
@@ -62,6 +64,7 @@ class CarMicroHandler(
 
     state.activateMicroMode(initialMicroState)
     state.status = Moving
+    state.journey.secondsPerTick = data.microTimeStep * data.ticksPerGlobalTick
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     // Ideal travel time: length(m) / speed(m/s)
     journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
@@ -83,10 +86,11 @@ class CarMicroHandler(
         "link_length"           -> data.linkLength,
         "speed_limit"           -> data.speedLimit,
         "initial_velocity"      -> initialMicroState.velocity,
+        "initial_position"      -> data.initialPosition,
         "micro_time_step"       -> data.microTimeStep,
         "ticks_per_global_tick" -> data.ticksPerGlobalTick,
         "tick"                  -> tick
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -95,7 +99,7 @@ class CarMicroHandler(
 
   def handleMicroUpdate(data: MicroUpdateData, state: CarState): Unit = {
     if (
-      !extendSimulationFn()
+      !runtimeOwnsHorizonFn() && !extendSimulationFn()
       && currentTickFn() >= simulationEndTickFn()
       && state.status != org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.Finished
     ) {
@@ -126,14 +130,14 @@ class CarMicroHandler(
           Map(
             "event_type" -> "micro_update",
             "car_id"     -> entityIdFn(),
-            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"       -> "MICRO",
             "position"   -> data.position,
             "velocity"   -> data.velocity,
             "lane"       -> data.currentLane,
             "sub_tick"   -> data.subTick,
             "tick"       -> currentTickFn()
-          ),
+          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -145,13 +149,16 @@ class CarMicroHandler(
     if (!currentLinkId.contains(data.linkId)) {
       logWarnFn(
         s"${entityIdFn()}: Ignoring stale MicroLeaveLink for link ${data.linkId} " +
-          s"(car is on link ${currentLinkId.getOrElse("none")}). Discarded."
+          s"(car is on link ${currentLinkId.getOrElse(0L)}). Discarded."
       )
       return
     }
 
     val travelTime = getLinkEntryTickFn().map(currentTickFn() - _).getOrElse(0L)
 
+    state.movableLinkExitReported = true
+    state.journey.boundaryRemainderSeconds = data.remainingStepSeconds
+    state.journey.boundaryExitTick = Some(currentTickFn())
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
@@ -174,7 +181,7 @@ class CarMicroHandler(
         "waiting_time_seconds"   -> data.waitingTimeSeconds,
         "total_distance"         -> state.distance,
         "tick"                   -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

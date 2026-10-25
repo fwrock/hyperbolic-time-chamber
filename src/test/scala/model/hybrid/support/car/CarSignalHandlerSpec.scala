@@ -41,8 +41,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
   private def newCarState(status: model.hybrid.entity.state.enumeration.MovableStatusEnum = WaitingSignalState): CarState = {
     val s = CarState(
       startTick = 0L,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
@@ -57,7 +57,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     leavingLinkCalls: mutable.ArrayBuffer[Unit],
     waitUntilTicks: mutable.ArrayBuffer[Option[Tick]],
     needsReverifyCalls: mutable.ArrayBuffer[Boolean],
-    reported: mutable.ArrayBuffer[Map[String, Any]]
+    reported: mutable.ArrayBuffer[Map[String, Any]],
+    journeyReporter: CarJourneyReporter
   )
 
   private def newFixture(currentTick: Tick = 100L): Fixture = {
@@ -68,14 +69,16 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     val needsReverifyCalls = mutable.ArrayBuffer.empty[Boolean]
     val reported = mutable.ArrayBuffer.empty[Map[String, Any]]
 
+    val journeyState = model.hybrid.entity.state.CarJourneyState()
     val journeyReporter = new CarJourneyReporter(
       reportFn = (data, _) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
       currentTickFn = () => currentTick,
-      tripOriginFn = () => Some("n_origin"),
-      tripDestFn = () => Some("n_dest"),
+      tripOriginFn = () => Some(1L),
+      tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
-      driverAttrsFn = () => DriverAttributes()
+      driverAttrsFn = () => DriverAttributes(),
+      journeyStateFn = () => journeyState
     )
 
     val handler = new CarSignalHandler(
@@ -86,20 +89,18 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       onFinishSpontaneousFn = tick => finishCalls += tick,
       scheduleEventFn = tick => scheduleEventCalls += tick,
       leavingLinkFn = () => leavingLinkCalls += (()),
-      selfDestructFn = () => (),
-      isPersonCentricFn = () => false,
       logWarnFn = _ => (),
       logStaleEventDebugFn = _ => (),
       sendMessageFn = (_, _, _, _) => (),
-      getCurrentNodeFn = () => "n_current",
-      getNextLinkFn = () => "link_next",
-      getTripDestinationFn = () => Some("n_dest"),
+      getCurrentNodeFn = () => 3L,
+      getNextLinkFn = () => 100L,
+      getTripDestinationFn = () => Some(2L),
       setSignalWaitUntilTickFn = tick => waitUntilTicks += tick,
       setSignalWaitNeedsReverifyFn = v => needsReverifyCalls += v,
       onSignalWaitFn = _ => ()
     )
 
-    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported)
+    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported, journeyReporter)
   }
 
   "handleLinkAccess" should "ignore a reply when the car is neither WaitingSignalState nor WaitingCapacity (stale/duplicate guard)" in {
@@ -113,6 +114,29 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     f.scheduleEventCalls shouldBe empty
     f.leavingLinkCalls shouldBe empty
     f.waitUntilTicks shouldBe empty
+  }
+
+  it should "install a connector only after its capacity grant, keeping the road route intact" in {
+    val f = newFixture()
+    val state = newCarState()
+    val path = model.hybrid.entity.state.model.PrecomputedRouteItem(700, 2)
+    state.bestRoute = Some(mutable.Queue(100L -> 3L))
+    f.handler.handleLinkAccess(LinkAccessData(Green, 100, capacityState = LinkCapacityStateEnum.Full,
+      junctionLink = Some(path)), state)
+    state.movablePendingJunctionPath shouldBe None
+    f.handler.handleLinkAccess(LinkAccessData(Green, 100, junctionLink = Some(path)), state)
+    state.movablePendingJunctionPath shouldBe Some(path)
+    state.bestRoute.get.toList shouldBe List(100L -> 3L)
+  }
+
+  it should "discard cruising speed when a signal or downstream capacity makes the vehicle stop" in {
+    for (reply <- Seq(LinkAccessData(phase = Red, nextTick = 130L),
+      LinkAccessData(phase = Green, nextTick = 100L, capacityState = LinkCapacityStateEnum.Full))) {
+      val f = newFixture()
+      f.journeyReporter.sumoArrivalSpeed = 12.5
+      f.handler.handleLinkAccess(reply, newCarState())
+      f.journeyReporter.sumoArrivalSpeed shouldBe 0.0
+    }
   }
 
   it should "accept a reply while WaitingCapacity (the later, unsolicited grant), not just WaitingSignalState" in {
