@@ -1,5 +1,5 @@
 package org.interscity.htc
-package core.actor.rollback
+package core.entity.event.control.rollback
 
 /** A message sent while processing a [[LoggedEvent]], with enough addressing info to actually
   * route an anti-message to it later — not just the [[MessageId]] identifying *which* send, but

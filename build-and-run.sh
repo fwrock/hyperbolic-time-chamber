@@ -3,6 +3,8 @@ set -e
 
 PROJECT_NAME="hyperbolic-time-chamber"
 SCALA_VERSION="3.3.5"
+HTC_VERSION="$(sbt -batch -error 'print version')"
+HTC_IMAGE="uxhabam/${PROJECT_NAME}:${HTC_VERSION}"
 HTC_SCENARIO_NAME="${HTC_SCENARIO_NAME:-htc_scenario}"
 
 echo "🚀 Step 1: Cleaning old build..."
@@ -11,7 +13,7 @@ sbt clean
 echo "📦 Step 2: Compiling and generating JAR..."
 sbt assembly
 
-JAR_FILE="target/scala-${SCALA_VERSION}/${PROJECT_NAME}-1.24.3.jar"
+JAR_FILE="target/scala-${SCALA_VERSION}/${PROJECT_NAME}-${HTC_VERSION}.jar"
 
 if [[ ! -f "$JAR_FILE" ]]; then
     echo "❌ Error: JAR not found at $JAR_FILE"
@@ -19,7 +21,7 @@ if [[ ! -f "$JAR_FILE" ]]; then
 fi
 
 echo "🐳 Step 3: Building docker image..."
-docker build -t ${PROJECT_NAME}:latest .
+docker build --build-arg HTC_VERSION="${HTC_VERSION}" -t "${HTC_IMAGE}" .
 
 echo "📦 Step 4: Deploying with docker compose..."
 echo "   • Scenario: ${HTC_SCENARIO_NAME}"

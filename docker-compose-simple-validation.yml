@@ -65,6 +65,7 @@ services:
       - redis_val_data:/data
 
   node1:
+    image: uxhabam/hyperbolic-time-chamber:3.2.0
     build: .
     container_name: node_1_val
     hostname: node1

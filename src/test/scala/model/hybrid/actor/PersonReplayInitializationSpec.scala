@@ -2,7 +2,6 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
-import core.actor.rollback.EventReadJournal
 import core.entity.actor.properties.Properties
 import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.load.InitializeEvent
@@ -20,6 +19,7 @@ import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.{ Actor, ActorSystem, Props }
 import org.apache.pekko.testkit.{ TestActorRef, TestProbe }
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

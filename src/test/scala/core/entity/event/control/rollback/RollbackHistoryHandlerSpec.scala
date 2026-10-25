@@ -1,5 +1,5 @@
 package org.interscity.htc
-package core.actor.rollback
+package core.entity.event.control.rollback
 
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.event.BaseEvent

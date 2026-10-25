@@ -1,7 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
-import org.interscity.htc.core.actor.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable

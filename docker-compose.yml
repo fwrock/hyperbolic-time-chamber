@@ -108,6 +108,7 @@ services:
       - clickhouse
 
   node1:
+    image: uxhabam/hyperbolic-time-chamber:3.2.0
     build: .
     container_name: node_1
     hostname: node1

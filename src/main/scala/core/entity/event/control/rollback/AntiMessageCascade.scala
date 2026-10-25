@@ -1,5 +1,5 @@
 package org.interscity.htc
-package core.actor.rollback
+package core.entity.event.control.rollback
 
 /** Pure cascade math for Time Warp's anti-message protocol (`docs/TIME_WARP_DESIGN.md` §10):
   * turns the events a rollback just undid into the anti-messages that must be sent to retract
