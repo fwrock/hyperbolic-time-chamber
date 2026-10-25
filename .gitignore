@@ -203,3 +203,9 @@ k8s/generated/
 .claude/agents/
 CLAUDE.md
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
