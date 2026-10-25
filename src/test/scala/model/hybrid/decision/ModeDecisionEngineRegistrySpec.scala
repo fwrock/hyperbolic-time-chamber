@@ -27,8 +27,8 @@ class ModeDecisionEngineRegistrySpec extends AnyFlatSpec with Matchers {
       override val id: String = "custom-test-engine"
       override def validateForScenario(ctx: ScenarioValidationContext): Either[EngineUnavailable, Unit] = Right(())
       override def decide(
-        originNodeId: String,
-        destinationNodeId: String,
+        originNodeId: Long,
+        destinationNodeId: Long,
         request: model.hybrid.entity.state.plan.ModeDecisionRequest,
         ctx: DecisionContext
       ): Either[NoViableJourney, List[model.hybrid.entity.state.plan.AtomicLeg]] = Left(NoViableJourney("unused"))

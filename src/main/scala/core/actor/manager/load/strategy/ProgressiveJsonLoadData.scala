@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.pattern.pipe
 import core.util.{ IdUtil, JsonStreamingUtil, TickIndexUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -15,7 +16,6 @@ import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
 import java.util.UUID
 import scala.collection.mutable
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.util.{ Failure, Success }
 
 /** Progressive JSON data loader using lightweight tick indexing and chunked file streaming.
   *
@@ -63,8 +63,25 @@ class ProgressiveJsonLoadData(private val properties: Properties)
 
   private var activeRequest: LoadActorsForTickRange = _
   private var pendingActorsSent = 0
+  private var failed = false
+
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    Option(managerRef).foreach(_ ! ProgressiveSourceFailed(sourceId, s"loader restarted: ${reason.getMessage}"))
+    super.preRestart(reason, message)
+  }
 
   override def handleEvent: Receive = {
+    case _ if failed => ()
+    case event: ProgressiveSourceFailed =>
+      failed = true
+      managerRef ! event
+    case ProgressiveIndexReady(index) =>
+      lightIndex = index
+      managerRef ! TickIndexBuiltEvent(sourceId, index.tickCounts, index.totalActors, index.maxTick)
+    case JsonStreamOpened(stream, iter) =>
+      activeInputStream = stream
+      activeIterator = iter
+      startNextChunkRead()
     case event: LoadDataSourceEvent    => load(event)
     case _: BuildTickIndex             => buildTickIndexAsync()
     case event: TickIndexBuiltEvent    => handleTickIndexBuilt(event)
@@ -93,29 +110,12 @@ class ProgressiveJsonLoadData(private val properties: Properties)
   /** Asynchronously scan the entire JSON file and build a lightweight tick index. Only extracts
     * startTick counts — does NOT retain ActorSimulation objects.
     */
-  private def buildTickIndexAsync(): Unit =
-    Future {
-      TickIndexUtil.buildLightIndex(sourceFilePath)
-    }.onComplete {
-      case Success(result) =>
-        logInfo(
-          s"Tick index built for $sourceFilePath: " +
-            s"${result.totalActors} actors, " +
-            s"ticks ${result.minTick}-${result.maxTick}, " +
-            s"${result.tickCounts.size} unique ticks"
-        )
-        this.lightIndex = result
-        self ! TickIndexBuiltEvent(
-          sourceId = sourceId,
-          tickCounts = result.tickCounts,
-          totalActors = result.totalActors,
-          maxTick = result.maxTick
-        )
-
-      case Failure(e) =>
-        logError(s"Failed to build tick index for $sourceFilePath", e)
-        self ! CloseAndFinish()
-    }
+  private def buildTickIndexAsync(): Unit = {
+    val path = sourceFilePath
+    val id = sourceId
+    Future { ProgressiveIndexReady(TickIndexUtil.buildLightIndex(path)) }
+      .recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"index: ${e.getMessage}") }.pipeTo(self)
+  }
 
   private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit =
     managerRef ! event
@@ -124,15 +124,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     */
   private def handleLoadForTickRange(request: LoadActorsForTickRange): Unit = {
     if (lightIndex == null) {
-      logWarn(
-        s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]"
-      )
-      managerRef ! TickRangeLoadedEvent(
-        sourceId = sourceId,
-        fromTick = request.fromTick,
-        toTick = request.toTick,
-        actorsLoaded = 0
-      )
+      self ! ProgressiveSourceFailed(sourceId, "range requested before index completion")
       return
     }
 
@@ -167,14 +159,18 @@ class ProgressiveJsonLoadData(private val properties: Properties)
         s"[${request.fromTick}, ${request.toTick}] from $sourceId"
     )
 
-    activeInputStream = new BufferedInputStream(new FileInputStream(new File(sourceFilePath)))
-    val (_, iter) = JsonStreamingUtil.createParser(activeInputStream)
-    activeIterator = iter
+    require(activeRequest == null, "overlapping JSON input ranges")
     activeRequest = request
     pendingActorsSent = 0
     streamExhausted = false
 
-    startNextChunkRead()
+    val path = sourceFilePath
+    val id = sourceId
+    Future {
+      val stream = new BufferedInputStream(new FileInputStream(new File(path)))
+      try JsonStreamOpened(stream, JsonStreamingUtil.createParser(stream)._2)
+      catch { case scala.util.control.NonFatal(e) => stream.close(); throw e }
+    }.recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"open: ${e.getMessage}") }.pipeTo(self)
   }
 
   /** Launch an async read of the next chunk from the open file. Runs on the io-dispatcher to avoid
@@ -185,16 +181,12 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     val from = activeRequest.fromTick
     val to = activeRequest.toTick
     val chunkSize = CHUNK_SIZE
+    val id = sourceId
 
     Future {
       TickIndexUtil.readMatchingChunk(iter, from, to, chunkSize)
-    }.onComplete {
-      case Success((actors, exhausted)) =>
-        self ! FileChunkReady(actors, exhausted)
-      case Failure(e) =>
-        logError(s"Error reading chunk from $sourceFilePath", e)
-        self ! FileChunkReady(Nil, true)
-    }
+    }.map { case (actors, exhausted) => FileChunkReady(actors, exhausted) }
+      .recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"read: ${e.getMessage}") }.pipeTo(self)
   }
 
   /** Handle a chunk read from the file. Send matching actors to creators (with back-pressure) or
@@ -220,7 +212,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       actor =>
         ActorSimulationCreation(
           resourceId = IdUtil.format(sourceId),
-          actor = actor.copy(id = IdUtil.format(actor.id))
+          actor = actor.copy(id = actor.id)
         )
     )
 
@@ -257,9 +249,7 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     * either read the next chunk or close the stream.
     */
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    activeBatches.remove(event.batchId)
-
-    if (activeBatches.isEmpty) {
+    if (activeBatches.remove(event.batchId) && activeBatches.isEmpty) {
       if (!streamExhausted) {
         startNextChunkRead()
       } else {
@@ -283,6 +273,11 @@ class ProgressiveJsonLoadData(private val properties: Properties)
     }
 
     if (activeRequest != null) {
+      val expected = TickIndexUtil.countActorsInRange(lightIndex.tickCounts, activeRequest.fromTick, activeRequest.toTick)
+      if (pendingActorsSent != expected) {
+        self ! ProgressiveSourceFailed(sourceId, s"index/range count mismatch: expected=$expected actual=$pendingActorsSent")
+        return
+      }
       logInfo(
         s"Finished streaming $pendingActorsSent actors for tick range " +
           s"[${activeRequest.fromTick}, ${activeRequest.toTick}] from $sourceId"
@@ -318,7 +313,15 @@ class ProgressiveJsonLoadData(private val properties: Properties)
       creators = creators
     )
   }
+
+  override def postStop(): Unit = {
+    if (activeInputStream != null) scala.util.Try(activeInputStream.close())
+    super.postStop()
+  }
 }
+
+private[strategy] case class ProgressiveIndexReady(index: LightTickIndex)
+private[strategy] case class JsonStreamOpened(stream: InputStream, iter: Iterator[ActorSimulation])
 
 /** Internal message: a chunk of actors was read from the file.
   */

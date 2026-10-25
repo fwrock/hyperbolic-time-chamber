@@ -26,16 +26,26 @@ class BusSignalHandler(
   private val scheduleEventFn: Tick => Unit,
   private val onFinishDestructFn: () => Unit,
   private val leavingLinkFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
-  private val getCurrentNodeFn: () => String,
-  private val getNextLinkFn: () => String,
-  private val sendMessageFn: (String, String, AnyRef, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
+  private val getCurrentNodeFn: () => Long,
+  private val getNextLinkFn: () => Long,
+  private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
   private val logWarnFn: String => Unit,
   private val logDebugFn: String => Unit,
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val setSignalWaitNeedsReverifyFn: Boolean => Unit,
-  private val restoreRouteIfMissingFn: String => Unit
+  private val restoreRouteIfMissingFn: String => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged; Bus.scala's real construction site passes all
+  // four explicitly -- same pattern as CarSignalHandler.
+  private val isTimeWarpFn: () => Boolean = () => false,
+  private val registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
+  private val isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  private val consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
+
+  /** See CarSignalHandler.linkAccessAwaitKey. */
+  private def linkAccessAwaitKey(linkId: Long): String = s"link-access:$linkId"
 
   def requestSignalState(state: BusState): Unit = {
     restoreRouteIfMissingFn("requestSignalState")
@@ -43,24 +53,26 @@ class BusSignalHandler(
     if (routeDepleted) {
       val currentNodeId = getCurrentNodeFn()
       logDebugFn(s"Bus ${entityIdFn()} reached destination: $currentNodeId")
-      finishJourneyFn("reached_destination", Option(currentNodeId).getOrElse("unknown"))
+      finishJourneyFn("reached_destination", Option(currentNodeId).getOrElse(0L))
       onFinishDestructFn()
     } else {
       state.status = WaitingSignalState
       getCurrentNodeFn() match {
-        case nodeId if nodeId != null =>
+        case nodeId if nodeId != 0L =>
           CityMapUtil.nodesById.get(nodeId) match {
             case Some(node) =>
               getNextLinkFn() match {
-                case linkId if linkId != null =>
+                case linkId if linkId != 0L =>
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestLinkAccessData(targetLinkId = linkId),
+                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported,
+                      approachLinkId = state.currentPath.map(_._1).getOrElse(0L)),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
+                registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
                 onFinishSpontaneousFn(None)
-                case null =>
+                case 0L =>
                   logWarnFn("No next link available")
                   leavingLinkFn()
               }
@@ -68,7 +80,7 @@ class BusSignalHandler(
               logWarnFn(s"Node $nodeId not found")
               leavingLinkFn()
           }
-        case null =>
+        case 0L =>
           logWarnFn("No current node")
           leavingLinkFn()
       }
@@ -76,15 +88,27 @@ class BusSignalHandler(
   }
 
   def handleLinkAccess(data: LinkAccessData, state: BusState): Unit = {
-    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
+    val linkId = getNextLinkFn()
+    val awaitKey = linkAccessAwaitKey(linkId)
+    val isStale =
+      if (isTimeWarpFn())
+        !isAwaitingReplyFn(awaitKey, "LinkAccessData", data.requestSeq)
+      else
+        state.status != WaitingSignalState && state.status != WaitingCapacity
+    if (isStale) {
       logDebugFn(
         s"${entityIdFn()}: Ignoring stale LinkAccessData " +
-          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
+          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard, " +
+          s"see docs/TIME_WARP_DESIGN.md §10 for the Time Warp variant of this check."
       )
       return
     }
 
+    // Full/WaitingCapacity is NOT a terminal reply -- see CarSignalHandler.handleLinkAccess.
+    if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
+
     if (data.phase == Red) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
       val waitUntilTick = data.nextTick
       val waitTicks = math.max(0L, waitUntilTick - tick)
@@ -108,9 +132,11 @@ class BusSignalHandler(
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
       // Green + Available: already fully verified at reply time, no re-verification needed.
+      data.junctionLink.foreach(path => state.movablePendingJunctionPath = Some(path))
       val tick = currentTickFn()
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(tick))
@@ -127,7 +153,7 @@ class BusSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

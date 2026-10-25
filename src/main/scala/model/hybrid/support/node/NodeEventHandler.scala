@@ -21,10 +21,10 @@ class NodeEventHandler(
   getStateFn:          () => NodeState,
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
-  pendingSignals:      mutable.Map[String, SignalState],
+  pendingSignals:      mutable.Map[Long, SignalState],
   reportFn:            (Map[String, Any], String) => Unit,
-  sendMessageFn:       (String, String, AnyRef, String) => Unit,
-  getLinkDependencyFn: String => Option[ShardActorId],
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getLinkDependencyFn: Long => Option[ShardActorId],
   logWarnFn:           String => Unit,
   logDebugFn:          String => Unit
 ) {
@@ -75,14 +75,22 @@ class NodeEventHandler(
     */
   def handleCancelLinkAccessRequest(event: ActorInteractionEvent, data: CancelLinkAccessRequestData): Unit =
     if (state != null) {
-      state.capacityWaitQueue.get(data.targetLinkId).foreach { queue =>
-        queue.dequeueAll(_.actorRefId == event.actorRefId)
-        if (queue.isEmpty) state.capacityWaitQueue.remove(data.targetLinkId)
+      state.capacityWaitQueue.keys.toList.foreach { key =>
+        state.capacityWaitQueue.get(key).foreach { queue =>
+          queue.dequeueAll(p => p.actorRefId == event.actorRefId &&
+            (key == data.targetLinkId || p.targetLinkId == data.targetLinkId))
+          if (queue.isEmpty) state.capacityWaitQueue.remove(key)
+        }
       }
     }
 
   def handleRequestLinkAccess(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit =
     if (state != null) {
+      if (data.signalAlreadyCleared) {
+        // MICRO's Link already authorized the physical crossing within the preceding interval.
+        replyGreenOrBufferForCapacity(event, data)
+        return
+      }
       state.connections.get(data.targetLinkId) match {
         case Some(identify) =>
           state.signals.get(identify.id) match {
@@ -109,23 +117,23 @@ class NodeEventHandler(
               sendMessageFn(
                 event.actorRefId,
                 event.shardRefId,
-                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos),
+                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos, requestSeq = event.seq),
                 EventTypeEnum.ReceiveLinkAccess.toString
               )
             case Some(_) =>
               state.signalWaitingCounts.remove(data.targetLinkId)
-              replyGreenOrBufferForCapacity(event, data.targetLinkId)
+              replyGreenOrBufferForCapacity(event, data)
             case None =>
               logDebugFn(
                 s"Node ${entityIdFn()}: no signal entry for id=${identify.id} (link=${data.targetLinkId}); assuming Green"
               )
-              replyGreenOrBufferForCapacity(event, data.targetLinkId)
+              replyGreenOrBufferForCapacity(event, data)
           }
         case None =>
           logDebugFn(
             s"Node ${entityIdFn()}: no connection entry for link=${data.targetLinkId}; assuming Green"
           )
-          replyGreenOrBufferForCapacity(event, data.targetLinkId)
+          replyGreenOrBufferForCapacity(event, data)
       }
     } else {
       logWarnFn(
@@ -134,7 +142,7 @@ class NodeEventHandler(
       sendMessageFn(
         event.actorRefId,
         event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn()),
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = event.seq),
         EventTypeEnum.ReceiveLinkAccess.toString
       )
     }
@@ -145,28 +153,37 @@ class NodeEventHandler(
     * `availableCapacity`'s doc on `NodeState`), decrementing Node's own counter; otherwise
     * buffers the requester FIFO and replies with `capacityState = Full`.
     */
-  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, targetLinkId: String): Unit = {
-    val capacityKnown = state.availableCapacity.contains(targetLinkId)
-    val hasCapacity   = !capacityKnown || state.availableCapacity(targetLinkId) > 0
+  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit = {
+    val junction = state.junctionMovements.find(m =>
+      m.incomingLinkId == data.approachLinkId && m.outgoingLinkId == data.targetLinkId)
+      .map(m => model.hybrid.entity.state.model.PrecomputedRouteItem(m.connectorLinkId, entityIdFn().toLong))
+    val admissionLinkId = junction.map(_.linkId).getOrElse(data.targetLinkId)
+    val capacityKnown = state.availableCapacity.contains(admissionLinkId)
+    val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
     if (hasCapacity) {
-      if (capacityKnown) state.availableCapacity(targetLinkId) -= 1
-      sendMessageFn(
-        event.actorRefId,
-        event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn()),
-        EventTypeEnum.ReceiveLinkAccess.toString
-      )
+      if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
+      sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction)
     } else {
-      state.capacityWaitQueue
-        .getOrElseUpdate(targetLinkId, mutable.Queue.empty)
-        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId))
-      sendMessageFn(
-        event.actorRefId,
-        event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full),
-        EventTypeEnum.ReceiveLinkAccess.toString
-      )
+      state.capacityWaitQueue.getOrElseUpdate(admissionLinkId, mutable.Queue.empty)
+        .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId,
+          requestSeq = event.seq, signalAlreadyCleared = data.signalAlreadyCleared,
+          targetLinkId = if (junction.nonEmpty) data.targetLinkId else 0L, junctionLink = junction))
+      sendMessageFn(event.actorRefId, event.shardRefId,
+        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full,
+          requestSeq = event.seq), EventTypeEnum.ReceiveLinkAccess.toString)
     }
+  }
+
+  private def sendGrant(vehicleId: Long, shardId: String, requestSeq: Long, targetLinkId: Long,
+                        junction: Option[model.hybrid.entity.state.model.PrecomputedRouteItem]): Unit = {
+    junction.foreach { path =>
+      reportFn(Map("node_id" -> entityIdFn(), "vehicle_id" -> vehicleId,
+        "connector_link_id" -> path.linkId, "target_link_id" -> targetLinkId,
+        "tick" -> currentTickFn()), "junction_connector_admitted")
+    }
+    sendMessageFn(vehicleId, shardId,
+      LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = requestSeq, junctionLink = junction),
+      EventTypeEnum.ReceiveLinkAccess.toString)
   }
 
   /** A Link reports exactly how many slots freed (never an estimate) every time a vehicle leaves
@@ -183,33 +200,24 @@ class NodeEventHandler(
       )
     }
 
-  /** Grants access to buffered vehicles up to `availableCapacity`, FIFO, only while the relevant
-    * signal (if any) is currently Green — checked against this Node's own already-in-memory
-    * `state.signals`, at zero message cost. This closes the gap where a signal could have cycled
-    * back to Red while a vehicle sat in the capacity buffer: if Red right now, nothing is
-    * dequeued; the buffer is picked up again either on the next freed-slots notification or the
-    * next time `handleReceiveSignalChangeStatus` sees this movement turn Green. See
-    * docs/CONGESTION_PROPAGATION_DESIGN.md.
+  /** Capacity waiting cannot retroactively invalidate a MICRO crossing already authorized by
+    * its approach Link. Other requests still need the current Green phase. Retaining FIFO and
+    * the original reply identity lets a freed-slot or signal transition drain the same wait
+    * obligation without another model round-trip. See docs/CONGESTION_PROPAGATION_DESIGN.md.
     */
-  private def tryDrainCapacityQueue(linkId: String): Unit = {
-    val signalCurrentlyGreen: Boolean =
-      state.connections.get(linkId).flatMap(identify => state.signals.get(identify.id)) match {
-        case Some(sig) => sig.state == Green
-        case None      => true // no signal registered — uncontrolled intersection, always passable
-      }
-    if (!signalCurrentlyGreen) return
-
+  private def tryDrainCapacityQueue(linkId: Long): Unit = {
+    def mayProceed(pending: PendingLinkAccessRequest): Boolean = {
+      val target = if (pending.targetLinkId == 0L) linkId else pending.targetLinkId
+      pending.signalAlreadyCleared || state.connections.get(target).flatMap(i => state.signals.get(i.id))
+        .forall(_.state == Green)
+    }
     state.capacityWaitQueue.get(linkId).foreach { queue =>
       var available = state.availableCapacity.getOrElse(linkId, 0)
-      while (available > 0 && queue.nonEmpty) {
+      while (available > 0 && queue.nonEmpty && mayProceed(queue.front)) {
         val pending = queue.dequeue()
         available -= 1
-        sendMessageFn(
-          pending.actorRefId,
-          pending.shardRefId,
-          LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Available),
-          EventTypeEnum.ReceiveLinkAccess.toString
-        )
+        sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
+          if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink)
       }
       state.availableCapacity(linkId) = available
       if (queue.isEmpty) state.capacityWaitQueue.remove(linkId)
@@ -218,7 +226,7 @@ class NodeEventHandler(
 
   def handleReceiveSignalChangeStatus(event: ActorInteractionEvent, data: TrafficSignalChangeStatusData): Unit =
     if (state != null) {
-      state.signals.put(StringPool.intern(data.phaseOrigin), data.signalState)
+      state.signals.put(data.phaseOrigin, data.signalState)
 
 
       val outgoingLinksForThisPhase = state.connections.collect {
@@ -235,6 +243,7 @@ class NodeEventHandler(
         outgoingLinksForThisPhase.foreach { linkId =>
           state.signalWaitingCounts.remove(linkId)
           tryDrainCapacityQueue(linkId)
+          state.junctionMovements.filter(_.outgoingLinkId == linkId).foreach(m => tryDrainCapacityQueue(m.connectorLinkId))
         }
       }
 

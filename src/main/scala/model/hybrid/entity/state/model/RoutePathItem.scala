@@ -5,5 +5,5 @@ import org.apache.pekko.actor.ActorRef
 
 case class RoutePathItem(
   actorRef: ActorRef,
-  actorId: String
+  actorId: Long
 )

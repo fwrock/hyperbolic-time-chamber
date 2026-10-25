@@ -23,37 +23,40 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
   private def newCarState(): CarState =
     CarState(
       startTick = 0L,
-      origin = "n_origin",
-      destination = "n_dest",
+      origin = 1L,
+      destination = 2L,
       actorType = ActorTypeEnum.Car,
       size = 4.5
     )
 
-  private def newHandler(reported: scala.collection.mutable.ArrayBuffer[Map[String, Any]]): (CarMicroHandler, CarJourneyReporter) = {
-    var currentLinkId: Option[String] = None
+  private def newHandler(reported: scala.collection.mutable.ArrayBuffer[Map[String, Any]],
+                         endTick: Long = 180L, runtimeOwnsHorizon: Boolean = false): (CarMicroHandler, CarJourneyReporter) = {
+    var currentLinkId: Option[Long] = None
     var currentLinkLength: Double = 0.0
     var linkEntryTick: Option[Tick] = None
 
+    val journeyState = model.hybrid.entity.state.CarJourneyState()
     val journeyReporter = new CarJourneyReporter(
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
       currentTickFn = () => 0L,
-      tripOriginFn = () => Some("n_origin"),
-      tripDestFn = () => Some("n_dest"),
+      tripOriginFn = () => Some(1L),
+      tripDestFn = () => Some(2L),
       tripStartTickFn = () => Some(0L),
-      driverAttrsFn = () => DriverAttributes()
+      driverAttrsFn = () => DriverAttributes(),
+      journeyStateFn = () => journeyState
     )
 
     val handler = new CarMicroHandler(
       reportFn = (data, label) => reported += data,
       entityIdFn = () => "htcaid:car;car_test",
       currentTickFn = () => 0L,
-      simulationEndTickFn = () => 180L,
+      simulationEndTickFn = () => endTick,
       extendSimulationFn = () => false,
       journeyReporter = journeyReporter,
       requestSignalStateFn = () => (),
       onFinishSpontaneousFn = _ => (),
-      finishAndCleanupFn = (_, _) => (),
+      finishAndCleanupFn = (_, _) => reported += Map("event_type" -> "forced_cleanup"),
       onFinishPrivateVehicleFn = _ => (),
       selfDestructFn = () => (),
       finishJourneyFn = (_, _) => (),
@@ -63,12 +66,13 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       setCurrentLinkLengthFn = v => currentLinkLength = v,
       setLinkEntryTickFn = v => linkEntryTick = v,
       getLinkEntryTickFn = () => linkEntryTick,
-      getCurrentLinkIdFn = () => currentLinkId
+      getCurrentLinkIdFn = () => currentLinkId,
+      runtimeOwnsHorizonFn = () => runtimeOwnsHorizon
     )
     (handler, journeyReporter)
   }
 
-  private def enterLinkData(linkId: String, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
+  private def enterLinkData(linkId: Long, speedLimitKmh: Double = 50.0): MicroEnterLinkData =
     MicroEnterLinkData(
       linkId = linkId,
       mode = SimulationModeEnum.MICRO,
@@ -85,7 +89,7 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newCarState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     state.microState.map(_.velocity) shouldBe Some(0.0)
   }
@@ -95,10 +99,10 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, journeyReporter) = newHandler(reported)
     val state = newCarState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_ab"), state)
+    handler.handleMicroEnterLink(enterLinkData(101L), state)
     handler.handleMicroLeaveLink(
       model.hybrid.entity.event.data.MicroLeaveLinkData(
-        linkId = "link_ab",
+        linkId = 101L,
         finalPosition = 300.0,
         finalVelocity = 12.5,
         travelTime = 25.0,
@@ -108,7 +112,10 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       state
     )
 
-    handler.handleMicroEnterLink(enterLinkData("link_bc"), state)
+    state.movableLinkExitReported shouldBe true
+    core.util.JsonUtil.fromJson[CarState](core.util.JsonUtil.toJson(state)).movableLinkExitReported shouldBe true
+
+    handler.handleMicroEnterLink(enterLinkData(102L), state)
 
     state.microState.map(_.velocity) shouldBe Some(12.5)
   }
@@ -118,10 +125,21 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     val (handler, _) = newHandler(reported)
     val state = newCarState()
 
-    handler.handleMicroEnterLink(enterLinkData("link_main"), state)
+    handler.handleMicroEnterLink(enterLinkData(100L), state)
 
     val enterEvent = reported.find(_.get("event_type").contains("enter_micro_link"))
     enterEvent shouldBe defined
     enterEvent.get("initial_velocity") shouldBe 0.0
+  }
+
+  it should "execute an inclusive-horizon update while the accounted runtime owns finalization" in {
+    val reported = scala.collection.mutable.ArrayBuffer.empty[Map[String, Any]]
+    val (handler, _) = newHandler(reported, endTick = 0L, runtimeOwnsHorizon = true)
+    val state = newCarState()
+    handler.handleMicroEnterLink(enterLinkData(100), state)
+    handler.handleMicroUpdate(model.hybrid.entity.event.data.MicroUpdateData(
+      0, 1.0, 5.0, 1.0, 0, None, 100.0, 10.0, 10.0), state)
+    state.microState.get.positionInLink shouldBe 1.0
+    reported.exists(_.get("event_type").contains("forced_cleanup")) shouldBe false
   }
 }

@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.time
 
-import core.actor.manager.time.{ LocalDiscreteEventTimeManager, LocalTimeManagerBase }
+import core.actor.manager.time.{ ConservativeLocalTimeManager, LocalDiscreteEventTimeManager }
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 
@@ -26,7 +26,7 @@ class LocalDiscreteEventTimeManager(
   simulationDuration: Tick,
   simulationManager: ActorRef,
   parentManager: Option[ActorRef]
-) extends LocalTimeManagerBase(
+) extends ConservativeLocalTimeManager(
       simulationDuration = simulationDuration,
       simulationManager = simulationManager,
       parentManager = parentManager,
@@ -42,7 +42,7 @@ class LocalDiscreteEventTimeManager(
     * tick 0).
     */
   private val TICK_BATCH_SIZE = 500
-  private val pendingTickActors = mutable.Queue[Identify]()
+  private val pendingTickActors = mutable.Queue[(Identify, Long)]()
   private var currentBatchTick: Tick = -1
   private var currentBatchSequence: Long = 0L
 
@@ -153,7 +153,7 @@ class LocalDiscreteEventTimeManager(
           // Large set — queue and fire in batches to prevent system overload
           currentBatchTick = effectiveTick
           currentBatchSequence = 0L
-          pendingTickActors.enqueueAll(actorsSet)
+          pendingTickActors.enqueueAll(actorsSet.iterator.map(identity => identity -> scheduleRevisionOf(identity.id)))
           fireNextBatch()
         }
     }
@@ -179,11 +179,14 @@ class LocalDiscreteEventTimeManager(
     var count = 0
     currentBatchSequence += 1
     while (pendingTickActors.nonEmpty && count < TICK_BATCH_SIZE) {
-      val identity = pendingTickActors.dequeue()
-      runningEvents.add(identity)
-      sendSpontaneousEvent(currentBatchTick, identity)
-      count += 1
+      val (identity, revision) = pendingTickActors.dequeue()
+      if (revision == scheduleRevisionOf(identity.id)) {
+        runningEvents.add(identity)
+        sendSpontaneousEvent(currentBatchTick, identity)
+        count += 1
+      }
     }
+    if (count == 0 && pendingTickActors.isEmpty && runningEvents.isEmpty) super.advanceToNextTick()
     if (
       count > 0 &&
       (pendingTickActors.isEmpty || currentBatchSequence % batchDebugLogEvery == 0)

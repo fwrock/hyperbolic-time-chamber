@@ -27,6 +27,7 @@ class CsvReportData(
 
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
+  private val simulationClock = core.util.SimulationClock.current
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
 
   private lazy val simulationId: String = {
@@ -100,8 +101,7 @@ class CsvReportData(
         val cleanData =
           report.data.toString.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ")
         writer.write(
-          s"${report.entityId},${report.tick},${startRealTime
-              .plusSeconds(report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\"\n"
+          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\"\n"
         )
       }
       writer.close()
@@ -110,6 +110,7 @@ class CsvReportData(
     } catch {
       case e: Exception =>
         logError(s"Failed to write CSV report to file: ${e.getMessage}", e)
+        throw e
     }
   }
 
@@ -118,6 +119,16 @@ class CsvReportData(
     if (!Files.exists(dirPath)) {
       Files.createDirectories(dirPath)
     }
+  }
+
+  override protected def flushCommittedReports(): scala.concurrent.Future[Unit] = {
+    flushBuffer()
+    val path = Paths.get(filePath)
+    if (Files.exists(path)) {
+      val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
+      try channel.force(true) finally channel.close()
+    }
+    scala.concurrent.Future.successful(())
   }
 
   override def postStop(): Unit =

@@ -1,0 +1,334 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "1",
+      "latitude": -23.55,
+      "longitude": -46.63
+    },
+    {
+      "id": 2,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "2",
+      "latitude": -23.55,
+      "longitude": -46.627
+    },
+    {
+      "id": 3,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "3",
+      "latitude": -23.55,
+      "longitude": -46.624
+    },
+    {
+      "id": 4,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "4",
+      "latitude": -23.547,
+      "longitude": -46.63
+    },
+    {
+      "id": 5,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "5",
+      "latitude": -23.547,
+      "longitude": -46.627
+    },
+    {
+      "id": 6,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "6",
+      "latitude": -23.547,
+      "longitude": -46.624
+    },
+    {
+      "id": 7,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "7",
+      "latitude": -23.544,
+      "longitude": -46.63
+    },
+    {
+      "id": 8,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "8",
+      "latitude": -23.544,
+      "longitude": -46.627
+    },
+    {
+      "id": 9,
+      "classType": "hybrid.actor.Node",
+      "resourceId": "9",
+      "latitude": -23.544,
+      "longitude": -46.624
+    }
+  ],
+  "edges": [
+    {
+      "source_id": 1,
+      "target_id": 2,
+      "weight": 200.0,
+      "label": {
+        "id": 10,
+        "resourceId": "10",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 2,
+      "target_id": 1,
+      "weight": 200.0,
+      "label": {
+        "id": 11,
+        "resourceId": "11",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 1,
+      "target_id": 4,
+      "weight": 200.0,
+      "label": {
+        "id": 12,
+        "resourceId": "12",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 4,
+      "target_id": 1,
+      "weight": 200.0,
+      "label": {
+        "id": 13,
+        "resourceId": "13",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 2,
+      "target_id": 3,
+      "weight": 200.0,
+      "label": {
+        "id": 14,
+        "resourceId": "14",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 3,
+      "target_id": 2,
+      "weight": 200.0,
+      "label": {
+        "id": 15,
+        "resourceId": "15",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 2,
+      "target_id": 5,
+      "weight": 200.0,
+      "label": {
+        "id": 16,
+        "resourceId": "16",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 5,
+      "target_id": 2,
+      "weight": 200.0,
+      "label": {
+        "id": 17,
+        "resourceId": "17",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 3,
+      "target_id": 6,
+      "weight": 200.0,
+      "label": {
+        "id": 18,
+        "resourceId": "18",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 6,
+      "target_id": 3,
+      "weight": 200.0,
+      "label": {
+        "id": 19,
+        "resourceId": "19",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 4,
+      "target_id": 5,
+      "weight": 200.0,
+      "label": {
+        "id": 20,
+        "resourceId": "20",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 5,
+      "target_id": 4,
+      "weight": 200.0,
+      "label": {
+        "id": 21,
+        "resourceId": "21",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 4,
+      "target_id": 7,
+      "weight": 200.0,
+      "label": {
+        "id": 22,
+        "resourceId": "22",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 7,
+      "target_id": 4,
+      "weight": 200.0,
+      "label": {
+        "id": 23,
+        "resourceId": "23",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 5,
+      "target_id": 6,
+      "weight": 200.0,
+      "label": {
+        "id": 24,
+        "resourceId": "24",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 6,
+      "target_id": 5,
+      "weight": 200.0,
+      "label": {
+        "id": 25,
+        "resourceId": "25",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 5,
+      "target_id": 8,
+      "weight": 200.0,
+      "label": {
+        "id": 26,
+        "resourceId": "26",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 8,
+      "target_id": 5,
+      "weight": 200.0,
+      "label": {
+        "id": 27,
+        "resourceId": "27",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 6,
+      "target_id": 9,
+      "weight": 200.0,
+      "label": {
+        "id": 28,
+        "resourceId": "28",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 9,
+      "target_id": 6,
+      "weight": 200.0,
+      "label": {
+        "id": 29,
+        "resourceId": "29",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 7,
+      "target_id": 8,
+      "weight": 200.0,
+      "label": {
+        "id": 30,
+        "resourceId": "30",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 8,
+      "target_id": 7,
+      "weight": 200.0,
+      "label": {
+        "id": 31,
+        "resourceId": "31",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 8,
+      "target_id": 9,
+      "weight": 200.0,
+      "label": {
+        "id": 32,
+        "resourceId": "32",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    },
+    {
+      "source_id": 9,
+      "target_id": 8,
+      "weight": 200.0,
+      "label": {
+        "id": 33,
+        "resourceId": "33",
+        "classType": "hybrid.actor.Link",
+        "length": 200.0
+      }
+    }
+  ],
+  "directed": true
+}

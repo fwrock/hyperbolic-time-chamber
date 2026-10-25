@@ -20,14 +20,28 @@ class BusLinkHandler(
   private val journeyReporter: BusJourneyReporter,
   private val onFinishSpontaneousFn: Option[Tick] => Unit,
   private val onFinishDestructFn: () => Unit,
-  private val finishJourneyFn: (String, String) => Unit,
+  private val finishJourneyFn: (String, Long) => Unit,
   private val setMesoExitTickFn: Option[Tick] => Unit,
-  private val restoreRouteIfMissingFn: String => Unit
+  private val restoreRouteIfMissingFn: String => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged; Bus.scala's real construction site passes all
+  // four explicitly -- same pattern as CarLinkHandler/BicycleLinkHandler.
+  private val logDebugFn: String => Unit = _ => (),
+  private val isTimeWarpFn: () => Boolean = () => false,
+  private val isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  private val consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
 
-  def handleEnterLink(linkId: String, data: LinkInfoData, state: BusState): Unit = {
+  private def enterLinkAwaitKey(linkId: Long): String = model.hybrid.actor.Movable.enterLinkAwaitKey(linkId)
+  private def leaveLinkAwaitKey(linkId: Long): String = model.hybrid.actor.Movable.leaveLinkAwaitKey(linkId)
+
+  def handleEnterLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
+
+    // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
+    // CarLinkHandler.handleEnterLink), so always safe to consume once received.
+    consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
 
     val speed = linkDensitySpeed(
       length       = data.linkLength,
@@ -70,9 +84,26 @@ class BusLinkHandler(
     onFinishSpontaneousFn(Some(exitTick))
   }
 
-  def handleLeaveLink(linkId: String, data: LinkInfoData, state: BusState): Unit = {
+  def handleLeaveLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
     val tick     = currentTickFn()
     val entityId = entityIdFn()
+
+    // Conservative mode has no staleness guard here at all (pre-existing behavior, unchanged).
+    // Under Time Warp, a rollback can restore state to a point before this reply's originating
+    // LeaveLinkData was sent -- consult the rollback-immune awaited-reply marker so a genuine,
+    // un-retractable reply is never silently dropped (docs/TIME_WARP_DESIGN.md §10; see
+    // CarSignalHandler.handleLinkAccess for the reference implementation of this pattern).
+    val awaitKey = leaveLinkAwaitKey(linkId)
+    if (isTimeWarpFn()) {
+      if (!isAwaitingReplyFn(awaitKey, "LeaveLinkData", data.requestSeq)) {
+        logDebugFn(
+          s"${entityIdFn()}: Discarding stale ReceiveLeaveLinkInfo for link $linkId " +
+            s"(no matching outstanding request under Time Warp)."
+        )
+        return
+      }
+    }
+    consumeAwaitedReplyFn(awaitKey)
 
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0

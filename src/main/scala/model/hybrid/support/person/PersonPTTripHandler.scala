@@ -29,7 +29,7 @@ import core.actor.trace.ActorTrace
 class PersonPTTripHandler(
   personId: String,
   reportFn: (Map[String, Any], String) => Unit,
-  sendMessageFn: (String, String, Any, String, Any) => Unit,
+  sendMessageFn: (Long, String, Any, String, Any) => Unit,
   logDebug: String => Unit
 ) {
 
@@ -75,11 +75,15 @@ class PersonPTTripHandler(
     */
   def handlePTUnloadRequest(
     event: ActorInteractionEvent,
-    nodeId: String,
+    nodeId: Long,
     mode: ConcreteMode,
-    alightingNodeId: String
+    alightingNodeId: Long,
+    expectedVehicleId: Option[Long] = None,
+    expectedVehicleClassType: Option[String] = None
   ): Boolean = {
-    val isArrival = alightingNodeId == nodeId
+    val isArrival = alightingNodeId == nodeId && expectedVehicleId.forall(_ == event.actorRefId) &&
+      expectedVehicleClassType.forall(expected =>
+        core.util.StringUtil.getModelClassName(expected) == core.util.StringUtil.getModelClassName(event.actorClassType))
 
     val responseData =
       if (mode == ConcreteMode.Subway) SubwayUnloadPassengerData(isArrival = isArrival)
@@ -90,7 +94,7 @@ class PersonPTTripHandler(
       event.actorClassType,
       responseData,
       "UnloadPassengerResponse",
-      null
+      LoadBalancedDistributed
     )
 
     logDebug(

@@ -22,19 +22,20 @@ import scala.collection.mutable
 class LinkMicroSimulationHandler(
   entityIdFn:                  () => String,
   currentTickFn:               () => Tick,
-  sendMessageFn:               (String, String, AnyRef, String) => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
   getLinkStateFn:              () => LinkState,
   setLinkStateFn:              LinkState => Unit,
-  getVehicleEntryTickFn:       String => Option[Tick],
-  removeVehicleEntryTickFn:    String => Unit,
-  getVehicleWaitingSecondsFn:  String => Double,
-  removeVehicleWaitingSecondsFn: String => Unit,
-  vehicleWaitingSeconds:       mutable.Map[String, Double],
+  getVehicleEntryTickFn:       Long => Option[Tick],
+  removeVehicleEntryTickFn:    Long => Unit,
+  getVehicleWaitingSecondsFn:  Long => Double,
+  removeVehicleWaitingSecondsFn: Long => Unit,
+  vehicleWaitingSeconds:       mutable.Map[Long, Double],
   isMicroScheduledFn:          () => Boolean,
   setMicroScheduledFn:         Boolean => Unit,
   getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
-  logDebugFn:                  String => Unit
+  logDebugFn:                  String => Unit,
+  downstreamLeadersFn: Tick => Map[Long, model.hybrid.entity.state.model.VehicleInLane] = _ => Map.empty
 ) {
 
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
@@ -60,7 +61,7 @@ class LinkMicroSimulationHandler(
     logDebugFn(s"✓ MICRO mode initialized: id=${entityIdFn()} lanes=${s.lanes} length=${s.length}m timeStep=${s.microTimeStep}s")
   }
 
-  def findVehicleLane(actorId: String): Option[Int] =
+  def findVehicleLane(actorId: Long): Option[Int] =
     getLinkStateFn().vehiclesByLane.collectFirst {
       case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
     }
@@ -68,7 +69,7 @@ class LinkMicroSimulationHandler(
   def findLeastOccupiedLane(): Int =
     microSimulationStrategy.selectEntryLane(
       vehiclesByLane = mutable.Map.from(getLinkStateFn().vehiclesByLane),
-      vehicleId      = "",
+      vehicleId      = 0L,
       vehicleLength  = 4.5
     )
 
@@ -87,7 +88,9 @@ class LinkMicroSimulationHandler(
         microTimeStep            = state.microTimeStep,
         microTicksPerGlobalTick  = state.microTicksPerGlobalTick,
         vehicleWaitingSeconds    = vehicleWaitingSeconds,
-        signalAtExit             = getSignalAtExitFn()
+        signalAtExit             = getSignalAtExitFn(),
+        downstreamLeaders        = downstreamLeadersFn(tick),
+        stopLineGapM             = state.stopLineGapM
       )
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)
@@ -116,7 +119,7 @@ class LinkMicroSimulationHandler(
     removeVehicleWaitingSecondsFn(update.vehicleId)
 
     val entryTick    = getVehicleEntryTickFn(update.vehicleId).getOrElse(currentTickFn())
-    val elapsedTicks = math.max(1L, currentTickFn() - entryTick + 1)
+    val elapsedTicks = math.max(1L, currentTickFn() - entryTick)
     val secondsPerGlobalTick = state.microTicksPerGlobalTick * state.microTimeStep
     val avgSpeed =
       if (elapsedTicks > 0 && secondsPerGlobalTick > 0)
@@ -127,13 +130,15 @@ class LinkMicroSimulationHandler(
       update.vehicleId,
       update.shardId,
       MicroLeaveLinkData(
-        linkId             = entityIdFn(),
+        linkId             = entityIdFn().toLong,
         finalPosition      = update.position,
         finalVelocity      = update.velocity,
-        travelTime         = elapsedTicks,
+        travelTime         = elapsedTicks * secondsPerGlobalTick,
         distanceTraveled   = state.length,
         averageSpeed       = avgSpeed,
-        waitingTimeSeconds = accWaiting
+        waitingTimeSeconds = accWaiting,
+        junctionPosition = state.junctionGeometry.map(_.positionAt(update.position)),
+        remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0
       ),
       "MicroLeaveLink"
     )
@@ -155,7 +160,8 @@ class LinkMicroSimulationHandler(
         leaderVehicle  = update.leaderVehicle,
         gapToLeader    = update.gapToLeader,
         leaderVelocity = update.leaderVelocity,
-        safeVelocity   = update.safeVelocity
+        safeVelocity   = update.safeVelocity,
+        junctionPosition = getLinkStateFn().junctionGeometry.map(_.positionAt(update.position))
       ),
       "MicroUpdate"
     )

@@ -35,16 +35,16 @@ class Node(
 
   override protected def internStateStrings(s: NodeState): NodeState = {
     val internedConnections = mutable.Map.from(
-      s.connections.map { case (k, v) => StringPool.intern(k) -> v }
+      s.connections.map { case (k, v) => k -> v }
     )
     val internedApproachConnections = mutable.Map.from(
-      s.approachConnections.map { case (k, v) => StringPool.intern(k) -> v }
+      s.approachConnections.map { case (k, v) => k -> v }
     )
     val internedSignals = mutable.Map.from(
-      s.signals.map { case (k, v) => StringPool.intern(k) -> v }
+      s.signals.map { case (k, v) => k -> v }
     )
     s.copy(
-      links                = s.links.map(StringPool.intern),
+      links                = s.links,
       connections          = internedConnections,
       approachConnections  = internedApproachConnections,
       signals              = internedSignals
@@ -52,7 +52,7 @@ class Node(
   }
 
   private val pendingSignals
-    : mutable.Map[String, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
+    : mutable.Map[Long, _root_.org.interscity.htc.model.hybrid.entity.state.model.SignalState] =
     mutable.Map.empty
 
   private lazy val nodeHandler = new NodeEventHandler(
@@ -65,7 +65,7 @@ class Node(
       sendMessageTo(eid, shardId, data, eventType, LoadBalancedDistributed),
     getLinkDependencyFn = linkId =>
       CityMapUtil.edgeLabelsById.get(linkId)
-        .map(e => ShardActorId(entityId = e.id, classType = e.classType, shardBucket = e.resourceId)),
+        .map(e => ShardActorId(entityId = e.id.toLong, classType = e.classType, shardBucket = e.resourceId)),
     logWarnFn           = logWarn,
     logDebugFn          = logDebug
   )

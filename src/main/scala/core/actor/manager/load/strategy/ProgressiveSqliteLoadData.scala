@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.load.strategy
 
 import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.pattern.pipe
 import core.util.{ IdUtil, SqliteActorSimulationUtil, TickIndexUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
@@ -16,7 +17,6 @@ import java.sql.{ Connection, DriverManager, PreparedStatement, ResultSet }
 import java.util.UUID
 import scala.collection.mutable
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.util.{ Failure, Success }
 
 /** PROGRESSIVE `LoadDataStrategy` reading `ActorSimulation` records for a tick window from a
   * SQLite `.db`, in place of `ProgressiveJsonLoadData`'s two-phase full-file-scan approach.
@@ -37,10 +37,9 @@ import scala.util.{ Failure, Success }
   * `ProgressiveLoadDataManager` needs no changes beyond resolving this class via
   * `DataSourceTypeEnum.progressiveClazz`.
   *
-  * One JDBC connection is opened once (lazily, on first use) and reused for both the index-build
-  * query and every subsequent tick-window query; only the per-window `PreparedStatement`/
-  * `ResultSet` are opened and closed per request. See `SqliteLoadData` for why (one connection,
-  * not one per query) and the assumption that each cluster node reads a LOCAL copy of the `.db`.
+  * JDBC work runs on the IO dispatcher. Completed resources are handed back through the
+  * mailbox; each window owns its connection until all creator acknowledgements arrive.
+  * Source files must remain immutable throughout the run and be available on each loader node.
   */
 class ProgressiveSqliteLoadData(private val properties: Properties)
     extends LoadDataStrategy(properties = properties) {
@@ -73,8 +72,27 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
 
   private var activeRequest: LoadActorsForTickRange = _
   private var pendingActorsSent = 0
+  private var failed = false
+
+  override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+    Option(managerRef).foreach(_ ! ProgressiveSourceFailed(sourceId, s"loader restarted: ${reason.getMessage}"))
+    super.preRestart(reason, message)
+  }
 
   override def handleEvent: Receive = {
+    case _ if failed => ()
+    case event: ProgressiveSourceFailed =>
+      failed = true
+      managerRef ! event
+    case ProgressiveIndexReady(index) =>
+      lightIndex = index
+      managerRef ! TickIndexBuiltEvent(sourceId, index.tickCounts, index.totalActors, index.maxTick)
+    case SqliteQueryOpened(conn, stmt, rs) =>
+      connection = conn
+      activeStatement = stmt
+      activeResultSet = rs
+      startNextChunkRead()
+    case SqliteRangeClosed => reportCompletedRange()
     case event: LoadDataSourceEvent    => load(event)
     case _: BuildTickIndex             => buildTickIndexAsync()
     case event: TickIndexBuiltEvent    => handleTickIndexBuilt(event)
@@ -100,79 +118,54 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
     self ! BuildTickIndex()
   }
 
-  /** Opens the shared connection on first use. Called only from within `Future` bodies running on
-    * the io-dispatcher, never directly from `receive`.
-    */
-  private def openConnectionIfNeeded(): Connection = {
-    if (connection == null) {
-      Class.forName("org.sqlite.JDBC")
-
-      connection = DriverManager.getConnection(s"jdbc:sqlite:file:$sourceDbPath?immutable=1")
-      val pragma = connection.createStatement()
-      pragma.execute("PRAGMA query_only = ON")
-      pragma.close()
-    }
-    connection
+  private def openConnection(path: String): Connection = {
+    Class.forName("org.sqlite.JDBC")
+    DriverManager.getConnection(s"jdbc:sqlite:file:$path?immutable=1&mode=ro")
   }
 
-  private def buildTickIndexAsync(): Unit =
+  private def buildTickIndexAsync(): Unit = {
+    val path = sourceDbPath
+    val id = sourceId
     Future {
-      val conn = openConnectionIfNeeded()
-      val stmt = conn.createStatement()
+      val conn = openConnection(path)
       try {
-        val rs =
-          stmt.executeQuery("SELECT start_tick, COUNT(*) AS cnt FROM actor_simulation GROUP BY start_tick")
+        val stmt = conn.createStatement()
         try {
-          val tickCounts = mutable.Map[Tick, Int]()
-          var totalActors = 0
-          var maxTick: Tick = 0L
-          var minTick: Tick = Long.MaxValue
-          while (rs.next()) {
-            val tick = rs.getLong("start_tick")
-            val count = rs.getInt("cnt")
-            tickCounts.put(tick, count)
-            totalActors += count
-            if (tick > maxTick) maxTick = tick
-            if (tick < minTick) minTick = tick
-          }
-          if (minTick == Long.MaxValue) minTick = 0L
-          LightTickIndex(
-            tickCounts = tickCounts.toMap,
-            totalActors = totalActors,
-            maxTick = maxTick,
-            minTick = minTick
-          )
-        } finally rs.close()
-      } finally stmt.close()
-    }.onComplete {
-      case Success(result) =>
-        logInfo(
-          s"Tick index built for $sourceDbPath: " +
-            s"${result.totalActors} actors, ticks ${result.minTick}-${result.maxTick}, " +
-            s"${result.tickCounts.size} unique ticks"
-        )
-        this.lightIndex = result
-        self ! TickIndexBuiltEvent(
-          sourceId = sourceId,
-          tickCounts = result.tickCounts,
-          totalActors = result.totalActors,
-          maxTick = result.maxTick
-        )
-
-      case Failure(e) =>
-        logError(s"Failed to build tick index for $sourceDbPath", e)
-        self ! CloseAndFinish()
-    }
+          val rs =
+            stmt.executeQuery("SELECT start_tick, COUNT(*) AS cnt FROM actor_simulation GROUP BY start_tick")
+          try {
+            val tickCounts = mutable.Map[Tick, Int]()
+            var totalActors = 0
+            var maxTick: Tick = 0L
+            var minTick: Tick = Long.MaxValue
+            while (rs.next()) {
+              val tick = rs.getLong("start_tick")
+              val count = rs.getInt("cnt")
+              tickCounts.put(tick, count)
+              totalActors += count
+              if (tick > maxTick) maxTick = tick
+              if (tick < minTick) minTick = tick
+            }
+            if (minTick == Long.MaxValue) minTick = 0L
+            LightTickIndex(
+              tickCounts = tickCounts.toMap,
+              totalActors = totalActors,
+              maxTick = maxTick,
+              minTick = minTick
+            )
+          } finally rs.close()
+        } finally stmt.close()
+      } finally conn.close()
+    }.map(ProgressiveIndexReady.apply)
+      .recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"index: ${e.getMessage}") }.pipeTo(self)
+  }
 
   private def handleTickIndexBuilt(event: TickIndexBuiltEvent): Unit =
     managerRef ! event
 
   private def handleLoadForTickRange(request: LoadActorsForTickRange): Unit = {
     if (lightIndex == null) {
-      logWarn(
-        s"Tick index not built yet, cannot load range [${request.fromTick}, ${request.toTick}]"
-      )
-      replyEmptyRange(request)
+      self ! ProgressiveSourceFailed(sourceId, "range requested before index completion")
       return
     }
 
@@ -194,28 +187,25 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
         s"[${request.fromTick}, ${request.toTick}] from $sourceId"
     )
 
+    require(activeRequest == null, "overlapping SQLite input ranges")
+    activeRequest = request
+    pendingActorsSent = 0
+    streamExhausted = false
+    val path = sourceDbPath
+    val id = sourceId
     Future {
-      val conn = openConnectionIfNeeded()
-      val stmt = conn.prepareStatement(
-        "SELECT * FROM actor_simulation WHERE start_tick BETWEEN ? AND ? ORDER BY start_tick"
-      )
-      stmt.setLong(1, request.fromTick)
-      stmt.setLong(2, request.toTick)
-      val rs = stmt.executeQuery()
-      (stmt, rs)
-    }.onComplete {
-      case Success((stmt, rs)) =>
-        activeStatement = stmt
-        activeResultSet = rs
-        activeRequest = request
-        pendingActorsSent = 0
-        streamExhausted = false
-        startNextChunkRead()
-
-      case Failure(e) =>
-        logError(s"Error querying tick range from $sourceDbPath", e)
-        replyEmptyRange(request)
-    }
+      val conn = openConnection(path)
+      try {
+        val stmt = conn.prepareStatement(
+          "SELECT * FROM actor_simulation WHERE start_tick BETWEEN ? AND ? ORDER BY start_tick"
+        )
+        try {
+          stmt.setLong(1, request.fromTick)
+          stmt.setLong(2, request.toTick)
+          SqliteQueryOpened(conn, stmt, stmt.executeQuery())
+        } catch { case scala.util.control.NonFatal(e) => stmt.close(); throw e }
+      } catch { case scala.util.control.NonFatal(e) => conn.close(); throw e }
+    }.recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"query: ${e.getMessage}") }.pipeTo(self)
   }
 
   private def replyEmptyRange(request: LoadActorsForTickRange): Unit =
@@ -228,6 +218,7 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
 
   private def startNextChunkRead(): Unit = {
     val rs = activeResultSet
+    val id = sourceId
     Future {
       val buffer = mutable.ListBuffer[ActorSimulation]()
       var exhausted = false
@@ -235,12 +226,8 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
         if (rs.next()) buffer += SqliteActorSimulationUtil.fromResultSet(rs)
         else exhausted = true
       (buffer.toList, exhausted)
-    }.onComplete {
-      case Success((actors, exhausted)) => self ! FileChunkReady(actors, exhausted)
-      case Failure(e) =>
-        logError(s"Error reading chunk from $sourceDbPath", e)
-        self ! FileChunkReady(Nil, true)
-    }
+    }.map { case (actors, exhausted) => FileChunkReady(actors, exhausted) }
+      .recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"read: ${e.getMessage}") }.pipeTo(self)
   }
 
   private def handleChunkReady(actors: List[ActorSimulation], isDone: Boolean): Unit = {
@@ -261,7 +248,7 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
       actor =>
         ActorSimulationCreation(
           resourceId = IdUtil.format(sourceId),
-          actor = actor.copy(id = IdUtil.format(actor.id))
+          actor = actor.copy(id = actor.id)
         )
     )
 
@@ -295,9 +282,7 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
   }
 
   private def handleFinishCreation(event: FinishCreationEvent): Unit = {
-    activeBatches.remove(event.batchId)
-
-    if (activeBatches.isEmpty) {
+    if (activeBatches.remove(event.batchId) && activeBatches.isEmpty) {
       if (!streamExhausted) {
         startNextChunkRead()
       } else {
@@ -307,16 +292,30 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
   }
 
   private def closeQueryAndReport(): Unit = {
-    try if (activeResultSet != null) activeResultSet.close() catch { case _: Exception => }
-    try if (activeStatement != null) activeStatement.close() catch { case _: Exception => }
+    val rs = activeResultSet
+    val stmt = activeStatement
+    val conn = connection
+    val id = sourceId
+    connection = null
     activeResultSet = null
     activeStatement = null
+    Future {
+      try { try rs.close() finally stmt.close() } finally conn.close()
+      SqliteRangeClosed
+    }.recover { case scala.util.control.NonFatal(e) => ProgressiveSourceFailed(id, s"close: ${e.getMessage}") }.pipeTo(self)
+  }
 
+  private def reportCompletedRange(): Unit = {
     if (lightIndex != null && activeRequest != null && activeRequest.toTick >= lightIndex.maxTick) {
       fullyConsumed = true
     }
 
     if (activeRequest != null) {
+      val expected = TickIndexUtil.countActorsInRange(lightIndex.tickCounts, activeRequest.fromTick, activeRequest.toTick)
+      if (pendingActorsSent != expected) {
+        self ! ProgressiveSourceFailed(sourceId, s"index/range count mismatch: expected=$expected actual=$pendingActorsSent")
+        return
+      }
       logInfo(
         s"Finished querying $pendingActorsSent actors for tick range " +
           s"[${activeRequest.fromTick}, ${activeRequest.toTick}] from $sourceId"
@@ -357,3 +356,6 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
     super.postStop()
   }
 }
+
+private[strategy] case class SqliteQueryOpened(connection: Connection, statement: PreparedStatement, result: ResultSet)
+private[strategy] case object SqliteRangeClosed

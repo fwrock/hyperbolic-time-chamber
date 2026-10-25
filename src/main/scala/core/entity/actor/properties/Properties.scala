@@ -18,7 +18,8 @@ case class Properties(
   data: Any = null,
   relationships: mutable.Map[String, ShardActorId] = mutable.Map[String, ShardActorId](),
   actorType: CreationTypeEnum = LoadBalancedDistributed,
-  defaultTimeManagerType: String = TimeManagerTypeEnum.DISCRETE_EVENT // Tipo padrão de time manager
+  defaultTimeManagerType: String = TimeManagerTypeEnum.DISCRETE_EVENT,
+  runtimeCoordinator: Option[ActorRef] = None
 ) {
 
   /** Gets the time manager by type.

@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.entity.state.model
 
 case class EdgeGraph(
-  id: String,
+  id: Long,
   resourceId: String,
   classType: String,
   length: Double

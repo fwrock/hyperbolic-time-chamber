@@ -6,7 +6,7 @@ import core.types.Tick
 import model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum
 
 case class Phase(
-  origin: String,
+  origin: Long,
   greenStart: Tick,
   greenDuration: Tick,
   state: TrafficSignalPhaseStateEnum

@@ -27,6 +27,7 @@ import scala.collection.mutable
 class DefaultMicroSimulationStrategy(
   private val carFollowingModel: CarFollowingModel = KraussModel()
 ) extends MicroSimulationStrategy {
+  import DefaultMicroSimulationStrategy.SignalBlockerId
 
   private var initialized = false
   private var cachedLinkLength: Double = 0.0
@@ -55,10 +56,12 @@ class DefaultMicroSimulationStrategy(
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double],
-    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+    vehicleWaitingSeconds: mutable.Map[Long, Double],
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
+    downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
+    stopLineGapM: Double = 0.0
   ): Seq[MicroVehicleUpdate] = {
-    val lastUpdateByVehicle = mutable.LinkedHashMap[String, MicroVehicleUpdate]()
+    val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
 
     for (st <- 0 until nSubTicks)
@@ -75,11 +78,15 @@ class DefaultMicroSimulationStrategy(
               microTimeStep = microTimeStep,
               microTicksPerGlobalTick = nSubTicks,
               vehicleWaitingSeconds = vehicleWaitingSeconds,
-              signalAtExit = signalAtExit
+              signalAtExit = signalAtExit,
+              downstreamLeaders = downstreamLeaders,
+              stopLineGapM = stopLineGapM
             )
             laneUpdates.foreach(
               u => lastUpdateByVehicle.put(u.vehicleId, u)
             )
+            val departed = laneUpdates.iterator.filter(_.reachedEnd).map(_.vehicleId).toSet
+            if (departed.nonEmpty) vehicles.filterInPlace(v => !departed.contains(v.actorId))
           }
       }
 
@@ -124,18 +131,22 @@ class DefaultMicroSimulationStrategy(
     speedLimit: Double,
     microTimeStep: Double,
     microTicksPerGlobalTick: Int,
-    vehicleWaitingSeconds: mutable.Map[String, Double],
-    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+    vehicleWaitingSeconds: mutable.Map[Long, Double],
+    signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
+    downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
+    stopLineGapM: Double = 0.0
   ): Seq[MicroVehicleUpdate] = {
+    VehicleInLane.sortFrontToBack(vehicles)
 
-    // Virtual leader placed at link exit when Red; IDM naturally decelerates to a stop.
+    // Only a red signal supplies a stopped leader; an uncontrolled exit must preserve momentum.
     val signalLeader: Option[VehicleInLane] =
       signalAtExit.collect {
         case Red =>
           VehicleInLane(
-            actorId         = "__signal__",
+            actorId         = SignalBlockerId,
             shardId         = "",
-            position        = linkLength,
+            // A signal is a stop line, so it has no vehicle-to-vehicle standstill gap.
+            position        = linkLength - stopLineGapM + 2.0,
             velocity        = 0.0,
             acceleration    = 0.0,
             vehicleLength   = 0.0,
@@ -145,96 +156,120 @@ class DefaultMicroSimulationStrategy(
       }
 
     val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
+    val previous = vehicles.toVector
 
-    for (i <- vehicles.indices) {
-      val vehicle = vehicles(i)
-      val leader = if (i > 0) Some(vehicles(i - 1)) else signalLeader
-
-      val (rawGap, leaderVel) = leader match {
-        case Some(l) =>
-          (l.position - vehicle.position - vehicle.vehicleLength, l.velocity)
-        case None =>
-          (linkLength - vehicle.position, speedLimit / 3.6)
-      }
-      val gap = math.max(0.1, rawGap)
-
-      val maxAcceleration = vehicle.maxAcceleration
-      val maxDeceleration = vehicle.maxDeceleration
-      val rawSafe = carFollowingModel.calculateSafeVelocity(
+    def safeBehind(vehicle: VehicleInLane, leader: VehicleInLane): Double =
+      carFollowingModel.calculateSafeVelocity(
         currentVelocity = vehicle.velocity,
         desiredVelocity = speedLimit / 3.6,
-        gap = gap,
-        leaderVelocity = leaderVel,
-        maxAcceleration = maxAcceleration,
-        maxDeceleration = maxDeceleration,
+        gap = math.max(0.1, vehicle.gapTo(leader)),
+        leaderVelocity = leader.velocity,
+        maxAcceleration = vehicle.maxAcceleration,
+        maxDeceleration = vehicle.maxDeceleration,
         minGap = 2.0,
         reactionTime = 1.0,
         deltaT = microTimeStep
       )
-      val safeTargetVel = if (rawSafe.isNaN || rawSafe.isInfinite) 0.0 else rawSafe
-      val velDiff = safeTargetVel - vehicle.velocity
-      val velChange =
-        if (velDiff >= 0)
-          math.min(velDiff, maxAcceleration * microTimeStep)
-        else
-          math.max(velDiff, -maxDeceleration * microTimeStep)
-      val rawNewVelocity = vehicle.velocity + velChange
-      val cappedVelocity = math.max(
-        0.0,
-        math.min(
-          if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity,
-          speedLimit / 3.6
+
+    for (i <- vehicles.indices) {
+      val vehicle = previous(i)
+      if (vehicle.entryTick < tick) {
+        val leader = if (i > 0) Some(previous(i - 1))
+          // A nearer moving vehicle must not hide the stricter stopped signal constraint.
+          else (signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId))
+            .minByOption(v => (safeBehind(vehicle, v), v.rearPosition, v.actorId))
+
+        val (rawGap, leaderVel) = leader match {
+          case Some(l) =>
+            (vehicle.gapTo(l), l.velocity)
+          case None =>
+            (linkLength - vehicle.position, speedLimit / 3.6)
+        }
+        val gap = math.max(0.1, rawGap)
+
+        val maxAcceleration = vehicle.maxAcceleration
+        val maxDeceleration = vehicle.maxDeceleration
+        val rawSafe = leader.fold(speedLimit / 3.6)(safeBehind(vehicle, _))
+        val turnSafe = vehicle.exitSpeedLimitMps.map { limit =>
+          val brakingStep = maxDeceleration * microTimeStep
+          // Include this step's travel before the remaining braking distance to avoid late turn braking.
+          math.max(limit, -brakingStep + math.sqrt(brakingStep * brakingStep + limit * limit +
+            2.0 * maxDeceleration * math.max(0.0, linkLength - vehicle.position)))
+        }.getOrElse(Double.PositiveInfinity)
+        val safeTargetVel = if (rawSafe.isNaN || rawSafe.isInfinite) 0.0 else math.min(rawSafe, turnSafe)
+        val velDiff = safeTargetVel - vehicle.velocity
+        val velChange =
+          if (velDiff >= 0)
+            math.min(velDiff, maxAcceleration * microTimeStep)
+          else
+            math.max(velDiff, -maxDeceleration * microTimeStep)
+        val rawNewVelocity = vehicle.velocity + velChange
+        val cappedVelocity = math.max(
+          0.0,
+          math.min(
+            if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity,
+            speedLimit / 3.6
+          )
         )
-      )
 
-      val rawNewPosition = vehicle.position + cappedVelocity * microTimeStep
-      val newPosition = math.min(rawNewPosition, linkLength)
+        val rawNewPosition = vehicle.position + cappedVelocity * microTimeStep
+        val newPosition = if (math.abs(rawNewPosition - linkLength) < 1e-10) linkLength
+          else math.min(rawNewPosition, linkLength)
 
-      val actualVelocity = if (newPosition >= linkLength) 0.0 else cappedVelocity
-      val newAcceleration = velChange / microTimeStep
+        val exitBlocked = signalAtExit.contains(Red)
+        val reachedEnd = newPosition >= linkLength && !exitBlocked
+        val actualVelocity = if (newPosition >= linkLength && exitBlocked) 0.0 else cappedVelocity
+        val newAcceleration = velChange / microTimeStep
 
-      if (actualVelocity < 0.1) {
-        vehicleWaitingSeconds.update(
-          vehicle.actorId,
-          vehicleWaitingSeconds.getOrElse(vehicle.actorId, 0.0) + microTimeStep
-        )
-      }
+        if (actualVelocity < 0.1) {
+          vehicleWaitingSeconds.update(
+            vehicle.actorId,
+            vehicleWaitingSeconds.getOrElse(vehicle.actorId, 0.0) + microTimeStep
+          )
+        }
 
-      vehicles(i) = vehicle.copy(
-        position = newPosition,
-        velocity = actualVelocity,
-        acceleration = newAcceleration
-      )
-
-      if (newPosition >= linkLength || subTick >= microTicksPerGlobalTick - 1) {
-        updates += MicroVehicleUpdate(
-          vehicleId = vehicle.actorId,
-          shardId = vehicle.shardId,
-          subTick = subTick,
+        vehicles(i) = vehicle.copy(
           position = newPosition,
           velocity = actualVelocity,
-          acceleration = newAcceleration,
-          currentLane = laneId,
-          leaderVehicle = leader.map(_.actorId),
-          gapToLeader = gap,
-          leaderVelocity = leaderVel,
-          safeVelocity = actualVelocity,
-          reachedEnd = newPosition >= linkLength
+          acceleration = newAcceleration
         )
+
+        if (reachedEnd || subTick >= microTicksPerGlobalTick - 1) {
+          updates += MicroVehicleUpdate(
+            vehicleId = vehicle.actorId,
+            shardId = vehicle.shardId,
+            subTick = subTick,
+            position = newPosition,
+            velocity = actualVelocity,
+            acceleration = newAcceleration,
+            currentLane = laneId,
+            leaderVehicle = leader.map(_.actorId),
+            gapToLeader = gap,
+            leaderVelocity = leaderVel,
+            safeVelocity = actualVelocity,
+            reachedEnd = reachedEnd,
+            remainingStepSeconds = if (reachedEnd && cappedVelocity > 0.0)
+              math.max(0.0, math.min(microTimeStep, (rawNewPosition - linkLength) / cappedVelocity))
+            else 0.0
+          )
+        }
       }
     }
 
-    val ordered = vehicles.sortBy(
-      v => -v.position
-    )
-    vehicles.clear()
-    vehicles ++= ordered
+    VehicleInLane.sortFrontToBack(vehicles)
 
     updates.toSeq
   }
 }
 
 object DefaultMicroSimulationStrategy {
+
+  /** Sentinel `VehicleInLane.actorId` for the virtual signal-blocker leader placed at the link
+    * exit on Red (see `processMicroLane`) -- never a real vehicle id, so kept out-of-band as a
+    * named negative constant rather than a magic literal (real vehicle ids are non-negative,
+    * generated by `IdUtil`/the load pipeline).
+    */
+  val SignalBlockerId: Long = -1L
 
   /** Creates a default micro simulation strategy with Krauss car-following model.
     */

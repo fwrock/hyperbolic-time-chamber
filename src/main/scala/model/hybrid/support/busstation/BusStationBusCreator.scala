@@ -17,7 +17,7 @@ class BusStationBusCreator(
   entityIdFn:          () => String,
   currentTickFn:       () => Tick,
   reportFn:            (Map[String, Any], String) => Unit,
-  spawnDynamicActorFn: (String, String, String) => Unit,
+  spawnDynamicActorFn: (String, Long, String) => Unit,
   routeCalculator:     BusStationRouteCalculator,
   logInfoFn:           String => Unit,
   logWarnFn:           String => Unit,
@@ -26,7 +26,13 @@ class BusStationBusCreator(
 
   private def state: BusStationState = getStateFn()
 
-  def createBus(bus: BusInformation): Unit = {
+  /** Everything about creating a bus that is pure/idempotent and safe to run eagerly under Time
+    * Warp: route lookup, state-object construction, and `report()` (already GVT-buffered — see
+    * `SimulationBaseActor.reportBuffer`). Deliberately excludes the one irrevocable step,
+    * `spawnDynamicActorFn`, which the caller defers separately under Time Warp; see
+    * `docs/TIME_WARP_DESIGN.md`'s dynamic-actor-spawn entry.
+    */
+  def prepareBus(bus: BusInformation): String = {
     val route = calcBusBestRoute()
     if (route.isEmpty) {
       logWarnFn(s"Cannot create bus ${bus.actorId} - no valid route available")
@@ -71,12 +77,20 @@ class BusStationBusCreator(
       "bus_created"
     )
 
-    BusStationMetrics.busesCreated.labels(bus.label).inc()
-    spawnDynamicActorFn("hybrid.actor.Bus", IdUtil.format(bus.actorId), toJson(busState))
+    toJson(busState)
   }
 
-  private def calcBusBestRoute(): mutable.Queue[(String, String)] = {
-    val bestRoute = mutable.Queue[(String, String)]()
+  /** Accounted runtimes journal activation; legacy callers gate physical initialization separately. */
+  def spawnPrepared(bus: BusInformation, stateJson: String): Unit = {
+    BusStationMetrics.busesCreated.labels(bus.label).inc()
+    spawnDynamicActorFn("hybrid.actor.Bus", bus.actorId, stateJson)
+  }
+
+  def createBus(bus: BusInformation): Unit =
+    spawnPrepared(bus, prepareBus(bus))
+
+  private def calcBusBestRoute(): mutable.Queue[(Long, Long)] = {
+    val bestRoute = mutable.Queue[(Long, Long)]()
 
     if (state.goingRoute.isDefined && state.goingRoute.get.nonEmpty) {
       val goingRouteData = getTotalRoute(state.goingRoute.get, routeCalculator.orderedBusStopIds)
@@ -100,7 +114,7 @@ class BusStationBusCreator(
 
   private def getTotalRoute(
     route:        mutable.Map[SubRoutePair, mutable.Queue[(Identify, Identify)]],
-    orderedStops: List[String]
+    orderedStops: List[Long]
   ): mutable.Queue[(Identify, Identify)] = {
     val totalRoute = mutable.Queue[(Identify, Identify)]()
     for (pair <- orderedStops.sliding(2)) {

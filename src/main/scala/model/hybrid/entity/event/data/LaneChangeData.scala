@@ -21,7 +21,7 @@ import org.interscity.htc.core.entity.event.data.BaseEventData
   *   Whether lane change is complete
   */
 case class LaneChangeData(
-  vehicleId: String,
+  vehicleId: Long,
   fromLane: Int,
   toLane: Int,
   progress: Double,

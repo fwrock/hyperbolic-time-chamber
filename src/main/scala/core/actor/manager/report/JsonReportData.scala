@@ -129,6 +129,7 @@ class JsonReportData(
       case e: Exception =>
         logError(s"Failed to write report to file: ${e.getMessage}", e)
         closeWriter()
+        throw e
     }
   }
 
@@ -144,6 +145,17 @@ class JsonReportData(
     if (!Files.exists(dirPath)) {
       Files.createDirectories(dirPath)
     }
+  }
+
+  override protected def flushCommittedReports(): scala.concurrent.Future[Unit] = {
+    flushBuffer()
+    if (persistentWriter != null) persistentWriter.flush()
+    val path = Paths.get(filePath)
+    if (Files.exists(path)) {
+      val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
+      try channel.force(true) finally channel.close()
+    }
+    scala.concurrent.Future.successful(())
   }
 
   override def postStop(): Unit = {

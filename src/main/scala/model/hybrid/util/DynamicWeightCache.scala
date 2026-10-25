@@ -2,6 +2,7 @@ package org.interscity.htc.model.hybrid.util
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
 import org.interscity.htc.model.hybrid.util.cache.{ DisabledCacheStrategy, InMemoryCacheStrategy, KafkaCacheStrategy, WeightCacheStrategy }
 
@@ -40,6 +41,10 @@ object DynamicWeightCache {
 
   private val config = ConfigFactory.load()
 
+  def configuredStrategy: String =
+    if (config.hasPath("htc.routing.cache-strategy")) config.getString("htc.routing.cache-strategy")
+    else "inmemory"
+
   private lazy val strategy: WeightCacheStrategy = {
     val strategyType =
       try
@@ -67,6 +72,10 @@ object DynamicWeightCache {
         println("[DynamicWeightCache] Dynamic weights DISABLED — using static weights only.")
         new DisabledCacheStrategy()
 
+      case "accounted" =>
+        println("[DynamicWeightCache] Accounted routing enabled — shared cache access disabled.")
+        new DisabledCacheStrategy()
+
       case other =>
         println(
           s"[DynamicWeightCache] Unknown cache strategy '$other' — falling back to InMemory."
@@ -84,7 +93,7 @@ object DynamicWeightCache {
     strategyType.toLowerCase match {
       case "kafka"                  => new KafkaCacheStrategy()
       case "inmemory"               => new InMemoryCacheStrategy()
-      case "disabled" | "none" | "off" => new DisabledCacheStrategy()
+      case "disabled" | "none" | "off" | "accounted" => new DisabledCacheStrategy()
       case _                        => new InMemoryCacheStrategy()
     }
   }
@@ -110,11 +119,89 @@ object DynamicWeightCache {
       case _: Exception => 100000L
     }
 
-  def getWeight(linkId: String, staticWeight: Double): Double = {
-    val costOpt = strategy.getCost(linkId)
-    val w       = costOpt.map(_.totalCost).getOrElse(staticWeight)
+  // ---------------------------------------------------------------------------
+  // Time Warp replay-safety (docs/TIME_WARP_DESIGN.md's model-level audit, third finding):
+  // dynamic link costs arrive via Kafka/Distributed-Data pub-sub on a real-time TTL, entirely
+  // outside HTC's deterministic event log. A route computed live (`getWeight` reading whatever the
+  // strategy holds *right now*) and later replayed by `RollbackHistoryHandler.rollbackTo` would read
+  // a DIFFERENT, time-shifted set of costs on replay -- silently reconstructing a different route
+  // than the one that was actually causally communicated to other actors (LinkInfoData already sent
+  // along the ORIGINAL route). Fixed with a ThreadLocal recording/override hook rather than
+  // threading parameters through every call site (CompactGraph's A*, CityMapUtil's congestion
+  // check, and any future caller). SimulationBaseActor now uses the generic EventReadJournal
+  // around each actor event. The legacy helpers below remain for standalone cache scopes,
+  // while the generic journal covers whatever `getWeight` calls happen inside an actor event,
+  // wherever they are, without CompactGraph/GPSUtil/the model actors needing to know Time Warp
+  // exists. Safe across concurrently-running actors on different threads by construction (each
+  // thread's Pekko dispatcher runs one actor's message to completion before picking up the next, so
+  // a ThreadLocal set for the duration of one such call never leaks across actors).
+  // ---------------------------------------------------------------------------
+  private val recordingSink: ThreadLocal[scala.collection.mutable.Map[String, Double]] =
+    new ThreadLocal[scala.collection.mutable.Map[String, Double]]()
+  private val overrideMap: ThreadLocal[Map[String, Double]] =
+    new ThreadLocal[Map[String, Double]]()
+  private val accountedWeights: ThreadLocal[Long => Option[Double]] =
+    new ThreadLocal[Long => Option[Double]]()
 
-    if (costOpt.isDefined) dynHits.incrementAndGet() else staticMisses.incrementAndGet()
+  /** Installs one immutable routing-LP state view for the duration of a synchronous route query. */
+  def withAccountedWeights[A](lookup: Long => Option[Double])(body: => A): A = {
+    val previous = accountedWeights.get()
+    accountedWeights.set(lookup)
+    try body
+    finally accountedWeights.set(previous)
+  }
+
+  private[util] def hasAccountedWeights: Boolean = accountedWeights.get() != null
+
+  /** Runs `body` with every `getWeight` read observed during it recorded into `sink` (the caller's
+    * own mutable map — typically an actor's per-event read buffer, flushed into its
+    * `RollbackHistoryHandler` log once the event finishes). Used only for a LIVE dispatch.
+    */
+  def withRecording[A](sink: scala.collection.mutable.Map[String, Double])(body: => A): A = {
+    val previous = recordingSink.get()
+    recordingSink.set(sink)
+    try body
+    finally recordingSink.set(previous)
+  }
+
+  /** Runs `body` with every `getWeight` read forced to come from `overrides` instead of the live
+    * strategy (falling back to the edge's static weight for any link not in the map, same as a
+    * live cache miss would). Used only while replaying an already-processed event, so it reproduces
+    * exactly the reads that event's original live dispatch made, not whatever the cache holds now.
+    */
+  def withOverride[A](overrides: Map[String, Double])(body: => A): A = {
+    val previous = overrideMap.get()
+    overrideMap.set(overrides)
+    try body
+    finally overrideMap.set(previous)
+  }
+
+  def getWeight(linkId: Long, staticWeight: Double): Double =
+    EventReadJournal.read(s"hybrid.routing.weight:$linkId") {
+      readLiveWeight(linkId, staticWeight)
+    }
+
+  private def readLiveWeight(linkId: Long, staticWeight: Double): Double = {
+    val linkIdKey = linkId.toString
+    val activeOverride = overrideMap.get()
+    val (w, wasDynamic) =
+      if (activeOverride != null) {
+        val ov = activeOverride.get(linkIdKey)
+        (ov.getOrElse(staticWeight), ov.isDefined)
+      } else if (accountedWeights.get() != null) {
+        val ov = accountedWeights.get().apply(linkId)
+        (ov.getOrElse(staticWeight), ov.isDefined)
+      } else {
+        if (configuredStrategy.equalsIgnoreCase("accounted"))
+          throw new IllegalStateException("accounted dynamic weights may only be read inside RoutingService")
+        val costOpt = strategy.getCost(linkIdKey)
+        (costOpt.map(_.totalCost).getOrElse(staticWeight), costOpt.isDefined)
+      }
+
+    val activeSink = recordingSink.get()
+    if (activeSink != null) activeSink.update(linkIdKey, w)
+
+    if (wasDynamic) dynHits.incrementAndGet() else staticMisses.incrementAndGet()
 
     val total = totalQueries.incrementAndGet()
     if (LOG_INTERVAL > 0 && total % LOG_INTERVAL == 0L) {

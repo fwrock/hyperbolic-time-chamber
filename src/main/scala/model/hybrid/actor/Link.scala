@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.actor
 
 import core.actor.SimulationBaseActor
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.types.Tick
 import core.entity.event.SpontaneousEvent
 
@@ -24,13 +25,15 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
-import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData }
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData, MicroBoundaryUpdateData }
+import org.interscity.htc.model.hybrid.entity.event.data.routing.LinkCostChangedData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.model.hybrid.support.link.{
-  LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler
+  LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler, LinkFollowingHandler
 }
 
 import scala.collection.mutable
+import scala.util.Success
 
 /** Hybrid link actor representing a road segment that can operate in MESO or MICRO simulation mode.
   *
@@ -68,29 +71,102 @@ class Link(
       properties = properties
     ) {
 
+  override protected def validateRuntimeCapabilities(): Unit = {
+    model.hybrid.util.HybridRuntimeCapabilities.validateAccountedRouting(DynamicWeightCache.configuredStrategy,
+      getCurrentTimeManagerType)
+    val clock = core.util.SimulationClock.current
+    require(!state.downstreamLookahead || math.abs(state.microTimeStep - clock.secondsPerTick) < 1e-9,
+      "downstream lookahead requires one physics step per scenario tick")
+    if (clock.secondsPerTick != 1.0) {
+      require(state.isMicroMode, "fractional clocks require every road Link to use MICRO")
+      require(math.abs(state.microTimeStep * state.microTicksPerGlobalTick - clock.secondsPerTick) < 1e-9,
+        "Link physics interval must equal the scenario tickDuration")
+      require(DynamicWeightCache.configuredStrategy == "disabled",
+        "fractional clocks require disabled dynamic routing until routing cost units are adapted")
+    }
+  }
+
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
-      from = StringPool.intern(s.from),
-      to   = StringPool.intern(s.to)
+      from = s.from,
+      to   = s.to
     )
 
-  /** Tracks when each vehicle entered the link (for travel time calculation) */
-  private val vehicleEntryTick: mutable.Map[String, Tick] = mutable.Map.empty
+  /** Tracks when each vehicle entered the link (for travel time calculation).
+    * protected, not private: lets LinkMigrationSnapshotSpec drive this directly, same rationale as
+    * the vehicle actors' link-wait fields.
+    */
+  protected val vehicleEntryTick: mutable.Map[Long, Tick] = mutable.Map.empty
 
   /** Accumulated waiting time per vehicle (seconds) */
-  private val vehicleWaitingSeconds: mutable.Map[String, Double] = mutable.Map.empty
+  protected val vehicleWaitingSeconds: mutable.Map[Long, Double] = mutable.Map.empty
+
+  /** `Link` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07):
+    * `vehicleEntryTick`/`vehicleWaitingSeconds` feed travel-time math sent to a departing vehicle
+    * (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`) but are
+    * actor-local `mutable.Map`s, invisible to a Time Warp rollback restore — a rollback that undoes
+    * a vehicle's leave-event without also purging its now-stale map entry would compute a different
+    * travel time for the same logical leave event on replay than the original live run did.
+    * MICRO scheduling and exit-signal state are captured by the model snapshot hooks as well:
+    * they control subsequent events and cannot be reconstructed from the vehicle maps alone.
+    */
+  private def captureLinkMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      linkVehicleEntryTick = vehicleEntryTick.toMap,
+      linkVehicleWaitingSeconds = vehicleWaitingSeconds.toMap
+    )
+
+  /** Restores what [[captureLinkMigrationFields]] captured. */
+  private def restoreLinkMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    vehicleEntryTick.clear()
+    vehicleEntryTick ++= snapshot.linkVehicleEntryTick
+    vehicleWaitingSeconds.clear()
+    vehicleWaitingSeconds ++= snapshot.linkVehicleWaitingSeconds
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureLinkMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreLinkMigrationFields(snapshot)
+  }
 
   /** Flag indicating if micro-tick simulation is scheduled */
   private var microTickScheduled: Boolean = false
 
   /** Current signal phase at the exit node of this link; None when uncontrolled. */
   private var signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var previousSignalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var signalAtExitSinceTick: Tick = Long.MinValue
+
+  protected def signalForMicroIntervalEndingAt(tick: Tick): Option[TrafficSignalPhaseStateEnum] =
+    if (tick <= signalAtExitSinceTick) previousSignalAtExit else signalAtExit
 
   /** Grace-period counter for MICRO links: stays alive for MICRO_GRACE_TICKS extra ticks when empty
     * to avoid race conditions with late-arriving vehicles from previous batches.
     */
   private var emptyGraceTick: Int = 0
   private val MICRO_GRACE_TICKS: Int = 5
+
+  override protected def captureModelSnapshot(): Map[String, String] =
+    super.captureModelSnapshot() ++ Map(
+      "hybrid.link.v1.microTickScheduled" -> microTickScheduled.toString,
+      "hybrid.link.v1.signalAtExit" -> signalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.previousSignalAtExit" -> previousSignalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.signalAtExitSinceTick" -> signalAtExitSinceTick.toString,
+      "hybrid.link.v1.emptyGraceTick" -> emptyGraceTick.toString
+    )
+
+  override protected def restoreModelSnapshot(metadata: Map[String, String]): Unit = {
+    super.restoreModelSnapshot(metadata)
+    microTickScheduled = metadata.get("hybrid.link.v1.microTickScheduled").exists(_.toBoolean)
+    signalAtExit = metadata.get("hybrid.link.v1.signalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    previousSignalAtExit = metadata.get("hybrid.link.v2.previousSignalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    signalAtExitSinceTick = metadata.get("hybrid.link.v2.signalAtExitSinceTick").fold(Long.MinValue)(_.toLong)
+    emptyGraceTick = metadata.get("hybrid.link.v1.emptyGraceTick").fold(0)(_.toInt)
+  }
 
   /** Configuration: interval between dynamic cost publications (ticks) */
   private val costPublishInterval: Int =
@@ -112,7 +188,30 @@ class Link(
     getVehicleEntryTickFn      = id => vehicleEntryTick.get(id),
     getVehicleWaitingSecondsFn = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
     getRegisteredVehicleIdsFn  = () => state.registered.iterator.map(_.actorId).toIterable,
-    logWarnFn                  = msg => logWarn(msg)
+    logWarnFn                  = msg => logWarn(msg),
+    publishCostFn              = (cost, ttl) => publishRoutingCost(cost, ttl)
+  )
+
+  private def publishRoutingCost(cost: DynamicLinkCost, ttl: Int): scala.util.Try[Unit] =
+    if (model.hybrid.util.AccountedRoutingConfig.enabled) {
+      model.hybrid.util.AccountedRoutingConfig.workerIds.foreach { workerId =>
+        sendMessageTo(
+          entityId = workerId,
+          shardId = model.hybrid.util.AccountedRoutingConfig.ActorClassType,
+          data = LinkCostChangedData(cost.linkId, cost.totalCost, currentTick),
+          eventType = EventTypeEnum.LinkCostChanged.toString,
+          actorType = LoadBalancedDistributed
+        )
+      }
+      Success(())
+    } else DynamicWeightCache.publishCost(cost, ttl)
+
+  private lazy val followingHandler = new LinkFollowingHandler(
+    stateFn = () => state,
+    entityIdFn = () => getEntityId.toLong,
+    currentTickFn = () => currentTick,
+    sendFn = (id, shard, data, eventType) => sendMessageTo(
+      entityId = id, shardId = shard, data = data, eventType = eventType, actorType = LoadBalancedDistributed)
   )
 
   private lazy val microSimHandler = new LinkMicroSimulationHandler(
@@ -128,9 +227,10 @@ class Link(
     vehicleWaitingSeconds         = vehicleWaitingSeconds,
     isMicroScheduledFn            = () => microTickScheduled,
     setMicroScheduledFn           = v => microTickScheduled = v,
-    getSignalAtExitFn             = () => signalAtExit,
+    getSignalAtExitFn             = () => signalForMicroIntervalEndingAt(currentTick),
     metricsReporter               = metricsReporter,
-    logDebugFn                    = msg => logDebug(msg)
+    logDebugFn                    = msg => logDebug(msg),
+    downstreamLeadersFn           = tick => followingHandler.leaders(tick)
   )
 
   private lazy val vehicleFlowHandler = new LinkVehicleFlowHandler(
@@ -157,24 +257,51 @@ class Link(
   override def onInitialize(event: InitializeEvent): Unit = {
     super.onInitialize(event)
     if (state.isMicroMode) microSimHandler.initializeMicroMode()
-    metricsReporter.publishDynamicCost()
-    // One-time report so the entry Node can seed its availableCapacity counter before any
-    // vehicle ever requests access to this link. See docs/CONGESTION_PROPAGATION_DESIGN.md.
+    if (!model.hybrid.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
+    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+  }
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  /** Seeds the entry Node's availableCapacity counter for this link, before any vehicle ever
+    * requests access to it. See docs/CONGESTION_PROPAGATION_DESIGN.md. Deferred to the post-load
+    * registration phase (rather than sent from onInitialize) because EAGER sources of different
+    * classTypes load concurrently (LoadDataManager.handleLoadNext groups sources by classType and
+    * advances every queue each round) — a Link can otherwise initialize and message its Node
+    * before that Node exists yet. Post-load registration only fires once every EAGER source has
+    * finished loading, so the target Node is guaranteed to be initialized here.
+    */
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(IdUtil.format(state.from)).orElse(
+        relationships
+          .get(IdUtil.format(state.from))
+          .orElse(
+            relationships.values.find(_.classType == "hybrid.actor.Node")
+          )
+      )
+    val nodeId = dependencyOpt.map(_.id).getOrElse(state.from)
     sendMessageTo(
-      entityId  = state.from,
+      entityId  = nodeId,
       shardId   = "hybrid.actor.Node",
-      data      = RegisterLinkCapacityData(linkId = getEntityId, capacity = state.capacity.toInt),
+      data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
       eventType = EventTypeEnum.RegisterLinkCapacity.toString,
       actorType = LoadBalancedDistributed
     )
-    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+    if (model.hybrid.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
   }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
-      case d: LinkSignalStateData  => signalAtExit = Some(d.phase)
+      case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId)
+      case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
+      case d: LinkSignalStateData =>
+        // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.
+        if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
+        signalAtExitSinceTick = event.tick
+        signalAtExit = Some(d.phase)
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
@@ -217,6 +344,7 @@ class Link(
     emptyGraceTick = 0
     microTickScheduled = true
     microSimHandler.handleGlobalTick(currentTick)
+    followingHandler.publish()
 
     val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0
     if (hasVehiclesAfterTick) {
@@ -240,7 +368,7 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
@@ -248,6 +376,8 @@ class Link(
     )
     if (state.isMicroMode) vehicleFlowHandler.handleEnterLinkMicro(event, data)
     else vehicleFlowHandler.handleEnterLinkMeso(event, data)
+    followingHandler.observeNextRoad(data.nextLinkId)
+    followingHandler.publish()
   }
 
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
@@ -258,13 +388,14 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId,
+        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = vehiclesRemaining
       ),
       "vehicle_link_flow"
     )
     vehicleFlowHandler.handleLeaveLink(event, data, wasRegistered)
+    followingHandler.publish()
   }
   /** Handles link destruction on simulation termination.
     *

@@ -25,15 +25,25 @@ class BicycleSignalHandler(
   selfDestructFn:              () => Unit,
   isPersonCentricFn:           () => Boolean,
   logDebugFn:                  String => Unit,
-  sendMessageFn:               (String, String, AnyRef, String) => Unit,
-  getCurrentNodeFn:            () => String,
-  getNextLinkFn:               () => String,
-  getTripDestinationFn:        () => Option[String],
-  finishJourneyFn:             (String, String) => Unit,
-  onFinishPrivateVehicleFn:    String => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getCurrentNodeFn: () => Long,
+  getNextLinkFn: () => Long,
+  getTripDestinationFn: () => Option[Long],
+  finishJourneyFn: (String, Long) => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   setSignalWaitUntilTickFn:    Option[Tick] => Unit,
-  setSignalWaitNeedsReverifyFn: Boolean => Unit
+  setSignalWaitNeedsReverifyFn: Boolean => Unit,
+  // Defaulted to conservative-mode-safe no-ops so existing/other in-flight callers that predate
+  // this Time Warp wiring keep compiling unchanged; Bicycle.scala's real construction site passes
+  // all four explicitly -- same pattern as CarSignalHandler.
+  isTimeWarpFn: () => Boolean = () => false,
+  registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
+  isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
+  consumeAwaitedReplyFn: String => Unit = _ => ()
 ) {
+
+  /** See CarSignalHandler.linkAccessAwaitKey. */
+  private def linkAccessAwaitKey(linkId: Long): String = s"link-access:$linkId"
 
   def requestSignalState(state: BicycleState): Unit = {
     val currentPathNode = state.currentPath.map(_._2).orNull
@@ -41,12 +51,12 @@ class BicycleSignalHandler(
     val tripDest        = getTripDestinationFn().getOrElse(state.destination)
     if (tripDest == currentPathNode || routeDepleted) {
       val nodeId = getCurrentNodeFn()
-      if (nodeId != null) {
+      if (nodeId != 0L) {
         finishJourneyFn("reached_destination", nodeId)
         onFinishPrivateVehicleFn(nodeId)
       } else {
-        finishJourneyFn("no_current_node", "unknown")
-        onFinishPrivateVehicleFn("unknown")
+        finishJourneyFn("no_current_node", 0L)
+        onFinishPrivateVehicleFn(0L)
       }
       onFinishSpontaneousFn(None)
       if (!isPersonCentricFn()) selfDestructFn()
@@ -54,40 +64,53 @@ class BicycleSignalHandler(
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
       nodeId match {
-        case nid if nid != null =>
+        case nid if nid != 0L =>
           CityMapUtil.nodesById.get(nid) match {
             case Some(node) =>
               getNextLinkFn() match {
-                case linkId if linkId != null =>
+                case linkId if linkId != 0L =>
                   sendMessageFn(
                     node.id,
                     node.classType,
-                    RequestLinkAccessData(targetLinkId = linkId),
+                    RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported, approachLinkId = state.currentPath.map(_._1).getOrElse(0L)),
                     EventTypeEnum.RequestLinkAccess.toString
                   )
+                registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
                 onFinishSpontaneousFn(None)
-                case null =>
+                case 0L =>
                   leavingLinkFn()
               }
             case None =>
               leavingLinkFn()
           }
-        case null =>
+        case 0L =>
           leavingLinkFn()
       }
     }
   }
 
   def handleLinkAccess(data: LinkAccessData, state: BicycleState): Unit = {
-    if (state.status != WaitingSignalState && state.status != WaitingCapacity) {
+    val linkId = getNextLinkFn()
+    val awaitKey = linkAccessAwaitKey(linkId)
+    val isStale =
+      if (isTimeWarpFn())
+        !isAwaitingReplyFn(awaitKey, "LinkAccessData", data.requestSeq)
+      else
+        state.status != WaitingSignalState && state.status != WaitingCapacity
+    if (isStale) {
       logDebugFn(
         s"${entityIdFn()}: Ignoring stale LinkAccessData " +
-          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard."
+          s"(current status=${state.status}, expected WaitingSignalState/WaitingCapacity). Race condition guard, " +
+          s"see docs/TIME_WARP_DESIGN.md §10 for the Time Warp variant of this check."
       )
       return
     }
 
+    // Full/WaitingCapacity is NOT a terminal reply -- see CarSignalHandler.handleLinkAccess.
+    if (data.capacityState != LinkCapacityStateEnum.Full) consumeAwaitedReplyFn(awaitKey)
+
     if (data.phase == Red) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       val tick = currentTickFn()
       val waitUntilTick = data.nextTick
       val waitTicks = math.max(0L, waitUntilTick - tick)
@@ -110,8 +133,10 @@ class BicycleSignalHandler(
       setSignalWaitNeedsReverifyFn(true)
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
+      journeyReporter.sumoArrivalSpeed = 0.0
       state.status = WaitingCapacity
     } else {
+      data.junctionLink.foreach(path => state.movablePendingJunctionPath = Some(path))
       val tick = currentTickFn()
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(tick))
@@ -128,7 +153,7 @@ class BicycleSignalHandler(
     if (state.status == WaitingCapacity) {
       val nodeId = getCurrentNodeFn()
       val linkId = getNextLinkFn()
-      if (nodeId != null && linkId != null) {
+      if (nodeId != 0L && linkId != 0L) {
         CityMapUtil.nodesById.get(nodeId).foreach { node =>
           sendMessageFn(
             node.id,

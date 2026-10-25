@@ -1,0 +1,157 @@
+[
+  {
+    "id": 78,
+    "typeActor": "hybrid.actor.Bicycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BicycleState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": 3,
+        "destination": 3,
+        "actorType": "Bicycle",
+        "size": 1.8,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": 3,
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 3,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 80,
+    "typeActor": "hybrid.actor.Bicycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BicycleState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": 8,
+        "destination": 8,
+        "actorType": "Bicycle",
+        "size": 1.8,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": 8,
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 8,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 82,
+    "typeActor": "hybrid.actor.Bicycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BicycleState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": 9,
+        "destination": 9,
+        "actorType": "Bicycle",
+        "size": 1.8,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": 9,
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 9,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 84,
+    "typeActor": "hybrid.actor.Bicycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BicycleState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": 1,
+        "destination": 1,
+        "actorType": "Bicycle",
+        "size": 1.8,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": 1,
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 1,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  },
+  {
+    "id": 86,
+    "typeActor": "hybrid.actor.Bicycle",
+    "data": {
+      "dataType": "model.hybrid.entity.state.BicycleState",
+      "content": {
+        "startTick": 0,
+        "scheduleOnTimeManager": false,
+        "origin": 6,
+        "destination": 6,
+        "actorType": "Bicycle",
+        "size": 1.8,
+        "currentSimulationMode": "MESO",
+        "microState": null,
+        "status": "Parked",
+        "bestRoute": null,
+        "currentNode": 6,
+        "distance": 0.0
+      }
+    },
+    "dependencies": {
+      "from_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      },
+      "to_node": {
+        "id": 6,
+        "classType": "hybrid.actor.Node"
+      }
+    }
+  }
+]

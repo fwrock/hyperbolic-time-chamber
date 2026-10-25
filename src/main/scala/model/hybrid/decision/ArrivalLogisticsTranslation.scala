@@ -38,7 +38,7 @@ object ArrivalLogisticsTranslation {
   }
 
   /** Pure — no lookups. */
-  def buildWalkLeg(originNodeId: String, destinationNodeId: String, logistics: ArrivalLogistics): WalkLeg =
+  def buildWalkLeg(originNodeId: Long, destinationNodeId: Long, logistics: ArrivalLogistics): WalkLeg =
     WalkLeg(originNodeId, destinationNodeId, logistics.precomputedRoute)
 
   /** Pure — no lookups. `None` only when `logistics.vehicle` is empty, which should not happen for
@@ -85,7 +85,7 @@ object ArrivalLogisticsTranslation {
     * [[TravelTimeEngine]]. `None` when the mode string is unresolvable (`"auto"`), or a
     * private-vehicle/transit leg is missing the data it needs to build a complete [[AtomicLeg]].
     */
-  def translate(originNodeId: String, destinationNodeId: String, logistics: ArrivalLogistics): Option[AtomicLeg] =
+  def translate(originNodeId: Long, destinationNodeId: Long, logistics: ArrivalLogistics): Option[AtomicLeg] =
     modeOf(logistics.mode).flatMap {
       case ConcreteMode.Walk => Some(buildWalkLeg(originNodeId, destinationNodeId, logistics))
       case mode @ (ConcreteMode.Car | ConcreteMode.Bicycle | ConcreteMode.Motorcycle) =>

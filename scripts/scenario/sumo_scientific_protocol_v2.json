@@ -1,0 +1,211 @@
+{
+  "version": 2,
+  "status": "frozen-before-v2-held-out-execution",
+  "baseCommit": "a38cc63",
+  "purpose": "Test physical cross-link following and signal stopping geometry using fresh cases and demand seeds; retain v1 as development diagnostics.",
+  "timeUnits": "seconds for physical inputs and metrics; runtime ticks remain integers",
+  "defaultParameters": {
+    "speedLimitKmh": 50,
+    "accelMps2": 2.6,
+    "decelMps2": 4.5,
+    "reactionSeconds": 1,
+    "minGapM": 2,
+    "vehicleLengthM": 4.5,
+    "sumoSigma": 0,
+    "physicsStepSeconds": 0.1,
+    "runtimeTickSeconds": 0.1,
+    "carryRemainder": true,
+    "seed": 42,
+    "horizonSeconds": 180,
+    "downstreamLookahead": true,
+    "stopLineGapM": 1.0
+  },
+  "developmentCases": [
+    "free",
+    "following",
+    "crossing-straight",
+    "crossing-left",
+    "crossing-right",
+    "signal-right",
+    "signal-boundary",
+    "long-route-1200m",
+    "all v1 held-out cases and demand seeds are now diagnostic development data"
+  ],
+  "heldOutCases": [
+    {
+      "id": "v2-left",
+      "case": "crossing",
+      "junctionGeometry": true,
+      "turn": "left",
+      "roadLengths": [
+        211,
+        137
+      ],
+      "departuresSeconds": [
+        0,
+        6.7,
+        13.4,
+        20.1,
+        26.8,
+        33.5
+      ]
+    },
+    {
+      "id": "v2-right",
+      "case": "crossing",
+      "junctionGeometry": true,
+      "turn": "right",
+      "roadLengths": [
+        229,
+        149
+      ],
+      "departuresSeconds": [
+        0,
+        5.6,
+        11.2,
+        16.8,
+        22.4,
+        28.0
+      ]
+    },
+    {
+      "id": "v2-signal-right",
+      "case": "signal",
+      "junctionGeometry": true,
+      "turn": "right",
+      "roadLengths": [
+        187,
+        137
+      ],
+      "departuresSeconds": [
+        0.0,
+        3.4,
+        6.8,
+        10.2,
+        13.6,
+        17.0,
+        20.4,
+        23.8,
+        27.2,
+        30.6,
+        34.0,
+        37.4,
+        40.8,
+        44.2,
+        47.6,
+        51.0,
+        54.4,
+        57.8
+      ]
+    },
+    {
+      "id": "v2-segmented",
+      "case": "long-route",
+      "junctionGeometry": false,
+      "turn": "straight",
+      "roadLengths": [
+        91,
+        157,
+        113,
+        179,
+        127,
+        167,
+        109,
+        137
+      ],
+      "departuresSeconds": [
+        0,
+        7.3,
+        14.6,
+        21.9
+      ]
+    }
+  ],
+  "convergence": {
+    "case": "long-route",
+    "roadLengths": [
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100
+    ],
+    "departuresSeconds": [
+      0
+    ],
+    "runtimeTickSeconds": [
+      1,
+      0.5,
+      0.1
+    ],
+    "physicsStepSeconds": 0.1,
+    "compareCarryDisabledAndEnabledAtFinestClock": true,
+    "metrics": [
+      "signedDurationBiasSeconds",
+      "maxAbsoluteDurationErrorSeconds",
+      "routeDistanceRmseM",
+      "speedRmseMps"
+    ],
+    "claim": "Report measured trends; do not assume monotone convergence for every metric."
+  },
+  "acceptanceCriteria": {
+    "scope": "Provisional numerical-equivalence targets for these matched-model experiments; separate from regression invariants and empirical validity.",
+    "maxMeanAbsoluteTripTimeErrorSeconds": 0.5,
+    "maxP95AbsoluteTripTimeErrorSeconds": 1.0,
+    "maxMeanRouteDistanceRmseM": 2.0,
+    "maxMeanSpeedRmseMps": 1.0,
+    "maxQueueCountRmseVehicles": 1.0,
+    "maxDischargeHeadwayMaeSeconds": 0.3,
+    "maxThroughputRelativeError": 0.05,
+    "requiredCompletionCoverage": 1.0,
+    "comparisonSamplingSeconds": 0.1,
+    "headwayDefinition": "Consecutive first-road exit event times within the same green interval; report count and match by vehicle pair.",
+    "queueDefinition": "Vehicles on the approach with speed below 0.1 m/s, sampled at equal times; this is the halted queue, not every vehicle slowed by congestion."
+  },
+  "stochasticReplications": {
+    "id": "v2-stochastic-signal",
+    "case": "signal",
+    "junctionGeometry": true,
+    "turn": "right",
+    "roadLengths": [
+      197,
+      127
+    ],
+    "vehicles": 18,
+    "headwaySeconds": 4,
+    "headwayJitterSeconds": 1,
+    "seeds": [
+      607,
+      709,
+      811,
+      907,
+      1009
+    ],
+    "stochasticSource": "Independent seeded demand headway perturbations, shared exactly by both simulators; driver dynamics remain deterministic.",
+    "inferenceUnit": "Scenario realization, not vehicles or time samples.",
+    "confidenceLevel": 0.95,
+    "pairedMeanCi": "Student t interval over independent per-seed HTC-minus-SUMO scenario means; n=5 uses t(4)=2.776445105.",
+    "bootstrap": false,
+    "calibrationOnTheseRuns": false
+  },
+  "empiricalValidation": {
+    "status": "unchanged exploratory pilot; v2 does not establish empirical validity",
+    "candidate": "USDOT/FHWA NGSIM, official dataset 8ect-6jqj",
+    "requirement": "Use documented units, quality-control continuity and lane changes, separate initialization/calibration prefixes from prediction intervals, retain raw query/hash/license, and state environmental applicability. Field availability alone does not establish validation."
+  },
+  "reportingRules": [
+    "Retain every held-out result, including failures. Never widen thresholds after execution without a new protocol version and fresh validation set.",
+    "Freeze parameters before held-out execution. Store protocol SHA256 in each result.",
+    "Report signed bias, absolute error, distributions, coverage and invariant checks; do not align traces by fitted time shifts.",
+    "SUMO agreement does not substitute for empirical validation. Stochastic demand intervals do not quantify all epistemic uncertainty.",
+    "Separate wall-clock failures and unsupported scenarios from physical acceptance; retain and label all exclusions.",
+    "V1 diagnosed a missing leader across link boundaries. No car-following coefficients or acceptance limits may be tuned on v2 outputs."
+  ]
+}

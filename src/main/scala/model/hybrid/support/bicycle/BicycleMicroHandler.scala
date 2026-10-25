@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.bicycle
 
 import core.types.Tick
+import model.hybrid.entity.state.model.JunctionGeometry
 import org.interscity.htc.model.hybrid.entity.event.data.{
   MicroEnterLinkData,
   MicroLeaveLinkData,
@@ -17,15 +18,15 @@ class BicycleMicroHandler(
   journeyReporter:         BicycleJourneyReporter,
   requestSignalStateFn:    () => Unit,
   onFinishSpontaneousFn:   Option[Tick] => Unit,
-  onFinishPrivateVehicleFn: String => Unit,
+  onFinishPrivateVehicleFn: Long => Unit,
   selfDestructFn:          () => Unit,
   isPersonCentricFn:       () => Boolean,
-  finishJourneyFn:         (String, String) => Unit,
+  finishJourneyFn: (String, Long) => Unit,
   logDebugFn:              String => Unit,
-  setCurrentLinkIdFn:      Option[String] => Unit,
+  setCurrentLinkIdFn:      Option[Long] => Unit,
   setLinkEntryTickFn:      Option[Tick] => Unit,
   getLinkEntryTickFn:      () => Option[Tick],
-  getCurrentLinkIdFn:      () => Option[String],
+  getCurrentLinkIdFn:      () => Option[Long],
   microUpdateReportEvery:  Int = 0
 ) {
 
@@ -39,7 +40,7 @@ class BicycleMicroHandler(
     val bikeLane = if (data.numberOfLanes >= 3) Some(0) else None
     val initialMicroState = MicroBicycleState(
       positionInLink   = 0.0,
-      velocity         = journeyReporter.sumoArrivalSpeed,
+      velocity         = data.initialVelocity.getOrElse(journeyReporter.sumoArrivalSpeed),
       acceleration     = 0.0,
       currentLane      = bikeLane.getOrElse(data.assignedLane),
       leaderVehicle    = None,
@@ -82,7 +83,7 @@ class BicycleMicroHandler(
         "link_length"     -> data.linkLength,
         "initial_velocity" -> initialMicroState.velocity,
         "tick"            -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -113,14 +114,14 @@ class BicycleMicroHandler(
           Map(
             "event_type" -> "micro_update",
             "bicycle_id" -> entityIdFn(),
-            "link_id"    -> getCurrentLinkIdFn().getOrElse(""),
+            "link_id"    -> getCurrentLinkIdFn().getOrElse(0L),
             "mode"       -> "MICRO",
             "position"   -> data.position,
             "velocity"   -> data.velocity,
             "lane"       -> data.currentLane,
             "sub_tick"   -> data.subTick,
             "tick"       -> currentTickFn()
-          ),
+          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -130,6 +131,7 @@ class BicycleMicroHandler(
     logDebugFn(s"Bicycle leaving MICRO link ${data.linkId}")
     val travelTime = getLinkEntryTickFn().map(e => currentTickFn() - e).getOrElse(0L)
 
+    state.movableLinkExitReported = true
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
     journeyReporter.sumoArrivalLane =
@@ -148,7 +150,7 @@ class BicycleMicroHandler(
         "average_speed"     -> data.averageSpeed,
         "total_distance"    -> state.distance,
         "tick"              -> currentTickFn()
-      ),
+      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

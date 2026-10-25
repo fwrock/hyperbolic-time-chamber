@@ -55,7 +55,7 @@ class LoadDataManagerScenarioPreflightSpec
 
   private def personPlan(strategyId: String): List[PlanElement] =
     List(
-      Activity("home", "n1", AtTick(0L)),
+      Activity("home", 1L, AtTick(0L)),
       PendingDecision(
         ModeDecisionRequest(allowedModes = Set(ConcreteMode.Walk), strategyId = strategyId)
       )
@@ -65,7 +65,7 @@ class LoadDataManagerScenarioPreflightSpec
     val state = PersonState(originalPlan = personPlan(strategyId))
     val contentJson = JsonUtil.toJson(state)
     val fileContent =
-      s"""[{"id":"person-1","typeActor":"hybrid.actor.Person","data":{"dataType":"model.hybrid.entity.state.PersonState","content":$contentJson}}]"""
+      s"""[{"id":"1","typeActor":"hybrid.actor.Person","data":{"dataType":"model.hybrid.entity.state.PersonState","content":$contentJson}}]"""
 
     val file = Files.createTempFile("load-data-manager-preflight-spec", ".json")
     Files.writeString(file, fileContent)
@@ -88,6 +88,7 @@ class LoadDataManagerScenarioPreflightSpec
       LoadDataManager.props(
         timeSingletonManager = TestProbe().ref,
         poolTimeManager = TestProbe().ref,
+        timeManagerType = "discrete-event",
         simulationManager = simulationManager.ref,
         poolReporters = mutable.Map.empty[ReportTypeEnum, org.apache.pekko.actor.ActorRef]
       )

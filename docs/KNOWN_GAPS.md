@@ -4,6 +4,555 @@ Honest gap assessment against the README/docs claims, based on a source-level au
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
 
+Start with [MICRO implementation and validation status](MICRO_VALIDATION_STATUS.md)
+for the consolidated current scope, evidence, scientific interpretation and next
+acceptance gates. The dated sections below retain milestone history.
+
+## Cross-link MICRO following and v2 validation (2026-10-25)
+
+Opt-in single-lane MICRO following now observes actual leaders across a Link
+boundary and through an optional connector onto the next road. It requires one
+physics step per runtime tick. Explicit stop-line gaps match the SUMO reference;
+defaults preserve the existing mixed-model mode. On the inspected v1 seed 101,
+trip-time MAE drops from 1.325 to 0.081 s and the final queued car changes from
+3.2 s early to 0.1 s late, without a fitted node delay or car-following coefficient.
+
+All four predeclared v2 physical cases and all five fresh 18-car demand seeds
+pass the unchanged provisional criteria. The five-seed mean HTC-minus-SUMO
+duration is +0.064 s, with exploratory 95% interval [+0.046, +0.083] s. A small
+positive bias remains. These are different demand realizations from v1 below.
+
+The final build passes **653 Scala tests in 135 suites** and **18 Python tests**.
+All **19 SUMO comparisons** produce valid measurements for **260 completed cars**;
+all **17 full-report comparisons** match, including two-JVM execution with 3,297
+rollbacks, unchanged conservative physics across the stale-publication repair,
+and legacy Car and cyclic transit behavior. An initial v2 Time Warp failure from
+a publication outliving its rolled-back subscription was repaired and retained
+as excluded evidence; all final validation uses the repaired executable.
+
+**Empirical following/discharge validity remains open.** Competing junction
+movements, multi-lane selection, capacity-blocked handoff/spillback and vehicles
+waiting outside lane queues need separate representation and validation. Very
+short successive roads can require an observation horizon beyond the next road.
+Messaging/checkpoint costs at city scale are unmeasured. See the
+[contract, ablations and reproduction](MICRO_CROSS_LINK_FOLLOWING.md) and
+[retained v2 evidence](validation/micro-discharge-2026-10-25.json).
+
+## Fractional MICRO timing and scientific workflow — prior v1 milestone (2026-10-25)
+
+Opt-in 0.1-second runtime ticks and checkpointed step-remainder transfer correct
+the accumulated boundary loss in the supported MICRO Car scope. Integer event
+ordering, owner ledgers, cancellation and report commit rules are retained. On a
+1.2 km development route, trip-time bias drops from 8.9 s at one-second ticks to
+below 0.001 s at 0.1 s; remainder transfer also removes the remaining observed
+position drift in that controlled case. The default one-second mixed-model mode
+remains available. Fractional clocks currently reject Person, transit, two-wheelers,
+MESO, dynamic routing feedback and plugins until their time-unit adapters exist.
+
+The full suite passes **644 Scala tests in 134 suites** and **17 Python tests**.
+All 21 real-SUMO runs produce valid measurements (169 completed cars). All four
+frozen held-out scenarios meet the provisional numerical-equivalence criteria.
+Eleven full-report comparisons match, including fractional-clock execution on
+one/two JVMs, conservative/optimistic policies, legacy cyclic Bus service and a
+censored field-initialized trajectory. The two-JVM optimistic geometry case
+exercises 135 rollbacks and cross-owner transport. CSV physical timestamps and
+MICRO relative-speed units are corrected; floating summaries use stable reduction
+order rather than relaxing report comparison.
+
+**General microscopic traffic accuracy is still unestablished.** All five frozen
+randomized-demand realizations fail the trip-time/trajectory equivalence targets.
+Their paired scenario-level mean HTC-minus-SUMO duration is −1.185 s, with an
+exploratory 95% Student-t interval [−1.292, −1.078] s. In seed 101, error accumulates
+through queued vehicles to 3.2 s early for the final vehicle. Following/discharge
+dynamics need a focused audit and a new frozen validation set after any revision.
+Matching halted-queue counts and completed-cohort throughput does not close that
+gap or establish saturated capacity.
+
+Three NGSIM field forecasts now use disjoint initialization/prediction intervals,
+documented feet-to-metres conversion and continuity/lane/leader checks. Position
+RMSE is 2.35–7.57 m over ten seconds. This conditional isolated-cruising pilot has
+no field-derived acceptance threshold; it does not validate following or networks.
+The original bounded responses, metadata, hashes and CC BY-SA attribution are
+retained in a replayable snapshot. See
+[methods, results and reproduction](MICRO_SCIENTIFIC_VALIDATION.md) and
+[retained evidence](validation/micro-scientific-2026-10-25.json).
+
+## Finite MICRO junction geometry (2026-10-24)
+
+Opt-in junction movements now traverse fixed Link connectors with measured length,
+metric paths and turn-speed limits. Approach physics brakes for the selected turn.
+Node capacity grants retain the original road request identity while checkpointing
+connector selection; replay, cancellation and cyclic Bus cursors preserve that
+selection. Road lengths stop at the junction boundary, so internal distance is
+counted exactly once. Existing point-node scenarios retain their defaults.
+
+The full suite passes **635 Scala tests in 133 suites**, six focused cold-codec
+follow-up tests and **11 Python harness tests**. Twelve real-SUMO runs with internal
+lanes (52 completed cars) and two mixed MICRO transit runs on two JVMs pass physical
+acceptance. All seven full-report policy comparisons match, including 39 Bus
+connector crossings and a run with 129 rollbacks. Protected straight/left/right
+movement trip-time errors are at most 1.7/1.2/1.2 s; queued right turns reach 1.9 s.
+See [the geometry contract, measurements and costs](JUNCTION_GEOMETRY.md) and
+[retained evidence](validation/junction-geometry-2026-10-24.json).
+
+The accepted junction fixtures protect the selected movement and hold other
+approaches red. Conflict priority/gap acceptance, shared conflict-area blocking,
+multi-lane junction choice, turn-aware routing costs and a general city-network
+geometry importer remain open. Whole-tick cross-link quantization also remains;
+geometry does not remove it. Each movement adds a fixed Link LP with lane/shape
+state and rollback history; these bounded tests establish no city-scale cost.
+
+## Real SUMO comparison and MICRO node boundaries (2026-10-24)
+
+The old sibling comparison harness has measurement, identity and current-schema
+problems. A tracked replacement now compares fresh real-SUMO runs using matched
+physical inputs, route-distance trajectories and actual terminal trip times. It
+fails on invalid/missing output and includes explicit node/clock checks rather
+than accepting a small RMSE computed over a partial trace.
+
+MICRO now preserves physical crossing speed, stops adding a tick at a point node,
+uses synchronous leader states and the leader's rear bumper, and applies entries
+and signal phases to their correct physics intervals. A previously authorized
+green crossing is retained when its rounded report reaches Node after red begins;
+downstream capacity and reply identity remain accounted and checkpointed. Real
+stops clear carried speed, and red stop-line vehicles cannot retire from the lane.
+Link travel-time reports no longer count both endpoint ticks as extra elapsed time.
+
+The accepted suite passes **626 Scala tests in 132 suites** and seven Python
+measurement regressions. All ten real-SUMO cases pass bounded acceptance; ordinary
+crossing trip-time error falls from 5.7 to 1.7 s, queued signal error from 8.7 to
+1.8 s, and the isolated phase-boundary error from 31.7 to 1.7 s. Two mixed MICRO
+transit/walking regressions also pass. All six complete policy report comparisons
+match. See [the real-SUMO validation and scope](SUMO_MICRO_VALIDATION_2026_10_24.md)
+and [retained evidence](validation/sumo-micro-2026-10-24.json).
+Whole-tick boundary quantization remains a runtime limitation. This earlier
+point-node campaign did not validate finite geometry; the opt-in connector stage
+above covers that follow-up. Earlier SUMO artifacts are not current accuracy proof.
+
+## Walking distance follow-up (2026-10-24)
+
+Person now checkpoints the actual walking route's measured distance and arrival
+tick, credits it only on arrival, and includes walking in leg metrics and daily
+totals. Transitions between access walks, rides, transfers and egress walks preserve
+the accumulated distance; the previous fresh-leg initialization reset that prefix.
+Aborts retain completed legs without counting a completed trip. An unfinished walk
+at the horizon remains uncounted, while an arrival exactly at the cap executes.
+
+The full suite passes **614 tests across 131 suites**, including nonzero walking
+checkpoint/replay, multimodal prefix preservation and failed-route/replan cases.
+All ten bounded simulator cases pass physical acceptance; all seven full-report
+comparisons match, including delayed two-JVM MESO and single-JVM MICRO Bus runs.
+See [the walking contract](WALKING_DISTANCE.md) and
+[machine-readable evidence](validation/walking-distance-2026-10-24.json) for scope
+and reproduction.
+This supersedes the walking exclusion in the historical milestone below.
+
+## Horizon finalization and transit distance follow-up (2026-10-24)
+
+Production policies now authorize reporting at the globally closed final horizon
+cut, so an active vehicle whose next wake lies beyond the cap still emits a
+censored journey/SUMO record. The shared hook covers Car, Bicycle, Motorcycle, Bus
+and Subway, cannot send or schedule model work, and preserves normal execution at
+the inclusive horizon. Optimistic reports flush strictly below GVT; conservative
+completion also waits for final report receipts before storage draining. Censored
+records cannot claim a destination arrival or unfinished-link distance.
+
+Person transit distance now comes from checkpointed typed boarding identity and
+vehicle odometer differences. Bus/Subway messages carry their existing cumulative
+physical distance without adding another request/reply exchange. Subway counts a
+rail arrival before station dwell, publishes arrival telemetry and checkpoints
+the guard preventing cleanup from adding that link twice. Cyclic trains now have
+explicit final journey/SUMO telemetry. Walking distance remains outside daily totals.
+
+The full suite passes **605 tests across 130 suites**. All 14 bounded simulator
+cases pass physical acceptance, including both policies with delayed two-JVM
+MICRO transit. All eight physical-report comparisons match their references.
+Measured rides are 400 m by Bus and 1400 m by Subway; exact-cap rail arrival and
+interrupted Car/Bicycle/Motorcycle cases have explicit acceptance. See
+[the reporting contract](HORIZON_AND_TRANSIT_REPORTING.md) and
+[validation record](HORIZON_TRANSIT_VALIDATION_2026_10_24.md) for independent distance,
+exact-horizon and interrupted-journey acceptance. Earlier milestone entries retain
+their historical scope and reporting limitations.
+
+## Accounted dynamic routing follow-up (2026-10-24)
+
+Hybrid dynamic road feedback now has an explicit accounted adapter:
+`htc.routing.cache-strategy=accounted` uses fixed EAGER/STATIC `RoutingService` LPs.
+Link costs, mode decisions and direct vehicle queries cross the existing owner
+ledgers as ordered model messages. Worker cost versions and requester obligations
+are checkpointed; rollback retracts affected replies. Dynamic route calculations
+cannot reuse a shared cached path. Unaccounted Kafka/in-memory feedback remains
+rejected by production policies.
+
+The implementation also corrects MICRO feedback that treated empty links as stopped
+traffic and compared m/s lane speeds against km/h configured speeds. Published
+costs now normalize units and restore free-flow cost on empty MICRO links.
+Startup rejects absent, extra, duplicate, progressive, ephemeral or non-sharded
+routing workers. Independent cold-codec and anti-message regressions cover the
+new protocol. The full suite passes **596 tests across 128 suites**.
+Eight MESO/MICRO scenarios under both policies on one/two JVMs pass independent
+physical acceptance; all six full-report comparisons match their references,
+including delayed TCP. Each case completes 6/6 journeys and 3/3 Person trips
+with the expected 1300 m total and 12/12 matched link traversals.
+
+See [the protocol and costs](ACCOUNTED_ROUTING.md) and
+[validation/reproduction record](ACCOUNTED_ROUTING_VALIDATION_2026_10_24.md).
+This closes the missing adapter for sampled hybrid road feedback; replicated
+cost-map/checkpoint overhead, million-actor capacity, external live streams,
+recovery/migration and uniform horizon reporting remain open. The historical
+entries below retain their original milestone scope.
+
+## Cross-JVM policy follow-up (2026-10-24)
+
+The separate-JVM campaign exposed gaps hidden by one-process tests: Kryo implicit
+numeric IDs could not be decoded by a cold peer, Class constructor arguments fell
+through to disabled Java serialization, and LTM Props captured creator closures.
+Production codecs now retain ordered explicit IDs and use class names for unlisted
+types; remote LTM construction uses class/argument Props. Independent-codec tests
+reproduce all three failures on the previous implementation.
+
+Transit also exposed process-local settings installed only by SimulationManager's
+singleton. Remote Persons had no RAPTOR routes and silently skipped their Bus leg.
+Each node now installs scenario resource settings before shard creation. Startup
+warm-up now dispatches on worker readiness rather than a one-time pool broadcast;
+the late-input case reproduced a remote worker missing that broadcast and leaving
+startup waiting indefinitely. Unique ACKs, node identity, worker loss/restart and
+target failure are checked explicitly.
+
+The full suite passes **582 tests across 124 suites**. Ten successful two-JVM
+scenario runs (including delayed TCP) match physical expectations and references;
+two worker-loss checks explicitly fail without successful completion. Fifteen
+full report comparisons match. See the
+[cross-JVM validation record](MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) for physical
+outcomes, reference comparisons, delayed transport, worker-loss evidence and exact
+artifact identity. These are bounded loopback JVM checks; multi-host partitions,
+coordinated recovery, migration, live distributed API settings, shared speculative
+feedback and scale validation remain open. Earlier one-JVM records retain their
+original scope.
+
+## Accounted model-created birth follow-up (2026-10-24)
+
+Both production policies now support one deterministic unique logical birth slot
+per child ID. The owning LTM accounts initialization and buffers overtaking input;
+the existing GTM authorizes membership without routing model payloads. Children
+join inert and activate through an ordered positive. Optimistic cancellation uses
+normal antis, restores dormancy and retracts descendant effects; physical retirement
+waits for safe GVT and a monotone latest-accepted-input fence. Children inherit only
+the policy selected before the run. No new global time coordinator was added.
+
+Bus/Subway stations use this adapter instead of speculative initialization polling
+or GVT-deferred creation at an older timestamp. Real transit validation exposed and
+fixed additional model defects: null unload routing, subway speed units, conservative
+subway leave correlation, missing subway stop-barrier obligations, Bus reporting
+state outside checkpoints and Bus MICRO repeatedly entering an unconsumed path.
+The Bus cyclic next-link peek now follows its actual route cursor for capacity and
+signal checks. These defects affected independent outcomes, so mere engine completion
+or policy parity was insufficient acceptance.
+
+The actor-birth milestone build passed **571 tests across 121 suites**. Eight transit cases
+(MESO, MICRO, late input and multiple births under both policies) and four car
+regressions pass, with six matching full physical-report comparisons. Cyclic
+services explicitly truncate at the horizon. A MESO bus whose next wake is beyond
+the cap can lack final journey/SUMO output; uniform horizon finalization remains
+a reporting gap and the validator records it separately.
+
+See [the lifecycle contract](RUNTIME_ACTOR_BIRTH.md) and
+[the validation record](RUNTIME_ACTOR_BIRTH_VALIDATION_2026_10_24.md). Earlier entries
+below retain their milestone scope. ID recycling, shared speculative feedback,
+coordinated recovery/migration, multi-JVM validation and million-actor capacity
+remain open. PT person distance and Subway journey-completion telemetry also remain
+incomplete; validation uses actual boardings/alightings and cyclic rail traversal.
+
+## Progressive optimistic input follow-up (2026-10-24)
+
+Production Time Warp now alternates acknowledged deterministic source windows with
+execution. Accepted input caps the execution ceiling; its next unloaded tick stays
+in GVT accounting until explicit closure. New LPs enroll only after committed
+retirement with every owner paused, and the next fresh round includes them.
+That source change excluded independent model birth; the follow-up above now
+provides its separate reversible adapter. The existing GTM coordinates enrollment;
+there is no new coordinator actor or policy mixing.
+
+Source failures can no longer masquerade as successful empty windows. JSON and
+SQLite async results update state through the mailbox and verify indexed counts.
+The simulator matrix also exposed empty JSON arrays being decoded as records and
+whole-file buffering in the shared parser. Record-by-record stream binding fixes
+both, with buffer-refill and malformed/empty-input regressions.
+
+The progressive milestone suite passed **532 tests across 112 suites**. All **12** MESO/MICRO
+source-format/preloading cases complete 4/4 trips and 2/2 summaries with zero errors,
+null-state discards or stalls. Ten full physical-report multiset comparisons match
+the preloaded conservative references. Optimistic progressive cases start with
+only the first person/car pair and accept the later pair after reaching the source
+boundary. Conservative's larger bootstrap window preloads these particular cohorts;
+its cases here serve as format/policy references, not late-enrollment evidence.
+
+See [the protocol](PROGRESSIVE_OPTIMISTIC_RUNTIME.md) and
+[latest validation](PROGRESSIVE_OPTIMISTIC_VALIDATION_2026_10_24.md). Background
+prefetch, arbitrary live streams, shared feedback, recovery/migration,
+multi-JVM validation and million-actor capacity remain open. Older preloading-only
+claims and measurements below retain their historical scope.
+
+## Bounded optimistic execution follow-up (2026-10-23)
+
+Production optimistic runs now use a startup tick window, per-LP speculative-event
+budget and cooperative per-turn input budget, with fossil collection after safe
+GVT commitment. Queued work remains in the cut when throttled. Business reply
+obligations stay in completion/retirement checks; their historical send timestamps
+no longer pin distributed GVT below the future work needed to answer them. Orphaned
+dispatches and waits without future work fail explicitly.
+
+Strict-boundary collection retains a usable pre-GVT state floor and coast-forward
+journals, and removes older processed/cancelled identities. Populated Link lane-map
+snapshots now declare Integer key types: narrow-window rollback reproduced String
+keys where lane arithmetic expected Int, which empty-map snapshots missed.
+The larger bounded cohort also exposed next-round traffic arriving before the
+receiver's local resume. Paused owners now queue that traffic while LPs stay frozen;
+collection/commit/retirement remain closed. A held-resume regression covers the race.
+
+The bounded milestone build passes 508 tests. Eight mobility cases, including one-tick MESO
+and MICRO, and six repeated 32-person cohort runs pass strict output acceptance.
+The same-executable cohort comparison lowers median peak retained logs from 1384
+to 567 records and read journals from 128 to 64, with effectively unchanged timing
+and no consistent rollback reduction. These are record counts, not heap-byte bounds.
+
+See [the resource protocol](BOUNDED_OPTIMISTIC_EXECUTION.md) and
+[current validation](BOUNDED_OPTIMISTIC_VALIDATION_2026_10_23.md). That milestone
+did not provide a fixed heap budget, progressive optimistic input, model birth/recovery,
+or evidence for one million actors; the progressive source gap is addressed above.
+Earlier unbounded-history statements below describe the preceding reference implementations.
+
+## Current production policy update (2026-10-23, distributed follow-up)
+
+Production optimistic execution now uses LTM-owned transport and report ledgers;
+the existing GTM aggregates frozen round summaries and no longer creates a central
+message-routing coordinator child. Conservative execution retains its separate
+channel-closed batch protocol. Neither run mixes or switches policies.
+
+`LinkMetricsState` now checkpoints cumulative and per-tick SUMO counters. The
+validated two-link MICRO reports match between policies, including the 67 summary
+rows that previously differed. A larger cohort exposed a second model restore
+bug: Node's `Map[Long, Int]` values became boxed Longs under the shared Jackson
+configuration. Explicit Integer content annotations now preserve replay arithmetic;
+the regression fails with the original cast error before the fix.
+
+The distributed milestone suite passes 496 tests. See
+[the distributed protocol](DISTRIBUTED_OPTIMISTIC_RUNTIME.md) and
+[current validation](DISTRIBUTED_OPTIMISTIC_VALIDATION_2026_10_23.md) for the final
+artifact, scenario matrices and performance limitations. Historical baseline
+sections below preserve their original findings; their central-routing and open
+counter-gap status statements are superseded by this update.
+
+## Time Warp correctness and extensibility (reviewed 2026-10-22)
+
+See [Extensible Time Warp Runtime](TIME_WARP_EXTENSIBLE_RUNTIME.md) for the current prioritized
+core/model audit and [validation record](TIME_WARP_VALIDATION_2026_10_22.md) for tested evidence.
+The historical margin-based estimator did not account for messages in transit. The
+2026-10-23 accounted runtime replaces heuristic commitment, plateau termination,
+and direct speculative destruction for fixed/preloaded optimistic runs. Shared
+speculative feedback and live birth require model adapters and are rejected. This
+patch fixes targeted-report buffering, cancellation retention, duplicate dispatch/input handling,
+empty relationship restoration, Link control-state snapshots, replay observations, the fossil
+floor boundary, and GVT subtraction overflow. These local fixes do not establish mode parity.
+
+## Shared event ordering and schedule revisions (foundation added 2026-10-23)
+
+`EventOrder` separates causal simulation time and stable logical identity from fresh
+transport send counters. Interactions and spontaneous dispatches share the actor's
+ordered queue; same-tick optimistic stragglers now restore the correct prefix.
+The pending self-event is part of the checkpoint, and a received interaction cannot
+overtake an already-known earlier self-event. This local queue does not establish
+that conservative channels contain no earlier independent input.
+
+Rollback uses atomic `ReplaceScheduleEvent` updates with monotone revisions.
+Obsolete dispatches acknowledge their exact generation without model execution;
+older schedule updates cannot erase a newer replacement. The requested tick is
+preserved on the versioned path. LVT now includes queued ticks and the actual
+in-flight tick after rollback, rather than using an older high-water mark for that
+dispatch. Production optimistic execution now obtains its frontier from the
+accounted cut described below; local LVT alone remains insufficient.
+
+The accounted path now scopes transport identity by model/run/incarnation, accounts
+model/control delivery, preserves speculative retirement, and drains committed
+reports. Coordinated actor restart recovery remains unsupported and fails the run. The legacy
+unstamped schedule adapter retains its old watermark semantics. See
+[validation and remaining limits](TIME_WARP_VALIDATION_2026_10_23.md).
+
+## Accounted optimistic commitment and retirement (2026-10-23)
+
+`core/runtime/accounting/AccountedRuntimeCoordinator` freezes all registered LPs
+and LTMs, drains delivery acceptance, and collects fresh round snapshots. Pending
+positives, antis, self-events, in-flight dispatches, and reply obligations constrain
+the frontier. Commitment uses time strictly below GVT. A terminal LP remains
+rollbackable until retirement is authorized; raw destruction is rejected. A sink
+receipt ACK and final asynchronous flush ACK are required before optimistic success.
+LP retirement is now round-scoped: the LP checks that the coordinator authorized
+the same committed round, the terminal and latest processed events are strictly below GVT, and no work
+remains. Settled/truncated final cuts carry a separate coordinator marker. Any
+accounted input delivered to an LP with null state fails before acknowledgement.
+Default actor restart, lost participants, and work below published GVT fail the run.
+The accounted path also disables pre-rollback “superseded reply” dropping: request
+identity in a speculative suffix is not proof that an earlier input is dispensable.
+A second reproduced core wait cycle is fixed by indexing queued dispatches separately:
+a dispatch invalidated during a frozen rollback must release its LTM slot before
+waiting for the restored earlier wake, including when another input precedes it.
+
+Membership is fixed after eager and fully exhausted progressive loading. The model
+validation hook rejects shared dynamic routing feedback and transit stations that
+need live birth. Their old “wait for GVT then spawn at an earlier tick” pattern is
+not a valid birth protocol, even with a safe GVT. External/live producers, reversible
+birth, timestamped shared feedback, migration/recovery, bounded histories, and
+multi-node validation remain open. This central reference coordinator is a separate
+child of `OptimisticGlobalTimeManager`. It adds pauses and per-message ledger/ACK
+overhead and remains a potential bottleneck; it has no scale or speedup claim.
+
+The production conservative factory now selects `ChannelClosedGlobalTimeManager`
+and `ChannelAwareLocalTimeManager`: interactions and acceptance ledgers stay with
+LTMs, and the GTM agrees on the next causal batch only after channels drain.
+Report receipt and final sink flush precede successful completion. The legacy
+barrier class is retained for compatibility tests and does not provide those
+guarantees when constructed directly. This change does not distribute the
+optimistic coordinator. Both accounted paths reject live model birth and shared
+dynamic routing until adapters exist. See
+[the conservative protocol and limits](CONSERVATIVE_CHANNEL_RUNTIME.md).
+
+The [channel validation](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md) passes all
+487 tests and the bounded MESO/MICRO outcome checks. MESO physical payloads and
+MICRO non-summary reports match between policies. MICRO cumulative SUMO `loaded`
+and `ended` counters still differ: `LinkMetricsReporter` stores them outside Link's
+checkpoint hooks, so replay can count the same entry/exit again. Full MICRO report
+parity remains open until these counters restore with model state. This is separate
+from channel closure and from the optimistic coordinator's scalability limitation.
+
+See [protocol and supported scope](TIME_WARP_ACCOUNTED_RUNTIME.md) and
+[validation](TIME_WARP_ACCOUNTED_VALIDATION_2026_10_23.md). Older entries below are
+historical investigations; their margin/plateau safety claims are superseded.
+
+## MESO Car departure and per-trip reporting (corrected 2026-10-23)
+
+The final MESO departure used to complete the trip before `ReceiveLeaveLinkInfo`
+added the last link's distance; intermediate departures could schedule the next
+link before the earlier reply cleared link timing metadata. `Movable.leavingLink`
+now waits for the MESO reply on every link. Its checkpointed exit-reported marker
+preserves proactive MICRO completion without adding a cleanup wait. Car signal
+handling initiates departure and leaves completion/terminal intent to the traversal
+completion path. Car SUMO route lengths and journey-distance metrics subtract the
+checkpointed trip-start odometer instead of counting previous trips again.
+
+The full build passes 483 tests in 100 suites. Four seeded Car MESO cases and two
+MICRO regressions pass distance, traversal, runtime, and applicable timing checks.
+MESO person and SUMO trip lengths are 200/400 m, and completion ticks match across
+policies in these one/two-link free-flow cases. Same-tick per-car density estimates
+still differ in some entries, so full report parity and conservative channel
+ordering remain open. Other vehicles, transit, congestion, and junction control
+need their own validation. See [evidence and limits](MESO_POLICY_VALIDATION_2026_10_23.md).
+
+## Conservative barrier does not close interaction channels (confirmed 2026-10-23)
+
+`ConservativeGlobalTimeManager` releases the next global tick after every LTM has
+reported, while ordinary `sendMessageTo` interactions travel directly through the
+sharding region. The sender's `FinishEvent` and the interaction use different
+recipients, so the GTM/LTM reports do not prove the interaction has reached the
+receiver. Registered awaited replies only account for selected consistency-critical
+requests; fire-and-forget sends are not represented in `hasPendingWork`. A late
+delivery can therefore introduce work at or before a frontier already released by
+the conservative barrier.
+
+This makes the barrier's channel-closure proof incomplete. Separately, repeated
+conservative runs of the fixed-seed two-link scenario with the same jar show a
+model-level tie-order issue: both vehicles enter the second MICRO link at tick 35,
+but the first vehicle to exit reverses between runs. Equal-position vehicles are
+inserted in message arrival order in `LinkVehicleFlowHandler`, and the car-following
+strategy uses lane queue order to choose each leader. This arrival-order
+sensitivity is consistent with the conservative/optimistic first-link lead swap.
+Do not attribute
+that observed state difference to the conservative barrier without further evidence.
+
+Equal-position MICRO lane order now uses descending position and ascending vehicle
+ID at insertion and after simulation steps. Focused specs and repeated fixed-seed
+runs pass strict trip, summary, and null-state-discard checks. Conservative
+two-link runs still differ in the tick of the first link-11 arrival (33 versus 35),
+so full event-tick determinism is not established. See the validation record for
+the per-run outcomes.
+
+The barrier still needs a conservative-run gateway that records each send before
+forwarding, acknowledges receiver acceptance, and holds the frontier until all
+relevant channel deliveries are settled. Fixed rounds, grace polls, and delays
+cannot prove this condition. Add an injected delayed-channel protocol regression
+to validate that independent gap. Details and protocol invariants are in
+[`TIME_WARP_ACCOUNTED_RUNTIME.md`](TIME_WARP_ACCOUNTED_RUNTIME.md#conservative-same-tick-closure-investigation-legacy-path).
+
+## Conservative premature termination during vehicle activation (fixed 2026-10-22)
+
+The fixed-seed two-person MICRO scenario could stop at tick 10 after two `person_trip_started`
+reports and no completed trips. Rebuilding the pre-review revision `200ba25` in an isolated
+worktree reproduced the same failure, so it predates the review's uncommitted changes.
+
+`Person` sent `StartTrip`, then finished its spontaneous event with no next tick. Its awaited
+trip reply was recorded only in Time Warp mode, and conservative LTM reports represented only
+scheduled ticks. Before `Car` had registered its first tick, all LTMs could report no schedule;
+the global manager's extra idle-query round could finish before the activation arrived.
+
+Both policies now retain registered reply obligations. Conservative LTM reports include an
+additive `LocalTimeReportEvent.hasPendingWork` field; the GTM can advance scheduled actors while
+another actor awaits a reply, but cannot declare idle termination while an obligation remains.
+Accepted replies consume the registry entry in either mode. MICRO entry acknowledgements also
+consume the corresponding EnterLink request. Final-link cleanup that completes without using
+its reply does not register an unnecessary wait. After a proactive MICRO exit, the vehicle
+also skips a redundant cleanup wait, using a checkpointed flag reset on its next link entry.
+
+The original scenario now reports four completed 200 m trips, two completed daily schedules,
+four MICRO entries and exits, no errors/stalls, and an engine stop after the final activity.
+A two-link variant also completes four 400 m trips, eight matching MICRO entries/exits, and
+two daily schedules of 800 m, then stops at tick 800 without errors or stalls.
+See [the validation follow-up](TIME_WARP_VALIDATION_2026_10_22.md#conservative-termination-follow-up)
+for the baseline comparison, tests, and artifacts. This fixes the tracked request/reply path;
+it is not a replacement for the future complete transport/quiescence protocol.
+
+## Optimistic replay initialization and rollback boundaries (fixed 2026-10-22)
+
+The reproduced Person error, `Replay did not consume all recorded reads`, came from an initial
+checkpoint taken before `onFinishInitialize` seeded its plan cursor. The live actor departed
+normally, but restoring that floor gave replay an empty plan. Core initialization now runs that
+hook before capturing the floor. `PersonReplayInitializationSpec` reproduces both the empty-cursor
+restore and the original exception before the fix, then checks the restored plan, observed
+decision, request identity, and cancellation/replacement of a completed trip.
+
+Two further core defects appeared while rerunning the optimistic MICRO scenarios:
+
+- Anti-messages rolled back by tick, undoing events processed before the cancelled message at
+  that same tick. Cancellation now uses the exact processed-event sequence. Buffered reports
+  carry that sequence so a surviving same-tick report is retained as well as its original send.
+  Positive interactions undo strictly later ticks, preserving their existing same-tick causal
+  prefix; otherwise a delayed reply could retract the very request it needs to answer.
+- Earlier spontaneous events overwrote `currentTick` and executed against future state.
+  They now restore the preceding history, cancel undone sends, execute, and reprocess surviving
+  interactions. Their normal `FinishEvent` resolves the incoming dispatch; no extra rollback
+  clear/reschedule exchange is sent for it.
+
+Rollback also removes the complete processing suffix from its first affected event. Previously
+a later-processed event with an earlier tick could remain in the log while missing from restored
+state. Pure history tests cover that case and exact cancellation with checkpoint intervals 1,
+2, and 50; actor tests cover surviving sends/reports and exactly one dispatch completion.
+
+The private-vehicle adapter also omitted the active `StartTrip` request token and driver
+attributes. A regression restored trip 1 after trip 2 overwrote those fields and observed a
+completion with token 22 instead of token 11. Both fields now round-trip in namespaced model
+snapshot metadata, without extending the core checkpoint schema. Car, Bicycle, and Motorcycle
+share this adapter.
+
+Car's journey reporter also supplied a physical input: `sumoArrivalSpeed` becomes the next
+MICRO link's entry velocity. The focused replay test observed 5 m/s instead of the original
+0 m/s after undoing a velocity update. Journey fields and completion guards now live in
+`CarState.journey` (`CarJourneyState`), and the reporter accesses the current state through a
+lambda. Restore therefore replaces physics/reporting inputs and guards together; Car no
+longer clears its completion guards unconditionally after restoring a surviving prefix.
+
+These changes preserve the existing single-policy-per-run configuration and add no mobility
+dependency to core. They do not provide safe GVT, speculative lifecycle retirement, a global
+same-tick order, or complete model snapshot coverage. See
+[the replay validation follow-up](TIME_WARP_VALIDATION_2026_10_22.md#optimistic-replay-follow-up).
+
 ## [RESOLVED 2026-07-22] Headline Gap: an Undocumented, Orphaned Second Actor Package
 
 **Resolution**: `model/mobility/actor/` (Car, Bus, BusStation, BusStop, Link, Node, Person, Subway,
@@ -1374,6 +1923,482 @@ means even a fully-fixed São Paulo generator would only gate MICRO-mode vehicle
 until this deeper gap is addressed — a genuine `htc-architect`-level design question (does HTC's
 signal model need turn-movement-aware admission control, and if so what data/format would supply
 it), not a follow-up wiring task. Flagged here, not designed or implemented.
+
+## `PersonPlanManager.handlePTUnloadRequest` Silently Drops the Reply When a PT-Boarding Timeout Races the Real Ride (Found 2026-08-07, Not Fixed)
+
+Found during a `docs/TIME_WARP_DESIGN.md`-driven audit checking whether `model/hybrid`'s
+consistency-critical request/reply handlers actually follow this repo's own CLAUDE.md
+"Synchronization Discipline" (every consistency-critical request handler must reply on *every*
+branch, including no-op ones). **Not Time-Warp-specific** — reproduces identically under the
+conservative barrier; found while looking for Time Warp gaps, but it's a general correctness bug.
+
+**The gap**: `PersonPlanManager.handlePTUnloadRequest` (`support/person/PersonPlanManager.scala:378-419`)
+only sends a reply inside its `case t: Traveling if t.ptWait.isDefined` branch (delegating to
+`PersonPTTripHandler.handlePTUnloadRequest`, itself verified to reply on every branch). The fallback:
+
+```scala
+case _ =>
+  logWarn(s"$personId received PT unload request from ${event.actorRefId} while not waiting on a PT leg — ignoring (already handled)")
+  None
+```
+
+sends **no reply at all** — `Person.actInteractWith` (`actor/Person.scala:228-240`) consumes the
+`Option[PlanStepResult]` via `.foreach`, so a `None` here silently drops the interaction with zero
+message back to the requesting `Bus`/`Subway`.
+
+**Why the fallback branch is actually reachable, not just defensive dead code**: `ptWait`
+(`TripExecutionState.Traveling.ptWait`) is set when a transit leg starts
+(`PersonPlanManager.scala:180-191`), alongside a self-scheduled timeout wake at
+`currentTick + state.ptWaitTimeoutTicks`. Boarding (`Person.actInteractWith`'s
+`PassengerBoardedVehicleData` case, `Person.scala:225-226`) only sets the actor-local
+`currentPTVehicleRef` — it never clears/reschedules that pending timeout, and there's no API in this
+TM to cancel an already-scheduled tick. `ptWait` is only cleared on true arrival
+(`PersonPlanManager.scala:414`, inside the same branch that replies). So if the PT ride itself (after
+boarding) takes longer than `ptWaitTimeoutTicks` — plausible under congestion if that timeout was
+tuned for "wait for the bus to *arrive*," not "wait out the whole ride" — the Person self-wakes
+mid-ride, sees `Traveling(ptWait = Some(...))`, and dispatches `replanAfterPTTimeout`
+(`PersonPlanManager.scala:245-310`), which unconditionally drops the current leg run and replans —
+with no awareness the person is already physically seated on the vehicle. When the real vehicle
+later reaches the alighting stop and sends its unload request, `tripExecution` no longer matches
+`Traveling(ptWait = Some(...))`, so the request falls into the silent-`None` branch above.
+
+**Consequence**: the vehicle's `expectedUnloadResponses` counter (`BusStopHandler.scala:174`,
+`SubwayPassengerHandler`'s equivalent — both actor-local, not part of `BusState`/`SubwayState`)
+never reaches `countUnloadReceived`, so `handleUnloadPassenger`'s completion branch
+(`BusStopHandler.scala:100-147`, gated on `state.countUnloadReceived >= expectedUnloadResponses`)
+never fires — the vehicle is permanently stuck in `WaitingUnloadPassenger` for that stop specifically
+because of this one passenger. No TM-level hang (the vehicle had already called
+`onFinishSpontaneous(None)` before waiting and relies on a later `scheduleEvent` call to re-enter the
+schedule, the same "immediate-`None`-finish + reschedule-on-reply" pattern verified clean everywhere
+else in the vehicle↔`Node` signal/capacity exchange during the same audit) — this manifests as a
+silently-corrupted trip/ridership/completion metric, not a crash.
+
+**Not fixed** — flagged for whoever picks this up. The real fix is upstream of the reply handler
+itself: `PassengerBoardedVehicleData` handling needs to cancel or account for the pending
+`ptWaitTimeoutTicks` wake once boarding actually happens, not patch the fallback branch to
+paper over a still-possible desync between `tripExecution` and physical vehicle occupancy.
+
+**Also surfaced, not a bug**: the vehicle↔`Node` signal/link-access exchange (`CarSignalHandler`
+and its Motorcycle/Bicycle/Bus equivalents) doesn't literally implement CLAUDE.md's "withhold
+`onFinishSpontaneous` until the reply arrives" wording — it finishes with `None` immediately and
+relies on the reply handler's `scheduleEvent` call to re-enter the schedule. Functionally sound today
+(`NodeEventHandler.handleRequestLinkAccess` replies on every branch, verified), but worth noting the
+failure mode differs from CLAUDE.md's literal example: a future missing-reply bug introduced here
+would silently strand a vehicle forever rather than hang the Time Manager, since the requester is
+already unregistered from `runningEvents`/`scheduledActors` by the time it's waiting.
+
+## Time Warp: `Movable` Route State (`movableCurrentPath`/`bestRoute`) Not Correctly Reconstructed After a Rollback (Found 2026-08-07, Not Fixed)
+
+Found running a real conservative-vs-optimistic comparison on the tiny end-to-end scenario, as a
+continuation of the Time Warp report-flush-race work (`docs/TIME_WARP_DESIGN.md` §4). Two prior
+layers of that race were fixed and verified first (see that doc's implementation log): (1) an
+ack-based handshake (`DestructAckEvent`/`LocalDestructCompleteEvent`) so `OptimisticGlobalTimeManager`
+only tells `ReportManager` to stop once every force-destructed actor's flush has actually been sent,
+closing a race where `ReportManager` routinely closed its parquet writers before Time-Warp-buffered
+reports arrived; and (2) a `hasStarted` gate on `OptimisticLocalTimeManager.onActorRescheduled`, since
+`registerActor`/`scheduleEvent` can arrive during the load/warm-up phase (well before this LTM's own
+`StartSimulationTimeEvent`), and dispatching then — as the unconditional immediate-dispatch behavior
+used to — handed EAGER actors like `SubwayStation`/`BusStation` their first `SpontaneousEvent` before
+the infrastructure it depends on (`Node`, the dynamic-actor-spawn machinery) was ready.
+
+Both fixes are real and independently verified (unit tests, plus confirmed via live logs that
+`SubwayStation`/`BusStation` now actually run — route calculation, dynamic `Bus`/`Subway` spawn, real
+interaction traffic — none of which happened at all before either fix). But the comparison run's
+parquet output is still far short of parity with conservative mode (0 rows vs. conservative's 285),
+and the reason is a third, distinct, and larger gap:
+
+**The gap**: `Bus`/`Subway` (and by construction, anything sharing `Movable`) genuinely roll back
+under Time Warp once real activity starts — confirmed via repeated `"anti-message for
+unknown/already-pruned messageId"` log lines for both actors, meaning `RollbackHistoryHandler`
+detected a straggler and unwound processed events. After one of these rollbacks, `BusSignalHandler`
+starts logging `"No current node"` (`support/bus/BusSignalHandler.scala:72`) — `getCurrentNode`
+(`Movable.scala:271`) reads `state.movableCurrentPath`, and that field comes back empty/`None` even
+though `Movable.enterLink()` (`Movable.scala:159-202`) always sets it *synchronously*, before ever
+sending anything, so this isn't the fire-and-forget `EnterLinkData` exchange racing ahead of a reply
+(that was the first hypothesis; ruled out by reading `enterLink()`/`getCurrentNode` directly — no
+reply is ever awaited to populate this field in the first place). The only mechanism that could make
+an already-synchronously-set field revert to empty is replay: `RollbackHistoryHandler`'s
+checkpoint-plus-forward-replay reconstructing this actor's state after a rollback without correctly
+reproducing every mutation `Movable` subclasses make to their route-position fields along the way.
+
+**Why conservative mode never surfaces this**: it doesn't roll back at all — no stragglers, no
+replay, so whatever gap exists in replay's fidelity for `Movable` state is invisible under the
+barrier. This is a genuine Time-Warp-only correctness gap, not a report-buffering/flush-ordering
+issue like the other two fixed this round — it sits at the semantic level of "does replaying logged
+events actually reproduce the same state as live execution did," specifically for `Movable`'s
+route-tracking fields (`movableCurrentPath`, `movableBestRoute`, `currentPathPosition`, and siblings
+across `Car`/`Bus`/`Motorcycle`/`Bicycle`/`Subway`).
+
+**Not fixed** — this is a materially bigger and riskier area than the two flush/registration-timing
+fixes above (core vehicle movement state, not Time Warp plumbing), so it's flagged here rather than
+attempted at the end of an already-long session. Whoever picks this up should start by checking
+whether `RollbackHistoryHandler`'s `recordProcessedEvent`/`rollbackTo` replay path
+(`core/actor/rollback/RollbackHistoryHandler.scala`) re-runs `Movable.enterLink()`/`leavingLink()`'s
+full mutation sequence on each replayed event, or only a partial subset (e.g. if replay short-circuits
+side effects that were originally driven by an interaction-event reply rather than the spontaneous
+event itself — `Movable`'s route fields are mutated across *both* `actSpontaneous` and
+`actInteractWith` handling, and it's plausible only one of those paths is captured correctly by
+whatever `LoggedEvent` replay currently reconstructs).
+
+## `BusStation`/`Subway` Crash Every Tick — Jackson Silently Leaves `Map[Long, Long]` Keys as `String` at Runtime (Found 2026-08-26, Fixed 2026-09-11)
+
+`hybrid.actor.BusStation` and `hybrid.actor.Subway` throw `ClassCastException: java.lang.String
+incompatible with java.lang.Long` on every `actSpontaneous`, inside
+`BusStationRouteCalculator.orderedBusStopIds` (`state.busStops.keys.toList.sorted`, where
+`BusStationState.busStops: mutable.LinkedHashMap[Long, Long]`). Reproduced in isolation with a
+throwaway synthetic case class and a `{"4":2,"5":3}` JSON payload run through the exact
+`JsonUtil` mapper: Jackson/jackson-module-scala silently leaves `Map[Long, X]` **keys** as raw
+`String` at runtime despite the declared type (values coerce fine — `println` even prints the
+keys looking like numbers, but the first `.asInstanceOf`/unboxing to `Long` throws).
+
+**Root cause, precisely identified 2026-09-11**: this is not a generic Jackson/Long bug — it is
+specific to Scala 3 case classes. jackson-module-scala only preserves a case class's full Map
+key/value generic signature for the constructor's *first* parameter; every later `Map[Long, _]`
+parameter has its key type erased to `Object` by the time Jackson resolves a key deserializer, so
+the key silently stays the raw JSON field-name `String`. A **mapper-wide** `KeyDeserializer`
+registration for `java.lang.Long` (or its primitive `TYPE`) via `SimpleModule` is provably never
+consulted for these fields — confirmed by instrumenting the deserializer and observing zero
+invocations even with the registration present. The only mechanism Jackson actually honors here is
+the **per-field** `@JsonDeserialize(keyAs = classOf[java.lang.Long])` annotation, which bypasses
+the broken type inference entirely.
+
+**Fixed**: this annotation was already applied (uncommitted, working-tree-only) to every
+non-first-position `Map[Long, _]` field across `model.hybrid.entity.state` (`BusStationState`,
+`BusState`, `SubwayState`, `NodeState`, `TrafficSignalState`) by an earlier session, each with a
+comment explaining the rule. **One field was missed**: `MigrationSnapshot.linkVehicleEntryTick` /
+`linkVehicleWaitingSeconds` (`core.actor.manager.loadbalance.migration.MigrationSnapshot`) — these
+round-trip through the exact same `JsonUtil` mapper on every shard-migration
+save/restore (`BaseActor.saveMigrationState`/`restoreMigrationState`), feeding
+`Link.vehicleEntryTick`/`vehicleWaitingSeconds` via `++=`. Without the annotation this would have
+**silently corrupted** per-vehicle link timing state after every migration restore (a missed key
+lookup, not a crash, since `Map[Long,Long]#++=` doesn't unbox eagerly) — directly relevant to Time
+Warp's rollback/migration-snapshot correctness. Added the same `@JsonDeserialize(keyAs = ...)`
+annotation to both fields; full `sbt test` (339 tests) passes.
+
+An audit of every `Map[Long, _]` in the codebase (`grep -rn "Map\[Long" src/main/scala`) found no
+other case-class constructor parameter missing the annotation — the remaining unannotated hits are
+all actor-local `var`s/handler-method parameters/`java.util.HashMap`s that never round-trip through
+`JsonUtil` directly (they get captured into an already-annotated state/snapshot field instead, or
+use a different serialization path e.g. `CompactGraph`'s `java.util.HashMap`).
+
+## Time Warp: Rollback-Orphaned Reply Permanently Hangs an Actor Waiting on a Signal/Link Reply (Found/Fixed 2026-09-05)
+
+Found chasing an unrelated `tls_test` livelock, not the `Movable` route-replay gap above (that one
+is still open). **Root cause**: an actor sends a request (e.g. `RequestLinkAccessData`) and
+disengages via `onFinishSpontaneousFn(None)`, relying entirely on the reply handler to reschedule
+it. If a Time Warp rollback then restores `state.status` to its pre-request value before the
+genuine, un-retractable reply arrives, the old `state.status`-only staleness guard
+(`state.status != WaitingSignalState && state.status != WaitingCapacity`) sees the "wrong" status
+and silently drops the reply as stale. Nothing else can ever reschedule that actor — it's
+permanently orphaned, hanging its LTM/GVT.
+
+**Fixed** via a new rollback-immune, actor-local tracker (`core/actor/AwaitedReply.scala`,
+`SimulationBaseActor.registerAwaitedReply`/`isAwaitingReply`/`consumeAwaitedReply`) consulted
+alongside the existing `state.status` guard — see `docs/TIME_WARP_DESIGN.md`'s 2026-09-05 log
+entries for the full mechanism and reasoning (including why this is correctly actor-local and not
+`state`, per this doc's "Shard Migration Silently Drops Actor-Local Reply State" entry above:
+losing this on a migration costs a stale-reply false-positive, not a hang). First pass wired it
+into `Car`'s signal handler and the shared `Movable` enter/leave-link path (covering
+`Car`/`Bicycle`/`Motorcycle`'s link handlers); a follow-up pass the same day ported the identical
+fix to `BicycleSignalHandler`/`MotorcycleSignalHandler`, `BusSignalHandler`/`BusLinkHandler`, and
+`Subway`'s inline enter/leave-link handling — all of which had been missed and carried the exact
+same live bug (Bus/Subway had it in both the signal-wait and, for `BusLinkHandler`, a
+previously-unguarded leave-link path). All five `Movable` subclasses now carry the fix; this
+class of bug is closed. Regression tests: `SimulationBaseActorAwaitedReplySpec` plus
+`BicycleSignalHandlerSpec`, `MotorcycleSignalHandlerSpec`, `BusSignalHandlerSpec`,
+`BusLinkHandlerSpec`, `SubwayAwaitedReplySpec`. Full suite: 315 tests, 0 failures.
+
+## Time Warp: Dynamic Actor Spawn (`BusStation`/`SubwayStation` → `Bus`/`Subway`) Bypasses Anti-Message Tracking, Duplicate-`InitializeEvent`s a Live Actor on Rollback (Found/Fixed 2026-09-07)
+
+`BusStation`/`SubwayStation` create their `Bus`/`Subway` actors via `SimulationBaseActor.spawnDynamicActor`,
+which talks directly to the `ShardRegion` (`shardRegion ! ShardRegion.StartEntity(...)`) rather
+than going through `sendMessageTo`. That means the spawn is never captured in
+`currentEventSentMessages`/`LoggedEvent.sentMessages`, so `AntiMessageCascade` can never generate
+an anti-message for it. If the station's Time Warp rollback target lands before the tick where it
+dequeued a bus/subway and called spawn, replay re-dequeues the same `BusInformation`/
+`SubwayInformation` (the dequeue itself is fine — `state.buses`/`state.subways`/`state.lines` are
+checkpointed and restored correctly) and re-spawns with the same deterministic entity id.
+`ShardRegion.StartEntity` on an already-live id just re-delivers `InitializeEvent` to the running
+actor, and `SimulationBaseActor.onInitialize` has no idempotency guard (unlike `BaseActor
+.onInitialize`'s `if (!isInitialized)`), so the live `Bus`/`Subway` gets its state and
+`RollbackHistoryHandler` reset mid-flight. Intermittent — only when the station's rollback target
+crosses the exact dequeue tick.
+
+**Fixed** by deferring the one truly irrevocable step — `spawnDynamicActorFn` (plus the
+actor-local `dependencies` registration that has to go with it, since `dependencies` is not part
+of checkpointed `state` and so isn't restored by rollback either) — until GVT has passed the
+dequeue tick, reusing the same "wait for a GVT watermark, then do the irrevocable thing" pattern
+already used for `SimulationBaseActor.reportBuffer`/`flushBufferedReportsUpTo`
+(`SpontaneousEvent.gvt`, piggybacked on every `SpontaneousEvent` an `OptimisticLocalTimeManager`
+sends). Everything else about creating a bus/subway (route validation, building the state object,
+`report()`) is either pure or already Time-Warp-safe, so it still runs eagerly at dequeue time in
+both modes.
+
+Concretely: `BusStationBusCreator.createBus`/`SubwayStationCreator.createSubway` (private) were
+split into `prepareBus`/`prepareSubway` (route + state build + `report()`, returns the state JSON,
+never calls `spawnDynamicActorFn`) and `spawnPrepared`/`spawnPreparedSubway` (the metrics
+increment + the actual `spawnDynamicActorFn` call). `createBus`/`createSubway` still chain both in
+sequence, so the non-Time-Warp path is byte-for-byte unchanged. `SubwayStationCreator` also gained
+`prepareSubwaysFrom`, the prepare-only counterpart of `createSubwayFrom` (it can dequeue+prepare
+more than one line's subway per call).
+
+Under Time Warp, `BusStation`/`SubwayStation` stash the prepared `(bus/subway, dequeue tick, state
+JSON)` locally (`pendingBusSpawn: Option[...]` / `pendingSubwaySpawns: mutable.Map[Long, ...]`)
+instead of spawning immediately, and poll every tick in `actSpontaneous` until
+`event.gvt.exists(_ >= dequeueTick)`, at which point `firePendingBusSpawn`/
+`firePendingSubwaySpawns` finally calls `spawnPrepared`/`spawnPreparedSubway` and registers the
+`dependencies` entry. This is safe by GVT's own monotonicity invariant (`MarginBasedGVTEstimation`:
+`GVT = min(reported LVTs) - margin`, the point below which no rollback can ever reach again): once
+GVT has passed the dequeue tick, the station provably can never roll back to before it again, so
+firing the deferred spawn needs no anti-message mechanism. Conversely, if the station rolls back to
+before the dequeue tick before GVT gets there, the stash is simply discarded — nothing external
+was ever created, so nothing needs undoing.
+
+That discard is a new `protected` hook on `SimulationBaseActor`, `onRollbackDiscardPending
+(targetTick: Tick)` (default no-op), called unconditionally from `rollbackAndCascade` right after
+the existing `reportBuffer.filterInPlace(_._1.tick < targetTick)` line — both existing call sites
+into `rollbackAndCascade` are already inside `isTimeWarp &&` guards, so no extra gating was needed
+at the hook's call site. `BusStation`/`SubwayStation` override it to drop any stash entry whose
+dequeue tick is `>= targetTick`, mirroring the reportBuffer filter's `< targetTick` convention.
+
+Non-Time-Warp (discrete-event/conservative) mode is unaffected by construction: the deferred-spawn
+path is gated on `getCurrentTimeManagerType == TimeManagerTypeEnum.TIME_WARP`, and
+`pendingBusSpawn`/`pendingSubwaySpawns` are simply never populated outside Time Warp.
+
+Regression tests: `BusStationBusCreatorSpec`, `SubwayStationCreatorSpec` — both plain-ScalaTest,
+no Pekko, covering: `prepareBus`/`prepareSubway` never touch the spawn lambda;
+`spawnPrepared`/`spawnPreparedSubway` call it with exactly the JSON `prepare*` produced;
+`prepareBus`/`prepareSubway` still throw `IllegalStateException` on an empty/missing route exactly
+as the old `createBus`/`createSubway` did; `prepareSubwaysFrom` dequeues+prepares without ever
+spawning and re-enqueues on failure; `createBus`/`createSubwayFrom` (the non-Time-Warp path) still
+spawn immediately, unchanged. Full suite: 330 tests, 0 failures.
+
+## Time Warp: `OptimisticLocalTimeManager.localVirtualTime` Understated GVT for Two Real Reasons (Found/Fixed 2026-09-11) — But GVT-Plateau Termination Itself Was Never the Bug; the Real, Now-Quantified Gap Is Report Loss/Duplication (Found 2026-09-11, Not Fixed)
+
+**History of this investigation, since the framing changed twice in one session — read this before
+trusting either fix in isolation.** An earlier session's diagnosis attributed a "GVT plateaued at
+-100 while report data shows real progress" symptom to the `deferFinishSpontaneous()` dynamic-spawn
+pattern — already fully removed by the time this was rechecked (see that section above, fixed
+2026-09-07). Rerunning `simulations/input/tw_livelock_repro` (endTick=3600, 1 bus line, 20 cars, 5
+bicycles) under `time-warp` against a real docker-compose cluster (after this session's Jackson
+`Map[Long,_]` fix unblocked `Bus`/`Subway` running at all — see that entry above) reproduced the
+exact same log line, `"GVT plateaued at -100 with all LTMs idle for 3 rounds — terminating"`, ~1.5s
+after load. Two real bugs in `OptimisticLocalTimeManager.localVirtualTime` were found and fixed
+(below) on the assumption this explained premature termination. **It didn't, and termination was
+never premature in this scenario** — see "The actual explanation" below, established only after
+adding a real conservative-mode baseline run that no prior session had done for this scenario.
+
+**Bug 1 (fixed): idle-instant collapse.** `localVirtualTime` (`OptimisticLocalTimeManager.scala:237`
+at the time):
+```scala
+protected def localVirtualTime: Tick =
+  if (runningEvents.nonEmpty) runningEvents.map(a => highestProcessedTickOf(a.id)).min
+  else nextTick.getOrElse(localTickOffset)
+```
+The `if` branch is correct. But the instant `runningEvents` goes empty — routine between one batch
+resolving and the next being dispatched, not just at genuine end-of-simulation — LVT fell back to
+`nextTick.getOrElse(localTickOffset)`. `localTickOffset` starts at `initialTick` and in this class
+is only ever moved *backward* (by `resyncScheduleAfterRollback`'s rollback resync), never forward
+as actors genuinely progress — so any such idle instant silently discarded all of
+`highestProcessedTick`'s real history. **Fix**: added `LocalTimeManagerBase.minHighestProcessedTick`
+(the min `highestProcessedTick` across every actor this LTM still owns, persists across idle gaps,
+removed only on `completeDestruct`) and floor the idle-branch at `min(nextTick, that)` instead.
+Regression test: `OptimisticLocalTimeManagerSpec` — "should report LVT as the actor's real
+high-water mark once idle, not collapse back to localTickOffset."
+
+**Bug 2 (fixed): permanently-empty routee collapse.** `MarginBasedGVTEstimation.estimate` takes
+`min` over *every* reporting LTM unconditionally. An LTM pool routee that has never had (or no
+longer has) a single actor assigned — plausible whenever the pool has more instances than the
+scenario has actors (`HTC_TIME_MANAGER_INSTANCES=16` for this ~90-actor scenario) — reported
+`localTickOffset` (`0`) forever via the same fallback, permanently pinning the global `min` near
+`0 - margin` regardless of how far every *other*, genuinely busy LTM progressed. **Fix**: when
+`registeredActors.isEmpty`, report `Long.MaxValue` (no constraint) instead. Regression test:
+"should report LVT as Long.MaxValue... for a routee with zero actors ever assigned."
+
+Both fixes are real, safe (only ever make LVT *more* accurate, never invent progress — preserves
+the "underestimate is safe" invariant), and covered by new passing tests (full suite: 341 tests).
+**Neither changed the live symptom** — rerunning the same scenario after both fixes still logged
+`"GVT plateaued at -100"` at the same ~1.5s mark. Chased a third hypothesis (Link/Node actors in
+MESO mode call `onFinishSpontaneous(None)` and never self-reschedule, so their contribution to
+`highestProcessedTick` freezes at their first dispatch tick even while they keep handling
+interaction events for the rest of the simulation — interactions never update `highestProcessedTick`
+at all) — real observation, but turned out to be a red herring for *this* symptom too.
+
+**The actual explanation, established by finally running a real conservative-mode baseline of this
+exact scenario** (`timeManagerType: "discrete-event"`, same docker-compose cluster): conservative
+mode **also** stops producing events at max `tick=1801` — identical to time-warp. This is not a
+coincidence: every `Person`'s plan here is `home (→300) → trip → leisure (→1800) → trip → home
+(→86400)` — after the second trip completes (~tick 1801), nothing is scheduled again until tick
+86400, far past this scenario's `endTick=3600`. `BusStation` (the one actor type that genuinely
+self-reschedules every tick) ran for real all the way to `"BusStation 36 reached simulation end
+tick=3600, stopping scheduling"` before the plateau fired. **The GVT-plateau termination decision
+itself is correct** — there really is no more spontaneous work to dispatch anywhere once every
+actor's plan is exhausted. The `-100` number is a red herring for a real symptom that isn't the one
+it looks like: it never caused an early stop, and reads confusingly low mostly because of the two
+now-fixed calculation bugs above, plus whatever residual imprecision Bug 3 above still contributes
+(not chased further, since it no longer has an observable symptom attached to it).
+
+**What the baseline comparison actually revealed — the real, now-precisely-quantified gap**:
+report count. Both runs reach `tick=1801`; conservative produced 660 parquet rows, time-warp only
+252, for the *same* activity window. Breaking down by `event_type`, the pattern is not uniform
+under-counting — it's a mix of near-total loss and duplication:
+
+| Pattern | Event types | Example |
+|---|---|---|
+| Near-total loss (≥90% missing) | `leave_link` (0/26 survive), `enter_link`, `journey_started`/`journey_completed`, `sumo_tripinfo`, `route_planned`, `person_trip_completed`/`person_trip_metrics`/`person_leg_metrics`, `vehicle_event_count` | conservative has 51 `enter_link` rows, time-warp has 15, and only 1 of those 15 ticks overlaps with a conservative row at the same `(entity_id, tick)` |
+| Duplication (same entity+tick reported 3-4×) | `person_schedule_complete` (conservative: 30, time-warp: **58** — more than conservative, not less) | entity `45` has 4 separate `person_schedule_complete` rows all at `tick=300` |
+
+**Cause 1, found and fixed same session: `journeyFinishedReported`/`sumoTripInfoReported` are
+actor-local, not `state`.** `CarJourneyReporter.finishJourney`/`reportSumoTripInfo` (and the
+identical pattern in `BusJourneyReporter`/`BicycleJourneyReporter`/`MotorcycleJourneyReporter`) each
+guard against duplicate reporting with a `private var ...Reported: Boolean = false`, set `true` on
+first call and never reset except by the per-trip `reset()` (called only at genuine new-trip start,
+via `resetTripState()`). A Time Warp rollback restores `state` via `RollbackHistoryHandler` but has
+no way to know about this actor-local flag, so it survives untouched. Sequence: a trip's real
+completion fires once (flag → `true`, report buffered); an overlapping rollback undoes back to
+*before* that completion (discarding the now-invalid buffered report, correctly, via
+`reportBuffer.filterInPlace(_._1.tick < targetTick)`); replay reaches the same (or corrected)
+completion point again and calls `finishJourney` again — but the guard is still `true` from the
+first, now-invalidated attempt, so the call is silently swallowed and **no report survives for that
+trip's completion at all**, for the rest of the simulation (the guard is never reset again short of
+a whole new trip starting). Confirmed directly: `entity 42` (a `Car`) showed `journey_completed`
+reported at `tick=0` in the time-warp parquet output — a stale/impossible timestamp, symptomatic of
+this exact class of corruption.
+
+**Fix**: added `clearCompletionGuards()` to each of the four journey reporters — narrower than
+`reset()`, clearing only the `...Reported` flags without wiping accumulated SUMO metrics
+(`sumoDepartTick` etc.) that describe the surviving, not-undone portion of the current trip. Wired
+into `Car`/`Bus`/`Bicycle`/`Motorcycle`'s (new) `onRollbackDiscardPending` override — the same
+existing extension point `BusStation`/`SubwayStation` already use for their own actor-local stash —
+called unconditionally on every rollback for that actor. Safe: if the guarded completion was NOT
+among the undone events (it already happened before the rollback's target), nothing in the replay
+can call `finishJourney` again for that already-finished trip, so clearing the guard can't produce
+a spurious duplicate. New test: `CarJourneyReporterSpec` (plain ScalaTest, no Pekko). Full suite:
+344 tests, 0 failures.
+
+**Measured effect, same live scenario**: `journey_completed` 15→23 rows, `sumo_tripinfo` 15→23,
+`enter_link` 15→21, `leave_link` 2→3 (conservative baseline: 51/51/51/26 respectively) — a real,
+confirmed improvement, but **most of the loss remains**. Two more, distinct causes identified but
+**not fixed this session**:
+
+**Cause 2 (found, partially fixed): `PersonMetricsReporter.reportScheduleComplete` had no
+idempotency guard at all** — unlike the vehicle journey reporters, there was no `...Reported` flag
+to reset in the first place; `Person.dispatch`'s `PlanStepResult.Finished` branch called it
+unconditionally every time that branch was reached, and replay could reach it more than once.
+Explained why `person_schedule_complete` was *duplicated* (conservative: 30, time-warp: 33-58
+across runs) rather than lost.
+
+**Fix**: added a `protected var scheduleCompleteReported: Boolean` guard on `Person` (no per-trip
+reset needed, unlike the vehicle case — a Person's daily schedule completes at most once ever,
+immediately followed by `destruct = true`), checked/set around the `reportScheduleComplete` call,
+and cleared via a new `Person.onRollbackDiscardPending` override, same mechanism as `Car`/`Bus`/
+`Bicycle`/`Motorcycle`. New test: `PersonScheduleCompleteGuardSpec` (drives the guard/reset directly
+since `dispatch` itself is private). Full suite: 347 tests, 0 failures.
+
+**Measured effect, same live scenario**: duplicate count dropped (e.g. entity `45`: 4 → 3 rows at
+the same tick) but **duplication is not fully eliminated** — some entities still show 2-3 rows.
+This means `dispatch(PlanStepResult.Finished)` can apparently be reached more than once for the
+same Person *without* an intervening rollback for that actor resetting the guard in between (the
+guard-clear is keyed to this actor's own `onRollbackDiscardPending` firing, but if the duplicate
+calls happen within a window where no rollback touched *this* actor at all, clearing on rollback
+can't be the whole story). Not investigated further — next step would be logging every call to
+`dispatch(Finished)` with `currentGeneration`/`isReplaying` to see what actually triggers the
+repeat calls when no rollback intervenes.
+
+**Cause 3 (found via new Prometheus instrumentation, not fixed): vehicles thrash on entering links
+without progressing to leaving them — a functional rollback/replay bug, NOT a report-pipeline bug.**
+
+To distinguish "reports lost in the buffering pipeline" from "the underlying behavior itself is
+wrong," added three new metrics (`core.metrics.core.ActorMetrics`,
+`htc_report_discarded_by_rollback_total`/`htc_report_flushed_total`, both by `event_type`, plus
+`htc_antimessages_sent_total` by `sender_actor_type`) and instrumented `SimulationBaseActor.report`/
+`flushBufferedReportsUpTo`/`rollbackAndCascade`'s discard/`sendAntiMessage`. Existing
+`ActorMetrics.eventsProcessed{event_type}` already counted every `report()` call *attempted*
+(conservative and Time Warp alike). Querying `:9999/metrics` right after the same live
+`tw_livelock_repro` run (before shutdown) gave, per `event_type` (attempted / discarded-by-rollback
+/ flushed):
+
+| event_type | attempted | discarded | flushed | attempted − discarded | conservative baseline (attempted-equivalent) |
+|---|---|---|---|---|---|
+| `enter_link` | 84 | 61 | 20 | 23 (≈ flushed, small race) | 51 |
+| `leave_link` | 7 | 2 | 5 | 5 (exact) | 26 |
+| `route_planned` | 62 | 56 | 6 | 6 (exact) | 40 |
+| `journey_started` | 74 | 64 | 10 | 10 (exact) | 50 |
+| `sumo_tripinfo` | 29 | 8 | 21 | 21 (exact) | 51 |
+| `journey_completed` | 29 | 8 | 21 | 21 (exact) | 51 |
+| `vehicle_event_count` | 23 | 6 | 17 | 17 (exact) | 40 |
+
+**The buffering pipeline's own accounting is correct** — `attempted − discarded = flushed` holds
+almost exactly for every event type. Nothing is silently lost between `report()` and the reporter
+target; every report is accounted for as either genuinely flushed or genuinely discarded because a
+rollback undid the tick it described. This rules out a report-buffering bug as Cause 3.
+
+**What the numbers show instead**: a clear over/under-attempt split. "Entering" events
+(`enter_link` 84 vs. 51 baseline, `journey_started` 74 vs. 50, `route_planned` 62 vs. 40) are
+*over*-attempted — replay is re-generating the same early-route report() calls repeatedly, while
+"completion" events (`leave_link` 7 vs. 26, `journey_completed`/`sumo_tripinfo` 29 vs. 51,
+`vehicle_event_count` 23 vs. 40) are *under*-attempted — vehicles rarely make it far enough to call
+these at all. This is the signature of a vehicle repeatedly entering a link, being rolled back, and
+retrying — without net forward progress through its route — not vehicles genuinely completing
+shorter, valid, different routes. Corroborated by anti-message volume by sender type from the same
+run: `hybrid.actor.Car` 66, `hybrid.actor.Link` 64, vs. `hybrid.actor.Node` 17, `hybrid.actor.Bicycle`
+10, `hybrid.actor.Person` 1 — the Car↔Link enter/leave-link exchange dominates rollback churn by a
+wide margin over every other interaction type in this scenario.
+
+**Root cause found, partially fixed (2026-09-11/12).** Traced with the new metrics above: of the
+Car↔Link `ReceiveEnterLinkInfo` stragglers, most were NOT the 2026-09-06 `AwaitedReply` `key`+`kind`
+livelock class (that fix's `requestSeq` identity check is correct and already in place) — they were
+a *different* bug: `SimulationBaseActor.handleInteractWith` unconditionally triggered a full
+rollback for any tick-behind interaction, checked *before* `actInteractWith` (and therefore before
+`CarLinkHandler`'s own `isAwaitingReplyFn` staleness gate) ever got a chance to recognize a reply as
+already-superseded. **Fixed**: a new `protected def isKnownSupersededReply(event): Boolean = false`
+hook on `SimulationBaseActor`, consulted before the rollback trigger; `Movable` overrides it using
+the same `isAwaitingReply` identity check business logic already had. Also added the same staleness
+gate to `CarLinkHandler.handleEnterLink` that `handleLeaveLink` already had (defense in depth — the
+old comment claiming it was "always safe" to skip was wrong under heavy contention). New tests:
+`MovableIsKnownSupersededReplySpec`. Full suite: 351 tests, 0 failures. **Measured effect**: only
+~8 of ~42 rollbacks for this pair were genuinely superseded replies (now correctly dropped without
+a rollback, tracked by `htc_stale_reply_dropped_without_rollback_total`) — a real but minority
+improvement.
+
+**The remaining ~34 are genuine causality violations, not a fixable protocol bug** — traced to
+`Movable.actSpontaneous`'s `Waiting` case (`Movable.scala:78-91`): after sending `EnterLinkData`,
+the Movable resolves `onFinishSpontaneous` immediately and then self-reschedules every tick
+(`onFinishSpontaneous(Some(currentTick + 1))`) while polling for the reply, up to `MaxWaitingTicks`
+(a self-recovery timeout for a genuinely lost reply). This is real dispatch activity from the LTM's
+perspective, so `currentTick`/`highestProcessedTick` climb every tick with **no actual business
+progress** — purely idle polling. If the `Link` is busy (its own LTM routee serving other vehicles)
+and its real, correct reply arrives stamped with an earlier tick than the Movable's now-inflated
+`currentTick`, the straggler check fires for what is genuinely the awaited, correct reply. This is
+architectural, not a code bug: the per-tick self-poll pattern is exactly what makes Time Warp's
+straggler mechanism see ordinary waiting as forward progress needing later correction. Full
+before/after architecture diagrams, the proposed fix (eliminate the round-trip entirely using the
+already-existing, already-replay-safe `DynamicWeightCache` instead of a live reply), and its
+explicit fidelity trade-off (`Link.costPublishInterval`, default 10 ticks of staleness) are written
+up in `docs/TIME_WARP_ARCHITECTURE_AUDIT.md`'s Section 5 — deliberately **not implemented**, pending
+a modeling-fidelity decision, not an engineering one.
+
+This entry supersedes the vague "Parquet parity with conservative mode is not yet achieved" language
+elsewhere in `docs/TIME_WARP_DESIGN.md` with concrete, reproducible numbers. Reproduction: run
+`simulations/input/tw_livelock_repro` in both `timeManagerType` modes against the same cluster and
+diff parquet output by `(event_type, entity_id, tick)`.
+
+## Time Warp: Awaited-Reply Registry Outside the Snapshot Broke Replay and Reprocessing of Undone Replies (Found 2026-10-21, Fixed 2026-10-21)
+
+`outstandingAwaitedReplies` was a rollback-immune actor var. A checkpoint restore therefore could not
+bring back a wait that an undone (or replayed) event had consumed, so a reply reexecuted by replay
+(Gap P) or reprocessed after a straggler (Gap A) found nothing awaited, was dropped as stale, and the
+actor stayed `Waiting`. A first patch recorded each `isAwaitingReply` verdict in the log; that was a
+workaround and was replaced.
+
+**Fix:** the registry is part of `MigrationSnapshot` (`awaitedReplies`), captured and restored with
+`state`, so a restore plus replay rebuilds it exactly as it was at the restored point. Waits
+registered by undone events vanish by themselves (`pruneInvalidatedAwaitedReplies` is gone), a wait
+an undone event consumed comes back, and a shard migration can no longer drop a pending reply
+obligation. Replay allocates no send seqs (it no longer resends); a replayed `registerAwaitedReply`
+takes the seq of the original send from `LoggedEvent.sentMessages`, so the echoed `requestSeq` still
+matches. Covered by `CarReplayEquivalenceSpec` (Gap P, undone reply accepted on reprocessing, stale
+duplicate stays stale).
 
 ## Test Coverage
 

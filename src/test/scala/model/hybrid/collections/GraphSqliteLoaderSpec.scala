@@ -23,20 +23,20 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
 
   Class.forName("org.sqlite.JDBC")
 
-  private val nodeIdExtractor: NodeGraph => String = _.id
-  private val edgeLabelIdExtractor: EdgeGraph => String = _.id
+  private val nodeIdExtractor: NodeGraph => Long = _.id
+  private val edgeLabelIdExtractor: EdgeGraph => Long = _.id
 
   private def writeJson(path: Path): Unit = {
     val json =
       """{
         |  "nodes": [
-        |    {"id":"n1","resourceId":"r1","classType":"Node","latitude":-23.5,"longitude":-46.6},
-        |    {"id":"n2","resourceId":"r2","classType":"Node","latitude":-23.6,"longitude":-46.7},
-        |    {"id":"n3","resourceId":"r3","classType":"Node","latitude":-23.7,"longitude":-46.8}
+        |    {"id":1,"resourceId":"r1","classType":"Node","latitude":-23.5,"longitude":-46.6},
+        |    {"id":2,"resourceId":"r2","classType":"Node","latitude":-23.6,"longitude":-46.7},
+        |    {"id":3,"resourceId":"r3","classType":"Node","latitude":-23.7,"longitude":-46.8}
         |  ],
         |  "edges": [
-        |    {"source_id":"n1","target_id":"n2","weight":12.5,"label":{"id":"e1","resourceId":"lr1","classType":"Link","length":100.0}},
-        |    {"source_id":"n2","target_id":"n3","weight":null,"label":{"id":"e2","resourceId":"lr2","classType":"Link","length":50.0}}
+        |    {"source_id":1,"target_id":2,"weight":12.5,"label":{"id":11,"resourceId":"lr1","classType":"Link","length":100.0}},
+        |    {"source_id":2,"target_id":3,"weight":null,"label":{"id":12,"resourceId":"lr2","classType":"Link","length":50.0}}
         |  ],
         |  "directed": true
         |}""".stripMargin
@@ -63,9 +63,9 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
       val insertNode =
         conn.prepareStatement("INSERT INTO city_map_node VALUES (?, ?, ?, ?, ?)")
       List(
-        ("n1", "r1", "Node", -23.5, -46.6),
-        ("n2", "r2", "Node", -23.6, -46.7),
-        ("n3", "r3", "Node", -23.7, -46.8)
+        ("1", "r1", "Node", -23.5, -46.6),
+        ("2", "r2", "Node", -23.6, -46.7),
+        ("3", "r3", "Node", -23.7, -46.8)
       ).foreach {
         case (id, rid, ct, lat, lon) =>
           insertNode.setString(1, id)
@@ -79,21 +79,21 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
 
       val insertEdge =
         conn.prepareStatement("INSERT INTO city_map_edge VALUES (?, ?, ?, ?, ?, ?, ?)")
-      insertEdge.setString(1, "e1")
+      insertEdge.setString(1, "11")
       insertEdge.setString(2, "lr1")
       insertEdge.setString(3, "Link")
       insertEdge.setDouble(4, 100.0)
-      insertEdge.setString(5, "n1")
-      insertEdge.setString(6, "n2")
+      insertEdge.setString(5, "1")
+      insertEdge.setString(6, "2")
       insertEdge.setDouble(7, 12.5)
       insertEdge.executeUpdate()
 
-      insertEdge.setString(1, "e2")
+      insertEdge.setString(1, "12")
       insertEdge.setString(2, "lr2")
       insertEdge.setString(3, "Link")
       insertEdge.setDouble(4, 50.0)
-      insertEdge.setString(5, "n2")
-      insertEdge.setString(6, "n3")
+      insertEdge.setString(5, "2")
+      insertEdge.setString(6, "3")
       insertEdge.setNull(7, java.sql.Types.REAL)
       insertEdge.executeUpdate()
       insertEdge.close()
@@ -109,7 +109,7 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
 
       val jsonResult =
         Graph
-          .loadFromJsonFile[NodeGraph, String, Double, EdgeGraph](
+          .loadFromJsonFile[NodeGraph, Long, Double, EdgeGraph](
             jsonPath.toString,
             nodeIdExtractor,
             edgeLabelIdExtractor,
@@ -123,8 +123,8 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
       dbResult.graph.edges shouldBe jsonResult.graph.edges
 
       // The NULL-weight edge (e2) must fall back to defaultWeightForUnweighted (0.0) in both.
-      dbResult.graph.weight(jsonResult.nodesById("n2"), jsonResult.nodesById("n3")) shouldBe Some(0.0)
-      dbResult.graph.weight(jsonResult.nodesById("n1"), jsonResult.nodesById("n2")) shouldBe Some(12.5)
+      dbResult.graph.weight(jsonResult.nodesById(2L), jsonResult.nodesById(3L)) shouldBe Some(0.0)
+      dbResult.graph.weight(jsonResult.nodesById(1L), jsonResult.nodesById(2L)) shouldBe Some(12.5)
     } finally {
       Files.deleteIfExists(jsonPath)
       Files.deleteIfExists(dbPath)

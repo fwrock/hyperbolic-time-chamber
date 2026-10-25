@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<title>HTC Interaction Graph</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f7f8fa;--fg:#1c2230;--muted:#5d6678;--line:#d5dae3;--card:#fff;--accent:#2f5fd0;--edge:#8a93a6;
+--ctrl-f:#e5ecfb;--ctrl-s:#4a63b8;--time-f:#fdecc8;--time-s:#c28a1b;--sim-f:#dff3e5;--sim-s:#2f8f4e;--out-f:#efe3f6;--out-s:#7a4aa0;--grp:rgba(47,143,78,.05)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161f;--fg:#e6e9f0;--muted:#98a1b3;--line:#2b3343;--card:#1a202c;--accent:#7ea2ff;--edge:#7b8497;
+--ctrl-f:#26335a;--ctrl-s:#7f98e6;--time-f:#4a3a14;--time-s:#e0b050;--sim-f:#1f3d2a;--sim-s:#59b97a;--out-f:#3a2a4a;--out-s:#b58be0;--grp:rgba(89,185,122,.07);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161f;--fg:#e6e9f0;--muted:#98a1b3;--line:#2b3343;--card:#1a202c;--accent:#7ea2ff;--edge:#7b8497;
+--ctrl-f:#26335a;--ctrl-s:#7f98e6;--time-f:#4a3a14;--time-s:#e0b050;--sim-f:#1f3d2a;--sim-s:#59b97a;--out-f:#3a2a4a;--out-s:#b58be0;--grp:rgba(89,185,122,.07);color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0;padding-block:18px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:1.45rem;margin:0 0 4px;text-wrap:balance}
+p.sub{color:var(--muted);margin:0 0 14px;max-width:80ch}
+button{font:inherit;font-size:14px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.lbl{color:var(--muted);font-size:13px;margin-right:2px}
+.chips button{display:inline-flex;gap:7px;align-items:center}
+.chips i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.view{border:1px solid var(--line);background:var(--card);border-radius:8px;overflow:auto;height:74vh;min-height:460px;cursor:grab}
+.view.drag{cursor:grabbing;user-select:none}
+.view svg{display:block}
+.panel{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:12px 14px;height:74vh;min-height:460px;overflow:auto}
+@media (max-width:980px){.panel{height:auto;min-height:0}}
+.panel h2{font-size:1rem;margin:0 0 4px}
+.panel p{margin:4px 0 8px;color:var(--muted);font-size:14px}
+.tb{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 6px}
+.tb .pct{min-width:48px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.detail{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:8px 0;font-size:14px;background:var(--bg)}
+.detail b{display:block}
+.detail small{color:var(--muted)}
+ol.steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+ol.steps li{display:grid;grid-template-columns:26px 1fr;gap:8px;padding:6px 8px;border-radius:6px;border:1px solid transparent;cursor:pointer}
+ol.steps li:hover{border-color:var(--line)}
+ol.steps li.cur{border-color:var(--c);background:var(--bg)}
+ol.steps li.off{opacity:.38}
+ol.steps .n{width:24px;height:24px;border-radius:50%;background:var(--c);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+ol.steps .e{font-weight:600;font-size:13.5px}
+ol.steps .a{color:var(--muted);font-size:12px}
+ol.steps .t{font-size:13.5px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.tw{overflow-x:auto;margin-top:8px}
+h2.sec{font-size:1.1rem;margin:26px 0 4px}
+.legend{color:var(--muted);font-size:13px;margin:8px 0}
+svg .node rect{stroke-width:1.6}
+svg .node{cursor:pointer}
+svg text{font-family:system-ui,sans-serif;fill:var(--fg);pointer-events:none}
+svg .edge .hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
+svg .edge .ln{fill:none;transition:opacity .15s}
+svg .badge text{fill:#fff;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+svg .cur .ln{animation:pulse 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){svg .cur .ln{animation:none}}
+</style>
+
+<h1>HTC — grafo de interações</h1>
+<p class="sub">Escolha o modo e um fluxo. As setas do fluxo ganham cor e número na ordem em que acontecem; o painel descreve cada passo. Clique em qualquer seta ou componente para ler o que ele faz.</p>
+
+<div class="row"><span class="lbl">Modo</span>
+<button id="mc" class="on">Conservador (SelectiveBarrier)</button>
+<button id="mo">Otimista (Time Warp)</button></div>
+<div class="row chips" id="chips"><span class="lbl">Fluxo</span></div>
+
+<div class="main">
+<div>
+<div class="tb"><button data-a="out" aria-label="Diminuir zoom">−</button><span class="pct">…</span><button data-a="in" aria-label="Aumentar zoom">+</button><button data-a="fit">Ajustar à largura</button><button data-a="one">100%</button><span class="legend" style="margin:0">arraste para mover · Ctrl + roda = zoom</span></div>
+<div class="view" id="view"></div>
+<p class="legend">Linha cheia: mensagem. Tracejada: assíncrona / sem resposta esperada. As setas do painel “Atores de simulação” que chegam ou saem da borda representam qualquer ator do grupo.</p>
+</div>
+<div class="panel" id="panel"></div>
+</div>
+
+<h2 class="sec">Diferenças entre os modos</h2>
+<div class="tw"><table>
+<tr><th>Eixo</th><th>Conservador</th><th>Otimista</th></tr>
+<tr><td>GTM → LTM</td><td>UpdateGlobalTimeEvent(t), QueryNextTickEvent</td><td>GvtUpdateEvent(gvt) apenas</td></tr>
+<tr><td>LTM → GTM</td><td>LocalTimeReportEvent (bloqueante)</td><td>LvtReportEvent (assíncrono)</td></tr>
+<tr><td>SpontaneousEvent</td><td>Após permissão da barreira</td><td>Imediato, com GVT embutido</td></tr>
+<tr><td>Ator → ator</td><td>ActorInteractionEvent</td><td>+ seq e anti-mensagens</td></tr>
+<tr><td>Rollback</td><td>Inexistente</td><td>Por ator, com cascata</td></tr>
+<tr><td>report()</td><td>Imediato</td><td>Em buffer até GVT ≥ tick</td></tr>
+<tr><td>Destruct</td><td>Imediato</td><td>Adiado até GVT confirmar</td></tr>
+<tr><td>Término</td><td>Fila vazia + grace period</td><td>Plateau de GVT + acks de destruct</td></tr>
+<tr><td>LoadBalanceManager ↔ GTM</td><td>Pausa de migração suportada</td><td>Não suportado</td></tr>
+</table></div>
+
+<script>
+(function(){
+var NS='http://www.w3.org/2000/svg';
+
+/* ---------- componentes: id:[cx,cy,w,h,rótulo,sub,tipo,descrição] ---------- */
+var N={
+ WU:[120,70,160,44,'WarmUpManager','','ctrl','Aquece JIT, serializadores e caches nos nós antes da simulação, para que os primeiros ticks não paguem custo de inicialização. Opcional (htc.warmup.targets).'],
+ LDM:[300,70,160,44,'LoadDataManager','','ctrl','Lê as fontes de dados do cenário (simulation.json) e cria os atores eager via creators/shards. Valida o cenário antes de criar qualquer ator.'],
+ PLR:[480,70,160,44,'PostLoadRegistration','Manager','ctrl','Roda uma fase depois da carga em que atores registram dependências de outros (ex.: BusStop se registra no Node). Só então a simulação pode começar.'],
+ SM:[700,70,160,44,'SimulationManager','','ctrl','Orquestra o ciclo de vida: carrega a configuração, cria GTM, ReportManager e demais managers, dispara carga, warm-up e start, e encerra tudo no fim.'],
+ PLM:[920,70,160,44,'ProgressiveLoad','DataManager','ctrl','Cria atores sob demanda em janelas de ticks (TickWindowRequest/Ready) para não manter a cidade inteira em memória desde o tick 0.'],
+ LBM:[1100,70,160,44,'LoadBalanceManager','','ctrl','Decide migrar shards entre nós para balancear carga. Hoje desativado no projeto; só o GTM conservador sabe pausar para migrações.'],
+ RM:[130,250,160,44,'ReportManager','','ctrl','Cria e encerra os reporters (parquet, csv, clickhouse, kafka). Só fecha os writers depois do último flush de reports.'],
+ REP:[130,430,150,44,'Reporters','parquet · csv · kafka','out','Destinos dos report(): tudo que a simulação produz de saída passa por aqui, nunca por escrita direta do ator.'],
+ GTM:[520,250,150,50,'GlobalTimeManager','','time','Singleton do cluster que coordena o tempo. Conservador: barreira que libera um tick por vez. Otimista: coordenador de GVT que só estima o tempo seguro e decide o término.'],
+ LTM:[940,250,170,50,'LocalTimeManager','pool de N routees','time','Cada routee atende um conjunto de atores: guarda o que está agendado, dispara SpontaneousEvent, recebe FinishEvent e destrói atores.'],
+ SNAP:[1290,250,150,44,'SnapshotManager','','ctrl','Guarda contexto de snapshots e migração (referências de TMs e reporters) usado ao mover atores entre nós.'],
+ P:[400,560,150,44,'Person','','sim','Agente que executa um plano de viagens. Escolhe modo, inicia a perna com o veículo/parada correto e se re-agenda ao fim de cada atividade.'],
+ CAR:[700,650,150,44,'Car','+ Bicycle, Motorcycle','sim','Veículo privado. Percorre links (meso), pede acesso ao Node antes de trocar de link e avisa a Person ao concluir a viagem.'],
+ BUS:[700,490,150,44,'Bus','','sim','Ônibus de uma linha. Percorre links como um Car e, nas paradas, descarrega e carrega passageiros.'],
+ BSTOP:[700,400,150,44,'BusStop','','sim','Parada de ônibus. Mantém a fila de passageiros que esperam por uma linha e entrega pessoas ao Bus que chega.'],
+ BSTA:[1000,400,150,44,'BusStation','','sim','Terminal de uma linha de ônibus. Cria Bus periodicamente (a cada interval ticks) via sharding; não troca mensagens de passageiros.'],
+ ND:[1000,650,150,44,'Node','+ TrafficSignal','sim','Interseção. Responde a pedidos de acesso com Green, Red (com posição na fila) ou Full (capacidade do link de destino cheia) e controla as fases do semáforo.'],
+ LNK:[1250,560,150,44,'Link','','sim','Trecho de via. Conta veículos, calcula velocidade por densidade (meso) e informa a capacidade restante ao Node.'],
+ SUB:[700,770,150,44,'Subway','','sim','Trem de metrô. Percorre RailLinks e troca passageiros nas estações.'],
+ SSTA:[400,770,150,44,'SubwayStation','','sim','Estação de metrô. Recebe registro de passageiros e embarca pessoas no Subway que chega.'],
+ RL:[1000,770,150,44,'RailLink','','sim','Trecho de trilho. Equivale ao Link para o metrô: recebe Enter/Leave e responde com LinkInfoData.']
+};
+var GROUP={x:290,y:340,w:1070,h:470};
+
+/* ---------- setas ----------
+   [id, de, para, nome, descrição, modo (b|c|o), opções]
+   opções: bend (curvatura perpendicular), cv ([dx,dy] do ponto de controle a partir do meio),
+           pts ([x1,y1,x2,y2] fixos), loop ('t'|'b'), dash */
+var E=[
+ ['sm_gtm_create','SM','GTM','Criação do GTM','O SimulationManager cria o GlobalTimeManager como singleton do cluster. O tipo (ConservativeGlobalTimeManager ou OptimisticGlobalTimeManager) vem da configuração.','b',{bend:0}],
+ ['sm_gtm_prog','SM','GTM','RegisterProgressiveLoadManagerEvent','Quando há fontes progressivas, o SM registra no GTM o ProgressiveLoadManager e a janela de look-ahead. O GTM confirma com ProgressiveLoadManagerRegisteredEvent.','b',{bend:-34}],
+ ['sm_gtm_start','SM','GTM','StartSimulationTimeEvent','Libera o relógio da simulação. Se há carga progressiva, o GTM segura o start até a primeira janela estar carregada.','b',{bend:34}],
+ ['gtm_sm_pool','GTM','SM','Referência do pool de LTMs','O GTM informa ao SM o pool de LocalTimeManagers. O SM só inicia a carga quando tem pool e reporters.','b',{bend:34,dash:1}],
+ ['gtm_sm_stop','GTM','SM','StopSimulationEvent','Conservador: enviado ao atingir a duração ou ficar sem eventos agendados. Otimista: enviado só depois que todo LTM confirmou o fim da cascata de destruct (LocalDestructCompleteEvent).','b',{bend:70}],
+ ['gtm_ltm_create','GTM','LTM','Criação do pool de LTMs','O GTM cria o pool (cluster router pool) de LocalTimeManagers. O tamanho vem de HTC_TIME_MANAGER_INSTANCES.','b',{cv:[0,-120]}],
+ ['ltm_gtm_reg','LTM','GTM','TimeManagerRegisterEvent','Cada LTM se registra no GTM ao iniciar. O GTM o observa (watch) e passa a incluí-lo na coordenação; se um LTM morrer, é removido para não travar a barreira.','b',{cv:[0,0]}],
+ ['gtm_ltm_start','GTM','LTM','StartSimulationTimeEvent','O GTM repassa o start aos LTMs. Conservador: o LTM se auto-envia UpdateGlobalTimeEvent e entra na primeira rodada da barreira. Otimista: o LTM já despacha o que está agendado e envia o primeiro LvtReportEvent.','b',{cv:[0,-80]}],
+ ['gtm_ltm_stop','GTM','LTM','StopSimulationEvent','Manda cada LTM parar e fazer force-destruct de todos os atores ainda vivos ou agendados.','b',{cv:[0,120]}],
+ ['gtm_ltm_upd','GTM','LTM','UpdateGlobalTimeEvent(t)','Núcleo da barreira: o GTM escolhe o menor próximo tick entre LTMs com hasSchedule e libera a rodada. Só os LTMs com trabalho naquele tick são notificados.','c',{cv:[0,-40]}],
+ ['ltm_gtm_rep','LTM','GTM','LocalTimeReportEvent','Bloqueante: o LTM só reporta (próximo tick, hasScheduled) quando runningEvents esvazia. O GTM não avança até receber o report de todos.','c',{cv:[0,40]}],
+ ['gtm_ltm_q','GTM','LTM','QueryNextTickEvent','Sonda de período de graça: quando nenhum LTM tem eventos, o GTM pergunta uma vez a todos antes de encerrar, para pegar ScheduleEvents que estavam em trânsito.','c',{cv:[0,80]}],
+ ['ltm_gtm_lvt','LTM','GTM','LvtReportEvent(lvt, isIdle)','Assíncrono: o LTM informa seu tempo virtual local (menor watermark entre atores em voo) e se está ocioso. Nunca espera resposta.','o',{cv:[0,40],dash:1}],
+ ['gtm_ltm_gvt','GTM','LTM','GvtUpdateEvent(gvt)','O GTM estima GVT = min(LVT) − margem e transmite quando ele avança. O LTM guarda o valor, usa para liberar destruct pendentes e o anexa aos próximos SpontaneousEvent.','o',{cv:[0,-40],dash:1}],
+ ['ltm_gtm_destruct','LTM','GTM','LocalDestructCompleteEvent','O LTM avisa que todos os atores que ele destruiu já confirmaram (DestructAckEvent), isto é, já enviaram seus últimos reports.','o',{cv:[0,80],dash:1}],
+ ['gtm_self','GTM','GTM','TerminationHeartbeatTick','Timer do próprio GTM. Sem ele, quando tudo fica ocioso nenhuma mensagem chegaria para recalcular o GVT, e o detector de plateau nunca acumularia rodadas.','o',{loop:'t'}],
+ ['lbm_gtm_pause','LBM','GTM','RequestMigrationPauseEvent','O LoadBalanceManager pede ao GTM que pare no fim do tick corrente para migrar shards com segurança.','c',{bend:0}],
+ ['gtm_lbm_safe','GTM','LBM','MigrationSafeEvent','Quando todos os LTMs reportaram o tick, o GTM avisa que é seguro migrar e segura o avanço do relógio.','c',{bend:22}],
+ ['lbm_gtm_done','LBM','GTM','MigrationCompleteNotifyEvent','Migração concluída: o GTM retoma a barreira a partir do mesmo tick.','c',{bend:-22}],
+ ['lbm_snap','LBM','SNAP','Migração de shards','O LoadBalanceManager usa o SnapshotManager para capturar e restaurar o estado dos atores migrados.','c',{bend:0}],
+ ['sm_rm_create','SM','RM','Criação do ReportManager','O SM cria o ReportManager, que por sua vez cria os reporters configurados.','b',{bend:0}],
+ ['rm_sm_reg','RM','SM','RegisterReportersEvent','O ReportManager devolve ao SM as referências dos reporters, necessárias para iniciar a carga.','b',{bend:34,dash:1}],
+ ['sm_rm_stop','SM','RM','StopSimulationEvent','O SM manda o ReportManager encerrar. No otimista isso só ocorre depois do flush completo, senão os writers fechariam antes dos últimos reports chegarem.','b',{bend:-34}],
+ ['rm_rep','RM','REP','Criação / encerramento dos reporters','O ReportManager cria os reporters na partida e fecha os writers (ex.: parquet) no fim.','b',{pts:[130,272,130,408]}],
+ ['sm_ldm','SM','LDM','LoadDataEvent','Com pool de LTMs e reporters prontos, o SM pede a carga dos dados do cenário.','b',{cv:[0,-90]}],
+ ['ldm_sm','LDM','SM','EagerLoadDataReadyEvent','Carga eager concluída. Informa também quais fontes serão carregadas progressivamente.','b',{cv:[0,-130],dash:1}],
+ ['sm_wu','SM','WU','StartWarmUpWorkersEvent','Dispara o warm-up nos nós do cluster (alvos em htc.warmup.targets).','b',{cv:[0,-150]}],
+ ['wu_sm','WU','SM','Warm-up concluído','Todos os workers terminaram; o SM segue para o registro pós-carga.','b',{cv:[0,-190],dash:1}],
+ ['sm_plr','SM','PLR','StartPostLoadRegistrationPhaseEvent','Inicia a fase em que atores já criados registram dependências em outros atores.','b',{bend:16}],
+ ['plr_sm','PLR','SM','PostLoadRegistrationDoneEvent','Todos os registros foram confirmados; a simulação pode começar.','b',{bend:16,dash:1}],
+ ['sm_snap','SM','SNAP','RegisterSnapshotContextEvent','Entrega ao SnapshotManager as referências de TMs e reporters.','b',{bend:0}],
+ ['sm_plm','SM','PLM','StartProgressiveLoadingEvent','Cria o ProgressiveLoadDataManager e entrega as fontes progressivas e a janela de look-ahead.','b',{bend:0}],
+ ['gtm_plm','GTM','PLM','TickWindowRequest','O GTM pede atores para uma janela de ticks, na partida, quando o próximo tick passa do que foi carregado, ou antecipadamente (pré-busca).','b',{bend:16}],
+ ['plm_gtm','PLM','GTM','TickWindowReady','Janela carregada até readyUpToTick. Long.MaxValue significa que a carga progressiva terminou.','b',{bend:16,dash:1}],
+ ['ldm_sim','LDM','SIM','Criação de atores (eager)','Os creators instanciam os atores do cenário via cluster sharding (ou pool), cada um com seu estado inicial.','b',{pts:[300,92,350,340]}],
+ ['plr_sim','PLR','SIM','Mensagens de registro pós-carga','EntityEnvelope enviado a cada ator que precisa se registrar em outro (ex.: BusStop → Node).','b',{pts:[470,92,400,340]}],
+ ['plm_sim','PLM','SIM','Criação de atores da janela','Cria os atores cujo primeiro evento cai na próxima janela de ticks.','b',{pts:[940,92,1130,340]}],
+
+ ['ltm_sim_spont','LTM','SIM','SpontaneousEvent(t)','Acorda um ator no tick t. Conservador: só depois de UpdateGlobalTimeEvent. Otimista: assim que o LTM vê o ator pronto, sem barreira, com o GVT anexado para liberar reports.','b',{pts:[870,276,870,340]}],
+ ['ltm_sim_destruct','LTM','SIM','DestructEvent','Manda o ator se destruir. Conservador: imediato após FinishEvent(destruct). Otimista: só depois que GVT ≥ finish.end, porque a decisão de terminar pode ser desfeita por rollback; no fim da simulação é forçado.','b',{pts:[900,276,900,340]}],
+ ['sim_ltm_reg','SIM','LTM','RegisterActorEvent / ScheduleEvent','O ator se registra com seu primeiro tick ou agenda um tick futuro. No otimista também existe RegisterPassiveActorEvent: atores que nunca recebem Spontaneous mas precisam ser alcançáveis no destruct final.','b',{pts:[930,340,930,276]}],
+ ['sim_ltm_fin','SIM','LTM','FinishEvent','Fecha o ciclo do SpontaneousEvent: Some(próximoTick) reagenda, None desregistra. Todo ramo de actSpontaneous precisa chegar aqui; senão o LTM nunca esvazia runningEvents e o tempo trava.','b',{pts:[960,340,960,276]}],
+ ['sim_ltm_resync','SIM','LTM','ScheduleEvent(resyncAfterRollback)','Depois de um rollback, o ator informa ao LTM o novo tick de retomada. É a única mensagem que pode mover para trás o watermark highestProcessedTick do ator.','o',{pts:[990,340,990,276]}],
+ ['sim_ltm_ack','SIM','LTM','DestructAckEvent','O ator confirma que seu onDestruct (e o flush de reports que ele dispara) já foi enviado.','o',{pts:[1020,340,1020,276],dash:1}],
+ ['sim_rep','SIM','REP','ReportEvent','Saída da simulação via report(). Conservador: enviado na hora. Otimista: fica em reportBuffer e só é enviado quando GVT ≥ tick do evento ou no destruct, porque um report não pode ser desfeito depois de enviado.','b',{pts:[290,430,205,430],dash:1}],
+
+ ['p_car','P','CAR','StartTripData','A Person inicia a perna de veículo privado. O veículo passa a ser dono do relógio (TM) até terminar a viagem.','b',{bend:16}],
+ ['car_p','CAR','P','TripCompletedData','O veículo avisa a Person que chegou ao destino; a Person retoma o plano.','b',{bend:16,dash:1}],
+ ['p_bstop','P','BSTOP','RegisterPassengerData','A Person entra na fila da parada para a linha de ônibus desejada.','b',{bend:0}],
+ ['p_ssta','P','SSTA','RegisterSubwayPassengerData','A Person entra na fila da estação de metrô.','b',{bend:0}],
+ ['bus_p_req','BUS','P','BusRequestUnloadPassengerData','Ao chegar numa parada, o Bus pede a cada passageiro se desembarca ali.','b',{bend:14}],
+ ['bus_p_boarded','BUS','P','PassengerBoardedVehicleData','O Bus avisa a Person que ela embarcou. A Person guarda a referência para poder responder ao veículo.','b',{bend:36,dash:1}],
+ ['p_bus','P','BUS','BusUnloadPassengerData','Resposta da Person ao pedido de desembarque: desce ou continua a bordo.','b',{bend:14}],
+ ['bus_bstop','BUS','BSTOP','BusRequestPassengerData','Depois do desembarque, o Bus pede à parada os passageiros que esperam sua linha, informando o espaço livre.','b',{bend:16}],
+ ['bstop_bus','BSTOP','BUS','BusLoadPassengerData','A parada entrega os passageiros que cabem no Bus.','b',{bend:16}],
+ ['bsta_bus','BSTA','BUS','Criação do Bus','A cada interval ticks a estação cria um ônibus da linha via sharding. É o único contato dela com outros atores.','b',{bend:0,dash:1}],
+ ['sub_p_req','SUB','P','SubwayRequestUnloadPassengerData','Ao chegar na estação, o Subway pergunta a cada passageiro se desembarca ali.','b',{bend:16}],
+ ['p_sub','P','SUB','SubwayUnloadPassengerData','Resposta da Person sobre o desembarque.','b',{bend:16}],
+ ['sub_ssta','SUB','SSTA','SubwayRequestPassengerData','O Subway pede à estação os passageiros da linha, informando o espaço livre.','b',{bend:16}],
+ ['ssta_sub','SSTA','SUB','SubwayLoadPassengerData','A estação entrega os passageiros ao Subway.','b',{bend:16}],
+ ['car_lnk','CAR','LNK','EnterLinkData / LeaveLinkData','O veículo avisa o Link que entrou ou saiu. No otimista, registra um AwaitedReply para reconhecer a resposta mesmo depois de um rollback.','b',{bend:16}],
+ ['lnk_car','LNK','CAR','LinkInfoData','Resposta do Link com a contagem de veículos e a velocidade por densidade. É uma resposta consistency-critical: o Link responde em todo ramo.','b',{bend:16}],
+ ['bus_lnk','BUS','LNK','EnterLinkData / LeaveLinkData','Igual ao Car: o ônibus avisa entrada e saída do link.','b',{bend:16}],
+ ['lnk_bus','LNK','BUS','LinkInfoData','Resposta do Link ao ônibus.','b',{bend:16}],
+ ['sub_rl','SUB','RL','EnterLinkData / LeaveLinkData','O metrô avisa entrada e saída do trecho de trilho.','b',{bend:16}],
+ ['rl_sub','RL','SUB','LinkInfoData','O RailLink responde com os dados para calcular o tempo de viagem do trecho.','b',{bend:16}],
+ ['car_nd','CAR','ND','RequestLinkAccessData','Antes de sair do link, o Car pede ao Node permissão para entrar no próximo link. Também existe CancelLinkAccessRequestData se o Car for destruído esperando.','b',{bend:16}],
+ ['nd_car','ND','CAR','LinkAccessData','O Node responde em todo ramo: Green (ou sem semáforo), Red com posição na fila, ou Full quando o link de destino está cheio (a liberação chega depois, sem novo pedido).','b',{bend:16}],
+ ['bus_nd','BUS','ND','RequestLinkAccessData','O ônibus pede acesso ao Node antes de sair do link.','b',{bend:16}],
+ ['nd_bus','ND','BUS','LinkAccessData','Resposta do Node ao ônibus (Green, Red ou Full).','b',{bend:16}],
+ ['lnk_nd','LNK','ND','RegisterLinkCapacityData / LinkCapacityFreedData','O Link informa a capacidade e avisa quando abre vaga, para o Node liberar quem estava bufferizado em Full.','b',{bend:0,dash:1}],
+ ['bstop_nd','BSTOP','ND','RegisterBusStopData','A parada se registra no Node onde está localizada (fase pós-carga).','b',{bend:0,dash:1}],
+
+ ['anti_car_lnk','CAR','LNK','AntiMessage','Após rollback, o Car retrata cada mensagem enviada depois do tick alvo. O Link localiza o evento original e faz o próprio rollback, que pode gerar novas anti-mensagens (cascata). Vale para qualquer par remetente → receptor.','o',{bend:46,dash:1}],
+ ['anti_car_nd','CAR','ND','AntiMessage','Mesma retratação enviada ao Node (por exemplo, para o RequestLinkAccessData desfeito).','o',{bend:46,dash:1}],
+ ['anti_lnk_car','LNK','CAR','AntiMessage (cascata)','O Link, ao desfazer o que processou, retrata o que havia respondido ao Car, que pode ter de fazer rollback de novo.','o',{bend:46,dash:1}],
+ ['car_rollback','CAR','CAR','rollbackAndCascade(T)','Straggler detectado (event.tick < currentTick): restaura o checkpoint ≤ T, descarta reports bufferizados ≥ T, limpa guardas locais e retrata mensagens enviadas, depois reprocessa em ordem causal.','o',{loop:'b'}]
+];
+
+/* ---------- fluxos ---------- */
+var F=[
+ {id:'init',name:'Inicialização e carga',mode:'b',desc:'Do SimulationManager criando os managers até o relógio ser liberado.',steps:[
+  ['sm_gtm_create','O SM cria o GlobalTimeManager (conservador ou otimista, conforme a configuração).'],
+  ['gtm_ltm_create','O GTM cria o pool de LocalTimeManagers.'],
+  ['ltm_gtm_reg','Cada LTM se registra no GTM.'],
+  ['gtm_sm_pool','O GTM entrega ao SM a referência do pool de LTMs.'],
+  ['sm_rm_create','O SM cria o ReportManager.'],
+  ['rm_rep','O ReportManager cria os reporters configurados.'],
+  ['rm_sm_reg','O ReportManager devolve ao SM as referências dos reporters.'],
+  ['sm_ldm','Com LTMs e reporters prontos, o SM pede a carga dos dados.'],
+  ['ldm_sim','O LoadDataManager lê as fontes e cria os atores (Person, Node, Link, ...).'],
+  ['sim_ltm_reg','Cada ator criado se registra num LTM com seu primeiro tick.'],
+  ['ldm_sm','Carga eager concluída.'],
+  ['sm_wu','Opcional: aquecimento de JIT e serializadores nos nós.'],
+  ['wu_sm','Warm-up concluído.'],
+  ['sm_plr','Fase de registro pós-carga: atores que dependem de outros se registram (ex.: BusStop no Node).'],
+  ['plr_sim','Mensagens de registro entregues aos atores.'],
+  ['plr_sm','Registro concluído em todos os atores.'],
+  ['sm_gtm_start','O SM libera o relógio: StartSimulationTimeEvent ao GTM.'],
+  ['gtm_ltm_start',{c:'O GTM repassa o start; cada LTM entra na primeira rodada da barreira.',o:'O GTM repassa o start; cada LTM já despacha o que está agendado, sem esperar barreira.'}]
+ ]},
+ {id:'prog',name:'Carga progressiva',mode:'b',desc:'Atores criados por janelas de ticks em vez de todos no início.',steps:[
+  ['sm_gtm_prog','O SM registra o ProgressiveLoadManager no GTM e aguarda o ack.'],
+  ['sm_plm','O SM entrega as fontes progressivas ao ProgressiveLoadDataManager.'],
+  ['sm_gtm_start','O SM pede o start; o GTM o segura até a primeira janela estar pronta.'],
+  ['gtm_plm','O GTM pede a primeira janela de ticks.'],
+  ['plm_sim','O PLM cria os atores cujo primeiro evento cai na janela.'],
+  ['plm_gtm','Janela pronta (readyUpToTick). Em janelas seguintes o ciclo se repete: pedido, criação, pronto.'],
+  ['gtm_ltm_start','Só agora o start é repassado aos LTMs.']
+ ]},
+ {id:'tick',name:'Um tick da barreira',mode:'c',desc:'Uma rodada do SelectiveBarrier. O tempo só avança quando todos os LTMs reportam.',steps:[
+  ['gtm_ltm_upd','O GTM escolhe o menor próximo tick e libera os LTMs que têm trabalho nele.'],
+  ['ltm_sim_spont','Cada LTM acorda os atores agendados para o tick.'],
+  ['sim_ltm_reg','Os atores agendam seus próximos eventos (ScheduleEvent) durante o processamento.'],
+  ['sim_rep','Os atores emitem report() imediatamente aos reporters.'],
+  ['sim_ltm_fin','Cada ator fecha com FinishEvent. Quando runningEvents esvazia, o LTM está pronto.'],
+  ['ltm_gtm_rep','O LTM reporta o próximo tick. Com todos reportados, o GTM calcula o próximo tick e volta ao passo 1.']
+ ]},
+ {id:'dispatch',name:'Despacho sem barreira',mode:'o',desc:'Cada LTM corre à frente por conta própria; o GTM só observa.',steps:[
+  ['gtm_ltm_start','O start libera o LTM; ele despacha imediatamente o que está agendado.'],
+  ['ltm_sim_spont','O LTM acorda todo ator pronto (dispatchNextAvailable), mesmo em ticks diferentes, sem pedir permissão.'],
+  ['sim_ltm_reg','Atores agendam novos ticks e se registram; o LTM despacha de novo se estiver ocioso.'],
+  ['sim_ltm_fin','O ator fecha o evento; o LTM avança por conta própria.'],
+  ['ltm_gtm_lvt','O LTM informa seu LVT de forma assíncrona. Não espera resposta.'],
+  ['ltm_sim_spont','Próximo despacho. Cada LTM e cada ator avançam em ritmos independentes.']
+ ]},
+ {id:'gvt',name:'GVT e flush de reports',mode:'o',desc:'Como o tempo seguro é calculado e quando a saída é liberada.',steps:[
+  ['ltm_gtm_lvt','Cada LTM reporta o LVT (menor watermark entre atores em voo) e se está ocioso.'],
+  ['gtm_ltm_gvt','Com um report de todos, o GTM estima GVT = min(LVT) − margem e o transmite se avançou.'],
+  ['ltm_sim_spont','O LTM anexa o último GVT ao próximo SpontaneousEvent de cada ator.'],
+  ['sim_rep','O ator envia os reports bufferizados com tick ≤ GVT: nada abaixo do GVT pode ser desfeito.']
+ ]},
+ {id:'car',name:'Viagem de carro (link + semáforo)',mode:'c',desc:'Travessia de um link no modo conservador.',steps:[
+  ['p_car','A Person inicia a perna: o veículo assume o relógio.'],
+  ['ltm_sim_spont','O LTM acorda o Car no tick da rodada.'],
+  ['car_lnk','O Car envia EnterLinkData e fica em Waiting.'],
+  ['lnk_car','O Link responde com a densidade; o Car calcula a velocidade e o tick de saída.'],
+  ['sim_ltm_fin','O Car reagenda para o tick de saída.'],
+  ['ltm_sim_spont','No tick de saída, o Car é acordado de novo.'],
+  ['car_nd','Pede acesso ao próximo link ao Node e libera o LTM com None (sem polling).'],
+  ['nd_car','O Node responde Green; o Car se auto-agenda para sair.'],
+  ['car_lnk','O Car envia LeaveLinkData.'],
+  ['lnk_car','O Link confirma a saída; o Car segue para o próximo link ou termina.'],
+  ['car_p','Ao fim do trajeto, TripCompletedData devolve o controle à Person.']
+ ]},
+ {id:'car',name:'Viagem de carro (link + semáforo)',mode:'o',desc:'Travessia de um link no modo otimista. O Car sonda a cada tick enquanto espera o Link, o que causa stragglers.',steps:[
+  ['p_car','A Person inicia a perna de veículo.'],
+  ['ltm_sim_spont','O LTM acorda o Car.'],
+  ['car_lnk','O Car envia EnterLinkData, registra um AwaitedReply e entra em Waiting.'],
+  ['sim_ltm_fin','O Car reagenda t+1 imediatamente, sem esperar a resposta.'],
+  ['ltm_sim_spont','Sondagem: a cada tick o Car é acordado e seu relógio avança sem progresso real.'],
+  ['lnk_car','Chega a resposta do Link. Se estiver com tick atrás do relógio do Car, vira straggler (veja o fluxo de rollback).'],
+  ['sim_ltm_fin','O Car consome a resposta e reagenda para o tick de saída.'],
+  ['car_nd','Ao sair, pede acesso ao Node e libera o LTM com None.'],
+  ['nd_car','O Node responde; o Car se auto-agenda para sair.'],
+  ['car_lnk','O Car envia LeaveLinkData e já segue; não há polling na saída.'],
+  ['lnk_car','O Link confirma a saída.'],
+  ['car_p','Fim do trajeto: TripCompletedData à Person.']
+ ]},
+ {id:'rollback',name:'Straggler e rollback',mode:'o',desc:'Uma resposta chega com tick no passado e desencadeia rollback e anti-mensagens.',steps:[
+  ['ltm_sim_spont','Enquanto sonda, o Car avança o relógio (ex.: de 100 para 105).'],
+  ['lnk_car','O Link, ocupado, responde com tick 100: menor que o currentTick do Car. É um straggler.'],
+  ['car_rollback','O Car faz rollbackAndCascade(100): restaura checkpoint, descarta reports ≥ 100 e limpa guardas locais.'],
+  ['anti_car_lnk','Retrata o EnterLinkData enviado depois do tick 100.'],
+  ['anti_car_nd','Retrata também o que enviou ao Node.'],
+  ['sim_ltm_resync','Informa ao LTM o tick de retomada (resync) e reexecuta o log até o straggler, em ordem causal.'],
+  ['anti_lnk_car','Se o Link precisou desfazer algo, retrata o que respondera ao Car: a cascata continua.']
+ ]},
+ {id:'signal',name:'Acesso ao Node (semáforo e capacidade)',mode:'b',desc:'O Node responde a todo pedido; Red e Full atrasam a travessia.',steps:[
+  ['car_nd','O Car pede permissão para entrar no próximo link.'],
+  ['nd_car','Red: devolve a posição na fila. Full: devolve “cheio” e bufferiza o pedido. O Car não consome a chave de espera em Full.'],
+  ['lnk_nd','O Link de destino libera vaga e avisa o Node (LinkCapacityFreedData).'],
+  ['nd_car','O Node envia o grant não solicitado, com a mesma chave. O Car prossegue.'],
+  ['car_lnk','O Car sai: LeaveLinkData.']
+ ]},
+ {id:'bus',name:'Passageiro de ônibus',mode:'b',desc:'Da fila na parada ao desembarque.',steps:[
+  ['p_bstop','A Person entra na fila da parada.'],
+  ['bsta_bus','A BusStation cria o ônibus da linha.'],
+  ['bus_lnk','O Bus percorre links: avisa entrada e saída.'],
+  ['lnk_bus','O Link responde com a velocidade.'],
+  ['bus_nd','Antes de trocar de link, pede acesso ao Node.'],
+  ['nd_bus','O Node libera (ou atrasa) a passagem.'],
+  ['bus_bstop','Na parada, o Bus pede passageiros.'],
+  ['bstop_bus','A parada entrega os passageiros que cabem.'],
+  ['bus_p_boarded','O Bus confirma o embarque à Person.'],
+  ['bus_p_req','No destino, o Bus pergunta se ela desembarca.'],
+  ['p_bus','A Person responde e desembarca.']
+ ]},
+ {id:'metro',name:'Passageiro de metrô',mode:'b',desc:'Da estação ao desembarque.',steps:[
+  ['p_ssta','A Person se registra na estação.'],
+  ['sub_rl','O Subway percorre um RailLink: avisa a entrada.'],
+  ['rl_sub','O RailLink responde com os dados do trecho.'],
+  ['sub_ssta','Na estação, o Subway pede passageiros.'],
+  ['ssta_sub','A estação entrega os passageiros.'],
+  ['sub_p_req','Em cada estação, o Subway pergunta aos passageiros se desembarcam.'],
+  ['p_sub','A Person responde e desembarca.']
+ ]},
+ {id:'migr',name:'Migração de shards',mode:'c',desc:'O LoadBalanceManager pausa o relógio para mover atores com segurança.',steps:[
+  ['lbm_gtm_pause','O LBM pede ao GTM que pare no fim do tick corrente.'],
+  ['ltm_gtm_rep','Os LTMs terminam o tick e reportam normalmente.'],
+  ['gtm_lbm_safe','Com todos reportados, o GTM avisa que é seguro e segura o avanço.'],
+  ['lbm_snap','O LBM captura e restaura estado via SnapshotManager.'],
+  ['lbm_gtm_done','Migração concluída: o GTM retoma a barreira.'],
+  ['gtm_ltm_upd','O relógio volta a andar com UpdateGlobalTimeEvent.']
+ ]},
+ {id:'end',name:'Término',mode:'c',desc:'Fim por ausência de eventos agendados.',steps:[
+  ['gtm_ltm_q','Sem eventos agendados: o GTM faz uma última sonda aos LTMs (período de graça).'],
+  ['ltm_gtm_rep','Os LTMs respondem hasScheduled=false.'],
+  ['gtm_ltm_stop','Confirmado: o GTM manda os LTMs pararem.'],
+  ['ltm_sim_destruct','Os LTMs destroem os atores ainda vivos.'],
+  ['gtm_sm_stop','O GTM avisa o SimulationManager.'],
+  ['sm_rm_stop','O SM manda o ReportManager encerrar.'],
+  ['rm_rep','Os reporters fecham seus writers.']
+ ]},
+ {id:'end',name:'Término em duas fases',mode:'o',desc:'O GVT estaciona, os atores descarregam reports e só então o ReportManager fecha.',steps:[
+  ['ltm_gtm_lvt','Os LTMs ficam ociosos e reportam isIdle=true.'],
+  ['gtm_self','O heartbeat recalcula o GVT; com GVT parado e todos ociosos por N rodadas, o GTM declara término.'],
+  ['gtm_ltm_stop','O GTM manda os LTMs fazerem force-destruct.'],
+  ['ltm_sim_destruct','Cada LTM envia DestructEvent aos atores vivos, agendados ou passivos.'],
+  ['sim_rep','No destruct o ator libera todos os reports bufferizados (flush com Long.MaxValue).'],
+  ['sim_ltm_ack','O ator confirma ao LTM que já fez o flush.'],
+  ['ltm_gtm_destruct','Com todos os acks, o LTM avisa o GTM.'],
+  ['gtm_sm_stop','Só após o aviso de todos os LTMs o GTM avisa o SimulationManager.'],
+  ['sm_rm_stop','O ReportManager fecha os writers sem perder dados.'],
+  ['rm_rep','Reporters encerrados.']
+ ]}
+];
+var COLORS=['#e8590c','#1c7ed6','#2f9e44','#ae3ec9','#d6336c','#0c8599','#f08c00','#5f3dc4','#c92a2a','#495057'];
+var ids=[];F.forEach(function(f){if(ids.indexOf(f.id)<0)ids.push(f.id)});F.forEach(function(f){f.color=COLORS[ids.indexOf(f.id)%COLORS.length]});
+
+/* ---------- estado ---------- */
+var mode='c',flow=null,k=0,selEdge=null,selNode=null;
+var EM={};E.forEach(function(e){EM[e[0]]={id:e[0],from:e[1],to:e[2],name:e[3],desc:e[4],mode:e[5],o:e[6]||{}}});
+
+/* ---------- geometria ---------- */
+function box(id){return N[id]}
+function clip(n,tx,ty){var cx=n[0],cy=n[1],hw=n[2]/2+2,hh=n[3]/2+2,dx=tx-cx,dy=ty-cy;
+ if(!dx&&!dy)return [cx,cy];
+ var t=Math.min(dx?hw/Math.abs(dx):1e9,dy?hh/Math.abs(dy):1e9);return [cx+dx*t,cy+dy*t]}
+function geom(e){
+ var o=e.o,A=N[e.from],B=N[e.to];
+ if(o.loop){var top=o.loop==='t',y=A[1]+(top?-1:1)*A[3]/2,s=top?-1:1,sx=A[0]+22,ex=A[0]+62;
+  return {d:'M'+sx+' '+y+' C'+sx+' '+(y+s*52)+' '+ex+' '+(y+s*52)+' '+ex+' '+y,mx:A[0]+42,my:y+s*39,self:1}}
+ if(o.pts){var p=o.pts;return {d:'M'+p[0]+' '+p[1]+' L'+p[2]+' '+p[3],mx:(p[0]+p[2])/2,my:(p[1]+p[3])/2}}
+ var ax=A[0],ay=A[1],bx=B[0],by=B[1],mx=(ax+bx)/2,my=(ay+by)/2,dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy)||1,c=null;
+ if(o.cv)c=[mx+o.cv[0],my+o.cv[1]];
+ else if(o.bend)c=[mx-dy/len*o.bend,my+dx/len*o.bend];
+ if(!c){var p1=clip(A,bx,by),p2=clip(B,ax,ay);return {d:'M'+p1[0]+' '+p1[1]+' L'+p2[0]+' '+p2[1],mx:(p1[0]+p2[0])/2,my:(p1[1]+p2[1])/2}}
+ var q1=clip(A,c[0],c[1]),q2=clip(B,c[0],c[1]);
+ return {d:'M'+q1[0]+' '+q1[1]+' Q'+c[0]+' '+c[1]+' '+q2[0]+' '+q2[1],mx:.25*q1[0]+.5*c[0]+.25*q2[0],my:.25*q1[1]+.5*c[1]+.25*q2[1]}}
+
+/* ---------- SVG ---------- */
+function el(n,a,p){var x=document.createElementNS(NS,n);for(var k in a)x.setAttribute(k,a[k]);if(p)p.appendChild(x);return x}
+var view=document.getElementById('view');
+var svg=el('svg',{viewBox:'-10 -60 1420 920',width:1420,height:920,role:'img','aria-label':'Grafo de interações entre managers, time managers e atores de simulação do HTC'});
+view.appendChild(svg);
+var defs=el('defs',{},svg);
+function marker(id,fill){var m=el('marker',{id:id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs);
+ var p=el('path',{d:'M0 0L10 5L0 10z'},m);p.style.fill=fill}
+marker('ar-g','var(--edge)');
+COLORS.forEach(function(c,i){marker('ar-'+i,c)});
+var gGroup=el('g',{},svg),gNodes=el('g',{},svg),gEdges=el('g',{},svg),gBadges=el('g',{},svg);
+var grp=el('rect',{x:GROUP.x,y:GROUP.y,width:GROUP.w,height:GROUP.h,rx:12,'stroke-dasharray':'6 5'},gGroup);
+grp.style.fill='var(--grp)';grp.style.stroke='var(--sim-s)';grp.style.strokeWidth=1.4;
+var gt=el('text',{x:GROUP.x+14,y:GROUP.y+22,'font-size':13,'font-weight':600},gGroup);gt.textContent='Atores de simulação (SimulationBaseActor)';
+var gt2=el('text',{x:20,y:-28,'font-size':11,'font-weight':700,'letter-spacing':1},gGroup);gt2.textContent='CONTROL PLANE';gt2.style.fill='var(--muted)';
+var nodeEls={};
+Object.keys(N).forEach(function(id){var n=N[id],g=el('g',{'class':'node'},gNodes);
+ var r=el('rect',{x:n[0]-n[2]/2,y:n[1]-n[3]/2,width:n[2],height:n[3],rx:8},g);
+ r.style.fill='var(--'+n[6]+'-f)';r.style.stroke='var(--'+n[6]+'-s)';
+ if(n[5]){var a=el('text',{x:n[0],y:n[1]-5,'text-anchor':'middle','font-size':12,'font-weight':600},g);a.textContent=n[4];
+  var b=el('text',{x:n[0],y:n[1]+11,'text-anchor':'middle','font-size':10.5},g);b.textContent=n[5];b.style.fill='var(--muted)'}
+ else{var a2=el('text',{x:n[0],y:n[1]+4,'text-anchor':'middle','font-size':12.5,'font-weight':600},g);a2.textContent=n[4]}
+ g.addEventListener('click',function(ev){ev.stopPropagation();selNode=id;selEdge=null;update()});
+ nodeEls[id]=g});
+var edgeEls={};
+E.forEach(function(e){var m=EM[e[0]],G=geom(m),g=el('g',{'class':'edge'},gEdges);
+ el('path',{'class':'hit',d:G.d},g);
+ var ln=el('path',{'class':'ln',d:G.d},g);if(m.o.dash)ln.setAttribute('stroke-dasharray','6 4');
+ var t=el('title',{},g);t.textContent=m.name;
+ g.addEventListener('click',function(ev){ev.stopPropagation();selEdge=m.id;selNode=null;update()});
+ edgeEls[m.id]={g:g,ln:ln,G:G}});
+svg.addEventListener('click',function(){selEdge=null;selNode=null;update()});
+
+/* ---------- lógica ---------- */
+function vis(m){return m.mode==='b'||m.mode===mode}
+function flows(){return F.filter(function(f){return f.mode==='b'||f.mode===mode})}
+function stepText(s){var t=s[1];return typeof t==='object'?t[mode]:t}
+function stepsOf(e){var r=[];if(flow)flow.steps.forEach(function(s,i){if(s[0]===e)r.push(i+1)});return r}
+
+function update(){
+ var touched={};
+ Object.keys(EM).forEach(function(id){
+  var m=EM[id],x=edgeEls[id],on=vis(m);x.g.style.display=on?'':'none';if(!on)return;
+  var st=stepsOf(id),shown=st.filter(function(n){return n<=k}),ln=x.ln,cls='edge';
+  ln.style.stroke='var(--edge)';ln.style.strokeWidth=1.3;ln.style.opacity=.75;ln.setAttribute('marker-end','url(#ar-g)');
+  if(flow){
+   if(shown.length){var ci=COLORS.indexOf(flow.color);ln.style.stroke=flow.color;ln.style.strokeWidth=2.8;ln.style.opacity=1;ln.setAttribute('marker-end','url(#ar-'+ci+')');
+    if(shown.indexOf(k)>=0)cls+=' cur';touched[m.from]=touched[m.to]=1;gEdges.appendChild(x.g)}
+   else{ln.style.opacity=st.length?.28:.09}
+  }else if(selEdge===id){ln.style.stroke='var(--accent)';ln.style.strokeWidth=3;ln.style.opacity=1}
+  if(selEdge===id&&flow){ln.style.strokeWidth=4}
+  x.g.setAttribute('class',cls)});
+ Object.keys(nodeEls).forEach(function(id){nodeEls[id].style.opacity=(!flow||touched[id]||id===selNode)?1:.3;
+  nodeEls[id].firstChild.style.strokeWidth=(id===selNode)?3:1.6});
+ gBadges.textContent='';
+ if(flow)Object.keys(EM).forEach(function(id){var m=EM[id];if(!vis(m))return;
+  var sh=stepsOf(id).filter(function(n){return n<=k});if(!sh.length)return;
+  var G=edgeEls[id].G,txt=sh.join('·'),w=Math.max(20,txt.length*7+10),cur=sh.indexOf(k)>=0;
+  var b=el('g',{'class':'badge'},gBadges);
+  var r=el('rect',{x:G.mx-w/2,y:G.my-10,width:w,height:20,rx:10},b);r.style.fill=flow.color;
+  if(cur){r.style.stroke='var(--fg)';r.style.strokeWidth=2}
+  var t=el('text',{x:G.mx,y:G.my+.5},b);t.textContent=txt});
+ renderChips();renderPanel()}
+
+function renderChips(){
+ var c=document.getElementById('chips');c.textContent='';
+ var l=document.createElement('span');l.className='lbl';l.textContent='Fluxo';c.appendChild(l);
+ var all=document.createElement('button');all.textContent='Todas as mensagens';if(!flow)all.className='on';
+ all.onclick=function(){flow=null;k=0;update()};c.appendChild(all);
+ flows().forEach(function(f){var b=document.createElement('button');if(flow===f)b.className='on';
+  var i=document.createElement('i');i.style.background=f.color;b.appendChild(i);b.appendChild(document.createTextNode(f.name));
+  b.onclick=function(){flow=f;k=f.steps.length;selEdge=null;selNode=null;update()};c.appendChild(b)})}
+
+function add(p,tag,txt,cls){var x=document.createElement(tag);if(txt!=null)x.textContent=txt;if(cls)x.className=cls;p.appendChild(x);return x}
+function nm(id){return N[id]?N[id][4]:id}
+function renderPanel(){
+ var p=document.getElementById('panel'),keep=p.scrollTop;p.textContent='';
+ if(selEdge||selNode){var d=add(p,'div',null,'detail');
+  if(selEdge){var m=EM[selEdge];add(d,'b',m.name);add(d,'small',nm(m.from)+' → '+nm(m.to)+(m.mode==='b'?' · ambos os modos':m.mode==='c'?' · só conservador':' · só otimista'));add(d,'div',m.desc)}
+  else{var n=N[selNode];add(d,'b',n[4]+(n[5]&&n[6]!=='out'?' '+n[5]:''));add(d,'div',n[7])}}
+ if(!flow){
+  if(!(selEdge||selNode)){add(p,'h2','Como usar');
+   add(p,'p','Escolha um fluxo acima: as setas envolvidas ganham cor e número, na ordem em que acontecem, e este painel descreve cada passo.');
+   add(p,'p','Use Anterior/Próximo para reproduzir o fluxo um passo por vez. Clique numa seta ou num componente para ver o que ele é.');
+   add(p,'p','Troque o modo para comparar: algumas setas existem só no conservador (barreira, migração) ou só no otimista (LVT/GVT, anti-mensagens, rollback).')}
+  p.scrollTop=keep;return}
+ var h=add(p,'h2',flow.name);h.style.color=flow.color;
+ add(p,'p',flow.desc);
+ var nav=add(p,'div',null,'tb');
+ var pv=add(nav,'button','◀ Anterior');pv.disabled=k<=1;pv.onclick=function(){k=Math.max(1,k-1);update()};
+ var nx=add(nav,'button','Próximo ▶');nx.disabled=k>=flow.steps.length;nx.onclick=function(){k=Math.min(flow.steps.length,k+1);update()};
+ var al=add(nav,'button','Tudo');al.onclick=function(){k=flow.steps.length;update()};
+ var rs=add(nav,'button','Reiniciar');rs.onclick=function(){k=1;update()};
+ var ol=add(p,'ol',null,'steps');ol.style.setProperty('--c',flow.color);
+ flow.steps.forEach(function(s,i){var m=EM[s[0]],li=add(ol,'li',null,(i+1===k?'cur':'')+(i+1>k?' off':''));
+  li.style.setProperty('--c',flow.color);add(li,'div',String(i+1),'n');var r=add(li,'div');
+  add(r,'div',m.name,'e');add(r,'div',nm(m.from)+' → '+nm(m.to),'a');add(r,'div',stepText(s),'t');
+  li.onclick=function(){k=i+1;selEdge=null;update()}});
+ p.scrollTop=keep}
+
+document.getElementById('mc').onclick=function(){setMode('c')};
+document.getElementById('mo').onclick=function(){setMode('o')};
+function setMode(m){mode=m;document.getElementById('mc').className=m==='c'?'on':'';document.getElementById('mo').className=m==='o'?'on':'';
+ if(flow){var same=F.filter(function(f){return f.id===flow.id&&(f.mode==='b'||f.mode===m)})[0];flow=same||null;k=flow?flow.steps.length:0}
+ selEdge=null;selNode=null;update()}
+
+/* ---------- zoom e arraste ---------- */
+var tb=document.querySelector('.tb'),pct=tb.querySelector('.pct'),NAT=1420,ASP=920/1420,sc=1;
+function apply(keep){var cx=view.scrollLeft+view.clientWidth/2,cy=view.scrollTop+view.clientHeight/2,old=svg.getBoundingClientRect().width;
+ svg.style.width=NAT*sc+'px';svg.style.height=NAT*sc*ASP+'px';svg.setAttribute('width',NAT*sc);svg.setAttribute('height',NAT*sc*ASP);
+ pct.textContent=Math.round(sc*100)+'%';
+ if(keep&&old){var r=NAT*sc/old;view.scrollLeft=cx*r-view.clientWidth/2;view.scrollTop=cy*r-view.clientHeight/2}}
+function setSc(v,keep){sc=Math.max(.3,Math.min(3,v));apply(keep)}
+function fit(){setSc(Math.max(.3,(view.clientWidth-4)/NAT),false);view.scrollLeft=0;view.scrollTop=0}
+tb.onclick=function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-a');
+ if(a==='in')setSc(sc*1.25,true);else if(a==='out')setSc(sc/1.25,true);else if(a==='fit')fit();else if(a==='one')setSc(1,true)};
+view.addEventListener('wheel',function(e){if(e.ctrlKey||e.metaKey){e.preventDefault();setSc(sc*(e.deltaY<0?1.1:.9),true)}},{passive:false});
+var dg=null,moved=false;
+view.addEventListener('pointerdown',function(e){dg={x:e.clientX,y:e.clientY,l:view.scrollLeft,t:view.scrollTop};moved=false});
+window.addEventListener('pointermove',function(e){if(dg){var dx=e.clientX-dg.x,dy=e.clientY-dg.y;if(Math.abs(dx)+Math.abs(dy)>4){moved=true;view.classList.add('drag')}
+ if(moved){view.scrollLeft=dg.l-dx;view.scrollTop=dg.t-dy}}});
+window.addEventListener('pointerup',function(){dg=null;view.classList.remove('drag')});
+
+fit();update();
+window.addEventListener('resize',function(){if(sc<=1.01)fit()});
+})();
+</script>
+
+</body></html>

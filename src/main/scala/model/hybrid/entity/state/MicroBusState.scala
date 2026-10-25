@@ -57,7 +57,7 @@ case class MicroBusState(
   velocity: Double,
   acceleration: Double,
   currentLane: Int,
-  leaderVehicle: Option[String] = None,
+  leaderVehicle: Option[Long] = None,
   gapToLeader: Double = Double.MaxValue,
   leaderVelocity: Double = 0.0,
   maxAcceleration: Double = 1.2,
@@ -68,7 +68,7 @@ case class MicroBusState(
   vehicleLength: Double = 12.0,
   capacity: Int = 80,
   currentPassengers: Int = 0,
-  nextBusStop: Option[String] = None,
+  nextBusStop: Option[Long] = None,
   busLaneRestricted: Boolean = true,
   desiredLane: Option[Int] = None,
   laneChangeProgress: Double = 0.0,
@@ -89,7 +89,7 @@ case class MicroBusState(
 
   /** Create a copy with updated leader information */
   def withUpdatedLeader(
-    leaderId: Option[String],
+    leaderId: Option[Long],
     gap: Double,
     leaderVel: Double
   ): MicroBusState =
