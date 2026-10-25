@@ -14,7 +14,7 @@ import scala.collection.mutable
   *
   * Carries the full initialization context (timeManagers, reporters) AND the migration snapshot so
   * the entity can restore its domain state and simulation metadata in a single message. Also
-  * carries batch tracking fields so the entity can ACK directly to the LBM.
+  * carries a store-issued restore token and revision so the entity can confirm application to SM.
   *
   * @param timeManagers
   *   Map of time manager type → ActorRef (cluster-transparent)
@@ -25,12 +25,21 @@ import scala.collection.mutable
   * @param batchId
   *   The migration batch ID — forwarded to [[MigrationRestoredAckEvent]]
   * @param lbmRef
-  *   ActorRef of the LoadBalanceManager singleton proxy — entity sends ACK here
+  *   ActorRef of the LoadBalanceManager singleton proxy for failure notification
+  * @param snapshotManagerRef
+  *   Store that must accept the target's confirmation before releasing state
+  * @param restoreToken
+  *   Store-issued identity of this target's restore offer
+  * @param snapshotRevision
+  *   Final source revision covered by this offer
   */
 case class MigrationContextEvent(
   timeManagers: mutable.Map[String, ActorRef],
   reporters: mutable.Map[ReportTypeEnum, ActorRef],
   snapshot: MigrationSnapshot,
   batchId: String,
-  lbmRef: ActorRef
+  lbmRef: ActorRef,
+  snapshotManagerRef: ActorRef = null,
+  restoreToken: String = "",
+  snapshotRevision: Long = 0L
 ) extends BaseEvent[DefaultBaseEventData]()

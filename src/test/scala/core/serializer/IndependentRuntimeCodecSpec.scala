@@ -53,6 +53,27 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
     SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, manifest).get shouldBe original
   }
 
+  it should "preserve migration preparation controls on independent codecs" in {
+    import core.entity.event.control.migration.*
+    val messages = Seq(
+      MigrationBatchRegisteredEvent("batch"),
+      MigrationSnapshotsReadyEvent("batch", Set("one", "two")),
+      MigrationPreparationFailedEvent("batch", "one", "capture failed"),
+      AbortMigrationPreparationEvent("batch"),
+      MigrationHandoffStopEvent(),
+      FinalMigrationSnapshotSavedEvent("one", "batch", 1L),
+      SaveFinalMigrationSnapshotEvent("one", "batch",
+        core.actor.manager.loadbalance.migration.MigrationSnapshot("{}", "example.State", entityId = "one"), 1L)
+    )
+    val from = SerializationExtension(writer)
+    messages.foreach { original =>
+      val serializer = from.findSerializerFor(original)
+      val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
+      SerializationExtension(reader).deserialize(from.serialize(original).get,
+        serializer.identifier, manifest).get shouldBe original
+    }
+  }
+
   "production worker Props" should "use class constructors rather than remotely serialized creator closures" in {
     val ref = writer.deadLetters
     val optimistic = AccountedOptimisticLocalTimeManager.props(100L, ref, ref)
@@ -60,5 +81,61 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
     optimistic.actorClass() shouldBe classOf[AccountedOptimisticLocalTimeManager]
     conservative.actorClass() shouldBe classOf[ChannelAwareLocalTimeManager]
     Seq(optimistic, conservative).foreach(_.args shouldBe List(100L, ref, ref))
+  }
+
+  "migration restore serialization" should "preserve confirmation identities on independent codecs" in {
+    import core.entity.event.control.migration.*
+    val messages = Seq(
+      MigrationRestoredAckEvent("one", "batch", "token", 3L),
+      MigrationRestoreAcceptedEvent("one", "batch"),
+      MigrationRestoreAlreadyAcceptedEvent("one", "batch", "token", 3L),
+      MigrationRestoreFailedEvent("one", "batch", "token", 3L, "hook failed"),
+      core.entity.event.control.loadbalance.MigrationCompleteEvent("shard", durationMs = 12L,
+        batchId = "batch", attemptId = "attempt"),
+      MigrationContextEvent(scala.collection.mutable.Map("discrete-event" -> reader.deadLetters),
+        scala.collection.mutable.Map(core.enumeration.ReportTypeEnum.parquet -> reader.deadLetters),
+        core.actor.manager.loadbalance.migration.MigrationSnapshot("{}", "example.State", entityId = "one"),
+        "batch", reader.deadLetters, reader.deadLetters, "token", 3L)
+    )
+    val from = SerializationExtension(writer)
+    messages.foreach { original =>
+      val serializer = from.findSerializerFor(original)
+      val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
+      SerializationExtension(reader).deserialize(from.serialize(original).get,
+        serializer.identifier, manifest).get shouldBe original
+    }
+  }
+
+  "distributed allocation codecs" should "preserve authority epochs, callback cohorts, registrations and intent identities" in {
+    import core.actor.manager.loadbalance.allocation.*
+    val ref = reader.deadLetters
+    val rows = Vector(AllocationRegion(ref, "pekko://cluster@127.0.0.1:2551", Vector("shard")))
+    val targets = Vector(AllocationTarget("Car", ref, ref))
+    val messages: Seq[AllocationWire] = Seq(
+      RegisterAllocationRegion("id", "epoch", "Car", "address", "incarnation", ref),
+      AllocationRegionRegistered("id", "epoch", "Car"),
+      BindAllocationController("id", "epoch", ref, "controller"), AllocationControllerBound("id", "epoch", "controller"),
+      AllocateShardRequest("id", "epoch", "Car", "address", "incarnation", 2L, ref, "shard", rows),
+      AllocateShardReply("id", "epoch", ref),
+      RebalanceShardsRequest("id", "epoch", "Car", "address", "incarnation", 3L, rows, Set("other")),
+      RebalanceShardsReply("id", "epoch", Set("shard")),
+      ResolveAllocationPlacement("id", "epoch", "controller", "shard", "source", "target", Vector("Car")),
+      AllocationPlacementResolved("id", "epoch", targets),
+      InstallAllocationIntent("id", "epoch", "controller", "batch", "attempt", "shard", "source", "target", targets),
+      AllocationIntentInstalled("id", "epoch", "batch", "attempt"),
+      RetireAllocationIntent("id", "epoch", "controller", "batch", "attempt", "shard"),
+      AllocationIntentRetired("id", "epoch", "batch", "attempt"), AllocationRejected("id", "epoch", "reason"),
+      AllocationAuthorityFailure("controller", "reason"), GetAllocationClientStatus,
+      AllocationClientStatus("epoch", "incarnation", "address", Set("Car"), None),
+      GetAllocationAuthorityStatus("id", "epoch"),
+      AllocationAuthorityStatus("id", "epoch", Map("Car" -> "owner"), Some("controller"), Map("Car" -> Set("address")), None,
+        Map("Car" -> rows))
+    )
+    val from = SerializationExtension(writer)
+    messages.foreach { original =>
+      val serializer = from.findSerializerFor(original)
+      val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
+      SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, manifest).get shouldBe original
+    }
   }
 }

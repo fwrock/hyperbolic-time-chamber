@@ -3,17 +3,20 @@ package core.actor.manager.loadbalance
 
 import core.actor.manager.BaseManager
 import core.actor.manager.loadbalance.allocation.{ LoadBalanceShardAllocator, ShardAllocatorRegistry, SpatialShardIdRegistry }
+import core.actor.manager.loadbalance.allocation.*
 import core.actor.manager.loadbalance.migration.{ MigrationRequestResult, MigrationStateStoreRegistry, MigrationWindowSubscriber, ShardMigrationCoordinator }
 import core.actor.manager.loadbalance.strategy.{ BalancingStrategy, StrategyConfig, StrategyFactory }
 import core.entity.control.loadbalance._
 import core.entity.event.EntityEnvelopeEvent
 import core.entity.event.control.loadbalance._
 import core.entity.event.control.loadbalance.ShardRegionMetricsCollectedEvent
-import core.entity.event.control.migration.{ MigrationRestoredAckEvent, MigrationWindowAckEvent, MigrationWindowCloseEvent, MigrationWindowOpenEvent, RegisterMigrationBatchEvent }
+import core.entity.event.control.migration.{ AbortMigrationPreparationEvent, MigrationBatchRegisteredEvent, MigrationPreparationFailedEvent, MigrationRestoredAckEvent, MigrationRestoreAcceptedEvent, MigrationSnapshotsReadyEvent, MigrationWindowAckEvent, MigrationWindowCloseEvent, MigrationWindowOpenEvent, RegisterMigrationBatchEvent }
 import core.entity.state.DefaultState
 import core.enumeration.{ LoadBalanceStrategyEnum, ShardTypeEnum }
 import core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
 import core.util.IdUtil
+import core.util.StringUtil
+import LoadBalanceManager.*
 
 import org.apache.pekko.actor.{ ActorRef, Cancellable, Props }
 import org.apache.pekko.cluster.{ Cluster, MemberStatus }
@@ -21,13 +24,14 @@ import org.apache.pekko.cluster.ClusterEvent.{ CurrentClusterState, MemberEvent,
 import org.apache.pekko.cluster.pubsub.DistributedPubSub
 import org.apache.pekko.cluster.pubsub.DistributedPubSubMediator.Publish
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
-import org.apache.pekko.pattern.ask
+import org.apache.pekko.pattern.{ ask, pipe }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.concurrent.Future
 import scala.util.{ Failure, Success }
 
 /** LoadBalanceManager
@@ -116,6 +120,26 @@ class LoadBalanceManager(
     * migration is active.
     */
   private var activeWave: Option[MigrationWaveState] = None
+  private var migrationFailed = false
+  private lazy val allocationRuntime = AllocationRuntime(context.system)
+  private val allocationControllerId = java.util.UUID.randomUUID().toString
+  private var allocationEpoch: Option[String] = None
+  private val startupMigrations = mutable.Queue.empty[MigrationPlan]
+  private case class PlacementAttempt(
+    id: String,
+    batchId: String,
+    plan: MigrationPlan,
+    targets: Seq[ResolvedMigrationTarget],
+    startedAt: Long = System.nanoTime(),
+    skipped: Boolean = false,
+    var round: Long = 0L,
+    var inFlight: Boolean = false,
+    var verified: Boolean = false,
+    var completionQueued: Boolean = false,
+    var installed: Boolean = true,
+    var poll: Option[Cancellable] = None
+  )
+  private val placementAttempts = mutable.Map.empty[String, PlacementAttempt]
 
   /** Lazy DistributedPubSub mediator reference for broadcasting window events. */
   private lazy val mediatorRef: ActorRef = DistributedPubSub(context.system).mediator
@@ -123,13 +147,21 @@ class LoadBalanceManager(
   // ── Per-wave migration tracking state ────────────────────────────────────
 
   /** Per-wave migration tracking state. */
+  private enum WavePhase {
+    case Resolving, Registering, Saving, Opening, Restoring, Closing
+  }
+
   private case class MigrationWaveState(
     batchId: String,
     plans: Seq[MigrationPlan],
     allEntityIds: Set[String],
     pendingWindowOpenNodeAcks: mutable.Set[String],
     pendingRestoreEntityAcks: mutable.Set[String],
-    pendingWindowCloseNodeAcks: mutable.Set[String]
+    pendingWindowCloseNodeAcks: mutable.Set[String],
+    entityIdsByShard: Map[String, Set[String]],
+    pendingPlacementShards: mutable.Set[String],
+    var destinations: Map[String, Seq[ResolvedMigrationTarget]] = Map.empty,
+    var phase: WavePhase = WavePhase.Resolving
   )
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -152,7 +184,7 @@ class LoadBalanceManager(
     cluster.subscribe(self, classOf[MemberEvent], classOf[UnreachableMember])
 
     // Register the shard allocator so ActorCreatorUtil uses it for future shard creations
-    ShardAllocatorRegistry.register(shardAllocator)
+    if (!allocationRuntime.enabled) ShardAllocatorRegistry.register(shardAllocator)
 
     // Schedule periodic rebalancing
     if (strategy.isDefined) {
@@ -161,11 +193,15 @@ class LoadBalanceManager(
     }
 
     // Initialize proxies
-    selfProxy = createSingletonProxy(LOAD_BALANCE_MANAGER_ACTOR_NAME)
+    selfProxy = if (allocationRuntime.enabled) self else createSingletonProxy(LOAD_BALANCE_MANAGER_ACTOR_NAME)
     timeManagerProxy = timeManager
 
     // Notify SimulationManager that we're ready
-    simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
+    if (allocationRuntime.enabled) {
+      val request = BindAllocationController(java.util.UUID.randomUUID().toString, "", self, allocationControllerId)
+      allocationRuntime.bind(request).map(e => AllocationBound(e.epoch))
+        .recover { case scala.util.control.NonFatal(error) => AllocationStartupFailed(error.getMessage) }.pipeTo(self)
+    } else simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
 
     logInfo(
       s"LoadBalanceManager ready. Strategy: ${strategy.map(_.name).getOrElse("disabled")}, " +
@@ -176,12 +212,27 @@ class LoadBalanceManager(
   // ── Message Handling ───────────────────────────────────────────────────────
 
   override def handleEvent: Receive = {
+    case _: StopSimulationEvent => handleStopSimulation()
+    case _ if migrationFailed => ()
+    case AllocationBound(epoch) =>
+      allocationEpoch = Some(epoch)
+      simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
+      startupMigrations.dequeueAll(_ => true).foreach(plan => self ! RequestMigrationEvent(plan))
+    case AllocationStartupFailed(reason) => failMigrationPreparation(reason)
+    case e: AllocationAuthorityFailure if e.controllerId == allocationControllerId => failMigrationPreparation(e.reason)
+    case _: AllocationAuthorityFailure => ()
+    case e: DestinationsResolved => handleDestinationsResolved(e)
+    case e: IntentAcknowledged => handleIntentAcknowledged(e)
     // Load balance events
     case event: UpdateLoadMetricsEvent            => handleUpdateMetrics(event)
     case event: RegisterSpatialEntityEvent        => handleRegisterEntity(event)
     case event: RegisterSpatialEntitiesBatchEvent => handleBatchRegisterEntities(event)
+    case event: RequestMigrationEvent if allocationRuntime.enabled && allocationEpoch.isEmpty => startupMigrations.enqueue(event.plan)
     case event: RequestMigrationEvent             => handleMigrationRequest(event)
     case event: MigrationCompleteEvent            => handleMigrationComplete(event)
+    case event: PlacementPoll => pollMigrationPlacement(event)
+    case event: PlacementObserved => handlePlacementObserved(event)
+    case _: ShardRegion.StartEntityAck => ()
     case event: TriggerRebalanceEvent             => handleTriggerRebalance(event)
     case _: CollectAndFeedMetricsEvent            => handleCollectAndFeedMetrics()
     case event: ShardRegionMetricsCollectedEvent  => handleShardRegionMetricsCollected(event)
@@ -189,9 +240,13 @@ class LoadBalanceManager(
     // TimeManager coordination events
     case event: MigrationSafeEvent => handleMigrationSafe(event)
 
-    case cmd: TriggerWindowOpenEvent      => handleTriggerWindowOpen(cmd)
+    case event: MigrationBatchRegisteredEvent => handleBatchRegistered(event)
+    case event: MigrationSnapshotsReadyEvent => handleSnapshotsReady(event)
+    case event: MigrationPreparationFailedEvent =>
+      activeWave.filter(_.batchId == event.batchId).foreach(_ => failMigrationPreparation(event.reason))
     case event: MigrationWindowAckEvent   => handleWindowAck(event)
-    case event: MigrationRestoredAckEvent => handleRestoredAck(event)
+    case event: MigrationRestoreAcceptedEvent => handleRestoredAck(event)
+    case _: MigrationRestoredAckEvent => ()
 
     case state: CurrentClusterState =>
       state.members.filter(_.status == MemberStatus.Up).foreach {
@@ -212,8 +267,8 @@ class LoadBalanceManager(
       strategy.foreach(_.removeNode(member.address))
 
     case _: UnreachableMember =>
+    case _: MemberEvent => ()
 
-    case _: StopSimulationEvent => handleStopSimulation()
   }
 
   /** Receives load metrics from shards and feeds them to the strategy. */
@@ -317,13 +372,7 @@ class LoadBalanceManager(
     val result = migrationCoordinator.requestMigration(event.plan)
     result match {
       case MigrationRequestResult.Started =>
-        logInfo(
-          s"Migration queued for execution: shard '${event.plan.shardId}' " +
-            s"from ${event.plan.sourceNode} to ${event.plan.targetNode} " +
-            s"(reason: ${event.plan.reason})"
-        )
-        pendingMigrationPlans.enqueue(event.plan)
-        requestTimeManagerPause()
+        enqueueAdmittedMigration(event.plan)
 
       case MigrationRequestResult.Queued(pos) =>
         logInfo(s"Migration queued at position $pos: shard '${event.plan.shardId}'")
@@ -336,13 +385,30 @@ class LoadBalanceManager(
     }
   }
 
+  private def enqueueAdmittedMigration(plan: MigrationPlan): Unit = {
+    logInfo(
+      s"Migration queued for execution: shard '${plan.shardId}' " +
+        s"from ${plan.sourceNode} to ${plan.targetNode} (reason: ${plan.reason})"
+    )
+    pendingMigrationPlans.enqueue(plan)
+    requestTimeManagerPause()
+  }
+
+  private def continueMigrationQueue(): Unit =
+    if (activeWave.isEmpty && !awaitingMigrationPause) {
+      if (pendingMigrationPlans.nonEmpty) requestTimeManagerPause()
+      else if (migrationCoordinator.activeMigrationCount == 0) {
+        timeManagerProxy ! MigrationCompleteNotifyEvent()
+      }
+    }
+
   /** Requests the TimeManager to pause at a safe tick boundary.
     *
     * Only sends one request at a time — if we're already waiting, additional migration plans just
     * queue up and will be executed once the TimeManager signals safety.
     */
   private def requestTimeManagerPause(): Unit =
-    if (!awaitingMigrationPause && pendingMigrationPlans.nonEmpty) {
+    if (activeWave.isEmpty && !awaitingMigrationPause && pendingMigrationPlans.nonEmpty) {
       awaitingMigrationPause = true
       val shardIds = pendingMigrationPlans.map(_.shardId).toSet
       logInfo(s"Requesting TimeManager to pause for migration of shards: $shardIds")
@@ -359,13 +425,17 @@ class LoadBalanceManager(
     * Pekko hands off the shard).
     *
     * Dynamic plan flow:
-    *   1. Register batch with SnapshotManager 2. Notify entities to serialize state to SM
-    *      (PrepareForMigrationEvent with batchId) 3. Schedule window-open broadcast after 200ms
-    *      (let snapshots reach SM) 4. Wait for open ACKs from all nodes → then trigger Pekko
-    *      rebalance per plan 5. Wait for entity restore ACKs → then broadcast window-close 6. Wait
+    *   1. Register batch with SnapshotManager and await registration ACK 2. Notify entities to
+    *      freeze and serialize state 3. Wait for the complete saved-snapshot barrier
+    *      4. Wait for open ACKs from all nodes → then trigger Pekko
+    *      rebalance per plan 5. Verify placement and accepted restores → then broadcast window-close 6. Wait
     *      for close ACKs → then notify TimeManager to resume
     */
   private def handleMigrationSafe(event: MigrationSafeEvent): Unit = {
+    if (!awaitingMigrationPause || activeWave.isDefined) {
+      logWarn(s"Ignoring unsolicited migration-safe notification at tick ${event.currentTick}")
+      return
+    }
     logInfo(
       s"TimeManager paused at tick ${event.currentTick}. Executing ${pendingMigrationPlans.size} pending migrations."
     )
@@ -397,27 +467,14 @@ class LoadBalanceManager(
     }
 
     val batchId = java.util.UUID.randomUUID().toString.take(12)
-    val allEntityIds = dynamicPlans
-      .flatMap(
-        p => SpatialShardIdRegistry.getEntitiesInShard(p.shardId).toSeq
-      )
-      .map(IdUtil.format) // Format to match shard routing keys used by TM
-      .toSet
+    val entityIdsByShard = dynamicPlans.map(p => p.shardId ->
+      SpatialShardIdRegistry.getEntitiesInShard(p.shardId).map(IdUtil.format)).toMap
+    val allEntityIds = entityIdsByShard.values.flatten.toSet
 
     val clusterNodeAddrs: mutable.Set[String] = mutable.Set.empty ++
       cluster.state.members
         .filter(_.status == MemberStatus.Up)
         .map(_.address.toString)
-
-    MigrationStateStoreRegistry.getSnapshotManager.foreach {
-      smRef =>
-        smRef ! RegisterMigrationBatchEvent(batchId, allEntityIds, getSelfProxy)
-    }
-
-    dynamicPlans.foreach {
-      plan =>
-        notifyEntitiesForMigrationWithBatch(plan.shardId, plan.targetNode.toString, batchId)
-    }
 
     activeWave = Some(
       MigrationWaveState(
@@ -426,51 +483,108 @@ class LoadBalanceManager(
         allEntityIds = allEntityIds,
         pendingWindowOpenNodeAcks = clusterNodeAddrs,
         pendingRestoreEntityAcks = mutable.Set.empty ++ allEntityIds,
-        pendingWindowCloseNodeAcks = mutable.Set.empty
+        pendingWindowCloseNodeAcks = mutable.Set.empty,
+        entityIdsByShard = entityIdsByShard,
+        pendingPlacementShards = mutable.Set.empty ++ dynamicPlans.map(_.shardId)
       )
     )
 
-    val windowOpenDelayMs =
-      try
-        context.system.settings.config
-          .getInt("htc.load-balance-manager.migration.window-open-delay-ms")
-      catch { case _: Exception => 200 }
-    context.system.scheduler.scheduleOnce(windowOpenDelayMs.milliseconds) {
-      getSelfProxy ! TriggerWindowOpenEvent(batchId, allEntityIds)
+    if (allEntityIds.isEmpty) {
+      failMigrationPreparation("dynamic migration has no known source membership")
+      return
+    }
+    Future.sequence(dynamicPlans.toVector.map(plan => resolveMigrationDestinationsAsync(plan).map(plan.shardId -> _)))
+      .map(results => DestinationsResolved(batchId, results)).pipeTo(self)
+  }
+
+  private def handleDestinationsResolved(event: DestinationsResolved): Unit = {
+    val current = activeWave.filter(w => w.batchId == event.batchId && w.phase == WavePhase.Resolving)
+    if (current.isEmpty) return
+    val wave = current.get
+    event.results.collectFirst { case (_, Left(reason)) => reason } match {
+      case Some(reason) =>
+        failMigrationPreparation(reason)
+        return
+      case None => wave.destinations = event.results.collect { case (id, Right(targets)) => id -> targets }.toMap
+    }
+    wave.phase = WavePhase.Registering
+    MigrationStateStoreRegistry.getSnapshotManager match {
+      case Some(smRef) => smRef ! RegisterMigrationBatchEvent(wave.batchId, wave.allEntityIds, getSelfProxy)
+      case None =>
+        failMigrationPreparation("SnapshotManager proxy is not registered")
+        return
     }
 
     logInfo(
-      s"Migration wave '$batchId': ${dynamicPlans.size} dynamic plan(s), " +
-        s"${allEntityIds.size} entities, ${clusterNodeAddrs.size} cluster nodes"
+      s"Migration wave '${wave.batchId}': ${wave.plans.size} dynamic plan(s), ${wave.allEntityIds.size} entities"
     )
   }
 
-  /** Broadcasts MigrationWindowOpenEvent to all nodes via DistributedPubSub. Called 200ms after
-    * entity notification to allow snapshots to reach SM first.
-    */
-  private def handleTriggerWindowOpen(cmd: TriggerWindowOpenEvent): Unit =
-    activeWave.filter(_.batchId == cmd.batchId) match {
-      case None =>
-        logWarn(s"TriggerWindowOpenEvent for unknown batch '${cmd.batchId}' — ignoring")
-      case Some(wave) =>
+  private def handleBatchRegistered(event: MigrationBatchRegisteredEvent): Unit =
+    activeWave.filter(w => w.batchId == event.batchId && w.phase == WavePhase.Registering).foreach { wave =>
+      wave.phase = WavePhase.Saving
+      wave.plans.foreach { plan =>
+        notifyEntitiesForMigrationWithBatch(plan.shardId, plan.targetNode.toString, wave.batchId)
+      }
+    }
+
+  private def handleSnapshotsReady(event: MigrationSnapshotsReadyEvent): Unit =
+    activeWave.filter(w => w.batchId == event.batchId && w.phase == WavePhase.Saving).foreach { wave =>
+      if (event.entityIds != wave.allEntityIds) failMigrationPreparation("snapshot barrier membership mismatch")
+      else {
+        wave.phase = WavePhase.Opening
         logInfo(
           s"Broadcasting MigrationWindowOpenEvent for batch '${wave.batchId}' " +
-            s"(${cmd.entityIds.size} entities, ${wave.pendingWindowOpenNodeAcks.size} nodes)"
+            s"(${wave.allEntityIds.size} entities, ${wave.pendingWindowOpenNodeAcks.size} nodes)"
         )
         mediatorRef ! Publish(
           MigrationWindowSubscriber.TOPIC,
           MigrationWindowOpenEvent(
             batchId = wave.batchId,
-            entityIds = cmd.entityIds,
+            entityIds = wave.allEntityIds,
             lbmRef = getSelfProxy
           )
         )
+      }
+    }
+
+  private def failMigrationPreparation(reason: String): Unit = {
+    logError(s"Migration preparation failed; stopping the simulation: $reason")
+    migrationFailed = true
+    abortPreparedSources()
+    activeWave = None
+    pendingMigrationPlans.clear()
+    startupMigrations.clear()
+    awaitingMigrationPause = false
+    migrationCoordinator.abortAll()
+    clearPlacementAttempts()
+    rebalanceScheduler.foreach(_.cancel())
+    metricsScheduler.foreach(_.cancel())
+    timeManagerProxy ! StopSimulationEvent()
+    simulationManager ! StopSimulationEvent()
+  }
+
+  private def abortPreparedSources(): Unit =
+    activeWave.foreach { wave =>
+      wave.plans.foreach { plan =>
+        SpatialShardIdRegistry.getEntitiesInShard(plan.shardId).foreach { id =>
+          SpatialShardIdRegistry.getEntityClassName(id).foreach { className =>
+            try {
+              ClusterSharding(context.system).shardRegion(className) !
+                EntityEnvelopeEvent(id, AbortMigrationPreparationEvent(wave.batchId))
+            } catch {
+              case e: IllegalArgumentException =>
+                logWarn(s"Cannot unfreeze '$id' during shutdown: ${e.getMessage}")
+            }
+          }
+        }
+      }
     }
 
   /** Handles a MigrationWindowAckEvent from a cluster node subscriber.
     *
     * Open ACKs: count down. When all nodes ACKed → trigger Pekko rebalance per plan. Close ACKs:
-    * count down. When all nodes ACKed → notify TimeManager to resume.
+    * count down. All close ACKs permit queue continuation; resume waits for the queue to finish.
     */
   private def handleWindowAck(event: MigrationWindowAckEvent): Unit =
     activeWave.filter(_.batchId == event.batchId) match {
@@ -480,13 +594,14 @@ class LoadBalanceManager(
         )
       case Some(wave) =>
         event.phase match {
-          case MigrationWindowSubscriber.PHASE_OPEN =>
-            wave.pendingWindowOpenNodeAcks -= event.nodeAddress
+          case MigrationWindowSubscriber.PHASE_OPEN if wave.phase == WavePhase.Opening &&
+              wave.pendingWindowOpenNodeAcks.remove(event.nodeAddress) =>
             logDebug(
               s"Window open ACK from '${event.nodeAddress}' " +
                 s"(remaining: ${wave.pendingWindowOpenNodeAcks.size})"
             )
             if (wave.pendingWindowOpenNodeAcks.isEmpty) {
+              wave.phase = WavePhase.Restoring
               logInfo(
                 s"All nodes ACKed window open for batch '${wave.batchId}'. " +
                   s"Triggering Pekko shard rebalance for ${wave.plans.size} plans."
@@ -494,8 +609,8 @@ class LoadBalanceManager(
               wave.plans.foreach(triggerPekkoHandoff)
             }
 
-          case MigrationWindowSubscriber.PHASE_CLOSE =>
-            wave.pendingWindowCloseNodeAcks -= event.nodeAddress
+          case MigrationWindowSubscriber.PHASE_CLOSE if wave.phase == WavePhase.Closing &&
+              wave.pendingWindowCloseNodeAcks.remove(event.nodeAddress) =>
             logDebug(
               s"Window close ACK from '${event.nodeAddress}' " +
                 s"(remaining: ${wave.pendingWindowCloseNodeAcks.size})"
@@ -503,79 +618,60 @@ class LoadBalanceManager(
             if (wave.pendingWindowCloseNodeAcks.isEmpty) {
               logInfo(
                 s"All nodes ACKed window close for batch '${wave.batchId}'. " +
-                  s"Notifying TimeManager to resume."
+                  s"Continuing admitted migrations."
               )
               activeWave = None
-              timeManagerProxy ! MigrationCompleteNotifyEvent()
+              continueMigrationQueue()
             }
 
-          case other =>
-            logWarn(s"Unknown migration window ACK phase: '$other'")
+          case _ => ()
         }
     }
 
-  /** Handles a MigrationRestoredAckEvent from a fully-restored entity on the target node.
-    *
-    * Counts down the pending restore set. When all entities in the wave have reported back,
-    * broadcasts MigrationWindowCloseEvent to end the distributed flag period.
-    */
-  private def handleRestoredAck(event: MigrationRestoredAckEvent): Unit =
+  /** A restore confirmation alone cannot release admission or close the window without placement evidence. */
+  private def handleRestoredAck(event: MigrationRestoreAcceptedEvent): Unit =
     activeWave.filter(_.batchId == event.batchId) match {
       case None =>
         logDebug(
-          s"MigrationRestoredAckEvent from '${event.entityId}' for batch '${event.batchId}' — " +
+          s"MigrationRestoreAcceptedEvent for '${event.entityId}' in batch '${event.batchId}' — " +
             s"no active wave (already closed or not a migration entity)"
         )
-      case Some(wave) =>
-        wave.pendingRestoreEntityAcks -= event.entityId
+      case Some(wave) if wave.phase == WavePhase.Restoring && wave.pendingRestoreEntityAcks.remove(event.entityId) =>
         logDebug(
           s"Entity '${event.entityId}' restored. " +
             s"Batch '${event.batchId}': ${wave.pendingRestoreEntityAcks.size} entities remaining."
         )
-        if (wave.pendingRestoreEntityAcks.isEmpty) {
-          logInfo(
-            s"All ${wave.allEntityIds.size} entities restored for batch '${wave.batchId}'. " +
-              s"Broadcasting MigrationWindowCloseEvent."
-          )
-          val clusterNodeAddrs: Set[String] = cluster.state.members
-            .filter(_.status == MemberStatus.Up)
-            .map(_.address.toString)
-          wave.pendingWindowCloseNodeAcks ++= clusterNodeAddrs
-          mediatorRef ! Publish(
-            MigrationWindowSubscriber.TOPIC,
-            MigrationWindowCloseEvent(batchId = wave.batchId, lbmRef = getSelfProxy)
-          )
-        }
+        wave.plans.foreach(plan => maybeCompletePlacement(plan.shardId))
+        maybeCloseMigrationWindow(wave)
+      case _ => ()
     }
 
-  /** Handles migration completion (Pekko shard hand-off reported done by the monitor).
-    *
-    * If an active migration wave is in progress, the TimeManager notification is deferred until all
-    * entities have been restored (tracked via MigrationRestoredAckEvent) and the distributed window
-    * is closed. In that case, do NOT notify TM here.
-    *
-    * If there is no active wave (static-only migrations), notify TM when all shard hand-offs are
-    * complete.
-    */
+  private def maybeCloseMigrationWindow(wave: MigrationWaveState): Unit =
+    if (wave.phase == WavePhase.Restoring && wave.pendingRestoreEntityAcks.isEmpty &&
+        wave.pendingPlacementShards.isEmpty) {
+      wave.phase = WavePhase.Closing
+      wave.pendingWindowCloseNodeAcks ++= cluster.state.members.filter(_.status == MemberStatus.Up).map(_.address.toString)
+      mediatorRef ! Publish(MigrationWindowSubscriber.TOPIC,
+        MigrationWindowCloseEvent(batchId = wave.batchId, lbmRef = getSelfProxy))
+    }
+
   private def handleMigrationComplete(event: MigrationCompleteEvent): Unit = {
+    val attempt = placementAttempts.get(event.shardId).filter(a => a.id == event.attemptId &&
+      a.batchId == event.batchId && a.completionQueued && a.verified)
+    if (sender() != self || attempt.isEmpty || !event.success ||
+        !migrationCoordinator.isMigrating(event.shardId)) return
+    placementAttempts.remove(event.shardId).foreach(_.poll.foreach(_.cancel()))
     val nextPlan = migrationCoordinator.completeMigration(event.shardId, event.success)
-
-    if (event.success) {
-      logInfo(s"Pekko shard hand-off complete: '${event.shardId}' (${event.durationMs}ms)")
-    } else {
-      logWarn(s"Pekko shard hand-off reported failure: '${event.shardId}'")
+    logInfo(s"Migration '${event.shardId}' ${if (attempt.get.skipped) "skipped (static)" else "placement and restore verified"}: ${event.durationMs}ms")
+    activeWave.filter(_.batchId == event.batchId).foreach { wave =>
+      wave.pendingPlacementShards -= event.shardId
+      maybeCloseMigrationWindow(wave)
     }
 
-    nextPlan.foreach {
-      plan =>
-        getSelfProxy ! RequestMigrationEvent(plan)
-    }
+    nextPlan.foreach(enqueueAdmittedMigration)
 
     val stats = migrationCoordinator.getStats
-    if (stats.activeMigrations == 0 && pendingMigrationPlans.isEmpty && activeWave.isEmpty) {
-      logInfo("All shard migrations complete (no wave active). Notifying TimeManager to resume.")
-      timeManagerProxy ! MigrationCompleteNotifyEvent()
-    }
+    continueMigrationQueue()
 
     logInfo(
       s"Migration stats: active=${stats.activeMigrations}, " +
@@ -607,6 +703,7 @@ class LoadBalanceManager(
     logInfo("LoadBalanceManager stopping. Aborting active migrations.")
 
     cluster.unsubscribe(self)
+    abortPreparedSources()
 
     ShardAllocatorRegistry.clear()
     SpatialShardIdRegistry.clear()
@@ -616,12 +713,10 @@ class LoadBalanceManager(
     metricsScheduler.foreach(_.cancel())
 
     migrationCoordinator.abortAll()
+    clearPlacementAttempts()
 
-    if (awaitingMigrationPause || activeWave.isDefined) {
-      timeManagerProxy ! MigrationCompleteNotifyEvent()
-      awaitingMigrationPause = false
-      activeWave = None
-    }
+    awaitingMigrationPause = false
+    activeWave = None
 
     strategy.foreach(_.shutdown())
 
@@ -633,56 +728,13 @@ class LoadBalanceManager(
     selfDestruct()
   }
 
-  /** Sends [[PrepareForMigrationEvent]] to all entities in a shard, requesting them to serialize
-    * their state to the migration store before hand-off.
-    *
-    * This uses the shard region to route the event to each entity. Since we may not have an
-    * explicit list of entity IDs per shard, we broadcast via the shard region using the entity IDs
-    * tracked in the allocator's shard→entity mapping.
-    *
-    * @param shardId
-    *   The shard being migrated
-    * @param targetNode
-    *   The target node address (for logging in the event)
-    */
-  private def notifyEntitiesForMigration(shardId: String, targetNode: String): Unit = {
-    val event = PrepareForMigrationEvent(shardId = shardId, targetNode = targetNode)
-
-    val entityIds = SpatialShardIdRegistry.getEntitiesInShard(shardId)
-
-    if (entityIds.nonEmpty) {
-      logInfo(
-        s"Notifying ${entityIds.size} entities in shard '$shardId' to save state before migration"
-      )
-      entityIds.foreach {
-        eid =>
-          try {
-            val shardRegionName = SpatialShardIdRegistry.getEntityClassName(eid)
-            shardRegionName.foreach {
-              className =>
-                val region = ClusterSharding(context.system).shardRegion(className)
-                region ! EntityEnvelopeEvent(eid, event)
-            }
-          } catch {
-            case e: Exception =>
-              logWarn(s"Failed to notify entity '$eid' for migration: ${e.getMessage}")
-          }
-      }
-    } else {
-      logDebug(
-        s"No entity IDs tracked for shard '$shardId' — entities will save state on DestructEvent"
-      )
-    }
-  }
-
   /** Notifies entities in a shard to save their state to the SnapshotManager (migration window).
     *
-    * Same as [[notifyEntitiesForMigration]] but includes `batchId` and `lbmRef` in the
-    * PrepareForMigrationEvent so entities can:
+    * Includes `batchId` and `lbmRef` in the PrepareForMigrationEvent so entities can:
     *   1. Send [[core.entity.event.control.migration.SaveMigrationSnapshotEvent]] to SM 2. Later
-    *      send [[core.entity.event.control.migration.MigrationRestoredAckEvent]] to LBM
+    *      confirm restoration to SM, which notifies LBM only after validating the confirmation
     */
-  private def notifyEntitiesForMigrationWithBatch(
+  protected def notifyEntitiesForMigrationWithBatch(
     shardId: String,
     targetNode: String,
     batchId: String
@@ -696,25 +748,22 @@ class LoadBalanceManager(
       entityIds.foreach {
         eid =>
           try {
-            val shardRegionName = SpatialShardIdRegistry.getEntityClassName(eid)
-            shardRegionName.foreach {
-              className =>
-                val region = ClusterSharding(context.system).shardRegion(className)
-                region ! EntityEnvelopeEvent(
-                  eid,
-                  PrepareForMigrationEvent(
-                    shardId = shardId,
-                    targetNode = targetNode,
-                    batchId = batchId,
-                    lbmRef = getSelfProxy
-                  )
-                )
-            }
+            val className = SpatialShardIdRegistry.getEntityClassName(eid).getOrElse(
+              throw new IllegalStateException(s"No actor class registered for '$eid'"))
+            val region = ClusterSharding(context.system).shardRegion(className)
+            region ! EntityEnvelopeEvent(
+              eid,
+              PrepareForMigrationEvent(
+                shardId = shardId,
+                targetNode = targetNode,
+                batchId = batchId,
+                lbmRef = getSelfProxy
+              )
+            )
           } catch {
             case e: Exception =>
-              logWarn(
-                s"Failed to notify entity '$eid' for migration (batch=$batchId): ${e.getMessage}"
-              )
+              getSelfProxy ! MigrationPreparationFailedEvent(batchId, eid,
+                s"Cannot prepare source: ${e.getMessage}")
           }
       }
     } else {
@@ -887,11 +936,10 @@ class LoadBalanceManager(
       logInfo(
         s"Skipping migration of static shard '${plan.shardId}' (infrastructure actors are pinned)"
       )
-      getSelfProxy ! MigrationCompleteEvent(
-        shardId = plan.shardId,
-        success = true,
-        durationMs = 0
-      )
+      val attempt = PlacementAttempt(java.util.UUID.randomUUID().toString, "", plan, Seq.empty,
+        skipped = true, verified = true, completionQueued = true)
+      placementAttempts(plan.shardId) = attempt
+      self ! MigrationCompleteEvent(plan.shardId, attemptId = attempt.id)
       return
     }
 
@@ -908,74 +956,199 @@ class LoadBalanceManager(
     * handleMigrationSafe; this method only tells the Pekko ShardCoordinator to move the shard and
     * then monitors completion.
     */
-  private def triggerPekkoHandoff(plan: MigrationPlan): Unit = {
+  protected def triggerPekkoHandoff(plan: MigrationPlan): Unit = {
+    if (migrationFailed) return
     logInfo(
       s"Triggering Pekko hand-off: shard '${plan.shardId}' (type=${shardTypes
           .getOrElse(plan.shardId, ShardTypeEnum.Dynamic)}) → ${plan.targetNode}"
     )
 
-    val targetRegion = shardAllocator.getRegionIndex.find {
-      case (_, shards) => shards.nonEmpty
+    val planned = activeWave.flatMap(_.destinations.get(plan.shardId))
+    if (allocationRuntime.enabled) {
+      val targets = planned.getOrElse(Seq.empty)
+      val attempt = PlacementAttempt(java.util.UUID.randomUUID().toString, activeWave.get.batchId, plan,
+        targets, installed = false)
+      placementAttempts(plan.shardId) = attempt
+      val request = InstallAllocationIntent(java.util.UUID.randomUUID().toString, allocationEpoch.get,
+        allocationControllerId, attempt.batchId, attempt.id, plan.shardId, plan.sourceNode.toString,
+        plan.targetNode.toString, targets.map(t => AllocationTarget(t.typeName, t.sourceRegion, t.region)).toVector)
+      allocationRuntime.request(request).map {
+        case e: AllocationIntentInstalled if e.requestId == request.requestId && e.epoch == request.epoch &&
+            e.batchId == request.batchId && e.attemptId == request.attemptId =>
+          IntentAcknowledged(plan.shardId, request.batchId, request.attemptId, retiring = false, None)
+        case e: AllocationRejected => IntentAcknowledged(plan.shardId, request.batchId, request.attemptId, false, Some(e.reason))
+        case _ => IntentAcknowledged(plan.shardId, request.batchId, request.attemptId, false, Some("uncorrelated allocation intent reply"))
+      }.recover { case scala.util.control.NonFatal(error) =>
+        IntentAcknowledged(plan.shardId, request.batchId, request.attemptId, false, Some(error.getMessage))
+      }.pipeTo(self)
+      return
     }
-      .map(_._1)
-
-    targetRegion match {
-      case Some(region) =>
-        shardAllocator.requestRebalance(plan.shardId, region)
+    resolveMigrationDestinations(plan) match {
+      case Right(targets) if planned.contains(targets) && targets.nonEmpty =>
+        targets.foreach { target =>
+          shardAllocator.forType(target.typeName).requestRebalance(plan.shardId, target.region)
+        }
         logInfo(
           s"Shard '${plan.shardId}' marked for rebalance in allocator. " +
             s"Pekko ShardCoordinator will pick it up on next rebalance cycle."
         )
-        val startTime = System.currentTimeMillis()
-        monitorMigrationCompletion(plan.shardId, startTime, attempt = 1)
+        startMigrationPlacementMonitoring(plan, targets)
 
-      case None =>
-        logWarn(
-          s"No target region found for shard '${plan.shardId}'. " +
-            s"Region index is empty (cluster may still be forming). Reporting failure."
-        )
-        getSelfProxy ! MigrationCompleteEvent(
-          shardId = plan.shardId,
-          success = false,
-          durationMs = 0
-        )
+      case Left(reason) => failMigrationPreparation(reason)
+      case _ => failMigrationPreparation(s"Destination registration changed for shard '${plan.shardId}'")
     }
   }
 
-  /** Periodically checks whether a shard migration has completed.
-    *
-    * Pekko's shard hand-off is async: the shard is passivated on the source node and re-created on
-    * the target. We check the allocator's region index to see if the shard has moved. After
-    * maxAttempts, we report completion anyway (Pekko handles delivery guarantees).
-    */
-  private def monitorMigrationCompletion(
-    shardId: String,
-    startTime: Long,
-    attempt: Int,
-    maxAttempts: Int = 20,
-    checkIntervalMs: Long = 500
-  ): Unit =
-    context.system.scheduler.scheduleOnce(checkIntervalMs.milliseconds) {
-      val migrationStillPending = shardAllocator.getPendingRebalances.contains(shardId)
-      val duration = System.currentTimeMillis() - startTime
-
-      if (!migrationStillPending || attempt >= maxAttempts) {
-        val success = !migrationStillPending
-        if (!success) {
-          logWarn(
-            s"Migration of shard '$shardId' did not complete after $maxAttempts attempts (${duration}ms). " +
-              s"Reporting success anyway — Pekko may still be processing."
-          )
-        }
-        getSelfProxy ! MigrationCompleteEvent(
-          shardId = shardId,
-          success = true,
-          durationMs = duration
-        )
-      } else {
-        monitorMigrationCompletion(shardId, startTime, attempt + 1, maxAttempts, checkIntervalMs)
+  protected def resolveMigrationDestinations(plan: MigrationPlan): Either[String, Seq[ResolvedMigrationTarget]] = {
+    migrationTypeNames(plan).flatMap { typeNames =>
+      val targets = typeNames.map { typeName =>
+        shardAllocator.forType(typeName).resolvePlacement(plan.shardId, plan.sourceNode, plan.targetNode,
+          cluster.selfAddress).map { case (source, target) => ResolvedMigrationTarget(typeName, target, source) }
+      }
+      targets.collectFirst { case Left(reason) => reason } match {
+        case Some(reason) => Left(reason)
+        case None => Right(targets.collect { case Right(target) => target })
       }
     }
+  }
+
+  private def migrationTypeNames(plan: MigrationPlan): Either[String, Seq[String]] = {
+    if (!cluster.state.members.exists(m => m.status == MemberStatus.Up && m.address == plan.sourceNode))
+      return Left(s"Migration source ${plan.sourceNode} is not an Up cluster member")
+    if (!cluster.state.members.exists(m => m.status == MemberStatus.Up && m.address == plan.targetNode))
+      return Left(s"Migration target ${plan.targetNode} is not an Up cluster member")
+    val ids = SpatialShardIdRegistry.getEntitiesInShard(plan.shardId).toSeq.sorted
+    val classes = ids.map(SpatialShardIdRegistry.getEntityClassName)
+    if (ids.isEmpty || classes.exists(_.isEmpty))
+      return Left(s"Incomplete entity/type membership for shard '${plan.shardId}'")
+    val typeNames = classes.flatten.map(StringUtil.getModelClassName).distinct.sorted
+    if (typeNames.exists { name =>
+      val lower = name.split('.').last.toLowerCase
+      lower.contains("node") || lower.contains("link") || lower.contains("signal")
+    }) return Left(s"Shard '${plan.shardId}' contains pinned infrastructure; mixed infrastructure migration is unsupported")
+    Right(typeNames)
+  }
+
+  private def resolveMigrationDestinationsAsync(plan: MigrationPlan): Future[Either[String, Seq[ResolvedMigrationTarget]]] = {
+    if (!allocationRuntime.enabled) return Future.successful(resolveMigrationDestinations(plan))
+    migrationTypeNames(plan) match {
+      case Left(reason) => Future.successful(Left(reason))
+      case Right(types) =>
+        val request = ResolveAllocationPlacement(java.util.UUID.randomUUID().toString, allocationEpoch.get,
+          allocationControllerId, plan.shardId, plan.sourceNode.toString, plan.targetNode.toString, types.toVector)
+        allocationRuntime.request(request).map {
+          case e: AllocationPlacementResolved if e.requestId == request.requestId && e.epoch == request.epoch =>
+            Right(e.targets.map(t => ResolvedMigrationTarget(t.typeName, t.target, t.source)))
+          case e: AllocationRejected => Left(e.reason)
+          case _ => Left("uncorrelated allocation resolution reply")
+        }.recover { case scala.util.control.NonFatal(error) => Left(error.getMessage) }
+    }
+  }
+
+  protected def startMigrationPlacementMonitoring(plan: MigrationPlan, targets: Seq[ResolvedMigrationTarget]): String = {
+    val batchId = activeWave.get.batchId
+    val attempt = PlacementAttempt(java.util.UUID.randomUUID().toString, batchId, plan, targets)
+    placementAttempts(plan.shardId) = attempt
+    self ! PlacementPoll(plan.shardId, batchId, attempt.id)
+    attempt.id
+  }
+
+  private def pollMigrationPlacement(event: PlacementPoll): Unit =
+    placementAttempts.get(event.shardId).filter(a => a.id == event.attemptId && a.batchId == event.batchId &&
+      a.installed && !a.inFlight && !a.verified).foreach { attempt =>
+      attempt.poll = None
+      attempt.inFlight = true
+      attempt.round += 1L
+      val round = attempt.round
+      val shardId = event.shardId
+      implicit val timeout: Timeout = Timeout(5.seconds)
+      def query(region: ActorRef): Future[Option[ShardRegion.CurrentShardRegionState]] =
+        (region ? ShardRegion.GetShardRegionState).mapTo[ShardRegion.CurrentShardRegionState]
+          .map(state => Option(state)).recover { case scala.util.control.NonFatal(_) => None }
+      val observations = attempt.targets.map { target =>
+        val source = query(target.sourceRegion)
+        val destination = query(target.region)
+        source.zip(destination).map {
+          case (Some(from), Some(to)) =>
+            from.failed.isEmpty && to.failed.isEmpty && !from.shards.exists(_.shardId == shardId) &&
+              to.shards.exists(_.shardId == shardId)
+          case _ => false
+        }.recover { case scala.util.control.NonFatal(_) => false }
+      }
+      Future.sequence(observations).map { results =>
+        PlacementObserved(shardId, event.batchId, event.attemptId, round, results.nonEmpty && results.forall(identity))
+      }.pipeTo(self)
+    }
+
+  private def handlePlacementObserved(event: PlacementObserved): Unit =
+    placementAttempts.get(event.shardId).filter(a => a.id == event.attemptId && a.batchId == event.batchId &&
+      a.inFlight && a.round == event.round).foreach { attempt =>
+      attempt.inFlight = false
+      attempt.verified = event.verified
+      if (event.verified) {
+        if (allocationRuntime.enabled) activeWave.filter(_.batchId == attempt.batchId).foreach { wave =>
+          attempt.targets.foreach { target =>
+            wave.entityIdsByShard(event.shardId).filter(id => SpatialShardIdRegistry.getEntityClassName(id)
+              .exists(name => StringUtil.getModelClassName(name) == target.typeName)).foreach { id =>
+              target.region ! ShardRegion.StartEntity(id)
+            }
+          }
+        }
+        maybeCompletePlacement(event.shardId)
+      }
+      else {
+        logDebug(s"Placement is not yet verified for '${event.shardId}' in round ${event.round}")
+        attempt.poll = Some(context.system.scheduler.scheduleOnce(500.milliseconds, self,
+          PlacementPoll(event.shardId, event.batchId, event.attemptId)))
+      }
+    }
+
+  private def maybeCompletePlacement(shardId: String): Unit =
+    placementAttempts.get(shardId).filter(a => a.verified && !a.completionQueued).foreach { attempt =>
+      activeWave.filter(w => w.batchId == attempt.batchId &&
+        w.entityIdsByShard(shardId).intersect(w.pendingRestoreEntityAcks.toSet).isEmpty).foreach { _ =>
+        attempt.completionQueued = true
+        if (allocationRuntime.enabled) {
+          val request = RetireAllocationIntent(java.util.UUID.randomUUID().toString, allocationEpoch.get,
+            allocationControllerId, attempt.batchId, attempt.id, shardId)
+          allocationRuntime.request(request).map {
+            case e: AllocationIntentRetired if e.requestId == request.requestId && e.epoch == request.epoch &&
+                e.batchId == request.batchId && e.attemptId == request.attemptId =>
+              IntentAcknowledged(shardId, request.batchId, request.attemptId, true, None)
+            case e: AllocationRejected => IntentAcknowledged(shardId, request.batchId, request.attemptId, true, Some(e.reason))
+            case _ => IntentAcknowledged(shardId, request.batchId, request.attemptId, true, Some("uncorrelated allocation retirement reply"))
+          }.recover { case scala.util.control.NonFatal(error) =>
+            IntentAcknowledged(shardId, request.batchId, request.attemptId, true, Some(error.getMessage))
+          }.pipeTo(self)
+        } else self ! completionEvent(attempt)
+      }
+    }
+
+  private def clearPlacementAttempts(): Unit = {
+    placementAttempts.values.foreach(_.poll.foreach(_.cancel()))
+    placementAttempts.clear()
+  }
+
+  private def completionEvent(attempt: PlacementAttempt): MigrationCompleteEvent =
+    MigrationCompleteEvent(attempt.plan.shardId, durationMs = (System.nanoTime() - attempt.startedAt) / 1000000L,
+      batchId = attempt.batchId, attemptId = attempt.id)
+
+  private def handleIntentAcknowledged(event: IntentAcknowledged): Unit =
+    placementAttempts.get(event.shardId).filter(a => a.id == event.attemptId && a.batchId == event.batchId).foreach { attempt =>
+      event.failure match {
+        case Some(reason) => failMigrationPreparation(reason)
+        case None if event.retiring && attempt.completionQueued => self ! completionEvent(attempt)
+        case None if !event.retiring && !attempt.installed =>
+          attempt.installed = true
+          self ! PlacementPoll(event.shardId, event.batchId, event.attemptId)
+        case _ => ()
+      }
+    }
+
+  override def postStop(): Unit = {
+    clearPlacementAttempts()
+    super.postStop()
+  }
 
   /** Classifies an entity as Static or Dynamic based on its actor `classType` (not the id string,
     * which is now an opaque `Long`).
@@ -1033,6 +1206,16 @@ case class ShardAssignmentResponse(
 )
 
 object LoadBalanceManager {
+  private case class AllocationBound(epoch: String)
+  private case class AllocationStartupFailed(reason: String)
+  private case class DestinationsResolved(batchId: String,
+    results: Vector[(String, Either[String, Seq[ResolvedMigrationTarget]])])
+  private case class IntentAcknowledged(shardId: String, batchId: String, attemptId: String,
+    retiring: Boolean, failure: Option[String])
+  case class ResolvedMigrationTarget(typeName: String, region: ActorRef, sourceRegion: ActorRef)
+  private[loadbalance] case class PlacementPoll(shardId: String, batchId: String, attemptId: String)
+  private[loadbalance] case class PlacementObserved(shardId: String, batchId: String, attemptId: String,
+    round: Long, verified: Boolean)
   def props(
     timeManager: ActorRef,
     simulationManager: ActorRef,

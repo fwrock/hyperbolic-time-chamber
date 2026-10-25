@@ -43,6 +43,7 @@ scripts/*
 scripts/scenario/*
 !scripts/scenario/compare_policy_reports.py
 !scripts/scenario/run_cluster_validation.py
+!scripts/scenario/run_allocation_authority_validation.py
 !scripts/scenario/validate_meso_reports.py
 !scripts/scenario/validate_transit_birth_reports.py
 !scripts/scenario/generate_hybrid_scenario.py

@@ -7,7 +7,7 @@ import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{MigrationSnapshot, MigrationStateStoreRegistry}
 import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
-import core.entity.event.control.migration.{MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent}
+import core.entity.event.control.migration.{MigrationContextEvent, MigrationPreparationFailedEvent, MigrationRestoredAckEvent, MigrationRestoreAlreadyAcceptedEvent, MigrationRestoreFailedEvent, NoPendingMigrationEvent, QueryMigrationEvent}
 import core.runtime.{EventOrder, OrderedInputQueue}
 import core.runtime.accounting.*
 import core.runtime.conservative.*
@@ -734,6 +734,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     * incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent arrives.
     */
   private var awaitingMigration: Boolean = false
+  private case class AppliedMigration(batchId: String, token: String, revision: Long, store: ActorRef)
+  private var appliedMigration: Option[AppliedMigration] = None
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
     accountedCoordinator.foreach(_ ! RuntimeFailure(s"LP restart requires coordinated recovery: $getEntityId (${reason.getMessage})"))
@@ -754,12 +756,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         case Some(smRef) =>
           smRef ! QueryMigrationEvent(entityId = entityId, actorRef = self)
         case None =>
-          logWarn(
-            s"Entity '$entityId': migration window active but SM proxy not registered — " +
-              s"proceeding with normal initialization."
-          )
-          awaitingMigration = false
-          proceedNormalInit()
+          logError(s"Entity '$entityId': migration window active but SnapshotManager is not registered")
+          context.stop(self)
       }
       return
     }
@@ -1596,15 +1594,29 @@ abstract class SimulationBaseActor[T <: BaseState](
         sender() ! RuntimeProcessRetired(round)
         physicallyRetire()
       }
+    case event: MigrationPreparationFailedEvent if awaitingMigration =>
+      logError(s"Cannot restore migration '${event.batchId}': ${event.reason}")
+      context.stop(self)
+
     case event: MigrationContextEvent if awaitingMigration =>
-      awaitingMigration = false
-      handleMigrationContext(event)
-      unstashAll()
+      if (handleMigrationContext(event)) {
+        awaitingMigration = false
+        unstashAll()
+      }
 
     case _: NoPendingMigrationEvent if awaitingMigration =>
       awaitingMigration = false
       unstashAll()
       proceedNormalInit()
+
+    case event: MigrationRestoreAlreadyAcceptedEvent =>
+      val applied = appliedMigration.exists(a => a.batchId == event.batchId && a.token == event.restoreToken &&
+        a.revision == event.snapshotRevision && a.store == sender())
+      if (!applied) {
+        sender() ! MigrationRestoreFailedEvent(entityId, event.batchId, event.restoreToken,
+          event.snapshotRevision, "completed restore has no matching application in this actor; independent recovery is unsupported")
+        context.stop(self)
+      }
 
     case _ if awaitingMigration =>
       stash()
@@ -1747,32 +1759,37 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
   }
 
-  private def handleMigrationContext(event: MigrationContextEvent): Unit = {
-    logInfo(
-      s"Entity '$entityId' received MigrationContextEvent: " +
-        s"timeManagers=${event.timeManagers.keys.mkString(",")}, " +
-        s"reporters=${event.reporters.size}, batchId=${event.batchId}"
-    )
-    applyMigrationSnapshot(event.snapshot)
-
-    if (event.snapshot.entityId.nonEmpty) {
-      entityId = event.snapshot.entityId
+  private def handleMigrationContext(event: MigrationContextEvent): Boolean = {
+    try {
+      require(event.snapshotManagerRef != null && event.restoreToken.nonEmpty &&
+        event.batchId.nonEmpty && event.snapshotRevision > 0L, "missing restore confirmation identity")
+      require(event.snapshot != null && event.snapshot.entityId == entityId, "restore entity mismatch")
+      val identity = AppliedMigration(event.batchId, event.restoreToken, event.snapshotRevision, event.snapshotManagerRef)
+      appliedMigration match {
+        case Some(existing) => require(existing == identity, "a different restore was already applied to this actor")
+        case None =>
+          applyMigrationSnapshot(event.snapshot)
+          if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
+          if (event.reporters.nonEmpty) reporters = event.reporters
+          creatorManager = null
+          if (shouldRegisterOnTimeManagerAfterMigration()) registerOnTimeManager()
+          onFinishInitialize()
+          onMigrationRestore()
+          appliedMigration = Some(identity)
+      }
+      event.snapshotManagerRef ! MigrationRestoredAckEvent(entityId, event.batchId,
+        event.restoreToken, event.snapshotRevision)
+      true
+    } catch {
+      case scala.util.control.NonFatal(error) =>
+        val reason = Option(error.getMessage).getOrElse(error.getClass.getName)
+        logError(s"Migration restore '${event.batchId}' failed: $reason", error)
+        Option(event.snapshotManagerRef).foreach(_ ! MigrationRestoreFailedEvent(entityId,
+          event.batchId, event.restoreToken, event.snapshotRevision, reason))
+        Option(event.lbmRef).foreach(_ ! MigrationPreparationFailedEvent(event.batchId, entityId, reason))
+        context.stop(self)
+        false
     }
-
-    if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
-    if (event.reporters.nonEmpty) reporters = event.reporters
-    creatorManager = null
-
-    if (shouldRegisterOnTimeManagerAfterMigration()) {
-      registerOnTimeManager()
-    }
-    onFinishInitialize()
-
-    if (event.lbmRef != null) {
-      event.lbmRef ! MigrationRestoredAckEvent(entityId = entityId, batchId = event.batchId)
-    }
-
-    onMigrationRestore()
   }
 
   /** Finishes processing a spontaneous event and optionally schedules the next tick.

@@ -596,6 +596,282 @@ target turned out not to exist at runtime. `model/mobility/entity/event/data/{Re
 ForwardRoute,ReceiveRoute}Data` (the already-dead `model.mobility` package, see the gap above)
 were left untouched — out of scope for this cleanup.
 
+## Load Balancing: Promoted Migration Never Executed (Fixed 2026-10-25)
+
+`ShardMigrationCoordinator.completeMigration` reserved the next waiting plan as
+active, but LoadBalanceManager sent that plan through admission again. It was
+rejected as `AlreadyMigrating`, leaving an active slot occupied by work that never
+entered the execution queue.
+
+Promoted plans now go directly into the manager's admitted execution queue.
+Waiting shards are deduplicated as well as active shards, and invalid concurrency
+limits fail at construction. Newly admitted/promoted work waits behind an open
+wave's restore/window-close barrier; the next pause starts that work before any
+ordinary simulation resume. Inactive completions cannot repeat the final resume,
+and unexpected migration-safe messages cannot replace the current wave.
+
+Validation: five pure coordinator tests and two bounded manager protocol tests
+pass. The manager regression failed before the fix and now drains three waves in
+order. It also covers new admission during a wave and handoff notifications that
+arrive after window closure. Full `sbt test`: **660 tests in 137 suites passed**.
+These tests use a one-member Pekko cluster and probe
+notifications; they do not perform physical shard migration. Snapshot readiness
+and source freezing were addressed separately in Step 3 below; destination
+selection and other migration gaps remain open. Default custom balancing remains disabled. See
+[load-balancing fix progress](LOAD_BALANCING.md#fix-progress).
+
+## Load Balancing: Handoff Ran Model Destruction and Could Stall (Fixed 2026-10-25)
+
+The custom `ActorCreatorUtil.createShardRegion` path configured `DestructEvent` as
+Pekko's handoff stop message. That invoked model cleanup: Car could finalize a
+journey and notify its owning Person, while a boarded Person could send an unload
+response. The source then requested `Passivate(PoisonPill)` from a shard already
+in its handoff phase. The real shard-coordinator regression reproduced this
+request as unhandled, leaving the source alive until Pekko's handoff timeout.
+
+The initial fix used `PoisonPill` directly; Step 3 extends this to a dedicated
+`MigrationHandoffStopEvent` that also drains frozen inputs and awaits final capture.
+Handoff stops the source without model
+destruction, passivation round-trips or destruction-counter increments. Explicit
+`DestructEvent` continues to perform normal modeled cleanup.
+
+Validation: two new `ShardHandoffLifecycleSpec` cases run actual shard handoff and
+re-creation for subclasses of Car and Person on a one-member cluster. They check
+the absence of model effects, preserved captured state/reply identity after an
+explicit snapshot restore, and normal trip/unload cleanup on later legitimate
+destruction. Both cases failed before the fix because the handoff did not stop
+the source. All 11 focused lifecycle/queue/passivation tests pass, and full
+`sbt test` passes **662 tests in 138 suites**. These tests do
+not establish multi-JVM delivery or the full snapshot-save/window protocol;
+remaining migration gaps and the conservative-only scope are unchanged. See
+[Step 2](LOAD_BALANCING.md#step-2--shard-handoff-without-model-destruction-2026-10-25).
+
+## Load Balancing: Save Readiness and Source-to-Stop Lost Updates (Corrected 2026-10-25)
+
+The controller previously opened the migration window after an elapsed delay,
+without evidence that all source snapshots had reached SnapshotManager. Sources
+also kept applying messages after capture, so their later state changes were
+absent from the restored snapshot (Gap C below).
+
+Batch registration now has an ACK before source preparation. Each source captures
+once and freezes subsequent ordinary input. SnapshotManager validates and stores
+the full expected set before acknowledging readiness; only then does the
+controller publish window-open. Batch/phase/membership checks reject premature or
+duplicate progress notifications. At actual Pekko handoff, while the region buffers
+new arrivals, the source drains its retained inputs with their original senders
+and saves a final snapshot including their effects. It stops only after the final
+revision is acknowledged, without model cleanup. A late accepted input requires
+another final revision. This avoids discarding a source-only stash or placing
+earlier retained inputs behind the region's newer buffered inputs.
+
+A target query for a registered entity without its final cut fails preparation;
+it cannot restore the initial checkpoint or fall back to fresh initialization.
+The checkpoint is retained. Final capture/save failures stop the source directly,
+since the region is already buffering ordinary shutdown messages at this stage.
+
+Missing storage, unroutable sources, conflicting saves, and capture failures stop
+the run instead of resuming it with incomplete state. A correlated abort unfreezes
+sources for shutdown. There is no elapsed-time fallback to handoff or normal
+initialization. Independent failure recovery remains unsupported.
+
+Tests cover the store barrier, duplicate/conflicting inputs, controller ordering,
+failure without resume, control-message serialization between independent codecs,
+and a bounded actual single-member shard handoff preserving frozen input and
+sender, waiting for final acceptance, and restoring the resulting final state.
+This does not establish durable storage, complete source membership,
+multi-JVM allocator ownership/target selection. Acknowledged restore retention
+was addressed separately in Step 4 below. The store remains singleton memory.
+Rebalancing remains disabled by default; the accounted runtimes and
+optimistic migration are outside this fix. See
+[Step 3](LOAD_BALANCING.md#step-3--acknowledged-snapshot-preparation-and-source-freezing-2026-10-25).
+
+Validation: **27 focused tests in five suites** and the full **676 tests in 139
+suites** pass on 2026-10-25. These Step 3 results do not establish a full multi-JVM migration run.
+
+## Load Balancing: Snapshot Removed Before Target Application (Corrected 2026-10-25)
+
+`SnapshotManager.handleQueryMigration` removed the snapshot and counted an entity
+as consumed when sending `MigrationContextEvent`. The target separately ACKed
+LoadBalanceManager before its `onMigrationRestore` hook ran. Lost delivery or a
+throwing hook could therefore lose the retained state or report success too early.
+
+Queries now retain the final snapshot and bind an offer to entity, batch, target
+ActorRef, random restore token, and final revision. Only the matching target's
+confirmation after state application and completion of its restore hook permits
+release. SnapshotManager sends `MigrationRestoreAcceptedEvent` to the controller;
+raw target ACKs cannot close the migration window. Invalid or stale confirmations
+cannot release state, and all expected entities must confirm before a batch ends.
+
+Repeated queries return the same offer, and repeated target contexts resend the
+confirmation without reapplying state or repeating the hook. Failed application
+stops the target, fails the run, and retains the snapshot until shutdown; a later
+success ACK cannot override that failed offer. Different target incarnations are
+rejected rather than silently reinitializing. Lightweight latest-completion
+receipts prevent duplicate queries from turning into `NoPendingMigrationEvent`.
+Receipts also allow idempotent re-notification of store acceptance to the manager.
+
+Validation includes store and target protocol specs, controller phase checks,
+independent codecs for restore controls/context, and actual single-member
+Car/Person shard handoff followed by querying the real SnapshotManager and
+confirming application. The codec regression also exposed a missing serializer
+binding for `MigrationContextEvent`; it now has an explicit Jackson CBOR binding.
+Its cold-codec case includes runtime references and a nonempty reporter map.
+
+This is acknowledged volatile retention, not durable recovery. Store state and
+latest-entity receipts are cleared at simulation shutdown. Receipt memory grows
+with distinct migrated entities. Independent restarts, asynchronous external
+effect recovery, full multi-JVM migration, allocator installation, and enforced
+destination selection remain outside this correction. Custom rebalancing remains
+disabled, and no accounted conservative/optimistic migration support is added.
+Destination selection is addressed separately in Step 5 below.
+See [Step 4](LOAD_BALANCING.md#step-4--snapshot-retention-until-confirmed-target-application-2026-10-25).
+
+Validation on 2026-10-25: **32 focused tests in six suites** and full `sbt test`
+with **686 tests in 141 suites** pass. `git diff --check` passes.
+
+## Load Balancing: Planned Destination Ignored and Actor-Type Commands Shared (Corrected 2026-10-25)
+
+`LoadBalanceManager.triggerPekkoHandoff` selected the first indexed nonempty region
+instead of resolving the plan's target node. The allocator could then silently
+fall back if an explicit target was unavailable. Its command maps were shared
+between physical actor types even though Pekko scopes shard IDs by type, so one
+type's callback could consume another type's request for the same ID.
+
+Preflight now resolves every represented dynamic actor type against its observed
+source owner and the requested node's registered region, including idle regions.
+Both nodes must be Up members. Missing/ambiguous membership or regions, wrong
+source ownership, and source equal to target fail preparation. Logical groups
+containing pinned infrastructure are rejected; static-only plans retain the
+existing skip behavior. Destinations are checked again after window-open ACKs.
+There is no arbitrary-region substitution.
+
+The factory installs stable per-type child allocators. Desired placement,
+rebalance requests, and authoritative callback indices are isolated by type.
+Callback snapshots evict absent regions while retaining idle ones; local region
+addresses are recorded explicitly. A missing explicit target causes allocation
+failure rather than least-shards fallback. Initial unplanned allocation retains
+its heuristic. Requests skipped while already in progress remain pending.
+
+A bounded two-member cluster fixture moves a live actor from the source to the
+requested idle target through the real manager, factory, shard coordinator,
+source final-save barrier, SnapshotManager restore, and store confirmation. Its
+value **23** survives; actual region-state queries prove the source no longer
+hosts the shard and the requested target does. Unit/protocol cases cover strict
+placement, idle targets, stale callbacks, colliding type-local IDs, cancellation,
+pending requests, ambiguity, missing targets, and pinned/multiple-type groups.
+
+The two ActorSystems share one JVM/allocator registry. The fixture supplies the
+conservative pause response, node window ACKs, and target query explicitly, with
+the global migration flag off for suite isolation. It does not validate separate
+JVM allocator authority, complete membership discovery, failure recovery, or the
+full distributed window/startup protocol. Step 6 separately replaces the old
+monitor's request-consumption and retry-limit success notifications.
+Custom balancing remains disabled; no accounted conservative/optimistic
+migration adapter is added. See
+[Step 5](LOAD_BALANCING.md#step-5--enforce-the-planned-destination-per-physical-shard-type-2026-10-25).
+
+Validation on 2026-10-25: **47 focused tests in nine suites** and full `sbt test`
+with **696 tests in 143 suites** pass. The two-member fixture also verifies that
+duplicate ACKs from one node cannot replace the other node's open/close ACK.
+`git diff --check` passes.
+
+## Load Balancing: Request Consumption Reported as Completion (Corrected 2026-10-25)
+
+The monitor treated removal from the allocator's pending set as completed
+migration, although that only meant Pekko consumed the request. After 20 checks
+it also reported success for a still-pending request. Completion messages carried
+only a shard ID, so an old result could retire a newer attempt for that shard.
+
+Each handoff now has a fresh UUID tied to its batch. The monitor queries the
+preflight source and target region ActorRefs for every physical type. One round
+must show the shard absent from every source and present at every planned target,
+with complete, nonfailed region-state responses. Failed queries, partial state,
+remaining source ownership, missing targets, and results from different rounds
+cannot establish placement. Queries use `pipeTo(self)`; only actor message
+handling changes migration state and queue/statistics bookkeeping.
+
+There is at most one round in flight per attempt; failures are converted to
+incomplete evidence before joining the queries, so one immediate failure cannot
+start overlapping rounds while another query is pending. Incomplete rounds poll
+again after 500 ms. The five-second query timeout never authorizes completion,
+and there is no success-after-retry-limit path.
+
+Placement and SnapshotManager's accepted restores must both finish for a logical
+shard before internal completion can retire admission. Batch, attempt, verified
+state, and self-sender checks reject stale, legacy, duplicate, or unsolicited
+completion messages. Window closing additionally waits for every logical shard;
+normal resume waits for window-close ACKs and the admitted queue. Shutdown no
+longer sends a normal migration-complete notification, and failed/stopped runs
+cancel polls and discard later observations. Static plans retain their explicit
+skip behavior with correlated bookkeeping.
+
+Tests cover both barrier orders, failed/partial observations, bounded in-flight
+rounds, every physical type and cross-round isolation, repeated moves of the same
+shard, stale batch/attempt/round notifications, unsolicited completion, queue
+sequencing, failure/shutdown, static skip, and independent completion codecs.
+The real two-member relocation fixture now completes through this monitor and
+the store restore-confirmation path, preserving its value 23 at the planned target.
+
+The fixture shares one JVM/allocator registry and explicitly supplies pause,
+node window ACKs, and the target query. Separate-JVM allocator authority and
+complete membership discovery remain unvalidated. Placement observations are not
+an ownership lease or a node-loss/restart recovery protocol. An unreachable
+region can keep the migration unverified until the run is stopped. Custom
+rebalancing remains disabled and accounted conservative/optimistic migration is
+not enabled. See
+[Step 6](LOAD_BALANCING.md#step-6--observed-placement-accepted-restore-and-correlated-completion-2026-10-25).
+
+Validation on 2026-10-25: **53 focused tests in nine suites** and full `sbt test`
+with **702 tests in 143 suites** pass. `git diff --check` passes.
+
+## Load Balancing: Allocation Authority Existed Only in the Singleton JVM (Corrected 2026-10-25)
+
+Regions started on every JVM before LoadBalanceManager could register its local
+allocator object. Worker coordinators could therefore retain Pekko's default
+strategy while the controller mutated an unused object. Per-type isolation in
+Step 5 did not distribute that authority.
+
+Enabled factories now install remote per-type adapters, backed by an
+ActorSystem-local node client and a cluster allocation-authority singleton.
+Registered region references, addresses, and client incarnations are explicitly
+acknowledged. The authority owns callback snapshots, controller binding, and
+placement intents. Callbacks carry sequences; replies carry request identities
+and authority epochs. A callback cannot consume intent by receiving a reply:
+intent remains until observed placement, store-confirmed restoration, and
+acknowledged controller retirement. Installing a logical move covers all its
+physical types atomically. Explicit destinations cannot fall back.
+
+The controller's preflight/install/retire exchanges are asynchronous and change
+state through actor messages. Stale epochs or replacement callback owners,
+regions, and controllers fail closed. Disabled custom allocation remains passive.
+This supports one fixed run per cluster; it does not add independent recovery.
+
+The first separate-JVM fixture also reproduced physical handoff without idle
+entity recreation. After placement is observed, the enabled controller now
+starts its known target cohort explicitly. Native start ACKs do not replace
+SnapshotManager's restore confirmation. The real window flags trigger automatic
+target queries. The subscriber no longer performs a blocking proxy lookup, and
+ordinary membership transitions no longer restart the controller through MatchError.
+
+An accepted independent-process fixture places the controller actor and active
+shard coordinator in different JVMs. A live actor moves to the requested worker
+with value 23 preserved; real source/target queries prove ownership and both
+window flags close. Both local allocator registries are absent. The fixture uses
+hash routing and controller-provided membership; the worker's spatial registry
+is empty. Distributed spatial assignments/live cohort discovery are still a real
+gap. The fixture pins the controller actor and supplies a pause probe, so full
+SimulationManager/controller election and actual conservative traffic migration
+remain separate acceptance work. No accounted-runtime migration is enabled.
+See [Step 7](LOAD_BALANCING.md#step-7--allocation-authority-and-region-registration-across-jvms-2026-10-25)
+and the [validation record](DISTRIBUTED_ALLOCATION_VALIDATION_2026_10_25.md).
+
+Validation on 2026-10-25: **63 focused tests in ten suites**, full `sbt test`
+with **712 tests in 144 suites**, and the independent-JVM run
+`/tmp/htc-allocation-authority-20261025-3/` pass. The classpath is unchanged during
+the run and content-hashed; both captured execution logs have zero engine errors.
+The first idle-entity failure remains rejected evidence. `git diff --check` and
+Python launcher compilation pass.
+
 ## Shard Migration Silently Drops Actor-Local Reply State (Currently Latent — Migration Is Disabled)
 
 **[RESOLVED 2026-07-22] Gaps A and B below are fixed.** `PrivateVehicle` gained
@@ -606,13 +882,17 @@ extend), and `Person` got the equivalent override for `currentPTVehicleRef`. `Mi
 carries the new fields with safe defaults so old snapshots still deserialize. Round-trip coverage:
 `src/test/scala/model/hybrid/actor/PrivateVehicleMigrationSnapshotSpec.scala` and
 `PersonMigrationSnapshotSpec.scala`.
-**Gap C is a distinct, still-open issue** — see its note below; fixing A/B did not resolve it.
+**[CORRECTED 2026-10-25] Gap C's source-to-stop window is addressed separately**
+by source freezing and acknowledged preparation; see Step 3 above for tested
+scope and remaining distributed migration limitations. Fixing A/B alone did not resolve it.
 
 Root-caused while investigating why `Car`/`Bicycle`/`Motorcycle` could fail to emit `TripCompleted`.
 The original fix attempt (`vehicleTripTimeoutTicks`, commit `932798f`) was correctly reverted in
 `420b285` in favor of a structural guarantee (`Car.onDestruct` always calls
 `onFinishPrivateVehicle` when `state.status != Finished`). That fixes the trip-lifecycle case, but
-three related gaps trace back to one shared structural cause and are still open:
+three related gaps traced back to one shared structural cause. The original
+findings below are retained as history; A/B were fixed in July and C was corrected
+in October within the scope stated above:
 
 - **A — `PrivateVehicle` reply-linkage vars aren't covered by migration snapshots.**
   `ownerPersonRef`, `personCentric`, `tripOrigin`, `tripDestination`, `tripStartTick` live as plain
@@ -659,7 +939,7 @@ three related gaps trace back to one shared structural cause and are still open:
   `MessageBuffer` was apparently an earlier or parallel design that got superseded by it and never
   cleaned up.
 
-  **The real remaining gap, more precise than the original**: `LoadBalanceManager.handlePrepareForMigration`
+  **Historical corrected finding (addressed by Step 3 above)**: `LoadBalanceManager.handlePrepareForMigration`
   (via each entity's `BaseActor.handlePrepareForMigration`) captures a source entity's
   `MigrationSnapshot` and sends it to the `SnapshotManager` — but the source entity is **not**
   stopped, passivated, or put into any restricted mode at that point; it keeps processing messages
@@ -669,12 +949,12 @@ three related gaps trace back to one shared structural cause and are still open:
   another actor** (e.g. a `LinkAccessData` a Car was already waiting on) can still arrive and be
   processed normally in that gap — mutating `state`/actor-local vars *after* the snapshot was
   already captured and sent. That mutation is never reflected in what gets restored on the target
-  node: a genuine lost-update window, not a dropped message. Still open, still dormant (migration
-  disabled — see below), and still an `htc-architect`-level design call (e.g. have the source
+  node: a genuine lost-update window, not a dropped message. At that review this was dormant (migration
+  disabled — see below) and required a protocol design (e.g. have the source
   entity also enter a stash/reject mode the moment it sends `PrepareForMigrationEvent`, or
   re-snapshot immediately before the actual Pekko-triggered stop instead of once, early) — not
-  attempted here; scoped and documented per the maintainer's own call not to guess at a protocol
-  change to dormant, currently-untested code in this session.
+  attempted during that dead-code removal. The separate 2026-10-25 correction
+  implements freezing and transport transfer with focused protocol/handoff tests.
 
   **Validation for the dead-code removal**: `sbt compile` clean, `sbt test` 172/172 (no test
   referenced `MessageBuffer`/`ShardMigrationCoordinator` at all — confirmed by grep before
@@ -683,9 +963,10 @@ three related gaps trace back to one shared structural cause and are still open:
 **Why this hadn't bitten anyone yet**: shard rebalancing/migration is currently kept disabled while
 the project prioritizes simulation execution quality and performance — see `CLAUDE.md`'s Actor
 State section. These gaps were real but dormant; A/B are now fixed (see above) so they no longer
-become load-bearing if migration is turned back on. Gap C's corrected finding (the
-`PrepareForMigrationEvent`-to-actual-stop lost-update window) remains dormant-but-real for the
-same reason and needs its own design before migration can be safely re-enabled.
+become load-bearing if migration is turned back on. Gap C's
+`PrepareForMigrationEvent`-to-actual-stop lost-update window was corrected in
+Step 3. The other migration gaps documented in `LOAD_BALANCING.md` still need
+resolution and acceptance evidence before rebalancing can be safely enabled.
 
 ## Simulation Runs Are Not Fully Reproducible for a Fixed Seed — Duplicate Spontaneous-Event Dispatch (Structural duplicate dispatch: RESOLVED 2026-07-25, TM-level fix; small residual timing drift still open)
 

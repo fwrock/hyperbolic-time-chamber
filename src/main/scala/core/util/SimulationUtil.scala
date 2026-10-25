@@ -99,6 +99,7 @@ object SimulationUtil {
     fromJson[Simulation](readJsonFile(configFile))
 
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
+    core.actor.manager.loadbalance.allocation.AllocationRuntime(system).start()
     val simulationConfig = loadSimulationConfig(configuration)
     if (model.hybrid.util.AccountedRoutingConfig.enabled)
       validateAccountedRoutingSources(simulationConfig, model.hybrid.util.AccountedRoutingConfig.workerIds)

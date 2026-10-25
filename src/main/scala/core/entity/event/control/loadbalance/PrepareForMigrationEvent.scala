@@ -14,13 +14,12 @@ import org.apache.pekko.actor.ActorRef
   * SnapshotManager via [[core.entity.event.control.migration.SaveMigrationSnapshotEvent]], so that
   * it can be restored after re-creation on the target node.
   *
-  * Flow:
-  *   1. LBM decides to migrate shard S (batch batchId) 2. TimeManager pauses → MigrationSafeEvent
-  *      3. LBM sends PrepareForMigrationEvent to entities in shard S 4. Entities build snapshot →
-  *      send SaveMigrationSnapshotEvent to SnapshotManager 5. LBM opens migration window
-  *      (MigrationWindowOpenEvent via PubSub) 6. Pekko hand-off begins; actors re-created on target
-  *      node 7. Actors query SM → receive MigrationContextEvent → restore state 8. Actors ACK
-  *      restoration → LBM closes migration window
+  * After the TimeManager pause and SnapshotManager's batch-registration ACK, LBM sends this event
+  * to each expected source. The source captures once, freezes ordinary input, and sends its save.
+  * Only a complete saved-set ACK allows LBM to open the distributed migration window. At actual
+  * shard handoff the source drains retained inputs and awaits final-snapshot acceptance before
+  * stopping. Targets restore before processing the region's buffered input; restore and
+  * window-close ACKs gate simulation resume.
   *
   * @param shardId
   *   The shard being migrated

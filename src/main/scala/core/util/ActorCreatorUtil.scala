@@ -4,6 +4,7 @@ package core.util
 import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
 import core.actor.BaseActor
 import core.entity.event.{ Command, EntityEnvelopeEvent }
+import core.entity.event.control.migration.MigrationHandoffStopEvent
 
 import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
@@ -165,18 +166,29 @@ object ActorCreatorUtil {
         )
       )
 
-      ShardAllocatorRegistry.get match {
+      val distributedAllocation = core.actor.manager.loadbalance.allocation.AllocationRuntime(system)
+      if (distributedAllocation.enabled) {
+        distributedAllocation.start()
+        val region = sharding.start(typeName = shardName, entityProps = entityProps,
+          settings = ClusterShardingSettings(system), extractEntityId = extractEntityId,
+          extractShardId = extractShardId, allocationStrategy = distributedAllocation.strategy(shardName),
+          handOffStopMessage = MigrationHandoffStopEvent())
+        distributedAllocation.register(shardName, region)
+        region
+      } else ShardAllocatorRegistry.get match {
         case Some(allocator) =>
-          sharding.start(
+          val typedAllocator = allocator.forType(shardName)
+          val region = sharding.start(
             typeName = shardName,
             entityProps = entityProps,
             settings = ClusterShardingSettings(system),
             extractEntityId = extractEntityId,
             extractShardId = extractShardId,
-            allocationStrategy = allocator,
-            handOffStopMessage =
-              org.htc.protobuf.core.entity.event.control.execution.DestructEvent(actorRef = "")
+            allocationStrategy = typedAllocator,
+            handOffStopMessage = MigrationHandoffStopEvent()
           )
+          typedAllocator.registerLocalRegion(region, org.apache.pekko.cluster.Cluster(system).selfAddress)
+          region
         case None =>
           sharding.start(
             typeName = shardName,
