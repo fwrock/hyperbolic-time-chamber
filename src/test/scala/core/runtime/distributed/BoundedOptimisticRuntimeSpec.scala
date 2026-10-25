@@ -3,7 +3,6 @@ package model.test
 
 import core.actor.SimulationBaseActor
 import core.actor.manager.time.{AccountedOptimisticGlobalTimeManager, AccountedOptimisticLocalTimeManager}
-import core.actor.rollback.EventReadJournal
 import core.entity.actor.properties.Properties
 import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
 import core.entity.event.control.load.InitializeEvent
@@ -17,6 +16,7 @@ import org.apache.pekko.actor.{ActorRef, ActorSystem}
 import org.apache.pekko.testkit.{TestActorRef, TestProbe}
 import org.htc.protobuf.core.entity.event.control.execution.{StartSimulationTimeEvent, StopSimulationEvent}
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

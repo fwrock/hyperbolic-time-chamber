@@ -1,10 +1,10 @@
 package org.interscity.htc
 package core.entity.event
 
-import core.actor.rollback.MessageId
 import core.types.Tick
 
 import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.event.control.rollback.MessageId
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 
 case class ActorInteractionEvent(

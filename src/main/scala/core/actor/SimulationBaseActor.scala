@@ -4,40 +4,41 @@ package core.actor
 import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
-import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationStateStoreRegistry }
-import core.actor.rollback.{ EventReadJournal, RecordedRead, RollbackHistoryHandler }
+import core.actor.manager.loadbalance.migration.{MigrationSnapshot, MigrationStateStoreRegistry}
 import core.api.SimulatorSettingsRegistry
-import core.entity.event.{ ActorInteractionEvent, FinishEvent, SpontaneousEvent }
-import core.entity.event.control.migration.{ MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent }
-import core.runtime.{ EventOrder, OrderedInputQueue }
+import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
+import core.entity.event.control.migration.{MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent}
+import core.runtime.{EventOrder, OrderedInputQueue}
 import core.runtime.accounting.*
 import core.runtime.conservative.*
 import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.types.Tick
 import core.entity.state.BaseState
 import core.entity.control.LamportClock
-import core.util.{ IdUtil, JsonUtil, StringPool, StringUtil }
+import core.util.{IdUtil, JsonUtil, StringPool, StringUtil}
 
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.entity.actor.ShardActorId
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
-import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, RegisterActorEvent }
-import org.htc.protobuf.core.entity.event.control.load.{ InitializeEntityAckEvent, StartEntityAckEvent }
+import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, RegisterActorEvent}
+import org.htc.protobuf.core.entity.event.control.load.{InitializeEntityAckEvent, StartEntityAckEvent}
 import org.interscity.htc.core.entity.actor.properties.Properties
-import org.interscity.htc.core.entity.event.control.load.{ InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent }
+import org.interscity.htc.core.entity.event.control.load.{InitializeEvent, NeedsPostLoadRegistrationEvent, PostLoadRegistrationAckEvent, PostLoadRegistrationEvent}
 import org.interscity.htc.core.entity.event.control.report.ReportEvent
-import org.interscity.htc.core.enumeration.{ ReportTypeEnum, TimeManagerTypeEnum }
+import org.interscity.htc.core.enumeration.{ReportTypeEnum, TimeManagerTypeEnum}
 import org.interscity.htc.core.enumeration.CreationTypeEnum
-import org.interscity.htc.core.enumeration.CreationTypeEnum.{ LoadBalancedDistributed, PoolDistributed }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.{LoadBalancedDistributed, PoolDistributed}
 import org.interscity.htc.core.metrics.core.ActorMetrics
 
 import scala.Long.MinValue
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-
 import core.entity.event.EntityEnvelopeEvent
 import core.util.ActorCreatorUtil.createShardRegion
 import core.entity.event.data.InitializeData
+
+import org.interscity.htc.core.entity.event.control.rollback
+import org.interscity.htc.core.entity.event.control.rollback.{AntiMessageCascade, AntiMessagePayload, EventReadJournal, LoggedEvent, MessageId, RecordedRead, RollbackHistoryHandler, SentMessage}
 
 /** Base actor for simulation entities that require time management, spontaneous events, Lamport
   * clocks, and reporting capabilities. Extends the generic BaseActor with simulation-specific
@@ -248,14 +249,14 @@ abstract class SimulationBaseActor[T <: BaseState](
   // processing finishes — the data AntiMessageCascade needs to retract them on a future rollback.
   // Cleared at the start of handleSpontaneous/handleInteractWith; only ever populated when
   // isTimeWarp (see sendMessageTo), so this stays empty and unused for conservative-mode actors.
-  private val currentEventSentMessages: mutable.ArrayBuffer[core.actor.rollback.SentMessage] = mutable.ArrayBuffer.empty
+  private val currentEventSentMessages: mutable.ArrayBuffer[SentMessage] = mutable.ArrayBuffer.empty
 
   // A sequence preserves repeated reads of the same external input within one event.
   private val currentEventReads: mutable.ArrayBuffer[RecordedRead] = mutable.ArrayBuffer.empty
 
   // Transport cancellation survives a state rewind, including when the positive arrives later.
-  private val cancelledMessages: mutable.Set[core.actor.rollback.MessageId] = mutable.Set.empty
-  private val processedMessages: mutable.Set[core.actor.rollback.MessageId] = mutable.Set.empty
+  private val cancelledMessages: mutable.Set[MessageId] = mutable.Set.empty
+  private val processedMessages: mutable.Set[MessageId] = mutable.Set.empty
 
   // What the CURRENTLY-processing event asked the time manager to schedule for this actor: None if
   // it never asked, Some(None) if it finished with no next tick (which clears every pending tick on
@@ -361,7 +362,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     * [[EventReadJournal]] reproduces the original event's external observations in read order.
     * A replay failure propagates: continuing with partially reconstructed state is incorrect.
     */
-  private def replayLoggedEvent(logged: core.actor.rollback.LoggedEvent): Unit = {
+  private def replayLoggedEvent(logged: LoggedEvent): Unit = {
     isReplaying = true
     replaySendSeqs = logged.sentMessages.iterator.map(_.messageId.seq)
     replayLastSendSeq = -1L
@@ -422,10 +423,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     * `RollbackHistoryHandler.rollbackTo` already implements.
     */
   private def rollbackAndCascade(
-    targetTick: Tick,
-    rollbackFn: () => Seq[core.actor.rollback.LoggedEvent],
-    resyncSchedule: Boolean = true
-  ): Seq[core.actor.rollback.LoggedEvent] = {
+                                  targetTick: Tick,
+                                  rollbackFn: () => Seq[LoggedEvent],
+                                  resyncSchedule: Boolean = true
+  ): Seq[LoggedEvent] = {
     val currentTickBeforeRestore = currentTick
     val undone = rollbackFn()
     undone.iterator.map(_.event).collect { case e: ActorInteractionEvent => e.messageId }
@@ -466,7 +467,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       }
     }
     onRollbackDiscardPending(targetTick)
-    val retracted = core.actor.rollback.AntiMessageCascade.messagesToRetract(undone)
+    val retracted = AntiMessageCascade.messagesToRetract(undone)
     // #timewarp-trace
     core.actor.trace.TimeWarpTrace.trace(
       getEntityId,
@@ -488,8 +489,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     * straggler of its own.
     */
   private def interactionsToReprocess(
-    undone: Seq[core.actor.rollback.LoggedEvent],
-    annihilated: Option[core.actor.rollback.MessageId]
+                                       undone: Seq[LoggedEvent],
+                                       annihilated: Option[MessageId]
   ): Seq[ActorInteractionEvent] =
     undone
       .sortBy(le => (le.tick, le.seq))
@@ -517,7 +518,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     * sender/tick/seq triple `ActorInteractionEvent.messageId` derives, since that's the only event
     * type [[handleInteractWith]] ever logs whose identity an anti-message could reference.
     */
-  private def findLoggedEventForMessage(messageId: core.actor.rollback.MessageId): Option[core.actor.rollback.LoggedEvent] =
+  private def findLoggedEventForMessage(messageId: MessageId): Option[LoggedEvent] =
     rollbackHandler.findEvent {
       case interaction: ActorInteractionEvent => interaction.messageId == messageId
       case _                                  => false
@@ -528,13 +529,13 @@ abstract class SimulationBaseActor[T <: BaseState](
     * carrying the *original* send's `tick`/`seq` (not this actor's current ones), so the receiver
     * can find and undo exactly that send in its own log via [[findLoggedEventForMessage]].
     */
-  private def sendAntiMessage(sentMessage: core.actor.rollback.SentMessage): Unit = {
+  private def sendAntiMessage(sentMessage: SentMessage): Unit = {
     ActorMetrics.antiMessagesSent.labels(cachedActorTypeLabel).inc()
     val actorType = CreationTypeEnum.valueOf(sentMessage.receiverActorType)
     if (actorType == PoolDistributed) {
       sendMessageToPool(
         entityId = sentMessage.receiverId,
-        data = core.actor.rollback.AntiMessagePayload,
+        data = AntiMessagePayload,
         eventType = "anti-message",
         tick = sentMessage.messageId.tick,
         seq = sentMessage.messageId.seq,
@@ -545,7 +546,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       sendMessageToShard(
         entityId = sentMessage.receiverId,
         shardId = sentMessage.receiverShardId,
-        data = core.actor.rollback.AntiMessagePayload,
+        data = rollback.AntiMessagePayload,
         eventType = "anti-message",
         tick = sentMessage.messageId.tick,
         seq = sentMessage.messageId.seq,
@@ -1014,8 +1015,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     // git log). Conservative-mode messages keep seq=0, byte-identical to before this field existed.
     val seq = if (isTimeWarp) {
       messageSendSeq += 1
-      currentEventSentMessages += core.actor.rollback.SentMessage(
-        messageId = core.actor.rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq,
+      currentEventSentMessages += rollback.SentMessage(
+        messageId = rollback.MessageId(senderId = getEntityId, tick = currentTick, seq = messageSendSeq,
           senderType = if (usesAccountedRuntime) getClass.getName else "",
           epoch = runtimeEpoch.getOrElse(""), incarnation = if (usesAccountedRuntime) runtimeIncarnation else ""),
         receiverId = entityId,

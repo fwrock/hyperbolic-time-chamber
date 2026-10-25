@@ -5,14 +5,17 @@ import core.actor.manager.time.{AccountedOptimisticGlobalTimeManager, AccountedO
 import core.entity.event.ActorInteractionEvent
 import core.runtime.EventOrder
 import core.runtime.accounting.*
+
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.{ActorRef, ActorSystem}
 import org.apache.pekko.testkit.{TestActorRef, TestProbe}
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.control.execution.StartSimulationTimeEvent
+import org.interscity.htc.core.entity.event.control.rollback.AntiMessagePayload
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
 import scala.concurrent.duration.*
 
 private case class BirthTransferHeld(target: ActorRef, source: ActorRef, event: OptimisticTransfer)
@@ -66,7 +69,7 @@ class DistributedBirthEnrollmentSpec extends AnyFlatSpec with Matchers with Befo
     val held = gate.expectMsgType[BirthTransferHeld]
     val heldAnti = if (antiFirst) {
       source.send(a.owner, RouteInteraction(a.epoch, target, positive.copy(isAntiMessage = true,
-        order = None, data = core.actor.rollback.AntiMessagePayload)))
+        order = None, data = AntiMessagePayload)))
       Some(gate.expectMsgType[BirthTransferHeld])
     } else None
     global ! RequestRuntimeRound()

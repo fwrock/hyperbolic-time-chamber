@@ -336,7 +336,7 @@ Pure logic (handlers, models) should be tested without Pekko using plain ScalaTe
 ```bash
 sbt compile
 sbt test
-sbt assembly   # produces target/scala-3.3.5/hyperbolic-time-chamber-1.24.3.jar
+sbt assembly   # produces target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar
 docker-compose up   # docker-compose.yml for local cluster
 ```
 

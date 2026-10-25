@@ -10,14 +10,18 @@ import core.enumeration.{CreationTypeEnum, ReportTypeEnum, TimeManagerTypeEnum}
 import core.runtime.{EventOrder, OptimisticExecutionLimits}
 import core.runtime.accounting.*
 import core.util.JsonUtil
+
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.testkit.{TestActorRef, TestProbe}
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
+import org.interscity.htc.core.entity.event.control.rollback
+import org.interscity.htc.core.entity.event.control.rollback.AntiMessagePayload
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
 import scala.collection.mutable
 import scala.concurrent.duration.*
 
@@ -83,7 +87,7 @@ class SimulationBaseActorBirthSpec extends AnyFlatSpec with Matchers with Before
       deliver(SpontaneousEvent(10L, owner.ref, generation = 1L, scheduleRevision = schedule.revision,
         order = Some(EventOrder(o.tick, o.microstep, o.key))), 2L)
     }
-    def anti(seq: Long = 1L): ActorInteractionEvent = birth(seq).copy(data = core.actor.rollback.AntiMessagePayload,
+    def anti(seq: Long = 1L): ActorInteractionEvent = birth(seq).copy(data = AntiMessagePayload,
       isAntiMessage = true, order = None)
     def commit(frontier: Long, round: Long = 1L): Vector[Any] = {
       owner.send(child, FreezeRuntime(round)); owner.expectMsg(RuntimeFrozen(round))
@@ -190,7 +194,7 @@ class SimulationBaseActorBirthSpec extends AnyFlatSpec with Matchers with Before
     f.outputs()
     f.deliver(f.anti(), 4L)
     f.outputs()
-    f.deliver(reply.copy(data = core.actor.rollback.AntiMessagePayload, isAntiMessage = true, order = None), 5L)
+    f.deliver(reply.copy(data = rollback.AntiMessagePayload, isAntiMessage = true, order = None), 5L)
     f.outputs()
     f.child.underlyingActor.born shouldBe false
     f.commit(20L).collect { case r: RuntimeCommitted => r.mayRetire } shouldBe Vector(false)

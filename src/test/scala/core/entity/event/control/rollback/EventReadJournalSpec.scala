@@ -1,5 +1,5 @@
 package org.interscity.htc
-package core.actor.rollback
+package core.entity.event.control.rollback
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

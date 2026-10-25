@@ -2,8 +2,8 @@ package org.interscity.htc.model.hybrid.util
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost
-import org.interscity.htc.core.actor.rollback.EventReadJournal
 import org.interscity.htc.model.hybrid.util.cache.{ DisabledCacheStrategy, InMemoryCacheStrategy, KafkaCacheStrategy, WeightCacheStrategy }
 
 import java.util.concurrent.atomic.AtomicLong

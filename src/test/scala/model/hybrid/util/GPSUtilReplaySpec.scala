@@ -1,7 +1,7 @@
 package org.interscity.htc
 package model.hybrid.util
 
-import core.actor.rollback.{ EventReadJournal, RecordedRead }
+import org.interscity.htc.core.entity.event.control.rollback.{EventReadJournal, RecordedRead}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

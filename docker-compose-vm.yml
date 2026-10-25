@@ -13,7 +13,7 @@
 #
 # Variáveis de ambiente configuráveis (sobrescreva via .env ou export):
 #   HTC_SCENARIO         nome do cenário (ex: toulouse_hybrid_100pct)
-#   HTC_IMAGE            imagem Docker (ex: uxhabam/hyperbolic-time-chamber:2.4.0-beluga)
+#   HTC_IMAGE            imagem Docker (ex: uxhabam/hyperbolic-time-chamber:3.2.0)
 #   HTC_JAVA_XMX         heap máxima JVM (ex: 24g)
 #   HTC_TIME_MANAGERS    número de instâncias do TimeManager (ex: 32)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ services:
 
   # ── HTC Simulator ──────────────────────────────────────────────────────────
   simulator:
-    image: ${HTC_IMAGE:-uxhabam/hyperbolic-time-chamber:2.7.0-vm}
+    image: ${HTC_IMAGE:-uxhabam/hyperbolic-time-chamber:3.2.0}
     container_name: htc-simulator
     hostname: node1
     network_mode: host

@@ -4,7 +4,10 @@
 
 **A distributed, event-driven multi-agent framework for urban mobility simulation and research**
 
-Built with Scala 3 and Apache Pekko, HTC implements a **hybrid micro-meso simulation model** where each link in the road network can independently operate in mesoscopic (aggregate flow) or microscopic (individual car-following) mode — enabling city-scale simulation with high-fidelity corridors.
+The next release is **3.2.0**, following 3.1.0. Release branch: `release/3.2.0`.
+The sbt version, assembled JAR and deployment images use the same release number.
+
+Built with Scala 3 and Apache Pekko, HTC implements a **hybrid micro-meso simulation model** where each link in the road network can independently operate in mesoscopic (aggregate flow) or microscopic (individual car-following) mode. Distributed execution and selective microscopic detail support urban mobility research; city-scale throughput and general traffic accuracy remain validation goals.
 
 ---
 
@@ -85,6 +88,27 @@ Its key design goals are:
 | `MachineLearningManager` | ML inference hooks |
 | `RandomSeedManager` | Reproducible random number streams |
 
+### Conservative and Time Warp execution
+
+Each run selects one synchronization policy through `Simulation.timeManagerType`:
+`discrete-event` is the default conservative policy; `time-warp` selects optimistic
+execution. Production Time Warp uses `AccountedOptimisticGlobalTimeManager` and
+`AccountedOptimisticLocalTimeManager`. Local managers own model delivery and
+anti-message accounting; the global manager aggregates frozen-round summaries
+to establish global virtual time (GVT). Rollback restores checkpointed state and
+replays ordered inputs. Reports commit strictly below GVT, and successful completion
+waits for report receipts and storage flush acknowledgements.
+
+The supported runtime milestone includes bounded speculative execution,
+progressive JSON/SQLite input windows, cancellable station-created Bus/Subway
+actors and an accounted dynamic-routing adapter. Two-JVM validation covers actual
+cross-owner transport, conservative/optimistic report parity, delayed transport
+and explicit run failure on worker loss. Those experiments use separate JVMs on
+one host; recovery, ownership migration, network partitions and city-scale
+performance remain outside the validated scope. See the
+[runtime contract](docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md) and
+[multi-JVM validation](docs/MULTI_JVM_POLICY_VALIDATION_2026_10_24.md).
+
 ---
 
 ## Simulation Models
@@ -131,6 +155,32 @@ Here `gap` is bumper spacing after subtracting the minimum standstill gap. This
 continuous stopping-distance approximation does not reproduce every discrete
 detail of SUMO's Krauss implementation.
 
+### Public transport and mixed trips
+
+Bus and Subway scenarios support scheduled service creation, boarding/alighting
+and cyclic routes under both conservative and Time Warp execution. Startup installs
+transit resources on every JVM before model actors initialize. Passenger ride
+distance uses checkpointed boarding and alighting odometer differences; Subway
+counts physical arrival before unloading and prevents duplicate distance credit.
+
+Person preserves completed-leg distance across walking, transit and private-vehicle
+transitions and PT replanning. Reaching the next activity completes one trip for
+the entire sequence of legs. Walking distance comes from the actual route and is
+credited only on arrival. An abort retains completed legs without claiming a
+completed trip; unfinished walks contribute no distance at the horizon. Active
+vehicle journeys receive explicit horizon-truncated reports instead of invented
+destination arrivals or unfinished-link distance.
+
+The bounded mixed-trip campaign validates a
+**walk → Bus → walk → Subway → walk** journey as one 1,700 m trip, alongside
+walking-only and consecutive-leg cases. All ten simulator cases pass and seven
+full-report comparisons match, including MICRO Bus execution, delayed two-JVM
+transport and optimistic rollback. These Person/transit scenarios require
+**one-second runtime ticks**; fractional clocks currently support only the
+documented Car/Link/Node/TrafficSignal configuration. See
+[mixed-trip and walking validation](docs/WALKING_DISTANCE.md) and
+[transit distance and horizon reporting](docs/HORIZON_AND_TRANSIT_REPORTING.md).
+
 ---
 
 ## Agent Catalogue
@@ -170,6 +220,7 @@ a flat **plan** — a list of `Activity`/`AtomicLeg` (`WalkLeg`, `PrivateVehicle
 private vehicles.
 
 Key features:
+
 - **Plan** — flat ordered list of plan elements (`originalPlan` for provenance, `cursor` for actual
   execution position), replacing the older `dailySchedule`/`currentActivityIndex` pair
 - **Mode choice** — `Walk | Car | Bicycle | Motorcycle | Bus | Subway`; a leg is either already
@@ -177,8 +228,8 @@ Key features:
 - **Dynamic mode choice** — pluggable `ModeDecisionEngine`s (`"raptor"`, `"nearest-stop-utility"`,
   `"travel-time"`) registered in `ModeDecisionEngineRegistry`; only `"travel-time"` evaluates
   private vehicles as a candidate
-- **Trip lifecycle** — activates vehicle → waits for `TripCompletedData` → advances the plan cursor
-- **Statistics** — accumulates `totalDistanceTraveled` and `completedTrips`
+- **Trip lifecycle** — executes walking, vehicle and transit legs; reaching the next activity completes the trip
+- **Statistics** — preserves measured distance across legs and counts completed trips once per activity arrival
 
 See **[Person Agent docs](docs/PERSON_AGENT.md)** for the full model.
 
@@ -199,6 +250,9 @@ cd hyperbolic-time-chamber
 # Tests only
 sbt test
 
+# Compile without running tests
+sbt compile
+
 # Code formatting
 sbt scalafmt
 
@@ -209,11 +263,28 @@ sbt scalafix --check
 **Docker (pre-built image):**
 
 ```bash
-docker pull uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+docker pull uxhabam/hyperbolic-time-chamber:3.2.0
 docker run -e HTC_SIMULATION_CONFIG_FILE=/app/simulations/my_scenario/simulation.json \
            -v /path/to/scenarios:/app/simulations \
-           uxhabam/hyperbolic-time-chamber:2.3.2-beluga
+           uxhabam/hyperbolic-time-chamber:3.2.0
 ```
+
+### Release artifacts
+
+Build the versioned JAR and Docker image locally:
+
+```bash
+sbt test assembly
+docker build --build-arg HTC_VERSION=3.2.0 \
+  -t uxhabam/hyperbolic-time-chamber:3.2.0 .
+```
+
+The assembly is `target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar`.
+`build-and-run.sh` reads the version from sbt and passes it to the Docker build.
+Compose and Kubernetes manifests reference `uxhabam/hyperbolic-time-chamber:3.2.0`;
+the VM Compose file also accepts an explicit `HTC_IMAGE` override. Registry pull
+examples require that image to be published first. Dated validation records retain
+their original executable names and hashes for reproducibility.
 
 ### Stack versions
 
@@ -221,13 +292,13 @@ docker run -e HTC_SIMULATION_CONFIG_FILE=/app/simulations/my_scenario/simulation
 |---|---|
 | Scala | 3.3.5 |
 | Java | 21+ |
-| SBT | 1.x |
-| Apache Pekko | 1.5.0 |
-| Pekko HTTP | 1.3.0 |
+| SBT | 1.10.7 |
+| Apache Pekko | 1.7.1 |
+| Pekko HTTP | 1.4.2 |
 | Pekko Management | 1.2.1 |
-| Apache Kafka (connectors) | 1.1.0 |
-| Apache Avro | 1.12.0 |
-| Apache Parquet | 1.17.0 |
+| Apache Pekko Kafka connector | 1.2.0 |
+| Apache Avro | 1.12.2 |
+| Apache Parquet | 1.18.1 |
 | Prometheus Java client | 0.16.0 |
 
 ---
@@ -392,8 +463,10 @@ Idle ──► Loading ──► Running ──► Stopped
 | ClickHouse | `ClickHouseReportData` | Time-series DB; see [ClickHouse queries](docs/clickhouse-queries.md) |
 | Parquet | `ParquetReportData` | Columnar; Snappy / Zstd compression |
 
-**Dynamic routing weights** are published to Kafka and consumed by `DynamicWeightCache`
-(in-memory, Redis, or Kafka-backed strategy).
+**Dynamic routing weights** can use `DynamicWeightCache` strategies. Time Warp
+requires `htc.routing.cache-strategy=accounted` for dynamic feedback through fixed
+RoutingService actors; unaccounted shared caches are rejected. Static routing is
+also supported. See [Accounted Routing](docs/ACCOUNTED_ROUTING.md).
 
 **Prometheus metrics** are exposed on `/metrics` (default port `9090`) for Grafana dashboards
 (see `k8s/monitoring/`).
@@ -459,12 +532,19 @@ src/main/scala/
 │   │       ├── load/               ← LoadDataManager, ProgressiveLoadDataManager
 │   │       └── report/             ← ReportManager, output adapters
 │   ├── api/                        ← REST API (Pekko HTTP)
+│   ├── entity/event/control/rollback/
+│   │                               ← RollbackHistoryHandler, EventReadJournal,
+│   │                                 LoggedEvent, MessageId, SentMessage, anti-messages
+│   ├── runtime/                    ← EventOrder, OrderedInputQueue, execution limits
+│   │   ├── accounting/             ← accounted transport and lifecycle protocol
+│   │   ├── conservative/           ← conservative channel accounting protocol
+│   │   └── distributed/            ← owner-ledger round protocol
 │   ├── kafka/                      ← Kafka topic management
 │   └── metrics/                    ← Prometheus MetricsServer
 │
 └── model/
-    ├── mobility/                   ← [LEGACY] mesoscopic-only model
-    │   └── actor/                  ← Car, Bus, Subway, Person, Link, Node …
+    ├── mobility/                   ← retained data types, collections and utilities
+    │                               ← legacy actors removed; hybrid actors are active
     │
     └── hybrid/                     ← [CURRENT] hybrid micro-meso model
         ├── actor/                  ← Car, Bus, Bicycle, Motorcycle, Subway,
@@ -506,6 +586,14 @@ src/main/scala/
 | [MICRO Scientific Validation](docs/MICRO_SCIENTIFIC_VALIDATION.md) | Original v1 clock/convergence study, measurement definitions and retained field pilot |
 | [Junction Geometry](docs/JUNCTION_GEOMETRY.md) | Fixed MICRO connectors, distance and turn-speed contract, and original geometry evidence |
 | [Work Recovery](docs/WORK_RECOVERY_2026_10_24.md) | Accepted implementation/build references, evidence locations and recovered milestone history |
+| [Distributed Time Warp Runtime](docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md) | Production LTM-owned accounting, rollback, GVT, commitment and supported scope |
+| [Multi-JVM Validation](docs/MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) | Cross-process transport, transit startup fixes, policy parity and worker-loss acceptance |
+| [Bounded Optimistic Execution](docs/BOUNDED_OPTIMISTIC_EXECUTION.md) | Execution windows, event budgets and safe history collection |
+| [Progressive Optimistic Input](docs/PROGRESSIVE_OPTIMISTIC_RUNTIME.md) | Correlated JSON/SQLite enrollment windows and accepted-input bounds |
+| [Runtime Actor Birth](docs/RUNTIME_ACTOR_BIRTH.md) | Cancellable station-created Bus/Subway lifecycle |
+| [Accounted Routing](docs/ACCOUNTED_ROUTING.md) | Dynamic costs and correlated route/mode queries through rollback-aware actors |
+| [Walking and Mixed Trips](docs/WALKING_DISTANCE.md) | Measured walking, preserved multimodal distance, trip completion and physical validation |
+| [Horizon and Transit Reporting](docs/HORIZON_AND_TRANSIT_REPORTING.md) | Passenger odometers, rail arrivals and censored unfinished journeys |
 | [Extensible Time Warp Runtime](docs/TIME_WARP_EXTENSIBLE_RUNTIME.md) | Current core/model audit, conservative and optimistic architecture, implementation stages and acceptance gates |
 | [Time Warp Validation](docs/TIME_WARP_VALIDATION_2026_10_22.md) | Regression tests and bounded scenario evidence for the runtime foundations |
 | [Scenario Modeling Guide](docs/SCENARIO_MODELING.md) | Full JSON schema for all entity types, dependency graph, ID conventions |

@@ -1,7 +1,6 @@
 package org.interscity.htc
 package core.actor
 
-import core.actor.rollback.LoggedEvent
 import core.entity.actor.properties.Properties
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.entity.state.BaseState
@@ -11,6 +10,7 @@ import core.types.Tick
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.{ Actor, ActorRef, ActorSystem, Props }
 import org.apache.pekko.testkit.{ TestActorRef, TestProbe }
+import org.interscity.htc.core.entity.event.control.rollback.LoggedEvent
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
