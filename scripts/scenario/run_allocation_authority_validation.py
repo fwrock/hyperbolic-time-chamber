@@ -41,6 +41,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classpath-file", type=Path, default=Path("target/streams/test/fullClasspath/_global/streams/export"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--spatial", action="store_true", help="publish spatial IDs through the production controller before creation")
     args = parser.parse_args()
     output = args.output or Path(tempfile.mkdtemp(prefix="htc-allocation-authority-"))
     if args.output:
@@ -62,7 +63,7 @@ def main():
     try:
         for role in ("worker", "controller"):
             seed = [] if role == "worker" else [ready["address"]]
-            command = base + [role, str(output)] + seed
+            command = base + [role, str(output)] + seed + (["--spatial"] if args.spatial else [])
             log = (output / f"{role}.log").open("w")
             handles.append(log)
             commands.append(command)
@@ -74,17 +75,25 @@ def main():
         assert result["worker_pid"] == processes[0].pid and result["controller_pid"] == processes[1].pid
         assert result["callback_owner"] == result["restored_owner"] == ready["address"]
         assert result["epoch"] == ready["epoch"] and result["restored_value"] == 23
+        assert result["worker_spatial_entries"] == 1 and result["directory_revision"] == 1
+        if args.spatial:
+            assert result["shard_id"].startswith("dynamic-qt-shard-")
         assert classpath_digest(classpath) == executable_digest, "classpath changed during validation"
         manifest = {
             "commands": commands, "result": result,
             "classpath_contents_sha256": executable_digest,
             "launcher_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            "scope": "allocator authority, registration and restore over independent JVMs; hash routing; explicit pause probe",
+            "scope": "allocator authority, acknowledged directory publication and restore over independent JVMs; explicit pause probe",
         }
         for role in ("worker", "controller"):
             data = (output / f"{role}.log").read_bytes()
             (output / f"{role}-execution.log").write_bytes(data)
+        manifest["engine_errors"] = {
+            role: (output / f"{role}-execution.log").read_text().count("[ERROR]")
+            for role in ("worker", "controller")
+        }
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        assert not any(manifest["engine_errors"].values()), "engine errors in validation execution logs"
         print(json.dumps({"passed": True, "output": str(output), "result": result}, indent=2), flush=True)
     finally:
         for process in processes:

@@ -13,6 +13,7 @@ class AllocationAuthority extends Actor with ActorLogging {
   private val owners = mutable.Map.empty[String, (String, String, Long)]
   private val intents = mutable.Map.empty[String, InstallAllocationIntent]
   private val placements = mutable.Map.empty[(String, String), ActorRef]
+  private val logicalPlacements = mutable.Map.empty[String, String]
   private val retired = mutable.Map.empty[String, (String, String)]
   private var controller: Option[(ActorRef, String)] = None
   private var failure: Option[String] = None
@@ -51,20 +52,38 @@ class AllocationAuthority extends Actor with ActorLogging {
     }
   }
 
-  private def resolve(shardId: String, source: String, target: String, types: Vector[String]): Vector[AllocationTarget] = {
+  private def resolve(shardId: String, source: String, target: String, types: Vector[String],
+    liveSourceVerified: Boolean = false): Vector[AllocationTarget] = {
     require(source != target && up(source) && up(target), "allocation source/target must be distinct Up members")
     require(types.nonEmpty && types.distinct.size == types.size, "missing or duplicate physical shard types")
     types.sorted.map { name =>
       val rows = snapshots.getOrElse(name, Vector.empty)
       val from = rows.filter(_.shards.contains(shardId))
       val to = rows.filter(_.address == target)
-      require(from.size == 1 && from.head.address == source, s"no unique observed source for $name/$shardId")
-      require(to.size == 1, s"no registered target in callback cohort for $name/$shardId")
-      AllocationTarget(name, from.head.region, to.head.region)
+      if (liveSourceVerified) {
+        require(logicalPlacements.get(shardId).contains(source), "live source differs from retained logical placement")
+        require(from.isEmpty || (from.size == 1 && from.head.address == source), "callback contradicts frozen live source")
+        val sourceRegion = registrations.getOrElse(name -> source,
+          throw new IllegalArgumentException(s"no registered source for $name/$shardId")).region
+        val targetRegion = registrations.getOrElse(name -> target,
+          throw new IllegalArgumentException(s"no registered target for $name/$shardId")).region
+        AllocationTarget(name, sourceRegion, targetRegion)
+      } else {
+        require(from.size == 1 && from.head.address == source, s"no unique observed source for $name/$shardId")
+        require(to.size == 1, s"no registered target in callback cohort for $name/$shardId")
+        AllocationTarget(name, from.head.region, to.head.region)
+      }
     }
   }
 
   override def receive: Receive = {
+    case e: GetRegisteredAllocationRegions =>
+      try {
+        checkController(e.epoch, e.controllerId)
+        sender() ! RegisteredAllocationRegions(e.requestId, epoch, registrations.toVector.sortBy(_._1).map {
+          case ((name, address), registration) => RegisteredAllocationRegion(name, registration.region, address)
+        })
+      } catch { case scala.util.control.NonFatal(error) => reject(e.requestId, error.getMessage) }
     case e: GetAllocationAuthorityStatus =>
       if (e.epoch != epoch) reject(e.requestId, "allocation authority epoch changed")
       else sender() ! AllocationAuthorityStatus(e.requestId, epoch, owners.view.mapValues(_._1).toMap,
@@ -104,7 +123,17 @@ class AllocationAuthority extends Actor with ActorLogging {
           case None =>
             val eligible = e.regions.filter(r => up(r.address))
             require(eligible.nonEmpty, "no eligible registered allocation regions")
-            eligible.minBy(r => (r.shards.size, if (r.region == e.requester) 0 else 1, r.address)).region
+            val chosen = logicalPlacements.get(e.shardId) match {
+              case Some(address) => eligible.find(_.address == address).getOrElse(
+                throw new IllegalArgumentException("logical shard target is not yet in the registered callback cohort"))
+              case None =>
+                eligible.minBy { r =>
+                  val load = snapshots.valuesIterator.flatten.filter(_.address == r.address).map(_.shards.size).sum
+                  (load, if (r.region == e.requester) 0 else 1, r.address)
+                }
+            }
+            logicalPlacements(e.shardId) = chosen.address
+            chosen.region
         }
         sender() ! AllocateShardReply(e.requestId, epoch, chosen)
       } catch { case scala.util.control.NonFatal(error) => reject(e.requestId, error.getMessage, error.isInstanceOf[IllegalStateException]) }
@@ -127,7 +156,7 @@ class AllocationAuthority extends Actor with ActorLogging {
       try {
         checkController(e.epoch, e.controllerId)
         sender() ! AllocationPlacementResolved(e.requestId, epoch,
-          resolve(e.shardId, e.sourceAddress, e.targetAddress, e.typeNames))
+          resolve(e.shardId, e.sourceAddress, e.targetAddress, e.typeNames, e.liveSourceVerified))
       } catch { case scala.util.control.NonFatal(error) => reject(e.requestId, error.getMessage) }
 
     case e: InstallAllocationIntent =>
@@ -139,7 +168,7 @@ class AllocationAuthority extends Actor with ActorLogging {
             require(existing.copy(requestId = e.requestId) == e, "conflicting allocation intent")
           case None =>
             require(!retired.get(e.shardId).contains(e.batchId -> e.attemptId), "allocation intent already retired")
-            require(resolve(e.shardId, e.sourceAddress, e.targetAddress, e.targets.map(_.typeName)) == e.targets,
+            require(resolve(e.shardId, e.sourceAddress, e.targetAddress, e.targets.map(_.typeName), e.liveSourceVerified) == e.targets,
               "allocation registration changed after preflight")
             intents(e.shardId) = e
             e.targets.foreach(t => placements(t.typeName -> e.shardId) = t.target)
@@ -154,6 +183,7 @@ class AllocationAuthority extends Actor with ActorLogging {
           case Some(current) =>
             require(current.batchId == e.batchId && current.attemptId == e.attemptId, "stale allocation retirement")
             intents -= e.shardId
+            logicalPlacements(e.shardId) = current.targetAddress
             retired(e.shardId) = e.batchId -> e.attemptId
           case None => require(retired.get(e.shardId).contains(e.batchId -> e.attemptId), "unknown allocation retirement")
         }

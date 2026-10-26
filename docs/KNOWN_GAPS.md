@@ -8,6 +8,39 @@ Start with [MICRO implementation and validation status](MICRO_VALIDATION_STATUS.
 for the consolidated current scope, evidence, scientific interpretation and next
 acceptance gates. The dated sections below retain milestone history.
 
+## Custom conservative load balancing (2026-10-26)
+
+The production conservative runtime now supports the custom migration protocol:
+closed causal batches, authoritative live cohorts after terminal retirement,
+checkpointed accepted input, owner-authorized source stop and physical ActorRef
+rebind preserving logical ownership/schedule handles. First-window loading and
+new migration requests during resume settle before the next cut. A request after
+the terminal cut is explicitly declined instead of failing a completed run.
+
+All routing JVMs acknowledge typed shard assignments before eager/progressive or
+station-created actor initialization. Complete cluster-wide live-count metrics
+are applied on the manager thread. Planning is deterministic, includes idle nodes,
+pins infrastructure, uses projected loads and preserves observed assignments until
+placement is accepted. Fixed initial geographic cells and stable capacity overflow
+replace the previously disconnected initial partitioning. Invalid strategy
+configuration cannot silently select default parameters.
+
+The retained two-JVM campaign compares complete physical output with a fixed
+placement reference and exercises real migration while Cars occupy MESO roads,
+queued waves, progressive cohort enrollment, station-created MICRO Bus/Subway
+service, and explicit worker-loss abort. See
+[Step 10](LOAD_BALANCING.md#step-10--production-conservative-ownership-live-metrics-and-traffic-acceptance-2026-10-26)
+and [the acceptance record](DISTRIBUTED_LOAD_BALANCING_VALIDATION_2026_10_26.md).
+Earlier dated migration sections below retain the original failures and narrower
+milestone evidence; they do not override this current scope.
+
+Custom balancing remains disabled by default. The active snapshot/directory/
+allocation authorities are memory-only and require a fixed cluster cohort.
+Independent restart/failover, membership growth, optimistic migration and live
+geographic repartition remain unsupported. Weights measure live entity counts,
+not CPU cost; useful city-scale performance, memory bounds and empirical
+load-prediction quality remain unestablished.
+
 ## Cross-link MICRO following and v2 validation (2026-10-25)
 
 Opt-in single-lane MICRO following now observes actual leaders across a Link
@@ -871,6 +904,63 @@ with **712 tests in 144 suites**, and the independent-JVM run
 the run and content-hashed; both captured execution logs have zero engine errors.
 The first idle-entity failure remains rejected evidence. `git diff --check` and
 Python launcher compilation pass.
+
+## Load Balancing: Spatial Membership and Classification (Component Corrected 2026-10-25; Distributed Integration Open)
+
+Quadtree registration previously updated lookup maps without populating leaves,
+so density-based refinement never activated. Its dormant branches redistributed
+from a placeholder coordinate, lost membership during balance splits, reused
+Morton-only IDs across depths, and could repeatedly consult an obsolete root.
+Registration now retains coordinates and leaf membership; split/merge/balance
+preserve entities and rebuild indexes. IDs include depth. Configuration and
+coordinate validation prevent out-of-bounds registrations from silently mapping
+to a branch ID. Hybrid/GeoAffinity and the manager share class-based classification
+with a legacy-ID fallback. GeoAffinity no longer assigns each namespace the total
+count of a mixed geographic region.
+Invalid spatial registration now stops the run through the existing fatal path
+instead of restarting the manager and losing previously published assignments.
+
+Repairing population exposes a further integration gap: periodic refinement would
+change IDs already returned to CreatorLoadData without updating all routing JVMs.
+Strategy evaluation now preserves that published topology. The repaired component
+is independently testable, but the integrated strategies keep their initial root
+until coordinated partition publication exists. Distributed entity assignments,
+live cohort discovery, and adaptive geographic integration remain open; custom
+balancing remains disabled by default. See [Step 8](LOAD_BALANCING.md#step-8--spatial-membership-invariants-and-shared-classification-2026-10-25)
+for validation and scope.
+
+Validation: **31 focused tests in three suites**, followed by full `sbt test`:
+**732 tests in 146 suites** pass. `git diff --check` passes. The repaired tree is
+component-tested; distributed spatial migration remains outside this evidence.
+
+## Load Balancing: Spatial Assignments Were Local to Creation JVMs (Directory Implemented 2026-10-25; Live Membership Open)
+
+CreatorLoadData previously installed shard assignments only in its own process.
+Other routing JVMs silently chose hash buckets for those same IDs, and the
+controller's migration cohort could omit entities created elsewhere. A ten-second
+creation timeout could also create hash-routed actors before a late spatial reply
+rewrote the registry. Batch responses updated registries before checking whether
+their chunk was still pending.
+
+An authority now publishes typed immutable assignments to a replica on every Up
+routing JVM and waits for all installation ACKs before the manager answers the
+creator. Epoch/revision/replica identities gate readiness and completion. Enabled
+native extraction requires a published entity/type row. Creator chunk correlation
+precedes writes; the timeout-to-hash path is removed. Invalid publication/replies
+stop the run. The supported directory has fixed cluster membership and no independent
+recovery. These changes distribute creation assignments; initialized/live/retired
+membership, progressive enrollment and adaptive partition publication remain open.
+See [Step 9](LOAD_BALANCING.md#step-9--acknowledged-spatial-directory-publication-2026-10-25)
+and the [directory contract](DISTRIBUTED_SPATIAL_DIRECTORY.md) for validation and limits.
+
+Validation: **34 focused tests in four suites**, full `sbt test` with **745 tests
+in 147 suites**, and two independent-JVM publication/migration cases pass. The
+spatial case uses a production GeoAffinity assignment; both cases preserve value
+23, route from each JVM to the same restored actor, close both windows, and capture
+zero pre-teardown engine errors with an unchanged executable hash. See the
+[validation record](DISTRIBUTED_SPATIAL_VALIDATION_2026_10_25.md). The controller
+and safe-boundary fixture remain controlled; full traffic and live lifecycle
+membership are not accepted by this evidence.
 
 ## Shard Migration Silently Drops Actor-Local Reply State (Currently Latent — Migration Is Disabled)
 

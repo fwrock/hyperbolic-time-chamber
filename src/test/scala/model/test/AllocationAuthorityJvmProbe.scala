@@ -6,7 +6,7 @@ import core.actor.manager.loadbalance.LoadBalanceManager
 import core.actor.manager.loadbalance.allocation.*
 import core.actor.manager.loadbalance.migration.{ MigrationStateStoreRegistry, MigrationWindowSubscriber }
 import core.actor.manager.loadbalance.strategy.StrategyConfig
-import core.entity.control.loadbalance.{ MigrationPlan, MigrationReason, SpatialBounds }
+import core.entity.control.loadbalance.{ MigrationPlan, MigrationReason, SpatialBounds, SpatialEntityData }
 import core.entity.event.EntityEnvelopeEvent
 import core.entity.event.control.loadbalance.*
 import core.enumeration.{ LoadBalanceStrategyEnum, ReportTypeEnum }
@@ -16,7 +16,7 @@ import org.apache.pekko.actor.{ Actor, ActorRef, ActorSystem, AddressFromURIStri
 import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.cluster.pubsub.DistributedPubSub
 import org.apache.pekko.cluster.pubsub.DistributedPubSubMediator.{ Publish, SubscribeAck }
-import org.apache.pekko.cluster.sharding.ShardRegion
+import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
 import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
 import org.apache.pekko.testkit.TestProbe
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
@@ -31,7 +31,8 @@ case class WindowTransportPing(replyTo: ActorRef) extends AllocationValidationWi
 case class WindowTransportReady(address: String) extends AllocationValidationWire
 case object ReadAllocationWorkerStatus extends AllocationValidationWire
 case class AllocationWorkerStatus(pid: Long, localAllocatorAbsent: Boolean, spatialEntries: Int,
-  migrationActive: Boolean) extends AllocationValidationWire
+  migrationActive: Boolean, directoryRevision: Long) extends AllocationValidationWire
+case class ReadCounterFromWorker(entityId: String, typeName: String) extends AllocationValidationWire
 
 class AllocationProofSubscriber(observer: ActorRef) extends MigrationWindowSubscriber {
   override def receive: Receive = {
@@ -42,11 +43,17 @@ class AllocationProofSubscriber(observer: ActorRef) extends MigrationWindowSubsc
 }
 class AllocationProofManager(tm: ActorRef, simulation: ActorRef) extends LoadBalanceManager(
   tm, simulation, LoadBalanceStrategyEnum.Disabled, SpatialBounds(-1, -1, 1, 1), StrategyConfig())
+class SpatialAllocationProofManager(tm: ActorRef, simulation: ActorRef) extends LoadBalanceManager(
+  tm, simulation, LoadBalanceStrategyEnum.GeoAffinity, SpatialBounds(-1, -1, 1, 1),
+  StrategyConfig(enablePrediction = false, rebalanceIntervalSeconds = 3600))
 
 class AllocationProofWorkerStatus extends Actor {
   override def receive: Receive = {
     case ReadAllocationWorkerStatus => sender() ! AllocationWorkerStatus(ProcessHandle.current().pid(),
-      ShardAllocatorRegistry.get.isEmpty, SpatialShardIdRegistry.size, MigrationStateStoreRegistry.isMigrationActive.get())
+      ShardAllocatorRegistry.get.isEmpty, SpatialShardIdRegistry.size, MigrationStateStoreRegistry.isMigrationActive.get(),
+      SpatialShardIdRegistry.directoryRevision)
+    case e: ReadCounterFromWorker =>
+      ClusterSharding(context.system).shardRegion(e.typeName).forward(EntityEnvelopeEvent(e.entityId, ReadDestinationCounter))
   }
 }
 
@@ -69,6 +76,7 @@ object AllocationAuthorityJvmProbe extends Matchers {
 
   private def run(args: Array[String]): Unit = {
     val role = args(0)
+    val spatial = args.contains("--spatial")
     val output = Path.of(args(1))
     val config = ConfigFactory.parseString("""
       pekko.actor.provider=cluster
@@ -100,7 +108,7 @@ object AllocationAuthorityJvmProbe extends Matchers {
     subscribed.expectMsg(20.seconds, "subscribed")
     system.actorOf(Props(classOf[AllocationProofWorkerStatus]), "allocation-proof-worker")
     val id = "801"
-    val shardId = (id.hashCode % 1000).toString
+    val hashShardId = (id.hashCode % 1000).toString
     val name = classOf[DestinationCounterActor].getName
     val region = ActorCreatorUtil.createShardRegion(system, name, id, "authority-proof", mutable.Map.empty,
       probe.ref, mutable.Map.empty[ReportTypeEnum, ActorRef])
@@ -110,6 +118,8 @@ object AllocationAuthorityJvmProbe extends Matchers {
       state.registeredTypes should contain(name)
     }, 30.seconds, 50.millis)
     val client = Await.result(runtime.status(), 5.seconds)
+    val directory = SpatialDirectoryRuntime(system)
+    probe.awaitAssert(Await.result(directory.status(), 5.seconds).ready shouldBe true, 20.seconds, 50.millis)
     ShardAllocatorRegistry.get shouldBe None
     if (role == "worker") {
       writeJson(output.resolve("worker-ready.json"), Map(
@@ -126,8 +136,29 @@ object AllocationAuthorityJvmProbe extends Matchers {
         seen ++= transport.receiveWhile(500.millis, 100.millis) { case WindowTransportReady(address) => address }
       }
       seen shouldBe Set(cluster.selfAddress.toString, worker.toString)
-      SpatialShardIdRegistry.putShardId(id, shardId)
-      SpatialShardIdRegistry.putEntityClassName(id, name)
+      val tm = TestProbe(); val simulation = TestProbe(); val watcher = TestProbe()
+      val managerProps = if (spatial) Props(classOf[SpatialAllocationProofManager], tm.ref, simulation.ref)
+        else Props(classOf[AllocationProofManager], tm.ref, simulation.ref)
+      val manager = system.actorOf(managerProps, "proof-controller")
+      simulation.expectMsgType[LoadBalanceReadyEvent](20.seconds)
+      val shardId = if (spatial) {
+        probe.send(manager, RegisterSpatialEntitiesBatchEvent(Vector(SpatialEntityData(id, 0, 0,
+          entityClassType = name)), "spatial-proof", 7))
+        val response = probe.expectMsgType[BatchShardAssignmentResponse](20.seconds)
+        response.batchId shouldBe "spatial-proof"
+        response.chunkIndex shouldBe 7
+        response.assignments(id) should startWith("dynamic-qt-shard-")
+        response.assignments(id) should not be hashShardId
+        response.assignments(id)
+      } else {
+        Await.result(directory.publish("hash-proof", Vector(SpatialAssignment(id, hashShardId, name, 0, 0))), 25.seconds)
+        hashShardId
+      }
+      system.actorSelection(s"$worker/user/allocation-proof-worker").tell(ReadAllocationWorkerStatus, probe.ref)
+      val beforeCreation = probe.expectMsgType[AllocationWorkerStatus]
+      beforeCreation.spatialEntries shouldBe 1
+      beforeCreation.directoryRevision shouldBe 1L
+      SpatialShardIdRegistry.requirePublishedShardId(id, name) shouldBe shardId
       probe.awaitAssert({
         val state = Await.result(runtime.request(GetAllocationAuthorityStatus("regions-ready", client.epoch)), 10.seconds)
           .asInstanceOf[AllocationAuthorityStatus]
@@ -140,9 +171,6 @@ object AllocationAuthorityJvmProbe extends Matchers {
           .asInstanceOf[AllocationAuthorityStatus]
         state.allocations(name).find(_.address == cluster.selfAddress.toString).get.shards should contain(shardId)
       }, 20.seconds, 50.millis)
-      val tm = TestProbe(); val simulation = TestProbe(); val watcher = TestProbe()
-      val manager = system.actorOf(Props(classOf[AllocationProofManager], tm.ref, simulation.ref), "proof-controller")
-      simulation.expectMsgType[LoadBalanceReadyEvent](20.seconds)
       watcher.watch(original.owner)
       probe.send(manager, RequestMigrationEvent(MigrationPlan(shardId, cluster.selfAddress, worker, MigrationReason.Rebalance)))
       tm.expectMsgType[RequestMigrationPauseEvent].shardIds shouldBe Set(shardId)
@@ -160,7 +188,8 @@ object AllocationAuthorityJvmProbe extends Matchers {
       system.actorSelection(s"$worker/user/allocation-proof-worker").tell(ReadAllocationWorkerStatus, probe.ref)
       val peer = probe.expectMsgType[AllocationWorkerStatus]
       peer.localAllocatorAbsent shouldBe true
-      peer.spatialEntries shouldBe 0
+      peer.spatialEntries shouldBe 1
+      peer.directoryRevision shouldBe 1L
       peer.migrationActive shouldBe false
       MigrationStateStoreRegistry.isMigrationActive.get() shouldBe false
       val authority = Await.result(runtime.request(GetAllocationAuthorityStatus("proof", client.epoch)), 10.seconds)
@@ -169,6 +198,8 @@ object AllocationAuthorityJvmProbe extends Matchers {
       authority.controllerAddress shouldBe Some(cluster.selfAddress.toString)
       authority.registered(name) shouldBe Set(worker.toString, cluster.selfAddress.toString)
       authority.failure shouldBe None
+      system.actorSelection(s"$worker/user/allocation-proof-worker").tell(ReadCounterFromWorker(id, name), probe.ref)
+      probe.expectMsgType[DestinationCounterValue] shouldBe restored
       tm.expectNoMessage(200.millis)
       writeJson(output.resolve("result.json"), Map(
         "passed" -> true, "controller_pid" -> ProcessHandle.current().pid(), "worker_pid" -> peer.pid,
@@ -176,8 +207,11 @@ object AllocationAuthorityJvmProbe extends Matchers {
         "restored_owner" -> restored.owner.path.address.toString, "restored_value" -> restored.value,
         "epoch" -> client.epoch, "controller_incarnation" -> client.incarnation,
         "worker_spatial_entries" -> peer.spatialEntries, "local_allocator_absent" -> ShardAllocatorRegistry.get.isEmpty,
+        "directory_revision" -> peer.directoryRevision, "shard_id" -> shardId,
         "worker_allocator_absent" -> peer.localAllocatorAbsent, "window_closed_on_both_nodes" -> true,
-        "routing_scope" -> "hash shard IDs; controller-only membership fixture", "time_manager" -> "explicit conservative pause probe"))
+        "routing_scope" -> (if (spatial) "published spatial IDs; routing from both independent JVMs" else "published hash IDs"),
+        "publication_scope" -> "all Up replicas installed before creation; fixed creation cohort",
+        "time_manager" -> "explicit conservative pause probe"))
       // The launcher captures completion evidence before tearing down its own child processes.
       Await.result(system.whenTerminated, Duration.Inf)
     }

@@ -20,11 +20,12 @@ case class RebalanceShardsRequest(requestId: String, epoch: String, typeName: St
   incarnation: String, sequence: Long, regions: Vector[AllocationRegion], inProgress: Set[String]) extends AllocationWire
 case class RebalanceShardsReply(requestId: String, epoch: String, shards: Set[String]) extends AllocationWire
 case class ResolveAllocationPlacement(requestId: String, epoch: String, controllerId: String,
-  shardId: String, sourceAddress: String, targetAddress: String, typeNames: Vector[String]) extends AllocationWire
+  shardId: String, sourceAddress: String, targetAddress: String, typeNames: Vector[String],
+  liveSourceVerified: Boolean = false) extends AllocationWire
 case class AllocationPlacementResolved(requestId: String, epoch: String, targets: Vector[AllocationTarget]) extends AllocationWire
 case class InstallAllocationIntent(requestId: String, epoch: String, controllerId: String, batchId: String,
   attemptId: String, shardId: String, sourceAddress: String, targetAddress: String,
-  targets: Vector[AllocationTarget]) extends AllocationWire
+  targets: Vector[AllocationTarget], liveSourceVerified: Boolean = false) extends AllocationWire
 case class AllocationIntentInstalled(requestId: String, epoch: String, batchId: String, attemptId: String) extends AllocationWire
 case class RetireAllocationIntent(requestId: String, epoch: String, controllerId: String,
   batchId: String, attemptId: String, shardId: String) extends AllocationWire
@@ -38,3 +39,6 @@ case class GetAllocationAuthorityStatus(requestId: String, epoch: String) extend
 case class AllocationAuthorityStatus(requestId: String, epoch: String, callbackOwners: Map[String, String],
   controllerAddress: Option[String], registered: Map[String, Set[String]], failure: Option[String],
   allocations: Map[String, Vector[AllocationRegion]] = Map.empty) extends AllocationWire
+case class RegisteredAllocationRegion(typeName: String, region: ActorRef, address: String) extends AllocationWire
+case class GetRegisteredAllocationRegions(requestId: String, epoch: String, controllerId: String) extends AllocationWire
+case class RegisteredAllocationRegions(requestId: String, epoch: String, regions: Vector[RegisteredAllocationRegion]) extends AllocationWire

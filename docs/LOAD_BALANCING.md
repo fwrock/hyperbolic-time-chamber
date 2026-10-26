@@ -452,6 +452,177 @@ classpath and zero engine errors in both pre-teardown execution logs. The
 scope, commands, addresses, hashes, rejected evidence, and remaining gaps.
 `git diff --check` and Python launcher compilation also pass.
 
+### Step 8 — spatial membership invariants and shared classification (2026-10-25)
+
+Normal quadtree registration now populates leaf membership and retains actual
+coordinates. Re-registration, movement within/across leaves, and removal update
+both leaf sets and lookup maps. Density refinement recursively distributes entities
+by their coordinates, merges sparse siblings, and rebuilds entity/shard indexes.
+Balancing splits preserve entities and each pass observes its current topology;
+the former stale-root recursion could fail to converge. Neighbor detection uses
+shared edges/corners and compares complete shard IDs. Depth is now part of
+`qt-shard-{depth}-{mortonCode}`, preventing collisions between paths with leading
+zero quadrants. This changes the dormant custom spatial ID format; no recovery
+compatibility with old assignments is claimed. Invalid coordinates and tree
+configurations are rejected before a registration is changed.
+The component retains a coordinate tuple and leaf membership per entity, and
+explicit refinement rebuilds its indexes. No city-scale memory or runtime claim
+is established by these bounded correctness tests.
+
+Hybrid, GeoAffinity, and LoadBalanceManager now share one class-based classifier.
+The final class-name component determines infrastructure status; package names and
+opaque numeric IDs cannot override supplied metadata. Null/blank metadata retains
+the legacy ID fallback, including `rail_link`. GeoAffinity counts actual prefixed
+memberships separately, so co-located infrastructure and vehicles no longer each
+inherit the whole region's count. Repeated registrations are deduplicated and
+strategy reinitialization clears membership/classification.
+
+Registration validation errors use the manager's existing fatal-stop path rather
+than escaping to actor supervision, which would erase previously published
+assignments on restart. A failed batch publishes no partial assignment response;
+the Time Manager and SimulationManager receive stop requests and later registration
+messages cannot advance the failed run. Tests cover both single and batch requests.
+
+Protocol review: successful creation registration requires its existing correlated
+assignment response; it is independent of model spontaneous-event completion.
+Invalid registration aborts the run and cannot be acknowledged as a successful
+assignment or cause normal resume. No new reply wait, model interaction, scheduling
+control, or timeout recovery was introduced. The existing CreatorLoadData fallback
+timer and complete distributed creation/abort acceptance remain outside this step.
+
+**Topology integration remains gated.** Once registration replies have exposed
+shard IDs to the creation pipeline, `evaluate()` must preserve them. Its previous
+refinement calls would silently invalidate routing as soon as leaf population
+started working. Those calls are removed. The repaired refinement component is
+tested independently; at Step 8 the strategies retained their initial root topology
+(one geographic shard for Hybrid, separate static/dynamic namespaces for
+GeoAffinity). Step 10 replaces that initial root with a configured fixed grid
+and stable overflow buckets. This does not establish useful adaptive geographic partitioning or
+spatial load distribution at scale. A coordinated initial-partition publication
+and live membership directory across every routing JVM are prerequisites for
+enabling refinement in the production path. `enableTwoToOneBalance` does not
+authorize live directory changes.
+
+Validation on 2026-10-25: **31 focused tests in three suites** and full `sbt test`
+with **732 tests in 146 suites** pass. The first regression run failed **13 of
+14 tests** against the previous implementation. Final coverage adds repeated
+insert/move/remove/refine/balance operations with a fixed seed, deterministic
+boundary handling, coincident points/depth limits, invalid configurations,
+membership replacement/reinitialization, namespace counts, class-metadata
+precedence, stable published IDs across evaluations, and fatal single/batch
+registration rejection. The existing migration-wave actor cases also pass.
+`git diff --check` passes. This is component and actor-protocol evidence; no new
+separate-JVM spatial-directory or full traffic-migration acceptance is claimed.
+
+```bash
+sbt 'testOnly *QuadtreePartitionerSpec *SpatialStrategySpec *LoadBalanceManagerMigrationQueueSpec'
+sbt test
+```
+
+### Step 9 — acknowledged spatial directory publication (2026-10-25)
+
+The enabled factory now starts a directory authority and per-JVM replicas before
+region creation. LoadBalanceManager retains each registration response until all
+Up routing JVMs have installed its typed assignments. Publications have an authority
+epoch, consecutive revisions, request identities and replica incarnations. Replica
+hydration gates readiness; partial, stale or wrong-sender ACKs cannot count as a
+complete publication. Duplicate receipts retain their original revision. Registry
+installs validate the complete batch before swapping the local immutable snapshot.
+
+Enabled envelope and native `StartEntity` routing require a published entity/type
+row. CreatorLoadData verifies its current batch/chunk before writing registries,
+checks the exact returned cohort against the directory, and no longer creates
+hash-routed actors when the old assignment timer expires. Enabled proxy creation
+is nonblocking. Invalid replies/publications abort instead of restarting with lost
+creation state or claiming success. Future completions re-enter the manager through
+actor messages. Enrollment cannot overlap migration preparation. Default-disabled
+behavior is retained.
+
+The [directory contract](DISTRIBUTED_SPATIAL_DIRECTORY.md) describes ownership,
+ACK obligations, atomic installation and failure handling. The first publication
+fixes cluster membership; later joins, replica replacement, authority loss and
+epoch changes fail closed. There is no independent failover/restart recovery.
+The directory records immutable **creation assignments**. It distributes the
+membership previously visible only to individual creators, but does not establish
+a live initialized/retired actor roster. Lifecycle-aware cohort closure, progressive
+enrollment, adaptive partition publication, full traffic migration, and accounted
+runtime migration remain open. Every JVM retains all rows and coordinates; scale
+and publication-barrier costs remain unmeasured. Custom balancing remains disabled.
+
+Validation on 2026-10-25: **34 focused tests in four suites** and full `sbt test`:
+**745 tests in 147 suites** pass. Independent JVMs accept a production GeoAffinity
+assignment before creation, move `dynamic-qt-shard-0-0` to the requested worker,
+restore value 23, route from both JVMs to the same restored actor, and close both
+migration windows. An explicit published-hash regression also passes. Both runs
+retain an unchanged content-hashed classpath and zero engine errors in captured
+pre-teardown logs. See the [validation record](DISTRIBUTED_SPATIAL_VALIDATION_2026_10_25.md)
+and [machine-readable results](validation/spatial-directory-2026-10-25.json).
+Python launcher compilation and `git diff --check` pass. The fixture supplies the
+pause response and a fixed counter cohort; it does not establish lifecycle-aware
+membership, the full CreatorLoadData pipeline, or traffic migration.
+
+### Step 10 — production conservative ownership, live metrics and traffic acceptance (2026-10-26)
+
+The enabled path now runs through the production ChannelClosed GTM and its
+ChannelAware owners. A correlated request waits for a closed causal batch, all
+accepted input/birth initialization and committed terminal retirement. Owners
+freeze the selected **live** LPs and return their physical identities; retired
+creation-directory entries do not become snapshot obligations. A request during
+the first progressive window waits for input acceptance. A terminal cut declines
+late requests explicitly; the balancer clears those plans without reporting a
+move or asking a finalizing runtime to resume.
+
+A saved conservative frame includes the ordered accepted input queue, runtime
+epoch/incarnation, owner/coordinator/source paths, finish/schedule generations,
+lifecycle and horizon metadata. The logical owner keeps its schedule handle and
+ledgers. It authorizes source termination and rebinds the planned physical
+replacement before SnapshotManager can accept restore. All owner resume ACKs are
+required; queued waves can arrive during resume, and manual pause remains intact.
+Unexpected source loss before authorization is fatal. The manager sends its real
+actor identity in the pause request rather than its singleton proxy.
+
+The creation path waits for directory publication on all fixed routing JVMs.
+This also covers station-created Bus/Subway actors before native creation.
+Coordinate extraction accepts numeric/string node references and Person plans;
+retained published node coordinates survive temporary cache clearing. Nonspatial
+actors use the configured world center. SimulationManager waits for allocator
+readiness and gives LBM the GTM proxy, not the singleton-manager container. The
+enabled factory avoids unpublished warm-up dummy entities. Singleton proxies no
+longer perform a blocking lookup of a freshly generated unique name.
+
+Metrics now discover every registered physical region across all routing JVMs.
+Complete observations replace prior locations and live counts on the manager
+thread; partial/failed, membership-changing, stale or contradictory rounds are
+discarded. Idle nodes participate with zero load. The planner is deterministic,
+keeps observed ownership unchanged during evaluation, pins infrastructure, and
+updates projected loads across strictly beneficial whole-shard moves. Count
+weights remain a workload proxy, not measured CPU consumption.
+
+Spatial strategies initialize a fixed grid before publication (default depth 2)
+and append stable capacity buckets rather than rewriting existing entity IDs.
+TypeAware deduplicates registrations, clears state on reinitialization and pins
+infrastructure too. A shared startup reader rejects invalid strategy parameters, unusable world
+bounds and nonpositive metrics intervals before any native regions are created;
+SimulationManager consumes the same validated values. Custom Time Warp startup is rejected. CLI shard-startup failures
+now stop metrics and terminate the ActorSystem rather than leaving an idle JVM.
+
+The acceptance campaign includes actual eager/progressive CreatorLoadData,
+production GTM/LTMs, native handoff, SnapshotManager and report sinks over
+independent JVMs. The two-cohort fixture enrolls its second group at tick 10050
+while the first group is travelling on long MESO roads. Acceptance requires actual
+restore offers for Cars whose reported road interval contains the migration cut,
+complete planned trips/distances, zero runtime errors and whole-report parity.
+A passing report comparison alone cannot accept a failed runtime. The harness
+separates runtime completion from reporter flushing during an abort and records
+whether the executable changed during the run.
+
+See [the retained campaign](DISTRIBUTED_LOAD_BALANCING_VALIDATION_2026_10_26.md)
+for exact scope, commands, input/executable hashes, accepted cases and rejected
+evidence. Default custom balancing remains **disabled**. Independent recovery,
+changing routing membership, optimistic migration and live geometric
+repartitioning remain separate protocols; city-scale costs and performance
+benefits are not established by this engineering acceptance.
+
 ## Distribution and rebalancing are separate choices
 
 HTC can execute a simulation across multiple JVMs without relocating existing
@@ -480,9 +651,11 @@ Three decisions should be described separately in experiments:
 
 These are architectural dimensions, not three independently implemented settings
 in the current configuration. In particular, custom strategies combine grouping
-and migration planning. The custom allocator initially falls back to selecting
-the region with the fewest shards unless a desired allocation exists; geographic
-grouping alone does not establish geographic node placement.
+and migration planning. The enabled allocation authority retains one physical node for all actor types
+sharing a logical shard. First allocation selects an eligible region using the
+observed physical shard counts; a retained logical destination cannot silently
+fall back to another node. Geographic grouping alone does not establish
+geographic node placement.
 
 ```mermaid
 flowchart LR
@@ -512,31 +685,34 @@ Source: [configuration](../src/main/resources/application.conf),
 
 ## Scope of synchronization
 
-The load-balancing communication and migration synchronization were designed for
-**conservative execution**. `ConservativeGlobalTimeManager` handles
-`RequestMigrationPauseEvent`, waits for its local managers to finish the current
-tick, emits `MigrationSafeEvent`, and holds tick advancement until
-`MigrationCompleteNotifyEvent`.
+The supported migration adapter targets the production conservative factory:
+`ConservativeGlobalTimeManager.props` creates `ChannelClosedGlobalTimeManager`
+and `ChannelAwareLocalTimeManager` workers. The GTM closes the current causal
+batch, then each owner retires committed terminals, freezes selected live LPs and
+acknowledges their identities and physical refs. Directory entries are routing
+metadata; they do not establish that an actor is still alive.
 
-The migration exchange is intended to run as follows:
+SnapshotManager's registration, save, window-open, final-save, target-apply and
+window-close barriers remain required. A conservative checkpoint also carries the
+accepted ordered input queue, run/LP identity, owner/coordinator paths, scheduling
+revision/generation and lifecycle/horizon metadata. Physical placement can change;
+the logical runtime owner and its schedule handle remain fixed. That owner
+authorizes source termination and validates the replacement before accepting its
+new ActorRef. The target acknowledges restore only after owner rebind.
 
-1. LoadBalanceManager requests a conservative pause.
-2. The Global Time Manager confirms the tick boundary.
-3. SnapshotManager acknowledges batch registration and the complete prepared source set.
-4. Per-JVM subscribers acknowledge opening a migration window.
-5. Pekko hands off the selected shards; sources drain frozen inputs and await final save acceptance before stopping.
-6. Recreated actors query SnapshotManager and stash messages while awaiting state.
-7. SnapshotManager accepts the targets' restore confirmations before the controller closes the window on every JVM.
-8. The manager tells the conservative Time Manager to resume.
+Every owner must acknowledge resume before further model execution. Queued waves
+refreeze without advancing the model, and a user's manual pause stays effective.
+Unexpected source loss before authorized handoff, an unplanned target, a changed
+incarnation or an incomplete barrier fails the run. Timeouts cannot establish
+successful migration.
 
-This is the intended protocol, not a claim that the handoff is already validated.
-The unresolved implementation problems are summarized below. Lack of an optimistic
-migration adapter is a scope boundary; it is not a defect in a design whose stated
-target is conservative execution. Distributed optimistic execution with existing
-placement is documented separately in
+Custom balancing rejects Time Warp at startup. Independent JVM restart,
+controller failover and changing cluster membership require a separate recovery
+protocol. Distributed optimistic execution with fixed placement is documented in
 [Distributed Optimistic Runtime](DISTRIBUTED_OPTIMISTIC_RUNTIME.md).
 
-Source: [conservative coordinator](../src/main/scala/core/actor/manager/time/ConservativeGlobalTimeManager.scala),
+Source: [production coordinator](../src/main/scala/core/actor/manager/time/ChannelClosedGlobalTimeManager.scala),
+[runtime owner](../src/main/scala/core/actor/manager/time/ChannelAwareLocalTimeManager.scala),
 [LoadBalanceManager](../src/main/scala/core/actor/manager/loadbalance/LoadBalanceManager.scala), and
 [window subscriber](../src/main/scala/core/actor/manager/loadbalance/migration/MigrationWindowSubscriber.scala).
 
@@ -546,9 +722,9 @@ Source: [conservative coordinator](../src/main/scala/core/actor/manager/time/Con
 |---|---|---|---|
 | `Disabled` | Normal routing fallback when no custom assignment exists | None | Configuration choice; cite Pekko for sharding |
 | `Default` | Entity-ID hash buckets | None (`evaluate()` returns `Nil`) | Framework baseline, with HTC's extractor/wrapper |
-| `Hybrid` | Intended adaptive geographic quadtree | Weighted recursive partitioning and optional overload prediction | HTC composition; published foundations below |
+| `Hybrid` | Fixed initial geographic grid with stable capacity buckets | Projected-load planning and optional overload prediction | HTC composition; published foundations below |
 | `GeoAffinity` | Geographic grouping with separate static/dynamic namespaces | Hybrid planning with load/locality target scoring | HTC composition and scoring heuristic; foundations below |
-| `TypeAware` | Sequential buckets per actor class | Weighted recursive partitioning and optional overload prediction | HTC grouping heuristic using shared balancing components |
+| `TypeAware` | Sequential buckets per actor class | Projected-load planning and optional overload prediction | HTC grouping heuristic using shared balancing components |
 
 These migration-plan entries describe the strategy layer. LoadBalanceManager and
 the allocator must still execute each plan; a generated plan is not evidence of a
@@ -591,13 +767,19 @@ Source: [DefaultStrategy](../src/main/scala/core/actor/manager/loadbalance/strat
 
 The design combines geographic grouping with load-based migration planning:
 
-1. A quadtree recursively divides world bounds into four regions. Dense leaves
-   are intended to split up to a configured depth; sparse sibling leaves may merge.
-2. A 2:1 refinement constraint is intended to keep adjacent leaves within one
-   depth level. This controls spatial partition granularity; it is separate from
-   balancing computational load across JVMs.
-3. Shard weights are partitioned recursively to propose shard-to-node assignments.
-4. Optional prediction proposes earlier moves for shards approaching a load threshold.
+1. An empty quadtree is subdivided to `initial-depth` before any assignment is published
+   (default 2: sixteen cells). World bounds must cover the scenario.
+2. Creation fills capacity buckets within each cell. Overflow appends
+   `-bucket-N`; existing entity/shard IDs never change.
+3. The shared planner proposes beneficial whole-shard node moves using live counts.
+4. Optional prediction prioritizes load approaching a configured threshold.
+
+The standalone partitioner supports split/merge/2:1 refinement, but live geometric
+repartitioning is not integrated. `enableTwoToOneBalance` does not authorize a
+published directory rewrite. Hybrid pins any bucket containing infrastructure;
+GeoAffinity separates static/dynamic namespaces so dynamic actors in the same
+cell remain movable. Actor geography at creation determines its grouping;
+physical motion does not continuously regroup actors.
 
 The geographic objective is to group nearby entities. The load objective is to
 reduce unequal work between nodes. These objectives can conflict: moving a busy
@@ -660,10 +842,10 @@ With a bucket capacity of 10,000, 25,000 cars produce three buckets containing
 10,000, 10,000, and 5,000 registrations. The resulting membership depends on creation
 order. Entities in one bucket may be geographically distant.
 
-It uses the shared weight partitioner and optional predictor for migration plans.
-The strategy declares every type-shard migratable, but the manager independently
-classifies infrastructure as static and skips its migration. This distinction must
-be retained when reporting which actor classes were actually moved.
+It uses the shared projected-load planner and optional predictor. Both strategy
+and manager pin infrastructure (including transit stops/stations and routing
+services). Duplicate entity registration does not consume bucket capacity, and
+reinitialization clears memberships and bucket indexes.
 
 Pekko already maintains separate sharding regions per actor class. The specific HTC
 addition is sequential, capacity-based bucket assignment and its use in the custom
@@ -689,22 +871,25 @@ from the verified BibTeX set. Morton encoding is also discussed in [R3].
 
 ### The component named KdTreeLoadBalancer
 
-The implementation sorts shards by a scalar weight, recursively splits the list
-toward half its total weight, and zips the resulting groups with registered nodes.
-It does not construct or query a multidimensional spatial search tree. Group-to-node
-assignment follows collection iteration order rather than an explicit optimization
-over candidate node loads.
+The historical class name remains, but the implementation is a deterministic
+scalar-load planner. It sorts shards by descending weight and stable ID, then
+considers only targets for which `sourceLoad - targetLoad > shardWeight`.
+Each accepted projected move strictly decreases the sum of squared node loads.
+Projected loads are updated across the plan; idle registered nodes participate
+with zero load. Planning does not change observed ownership. Strategies record
+new placement only after migration completion or a fresh complete observation.
 
-Bentley's k-d-tree paper [R4] is background for the name, not evidence that HTC
-implements that algorithm. Berger and Bokhari [R5] provide related work on recursive
-workload partitioning. Their geometric domain decomposition is not the scalar
-weight-sorted procedure here, and no derivation from that paper was found in the code.
-For the implemented component, use **recursive scalar-weight partitioning** in
-scientific prose and retain `KdTreeLoadBalancer` as its code identifier.
+GeoAffinity scores only these beneficial candidates. Infrastructure stays pinned.
+Whole indivisible shards can leave residual imbalance without a beneficial move.
+The strategies evaluate ordinary balancing when max/min load exceeds `1.5`;
+overload predictions can also initiate evaluation. This is an implementation
+threshold, not a value established by the cited papers.
 
-The strategies request this partitioning when their computed maximum/minimum node
-load ratio exceeds `1.5`. This is an implementation threshold, not a result or
-recommended value established by the cited papers.
+Bentley's k-d-tree paper [R4] is background for the historical name; HTC does not
+implement that multidimensional search algorithm. Berger and Bokhari [R5] remain
+related work, with no demonstrated derivation. Describe the current code as
+**deterministic projected scalar-load planning**, not recursive partitioning or
+a k-d tree. No optimality or simulation-speedup result is claimed.
 
 Source: [KdTreeLoadBalancer](../src/main/scala/core/actor/manager/loadbalance/spatial/KdTreeLoadBalancer.scala).
 
@@ -725,8 +910,11 @@ predicted overload, then ordinary rebalancing.
 
 Although flow-vector history is retained, the overload decision uses the load
 trend. Describe this as linear load extrapolation rather than motion-based traffic
-prediction. The current built-in collection path supplies creation-time entity
-counts as weights; it does not measure CPU load. No external producer of
+prediction. The built-in collector queries every registered native region on every fixed Up
+JVM and supplies live entity counts as weights; it does not measure CPU load.
+Partial/failed query rounds, changed membership, stale pre-migration observations
+and contradictory physical placement are discarded. Complete snapshots replace
+stale metrics and assignments atomically. No external producer of
 `UpdateLoadMetricsEvent` was found in the inspected main source tree.
 
 Source: [PredictiveBalancer](../src/main/scala/core/actor/manager/loadbalance/prediction/PredictiveBalancer.scala),
@@ -757,13 +945,15 @@ sbt 'testOnly *MigrationSnapshotSpec *LinkWaitMigrationSnapshotSpec *JsonUtilMov
 
 These tests establish the tested capture/restore and serialization cases, not
 end-to-end distributed migration. Before migration results can be claimed, the
-remaining gaps include completion evidence and
-incomplete distributed membership, metrics, and recovery. Steps 1–7 above
+at that milestone, remaining gaps included full traffic acceptance and
+incomplete distributed membership, metrics, and recovery. Step 10 implements the
+production conservative membership/metrics path and records real traffic
+acceptance separately. Independent recovery remains unsupported. Steps 1–7 above
 correct queue promotion, model destruction at handoff, and the snapshot
 readiness/source-freeze, acknowledged restore-retention, and planned-destination
 and observed-completion protocols within their stated test scope.
-Normal quadtree registration also leaves the leaf population used for
-refinement empty, and Hybrid/GeoAffinity classification still expects legacy IDs.
+Step 8 repairs quadtree population/refinement and unifies class-based classification,
+while explicitly gating live topology changes on coordinated assignment publication.
 See [Known Gaps](KNOWN_GAPS.md#shard-migration-silently-drops-actor-local-reply-state-currently-latent--migration-is-disabled)
 for the history of the snapshot-to-stop lost-update window.
 
@@ -783,11 +973,11 @@ distributed protocol.
 | Planned destination is ignored during handoff — fixed in Step 5 | Preflight and handoff resolve the exact node and physical actor type, including idle regions. Typed child allocators isolate colliding shard IDs and reject unavailable explicit destinations instead of falling back. Real two-member, single-JVM relocation preserves state at the selected member; cross-process allocator authority remains unvalidated. |
 | Queue promotion is submitted twice — fixed in Step 1 | Previously, `ShardMigrationCoordinator.completeMigration` started the next pending plan and LoadBalanceManager resubmitted it through admission. The promoted plan is now directly enqueued for execution; subsequent waves wait for the current wave to close. |
 | Handoff monitor does not establish completion — fixed in Step 6 | Fresh source/target region-state queries must establish placement for every type in one round, and store-accepted restores must finish before correlated internal completion advances admission. Missing/failed evidence never turns into success by elapsed time. This does not establish node-loss recovery or cross-process ownership authority. |
-| Quadtree population/refinement is disconnected | `registerEntity` updates the external lookup maps but not `QuadtreeLeaf.entities`, which controls splitting. The normal registration path therefore does not activate the intended refinement. The dormant redistribution branch also uses a placeholder position rather than stored entity coordinates. |
-| Strategy classification expects legacy IDs | Hybrid and GeoAffinity inspect legacy string conventions, while the creation pipeline supplies numeric ID strings and separate class metadata. Their classification can disagree with the manager, which uses class metadata. |
-| Metrics discovery and updates are incomplete | `GetShardRegionState` queries each local region, rather than obtaining a complete cluster-wide assignment snapshot. Its Future callback mutates strategy state outside actor message handling. Built-in weights come from creation-time counts, and `getNodeLoads` does not include every idle registered node. |
+| Quadtree population/refinement is disconnected — component corrected in Step 8 | Registration now retains leaf membership and coordinates; split/merge/balance preserve indexes and entities, with unique depth-qualified IDs. Strategy evaluation preserves published IDs until distributed assignment publication exists. Step 10 integrates a fixed initial grid and stable capacity overflow; live geometric repartition remains unsupported. |
+| Strategy classification expects legacy IDs — fixed in Step 8 | Hybrid, GeoAffinity, and the manager share a class-based classifier with a legacy-ID fallback. GeoAffinity counts static/dynamic membership separately. |
+| Metrics discovery and updates were incomplete — corrected in Step 10 | Every registered region in the fixed Up cohort is queried. Complete live-count observations replace old snapshots on the actor thread; partial/stale rounds are discarded and idle nodes included. Counts are not CPU measurements. |
 | Allocator ownership is JVM-local — corrected in Step 7 | Enabled factories install remote adapters on every JVM; one cluster authority owns registrations, callback snapshots and placement intents. A separate-JVM fixture moves a live shard with controller and callback owner in different processes and no local allocator registry. Recovery and full traffic migration remain outside its scope. |
-| Spatial assignment and live membership remain JVM-local | `SpatialShardIdRegistry` is still populated in creation JVMs. The controller needs complete live membership and every routing JVM needs consistent entity/shard assignments before non-hash spatial migration can be accepted. Step 7's hash-routing fixture intentionally does not claim this. |
+| Spatial assignment and live membership remain JVM-local — creation directory corrected in Step 9 | Assignments and full actor classes publish to every fixed-cohort routing JVM before creation. Step 10 obtains initialized/live membership from conservative owners after retirement, settles progressive/birth initialization and preserves those ledgers during relocation. Coordinated live topology changes remain unsupported. |
 
 Relevant implementation: [actor construction](../src/main/scala/core/util/ActorCreatorUtil.scala),
 [base snapshot capture](../src/main/scala/core/actor/BaseActor.scala),
@@ -814,7 +1004,7 @@ Suggested wording, to adapt to the configuration actually evaluated:
 > Distributed runs can retain existing shard placement while allocating new entities
 > as input becomes available. The optional migration protocol targets conservative
 > execution and coordinates relocation at a simulation-time boundary. The custom
-> strategy family combines geographic or actor-type grouping with recursive
+> strategy family combines geographic or actor-type grouping with projected scalar-load
 > scalar-weight partitioning and optional linear load extrapolation. Geographic
 > refinement draws on quadtree and balanced-octree literature [R2, R3]. The complete
 > strategies are HTC-specific combinations; the current implementation and

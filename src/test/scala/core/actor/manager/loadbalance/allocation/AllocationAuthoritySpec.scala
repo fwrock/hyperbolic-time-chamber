@@ -184,4 +184,27 @@ class AllocationAuthoritySpec extends AnyFlatSpec with Matchers with ScalaFuture
     intercept[IllegalArgumentException](runtime.status()).getMessage should include("disabled")
     intercept[IllegalArgumentException](runtime.request(GetAllocationAuthorityStatus("id", "epoch")))
   }
+
+  "logical shard placement" should "co-locate different physical actor types and reject a missing planned region without fallback" in {
+    val s = new Session
+    s.wire.send(s.authority, AllocateShardRequest("initial-cell", s.epoch, "Car", here, "source-client", 2L,
+      s.source.ref, "cell", s.rows))
+    s.wire.expectMsgType[AllocateShardReply].region shouldBe s.target.ref
+    s.wire.send(s.authority, RegisterAllocationRegion("person-source", s.epoch, "Person", here, "source-client", s.source.ref))
+    s.wire.expectMsgType[AllocationRegionRegistered]
+    s.wire.send(s.authority, RegisterAllocationRegion("person-target", s.epoch, "Person", there, "target-client", s.target.ref))
+    s.wire.expectMsgType[AllocationRegionRegistered]
+    val biased = Vector(AllocationRegion(s.source.ref, here, Vector.empty),
+      AllocationRegion(s.target.ref, there, Vector("busy-one", "busy-two")))
+    s.wire.send(s.authority, AllocateShardRequest("same-cell", s.epoch, "Person", here, "source-client", 1L,
+      s.source.ref, "cell", biased))
+    s.wire.expectMsgType[AllocateShardReply].region shouldBe s.target.ref
+    s.wire.send(s.authority, AllocateShardRequest("missing-cell-region", s.epoch, "Person", here, "source-client", 2L,
+      s.source.ref, "cell", Vector(biased.head)))
+    s.wire.expectMsgType[AllocationRejected].reason should include("logical shard target")
+    s.wire.send(s.authority, AllocateShardRequest("registered-cell-region", s.epoch, "Person", here, "source-client", 3L,
+      s.source.ref, "cell", biased))
+    s.wire.expectMsgType[AllocateShardReply].region shouldBe s.target.ref
+    s.controller.expectNoMessage(100.millis)
+  }
 }

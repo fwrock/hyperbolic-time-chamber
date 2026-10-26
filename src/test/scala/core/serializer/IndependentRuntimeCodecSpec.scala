@@ -120,6 +120,7 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
       RebalanceShardsRequest("id", "epoch", "Car", "address", "incarnation", 3L, rows, Set("other")),
       RebalanceShardsReply("id", "epoch", Set("shard")),
       ResolveAllocationPlacement("id", "epoch", "controller", "shard", "source", "target", Vector("Car")),
+      ResolveAllocationPlacement("live", "epoch", "controller", "shard", "source", "target", Vector("Car"), true),
       AllocationPlacementResolved("id", "epoch", targets),
       InstallAllocationIntent("id", "epoch", "controller", "batch", "attempt", "shard", "source", "target", targets),
       AllocationIntentInstalled("id", "epoch", "batch", "attempt"),
@@ -137,5 +138,65 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
       val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
       SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, manifest).get shouldBe original
     }
+  }
+
+  "spatial directory codecs" should "preserve epochs revisions typed assignments and replica identities" in {
+    import core.actor.manager.loadbalance.allocation.*
+    val row = SpatialAssignment("801", "dynamic-qt-shard-0-0", "example.Car", 1.5, 2.5)
+    val messages: Seq[SpatialDirectoryWire] = Seq(row,
+      RegisterSpatialReplica("id", "address", "incarnation", reader.deadLetters),
+      InstallSpatialAssignments("id", "epoch", 2L, Vector(row), false),
+      SpatialAssignmentsInstalled("id", "epoch", 2L, "address", "incarnation"),
+      SpatialInstallFailed("id", "epoch", "address", "incarnation", "reason"),
+      SpatialReplicaRegistered("id", "epoch", 2L),
+      PublishSpatialAssignments("id", "epoch", "address", "incarnation", Vector(row)),
+      SpatialAssignmentsPublished("id", "epoch", 2L), SpatialDirectoryRejected("id", "reason"),
+      SpatialDirectoryFailed("epoch", "reason"), GetSpatialDirectoryStatus,
+      SpatialDirectoryStatus("epoch", 2L, true, 1, None))
+    val from = SerializationExtension(writer)
+    messages.foreach { original =>
+      val serializer = from.findSerializerFor(original)
+      val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
+      SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, manifest).get shouldBe original
+    }
+  }
+
+  "conservative migration codecs" should "carry frozen cohorts and saved input on independent cold codecs" in {
+    import core.runtime.conservative.*
+    import core.actor.manager.loadbalance.migration.*
+    import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+    val from = SerializationExtension(writer)
+    val ref = reader.deadLetters
+    val lp = LogicalProcessId("example.Car", 801L)
+    val messages: Seq[AnyRef] = Seq(
+      ConservativeMigrationDeclined("late-cut"),
+      FreezeConservativeMigration("epoch", "cut", Map("shard" -> "node"), 1L),
+      FreezeConservativeProcess("epoch", "cut"), ConservativeProcessFrozen("epoch", "cut"),
+      ConservativeMigrationFrozen("epoch", "cut", Vector(ConservativeMigrationMember(lp, ref, ref))),
+      RebindConservativeProcess("epoch", "cut", lp, "incarnation", "old"),
+      ConservativeProcessRebound("epoch", "cut", ref, ref, "incarnation"),
+      AuthorizeConservativeSourceStop("epoch", "cut"), ConservativeSourceStopAuthorized("epoch", "cut"),
+      ResumeConservativeMigration("epoch", "cut"), EndConservativeProcessMigration("epoch", "cut"),
+      ConservativeMigrationResumed("epoch", "cut"),
+      core.entity.event.control.loadbalance.MigrationSafeEvent(2L, Some(Vector(ConservativeMigrationMember(lp, ref, ref))), "cut"),
+      core.entity.event.control.loadbalance.RequestMigrationPauseEvent(Set("shard"), ref, Map("shard" -> "node"), "cut"),
+      core.actor.manager.loadbalance.allocation.GetRegisteredAllocationRegions("id", "epoch", "controller"),
+      core.actor.manager.loadbalance.allocation.RegisteredAllocationRegions("id", "epoch", Vector(
+        core.actor.manager.loadbalance.allocation.RegisteredAllocationRegion("Car", ref, "address"))))
+    messages.foreach { original =>
+      val serializer = from.findSerializerFor(original)
+      val manifest = org.apache.pekko.serialization.Serializers.manifestFor(serializer, original)
+      SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, manifest).get shouldBe original
+    }
+    val event = ActorInteractionEvent(10L, 2L, 12L, "example.Link", "path", "example.Link",
+      data = model.hybrid.entity.event.data.link.LinkInfoData(200.0, 600.0, 2, 40.0, 1), resourceId = "run",
+      order = Some(core.runtime.EventOrder(10L, 2L, "queued")), sourceEpoch = "epoch", sourceIncarnation = "incarnation")
+    Seq[AnyRef](event, SpontaneousEvent(20L, ref, generation = 7L)).foreach { queued =>
+      ConservativeMigrationCodec.decode(reader, ConservativeMigrationCodec.encode(writer, queued)) shouldBe queued
+    }
+    val checkpoint = ConservativeMigrationCheckpoint("epoch", "incarnation", "cut", "owner", "coordinator", "source",
+      Vector(ConservativeMigrationCodec.encode(writer, event)), 7L, 3L, true, 2L, 100L, 0L, None, None)
+    val snapshot = MigrationSnapshot("{}", "example.State", conservativeRuntime = Some(checkpoint))
+    core.util.JsonUtil.convertValue[MigrationSnapshot](core.util.JsonUtil.toJson(snapshot)) shouldBe snapshot
   }
 }

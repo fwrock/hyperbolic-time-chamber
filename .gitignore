@@ -41,6 +41,10 @@ build/
 scripts/*
 !scripts/scenario/
 scripts/scenario/*
+!scripts/scenario/validate_balancing_traffic.py
+!scripts/scenario/test_validate_balancing_traffic.py
+!scripts/scenario/generate_balancing_validation_scenario.py
+!scripts/scenario/test_run_cluster_validation.py
 !scripts/scenario/compare_policy_reports.py
 !scripts/scenario/run_cluster_validation.py
 !scripts/scenario/run_allocation_authority_validation.py

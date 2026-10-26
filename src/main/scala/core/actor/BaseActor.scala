@@ -88,6 +88,7 @@ abstract class BaseActor[T <: BaseState](
       case _: PrepareForMigrationEvent | _: MigrationHandoffStopEvent |
           _: AbortMigrationPreparationEvent | _: MigrationPreparationFailedEvent |
           _: FinalMigrationSnapshotSavedEvent => true
+      case _: core.runtime.conservative.ConservativeSourceStopAuthorized => true
       case _ => false
     }
     if (migrationFreeze.isDefined && !preparationControl) {
@@ -367,8 +368,13 @@ abstract class BaseActor[T <: BaseState](
         event.entityId == entityId && event.revision == finalMigrationRevision) {
       waitingForFinalMigrationSave = false
       if (frozenMigrationInputs.nonEmpty) drainMigrationInputs()
-      else context.stop(self)
+      else stopAfterMigrationSnapshot()
     }
+
+  protected def stopAfterMigrationSnapshot(): Unit = completeAuthorizedMigrationStop()
+
+  protected final def completeAuthorizedMigrationStop(): Unit =
+    if (frozenMigrationInputs.nonEmpty) drainMigrationInputs() else context.stop(self)
 
   private def handleMigrationSaveFailure(event: MigrationPreparationFailedEvent): Unit = {
     migrationFreeze.get.lbmRef ! event

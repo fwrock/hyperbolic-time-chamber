@@ -97,6 +97,11 @@ trait BalancingStrategy {
     * no-op; strategies that maintain a kd-tree override this.
     */
   def recordShardLocation(shardId: String, address: Address): Unit = ()
+  def replaceLoadSnapshot(metrics: Seq[ShardMetrics], assignments: Map[String, Address], nodes: Set[Address]): Unit = {
+    nodes.foreach(registerNode)
+    metrics.foreach(updateMetrics)
+    assignments.foreach { case (shard, node) => recordShardLocation(shard, node) }
+  }
 
   /** Returns entity count per shard as tracked by the strategy at creation time. Default empty;
     * strategies that track shard fill override this.
@@ -122,5 +127,18 @@ case class StrategyConfig(
   /** Weight for geographic affinity in GeoAffinityStrategy target scoring. 0.0 = pure load
     * balancing; 1.0 = pure geographic affinity; 0.4 recommended.
     */
-  geographicAffinityWeight: Double = 0.4
-)
+  geographicAffinityWeight: Double = 0.4,
+  initialSpatialDepth: Int = 2
+) {
+  require(maxDepth >= 0 && maxDepth <= 31 && initialSpatialDepth >= 0 && initialSpatialDepth <= math.min(maxDepth, 8),
+    "invalid spatial depth")
+  require(maxEntitiesPerShard > 0 && minEntitiesPerShard >= 0 && minEntitiesPerShard <= maxEntitiesPerShard,
+    "invalid shard capacity thresholds")
+  require(loadThreshold.isFinite && loadThreshold > 0 && loadThreshold <= 1 &&
+    predictionWindowSeconds.isFinite && predictionWindowSeconds >= 0 && flowVectorSamples >= 2,
+    "invalid prediction configuration")
+  require(rebalanceIntervalSeconds.isFinite && rebalanceIntervalSeconds > 0 && maxConcurrentMigrations > 0,
+    "invalid rebalance interval or concurrency")
+  require(geographicAffinityWeight.isFinite && geographicAffinityWeight >= 0 && geographicAffinityWeight <= 1,
+    "invalid geographic affinity weight")
+}

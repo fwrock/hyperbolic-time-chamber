@@ -121,7 +121,11 @@ class AllocationRuntime(system: ExtendedActorSystem) extends Extension {
   private lazy val client = system.actorOf(Props(classOf[AllocationNodeClient], proxy,
     Cluster(system).selfAddress), "allocation-node-client")
   private val adapters = mutable.Map.empty[String, RemoteShardAllocator]
-  def start(): Unit = if (enabled) { val initialized = client; () }
+  def start(): Unit = if (enabled) {
+    SpatialDirectoryRuntime(system).start()
+    val initialized = client
+    ()
+  }
   def strategy(typeName: String): RemoteShardAllocator = synchronized {
     require(enabled, "custom allocation is disabled")
     adapters.getOrElseUpdate(typeName, new RemoteShardAllocator(client, typeName, Cluster(system).selfAddress)(system))

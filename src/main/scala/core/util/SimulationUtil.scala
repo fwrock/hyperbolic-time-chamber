@@ -99,13 +99,17 @@ object SimulationUtil {
     fromJson[Simulation](readJsonFile(configFile))
 
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
-    core.actor.manager.loadbalance.allocation.AllocationRuntime(system).start()
     val simulationConfig = loadSimulationConfig(configuration)
+    val customBalancing = system.settings.config.getBoolean("htc.load-balance-manager.enabled")
+    require(!customBalancing || simulationConfig.timeManagerType != core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+      "custom load-balancing migration requires the production conservative runtime")
+    if (customBalancing) core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(system.settings.config)
     if (model.hybrid.util.AccountedRoutingConfig.enabled)
       validateAccountedRoutingSources(simulationConfig, model.hybrid.util.AccountedRoutingConfig.workerIds)
     // Remote shard actors can initialize lazy process-wide resources before the
     // SimulationManager's singleton runs; its registry writes reach only its own JVM.
     installLocalScenarioSettings(simulationConfig)
+    core.actor.manager.loadbalance.allocation.AllocationRuntime(system).start()
 
     // Register shard regions for all actor types declared in actorsDataSources.
     simulationConfig.actorsDataSources
@@ -132,7 +136,7 @@ object SimulationUtil {
             null,
             null
           )
-          shardRegion ! ShardRegion.StartEntity(initiatorId)
+          if (!customBalancing) shardRegion ! ShardRegion.StartEntity(initiatorId)
       }
 
     // Also register shard regions for actor types that are created dynamically at runtime

@@ -26,7 +26,6 @@ import org.interscity.htc.core.entity.event.control.load.{EagerLoadDataReadyEven
 import org.interscity.htc.core.entity.event.control.report.RegisterReportersEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.LoadBalanceReadyEvent
 import org.interscity.htc.core.actor.manager.loadbalance.LoadBalanceManager
-import org.interscity.htc.core.actor.manager.loadbalance.strategy.StrategyConfig
 import org.interscity.htc.core.entity.control.loadbalance.SpatialBounds
 import org.interscity.htc.core.enumeration.LoadBalanceStrategyEnum
 import org.interscity.htc.core.metrics.core.PhaseMetrics
@@ -44,6 +43,7 @@ class SimulationManager(
       actorId = SIMULATION_MANAGER_ACTOR_NAME,
       timeManager = null
     ) {
+  override protected val config = context.system.settings.config
 
   private var timeSingletonManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
@@ -63,6 +63,8 @@ class SimulationManager(
   private var waitingForProgressiveRegistrationAck: Boolean = false
   private var pendingSimulationStartTick: Option[Tick] = None
   private var simulationStartSent: Boolean = false
+  private var loadBalanceReady = false
+  private var loadDataStarted = false
   private var pendingProgressiveSources: List[ActorDataSource] = List.empty
 
   private case object RetryPrepareSimulation
@@ -235,6 +237,8 @@ class SimulationManager(
       actorRef = getPath,
       data = Some(StartSimulationTimeData(startTime = System.currentTimeMillis()))
     )
+    if (loadBalanceManager != null) createSingletonProxy(LOAD_BALANCE_MANAGER_ACTOR_NAME) !
+      StartSimulationTimeEvent(startTick = startTick)
   }
 
   private def getSelfProxy: ActorRef =
@@ -259,7 +263,9 @@ class SimulationManager(
   }
 
   private def startLoadData(): Unit =
-    if (poolTimeManager != null && reporters != null) {
+    if (!loadDataStarted && poolTimeManager != null && reporters != null &&
+      (!config.getBoolean("htc.load-balance-manager.enabled") || loadBalanceReady)) {
+      loadDataStarted = true
       PhaseMetrics.recordPhaseStart("loading")
       loadManager = createSingletonLoadManager()
       createSingletonProxy(SNAPSHOT_MANAGER_ACTOR_NAME) ! SnapshotManager
@@ -444,83 +450,32 @@ class SimulationManager(
       }
 
     if (loadBalanceEnabled) {
-      val strategyName =
-        try
-          config.getString("htc.load-balance-manager.strategy")
-        catch {
-          case _: Exception => "hybrid"
-        }
-
-      val strategyType = strategyName.toLowerCase match {
-        case "hybrid"       => LoadBalanceStrategyEnum.Hybrid
-        case "type-aware"   => LoadBalanceStrategyEnum.TypeAware
-        case "geo-affinity" => LoadBalanceStrategyEnum.GeoAffinity
-        case "default"      => LoadBalanceStrategyEnum.Default
-        case "disabled"     => LoadBalanceStrategyEnum.Disabled
-        case _              => LoadBalanceStrategyEnum.Hybrid
-      }
-
-      val worldBounds =
-        try
-          SpatialBounds(
-            minX = config.getDouble("htc.load-balance-manager.world-bounds.min-x"),
-            minY = config.getDouble("htc.load-balance-manager.world-bounds.min-y"),
-            maxX = config.getDouble("htc.load-balance-manager.world-bounds.max-x"),
-            maxY = config.getDouble("htc.load-balance-manager.world-bounds.max-y")
-          )
-        catch {
-          case _: Exception =>
-            SpatialBounds(-180.0, -90.0, 180.0, 90.0)
-        }
-
-      val strategyConfig =
-        try
-          StrategyConfig(
-            maxDepth = config.getInt("htc.load-balance-manager.quadtree.max-depth"),
-            maxEntitiesPerShard =
-              config.getInt("htc.load-balance-manager.quadtree.max-actors-per-shard"),
-            minEntitiesPerShard =
-              config.getInt("htc.load-balance-manager.quadtree.min-actors-per-shard"),
-            loadThreshold = config.getDouble("htc.load-balance-manager.kdtree.load-threshold"),
-            predictionWindowSeconds =
-              config.getDouble("htc.load-balance-manager.prediction.prediction-window-seconds"),
-            rebalanceIntervalSeconds =
-              config.getDouble("htc.load-balance-manager.rebalance-interval-seconds"),
-            enablePrediction = config.getBoolean("htc.load-balance-manager.prediction.enabled"),
-            enableTwoToOneBalance =
-              config.getBoolean("htc.load-balance-manager.quadtree.enable-two-to-one-balance"),
-            maxConcurrentMigrations =
-              config.getInt("htc.load-balance-manager.migration.max-concurrent"),
-            flowVectorSamples =
-              config.getInt("htc.load-balance-manager.prediction.flow-vector-samples"),
-            geographicAffinityWeight =
-              config.getDouble("htc.load-balance-manager.geo-affinity.weight")
-          )
-        catch {
-          case _: Exception => StrategyConfig()
-        }
+      val settings = core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(config)
 
       loadBalanceManager = createSingletonManager(
         manager = LoadBalanceManager.props(
-          timeManager = timeSingletonManager,
+          timeManager = createSingletonProxy(GLOBAL_TIME_MANAGER_ACTOR_NAME),
           simulationManager = getSelfProxy,
-          strategyType = strategyType,
-          worldBounds = worldBounds,
-          strategyConfig = strategyConfig
+          strategyType = settings.strategyType,
+          worldBounds = settings.worldBounds,
+          strategyConfig = settings.strategyConfig
         ),
         name = LOAD_BALANCE_MANAGER_ACTOR_NAME,
         terminateMessage = StopSimulationEvent()
       )
 
-      logInfo(s"LoadBalanceManager created with strategy: $strategyName")
+      logInfo(s"LoadBalanceManager created with strategy: ${settings.strategyName}")
     } else {
       logInfo("LoadBalanceManager disabled. Using default Pekko shard allocation.")
     }
   }
 
   /** Handles notification that LoadBalanceManager is ready. */
-  private def handleLoadBalanceReady(event: LoadBalanceReadyEvent): Unit =
+  private def handleLoadBalanceReady(event: LoadBalanceReadyEvent): Unit = {
+    loadBalanceReady = true
     logInfo("LoadBalanceManager is ready and operational.")
+    startLoadData()
+  }
 
   private def createSingletonProgressiveLoadManager(): ActorRef =
     createSingletonManager(

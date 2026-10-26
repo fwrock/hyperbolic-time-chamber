@@ -4,7 +4,7 @@ package core.actor.manager.loadbalance
 import core.actor.manager.loadbalance.allocation.{ ShardAllocatorRegistry, SpatialShardIdRegistry }
 import core.actor.manager.loadbalance.migration.{ MigrationStateStoreRegistry, MigrationWindowSubscriber }
 import core.actor.manager.loadbalance.strategy.StrategyConfig
-import core.entity.control.loadbalance.{ MigrationPlan, MigrationReason, SpatialBounds, SpatialEntity }
+import core.entity.control.loadbalance.{ MigrationPlan, MigrationReason, SpatialBounds, SpatialEntity, SpatialEntityData }
 import core.entity.event.control.loadbalance.*
 import core.entity.event.control.migration.*
 import core.enumeration.LoadBalanceStrategyEnum
@@ -160,6 +160,33 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
       system.stop(manager)
       control.expectTerminated(manager)
       system.stop(windows.ref)
+    }
+  }
+
+  it should "clear a terminally declined request without snapshotting resuming or accepting later plans" in {
+    import core.runtime.conservative.ConservativeMigrationDeclined
+    val tm = TestProbe(); val simulation = TestProbe(); val control = TestProbe(); val snapshots = TestProbe()
+    MigrationStateStoreRegistry.registerSnapshotManager(snapshots.ref)
+    val address = Cluster(system).selfAddress
+    val plan = MigrationPlan("late-shard", address, address, MigrationReason.Rebalance)
+    val manager = system.actorOf(Props(new Manager(tm.ref, simulation.ref)))
+    control.watch(manager)
+    simulation.expectMsgType[LoadBalanceReadyEvent]
+    try {
+      control.send(manager, RequestMigrationEvent(plan))
+      val request = tm.expectMsgType[RequestMigrationPauseEvent]
+      request.requester shouldBe tm.lastSender
+      tm.send(manager, ConservativeMigrationDeclined("stale"))
+      tm.expectNoMessage(100.millis)
+      tm.send(manager, ConservativeMigrationDeclined(request.requestId))
+      control.send(manager, RequestMigrationEvent(plan))
+      control.send(manager, TriggerRebalanceEvent("late"))
+      tm.expectNoMessage(100.millis)
+      snapshots.expectNoMessage(100.millis)
+      simulation.expectNoMessage(100.millis)
+    } finally {
+      system.stop(manager)
+      control.expectTerminated(manager)
     }
   }
 
@@ -469,6 +496,30 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
     }
   }
 
+  "spatial registration" should "stop on invalid single or batch input without restarting or publishing partial assignments" in {
+    for (batch <- Seq(false, true)) {
+      val tm = TestProbe(); val simulation = TestProbe(); val control = TestProbe()
+      val manager = system.actorOf(Props(new Manager(tm.ref, simulation.ref,
+        selectedStrategy = LoadBalanceStrategyEnum.Hybrid)))
+      control.watch(manager)
+      simulation.expectMsgType[LoadBalanceReadyEvent]
+      val valid = SpatialEntityData("901", 0, 0, entityClassType = "hybrid.actor.Car")
+      val invalid = SpatialEntityData("902", Double.NaN, 0, entityClassType = "hybrid.actor.Car")
+      try {
+        if (batch) control.send(manager, RegisterSpatialEntitiesBatchEvent(Seq(valid, invalid), "invalid"))
+        else control.send(manager, RegisterSpatialEntityEvent(invalid))
+        tm.expectMsg(StopSimulationEvent())
+        simulation.expectMsg(StopSimulationEvent())
+        control.send(manager, RegisterSpatialEntityEvent(valid))
+        control.expectNoMessage(100.millis)
+        simulation.expectNoMessage(100.millis)
+      } finally {
+        system.stop(manager)
+        control.expectTerminated(manager)
+      }
+    }
+  }
+
   "static placement" should "skip pinned infrastructure without querying placement or preparing snapshots" in {
     val tm = TestProbe(); val simulation = TestProbe(); val snapshots = TestProbe(); val control = TestProbe(); val handoffs = TestProbe()
     MigrationStateStoreRegistry.registerSnapshotManager(snapshots.ref)
@@ -496,5 +547,57 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
       system.stop(manager)
       control.expectTerminated(manager)
     }
+  }
+
+  "authoritative migration membership" should "skip a directory shard with no initialized live processes" in {
+    val tm = TestProbe(); val simulation = TestProbe(); val control = TestProbe(); val snapshots = TestProbe()
+    MigrationStateStoreRegistry.registerSnapshotManager(snapshots.ref)
+    SpatialShardIdRegistry.putShardId("990", "retired-only")
+    SpatialShardIdRegistry.putEntityClassName("990", "test")
+    val manager = system.actorOf(Props(new Manager(tm.ref, simulation.ref)))
+    control.watch(manager)
+    simulation.expectMsgType[LoadBalanceReadyEvent]
+    try {
+      val address = Cluster(system).selfAddress
+      control.send(manager, RequestMigrationEvent(MigrationPlan("retired-only", address, address, MigrationReason.Rebalance)))
+      val pause = tm.expectMsgType[RequestMigrationPauseEvent]
+      tm.send(manager, MigrationSafeEvent(10L, Some(Vector.empty), pause.requestId))
+      tm.expectMsg(MigrationCompleteNotifyEvent(pause.requestId))
+      snapshots.expectNoMessage(100.millis)
+    } finally { system.stop(manager); control.expectTerminated(manager) }
+  }
+
+  it should "capture only the frozen live cohort and prepare its physical actor directly" in {
+    val tm = TestProbe(); val simulation = TestProbe(); val control = TestProbe(); val snapshots = TestProbe()
+    val source = TestProbe(); val owner = TestProbe(); val windows = windowProbe()
+    MigrationStateStoreRegistry.registerSnapshotManager(snapshots.ref)
+    Seq("991", "992").foreach { id =>
+      SpatialShardIdRegistry.putShardId(id, "partly-retired")
+      SpatialShardIdRegistry.putEntityClassName(id, "test")
+    }
+    val manager = system.actorOf(Props(new Manager(tm.ref, simulation.ref, notifySources = true)))
+    control.watch(manager)
+    simulation.expectMsgType[LoadBalanceReadyEvent]
+    try {
+      val address = Cluster(system).selfAddress
+      control.send(manager, RequestMigrationEvent(MigrationPlan("partly-retired", address, address, MigrationReason.Rebalance)))
+      val pause = tm.expectMsgType[RequestMigrationPauseEvent]
+      val cohort = Vector(core.runtime.conservative.ConservativeMigrationMember(
+        core.runtime.accounting.LogicalProcessId("test", 991L), source.ref, owner.ref))
+      tm.send(manager, MigrationSafeEvent(10L, Some(cohort), "stale"))
+      snapshots.expectNoMessage(100.millis)
+      tm.send(manager, MigrationSafeEvent(10L, Some(cohort), pause.requestId))
+      val batch = snapshots.expectMsgType[RegisterMigrationBatchEvent]
+      batch.entityIds shouldBe Set("991")
+      snapshots.send(manager, MigrationBatchRegisteredEvent(batch.batchId))
+      source.expectMsgType[PrepareForMigrationEvent].batchId shouldBe batch.batchId
+      snapshots.send(manager, MigrationSnapshotsReadyEvent(batch.batchId, Set("991")))
+      windows.expectMsgType[MigrationWindowOpenEvent]
+      control.send(manager, MigrationWindowAckEvent(batch.batchId, MigrationWindowSubscriber.PHASE_OPEN, address.toString))
+      snapshots.send(manager, MigrationRestoreAcceptedEvent("991", batch.batchId))
+      windows.expectMsgType[MigrationWindowCloseEvent]
+      control.send(manager, MigrationWindowAckEvent(batch.batchId, MigrationWindowSubscriber.PHASE_CLOSE, address.toString))
+      tm.expectMsg(MigrationCompleteNotifyEvent(pause.requestId))
+    } finally { system.stop(manager); control.expectTerminated(manager) }
   }
 }

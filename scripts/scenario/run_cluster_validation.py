@@ -15,6 +15,15 @@ import threading
 import time
 
 
+def execution_outcome(logs):
+    stopped = any("Received StopSimulationEvent. Flushing/stopping reporters" in log for log in logs)
+    completed = any("[CONSERVATIVE-COMPLETE]" in log or "[ACCOUNTED-COMPLETE]" in log for log in logs)
+    failed = any(any(marker in log for marker in (
+        "[RUNTIME-FAILED]", "[SIMULATION-FAILED]", "[CONSERVATIVE-FAILED]",
+        "Load balancing failed;")) for log in logs)
+    return stopped, completed, failed
+
+
 class DelayedTransport:
     def __init__(self, advertised, bound, delay_ms):
         self.advertised, self.bound = advertised, bound
@@ -86,6 +95,8 @@ def run(args):
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     jar, scenario = args.jar.resolve(), args.simulation.resolve()
+    with jar.open("rb") as stream:
+        initial_digest = hashlib.file_digest(stream, "sha256").hexdigest()
     configuration = json.loads(scenario.read_text())
     city_map = Path(configuration["cityMapFile"])
     if not city_map.is_absolute():
@@ -94,7 +105,7 @@ def run(args):
     bound = [port + 100 for port in ports] if args.delay_ms else ports
     relay = DelayedTransport(ports, bound, args.delay_ms) if args.delay_ms else None
     processes, streams, runtime_logs = [], [], []
-    stopped = failed = killed = False
+    stopped = completed = failed = killed = False
     kill_elapsed = None
     started = time.monotonic()
     extra = args.extra_config.read_text() if args.extra_config else ""
@@ -143,8 +154,7 @@ htc.report-manager.json.batch-size=1
 
         while time.monotonic() - started < args.timeout:
             runtime_logs = logs()
-            stopped = any("Received StopSimulationEvent. Flushing/stopping reporters" in log for log in runtime_logs)
-            failed = any("[RUNTIME-FAILED]" in log or "[SIMULATION-FAILED]" in log for log in runtime_logs)
+            stopped, completed, failed = execution_outcome(runtime_logs)
             if stopped or failed:
                 time.sleep(2)
                 break
@@ -159,6 +169,7 @@ htc.report-manager.json.batch-size=1
                 raise relay.error
             time.sleep(.1)
         runtime_logs = logs()
+        stopped, completed, failed = execution_outcome(runtime_logs)
         for index, log in enumerate(runtime_logs):
             (root / f"node-{index}/runtime.log").write_text(log)
         # Keep lifecycle teardown out of execution acceptance while retaining full raw logs.
@@ -181,10 +192,12 @@ htc.report-manager.json.batch-size=1
 
     with jar.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    engine_errors = [log.count("[ERROR]") for log in runtime_logs]
     result = dict(jar=str(jar), jarSha256=digest, simulationFile=str(scenario),
-                  policy=configuration["timeManagerType"], nodes=args.nodes,
+                  executableUnchanged=digest == initial_digest, engineErrors=engine_errors,
+                  policy=configuration.get("timeManagerType", "discrete-event"), nodes=args.nodes,
                   localTimeManagersPerNode=1, advertisedPorts=ports, bindPorts=bound,
-                  engineReportedStop=stopped, runtimeFailed=failed,
+                  engineReportedStop=stopped, engineCompleted=completed, runtimeFailed=failed,
                   faultInjected=killed, killNode=args.kill_node, killAfter=args.kill_after,
                   killElapsedSeconds=kill_elapsed, delayMsPerRead=args.delay_ms,
                   elapsedSeconds=round(time.monotonic() - started, 2),
@@ -194,8 +207,8 @@ htc.report-manager.json.batch-size=1
     (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
     if args.kill_node is not None:
-        return 0 if killed and failed and not stopped else 1
-    return 0 if stopped and not failed else 1
+        return 0 if killed and failed and not completed and digest == initial_digest else 1
+    return 0 if stopped and completed and not failed and not any(engine_errors) and digest == initial_digest else 1
 
 
 def main():

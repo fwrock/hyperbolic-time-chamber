@@ -158,5 +158,6 @@ case class MigrationSnapshot(
   logicalOrder: Option[core.runtime.EventOrder] = None,
   pendingSelf: Option[core.runtime.EventOrder] = None,
   terminalIntent: Option[core.runtime.EventOrder] = None,
-  runtimeBorn: Boolean = true
+  runtimeBorn: Boolean = true,
+  conservativeRuntime: Option[ConservativeMigrationCheckpoint] = None
 )

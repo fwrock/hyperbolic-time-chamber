@@ -3,9 +3,12 @@ package core.actor.manager.load
 
 import core.entity.actor.properties.CreatorProperties
 import core.entity.event.control.load.FinishCreationEvent
+import core.entity.event.control.loadbalance.BatchShardAssignmentResponse
+import core.actor.manager.loadbalance.LoadBalanceTestIsolation
+import core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.{ ActorSystem, Props }
 import org.apache.pekko.testkit.{ TestActorRef, TestKit, TestProbe }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import org.scalatest.BeforeAndAfterAll
@@ -48,8 +51,11 @@ class CreatorLoadDataCorrelationSpec
     with Matchers
     with BeforeAndAfterAll {
 
-  override def afterAll(): Unit =
+  override def beforeAll(): Unit = LoadBalanceTestIsolation.acquire()
+  override def afterAll(): Unit = try {
     TestKit.shutdownActorSystem(system)
+    SpatialShardIdRegistry.clear()
+  } finally LoadBalanceTestIsolation.release()
 
   private def newCreator(): CreatorLoadData =
     TestActorRef[CreatorLoadData](
@@ -114,5 +120,34 @@ class CreatorLoadDataCorrelationSpec
     creator.pendingInitAck.contains("e1") shouldBe false
     creator.initializedAcknowledges.get("batch-A").forall(_.isEmpty) shouldBe true
     creator.initializedAcknowledges.get("batch-B").forall(_.isEmpty) shouldBe true
+  }
+
+  "spatial chunk correlation" should "ignore unsolicited and stale replies before changing routing or positions" in {
+    val creator = newCreator()
+    creator.pendingChunks("batch") = Nil
+    creator.pendingChunkIndexes("batch") = 2
+    val response = BatchShardAssignmentResponse(Map("stale-id" -> "stale-shard"),
+      Map("stale-id" -> Array(1.0, 2.0)), "batch", 1)
+    creator.handleBatchAssignmentResponse(response)
+    creator.handleBatchAssignmentResponse(response.copy(batchId = "unknown", chunkIndex = 2))
+    SpatialShardIdRegistry.getShardId("stale-id") shouldBe None
+    SpatialShardIdRegistry.getPosition("stale-id") shouldBe None
+    creator.pendingChunkIndexes("batch") shouldBe 2
+    creator.pendingChunks should contain key("batch")
+  }
+
+  it should "abort a matching response with an incomplete cohort before publishing any local assignment" in {
+    val failures = TestProbe()
+    val creator = TestActorRef[CreatorLoadData](Props(new CreatorLoadData(
+      CreatorProperties(entityId = "invalid-creator", shardId = "shard")) {
+      override protected def stopForSpatialFailure(reason: String): Unit = failures.ref ! reason
+    })).underlyingActor
+    creator.pendingChunks("batch") = Nil
+    creator.pendingChunkIndexes("batch") = 2
+    creator.handleBatchAssignmentResponse(BatchShardAssignmentResponse(Map("unexpected" -> "shard"),
+      Map("unexpected" -> Array(1.0, 2.0)), "batch", 2))
+    failures.expectMsgType[String] should include("does not cover")
+    SpatialShardIdRegistry.getShardId("unexpected") shouldBe None
+    creator.pendingChunkIndexes("batch") shouldBe 2
   }
 }

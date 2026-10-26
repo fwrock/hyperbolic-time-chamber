@@ -125,12 +125,12 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - `var` fields on the actor itself must be reset in `resetTripState()` / `onDestruct()`
 - Never hold `ActorRef` in state — use entity IDs + shard IDs
 
-**What must live in `state`, not as an actor-local `var`**: only `state` is carried by
-`BaseActor.buildMigrationSnapshot` across a shard migration/rebalance. Any actor-local `var` that
+**Behavior needed after migration**: `BaseActor.buildMigrationSnapshot` carries `state`;
+explicit model/core snapshot overrides also carry their named metadata. Any actor-local `var` that
 represents something needed to reconstruct correct behavior after a restart — most importantly a
 **pending reply obligation to another actor** (e.g. `PrivateVehicle.ownerPersonRef`,
-`Person.currentPTVehicleRef`) — must go in `state`, or it silently vanishes on migration and the
-actor loses the ability to ever answer that sender. See `docs/KNOWN_GAPS.md` ("Shard Migration
+`Person.currentPTVehicleRef`) — must go in `state` or an explicitly tested capture/restore hook; otherwise it silently vanishes
+on migration and the actor loses the ability to answer that sender. See `docs/KNOWN_GAPS.md` ("Shard Migration
 Silently Drops Actor-Local Reply State") for the concrete failure chain this caused.
 
 Actor-local `var`s are fine to keep **outside** `state` when they're cheaply recoverable and hold
@@ -139,10 +139,16 @@ no reply obligation — e.g. handles/proxies to process-wide singletons (`CityMa
 rebuildable from `state` on demand. The test is not "is it mutable" but "does losing this value on
 restart break correctness for someone else, or just cost a recompute."
 
-**Shard rebalancing/migration is currently kept disabled** — the project is prioritizing
-simulation execution correctness and performance first, and migration/snapshot restore is not
-part of the active test loop. Gaps A/B/C in `docs/KNOWN_GAPS.md` are real but dormant under this
-setting; don't treat their absence from observed bugs as evidence they're fixed.
+**Custom shard rebalancing remains disabled by default.** The opt-in production conservative
+adapter is tested through closed-batch owner freezes, accepted input checkpoints, authorized
+source termination and physical-ref rebind. Preserve logical owner/schedule identity and wait
+for all restore, placement, window-close and owner-resume ACKs. Directory rows are immutable
+routing assignments, not live snapshot obligations; use the owners' frozen live cohort after
+committed retirement. Late requests after the terminal cut are declined without model resume.
+Time Warp migration, independent recovery, membership growth and live geometric repartition
+remain unsupported. See `docs/LOAD_BALANCING.md` Step 10 and the retained traffic campaign.
+Model reply obligations must survive in state or the existing explicit migration snapshot hooks;
+never assume a field survives because migration worked before that branch was exercised.
 
 ## Synchronization Discipline
 

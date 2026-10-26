@@ -3,7 +3,8 @@ package core.actor.manager.load
 
 import core.actor.BaseActor
 
-import org.apache.pekko.actor.{ ActorRef, Cancellable, Props }
+import org.apache.pekko.actor.{ ActorRef, Props }
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 import core.util.{ ActorCreatorUtil, DistributedUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
@@ -20,6 +21,8 @@ import org.interscity.htc.core.entity.event.control.load.{ CreateActorsEvent, Fi
 import org.interscity.htc.core.entity.event.control.loadbalance.{ BatchShardAssignmentResponse, RegisterSpatialEntitiesBatchEvent }
 import org.interscity.htc.core.entity.event.data.InitializeData
 import org.interscity.htc.core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
+import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
+import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -34,6 +37,7 @@ class CreatorLoadData(
         data = creatorProperties.data
       )
     ) {
+  override protected val config = context.system.settings.config
 
   private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
   private val creatorManager: ActorRef = creatorProperties.creatorManager
@@ -69,7 +73,6 @@ class CreatorLoadData(
 
   private val CREATE_CHUNK_SIZE = 500
   private val DELAY_BETWEEN_CHUNKS = 100.milliseconds
-  private val LB_CHUNK_TIMEOUT = 10.seconds
 
   /** Lazy singleton proxy to LoadBalanceManager (null if load balancing disabled). */
   private var loadBalanceProxy: ActorRef = _
@@ -77,14 +80,14 @@ class CreatorLoadData(
   /** Pending chunks awaiting BatchShardAssignmentResponse from LoadBalanceManager. Key: batchId,
     * Value: the chunk of actors waiting for spatial assignment.
     */
-  private val pendingChunks: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
-
-  /** Scheduled timeout cancellables for pending LBM chunks. Cancelled on response. */
-  private val pendingChunkTimeouts: mutable.Map[String, Cancellable] = mutable.Map.empty
+  private[load] val pendingChunks: mutable.Map[String, List[ActorSimulationCreation]] = mutable.Map.empty
+  private[load] val pendingChunkIndexes: mutable.Map[String, Int] = mutable.Map.empty
+  private val nextChunkIndexes: mutable.Map[String, Int] = mutable.Map.empty
 
   /** Whether this instance has already attempted proxy initialisation (avoids repeat config reads).
     */
   private var lbProxyChecked: Boolean = false
+  private var spatialCreationFailed = false
 
   override def onStart(): Unit =
     super.onStart()
@@ -93,13 +96,13 @@ class CreatorLoadData(
     super.postStop()
 
   override def handleEvent: Receive = {
+    case _ if spatialCreationFailed => ()
     case event: CreateActorsEvent =>
       logDebug(s"Received CreateActorsEvent with ${event.actors.size} actors, batchId=${event.id}")
       handleCreateActors(event)
     case event: StartCreationEvent             => handleStartCreation(event)
     case event: ProcessNextCreateChunk         => handleProcessNextCreateChunk(event.batchId)
     case event: BatchShardAssignmentResponse   => handleBatchAssignmentResponse(event)
-    case event: CreatorLoadData.LbChunkTimeout => handleLbChunkTimeout(event)
     case event: ShardRegion.StartEntityAck     => handleInitialize(event)
     case event: InitializeEntityAckEvent       => handleFinishInitialization(event)
     case event: NeedsPostLoadRegistrationEvent => handleNeedsPostLoadRegistration(event)
@@ -149,7 +152,7 @@ class CreatorLoadData(
       if (lbProxy.isDefined) {
         val spatialEntities = chunk.map {
           actorCreation =>
-            val position = extractSpatialPosition(actorCreation).getOrElse((0.0, 0.0))
+            val position = core.actor.manager.loadbalance.allocation.SpatialPositionUtil.resolve(actorCreation.actor.data.content, config)
             SpatialEntityData(
               spatialEntityId = actorCreation.actor.id.toString,
               lon = position._1,
@@ -163,15 +166,13 @@ class CreatorLoadData(
         }
 
         pendingChunks.put(batchId, chunk)
-        val timeout = context.system.scheduler.scheduleOnce(
-          LB_CHUNK_TIMEOUT,
-          self,
-          CreatorLoadData.LbChunkTimeout(batchId)
-        )
-        pendingChunkTimeouts.put(batchId, timeout)
+        val chunkIndex = nextChunkIndexes.getOrElse(batchId, 0)
+        nextChunkIndexes(batchId) = chunkIndex + 1
+        pendingChunkIndexes(batchId) = chunkIndex
         lbProxy.get ! RegisterSpatialEntitiesBatchEvent(
           entities = spatialEntities,
-          batchId = batchId
+          batchId = batchId,
+          chunkIndex = chunkIndex
         )
         return
       }
@@ -188,7 +189,24 @@ class CreatorLoadData(
     * Phase 2 of two-phase creation: stores the spatial shard assignments in
     * [[SpatialShardIdRegistry]], then creates the entities using the assigned shard IDs.
     */
-  private def handleBatchAssignmentResponse(response: BatchShardAssignmentResponse): Unit = {
+  private[load] def handleBatchAssignmentResponse(response: BatchShardAssignmentResponse): Unit = try {
+    if (!pendingChunkIndexes.get(response.batchId).contains(response.chunkIndex)) {
+      logWarn(s"Ignoring spatial assignment for inactive chunk '${response.batchId}/${response.chunkIndex}'")
+      return
+    }
+    val expectedIds = pendingChunks(response.batchId).map(_.actor.id.toString).toSet
+    require(response.assignments.keySet == expectedIds && response.positions.keySet == expectedIds,
+      "spatial assignment response does not cover its creation chunk")
+    require(response.positions.values.forall(a => a != null && a.length == 2 && a.forall(_.isFinite)),
+      "invalid spatial creation positions")
+    if (config.getBoolean("htc.load-balance-manager.enabled")) {
+      pendingChunks(response.batchId).foreach { creation =>
+        val id = creation.actor.id.toString
+        val published = SpatialShardIdRegistry.requirePublishedShardId(id,
+          StringUtil.getModelClassName(creation.actor.typeActor))
+        require(response.assignments(id) == published, "creation response differs from published spatial directory")
+      }
+    }
     SpatialShardIdRegistry.putAllShardIds(response.assignments)
 
     SpatialShardIdRegistry.putAllPositions(response.positions)
@@ -198,7 +216,7 @@ class CreatorLoadData(
         s"${response.assignments.size} entities assigned"
     )
 
-    pendingChunkTimeouts.remove(response.batchId).foreach(_.cancel())
+    pendingChunkIndexes.remove(response.batchId)
 
     pendingChunks.remove(response.batchId) match {
       case Some(chunk) =>
@@ -211,6 +229,17 @@ class CreatorLoadData(
             s"but no pending chunk found. Ignoring."
         )
     }
+  } catch {
+    case scala.util.control.NonFatal(error) =>
+      spatialCreationFailed = true
+      stopForSpatialFailure(error.getMessage)
+  }
+
+  protected def stopForSpatialFailure(reason: String): Unit = {
+    logError(s"Spatial creation failed; stopping simulation: $reason")
+    val proxy = context.actorOf(ClusterSingletonProxy.props(s"/user/$SIMULATION_MANAGER_ACTOR_NAME",
+      ClusterSingletonProxySettings(context.system)))
+    proxy ! StopSimulationEvent()
   }
 
   /** Creates entities from a chunk — the actual creation loop extracted from
@@ -293,54 +322,7 @@ class CreatorLoadData(
   private def extractSpatialPosition(
     actorCreation: ActorSimulationCreation
   ): Option[(Double, Double)] =
-    try
-      actorCreation.actor.data.content match {
-        case contentMap: java.util.Map[?, ?] =>
-          val map = contentMap.asInstanceOf[java.util.Map[String, Any]]
-
-          if (map.containsKey("latitude") && map.containsKey("longitude")) {
-            val lat = map.get("latitude") match {
-              case n: Number => n.doubleValue()
-              case _         => return None
-            }
-            val lon = map.get("longitude") match {
-              case n: Number => n.doubleValue()
-              case _         => return None
-            }
-            return Some((lon, lat))
-          }
-
-          if (map.containsKey("from")) {
-            val fromNodeId = map.get("from").asInstanceOf[String]
-            val pos = SpatialShardIdRegistry.getPosition(fromNodeId)
-            if (pos.isDefined) return pos
-          }
-
-          if (map.containsKey("origin")) {
-            val originNodeId = map.get("origin").asInstanceOf[String]
-            val pos = SpatialShardIdRegistry.getPosition(originNodeId)
-            if (pos.isDefined) return pos
-          }
-
-          if (map.containsKey("currentNode")) {
-            val nodeId = map.get("currentNode").asInstanceOf[String]
-            val pos = SpatialShardIdRegistry.getPosition(nodeId)
-            if (pos.isDefined) return pos
-          }
-
-          if (map.containsKey("nodeId")) {
-            val nodeId = map.get("nodeId").asInstanceOf[String]
-            val pos = SpatialShardIdRegistry.getPosition(nodeId)
-            if (pos.isDefined) return pos
-          }
-
-          None
-
-        case _ => None
-      }
-    catch {
-      case _: Exception => None
-    }
+    core.actor.manager.loadbalance.allocation.SpatialPositionUtil.extract(actorCreation.actor.data.content)
 
   /** Lazily obtains a singleton proxy to LoadBalanceManager, if load balancing is enabled.
     *
@@ -353,53 +335,25 @@ class CreatorLoadData(
   private def getLoadBalanceProxy: Option[ActorRef] = {
     if (lbProxyChecked) return Option(loadBalanceProxy)
 
-    val cached = CreatorLoadData.globalLbProxy.get()
-    if (cached != null) {
-      loadBalanceProxy = cached
-      lbProxyChecked = true
-      return Some(loadBalanceProxy)
-    }
-
     lbProxyChecked = true
     val lbEnabled =
       try config.getBoolean("htc.load-balance-manager.enabled")
       catch { case _: Exception => false }
     if (lbEnabled) {
-      try {
-        val proxy = DistributedUtil.createSingletonProxy(
-          context.system,
-          LOAD_BALANCE_MANAGER_ACTOR_NAME
-        )
-        // Race: only one proxy wins; stop the losers to avoid orphaned actors
-        if (!CreatorLoadData.globalLbProxy.compareAndSet(null, proxy)) {
-          context.stop(proxy)
-        }
-        loadBalanceProxy = CreatorLoadData.globalLbProxy.get()
-        Some(loadBalanceProxy)
-      } catch {
-        case e: Exception =>
-          logWarn(
-            s"Failed to create LoadBalanceManager proxy: ${e.getMessage}. Using hash-based shard routing."
-          )
-          loadBalanceProxy = null
-          None
+      val cached = CreatorLoadData.globalLbProxy.get()
+      if (cached != null) {
+        loadBalanceProxy = cached
+        return Some(loadBalanceProxy)
       }
+      val proxy = context.system.actorOf(ClusterSingletonProxy.props(
+        s"/user/$LOAD_BALANCE_MANAGER_ACTOR_NAME", ClusterSingletonProxySettings(context.system)),
+        s"load-balance-creator-proxy-${java.util.UUID.randomUUID()}")
+      // Race: only one proxy wins; stop the losers to avoid orphaned actors.
+      if (!CreatorLoadData.globalLbProxy.compareAndSet(null, proxy)) context.stop(proxy)
+      loadBalanceProxy = CreatorLoadData.globalLbProxy.get()
+      Some(loadBalanceProxy)
     } else {
       None // Load balancing not enabled
-    }
-  }
-
-  /** Fallback handler: fires when a pending LBM chunk hasn't received a response within
-    * [[LB_CHUNK_TIMEOUT]]. Proceeds with hash-based routing so entity creation isn't stalled.
-    */
-  private def handleLbChunkTimeout(event: CreatorLoadData.LbChunkTimeout): Unit = {
-    pendingChunkTimeouts.remove(event.batchId)
-    pendingChunks.remove(event.batchId) match {
-      case Some(chunk) =>
-        createEntitiesFromChunk(chunk, event.batchId)
-        advanceToNextChunk(event.batchId, chunk.size)
-      case None =>
-      // Response already arrived just before the timeout fired — nothing to do
     }
   }
 
@@ -579,6 +533,7 @@ class CreatorLoadData(
       batchesToCreate.remove(batchId)
       actorsToCreate.remove(batchId)
       initializedAcknowledges.remove(batchId)
+      nextChunkIndexes.remove(batchId)
 
       pruneBatchFromQueues(actorsBatches, batchId)(identity)
       pruneBatchFromQueues(pendingInitAck, batchId)(_._1)
@@ -605,9 +560,6 @@ object CreatorLoadData {
   /** JVM-level cache: all [[CreatorLoadData]] instances on the same node share one proxy actor. */
   private[load] val globalLbProxy: java.util.concurrent.atomic.AtomicReference[ActorRef] =
     new java.util.concurrent.atomic.AtomicReference[ActorRef](null)
-
-  /** Internal message: fires when an LBM chunk response hasn't arrived within the timeout. */
-  final case class LbChunkTimeout(batchId: String)
 
   def props(
     creatorProperties: CreatorProperties

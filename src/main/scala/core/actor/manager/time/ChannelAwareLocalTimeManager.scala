@@ -6,6 +6,7 @@ import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
 import core.actor.manager.load.RuntimeBirthInitializer
+import core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 import core.types.Tick
 import core.util.ManagerConstantsUtil.LOCAL_TIME_MANAGER_ACTOR_NAME
 import org.apache.pekko.actor.{ActorRef, Props, Terminated}
@@ -19,7 +20,7 @@ import scala.util.control.NonFatal
 class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinator: ActorRef)
   extends LocalTimeManagerBase(duration, manager, Some(coordinator), LOCAL_TIME_MANAGER_ACTOR_NAME) {
   accountedRuntime = Some(coordinator)
-  private case class Process(id: LogicalProcessId, ref: ActorRef, identity: Identify, handle: Long,
+  private case class Process(id: LogicalProcessId, var ref: ActorRef, identity: Identify, handle: Long,
     incarnation: String, var next: Option[EventOrder] = None, var blocked: Int = 0, var terminal: Boolean = false)
   private case class Acceptance(process: Process, source: Option[(ActorRef, Long)])
   private val processes = mutable.Map.empty[LogicalProcessId, Process]
@@ -50,6 +51,12 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var readyRequest: Option[(Long, ActorRef)] = None
   private val unborn = mutable.Map.empty[LogicalProcessId, mutable.ArrayBuffer[(core.entity.event.ActorInteractionEvent, Option[(ActorRef, Long)])]]
   private val births = mutable.Map.empty[LogicalProcessId, (RuntimeBirthOrigin, RuntimeBirthData, Option[ActorRef])]
+  private case class FrozenProcess(process: Process, original: ActorRef, oldPath: String, target: String,
+    var replacement: Option[ActorRef] = None, var stopAuthorized: Boolean = false)
+  private var migration: Option[FreezeConservativeMigration] = None
+  private val frozenProcesses = mutable.Map.empty[LogicalProcessId, FrozenProcess]
+  private var migrationStarted = false
+  private val pendingMigrationAcks = mutable.Set.empty[ActorRef]
   protected def createRuntimeBirthInitializer(target: LogicalProcessId, origin: RuntimeBirthOrigin, data: RuntimeBirthData): ActorRef =
     context.actorOf(RuntimeBirthInitializer.props(self, coordinator, target, origin, data))
 
@@ -190,13 +197,13 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       }
     }
     case CollectConservativeReady(round) => protect {
-      require(sender() == coordinator && batch.isEmpty, "frontier requested during execution")
+      require(sender() == coordinator && batch.isEmpty && migration.isEmpty, "frontier requested during execution/migration")
       readyRequest = Some(round -> sender())
       require(unborn.isEmpty || births.nonEmpty, "input to an unknown/retired LP without an accounted birth")
       reportReady()
     }
     case event: ExecuteConservativeBatch => protect {
-      require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty, "overlapping conservative batches")
+      require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty && migration.isEmpty, "overlapping conservative batches/migration")
       batch = Some(event)
       preparing = true
       retireCommittedTerminals(event.round)
@@ -254,6 +261,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
         terminalProcesses.remove(sender())
         forgetOwnedProcess(process.handle)
         context.unwatch(sender())
+        completeMigrationFreeze()
         completeBatch()
       } else {
         require(stopping.exists(_.round == round) && retirements.contains(sender()), "unexpected retirement")
@@ -261,16 +269,95 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
         completeStop()
       }
     }
+    case e: FreezeConservativeMigration => protect {
+      checkEpoch(e.epoch)
+      require(sender() == coordinator && migration.isEmpty && batch.isEmpty && outgoing.isEmpty && accepting.isEmpty &&
+        reports.isEmpty && births.isEmpty && stopping.isEmpty, "migration outside a closed conservative batch")
+      migration = Some(e)
+      retireCommittedTerminals(e.round)
+      completeMigrationFreeze()
+    }
+    case e: ConservativeProcessFrozen => protect {
+      checkEpoch(e.epoch)
+      if (migration.exists(_.requestId == e.requestId) && pendingMigrationAcks.remove(sender())) completeMigrationFreeze()
+    }
+    case e: RebindConservativeProcess => protect {
+      checkEpoch(e.epoch)
+      require(migration.exists(_.requestId == e.requestId) && pendingMigrationAcks.isEmpty, "rebind outside an acknowledged migration")
+      val frozen = frozenProcesses.getOrElse(e.id, throw new IllegalArgumentException("rebind of an unfrozen LP"))
+      val process = frozen.process
+      require(process.incarnation == e.incarnation && frozen.oldPath == e.oldPath, "migration LP incarnation changed")
+      require(frozen.stopAuthorized, "migration source stop was not authorized")
+      val address = if (sender().path.address.hasLocalScope) org.apache.pekko.cluster.Cluster(context.system).selfAddress.toString
+        else sender().path.address.toString
+      require(address == frozen.target && sender().path.name == e.id.id.toString, "migration restored at an unplanned actor/physical node")
+      require(frozen.replacement.forall(_ == sender()), "migration replacement actor changed")
+      if (frozen.replacement.isEmpty) {
+        val old = process.ref
+        byRef.remove(old)
+        readyInputs.remove(old).foreach(order => readyInputs(sender()) = order)
+        if (blockedProcesses.remove(old)) blockedProcesses.add(sender())
+        if (terminalProcesses.remove(old)) terminalProcesses.add(sender())
+        context.unwatch(old)
+        process.ref = sender()
+        byRef(sender()) = process
+        context.watch(sender())
+        frozen.replacement = Some(sender())
+      }
+      sender() ! ConservativeProcessRebound(epoch, e.requestId, coordinator, self, process.incarnation)
+    }
+    case e: AuthorizeConservativeSourceStop => protect {
+      checkEpoch(e.epoch)
+      require(migration.exists(_.requestId == e.requestId) && pendingMigrationAcks.isEmpty,
+        "source stop outside an acknowledged migration")
+      val frozen = frozenProcesses.values.find(_.original == sender()).getOrElse(
+        throw new IllegalArgumentException("source stop from an unfrozen LP"))
+      frozen.stopAuthorized = true
+      sender() ! ConservativeSourceStopAuthorized(epoch, e.requestId)
+    }
+    case e: ResumeConservativeMigration => protect {
+      checkEpoch(e.epoch)
+      require(sender() == coordinator && migration.exists(_.requestId == e.requestId) && pendingMigrationAcks.isEmpty &&
+        retiring.isEmpty, "resume outside acknowledged migration")
+      require(frozenProcesses.values.forall(f => !f.stopAuthorized || f.replacement.nonEmpty), "resume before source replacement")
+      frozenProcesses.values.foreach(f => f.process.ref ! EndConservativeProcessMigration(epoch, e.requestId))
+      frozenProcesses.clear()
+      migration = None
+      migrationStarted = false
+      sender() ! ConservativeMigrationResumed(epoch, e.requestId)
+    }
+    case Terminated(ref) if frozenProcesses.values.exists(f => f.original == ref && f.stopAuthorized) => ()
     case Terminated(ref) if byRef.contains(ref) && stopping.isEmpty && !retiring.contains(ref) =>
       fail(new IllegalStateException(s"LP lost: $ref"))
     case Terminated(ref) if births.valuesIterator.exists(_._3.contains(ref)) =>
       fail(new IllegalStateException(s"birth initializer lost: $ref"))
+    case _: Terminated => ()
     case failure: RuntimeFailure => fail(new IllegalStateException(failure.reason))
     }
     conservative.orElse(super.handleEvent)
   }
 
   private def protect(body: => Unit): Unit = try body catch { case NonFatal(e) => fail(e) }
+  private def completeMigrationFreeze(): Unit = migration.foreach { request =>
+    if (retiring.isEmpty && !migrationStarted) {
+      migrationStarted = true
+      processes.values.toVector.sortBy(p => (p.id.model, p.id.id)).foreach { process =>
+        SpatialShardIdRegistry.getShardId(process.id.id.toString).flatMap(request.targets.get).foreach { target =>
+          require(SpatialShardIdRegistry.getEntityClassName(process.id.id.toString).contains(process.id.model),
+            "live migration membership differs from published actor type")
+          frozenProcesses(process.id) = FrozenProcess(process, process.ref,
+            org.apache.pekko.serialization.Serialization.serializedActorPath(process.ref), target)
+          pendingMigrationAcks.add(process.ref)
+          process.ref ! FreezeConservativeProcess(epoch, request.requestId)
+        }
+      }
+    }
+    if (migrationStarted && pendingMigrationAcks.isEmpty && retiring.isEmpty) {
+      coordinator ! ConservativeMigrationFrozen(epoch, request.requestId,
+        frozenProcesses.values.toVector.sortBy(f => (f.process.id.model, f.process.id.id))
+          .map(f => ConservativeMigrationMember(f.process.id, f.process.ref, self)))
+    }
+  }
   private def executePreparedBatch(): Unit = if (preparing && !dispatching && !accepting.valuesIterator.exists(_.source.isEmpty)) {
     val stage = batch.get
     preparing = false

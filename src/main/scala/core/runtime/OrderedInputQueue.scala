@@ -55,6 +55,14 @@ final class OrderedInputQueue {
   def nonEmpty: Boolean = { trimHead(); pending.nonEmpty }
   def minimumTick: Option[Long] = { trimHead(); pending.headOption.map(_.tick) }
   def queuedDispatchCount: Int = dispatches.size
+  def snapshot: Vector[AnyRef] = pending.iterator.filterNot(_.discarded).toVector.sorted.reverse.map(_.event)
+  def restore(events: Vector[AnyRef]): Unit = {
+    pending.clear()
+    dispatches.clear()
+    arrival = 0L
+    discardedEntries = 0
+    events.foreach(enqueue)
+  }
   private[runtime] def retainedEntryCount: Int = pending.size
   def compactDiscarded(): Unit = if (discardedEntries > 0) {
     val live = pending.iterator.filterNot(_.discarded).toVector

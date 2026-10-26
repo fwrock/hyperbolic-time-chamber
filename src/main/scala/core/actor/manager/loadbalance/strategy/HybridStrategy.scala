@@ -2,21 +2,14 @@ package org.interscity.htc
 package core.actor.manager.loadbalance.strategy
 
 import core.actor.manager.loadbalance.prediction.PredictiveBalancer
-import core.actor.manager.loadbalance.spatial.{ KdTreeLoadBalancer, QuadtreePartitioner }
+import core.actor.manager.loadbalance.spatial.{ KdTreeLoadBalancer, QuadtreePartitioner, SpatialShardBuckets }
 import core.entity.control.loadbalance._
 import core.enumeration.ShardTypeEnum
 
 import org.apache.pekko.actor.Address
 
-/** Hybrid balancing strategy combining:
-  *
-  *   - Level 1: Quadtree (spatial/geographic) — stable shard IDs for infrastructure
-  *   - Level 2: kd-tree (load) — dynamic assignment of shards to cluster nodes
-  *   - Predictive: Flow vector analysis to anticipate overload
-  *   - 2:1 Balance: Ensures smooth density transitions between shards
-  *
-  * This is the high-performance strategy designed for 10M+ actors. It maximizes data locality
-  * (geographically close actors share shards) while maintaining load balance across cluster nodes.
+/** Fixed initial geographic cells, stable capacity buckets and projected-load placement.
+  * Live refinement requires coordinated directory rewrites; ordinary evaluation preserves IDs.
   */
 class HybridStrategy extends BalancingStrategy {
 
@@ -27,6 +20,7 @@ class HybridStrategy extends BalancingStrategy {
   private var predictor: PredictiveBalancer = _
   private var strategyConfig: StrategyConfig = _
   private var maxShardWeight: Double = 10000.0
+  private var buckets: SpatialShardBuckets = _
 
   /** Shard type classification: static infrastructure vs dynamic vehicles */
   private val shardTypeMap: scala.collection.mutable.Map[String, ShardTypeEnum] =
@@ -34,6 +28,7 @@ class HybridStrategy extends BalancingStrategy {
 
   override def initialize(worldBounds: SpatialBounds, config: StrategyConfig): Unit = {
     strategyConfig = config
+    shardTypeMap.clear()
 
     // Level 1: Geographic partitioning
     quadtree = new QuadtreePartitioner(
@@ -42,6 +37,8 @@ class HybridStrategy extends BalancingStrategy {
       maxEntitiesPerLeaf = config.maxEntitiesPerShard,
       minEntitiesPerLeaf = config.minEntitiesPerShard
     )
+    quadtree.initializeDepth(config.initialSpatialDepth)
+    buckets = new SpatialShardBuckets(config.maxEntitiesPerShard)
 
     // Level 2: Load-based assignment
     kdTree = new KdTreeLoadBalancer()
@@ -62,9 +59,10 @@ class HybridStrategy extends BalancingStrategy {
   }
 
   override def assignShard(entity: SpatialEntity): String = {
-    val shardId = quadtree.registerEntity(entity)
+    val base = quadtree.registerEntity(entity)
+    val shardId = buckets.assign(entity.spatialEntityId, base)
     // Classify the entity and merge shard type
-    val entityType = classifyEntity(entity)
+    val entityType = SpatialEntityClassification.classify(entity)
     shardTypeMap.get(shardId) match {
       case Some(existing) if existing != entityType =>
         shardTypeMap.put(shardId, ShardTypeEnum.Mixed)
@@ -76,7 +74,7 @@ class HybridStrategy extends BalancingStrategy {
   }
 
   override def getShardForPosition(x: Double, y: Double): String =
-    quadtree.getShardId(x, y)
+    buckets.candidate(quadtree.getShardId(x, y))
 
   override def registerNode(address: Address): Unit =
     kdTree.registerNode(address)
@@ -92,94 +90,46 @@ class HybridStrategy extends BalancingStrategy {
   }
 
   override def evaluate(): List[MigrationPlan] = {
-    val migrations = scala.collection.mutable.ListBuffer[MigrationPlan]()
-
-    // 1. Predictive analysis — check for imminent overloads
-    if (strategyConfig.enablePrediction) {
-      val predictions = predictor.predictOverloadedShards(maxShardWeight)
-      predictions.foreach {
-        result =>
-          val currentAssignment = kdTree.getAssignment(result.shardId)
-          if (currentAssignment.isDefined) {
-            val reason =
-              if (result.isAlreadyOverloaded) MigrationReason.ReactiveOverload
-              else MigrationReason.PredictiveOverload
-
-            // Find least-loaded node
-            val nodeLoads = kdTree.getNodeLoads
-            val leastLoaded = nodeLoads.minByOption(_._2)
-
-            leastLoaded.foreach {
-              case (targetNode, _) if !currentAssignment.contains(targetNode) =>
-                migrations += MigrationPlan(
-                  shardId = result.shardId,
-                  sourceNode = currentAssignment.get,
-                  targetNode = targetNode,
-                  reason = reason,
-                  predictedLoadAtTarget = result.predictedLoad,
-                  priority = if (result.isAlreadyOverloaded) 10 else 5
-                )
-              case _ => () // Already on least-loaded node
-            }
-          }
-      }
-    }
-
-    // 2. Periodic kd-tree rebalancing if imbalance exceeds threshold
-    val imbalance = kdTree.getImbalanceRatio
-    if (imbalance > 1.5) { // More than 50% imbalance
-      val rebalanceMigrations = kdTree.rebalance()
-      rebalanceMigrations.foreach {
-        case (shardId, oldNode, newNode) =>
-          // Avoid duplicates from predictive analysis
-          if (!migrations.exists(_.shardId == shardId)) {
-            migrations += MigrationPlan(
-              shardId = shardId,
-              sourceNode = oldNode.getOrElse(newNode),
-              targetNode = newNode,
-              reason = MigrationReason.Rebalance,
-              priority = 1
-            )
-          }
-      }
-    }
-
-    // 3. Adaptively refine quadtree based on current entity distribution
-    quadtree.refine()
-    if (strategyConfig.enableTwoToOneBalance) {
-      quadtree.applyTwoToOneBalance()
-    }
-
-    // Filter out static (non-migratable) shards before returning
-    migrations
-      .filter(
-        plan => isMigratable(plan.shardId)
-      )
-      .toList
-      .sortBy(-_.priority)
+    val predictions = if (strategyConfig.enablePrediction)
+      predictor.predictOverloadedShards(maxShardWeight).map(p => p.shardId -> p).toMap
+    else Map.empty[String, core.actor.manager.loadbalance.prediction.PredictionResult]
+    if (kdTree.getImbalanceRatio <= 1.5 && predictions.isEmpty) return Nil
+    kdTree.rebalance(isMigratable).map { case (shard, source, target) =>
+      val prediction = predictions.get(shard)
+      val reason = prediction.fold(MigrationReason.Rebalance)(p =>
+        if (p.isAlreadyOverloaded) MigrationReason.ReactiveOverload else MigrationReason.PredictiveOverload)
+      MigrationPlan(shard, source.get, target, reason,
+        predictedLoadAtTarget = prediction.fold(0.0)(_.predictedLoad),
+        priority = prediction.fold(1)(p => if (p.isAlreadyOverloaded) 10 else 5))
+    }.sortBy(p => (-p.priority, p.shardId))
   }
 
   override def getAssignments: Map[String, Address] =
     kdTree.getAllAssignments
 
   override def getAllShardIds: Set[String] =
-    quadtree.getAllShardIds
+    buckets.shardIds
 
   override def getShardEntityCounts: Map[String, Int] =
-    quadtree.getShardEntityCounts
+    buckets.entityCounts
 
   override def recordShardLocation(shardId: String, address: Address): Unit =
     kdTree.recordNodeAssignment(shardId, address)
+  override def replaceLoadSnapshot(metrics: Seq[ShardMetrics], assignments: Map[String, Address], nodes: Set[Address]): Unit = {
+    kdTree.replaceSnapshot(metrics, assignments, nodes)
+    if (strategyConfig.enablePrediction) metrics.foreach(predictor.recordMetrics)
+  }
 
   override def getShardType(shardId: String): ShardTypeEnum =
     shardTypeMap.getOrElse(shardId, ShardTypeEnum.Dynamic)
 
   override def isMigratable(shardId: String): Boolean =
-    getShardType(shardId) != ShardTypeEnum.Static
+    getShardType(shardId) == ShardTypeEnum.Dynamic
 
   override def getStats: Map[String, Any] = Map(
     "strategy" -> name,
-    "shardCount" -> quadtree.shardCount,
+    "shardCount" -> buckets.shardIds.size,
+    "spatialCells" -> quadtree.shardCount,
     "entityCount" -> quadtree.entityCount,
     "clusterNodes" -> kdTree.nodeCount,
     "imbalanceRatio" -> kdTree.getImbalanceRatio,
@@ -191,18 +141,4 @@ class HybridStrategy extends BalancingStrategy {
   override def shutdown(): Unit =
     predictor.clearAll()
 
-  /** Classifies a spatial entity as Static or Dynamic based on its ID convention. Entity IDs follow
-    * `htcaid:type;id` where type indicates the actor class.
-    */
-  private def classifyEntity(entity: SpatialEntity): ShardTypeEnum = {
-    val id = entity.spatialEntityId.toLowerCase
-    if (
-      id.contains(":node;") || id.contains(":link;") ||
-      id.contains(":traffic_signal;") || id.contains(":signal;")
-    ) {
-      ShardTypeEnum.Static
-    } else {
-      ShardTypeEnum.Dynamic
-    }
-  }
 }

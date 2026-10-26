@@ -169,9 +169,13 @@ object ActorCreatorUtil {
       val distributedAllocation = core.actor.manager.loadbalance.allocation.AllocationRuntime(system)
       if (distributedAllocation.enabled) {
         distributedAllocation.start()
+        val publishedShardId: ShardRegion.ExtractShardId = {
+          case EntityEnvelopeEvent(id, _) => SpatialShardIdRegistry.requirePublishedShardId(id, shardName)
+          case ShardRegion.StartEntity(id) => SpatialShardIdRegistry.requirePublishedShardId(id, shardName)
+        }
         val region = sharding.start(typeName = shardName, entityProps = entityProps,
           settings = ClusterShardingSettings(system), extractEntityId = extractEntityId,
-          extractShardId = extractShardId, allocationStrategy = distributedAllocation.strategy(shardName),
+          extractShardId = publishedShardId, allocationStrategy = distributedAllocation.strategy(shardName),
           handOffStopMessage = MigrationHandoffStopEvent())
         distributedAllocation.register(shardName, region)
         region
