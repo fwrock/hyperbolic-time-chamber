@@ -157,6 +157,7 @@ class CarMicroHandler(
     val travelTime = getLinkEntryTickFn().map(currentTickFn() - _).getOrElse(0L)
 
     state.movableLinkExitReported = true
+    state.journey.retainedMicroExitLinkId = Option.when(data.retainedInLane)(data.linkId)
     state.journey.boundaryRemainderSeconds = data.remainingStepSeconds
     state.journey.boundaryExitTick = Some(currentTickFn())
     state.distance += data.distanceTraveled

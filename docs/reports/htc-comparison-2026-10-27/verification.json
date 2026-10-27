@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-27T06:53:16.739372+00:00",
+  "pages": 25,
+  "everyPageVisuallyInspected": true,
+  "pdfSha256": "c51f718ecc04e4b5a8cf3d9f237b2f9ed31ba3364e72af39237cdf5856166266",
+  "docxSha256": "06154b6c8039515c2438b9ba99c05397f47f62e2f1548ecd08754ca630cd5cd5",
+  "renderedWith": "Codex bundled Python and LibreOffice; render_docx.py; inspected page images",
+  "scientificFigureSets": 13,
+  "retainedFieldFigure": true,
+  "scalaTests": 780,
+  "scalaSuites": 154,
+  "pythonTests": 56,
+  "assemblyPassed": true,
+  "diffCheckPassed": true,
+  "originalMeasuredAttempts": 95,
+  "originalWarmupAttempts": 19,
+  "supplementalRssAttempts": 18,
+  "measuredPhysicalAcceptancePassed": true,
+  "allParityComparisonsPassed": true
+}

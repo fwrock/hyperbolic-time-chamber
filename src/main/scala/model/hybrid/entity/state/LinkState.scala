@@ -91,7 +91,8 @@ case class LinkState(
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Long])
   downstreamConnectors: Map[Long, Long] = Map.empty,
   stopLineGapM: Double = 0.0,
-  following: model.MicroFollowingState = model.MicroFollowingState()
+  following: model.MicroFollowingState = model.MicroFollowingState(),
+  downstreamSpillback: Boolean = false
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
@@ -101,6 +102,8 @@ case class LinkState(
   require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
   require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
     "downstream lookahead requires single-lane MICRO with one physics step per runtime tick")
+  require(!downstreamSpillback || downstreamLookahead,
+    "downstream spillback requires single-lane MICRO downstream lookahead")
   require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
     "MICRO boundary remainder requires one physics step per runtime tick")
   require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,

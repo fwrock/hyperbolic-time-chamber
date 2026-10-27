@@ -1,7 +1,9 @@
 # MICRO implementation and validation status
 
-Status recorded on **2026-10-25**, following milestone `729a746` on
-`feat/time-warp`. This page consolidates the recovered MICRO/SUMO work, its
+Status updated on **2026-10-26**. The v2 scientific results below retain the
+**2026-10-25** campaign following milestone `729a746` on `feat/time-warp`;
+the new [bounded spillback acceptance](MICRO_SPILLBACK.md) is separate engineering
+evidence. This page consolidates the recovered MICRO/SUMO work, its
 scientific interpretation and the remaining work. Dated experiment records
 remain the source of detailed measurements; older failures are preserved.
 
@@ -9,6 +11,35 @@ remain the source of detailed measurements; older failures are preserved.
 
 Engineering verification and the predeclared v2 numerical comparisons pass.
 **Independent empirical validation of following and queue discharge remains open.**
+
+The latest [field input audit and prospective v2 study](MICRO_FIELD_INPUT_AUDIT.md)
+use the documented 35 mph site cap, session-aware identity exclusions,
+same-section following and observed head-release alignment. Eight fresh following
+episodes and four fresh queues qualify. All comparative and physical checks pass
+on that subset: mean following position RMSE is 1.980 m versus rigid spacing
+9.228 m, and queue headway MAE is 0.463 s versus 0.999 s. The original ten/five
+sample targets are not met, so the overall field gate remains inconclusive.
+The current adapter build passes 780 Scala tests in 154 suites and 49 Python
+tests, with exact replay from the retained v2 ZIP. Production physics is unchanged;
+the retrieved signal-support attachment fails ZIP integrity and supplies no
+accepted phase reconstruction.
+
+The later [conditional urban field assessment](MICRO_FIELD_VALIDATION.md) now
+tests actual Link following physics against Lankershim observations. Ten reserved
+following episodes have mean position RMSE 2.223 m, improving on constant velocity
+(12.384 m). The paired interval against rigid spacing includes zero, and only two
+of five required queue episodes qualify. Both queues discharge, with mean headway
+MAE 0.625 s, but the declared field gate is not established. All observations,
+exclusions, frozen criteria and exact offline replay survive in the repository
+snapshot. The field adapter build passes 779 Scala tests in 154 suites and 44
+Python tests; production traffic physics is unchanged.
+
+The later opt-in spillback build passes 775 Scala tests in 153 suites and 34
+Python tests. Its reserved short-road, connector and blocked-horizon fixtures
+preserve physical queues, spacing and journeys under both policies, including
+delayed two-JVM execution with 4,468 rollbacks. All ten new report comparisons
+pass. The table below records the earlier v2 campaign; it is not a claim that all
+19 SUMO comparisons were rerun on the spillback build.
 
 | Evidence | Current result | Meaning |
 |---|---|---|
@@ -61,7 +92,7 @@ spontaneous event. See the [source handler](../src/main/scala/model/hybrid/suppo
 | Clock and numerical convergence | Explicit physical clocks; fixed-physics-step v1 convergence study; remainder transfer removes observed cumulative boundary loss on the 1.2 km development route | No general convergence proof for every traffic regime; the default one-second mode retains its coarser timing behavior |
 | Traffic metrics and comparison correctness | Duration distributions, route/speed errors, completion coverage, halted queues, discharge headways and completed-cohort throughput; independent harness regressions | Thresholds are provisional for matched experiments; completed-cohort throughput does not establish saturated capacity |
 | Replication and uncertainty | Frozen scenarios and demand seeds; paired per-seed differences and small-sample Student-t interval; strict policy/layout report comparisons | Drivers remain deterministic; demand-only uncertainty does not cover driver populations, geometry error or model uncertainty |
-| Independent empirical evidence | Three NGSIM forecasts with disjoint initialization/prediction intervals, unit and continuity checks, retained raw responses, hashes and license | Held-out field following/discharge validation, justified thresholds and broader environmental coverage are still required |
+| Independent empirical evidence | Three isolated-cruising forecasts and conditional Lankershim v1/v2 studies with retained snapshots and paired baselines | V2 comparative checks pass on its qualified subset, but eight following/four queues miss fixed ten/five targets; autonomous network adequacy and real signal reconstruction remain open |
 
 The NGSIM ten-second position RMSE values are **2.35–7.57 m**. There is no
 field-derived acceptance threshold for that pilot. Raw input survives outside
@@ -181,22 +212,23 @@ exact implementation of every SUMO discrete Krauss detail.
 
 ## Remaining work and proposed acceptance gates
 
-The following are pending work, not implemented capabilities or new accepted
-results. Before changing traffic physics again, freeze a new protocol and reserve
+The table separates the accepted bounded spillback gate from remaining work.
+Before changing traffic physics again, freeze a new protocol and reserve
 fresh validation cases; inspected v1/v2 results may be used as development data.
 
 | Work item | Priority | Evidence required before closing it |
 |---|---|---|
-| Downstream blocking and spillback at Nodes | Next model priority | A bounded full-downstream fixture must show blocked vehicles remain represented in lane physics, spacing is preserved and grants/cancellations survive rollback; verify physical queues and journeys under both policies |
-| Independent field following and queue discharge | Next scientific priority | Reserve field observations; document units, geometry, leader identity, continuity and lane-change exclusions; separate initialization/calibration from held-out prediction; predeclare defensible error targets and uncertainty |
-| Competing junction movements | Subsequent model work | Conflict-area occupancy, priority/gap acceptance and cross-stream delays checked against controlled cases and independent observations |
+| Downstream blocking and spillback at Nodes | Bounded Car gate accepted on 2026-10-26 | Opt-in retained lane footprints pass short-road, fixed-connector, horizon and policy/layout checks; checkpoint/cancellation tests preserve grant identity. General network, multi-lane and origin-admission behavior remain open. See [acceptance](MICRO_SPILLBACK.md). |
+| Independent field following and queue discharge | Next scientific priority; v2 data gate incomplete | The input audit and fresh v2 comparative checks are complete. Preregister additional independent, uninspected sampling opportunities to meet the fixed cohort counts; do not lower targets or retrospectively pool favorable cases. See [audit and v2](MICRO_FIELD_INPUT_AUDIT.md). |
+| Competing junction movements | Next model extension | Conflict-area occupancy, priority/gap acceptance and cross-stream delays checked against controlled cases and independent observations |
 | Multi-lane behavior and longer observation horizons | Subsequent model work | Exercise actual lane-change integration and cases needing a leader beyond one connector plus the next road; establish spacing and policy parity |
 | Discrete safe-speed details | Further reference audit | Isolate stopping/following integration differences without fitting coefficients or time offsets to inspected holdouts |
 | City geometry import and execution cost | Subsequent integration/performance work | Validate complete movement mappings and distance conservation on an imported network; measure message rates, checkpoint memory, rollback cost and throughput under stated conditions |
 
-Current boundary snapshots represent vehicles owned by lane queues. They do not
-represent a vehicle waiting at a Node after leaving its lane. Existing capacity
-accounting alone therefore does not establish physical spillback correctness.
+Boundary snapshots represent lane queues. `downstreamSpillback=true` now keeps
+the waiting Car's footprint in that queue until cleanup; without the option,
+Node-resident vehicles remain absent. The bounded gate does not establish
+general network spillback, calibrated gate braking or capacity-dwell emissions.
 
 ## Reproduction and session recovery
 

@@ -46,6 +46,9 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var pendingMigration: Option[RequestMigrationPauseEvent] = None
   private var migration: Option[(String, RequestMigrationPauseEvent)] = None
   private val migrationMembers = mutable.Map.empty[ActorRef, Vector[ConservativeMigrationMember]]
+  private var migrationFreezeNanos = 0L
+  private var migrationFrozenNanos = 0L
+  private var migrationResumeNanos = 0L
 
   protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
@@ -149,6 +152,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
           require(cohort.map(_.id).distinct.size == cohort.size, "duplicate live migration LP")
           phase = Migrating
           val (id, request) = migration.get
+          migrationFrozenNanos = System.nanoTime()
+          logInfo(s"[MIGRATION-TIMING] request=$id phase=frozen elapsedNanos=${migrationFrozenNanos - migrationFreezeNanos}")
           request.requester ! MigrationSafeEvent(localTickOffset, Some(cohort), id)
         }
       }
@@ -162,6 +167,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       if (phase == ResumingMigration && event.epoch == epoch && migration.exists(_._1 == event.requestId)) {
         pending -= sender()
         if (pending.isEmpty) {
+          val now = System.nanoTime()
+          logInfo(s"[MIGRATION-TIMING] request=${event.requestId} phase=resumed totalNanos=${now - migrationFreezeNanos} freezeNanos=${migrationFrozenNanos - migrationFreezeNanos} relocationNanos=${migrationResumeNanos - migrationFrozenNanos} resumeNanos=${now - migrationResumeNanos}")
           migration = None
           migrationMembers.clear()
           if (pendingMigration.nonEmpty) freezeMigration()
@@ -263,6 +270,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     val request = pendingMigration.get
     pendingMigration = None
     val id = request.requestId
+    migrationFreezeNanos = System.nanoTime()
     migration = Some(id -> request)
     migrationMembers.clear()
     phase = FreezingMigration
@@ -272,6 +280,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   }
 
   private def resumeMigration(): Unit = {
+    migrationResumeNanos = System.nanoTime()
     phase = ResumingMigration
     pending = workers.toSet
     workers.foreach(_ ! ResumeConservativeMigration(epoch, migration.get._1))

@@ -1,0 +1,2185 @@
+{
+  "date": "2026-10-26",
+  "protocol": {
+    "version": 2,
+    "status": "frozen-before-access-to-fresh-reserved-episodes-and-error-evaluation",
+    "purpose": "Input-corrected conditional following on one road section and observed queue release; v1 observations are released development evidence.",
+    "source": "https://data.transportation.gov/resource/8ect-6jqj.json",
+    "metadata": "https://data.transportation.gov/api/views/8ect-6jqj.json",
+    "location": "lankershim",
+    "license": "CC_30_BY_SA",
+    "metresPerFoot": 0.3048,
+    "samplingFrameOriginMilliseconds": 1118935680200,
+    "developmentOffsetsSeconds": [],
+    "reservedOffsetsSeconds": [
+      330,
+      360,
+      390,
+      420,
+      450,
+      480,
+      510,
+      540,
+      570,
+      600,
+      630,
+      660,
+      690,
+      720,
+      750,
+      780,
+      810,
+      840,
+      870
+    ],
+    "initializationSeconds": 1,
+    "stepSeconds": 0.1,
+    "followingPredictionSeconds": 10,
+    "queuePredictionSeconds": 20,
+    "queueFollowers": 2,
+    "maximumCandidatesPerKindAndBlock": 8,
+    "targets": {
+      "reservedFollowing": 10,
+      "reservedQueue": 5
+    },
+    "selection": "Fixed fresh first-session blocks, numeric vehicle identity order, at most one per kind/block. Exclude every (global_time-100*frame_id, vehicle_id) identity exposed in either v1 stage, including candidate snapshots and rejected trajectories. No model error enters eligibility.",
+    "quality": {
+      "exactSampleMilliseconds": 100,
+      "maximumReverseStepM": 0.05,
+      "maximumPrefixSpeedMps": 15.6464,
+      "maximumAbsolutePrefixStopSpeedMps": 0.2,
+      "minimumVehicleLengthM": 2,
+      "maximumVehicleLengthM": 8,
+      "minimumInitialBumperGapM": 2,
+      "minimumObservedBumperGapM": 0,
+      "maximumRowsPerQuery": 2000,
+      "maximumBytesPerQuery": 2000000,
+      "rules": [
+        "Remove exact duplicates, reject conflicting subject/time rows, truncation, missing 100 ms samples and nonconsecutive frame IDs.",
+        "Every subject remains a northbound through passenger Car in one unchanged lane; every follower retains its recorded immediate leader throughout initialization and prediction.",
+        "Use front-center local_y and measured lengths, converted from feet. Reject nonfinite data, negative annotated speeds, reversed steps beyond tolerance or overlapping observed bumpers.",
+        "Initialize speed by least-squares position slope over the disjoint one-second prefix; head-leader velocity at each boundary uses only its previous one-second positions, floored at zero.",
+        "Queue prefix fitted speed must remain within the stop threshold for all three Cars. The fixed virtual discharge station is 5 m beyond the head leader's initial front. All observed subjects must cross within 20 seconds; missing predicted crossings fail coverage, never exclude the case.",
+        "Retain all raw responses, query URLs, SHA256, license and every rejection. No fitted time shifts, post-outcome filtering or traffic-coefficient calibration."
+      ]
+    },
+    "physics": {
+      "speedLimitKmh": 56.327040000000004,
+      "maxAccelerationMps2": 2.6,
+      "maxDecelerationMps2": 4.5,
+      "reactionSeconds": 1,
+      "minGapM": 2,
+      "retainExits": true,
+      "linkLengthM": 100000
+    },
+    "baselines": [
+      "Constant velocity from the initialization prefix",
+      "Rigid initial bumper spacing behind observed head leader motion"
+    ],
+    "metrics": [
+      "per-episode mean follower position RMSE",
+      "speed RMSE versus backward position slopes",
+      "minimum predicted bumper gap",
+      "discharge crossing coverage",
+      "per-platoon discharge-headway MAE",
+      "annotated-speed versus position-derivative inconsistency"
+    ],
+    "acceptance": {
+      "requiredReservedFollowingEpisodes": 10,
+      "requiredReservedQueueEpisodes": 5,
+      "requiredPredictionSampleCoverage": 1,
+      "requiredPredictedQueueCrossingCoverage": 1,
+      "minimumPredictedBumperGapM": 0,
+      "followingSkill": "The upper 95% percentile-bootstrap bound on mean paired per-episode position-RMSE difference must be strictly below zero against each baseline.",
+      "queueSkill": "The upper 95% percentile-bootstrap bound on mean paired per-platoon headway-MAE difference against the rigid-spacing baseline must be strictly below zero.",
+      "uncertainty": "10000 resamples with seed 20261026. Episode/platoon, never time samples or individual followers, is the resampling unit. Dependence within the same observed road/session limits interpretation; intervals are exploratory conditional summaries.",
+      "rationale": "Zero paired loss improvement is a comparative predictive-skill null, avoiding invented absolute field-accuracy tolerances. Report absolute errors regardless. Passing supports only this conditional comparison, not broad empirical adequacy."
+    },
+    "execution": [
+      "Retain v1 outcomes unchanged as released development evidence. Keep physical acceleration, deceleration, reaction time and gap coefficients unchanged.",
+      "The site cap is 35 mph from independent FHWA documentation. Sensitivities are predeclared diagnostics, never a basis for selecting the best holdout cap.",
+      "Freeze protocol, executable and selection source before fresh API access. Seal raw responses, identity exclusions and selected episodes before any model predictions.",
+      "Following requires unchanged common section and no recorded intersection for the entire observation interval. Queue release is selected using observed head motion independently of follower prediction errors.",
+      "Do not widen sample-count or skill targets after execution. Record missing eligible cases as a data gate and numerical/engine failures separately.",
+      "Retain all raw queries, hashes, exclusions, profiles, baseline comparisons and offline replay. Inspected v2 outcomes become development data before another model revision.",
+      "A secondary sensitivity with an initial speed above that cap is explicitly outside its domain and not executed; retain the primary episode and its unchanged cohort. Primary initial speeds must satisfy the documented site cap."
+    ],
+    "claimBoundary": "New, identity-disjoint observations in previously unopened first-session time windows. Conditional active-Link-physics component assessment with a documented site cap and restricted context; no autonomous network, signal-state or general empirical adequacy claim.",
+    "expectedSessionOriginMilliseconds": 1118935679900,
+    "postedSpeedSource": "https://ops.fhwa.dot.gov/publications/fhwahop08054/sect7.htm",
+    "speedSensitivityKmh": [
+      50,
+      56.327040000000004,
+      65
+    ],
+    "followingContext": {
+      "sameNonzeroRoadSectionThroughout": true,
+      "noRecordedIntersectionThroughout": true,
+      "maximumInitialBumperGapM": 30,
+      "maximumInitialSafeSpeedFractionOfCap": 0.9,
+      "interpretation": "Leader-dominated midblock component scope. Does not infer signals or exclude indirect upstream/downstream traffic effects."
+    },
+    "queueRelease": {
+      "maximumSearchSeconds": 20,
+      "maximumFetchSeconds": 41,
+      "releaseDefinition": "First annotated head-leader speed >0.2 m/s after a one-second stopped initialization prefix, with >=0.3 m observed head displacement during the next second. All three prefix fitted speeds remain <=0.2 m/s in absolute value.",
+      "maximumPredictionSeconds": 20,
+      "minimumPredictionSeconds": 5,
+      "afterLastObservedCrossingSeconds": 1,
+      "endpoint": "Ceil the last observed station crossing plus one second to the 0.1 s grid, with a minimum five seconds and maximum twenty. Require complete common coverage through that endpoint. Missing predicted crossings fail coverage. Do not extend a failed prediction horizon.",
+      "station": "5 m beyond the observed head front at the last initialization sample; physical station and identities shared by all comparisons.",
+      "interpretation": "Conditional queue-release response to observed head motion, not reconstruction of the green phase or saturated signal capacity."
+    }
+  },
+  "protocolSha256": "a65c7c6357278ccc83652f95c5067a9c4e6164b5e0572268dc9fe3d1d9bf5325",
+  "jar": {
+    "jar": "/tmp/htc-field-input-audit-20261026.jar",
+    "jarSha256": "ac21a403e3177438f3459a169083ebe457480123ad172c1cea73ffa6790f9e17",
+    "harnessSha256": "e7f008016256287e7204526b3578ba3856763976d623ad0f2bf5f58303a1665e",
+    "adapterSha256": "a81bd593f0d6209a727e281485b67c2b676a0fe8fc9e75ef9af7001c89a709a4",
+    "supportModules": {
+      "scripts/scenario/validate_micro_field.py": "94e2eace79cc7ba6d4fb38265e62de705eae92a4b80f077ade39c6371149bdb9",
+      "scripts/scenario/audit_micro_field_inputs.py": "e4c63fdd9bc53e97b756590ab05ba15c93a177cecb48067df55044cfeef5e813",
+      "src/main/scala/model/hybrid/micro/strategy/DefaultMicroSimulationStrategy.scala": "a1669044047cbf813e99516209d818f30ae33ccec6e6878b5e07807ac1b968d1"
+    }
+  },
+  "assessment": {
+    "protocolSha256": "a65c7c6357278ccc83652f95c5067a9c4e6164b5e0572268dc9fe3d1d9bf5325",
+    "jarSha256": "ac21a403e3177438f3459a169083ebe457480123ad172c1cea73ffa6790f9e17",
+    "measurementValid": true,
+    "selectionSha256": "19cec003ac213ae04969ced664b482416f54813b80f486f3595bdef6fe25c895",
+    "predictionsSha256": "10ce58b953902edaf4513da7676d52b16ed693469a9e04238ed81e70a0ce8ec1",
+    "dataGate": "inconclusive-insufficient-eligible-episodes",
+    "scientificGate": "not-established",
+    "assessment": {
+      "checks": {
+        "selectionCoverage": false,
+        "predictionCoverage": true,
+        "nonoverlappingPredictedBumpers": true,
+        "queueCrossingCoverage": true,
+        "followingBeatsConstantVelocity": true,
+        "followingBeatsRigidSpacing": true,
+        "queueHeadwaysBeatRigidSpacing": true
+      },
+      "passed": false,
+      "followingVsConstantVelocity": {
+        "mean": -18.854336677271743,
+        "lower95": -22.00698154100689,
+        "upper95": -15.281468421565751,
+        "episodes": 8,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "followingVsRigidSpacing": {
+        "mean": -7.2473559186052645,
+        "lower95": -12.195955435793731,
+        "upper95": -2.820585806122972,
+        "episodes": 8,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "queueHeadwaysVsRigidSpacing": {
+        "mean": -0.5361801364529085,
+        "lower95": -0.6239043079888391,
+        "upper95": -0.44792336454418447,
+        "episodes": 4,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      }
+    },
+    "results": [
+      {
+        "id": "v2-following-0-519",
+        "kind": "following",
+        "block": 0,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28513%2C519%29+and+global_time%3E%3D1118936010200+and+global_time%3C%3D1118936021200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-0-519.json",
+          "sha256": "0028db968351d0e2d797bb1d208e4328518f0c247a25bcd430faac16c9347d29",
+          "bytes": 102604,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.014658109090929492,
+            0.10122130909090594
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 519,
+            "positionRmseM": 2.025757182852002,
+            "speedRmseMps": 0.812306809191792,
+            "constantVelocityRmseM": 25.564613832630684,
+            "rigidSpacingRmseM": 20.893358267017675,
+            "initialBumperGapM": 28.764585600000004,
+            "constrainedSteps": 93
+          }
+        ],
+        "meanPositionRmseM": 2.025757182852002,
+        "meanConstantVelocityRmseM": 25.564613832630684,
+        "meanRigidSpacingRmseM": 20.893358267017675,
+        "minimumPredictedGapM": 2.00732337887311,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-2-605",
+        "kind": "following",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28568%2C605%29+and+global_time%3E%3D1118936070200+and+global_time%3C%3D1118936081200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-2-605.json",
+          "sha256": "61db198722fd073e260e661ee81d2bc918554d1c28d49e5f8b7027c17c16966d",
+          "bytes": 102869,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.05735781818182,
+            0.07112923636363765
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 605,
+            "positionRmseM": 3.512658799461659,
+            "speedRmseMps": 1.6592659650376114,
+            "constantVelocityRmseM": 25.373071176679726,
+            "rigidSpacingRmseM": 4.905551927657775,
+            "initialBumperGapM": 3.560368799999992,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 3.512658799461659,
+        "meanConstantVelocityRmseM": 25.373071176679726,
+        "meanRigidSpacingRmseM": 4.905551927657775,
+        "minimumPredictedGapM": 1.9926238432754815,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-4-652",
+        "kind": "following",
+        "block": 4,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28637%2C652%29+and+global_time%3E%3D1118936130200+and+global_time%3C%3D1118936141200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-4-652.json",
+          "sha256": "e3e128742df142d8087209d81a496d7e82f024c71bf3df2d0ac89a6c70b331a6",
+          "bytes": 102960,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.011333018181820389,
+            0.08667403636365194
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 652,
+            "positionRmseM": 3.313796511829524,
+            "speedRmseMps": 1.1173673609467512,
+            "constantVelocityRmseM": 24.60010473584931,
+            "rigidSpacingRmseM": 18.715649306542275,
+            "initialBumperGapM": 27.098853599999984,
+            "constrainedSteps": 92
+          }
+        ],
+        "meanPositionRmseM": 3.313796511829524,
+        "meanConstantVelocityRmseM": 24.60010473584931,
+        "meanRigidSpacingRmseM": 18.715649306542275,
+        "minimumPredictedGapM": 2.0038701901512894,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-queue-5-681",
+        "kind": "queue",
+        "block": 5,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28662%2C670%2C681%29+and+global_time%3E%3D1118936160200+and+global_time%3C%3D1118936201200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-5-681.json",
+          "sha256": "5d78dacaa308b419722708defac4cb0adeff5017f05769899379a3f6997e31c0",
+          "bytes": 574821,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 102,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.15378819801979185,
+            0.08262796039603003,
+            0.11452633663365892
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 670,
+            "positionRmseM": 0.9807654712247466,
+            "speedRmseMps": 0.7561622756668738,
+            "constantVelocityRmseM": 15.524316336233541,
+            "rigidSpacingRmseM": 2.1456306750719936,
+            "initialBumperGapM": 4.0809672000000035,
+            "constrainedSteps": 76
+          },
+          {
+            "vehicle": 681,
+            "positionRmseM": 1.5691583249137768,
+            "speedRmseMps": 1.0498127378029236,
+            "constantVelocityRmseM": 12.897557251584898,
+            "rigidSpacingRmseM": 4.813169985394141,
+            "initialBumperGapM": 4.210202399999986,
+            "constrainedSteps": 84
+          }
+        ],
+        "meanPositionRmseM": 1.2749618980692616,
+        "meanConstantVelocityRmseM": 14.21093679390922,
+        "meanRigidSpacingRmseM": 3.479400330233067,
+        "minimumPredictedGapM": 2.8267458141820754,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          3.6472310812407027,
+          5.990454978516967,
+          8.032644991301842
+        ],
+        "predictedCrossingsSeconds": [
+          3.647231081240701,
+          5.912177573017259,
+          8.056912098213532
+        ],
+        "rigidCrossingsSeconds": [
+          3.647231081240701,
+          5.442664349632113,
+          7.066660101768787
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.09041095895555173,
+        "rigidHeadwayMaeSeconds": 0.4829924447665266,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-7-768",
+        "kind": "following",
+        "block": 7,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28765%2C768%29+and+global_time%3E%3D1118936220200+and+global_time%3C%3D1118936231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-7-768.json",
+          "sha256": "44637b55147c130f4046f78ddf4d8b9b9c1b87e1add4d85cc68ba8e8994d9bb9",
+          "bytes": 103486,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1500724363636147,
+            0.09698181818180926
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 768,
+            "positionRmseM": 2.0258328521793683,
+            "speedRmseMps": 0.5659497244953368,
+            "constantVelocityRmseM": 25.22497804487275,
+            "rigidSpacingRmseM": 1.8863563101734828,
+            "initialBumperGapM": 3.230270399999995,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 2.0258328521793683,
+        "meanConstantVelocityRmseM": 25.22497804487275,
+        "meanRigidSpacingRmseM": 1.8863563101734828,
+        "minimumPredictedGapM": 1.9858200878204002,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-queue-8-780",
+        "kind": "queue",
+        "block": 8,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28775%2C777%2C780%29+and+global_time%3E%3D1118936250200+and+global_time%3C%3D1118936291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-8-780.json",
+          "sha256": "46abd79811887b6c360ae89cc33d9c99013a2e269a956d26eba284cede76bf20",
+          "bytes": 534860,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 90,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.16065357303371758,
+            0.15798229213482567,
+            0.10722795505617883
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 777,
+            "positionRmseM": 3.4484508279129713,
+            "speedRmseMps": 1.705291411734342,
+            "constantVelocityRmseM": 23.759170490689964,
+            "rigidSpacingRmseM": 9.551062796055149,
+            "initialBumperGapM": 3.686860800000005,
+            "constrainedSteps": 58
+          },
+          {
+            "vehicle": 780,
+            "positionRmseM": 9.948489574129098,
+            "speedRmseMps": 3.019121098254173,
+            "constantVelocityRmseM": 12.430939573724272,
+            "rigidSpacingRmseM": 21.237988498465576,
+            "initialBumperGapM": 2.4710136000000062,
+            "constrainedSteps": 78
+          }
+        ],
+        "meanPositionRmseM": 6.698470201021035,
+        "meanConstantVelocityRmseM": 18.095055032207117,
+        "meanRigidSpacingRmseM": 15.394525647260362,
+        "minimumPredictedGapM": 2.4710136000000062,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          1.7541010011192903,
+          4.198742876660317,
+          6.849846406116072
+        ],
+        "predictedCrossingsSeconds": [
+          1.7541010011192903,
+          3.9418696967543028,
+          5.366682718283528
+        ],
+        "rigidCrossingsSeconds": [
+          1.7541010011192903,
+          3.3533479983504315,
+          4.138784716795901
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.741581843916272,
+        "rigidHeadwayMaeSeconds": 1.3555308446600853,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-10-810",
+        "kind": "following",
+        "block": 10,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28814%2C810%29+and+global_time%3E%3D1118936310200+and+global_time%3C%3D1118936321200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-10-810.json",
+          "sha256": "839862dda2f4dd19a3f0cb8951aadc8af3b6ce7c970eae4a422bb1214d1530ba",
+          "bytes": 103224,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.0,
+            0.026628436363618134
+          ],
+          "lane": "4"
+        },
+        "followers": [
+          {
+            "vehicle": 810,
+            "positionRmseM": 1.453010174173885,
+            "speedRmseMps": 0.3332646454071397,
+            "constantVelocityRmseM": 10.834643446922158,
+            "rigidSpacingRmseM": 2.197757053982052,
+            "initialBumperGapM": 5.987795999999946,
+            "constrainedSteps": 98
+          }
+        ],
+        "meanPositionRmseM": 1.453010174173885,
+        "meanConstantVelocityRmseM": 10.834643446922158,
+        "meanRigidSpacingRmseM": 2.197757053982052,
+        "minimumPredictedGapM": 2.0001640709569415,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-queue-12-923",
+        "kind": "queue",
+        "block": 12,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28918%2C919%2C923%29+and+global_time%3E%3D1118936370200+and+global_time%3C%3D1118936411200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-12-923.json",
+          "sha256": "95f57c85cf18da3e0b603f963abf3dc99bf888e11a8207f693d0641ee9b15a18",
+          "bytes": 575438,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 96,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1069366736842147,
+            0.10552496842104774,
+            0.05983705263157796
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 919,
+            "positionRmseM": 0.6044972798115038,
+            "speedRmseMps": 0.4788613235220643,
+            "constantVelocityRmseM": 16.112833635206275,
+            "rigidSpacingRmseM": 2.9723091711673817,
+            "initialBumperGapM": 3.0860999999999876,
+            "constrainedSteps": 80
+          },
+          {
+            "vehicle": 923,
+            "positionRmseM": 1.3638979927312644,
+            "speedRmseMps": 0.5766097513917623,
+            "constantVelocityRmseM": 11.86350171928028,
+            "rigidSpacingRmseM": 7.435919486736167,
+            "initialBumperGapM": 2.7075384000000042,
+            "constrainedSteps": 83
+          }
+        ],
+        "meanPositionRmseM": 0.9841976362713841,
+        "meanConstantVelocityRmseM": 13.988167677243277,
+        "meanRigidSpacingRmseM": 5.204114328951775,
+        "minimumPredictedGapM": 2.7075384000000042,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.9808996085696897,
+          5.000447081519391,
+          7.453675438664009
+        ],
+        "predictedCrossingsSeconds": [
+          2.980899608569686,
+          5.182308072658471,
+          7.269394834153991
+        ],
+        "rigidCrossingsSeconds": [
+          2.980899608569686,
+          4.5676136706943025,
+          5.897011963829861
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.27400129339409096,
+        "rigidHeadwayMaeSeconds": 0.778331737417072,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-15-1057",
+        "kind": "following",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281071%2C1057%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-15-1057.json",
+          "sha256": "2649055368b9da241e6852c322d52dc9a15b3e24ce59251967d5fe34fa9c02bb",
+          "bytes": 103972,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.07686501818182327,
+            0.10063941818181983
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1057,
+            "positionRmseM": 2.0476000597742905,
+            "speedRmseMps": 1.3402629616001458,
+            "constantVelocityRmseM": 17.118483221283903,
+            "rigidSpacingRmseM": 14.614126847251978,
+            "initialBumperGapM": 21.963583200000002,
+            "constrainedSteps": 72
+          }
+        ],
+        "meanPositionRmseM": 2.0476000597742905,
+        "meanConstantVelocityRmseM": 17.118483221283903,
+        "meanRigidSpacingRmseM": 14.614126847251978,
+        "minimumPredictedGapM": 2.1377378064112236,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-queue-15-1017",
+        "kind": "queue",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281010%2C1026%2C1017%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936501200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-15-1017.json",
+          "sha256": "7c1aeb9b9789e513407ece5efc69f8a80f38b2f4c8c2562ee9ac19e9649a4b13",
+          "bytes": 513904,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 94,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.162199483870975,
+            0.1225754838709789,
+            0.10628670967744981
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1026,
+            "positionRmseM": 6.620105686608908,
+            "speedRmseMps": 2.1843895569306833,
+            "constantVelocityRmseM": 18.737185450774035,
+            "rigidSpacingRmseM": 12.073087461929688,
+            "initialBumperGapM": 3.5539679999999976,
+            "constrainedSteps": 64
+          },
+          {
+            "vehicle": 1017,
+            "positionRmseM": 7.796196520398943,
+            "speedRmseMps": 2.574818323463968,
+            "constantVelocityRmseM": 12.778023057248546,
+            "rigidSpacingRmseM": 17.479740601075967,
+            "initialBumperGapM": 2.9507687999999916,
+            "constrainedSteps": 80
+          }
+        ],
+        "meanPositionRmseM": 7.208151103503925,
+        "meanConstantVelocityRmseM": 15.75760425401129,
+        "meanRigidSpacingRmseM": 14.776414031502828,
+        "minimumPredictedGapM": 2.9507687999999916,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.2488627156899486,
+          5.177613420007824,
+          7.243907499279352
+        ],
+        "predictedCrossingsSeconds": [
+          2.2488627156899486,
+          4.053096071890991,
+          5.751632890857838
+        ],
+        "rigidCrossingsSeconds": [
+          2.2488627156899486,
+          3.3892509975063834,
+          4.483913660390108
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.7461373042107571,
+        "rigidHeadwayMaeSeconds": 1.379996919444622,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-17-1176",
+        "kind": "following",
+        "block": 17,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281168%2C1176%29+and+global_time%3E%3D1118936520200+and+global_time%3C%3D1118936531200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-17-1176.json",
+          "sha256": "a59a8d0c12388a763ddc5cd7c3f0641febd042c855ee92d313fb27a8dc3fabd5",
+          "bytes": 103429,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.003075709090908528,
+            0.029731854545449906
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1176,
+            "positionRmseM": 1.1001659587452013,
+            "speedRmseMps": 0.322670792544028,
+            "constantVelocityRmseM": 23.568789084635668,
+            "rigidSpacingRmseM": 4.251101232574666,
+            "initialBumperGapM": 7.811109600000009,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 1.1001659587452013,
+        "meanConstantVelocityRmseM": 23.568789084635668,
+        "meanRigidSpacingRmseM": 4.251101232574666,
+        "minimumPredictedGapM": 2.0002718229338257,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      },
+      {
+        "id": "v2-following-18-1221",
+        "kind": "following",
+        "block": 18,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281220%2C1221%29+and+global_time%3E%3D1118936550200+and+global_time%3C%3D1118936561200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-18-1221.json",
+          "sha256": "fef17e23cf627e724c4286c7b9c0ef562b9f274fb455c10447f7a0d34d6d580f",
+          "bytes": 103294,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.022194981818191604,
+            0.0486294545454589
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1221,
+            "positionRmseM": 0.3627394660652793,
+            "speedRmseMps": 0.4920110711436781,
+            "constantVelocityRmseM": 14.391570880380938,
+            "rigidSpacingRmseM": 6.356507408723418,
+            "initialBumperGapM": 9.465868799999996,
+            "constrainedSteps": 96
+          }
+        ],
+        "meanPositionRmseM": 0.3627394660652793,
+        "meanConstantVelocityRmseM": 14.391570880380938,
+        "meanRigidSpacingRmseM": 6.356507408723418,
+        "minimumPredictedGapM": 2.000658531652334,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 56.327040000000004
+      }
+    ],
+    "sensitivities": [
+      {
+        "id": "v2-following-0-519-cap-50",
+        "kind": "following",
+        "block": 0,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28513%2C519%29+and+global_time%3E%3D1118936010200+and+global_time%3C%3D1118936021200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-0-519.json",
+          "sha256": "0028db968351d0e2d797bb1d208e4328518f0c247a25bcd430faac16c9347d29",
+          "bytes": 102604,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.014658109090929492,
+            0.10122130909090594
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 519,
+            "positionRmseM": 2.025757182852002,
+            "speedRmseMps": 0.812306809191792,
+            "constantVelocityRmseM": 25.564613832630684,
+            "rigidSpacingRmseM": 20.893358267017675,
+            "initialBumperGapM": 28.764585600000004,
+            "constrainedSteps": 93
+          }
+        ],
+        "meanPositionRmseM": 2.025757182852002,
+        "meanConstantVelocityRmseM": 25.564613832630684,
+        "meanRigidSpacingRmseM": 20.893358267017675,
+        "minimumPredictedGapM": 2.00732337887311,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-0-519-cap-65",
+        "kind": "following",
+        "block": 0,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28513%2C519%29+and+global_time%3E%3D1118936010200+and+global_time%3C%3D1118936021200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-0-519.json",
+          "sha256": "0028db968351d0e2d797bb1d208e4328518f0c247a25bcd430faac16c9347d29",
+          "bytes": 102604,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.014658109090929492,
+            0.10122130909090594
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 519,
+            "positionRmseM": 2.025757182852002,
+            "speedRmseMps": 0.812306809191792,
+            "constantVelocityRmseM": 25.564613832630684,
+            "rigidSpacingRmseM": 20.893358267017675,
+            "initialBumperGapM": 28.764585600000004,
+            "constrainedSteps": 93
+          }
+        ],
+        "meanPositionRmseM": 2.025757182852002,
+        "meanConstantVelocityRmseM": 25.564613832630684,
+        "meanRigidSpacingRmseM": 20.893358267017675,
+        "minimumPredictedGapM": 2.00732337887311,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-2-605-cap-50",
+        "kind": "following",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28568%2C605%29+and+global_time%3E%3D1118936070200+and+global_time%3C%3D1118936081200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-2-605.json",
+          "sha256": "61db198722fd073e260e661ee81d2bc918554d1c28d49e5f8b7027c17c16966d",
+          "bytes": 102869,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.05735781818182,
+            0.07112923636363765
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 605,
+            "positionRmseM": 3.512658799461659,
+            "speedRmseMps": 1.6592659650376114,
+            "constantVelocityRmseM": 25.373071176679726,
+            "rigidSpacingRmseM": 4.905551927657775,
+            "initialBumperGapM": 3.560368799999992,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 3.512658799461659,
+        "meanConstantVelocityRmseM": 25.373071176679726,
+        "meanRigidSpacingRmseM": 4.905551927657775,
+        "minimumPredictedGapM": 1.9926238432754815,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-2-605-cap-65",
+        "kind": "following",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28568%2C605%29+and+global_time%3E%3D1118936070200+and+global_time%3C%3D1118936081200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-2-605.json",
+          "sha256": "61db198722fd073e260e661ee81d2bc918554d1c28d49e5f8b7027c17c16966d",
+          "bytes": 102869,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.05735781818182,
+            0.07112923636363765
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 605,
+            "positionRmseM": 3.512658799461659,
+            "speedRmseMps": 1.6592659650376114,
+            "constantVelocityRmseM": 25.373071176679726,
+            "rigidSpacingRmseM": 4.905551927657775,
+            "initialBumperGapM": 3.560368799999992,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 3.512658799461659,
+        "meanConstantVelocityRmseM": 25.373071176679726,
+        "meanRigidSpacingRmseM": 4.905551927657775,
+        "minimumPredictedGapM": 1.9926238432754815,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-4-652-cap-50",
+        "kind": "following",
+        "block": 4,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28637%2C652%29+and+global_time%3E%3D1118936130200+and+global_time%3C%3D1118936141200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-4-652.json",
+          "sha256": "e3e128742df142d8087209d81a496d7e82f024c71bf3df2d0ac89a6c70b331a6",
+          "bytes": 102960,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.011333018181820389,
+            0.08667403636365194
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 652,
+            "positionRmseM": 3.313796511829524,
+            "speedRmseMps": 1.1173673609467512,
+            "constantVelocityRmseM": 24.60010473584931,
+            "rigidSpacingRmseM": 18.715649306542275,
+            "initialBumperGapM": 27.098853599999984,
+            "constrainedSteps": 92
+          }
+        ],
+        "meanPositionRmseM": 3.313796511829524,
+        "meanConstantVelocityRmseM": 24.60010473584931,
+        "meanRigidSpacingRmseM": 18.715649306542275,
+        "minimumPredictedGapM": 2.0038701901512894,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-4-652-cap-65",
+        "kind": "following",
+        "block": 4,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28637%2C652%29+and+global_time%3E%3D1118936130200+and+global_time%3C%3D1118936141200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-4-652.json",
+          "sha256": "e3e128742df142d8087209d81a496d7e82f024c71bf3df2d0ac89a6c70b331a6",
+          "bytes": 102960,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.011333018181820389,
+            0.08667403636365194
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 652,
+            "positionRmseM": 3.313796511829524,
+            "speedRmseMps": 1.1173673609467512,
+            "constantVelocityRmseM": 24.60010473584931,
+            "rigidSpacingRmseM": 18.715649306542275,
+            "initialBumperGapM": 27.098853599999984,
+            "constrainedSteps": 92
+          }
+        ],
+        "meanPositionRmseM": 3.313796511829524,
+        "meanConstantVelocityRmseM": 24.60010473584931,
+        "meanRigidSpacingRmseM": 18.715649306542275,
+        "minimumPredictedGapM": 2.0038701901512894,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-queue-5-681-cap-50",
+        "kind": "queue",
+        "block": 5,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28662%2C670%2C681%29+and+global_time%3E%3D1118936160200+and+global_time%3C%3D1118936201200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-5-681.json",
+          "sha256": "5d78dacaa308b419722708defac4cb0adeff5017f05769899379a3f6997e31c0",
+          "bytes": 574821,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 102,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.15378819801979185,
+            0.08262796039603003,
+            0.11452633663365892
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 670,
+            "positionRmseM": 0.9807654712247466,
+            "speedRmseMps": 0.7561622756668738,
+            "constantVelocityRmseM": 15.524316336233541,
+            "rigidSpacingRmseM": 2.1456306750719936,
+            "initialBumperGapM": 4.0809672000000035,
+            "constrainedSteps": 76
+          },
+          {
+            "vehicle": 681,
+            "positionRmseM": 1.5691583249137768,
+            "speedRmseMps": 1.0498127378029236,
+            "constantVelocityRmseM": 12.897557251584898,
+            "rigidSpacingRmseM": 4.813169985394141,
+            "initialBumperGapM": 4.210202399999986,
+            "constrainedSteps": 84
+          }
+        ],
+        "meanPositionRmseM": 1.2749618980692616,
+        "meanConstantVelocityRmseM": 14.21093679390922,
+        "meanRigidSpacingRmseM": 3.479400330233067,
+        "minimumPredictedGapM": 2.8267458141820754,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          3.6472310812407027,
+          5.990454978516967,
+          8.032644991301842
+        ],
+        "predictedCrossingsSeconds": [
+          3.647231081240701,
+          5.912177573017259,
+          8.056912098213532
+        ],
+        "rigidCrossingsSeconds": [
+          3.647231081240701,
+          5.442664349632113,
+          7.066660101768787
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.09041095895555173,
+        "rigidHeadwayMaeSeconds": 0.4829924447665266,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-queue-5-681-cap-65",
+        "kind": "queue",
+        "block": 5,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28662%2C670%2C681%29+and+global_time%3E%3D1118936160200+and+global_time%3C%3D1118936201200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-5-681.json",
+          "sha256": "5d78dacaa308b419722708defac4cb0adeff5017f05769899379a3f6997e31c0",
+          "bytes": 574821,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 102,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.15378819801979185,
+            0.08262796039603003,
+            0.11452633663365892
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 670,
+            "positionRmseM": 0.9807654712247466,
+            "speedRmseMps": 0.7561622756668738,
+            "constantVelocityRmseM": 15.524316336233541,
+            "rigidSpacingRmseM": 2.1456306750719936,
+            "initialBumperGapM": 4.0809672000000035,
+            "constrainedSteps": 76
+          },
+          {
+            "vehicle": 681,
+            "positionRmseM": 1.5691583249137768,
+            "speedRmseMps": 1.0498127378029236,
+            "constantVelocityRmseM": 12.897557251584898,
+            "rigidSpacingRmseM": 4.813169985394141,
+            "initialBumperGapM": 4.210202399999986,
+            "constrainedSteps": 84
+          }
+        ],
+        "meanPositionRmseM": 1.2749618980692616,
+        "meanConstantVelocityRmseM": 14.21093679390922,
+        "meanRigidSpacingRmseM": 3.479400330233067,
+        "minimumPredictedGapM": 2.8267458141820754,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          3.6472310812407027,
+          5.990454978516967,
+          8.032644991301842
+        ],
+        "predictedCrossingsSeconds": [
+          3.647231081240701,
+          5.912177573017259,
+          8.056912098213532
+        ],
+        "rigidCrossingsSeconds": [
+          3.647231081240701,
+          5.442664349632113,
+          7.066660101768787
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.09041095895555173,
+        "rigidHeadwayMaeSeconds": 0.4829924447665266,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-7-768-cap-50",
+        "kind": "following",
+        "block": 7,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28765%2C768%29+and+global_time%3E%3D1118936220200+and+global_time%3C%3D1118936231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-7-768.json",
+          "sha256": "44637b55147c130f4046f78ddf4d8b9b9c1b87e1add4d85cc68ba8e8994d9bb9",
+          "bytes": 103486,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1500724363636147,
+            0.09698181818180926
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 768,
+            "positionRmseM": 2.0258328521793683,
+            "speedRmseMps": 0.5659497244953368,
+            "constantVelocityRmseM": 25.22497804487275,
+            "rigidSpacingRmseM": 1.8863563101734828,
+            "initialBumperGapM": 3.230270399999995,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 2.0258328521793683,
+        "meanConstantVelocityRmseM": 25.22497804487275,
+        "meanRigidSpacingRmseM": 1.8863563101734828,
+        "minimumPredictedGapM": 1.9858200878204002,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-7-768-cap-65",
+        "kind": "following",
+        "block": 7,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28765%2C768%29+and+global_time%3E%3D1118936220200+and+global_time%3C%3D1118936231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-7-768.json",
+          "sha256": "44637b55147c130f4046f78ddf4d8b9b9c1b87e1add4d85cc68ba8e8994d9bb9",
+          "bytes": 103486,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1500724363636147,
+            0.09698181818180926
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 768,
+            "positionRmseM": 2.0258328521793683,
+            "speedRmseMps": 0.5659497244953368,
+            "constantVelocityRmseM": 25.22497804487275,
+            "rigidSpacingRmseM": 1.8863563101734828,
+            "initialBumperGapM": 3.230270399999995,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 2.0258328521793683,
+        "meanConstantVelocityRmseM": 25.22497804487275,
+        "meanRigidSpacingRmseM": 1.8863563101734828,
+        "minimumPredictedGapM": 1.9858200878204002,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-queue-8-780-cap-50",
+        "kind": "queue",
+        "block": 8,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28775%2C777%2C780%29+and+global_time%3E%3D1118936250200+and+global_time%3C%3D1118936291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-8-780.json",
+          "sha256": "46abd79811887b6c360ae89cc33d9c99013a2e269a956d26eba284cede76bf20",
+          "bytes": 534860,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 90,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.16065357303371758,
+            0.15798229213482567,
+            0.10722795505617883
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 777,
+            "positionRmseM": 3.4484508279129713,
+            "speedRmseMps": 1.705291411734342,
+            "constantVelocityRmseM": 23.759170490689964,
+            "rigidSpacingRmseM": 9.551062796055149,
+            "initialBumperGapM": 3.686860800000005,
+            "constrainedSteps": 58
+          },
+          {
+            "vehicle": 780,
+            "positionRmseM": 9.948489574129098,
+            "speedRmseMps": 3.019121098254173,
+            "constantVelocityRmseM": 12.430939573724272,
+            "rigidSpacingRmseM": 21.237988498465576,
+            "initialBumperGapM": 2.4710136000000062,
+            "constrainedSteps": 78
+          }
+        ],
+        "meanPositionRmseM": 6.698470201021035,
+        "meanConstantVelocityRmseM": 18.095055032207117,
+        "meanRigidSpacingRmseM": 15.394525647260362,
+        "minimumPredictedGapM": 2.4710136000000062,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          1.7541010011192903,
+          4.198742876660317,
+          6.849846406116072
+        ],
+        "predictedCrossingsSeconds": [
+          1.7541010011192903,
+          3.9418696967543028,
+          5.366682718283528
+        ],
+        "rigidCrossingsSeconds": [
+          1.7541010011192903,
+          3.3533479983504315,
+          4.138784716795901
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.741581843916272,
+        "rigidHeadwayMaeSeconds": 1.3555308446600853,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-queue-8-780-cap-65",
+        "kind": "queue",
+        "block": 8,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28775%2C777%2C780%29+and+global_time%3E%3D1118936250200+and+global_time%3C%3D1118936291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-8-780.json",
+          "sha256": "46abd79811887b6c360ae89cc33d9c99013a2e269a956d26eba284cede76bf20",
+          "bytes": 534860,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 90,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.16065357303371758,
+            0.15798229213482567,
+            0.10722795505617883
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 777,
+            "positionRmseM": 3.4484508279129713,
+            "speedRmseMps": 1.705291411734342,
+            "constantVelocityRmseM": 23.759170490689964,
+            "rigidSpacingRmseM": 9.551062796055149,
+            "initialBumperGapM": 3.686860800000005,
+            "constrainedSteps": 58
+          },
+          {
+            "vehicle": 780,
+            "positionRmseM": 9.948489574129098,
+            "speedRmseMps": 3.019121098254173,
+            "constantVelocityRmseM": 12.430939573724272,
+            "rigidSpacingRmseM": 21.237988498465576,
+            "initialBumperGapM": 2.4710136000000062,
+            "constrainedSteps": 78
+          }
+        ],
+        "meanPositionRmseM": 6.698470201021035,
+        "meanConstantVelocityRmseM": 18.095055032207117,
+        "meanRigidSpacingRmseM": 15.394525647260362,
+        "minimumPredictedGapM": 2.4710136000000062,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          1.7541010011192903,
+          4.198742876660317,
+          6.849846406116072
+        ],
+        "predictedCrossingsSeconds": [
+          1.7541010011192903,
+          3.9418696967543028,
+          5.366682718283528
+        ],
+        "rigidCrossingsSeconds": [
+          1.7541010011192903,
+          3.3533479983504315,
+          4.138784716795901
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.741581843916272,
+        "rigidHeadwayMaeSeconds": 1.3555308446600853,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-10-810-cap-50",
+        "kind": "following",
+        "block": 10,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28814%2C810%29+and+global_time%3E%3D1118936310200+and+global_time%3C%3D1118936321200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-10-810.json",
+          "sha256": "839862dda2f4dd19a3f0cb8951aadc8af3b6ce7c970eae4a422bb1214d1530ba",
+          "bytes": 103224,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.0,
+            0.026628436363618134
+          ],
+          "lane": "4"
+        },
+        "followers": [
+          {
+            "vehicle": 810,
+            "positionRmseM": 1.453010174173885,
+            "speedRmseMps": 0.3332646454071397,
+            "constantVelocityRmseM": 10.834643446922158,
+            "rigidSpacingRmseM": 2.197757053982052,
+            "initialBumperGapM": 5.987795999999946,
+            "constrainedSteps": 98
+          }
+        ],
+        "meanPositionRmseM": 1.453010174173885,
+        "meanConstantVelocityRmseM": 10.834643446922158,
+        "meanRigidSpacingRmseM": 2.197757053982052,
+        "minimumPredictedGapM": 2.0001640709569415,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-10-810-cap-65",
+        "kind": "following",
+        "block": 10,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28814%2C810%29+and+global_time%3E%3D1118936310200+and+global_time%3C%3D1118936321200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-10-810.json",
+          "sha256": "839862dda2f4dd19a3f0cb8951aadc8af3b6ce7c970eae4a422bb1214d1530ba",
+          "bytes": 103224,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.0,
+            0.026628436363618134
+          ],
+          "lane": "4"
+        },
+        "followers": [
+          {
+            "vehicle": 810,
+            "positionRmseM": 1.453010174173885,
+            "speedRmseMps": 0.3332646454071397,
+            "constantVelocityRmseM": 10.834643446922158,
+            "rigidSpacingRmseM": 2.197757053982052,
+            "initialBumperGapM": 5.987795999999946,
+            "constrainedSteps": 98
+          }
+        ],
+        "meanPositionRmseM": 1.453010174173885,
+        "meanConstantVelocityRmseM": 10.834643446922158,
+        "meanRigidSpacingRmseM": 2.197757053982052,
+        "minimumPredictedGapM": 2.0001640709569415,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-queue-12-923-cap-50",
+        "kind": "queue",
+        "block": 12,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28918%2C919%2C923%29+and+global_time%3E%3D1118936370200+and+global_time%3C%3D1118936411200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-12-923.json",
+          "sha256": "95f57c85cf18da3e0b603f963abf3dc99bf888e11a8207f693d0641ee9b15a18",
+          "bytes": 575438,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 96,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1069366736842147,
+            0.10552496842104774,
+            0.05983705263157796
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 919,
+            "positionRmseM": 0.6044972798115038,
+            "speedRmseMps": 0.4788613235220643,
+            "constantVelocityRmseM": 16.112833635206275,
+            "rigidSpacingRmseM": 2.9723091711673817,
+            "initialBumperGapM": 3.0860999999999876,
+            "constrainedSteps": 80
+          },
+          {
+            "vehicle": 923,
+            "positionRmseM": 1.3638979927312644,
+            "speedRmseMps": 0.5766097513917623,
+            "constantVelocityRmseM": 11.86350171928028,
+            "rigidSpacingRmseM": 7.435919486736167,
+            "initialBumperGapM": 2.7075384000000042,
+            "constrainedSteps": 83
+          }
+        ],
+        "meanPositionRmseM": 0.9841976362713841,
+        "meanConstantVelocityRmseM": 13.988167677243277,
+        "meanRigidSpacingRmseM": 5.204114328951775,
+        "minimumPredictedGapM": 2.7075384000000042,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.9808996085696897,
+          5.000447081519391,
+          7.453675438664009
+        ],
+        "predictedCrossingsSeconds": [
+          2.980899608569686,
+          5.182308072658471,
+          7.269394834153991
+        ],
+        "rigidCrossingsSeconds": [
+          2.980899608569686,
+          4.5676136706943025,
+          5.897011963829861
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.27400129339409096,
+        "rigidHeadwayMaeSeconds": 0.778331737417072,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-queue-12-923-cap-65",
+        "kind": "queue",
+        "block": 12,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28918%2C919%2C923%29+and+global_time%3E%3D1118936370200+and+global_time%3C%3D1118936411200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-12-923.json",
+          "sha256": "95f57c85cf18da3e0b603f963abf3dc99bf888e11a8207f693d0641ee9b15a18",
+          "bytes": 575438,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 96,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1069366736842147,
+            0.10552496842104774,
+            0.05983705263157796
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 919,
+            "positionRmseM": 0.6044972798115038,
+            "speedRmseMps": 0.4788613235220643,
+            "constantVelocityRmseM": 16.112833635206275,
+            "rigidSpacingRmseM": 2.9723091711673817,
+            "initialBumperGapM": 3.0860999999999876,
+            "constrainedSteps": 80
+          },
+          {
+            "vehicle": 923,
+            "positionRmseM": 1.3638979927312644,
+            "speedRmseMps": 0.5766097513917623,
+            "constantVelocityRmseM": 11.86350171928028,
+            "rigidSpacingRmseM": 7.435919486736167,
+            "initialBumperGapM": 2.7075384000000042,
+            "constrainedSteps": 83
+          }
+        ],
+        "meanPositionRmseM": 0.9841976362713841,
+        "meanConstantVelocityRmseM": 13.988167677243277,
+        "meanRigidSpacingRmseM": 5.204114328951775,
+        "minimumPredictedGapM": 2.7075384000000042,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.9808996085696897,
+          5.000447081519391,
+          7.453675438664009
+        ],
+        "predictedCrossingsSeconds": [
+          2.980899608569686,
+          5.182308072658471,
+          7.269394834153991
+        ],
+        "rigidCrossingsSeconds": [
+          2.980899608569686,
+          4.5676136706943025,
+          5.897011963829861
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.27400129339409096,
+        "rigidHeadwayMaeSeconds": 0.778331737417072,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-15-1057-cap-50",
+        "kind": "following",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281071%2C1057%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-15-1057.json",
+          "sha256": "2649055368b9da241e6852c322d52dc9a15b3e24ce59251967d5fe34fa9c02bb",
+          "bytes": 103972,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.07686501818182327,
+            0.10063941818181983
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1057,
+            "positionRmseM": 2.0476000597742905,
+            "speedRmseMps": 1.3402629616001458,
+            "constantVelocityRmseM": 17.118483221283903,
+            "rigidSpacingRmseM": 14.614126847251978,
+            "initialBumperGapM": 21.963583200000002,
+            "constrainedSteps": 72
+          }
+        ],
+        "meanPositionRmseM": 2.0476000597742905,
+        "meanConstantVelocityRmseM": 17.118483221283903,
+        "meanRigidSpacingRmseM": 14.614126847251978,
+        "minimumPredictedGapM": 2.1377378064112236,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-15-1057-cap-65",
+        "kind": "following",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281071%2C1057%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-15-1057.json",
+          "sha256": "2649055368b9da241e6852c322d52dc9a15b3e24ce59251967d5fe34fa9c02bb",
+          "bytes": 103972,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.07686501818182327,
+            0.10063941818181983
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1057,
+            "positionRmseM": 2.0476000597742905,
+            "speedRmseMps": 1.3402629616001458,
+            "constantVelocityRmseM": 17.118483221283903,
+            "rigidSpacingRmseM": 14.614126847251978,
+            "initialBumperGapM": 21.963583200000002,
+            "constrainedSteps": 72
+          }
+        ],
+        "meanPositionRmseM": 2.0476000597742905,
+        "meanConstantVelocityRmseM": 17.118483221283903,
+        "meanRigidSpacingRmseM": 14.614126847251978,
+        "minimumPredictedGapM": 2.1377378064112236,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-queue-15-1017-cap-50",
+        "kind": "queue",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281010%2C1026%2C1017%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936501200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-15-1017.json",
+          "sha256": "7c1aeb9b9789e513407ece5efc69f8a80f38b2f4c8c2562ee9ac19e9649a4b13",
+          "bytes": 513904,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 94,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.162199483870975,
+            0.1225754838709789,
+            0.10628670967744981
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1026,
+            "positionRmseM": 6.620105686608908,
+            "speedRmseMps": 2.1843895569306833,
+            "constantVelocityRmseM": 18.737185450774035,
+            "rigidSpacingRmseM": 12.073087461929688,
+            "initialBumperGapM": 3.5539679999999976,
+            "constrainedSteps": 64
+          },
+          {
+            "vehicle": 1017,
+            "positionRmseM": 7.796196520398943,
+            "speedRmseMps": 2.574818323463968,
+            "constantVelocityRmseM": 12.778023057248546,
+            "rigidSpacingRmseM": 17.479740601075967,
+            "initialBumperGapM": 2.9507687999999916,
+            "constrainedSteps": 80
+          }
+        ],
+        "meanPositionRmseM": 7.208151103503925,
+        "meanConstantVelocityRmseM": 15.75760425401129,
+        "meanRigidSpacingRmseM": 14.776414031502828,
+        "minimumPredictedGapM": 2.9507687999999916,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.2488627156899486,
+          5.177613420007824,
+          7.243907499279352
+        ],
+        "predictedCrossingsSeconds": [
+          2.2488627156899486,
+          4.053096071890991,
+          5.751632890857838
+        ],
+        "rigidCrossingsSeconds": [
+          2.2488627156899486,
+          3.3892509975063834,
+          4.483913660390108
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.7461373042107571,
+        "rigidHeadwayMaeSeconds": 1.379996919444622,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-queue-15-1017-cap-65",
+        "kind": "queue",
+        "block": 15,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281010%2C1026%2C1017%29+and+global_time%3E%3D1118936460200+and+global_time%3C%3D1118936501200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-queue-15-1017.json",
+          "sha256": "7c1aeb9b9789e513407ece5efc69f8a80f38b2f4c8c2562ee9ac19e9649a4b13",
+          "bytes": 513904,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 94,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.162199483870975,
+            0.1225754838709789,
+            0.10628670967744981
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1026,
+            "positionRmseM": 6.620105686608908,
+            "speedRmseMps": 2.1843895569306833,
+            "constantVelocityRmseM": 18.737185450774035,
+            "rigidSpacingRmseM": 12.073087461929688,
+            "initialBumperGapM": 3.5539679999999976,
+            "constrainedSteps": 64
+          },
+          {
+            "vehicle": 1017,
+            "positionRmseM": 7.796196520398943,
+            "speedRmseMps": 2.574818323463968,
+            "constantVelocityRmseM": 12.778023057248546,
+            "rigidSpacingRmseM": 17.479740601075967,
+            "initialBumperGapM": 2.9507687999999916,
+            "constrainedSteps": 80
+          }
+        ],
+        "meanPositionRmseM": 7.208151103503925,
+        "meanConstantVelocityRmseM": 15.75760425401129,
+        "meanRigidSpacingRmseM": 14.776414031502828,
+        "minimumPredictedGapM": 2.9507687999999916,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          2.2488627156899486,
+          5.177613420007824,
+          7.243907499279352
+        ],
+        "predictedCrossingsSeconds": [
+          2.2488627156899486,
+          4.053096071890991,
+          5.751632890857838
+        ],
+        "rigidCrossingsSeconds": [
+          2.2488627156899486,
+          3.3892509975063834,
+          4.483913660390108
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.7461373042107571,
+        "rigidHeadwayMaeSeconds": 1.379996919444622,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-17-1176-cap-50",
+        "kind": "following",
+        "block": 17,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281168%2C1176%29+and+global_time%3E%3D1118936520200+and+global_time%3C%3D1118936531200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-17-1176.json",
+          "sha256": "a59a8d0c12388a763ddc5cd7c3f0641febd042c855ee92d313fb27a8dc3fabd5",
+          "bytes": 103429,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.003075709090908528,
+            0.029731854545449906
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1176,
+            "positionRmseM": 1.1001659587452013,
+            "speedRmseMps": 0.322670792544028,
+            "constantVelocityRmseM": 23.568789084635668,
+            "rigidSpacingRmseM": 4.251101232574666,
+            "initialBumperGapM": 7.811109600000009,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 1.1001659587452013,
+        "meanConstantVelocityRmseM": 23.568789084635668,
+        "meanRigidSpacingRmseM": 4.251101232574666,
+        "minimumPredictedGapM": 2.0002718229338257,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-17-1176-cap-65",
+        "kind": "following",
+        "block": 17,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281168%2C1176%29+and+global_time%3E%3D1118936520200+and+global_time%3C%3D1118936531200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-17-1176.json",
+          "sha256": "a59a8d0c12388a763ddc5cd7c3f0641febd042c855ee92d313fb27a8dc3fabd5",
+          "bytes": 103429,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.003075709090908528,
+            0.029731854545449906
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1176,
+            "positionRmseM": 1.1001659587452013,
+            "speedRmseMps": 0.322670792544028,
+            "constantVelocityRmseM": 23.568789084635668,
+            "rigidSpacingRmseM": 4.251101232574666,
+            "initialBumperGapM": 7.811109600000009,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 1.1001659587452013,
+        "meanConstantVelocityRmseM": 23.568789084635668,
+        "meanRigidSpacingRmseM": 4.251101232574666,
+        "minimumPredictedGapM": 2.0002718229338257,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      },
+      {
+        "id": "v2-following-18-1221-cap-50",
+        "kind": "following",
+        "block": 18,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281220%2C1221%29+and+global_time%3E%3D1118936550200+and+global_time%3C%3D1118936561200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-18-1221.json",
+          "sha256": "fef17e23cf627e724c4286c7b9c0ef562b9f274fb455c10447f7a0d34d6d580f",
+          "bytes": 103294,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.022194981818191604,
+            0.0486294545454589
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1221,
+            "positionRmseM": 0.3627394660652793,
+            "speedRmseMps": 0.4920110711436781,
+            "constantVelocityRmseM": 14.391570880380938,
+            "rigidSpacingRmseM": 6.356507408723418,
+            "initialBumperGapM": 9.465868799999996,
+            "constrainedSteps": 96
+          }
+        ],
+        "meanPositionRmseM": 0.3627394660652793,
+        "meanConstantVelocityRmseM": 14.391570880380938,
+        "meanRigidSpacingRmseM": 6.356507408723418,
+        "minimumPredictedGapM": 2.000658531652334,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 50
+      },
+      {
+        "id": "v2-following-18-1221-cap-65",
+        "kind": "following",
+        "block": 18,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281220%2C1221%29+and+global_time%3E%3D1118936550200+and+global_time%3C%3D1118936561200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "v2-following-18-1221.json",
+          "sha256": "fef17e23cf627e724c4286c7b9c0ef562b9f274fb455c10447f7a0d34d6d580f",
+          "bytes": 103294,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.022194981818191604,
+            0.0486294545454589
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 1221,
+            "positionRmseM": 0.3627394660652793,
+            "speedRmseMps": 0.4920110711436781,
+            "constantVelocityRmseM": 14.391570880380938,
+            "rigidSpacingRmseM": 6.356507408723418,
+            "initialBumperGapM": 9.465868799999996,
+            "constrainedSteps": 96
+          }
+        ],
+        "meanPositionRmseM": 0.3627394660652793,
+        "meanConstantVelocityRmseM": 14.391570880380938,
+        "meanRigidSpacingRmseM": 6.356507408723418,
+        "minimumPredictedGapM": 2.000658531652334,
+        "sampleCoverage": 1,
+        "speedLimitKmh": 65
+      }
+    ],
+    "unsupportedSensitivities": [],
+    "productionPhysicsChanged": false,
+    "empiricalNetworkValidityEstablished": false,
+    "claimBoundary": "New, identity-disjoint observations in previously unopened first-session time windows. Conditional active-Link-physics component assessment with a documented site cap and restricted context; no autonomous network, signal-state or general empirical adequacy claim."
+  },
+  "selectionCounts": {
+    "following": 8,
+    "queue": 4
+  },
+  "targets": {
+    "following": 10,
+    "queue": 5
+  },
+  "v1ExposureCount": 1243,
+  "selectedIdentitiesDisjoint": true,
+  "primarySummaries": {
+    "following": {
+      "episodes": 8,
+      "positionRmseM": {
+        "mean": 1.980195125635151,
+        "minimum": 0.3627394660652793,
+        "maximum": 3.512658799461659
+      },
+      "constantVelocityRmseM": {
+        "mean": 20.83453180290689,
+        "minimum": 10.834643446922158,
+        "maximum": 25.564613832630684
+      },
+      "rigidSpacingRmseM": {
+        "mean": 9.227551044240416,
+        "minimum": 1.8863563101734828,
+        "maximum": 20.893358267017675
+      },
+      "headwayMaeSeconds": null,
+      "rigidHeadwayMaeSeconds": null,
+      "minimumPredictedGapM": 1.9858200878204002,
+      "constrainedSteps": 751
+    },
+    "queue": {
+      "episodes": 4,
+      "positionRmseM": {
+        "mean": 4.041445209716401,
+        "minimum": 0.9841976362713841,
+        "maximum": 7.208151103503925
+      },
+      "constantVelocityRmseM": {
+        "mean": 15.512940939342727,
+        "minimum": 13.988167677243277,
+        "maximum": 18.095055032207117
+      },
+      "rigidSpacingRmseM": {
+        "mean": 9.713613584487009,
+        "minimum": 3.479400330233067,
+        "maximum": 15.394525647260362
+      },
+      "headwayMaeSeconds": {
+        "mean": 0.46303285011916795,
+        "minimum": 0.09041095895555173,
+        "maximum": 0.7461373042107571
+      },
+      "rigidHeadwayMaeSeconds": {
+        "mean": 0.9992129865720765,
+        "minimum": 0.4829924447665266,
+        "maximum": 1.379996919444622
+      },
+      "minimumPredictedGapM": 2.4710136000000062,
+      "constrainedSteps": 603
+    }
+  },
+  "sensitivitySummaries": {
+    "50": {
+      "following": {
+        "episodes": 8,
+        "positionRmseM": {
+          "mean": 1.980195125635151,
+          "minimum": 0.3627394660652793,
+          "maximum": 3.512658799461659
+        },
+        "constantVelocityRmseM": {
+          "mean": 20.83453180290689,
+          "minimum": 10.834643446922158,
+          "maximum": 25.564613832630684
+        },
+        "rigidSpacingRmseM": {
+          "mean": 9.227551044240416,
+          "minimum": 1.8863563101734828,
+          "maximum": 20.893358267017675
+        },
+        "headwayMaeSeconds": null,
+        "rigidHeadwayMaeSeconds": null,
+        "minimumPredictedGapM": 1.9858200878204002,
+        "constrainedSteps": 751
+      },
+      "queue": {
+        "episodes": 4,
+        "positionRmseM": {
+          "mean": 4.041445209716401,
+          "minimum": 0.9841976362713841,
+          "maximum": 7.208151103503925
+        },
+        "constantVelocityRmseM": {
+          "mean": 15.512940939342727,
+          "minimum": 13.988167677243277,
+          "maximum": 18.095055032207117
+        },
+        "rigidSpacingRmseM": {
+          "mean": 9.713613584487009,
+          "minimum": 3.479400330233067,
+          "maximum": 15.394525647260362
+        },
+        "headwayMaeSeconds": {
+          "mean": 0.46303285011916795,
+          "minimum": 0.09041095895555173,
+          "maximum": 0.7461373042107571
+        },
+        "rigidHeadwayMaeSeconds": {
+          "mean": 0.9992129865720765,
+          "minimum": 0.4829924447665266,
+          "maximum": 1.379996919444622
+        },
+        "minimumPredictedGapM": 2.4710136000000062,
+        "constrainedSteps": 603
+      }
+    },
+    "65": {
+      "following": {
+        "episodes": 8,
+        "positionRmseM": {
+          "mean": 1.980195125635151,
+          "minimum": 0.3627394660652793,
+          "maximum": 3.512658799461659
+        },
+        "constantVelocityRmseM": {
+          "mean": 20.83453180290689,
+          "minimum": 10.834643446922158,
+          "maximum": 25.564613832630684
+        },
+        "rigidSpacingRmseM": {
+          "mean": 9.227551044240416,
+          "minimum": 1.8863563101734828,
+          "maximum": 20.893358267017675
+        },
+        "headwayMaeSeconds": null,
+        "rigidHeadwayMaeSeconds": null,
+        "minimumPredictedGapM": 1.9858200878204002,
+        "constrainedSteps": 751
+      },
+      "queue": {
+        "episodes": 4,
+        "positionRmseM": {
+          "mean": 4.041445209716401,
+          "minimum": 0.9841976362713841,
+          "maximum": 7.208151103503925
+        },
+        "constantVelocityRmseM": {
+          "mean": 15.512940939342727,
+          "minimum": 13.988167677243277,
+          "maximum": 18.095055032207117
+        },
+        "rigidSpacingRmseM": {
+          "mean": 9.713613584487009,
+          "minimum": 3.479400330233067,
+          "maximum": 15.394525647260362
+        },
+        "headwayMaeSeconds": {
+          "mean": 0.46303285011916795,
+          "minimum": 0.09041095895555173,
+          "maximum": 0.7461373042107571
+        },
+        "rigidHeadwayMaeSeconds": {
+          "mean": 0.9992129865720765,
+          "minimum": 0.4829924447665266,
+          "maximum": 1.379996919444622
+        },
+        "minimumPredictedGapM": 2.4710136000000062,
+        "constrainedSteps": 603
+      }
+    }
+  },
+  "qualityRejections": {
+    "total": 135,
+    "byReason": {
+      "unsupported observed vehicle length": 1,
+      "lane change": 34,
+      "missing contiguous subject observations": 50,
+      "class, direction or movement change": 3,
+      "no qualifying observed queue release": 26,
+      "following crosses a section or recorded intersection": 11,
+      "initial leader outside bounded following horizon": 2,
+      "reversed longitudinal motion": 3,
+      "initial speed outside component scope": 5
+    }
+  },
+  "sourceSha256": {
+    "scripts/scenario/validate_micro_field_v2.py": "e7f008016256287e7204526b3578ba3856763976d623ad0f2bf5f58303a1665e",
+    "scripts/scenario/audit_micro_field_inputs.py": "e4c63fdd9bc53e97b756590ab05ba15c93a177cecb48067df55044cfeef5e813",
+    "scripts/scenario/test_micro_field_input_audit.py": "bfba74702edf115c489ae6caed67a5352f081ac584e12da1a1fef9cf5ab5e035",
+    "src/main/scala/model/hybrid/validation/MicroFieldReplay.scala": "a81bd593f0d6209a727e281485b67c2b676a0fe8fc9e75ef9af7001c89a709a4",
+    "src/test/scala/model/hybrid/validation/MicroFieldReplaySpec.scala": "2232d93deecf3d7c0473525f4bbbe4b8c727d5b7bab759100f8e6e5adc9e9a16"
+  },
+  "engineering": {
+    "scalaTests": 780,
+    "scalaSuites": 154,
+    "pythonTests": 49,
+    "scalaTestLog": {
+      "path": "/tmp/htc-field-input-audit-full-tests.log",
+      "sha256": "1e2fd97e7eb33e764a2c825663a92c2b531c7e39282ab6829454f5176e30528e"
+    },
+    "pythonTestLog": {
+      "path": "/tmp/htc-field-input-audit-python-tests.log",
+      "sha256": "666364f34799a82723024133da45ba518fd7983991373eb2378fe2b57a123ff9"
+    },
+    "assemblyLog": {
+      "path": "/tmp/htc-field-input-audit-build.log",
+      "sha256": "8610d0552138df3ac8204728ca72fdcdd617a098cc48e8d5346a6d2651f67ad9"
+    }
+  },
+  "inputAuditRecord": {
+    "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/micro-field-input-audit-2026-10-26.json",
+    "sha256": "e7fc52dfa1822f6b58c321bf244137d0b115541128b9b0d6042d52ccc8d9bc42"
+  },
+  "v1Snapshot": {
+    "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/ngsim-following-discharge-snapshot-2026-10-26.zip",
+    "sha256": "4dda769b8b322c48e563ec78b25a49b71db275f82b383bee30e00df264f233aa"
+  },
+  "rawSnapshot": {
+    "path": "docs/validation/ngsim-field-v2-snapshot-2026-10-26.zip",
+    "sha256": "ab15619a85aec99595ba9118932a85e88cc551f1ce31838023324579f6ac0e45",
+    "bytes": 1998831
+  },
+  "rawArtifacts": "/tmp/htc-field-v2-20261026",
+  "offlineReplay": {
+    "predictionsExact": true,
+    "predictionsSha256": "10ce58b953902edaf4513da7676d52b16ed693469a9e04238ed81e70a0ce8ec1",
+    "repositoryArchiveExact": true
+  },
+  "productionPhysicsChanged": false,
+  "empiricalNetworkValidityEstablished": false,
+  "figures": [
+    {
+      "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/figures/micro-field-v2-2026-10-26.png",
+      "sha256": "b65699baac9d94a7f8abc74aea21d8d42c507a2597ee162f6b2b27ba8299aaaa"
+    },
+    {
+      "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/figures/micro-field-v2-2026-10-26.svg",
+      "sha256": "9af59e5c9cc578d4ea114860ab39126c164ef5fd232caddc6d61d0953b582f4d"
+    }
+  ],
+  "interpretation": "The frozen v2 gates determine the prospective result. V1 cap sensitivities remain released development diagnostics, never fresh acceptance. Conditional longitudinal following/queue-release evidence with observed head motion; signal phases and autonomous network validity remain unestablished.",
+  "sensitivityPathsExactAcrossCaps": {
+    "50": true,
+    "65": true
+  },
+  "figuresVisuallyInspected": true
+}

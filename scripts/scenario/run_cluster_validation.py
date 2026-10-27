@@ -14,6 +14,8 @@ import subprocess
 import threading
 import time
 
+from benchmark_metrics import ProcessMonitor, parse_runtime
+
 
 def execution_outcome(logs):
     stopped = any("Received StopSimulationEvent. Flushing/stopping reporters" in log for log in logs)
@@ -108,6 +110,15 @@ def run(args):
     stopped = completed = failed = killed = False
     kill_elapsed = None
     started = time.monotonic()
+    measuring = getattr(args, "measure", False)
+    cpu_ids = getattr(args, "cpu_ids", None)
+    if cpu_ids:
+        cpu_ids = [int(v) for v in cpu_ids.split(",")]
+        if len(cpu_ids) != 4 or len(set(cpu_ids)) != 4 or not set(cpu_ids) <= os.sched_getaffinity(0):
+            raise ValueError("measurement requires four distinct available logical CPUs")
+    monitor = ProcessMonitor(root, started, metrics_ports=[args.base_port + 20 + i for i in range(args.nodes)]) if measuring else None
+    completion_seconds = None
+    measurement = None
     extra = args.extra_config.read_text() if args.extra_config else ""
     try:
         if relay:
@@ -142,10 +153,18 @@ htc.report-manager.json.batch-size=1
                        HTC_SIMULATION_CONFIG_FILE=str(scenario), HTC_MOBILITY_CITY_MAP_FILE=str(city_map))
             command = ["java", "--add-opens=java.base/java.lang=ALL-UNNAMED", "-Xms128m", "-Xmx2g",
                        "-XX:ActiveProcessorCount=4", "-Dconfig.file=" + str(node / "run.conf"), "-jar", str(jar)]
+            if measuring:
+                command[command.index("-Xmx2g")] = "-Xmx4g" if args.nodes == 1 else "-Xmx2g"
+                command[command.index("-XX:ActiveProcessorCount=4")] = f"-XX:ActiveProcessorCount={4 // args.nodes}"
+                if cpu_ids:
+                    assigned = cpu_ids if args.nodes == 1 else cpu_ids[index*2:index*2+2]
+                    command = ["taskset", "-c", ",".join(map(str, assigned)), *command]
             (node / "command.json").write_text(json.dumps(command, indent=2) + "\n")
             stream = (node / "run.log").open("w")
             streams.append(stream)
             processes.append(subprocess.Popen(command, env=env, stdout=stream, stderr=subprocess.STDOUT))
+            if monitor:
+                monitor.add(processes[-1].pid)
             if index == 0 and args.nodes > 1:
                 time.sleep(.4)
 
@@ -156,6 +175,10 @@ htc.report-manager.json.batch-size=1
             runtime_logs = logs()
             stopped, completed, failed = execution_outcome(runtime_logs)
             if stopped or failed:
+                completion_seconds = time.monotonic() - started
+                if monitor:
+                    measurement = monitor.finish()
+                    monitor = None
                 time.sleep(2)
                 break
             if args.kill_node is not None and not killed and any(args.kill_after in log for log in runtime_logs):
@@ -175,6 +198,8 @@ htc.report-manager.json.batch-size=1
         # Keep lifecycle teardown out of execution acceptance while retaining full raw logs.
         (root / "runtime.log").write_text("\n".join(runtime_logs))
     finally:
+        if monitor:
+            measurement = monitor.finish()
         for proc in processes:
             if proc.poll() is None:
                 proc.terminate()
@@ -202,6 +227,11 @@ htc.report-manager.json.batch-size=1
                   killElapsedSeconds=kill_elapsed, delayMsPerRead=args.delay_ms,
                   elapsedSeconds=round(time.monotonic() - started, 2),
                   returncodes=[proc.returncode for proc in processes])
+    if measuring:
+        result["measurement"] = dict(measurement or {}, completionSeconds=completion_seconds,
+            deadlineExceeded=completion_seconds is None and time.monotonic()-started >= args.timeout,
+            sampleIntervalSeconds=.25, cpuIds=cpu_ids, totalMaxHeapGiB=4,
+            runtime=parse_runtime("\n".join(runtime_logs)))
     if relay:
         result["relay"] = dict(connections=relay.connections, chunks=relay.chunks, bytes=relay.bytes)
     (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -223,6 +253,8 @@ def main():
     parser.add_argument("--kill-node", type=int, choices=(1,))
     parser.add_argument("--kill-after", default="[ACCOUNTED-GVT] round=1 ")
     parser.add_argument("--extra-config", type=Path)
+    parser.add_argument("--measure", action="store_true", help="Sample process resources before teardown")
+    parser.add_argument("--cpu-ids", help="Four comma-separated logical CPUs for measured runs")
     args = parser.parse_args()
     if not (1024 <= args.base_port <= 65300) or args.delay_ms < 0 or args.timeout <= 0:
         parser.error("invalid port, delay or timeout")

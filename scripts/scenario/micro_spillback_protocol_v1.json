@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "status": "frozen-before-implementation-and-held-out-execution",
+  "baseCommit": "9b8863039fda5fb00df4a81ba5f58cfbaf8f5a7d",
+  "purpose": "Bounded engineering acceptance of single-lane MICRO blocked handoff and physical spillback, separately from SUMO equivalence and empirical validation.",
+  "scope": "Static Car routes, fixed membership, 0.1-second ticks, downstream lookahead, optional fixed connector, no competing movements or lane changes.",
+  "defaultParameters": {
+    "runtimeTickSeconds": 0.1,
+    "physicsStepSeconds": 0.1,
+    "speedLimitKmh": 50,
+    "vehicleLengthM": 4.5,
+    "minGapM": 2,
+    "accelMps2": 2.6,
+    "decelMps2": 4.5,
+    "reactionSeconds": 1,
+    "carryRemainder": true,
+    "downstreamLookahead": true,
+    "stopLineGapM": 1,
+    "horizonSeconds": 180,
+    "signalCycleSeconds": 120,
+    "greenStartSeconds": 60,
+    "greenDurationSeconds": 60
+  },
+  "developmentCase": {
+    "id": "development-capacity-one",
+    "seed": 1201,
+    "roadLengths": [160, 38, 140],
+    "bottleneckCapacity": 1,
+    "vehicles": 8,
+    "departureHeadwaySeconds": 3
+  },
+  "reservedCases": [
+    {
+      "id": "reserved-short-road",
+      "seed": 1301,
+      "roadLengths": [173, 23, 137],
+      "bottleneckCapacity": 2,
+      "vehicles": 10,
+      "departureHeadwaySeconds": 3.2
+    },
+    {
+      "id": "reserved-connector",
+      "seed": 1409,
+      "roadLengths": [191, 31, 149],
+      "connectorLengthM": 12,
+      "connectorCapacity": 1,
+      "bottleneckCapacity": 2,
+      "vehicles": 10,
+      "departureHeadwaySeconds": 3.4
+    },
+    {
+      "id": "reserved-horizon-blocked",
+      "seed": 1511,
+      "roadLengths": [181, 29, 139],
+      "bottleneckCapacity": 1,
+      "vehicles": 8,
+      "departureHeadwaySeconds": 3.1,
+      "horizonSeconds": 50,
+      "expectedCompletedJourneys": 0
+    }
+  ],
+  "acceptance": {
+    "requiredCompletedJourneyFraction": 1,
+    "horizonCaseUsesExplicitCensoredJourneys": true,
+    "minimumGapM": 2,
+    "positionToleranceM": 0.000001,
+    "requiredBlockedVehicles": 1,
+    "requiredUpstreamStoppedFollowers": 1,
+    "downstreamCountNeverExceedsCapacity": true,
+    "noDuplicateLinkEntryOrCompletion": true,
+    "distanceEqualsCompletedInputLinks": true,
+    "sameTickHandoffsHaveNoArtificialDwell": true,
+    "delayedGrantsClearVelocityAndRemainder": true,
+    "fullReportPolicyAndLayoutParity": true,
+    "multiJvmOptimisticRunMustExerciseRollback": true,
+    "checkpointReplayAndCancellationMustRestoreFootprintAndGrantIdentity": true
+  },
+  "execution": [
+    "Development case first; retain baseline and failures.",
+    "Freeze engine parameters before running reserved cases. No threshold or traffic-coefficient fitting to reserved results.",
+    "Run reserved complete cases under both policies on one JVM and compare full physical reports; repeat at least one on two JVMs with delayed transport.",
+    "Run blocked-horizon case under both policies; no modeled sends from horizon finalization.",
+    "Exercise request cancellation, restored pending footprint and correlated grant replay in focused tests.",
+    "Retain input, protocol and executable SHA256, commands, logs, physical measurements, exclusions and all failures.",
+    "Run existing v2 and legacy compatibility diagnostics without altering their frozen protocols."
+  ],
+  "claimBoundary": "Physical representation, spacing and runtime consistency in bounded fixtures. Finite count capacity is an admission constraint, not an empirical saturated-flow estimate. No general spillback, intersection, SUMO equivalence, field accuracy or city-scale performance claim."
+}

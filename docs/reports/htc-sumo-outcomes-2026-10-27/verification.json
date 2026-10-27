@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-27T07:43:01.474565+00:00",
+  "pages": 9,
+  "everyPageVisuallyInspected": true,
+  "figureSets": 6,
+  "sourceHashesVerified": true,
+  "figureHashesVerified": true,
+  "signalVehicles": 18,
+  "historicalPhysicalCases": 4,
+  "historicalDemandSeeds": 5,
+  "allSignalAgreementChecksPassed": true,
+  "scope": "Matched single-lane numerical agreement; field validity remains unestablished",
+  "pdfSha256": "28ccd513389d94e2e338a7c4635203e4411337e4f589922998cd9cb1ebda27ef",
+  "metricsSha256": "e0377ac9242395198769ce918b08ac5c0981e61d608406fb714c543acbfa4cd2",
+  "generatorSha256": "db6a1a0c30a761985e7e9d514b05d0d8f63e29c9375ec266a888f4355fa9f0a6",
+  "artifactSha256": {
+    "README.md": "f8cfc6d5cbaa0a15b1ddf39887463ca2a3324d1ad924506c235c53259974316d",
+    "figures/agreement-criteria.png": "cc27136db53cbc7200261b1923b261706086be36deb88f5c32faabed119258e1",
+    "figures/agreement-criteria.svg": "718a86fa85d99407677fd7efb77ec5d33c6b2bbed6f8b8675c02613144f76788",
+    "figures/discharge-and-completion.png": "d77001c37a457e63eb38522d1593617b8a5b93c96ad12c08ffa5abd7f7b08f73",
+    "figures/discharge-and-completion.svg": "bf0705045ceebbc67a1461ba7543316e7e2fb83ae642440b66eefc52e8e36f75",
+    "figures/historical-v2-agreement.png": "72385ce419eef8407c368b9274b19bded645738d4f3adddf79581ea1820fbdfc",
+    "figures/historical-v2-agreement.svg": "3655a8bee5ea902740d57b31edbc8891b854fd87b3de7e8c26b107d49a079bbd",
+    "figures/position-speed-trajectories.png": "430bcb2918582860be3d1c4a0dbd95ea36a263481fd4e838952985eca72d7fa1",
+    "figures/position-speed-trajectories.svg": "4980783ae25940d747ecb2c0ae8098f624b1ec211329d6228e091bc08534cc11",
+    "figures/queue-and-stopped-time.png": "0bf6b30d8cf8a80223496d7606bebcbccf645faa676d443d9dc57a33b2cd2829",
+    "figures/queue-and-stopped-time.svg": "9db11831774d45c400394c6be06237cc9327d07f41c9e3f70571e625a38859ce",
+    "figures/travel-time-comparison.png": "0e70ee835de9954fa89b78aae179c240a82d10aee44cb7f6d5afbd299af57053",
+    "figures/travel-time-comparison.svg": "1ba604a3039359db73119d37b47b6754d9a0a2877eb3c8707fc632076dd81d95",
+    "htc-sumo-traffic-outcomes-2026-10-27.pdf": "28ccd513389d94e2e338a7c4635203e4411337e4f589922998cd9cb1ebda27ef",
+    "outcome-metrics.json": "e0377ac9242395198769ce918b08ac5c0981e61d608406fb714c543acbfa4cd2"
+  }
+}

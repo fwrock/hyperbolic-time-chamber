@@ -136,6 +136,18 @@ class LinkMetricsReporter(
     )
   }
 
+  def emitMicroExitWaits(tick: Tick): Unit = {
+    val state = getLinkStateFn()
+    state.vehiclesByLane.toVector.sortBy(_._1).foreach { case (lane, vehicles) =>
+      vehicles.filter(_.pendingExitTick.exists(_ < tick)).foreach { vehicle =>
+        reportFn(Map("car_id" -> vehicle.actorId.toString, "link_id" -> entityIdFn(),
+          "position" -> vehicle.position, "velocity" -> 0.0, "lane" -> lane,
+          "vehicle_length" -> vehicle.vehicleLength, "exit_tick" -> vehicle.pendingExitTick.get,
+          "tick" -> tick), "micro_exit_wait")
+      }
+    }
+  }
+
   /** Publishes the dynamic cost only if `costPublishInterval` ticks have elapsed since the last
     * publish. Shared by both MESO (called on vehicle enter/leave) and MICRO (called every global
     * tick) link dynamics, so neither mode floods Redis/Kafka with a publish per event.

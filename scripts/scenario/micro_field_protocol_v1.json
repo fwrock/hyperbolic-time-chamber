@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "status": "frozen-before-field-trajectory-download-and-model-error-evaluation",
+  "purpose": "Conditional field following and two-follower queue-discharge assessment of the actual active Link physics, with observed head-leader motion as an exogenous boundary.",
+  "source": "https://data.transportation.gov/resource/8ect-6jqj.json",
+  "metadata": "https://data.transportation.gov/api/views/8ect-6jqj.json",
+  "location": "lankershim",
+  "license": "CC_30_BY_SA",
+  "metresPerFoot": 0.3048,
+  "samplingFrameOriginMilliseconds": 1118935680200,
+  "developmentOffsetsSeconds": [30, 90, 150, 210, 270],
+  "reservedOffsetsSeconds": [930, 990, 1050, 1110, 1170, 1230, 1290, 1350, 1410, 1470, 1530, 1590, 1650, 1710, 1770],
+  "initializationSeconds": 1,
+  "stepSeconds": 0.1,
+  "followingPredictionSeconds": 10,
+  "queuePredictionSeconds": 20,
+  "queueFollowers": 2,
+  "maximumCandidatesPerKindAndBlock": 8,
+  "targets": {"developmentFollowing": 3, "developmentQueue": 2, "reservedFollowing": 10, "reservedQueue": 5},
+  "selection": "At each fixed block, numeric vehicle identity order. Through-moving northbound passenger Cars only, with an observed preceding vehicle. Following starts with annotated speed >=1 m/s; queue chains start with all three annotated speeds <=0.2 m/s. First quality-qualified candidates, at most one per kind/block. Never reuse any vehicle identity between selected episodes or development and reserved data. Selection never reads model errors.",
+  "quality": {
+    "exactSampleMilliseconds": 100,
+    "maximumReverseStepM": 0.05,
+    "maximumPrefixSpeedMps": 13.88888888888889,
+    "maximumAbsolutePrefixStopSpeedMps": 0.2,
+    "minimumVehicleLengthM": 2,
+    "maximumVehicleLengthM": 8,
+    "minimumInitialBumperGapM": 2,
+    "minimumObservedBumperGapM": 0,
+    "maximumRowsPerQuery": 2000,
+    "maximumBytesPerQuery": 2000000,
+    "rules": [
+      "Remove exact duplicates, reject conflicting subject/time rows, truncation, missing 100 ms samples and nonconsecutive frame IDs.",
+      "Every subject remains a northbound through passenger Car in one unchanged lane; every follower retains its recorded immediate leader throughout initialization and prediction.",
+      "Use front-center local_y and measured lengths, converted from feet. Reject nonfinite data, negative annotated speeds, reversed steps beyond tolerance or overlapping observed bumpers.",
+      "Initialize speed by least-squares position slope over the disjoint one-second prefix; head-leader velocity at each boundary uses only its previous one-second positions, floored at zero.",
+      "Queue prefix fitted speed must remain within the stop threshold for all three Cars. The fixed virtual discharge station is 5 m beyond the head leader's initial front. All observed subjects must cross within 20 seconds; missing predicted crossings fail coverage, never exclude the case.",
+      "Retain all raw responses, query URLs, SHA256, license and every rejection. No fitted time shifts, post-outcome filtering or traffic-coefficient calibration."
+    ]
+  },
+  "physics": {"speedLimitKmh": 50, "maxAccelerationMps2": 2.6, "maxDecelerationMps2": 4.5, "reactionSeconds": 1, "minGapM": 2, "retainExits": true, "linkLengthM": 100000},
+  "baselines": ["Constant velocity from the initialization prefix", "Rigid initial bumper spacing behind observed head leader motion"],
+  "metrics": ["per-episode mean follower position RMSE", "speed RMSE versus backward position slopes", "minimum predicted bumper gap", "discharge crossing coverage", "per-platoon discharge-headway MAE", "annotated-speed versus position-derivative inconsistency"],
+  "acceptance": {
+    "requiredReservedFollowingEpisodes": 10,
+    "requiredReservedQueueEpisodes": 5,
+    "requiredPredictionSampleCoverage": 1,
+    "requiredPredictedQueueCrossingCoverage": 1,
+    "minimumPredictedBumperGapM": 0,
+    "followingSkill": "The upper 95% percentile-bootstrap bound on mean paired per-episode position-RMSE difference must be strictly below zero against each baseline.",
+    "queueSkill": "The upper 95% percentile-bootstrap bound on mean paired per-platoon headway-MAE difference against the rigid-spacing baseline must be strictly below zero.",
+    "uncertainty": "10000 resamples with seed 20261026. Episode/platoon, never time samples or individual followers, is the resampling unit. Dependence within the same observed road/session limits interpretation; intervals are exploratory conditional summaries.",
+    "rationale": "Zero paired loss improvement is a comparative predictive-skill null, avoiding invented absolute field-accuracy tolerances. Report absolute errors regardless. Passing supports only this conditional comparison, not broad empirical adequacy."
+  },
+  "execution": [
+    "Build and test the replay adapter and quality/measurement pipeline using synthetic data before field evaluation.",
+    "Run development selection and assessment separately; retain failures. No production physics change in this study.",
+    "Freeze executable and source hashes before downloading reserved trajectories. Freeze the selected manifest before evaluating reserved errors.",
+    "If fixed selection or coverage targets cannot be met, record an inconclusive data/measurement gate rather than widening criteria or silently reducing the target.",
+    "Report engineering failures, data quality exclusions and scientific rejection separately. Never tune on these reserved outcomes."
+  ],
+  "claimBoundary": "Conditional longitudinal component assessment, not a full actor-runtime experiment, traffic-signal reconstruction, junction validation or independent network replication. The earlier US-101 isolated-cruising pilot is disjoint. Observed leader motion is supplied at every step, so this is not an autonomous forecast of the whole platoon. Both comparative skill and absolute adequacy must remain explicit."
+}

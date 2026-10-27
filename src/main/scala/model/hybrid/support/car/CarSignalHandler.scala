@@ -157,8 +157,11 @@ class CarSignalHandler(
       scheduleEventFn(waitUntilTick)
     } else if (data.capacityState == LinkCapacityStateEnum.Full) {
       journeyReporter.sumoArrivalSpeed = 0.0
+      if (state.journey.capacityWaitSinceTick.isEmpty)
+        state.journey.capacityWaitSinceTick = Some(currentTickFn())
       state.status = WaitingCapacity
     } else {
+      completeCapacityWait(state)
       data.junctionLink.foreach(path => state.movablePendingJunctionPath = Some(path))
       val tick = currentTickFn()
       state.status = WaitingSignal
@@ -166,6 +169,14 @@ class CarSignalHandler(
       setSignalWaitNeedsReverifyFn(false)
       scheduleEventFn(tick)
     }
+  }
+
+  private def completeCapacityWait(state: CarState): Unit = {
+    state.journey.capacityWaitSinceTick.foreach { since =>
+      val seconds = math.max(0L, currentTickFn() - since).toDouble * journeyReporter.secondsPerTick
+      if (seconds > 0.0) journeyReporter.updateHaltingState(0.0, seconds)
+    }
+    state.journey.capacityWaitSinceTick = None
   }
 
   /** Call from `onDestruct`, before any state clearing, when a car is destroyed while
@@ -187,5 +198,13 @@ class CarSignalHandler(
           )
         }
       }
+      state.journey.retainedMicroExitLinkId.foreach { approach =>
+        sendMessageFn(approach, "hybrid.actor.Link",
+          model.hybrid.entity.event.data.LeaveLinkData(state.actorType, state.size,
+            core.enumeration.CreationTypeEnum.LoadBalancedDistributed), EventTypeEnum.LeaveLink.toString)
+      }
+      state.journey.retainedMicroExitLinkId = None
+      completeCapacityWait(state)
+      consumeAwaitedReplyFn(linkAccessAwaitKey(linkId))
     }
 }

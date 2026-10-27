@@ -1,0 +1,976 @@
+{
+  "free": {
+    "modelChecks": {
+      "noArtificialNodeDelay": true,
+      "crossingMomentum": true,
+      "elapsedLinkTime": true,
+      "inclusiveSignalPhases": true,
+      "noRedIntervalCrossing": true,
+      "tripTimeWithinClockResolution": true
+    },
+    "vehicles": [
+      {
+        "vehicle": "5",
+        "samples": 243,
+        "sameLinkSamples": 243,
+        "differentLinkSamples": 0,
+        "htcSamples": 244,
+        "sumoSamples": 243,
+        "routeDistanceRmseM": 2.530111332502013e-07,
+        "sameLinkPositionRmseM": 2.530111332502013e-07,
+        "speedRmseMps": 9.799078957348544e-08,
+        "htcDuration": 24.3,
+        "sumoDuration": 24.3,
+        "durationDelta": 0.0,
+        "htcNodeDelayTicks": [],
+        "htcLinkEntryTicks": [
+          0
+        ],
+        "htcLinkExitTicks": [
+          243
+        ],
+        "htcLinkEntryPositions": [
+          0.0
+        ],
+        "htcExitSpeeds": [
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          0.0
+        ]
+      }
+    ],
+    "meanRouteDistanceRmseM": 2.530111332502013e-07,
+    "maxAbsDurationDelta": 0.0,
+    "meanSpeedRmseMps": 9.799078957348544e-08
+  },
+  "following": {
+    "modelChecks": {
+      "noArtificialNodeDelay": true,
+      "crossingMomentum": true,
+      "elapsedLinkTime": true,
+      "inclusiveSignalPhases": true,
+      "noRedIntervalCrossing": true,
+      "tripTimeWithinClockResolution": true
+    },
+    "vehicles": [
+      {
+        "vehicle": "5",
+        "samples": 243,
+        "sameLinkSamples": 243,
+        "differentLinkSamples": 0,
+        "htcSamples": 244,
+        "sumoSamples": 243,
+        "routeDistanceRmseM": 2.530111332502013e-07,
+        "sameLinkPositionRmseM": 2.530111332502013e-07,
+        "speedRmseMps": 9.799078957348544e-08,
+        "htcDuration": 24.3,
+        "sumoDuration": 24.3,
+        "durationDelta": 0.0,
+        "htcNodeDelayTicks": [],
+        "htcLinkEntryTicks": [
+          0
+        ],
+        "htcLinkExitTicks": [
+          243
+        ],
+        "htcLinkEntryPositions": [
+          0.0
+        ],
+        "htcExitSpeeds": [
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          0.0
+        ]
+      },
+      {
+        "vehicle": "6",
+        "samples": 243,
+        "sameLinkSamples": 243,
+        "differentLinkSamples": 0,
+        "htcSamples": 244,
+        "sumoSamples": 243,
+        "routeDistanceRmseM": 2.530111332502013e-07,
+        "sameLinkPositionRmseM": 2.530111332502013e-07,
+        "speedRmseMps": 9.799078957348544e-08,
+        "htcDuration": 24.3,
+        "sumoDuration": 24.3,
+        "durationDelta": 0.0,
+        "htcNodeDelayTicks": [],
+        "htcLinkEntryTicks": [
+          60
+        ],
+        "htcLinkExitTicks": [
+          303
+        ],
+        "htcLinkEntryPositions": [
+          0.0
+        ],
+        "htcExitSpeeds": [
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          6.0
+        ]
+      },
+      {
+        "vehicle": "7",
+        "samples": 243,
+        "sameLinkSamples": 243,
+        "differentLinkSamples": 0,
+        "htcSamples": 244,
+        "sumoSamples": 243,
+        "routeDistanceRmseM": 2.530111332502013e-07,
+        "sameLinkPositionRmseM": 2.530111332502013e-07,
+        "speedRmseMps": 9.799078957348544e-08,
+        "htcDuration": 24.300000000000004,
+        "sumoDuration": 24.3,
+        "durationDelta": 3.552713678800501e-15,
+        "htcNodeDelayTicks": [],
+        "htcLinkEntryTicks": [
+          120
+        ],
+        "htcLinkExitTicks": [
+          363
+        ],
+        "htcLinkEntryPositions": [
+          0.0
+        ],
+        "htcExitSpeeds": [
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          12.0
+        ]
+      },
+      {
+        "vehicle": "8",
+        "samples": 243,
+        "sameLinkSamples": 243,
+        "differentLinkSamples": 0,
+        "htcSamples": 244,
+        "sumoSamples": 243,
+        "routeDistanceRmseM": 2.530111332502013e-07,
+        "sameLinkPositionRmseM": 2.530111332502013e-07,
+        "speedRmseMps": 9.799078957348544e-08,
+        "htcDuration": 24.300000000000004,
+        "sumoDuration": 24.3,
+        "durationDelta": 3.552713678800501e-15,
+        "htcNodeDelayTicks": [],
+        "htcLinkEntryTicks": [
+          180
+        ],
+        "htcLinkExitTicks": [
+          423
+        ],
+        "htcLinkEntryPositions": [
+          0.0
+        ],
+        "htcExitSpeeds": [
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          18.0
+        ]
+      }
+    ],
+    "meanRouteDistanceRmseM": 2.530111332502013e-07,
+    "maxAbsDurationDelta": 3.552713678800501e-15,
+    "meanSpeedRmseMps": 9.799078957348544e-08
+  },
+  "signal": {
+    "modelChecks": {
+      "noArtificialNodeDelay": true,
+      "crossingMomentum": true,
+      "elapsedLinkTime": true,
+      "inclusiveSignalPhases": true,
+      "noRedIntervalCrossing": true,
+      "tripTimeWithinClockResolution": true,
+      "junctionSelection": true,
+      "junctionCoordinates": true,
+      "junctionSpeed": true,
+      "turnSpeedOnApproach": true,
+      "finiteJunctionTraversal": true
+    },
+    "vehicles": [
+      {
+        "vehicle": "8",
+        "samples": 275,
+        "sameLinkSamples": 274,
+        "differentLinkSamples": 1,
+        "htcSamples": 277,
+        "sumoSamples": 275,
+        "routeDistanceRmseM": 0.5578906152287636,
+        "sameLinkPositionRmseM": 0.5586885300625994,
+        "speedRmseMps": 0.09210758198214206,
+        "htcDuration": 27.6,
+        "sumoDuration": 27.5,
+        "durationDelta": 0.10000000000000142,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          0,
+          161,
+          175
+        ],
+        "htcLinkExitTicks": [
+          161,
+          175,
+          276
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.3919136606233735,
+          0.4759136606233731
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          0.0,
+          16.1,
+          17.4
+        ]
+      },
+      {
+        "vehicle": "9",
+        "samples": 276,
+        "sameLinkSamples": 275,
+        "differentLinkSamples": 1,
+        "htcSamples": 278,
+        "sumoSamples": 276,
+        "routeDistanceRmseM": 0.6416220466192964,
+        "sameLinkPositionRmseM": 0.642355565767555,
+        "speedRmseMps": 0.09595515490270266,
+        "htcDuration": 27.700000000000003,
+        "sumoDuration": 27.6,
+        "durationDelta": 0.10000000000000142,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          34,
+          196,
+          210
+        ],
+        "htcLinkExitTicks": [
+          196,
+          210,
+          311
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.26025998996775,
+          0.34425998996774965
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          3.4,
+          19.6,
+          20.9
+        ]
+      },
+      {
+        "vehicle": "10",
+        "samples": 277,
+        "sameLinkSamples": 277,
+        "differentLinkSamples": 0,
+        "htcSamples": 278,
+        "sumoSamples": 277,
+        "routeDistanceRmseM": 0.32709880108335176,
+        "sameLinkPositionRmseM": 0.3270988010833606,
+        "speedRmseMps": 0.0561490075349911,
+        "htcDuration": 27.7,
+        "sumoDuration": 27.7,
+        "durationDelta": 0.0,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          68,
+          230,
+          244
+        ],
+        "htcLinkExitTicks": [
+          230,
+          244,
+          345
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.04920163041126102,
+          0.13320163041126065
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          6.8,
+          23.0,
+          24.4
+        ]
+      },
+      {
+        "vehicle": "11",
+        "samples": 277,
+        "sameLinkSamples": 277,
+        "differentLinkSamples": 0,
+        "htcSamples": 278,
+        "sumoSamples": 277,
+        "routeDistanceRmseM": 0.2665293662525986,
+        "sameLinkPositionRmseM": 0.2665293662526069,
+        "speedRmseMps": 0.04579231892724707,
+        "htcDuration": 27.699999999999996,
+        "sumoDuration": 27.7,
+        "durationDelta": -3.552713678800501e-15,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          102,
+          264,
+          278
+        ],
+        "htcLinkExitTicks": [
+          264,
+          278,
+          379
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.002837047497934009,
+          0.08683704749793364
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          10.2,
+          26.4,
+          27.8
+        ]
+      },
+      {
+        "vehicle": "12",
+        "samples": 277,
+        "sameLinkSamples": 276,
+        "differentLinkSamples": 1,
+        "htcSamples": 278,
+        "sumoSamples": 277,
+        "routeDistanceRmseM": 0.23687803004857516,
+        "sameLinkPositionRmseM": 0.23638918705485965,
+        "speedRmseMps": 0.040669026482509155,
+        "htcDuration": 27.700000000000003,
+        "sumoDuration": 27.7,
+        "durationDelta": 3.552713678800501e-15,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          136,
+          299,
+          312
+        ],
+        "htcLinkExitTicks": [
+          299,
+          312,
+          413
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.6439327509915529,
+          0.07693275099155272
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          13.6,
+          29.8,
+          31.2
+        ]
+      },
+      {
+        "vehicle": "13",
+        "samples": 558,
+        "sameLinkSamples": 556,
+        "differentLinkSamples": 2,
+        "htcSamples": 560,
+        "sumoSamples": 558,
+        "routeDistanceRmseM": 1.1459940901064873,
+        "sameLinkPositionRmseM": 1.1476798464446176,
+        "speedRmseMps": 0.5722277194405031,
+        "htcDuration": 55.900000000000006,
+        "sumoDuration": 55.8,
+        "durationDelta": 0.10000000000000853,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          170,
+          609,
+          628
+        ],
+        "htcLinkExitTicks": [
+          609,
+          628,
+          729
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.17000000000001592,
+          0.3730000000113822
+        ],
+        "htcExitSpeeds": [
+          2.3400000000071053,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          17.0,
+          60.8,
+          62.7
+        ]
+      },
+      {
+        "vehicle": "14",
+        "samples": 540,
+        "sameLinkSamples": 538,
+        "differentLinkSamples": 2,
+        "htcSamples": 542,
+        "sumoSamples": 540,
+        "routeDistanceRmseM": 0.6657863499371741,
+        "sameLinkPositionRmseM": 0.666183940729076,
+        "speedRmseMps": 0.19834538386103429,
+        "htcDuration": 54.099999999999994,
+        "sumoDuration": 54.0,
+        "durationDelta": 0.09999999999999432,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          204,
+          630,
+          644
+        ],
+        "htcLinkExitTicks": [
+          630,
+          644,
+          745
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.294497157629138,
+          0.23140641580103427
+        ],
+        "htcExitSpeeds": [
+          5.531488693383727,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          20.4,
+          62.9,
+          64.3
+        ]
+      },
+      {
+        "vehicle": "15",
+        "samples": 524,
+        "sameLinkSamples": 522,
+        "differentLinkSamples": 2,
+        "htcSamples": 526,
+        "sumoSamples": 524,
+        "routeDistanceRmseM": 0.5662600048488208,
+        "sameLinkPositionRmseM": 0.5663465766231764,
+        "speedRmseMps": 0.10129429899373549,
+        "htcDuration": 52.5,
+        "sumoDuration": 52.4,
+        "durationDelta": 0.10000000000000142,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          238,
+          648,
+          662
+        ],
+        "htcLinkExitTicks": [
+          648,
+          662,
+          763
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.5342524232520134,
+          0.618252423252013
+        ],
+        "htcExitSpeeds": [
+          6.369788190406803,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          23.8,
+          64.7,
+          66.1
+        ]
+      },
+      {
+        "vehicle": "16",
+        "samples": 508,
+        "sameLinkSamples": 506,
+        "differentLinkSamples": 2,
+        "htcSamples": 510,
+        "sumoSamples": 508,
+        "routeDistanceRmseM": 0.5490566227817837,
+        "sameLinkPositionRmseM": 0.5491862439754412,
+        "speedRmseMps": 0.0857016902926077,
+        "htcDuration": 50.900000000000006,
+        "sumoDuration": 50.8,
+        "durationDelta": 0.10000000000000853,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          272,
+          666,
+          680
+        ],
+        "htcLinkExitTicks": [
+          666,
+          680,
+          781
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.38870029707607046,
+          0.4727002970760701
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          27.2,
+          66.5,
+          67.9
+        ]
+      },
+      {
+        "vehicle": "17",
+        "samples": 493,
+        "sameLinkSamples": 492,
+        "differentLinkSamples": 1,
+        "htcSamples": 494,
+        "sumoSamples": 493,
+        "routeDistanceRmseM": 0.2881783186968177,
+        "sameLinkPositionRmseM": 0.2875778056913753,
+        "speedRmseMps": 0.053313203814869224,
+        "htcDuration": 49.300000000000004,
+        "sumoDuration": 49.3,
+        "durationDelta": 7.105427357601002e-15,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          306,
+          685,
+          698
+        ],
+        "htcLinkExitTicks": [
+          685,
+          698,
+          799
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.5932486220305861,
+          0.026248622030585977
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          30.6,
+          68.4,
+          69.8
+        ]
+      },
+      {
+        "vehicle": "18",
+        "samples": 478,
+        "sameLinkSamples": 477,
+        "differentLinkSamples": 1,
+        "htcSamples": 479,
+        "sumoSamples": 478,
+        "routeDistanceRmseM": 0.2725459727845096,
+        "sameLinkPositionRmseM": 0.2720459780399141,
+        "speedRmseMps": 0.04856039596485596,
+        "htcDuration": 47.80000000000001,
+        "sumoDuration": 47.8,
+        "durationDelta": 1.4210854715202004e-14,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          340,
+          704,
+          717
+        ],
+        "htcLinkExitTicks": [
+          704,
+          717,
+          818
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.6314736518291113,
+          0.06447365182911113
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          34.0,
+          70.3,
+          71.7
+        ]
+      },
+      {
+        "vehicle": "19",
+        "samples": 463,
+        "sameLinkSamples": 461,
+        "differentLinkSamples": 2,
+        "htcSamples": 465,
+        "sumoSamples": 463,
+        "routeDistanceRmseM": 0.5256284751447693,
+        "sameLinkPositionRmseM": 0.5260764827800548,
+        "speedRmseMps": 0.07932565552463212,
+        "htcDuration": 46.40000000000001,
+        "sumoDuration": 46.3,
+        "durationDelta": 0.10000000000001563,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          374,
+          723,
+          737
+        ],
+        "htcLinkExitTicks": [
+          723,
+          737,
+          838
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.5285332930064044,
+          0.612533293006404
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          37.4,
+          72.2,
+          73.6
+        ]
+      },
+      {
+        "vehicle": "20",
+        "samples": 448,
+        "sameLinkSamples": 446,
+        "differentLinkSamples": 2,
+        "htcSamples": 450,
+        "sumoSamples": 448,
+        "routeDistanceRmseM": 0.5357680366400165,
+        "sameLinkPositionRmseM": 0.5362565776551151,
+        "speedRmseMps": 0.08193526139381165,
+        "htcDuration": 44.9,
+        "sumoDuration": 44.8,
+        "durationDelta": 0.10000000000000142,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          408,
+          742,
+          756
+        ],
+        "htcLinkExitTicks": [
+          742,
+          756,
+          857
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.28700005217319813,
+          0.37100005217319776
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          40.8,
+          74.1,
+          75.5
+        ]
+      },
+      {
+        "vehicle": "21",
+        "samples": 434,
+        "sameLinkSamples": 433,
+        "differentLinkSamples": 1,
+        "htcSamples": 435,
+        "sumoSamples": 434,
+        "routeDistanceRmseM": 0.2837949021680243,
+        "sameLinkPositionRmseM": 0.2833250082325008,
+        "speedRmseMps": 0.04961614858981953,
+        "htcDuration": 43.400000000000006,
+        "sumoDuration": 43.4,
+        "durationDelta": 7.105427357601002e-15,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          442,
+          762,
+          775
+        ],
+        "htcLinkExitTicks": [
+          762,
+          775,
+          876
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.646133367211803,
+          0.07913336721180286
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          44.2,
+          76.1,
+          77.5
+        ]
+      },
+      {
+        "vehicle": "22",
+        "samples": 419,
+        "sameLinkSamples": 417,
+        "differentLinkSamples": 2,
+        "htcSamples": 421,
+        "sumoSamples": 419,
+        "routeDistanceRmseM": 0.5464566297298303,
+        "sameLinkPositionRmseM": 0.5470895713466367,
+        "speedRmseMps": 0.08341366021736503,
+        "htcDuration": 42.00000000000001,
+        "sumoDuration": 41.9,
+        "durationDelta": 0.10000000000000853,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          476,
+          781,
+          795
+        ],
+        "htcLinkExitTicks": [
+          781,
+          795,
+          896
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.32305684971689175,
+          0.4070568497168914
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          47.6,
+          78.0,
+          79.4
+        ]
+      },
+      {
+        "vehicle": "23",
+        "samples": 405,
+        "sameLinkSamples": 404,
+        "differentLinkSamples": 1,
+        "htcSamples": 406,
+        "sumoSamples": 405,
+        "routeDistanceRmseM": 0.2896181687821245,
+        "sameLinkPositionRmseM": 0.2892077977539451,
+        "speedRmseMps": 0.0502581953675515,
+        "htcDuration": 40.5,
+        "sumoDuration": 40.5,
+        "durationDelta": 0.0,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          510,
+          801,
+          814
+        ],
+        "htcLinkExitTicks": [
+          801,
+          814,
+          915
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.5824359645778259,
+          0.0154359645778257
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          51.0,
+          80.0,
+          81.4
+        ]
+      },
+      {
+        "vehicle": "24",
+        "samples": 390,
+        "sameLinkSamples": 389,
+        "differentLinkSamples": 1,
+        "htcSamples": 392,
+        "sumoSamples": 390,
+        "routeDistanceRmseM": 0.5810876631907074,
+        "sameLinkPositionRmseM": 0.5814477581804742,
+        "speedRmseMps": 0.08334025457710204,
+        "htcDuration": 39.099999999999994,
+        "sumoDuration": 39.0,
+        "durationDelta": 0.09999999999999432,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          544,
+          820,
+          834
+        ],
+        "htcLinkExitTicks": [
+          820,
+          834,
+          935
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.18688603077075072,
+          0.27088603077075035
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          54.4,
+          82.0,
+          83.3
+        ]
+      },
+      {
+        "vehicle": "25",
+        "samples": 376,
+        "sameLinkSamples": 374,
+        "differentLinkSamples": 2,
+        "htcSamples": 378,
+        "sumoSamples": 376,
+        "routeDistanceRmseM": 0.6022097315572218,
+        "sameLinkPositionRmseM": 0.6029872477291103,
+        "speedRmseMps": 0.08227241020076773,
+        "htcDuration": 37.699999999999996,
+        "sumoDuration": 37.6,
+        "durationDelta": 0.09999999999999432,
+        "htcNodeDelayTicks": [
+          0,
+          0
+        ],
+        "htcLinkEntryTicks": [
+          578,
+          840,
+          854
+        ],
+        "htcLinkExitTicks": [
+          840,
+          854,
+          955
+        ],
+        "htcLinkEntryPositions": [
+          0.0,
+          0.3917143914041503,
+          0.47571439140414995
+        ],
+        "htcExitSpeeds": [
+          6.51,
+          6.51,
+          13.88888888888889
+        ],
+        "sumoLinkEntryTimes": [
+          57.8,
+          83.9,
+          85.3
+        ]
+      }
+    ],
+    "meanRouteDistanceRmseM": 0.4934668792000485,
+    "maxAbsDurationDelta": 0.10000000000001563,
+    "meanSpeedRmseMps": 0.10557096489268042
+  }
+}

@@ -90,12 +90,14 @@ class LinkMicroSimulationHandler(
         vehicleWaitingSeconds    = vehicleWaitingSeconds,
         signalAtExit             = getSignalAtExitFn(),
         downstreamLeaders        = downstreamLeadersFn(tick),
-        stopLineGapM             = state.stopLineGapM
+        stopLineGapM             = state.stopLineGapM,
+        retainExits              = state.downstreamSpillback
       )
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)
         else sendMicroUpdateToVehicle(u)
       }
+      if (state.downstreamSpillback) metricsReporter.emitMicroExitWaits(tick)
     }
 
     val freshState = getLinkStateFn()
@@ -113,7 +115,8 @@ class LinkMicroSimulationHandler(
 
   def sendMicroLeaveLinkToVehicle(update: MicroVehicleUpdate): Unit = {
     val state = getLinkStateFn()
-    state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == update.vehicleId) }
+    if (!state.downstreamSpillback)
+      state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == update.vehicleId) }
 
     val accWaiting = getVehicleWaitingSecondsFn(update.vehicleId)
     removeVehicleWaitingSecondsFn(update.vehicleId)
@@ -138,7 +141,8 @@ class LinkMicroSimulationHandler(
         averageSpeed       = avgSpeed,
         waitingTimeSeconds = accWaiting,
         junctionPosition = state.junctionGeometry.map(_.positionAt(update.position)),
-        remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0
+        remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0,
+        retainedInLane = state.downstreamSpillback
       ),
       "MicroLeaveLink"
     )

@@ -103,6 +103,8 @@ class CarJourneyReporter(
     journeyStateFn().secondsPerTick = 1.0
     journeyStateFn().boundaryRemainderSeconds = 0.0
     journeyStateFn().boundaryExitTick = None
+    journeyStateFn().retainedMicroExitLinkId = None
+    journeyStateFn().capacityWaitSinceTick = None
   }
 
   /** Explicit reset for callers discarding completion without restoring a state snapshot. */

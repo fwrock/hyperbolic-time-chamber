@@ -78,9 +78,11 @@ adjacency. It does not provide multi-lane downstream selection, cross-junction
 conflict priority or a proof of city-scale cost. Observation extends through one
 optional connector and the next road; very short sequences needing leaders beyond
 that road require a longer observation horizon and are not established by these
-fixtures. Snapshots contain lane-owned vehicles; they do not represent a vehicle
-waiting at a Node after leaving its lane. Capacity-blocked handoff and spillback
-need separate validation and representation. Subscriber sets remain enrolled
+fixtures. Snapshots contain lane-owned vehicles. The later opt-in
+[`downstreamSpillback` extension](MICRO_SPILLBACK.md) retains a stopped lane
+footprint during Node admission, validated separately for bounded single-lane
+Car fixtures. Without that option, a vehicle waiting at a Node after leaving its
+lane is still absent from these snapshots. Subscriber sets remain enrolled
 for the static Link lifetime. Bounded policy/layout report comparisons are needed
 alongside traffic measurements; engine termination alone is insufficient.
 

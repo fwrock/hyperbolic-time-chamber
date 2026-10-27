@@ -23,7 +23,9 @@ case class CarJourneyState(
   var sumoTripInfoReported: Boolean = false,
   var secondsPerTick: Double = 1.0,
   var boundaryRemainderSeconds: Double = 0.0,
-  var boundaryExitTick: Option[Tick] = None
+  var boundaryExitTick: Option[Tick] = None,
+  var retainedMicroExitLinkId: Option[Long] = None,
+  var capacityWaitSinceTick: Option[Tick] = None
 ) {
   def entryRemainderAt(tick: Tick): Double =
     if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0

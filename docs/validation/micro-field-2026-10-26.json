@@ -1,0 +1,1962 @@
+{
+  "date": "2026-10-26",
+  "protocol": {
+    "version": 1,
+    "status": "frozen-before-field-trajectory-download-and-model-error-evaluation",
+    "purpose": "Conditional field following and two-follower queue-discharge assessment of the actual active Link physics, with observed head-leader motion as an exogenous boundary.",
+    "source": "https://data.transportation.gov/resource/8ect-6jqj.json",
+    "metadata": "https://data.transportation.gov/api/views/8ect-6jqj.json",
+    "location": "lankershim",
+    "license": "CC_30_BY_SA",
+    "metresPerFoot": 0.3048,
+    "samplingFrameOriginMilliseconds": 1118935680200,
+    "developmentOffsetsSeconds": [
+      30,
+      90,
+      150,
+      210,
+      270
+    ],
+    "reservedOffsetsSeconds": [
+      930,
+      990,
+      1050,
+      1110,
+      1170,
+      1230,
+      1290,
+      1350,
+      1410,
+      1470,
+      1530,
+      1590,
+      1650,
+      1710,
+      1770
+    ],
+    "initializationSeconds": 1,
+    "stepSeconds": 0.1,
+    "followingPredictionSeconds": 10,
+    "queuePredictionSeconds": 20,
+    "queueFollowers": 2,
+    "maximumCandidatesPerKindAndBlock": 8,
+    "targets": {
+      "developmentFollowing": 3,
+      "developmentQueue": 2,
+      "reservedFollowing": 10,
+      "reservedQueue": 5
+    },
+    "selection": "At each fixed block, numeric vehicle identity order. Through-moving northbound passenger Cars only, with an observed preceding vehicle. Following starts with annotated speed >=1 m/s; queue chains start with all three annotated speeds <=0.2 m/s. First quality-qualified candidates, at most one per kind/block. Never reuse any vehicle identity between selected episodes or development and reserved data. Selection never reads model errors.",
+    "quality": {
+      "exactSampleMilliseconds": 100,
+      "maximumReverseStepM": 0.05,
+      "maximumPrefixSpeedMps": 13.88888888888889,
+      "maximumAbsolutePrefixStopSpeedMps": 0.2,
+      "minimumVehicleLengthM": 2,
+      "maximumVehicleLengthM": 8,
+      "minimumInitialBumperGapM": 2,
+      "minimumObservedBumperGapM": 0,
+      "maximumRowsPerQuery": 2000,
+      "maximumBytesPerQuery": 2000000,
+      "rules": [
+        "Remove exact duplicates, reject conflicting subject/time rows, truncation, missing 100 ms samples and nonconsecutive frame IDs.",
+        "Every subject remains a northbound through passenger Car in one unchanged lane; every follower retains its recorded immediate leader throughout initialization and prediction.",
+        "Use front-center local_y and measured lengths, converted from feet. Reject nonfinite data, negative annotated speeds, reversed steps beyond tolerance or overlapping observed bumpers.",
+        "Initialize speed by least-squares position slope over the disjoint one-second prefix; head-leader velocity at each boundary uses only its previous one-second positions, floored at zero.",
+        "Queue prefix fitted speed must remain within the stop threshold for all three Cars. The fixed virtual discharge station is 5 m beyond the head leader's initial front. All observed subjects must cross within 20 seconds; missing predicted crossings fail coverage, never exclude the case.",
+        "Retain all raw responses, query URLs, SHA256, license and every rejection. No fitted time shifts, post-outcome filtering or traffic-coefficient calibration."
+      ]
+    },
+    "physics": {
+      "speedLimitKmh": 50,
+      "maxAccelerationMps2": 2.6,
+      "maxDecelerationMps2": 4.5,
+      "reactionSeconds": 1,
+      "minGapM": 2,
+      "retainExits": true,
+      "linkLengthM": 100000
+    },
+    "baselines": [
+      "Constant velocity from the initialization prefix",
+      "Rigid initial bumper spacing behind observed head leader motion"
+    ],
+    "metrics": [
+      "per-episode mean follower position RMSE",
+      "speed RMSE versus backward position slopes",
+      "minimum predicted bumper gap",
+      "discharge crossing coverage",
+      "per-platoon discharge-headway MAE",
+      "annotated-speed versus position-derivative inconsistency"
+    ],
+    "acceptance": {
+      "requiredReservedFollowingEpisodes": 10,
+      "requiredReservedQueueEpisodes": 5,
+      "requiredPredictionSampleCoverage": 1,
+      "requiredPredictedQueueCrossingCoverage": 1,
+      "minimumPredictedBumperGapM": 0,
+      "followingSkill": "The upper 95% percentile-bootstrap bound on mean paired per-episode position-RMSE difference must be strictly below zero against each baseline.",
+      "queueSkill": "The upper 95% percentile-bootstrap bound on mean paired per-platoon headway-MAE difference against the rigid-spacing baseline must be strictly below zero.",
+      "uncertainty": "10000 resamples with seed 20261026. Episode/platoon, never time samples or individual followers, is the resampling unit. Dependence within the same observed road/session limits interpretation; intervals are exploratory conditional summaries.",
+      "rationale": "Zero paired loss improvement is a comparative predictive-skill null, avoiding invented absolute field-accuracy tolerances. Report absolute errors regardless. Passing supports only this conditional comparison, not broad empirical adequacy."
+    },
+    "execution": [
+      "Build and test the replay adapter and quality/measurement pipeline using synthetic data before field evaluation.",
+      "Run development selection and assessment separately; retain failures. No production physics change in this study.",
+      "Freeze executable and source hashes before downloading reserved trajectories. Freeze the selected manifest before evaluating reserved errors.",
+      "If fixed selection or coverage targets cannot be met, record an inconclusive data/measurement gate rather than widening criteria or silently reducing the target.",
+      "Report engineering failures, data quality exclusions and scientific rejection separately. Never tune on these reserved outcomes."
+    ],
+    "claimBoundary": "Conditional longitudinal component assessment, not a full actor-runtime experiment, traffic-signal reconstruction, junction validation or independent network replication. The earlier US-101 isolated-cruising pilot is disjoint. Observed leader motion is supplied at every step, so this is not an autonomous forecast of the whole platoon. Both comparative skill and absolute adequacy must remain explicit."
+  },
+  "protocolSha256": "e79261f236740ef2e84599a4098b73c9185da7d83fe458c8b6f24750e059407d",
+  "executable": {
+    "jar": "/tmp/htc-field-replay-20261026.jar",
+    "sha256": "62a3fa70bb8b36c302afa22eb5d086f0277a1f45f1dda1af3ef0b602a4d5ff59",
+    "adapterSourceSha256": "c9fd4b5bff3a4191db13c54fd8d2b460fce01e3a5e77ad961468bd29cdf5fa12",
+    "harnessSourceSha256": "94e2eace79cc7ba6d4fb38265e62de705eae92a4b80f077ade39c6371149bdb9",
+    "physicsSourceSha256": {
+      "src/main/scala/model/hybrid/micro/strategy/DefaultMicroSimulationStrategy.scala": "a1669044047cbf813e99516209d818f30ae33ccec6e6878b5e07807ac1b968d1",
+      "src/main/scala/model/hybrid/micro/model/KraussModel.scala": "4ff5704ef2da21ff8cd12e5b88a3fc43ca34204a1a1d39bb1d4536950ea56332",
+      "src/main/scala/model/hybrid/entity/state/model/VehicleInLane.scala": "f6e199559dfd8b82a5726c2fe2f4862efd539804ec9e6d1a6f266f75ca8db2ad"
+    }
+  },
+  "sourceSha256": {
+    "scripts/scenario/validate_micro_field.py": "94e2eace79cc7ba6d4fb38265e62de705eae92a4b80f077ade39c6371149bdb9",
+    "scripts/scenario/test_validate_micro_field.py": "458ab88b52e619f9511354a5ac79f062c679036a39331d61091a2ad5dfa87c88",
+    "scripts/scenario/micro_field_protocol_v1.json": "e79261f236740ef2e84599a4098b73c9185da7d83fe458c8b6f24750e059407d",
+    "scripts/scenario/plot_micro_field_validation.py": "cb6294e5ff4ff40cf5decb8a7795cbacd7d48e14303f425371925a04272b08a1",
+    "src/main/scala/model/hybrid/validation/MicroFieldReplay.scala": "c9fd4b5bff3a4191db13c54fd8d2b460fce01e3a5e77ad961468bd29cdf5fa12",
+    "src/test/scala/model/hybrid/validation/MicroFieldReplaySpec.scala": "d221fb8d4e1ed6082074928e507670d32c6bb9d0758596cb5f8638116ae668f5"
+  },
+  "productionPhysicsChanged": false,
+  "engineering": {
+    "scalaTests": 779,
+    "scalaSuites": 154,
+    "scalaTestLog": {
+      "path": "/tmp/htc-field-full-tests.log",
+      "sha256": "32f32b3354aaab7abad53d395007e0ee653853c4d73c18b6696099790b016776"
+    },
+    "pythonTests": 44,
+    "pythonTestLog": {
+      "path": "/tmp/htc-field-python-final-tests.log",
+      "sha256": "fbd496af6d6b25ddeaee11a8406be291df8edc8410f905ca4199471ae787dc14"
+    },
+    "assemblyLog": {
+      "path": "/tmp/htc-field-replay-build.log",
+      "sha256": "2545b8a8bd250436cfa654292fb24f53ec0d8c55e376be914ea643007fe968ad"
+    }
+  },
+  "development": {
+    "stage": "development",
+    "protocolSha256": "e79261f236740ef2e84599a4098b73c9185da7d83fe458c8b6f24750e059407d",
+    "jarSha256": "62a3fa70bb8b36c302afa22eb5d086f0277a1f45f1dda1af3ef0b602a4d5ff59",
+    "selectionSha256": "567ede858b73e1f24f44409d154d3231ae90b93c79d5bbc82954e469282be73a",
+    "inputSha256": "896205a6ff49c6b85808452f5bc606f081dc1094197b8ca90ee1cd4d0a0ae96e",
+    "predictionsSha256": "25fbdc7a64f23911df2eee862e77060f213669a0413663b09a235c4898c517dd",
+    "measurementValid": true,
+    "dataGate": "inconclusive-insufficient-eligible-episodes",
+    "scientificGate": "not-established",
+    "empiricalNetworkValidityEstablished": false,
+    "assessment": {
+      "checks": {
+        "selectionCoverage": false,
+        "predictionCoverage": true,
+        "nonoverlappingPredictedBumpers": true,
+        "queueCrossingCoverage": true,
+        "followingBeatsConstantVelocity": false,
+        "followingBeatsRigidSpacing": false,
+        "queueHeadwaysBeatRigidSpacing": true
+      },
+      "passed": false,
+      "followingVsConstantVelocity": {
+        "mean": 5.54125019378418,
+        "lower95": -24.582553313779083,
+        "upper95": 47.95762243234545,
+        "episodes": 3,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "followingVsRigidSpacing": {
+        "mean": -2.11585449996432,
+        "lower95": -6.394931458736073,
+        "upper95": 4.934964369569322,
+        "episodes": 3,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "queueHeadwaysVsRigidSpacing": {
+        "mean": -0.658219385299085,
+        "lower95": -0.658219385299085,
+        "upper95": -0.658219385299085,
+        "episodes": 1,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      }
+    },
+    "results": [
+      {
+        "id": "development-following-0-84",
+        "kind": "following",
+        "block": 0,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2874%2C84%29+and+global_time%3E%3D1118935710200+and+global_time%3C%3D1118935721200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "development-following-0-84.json",
+          "sha256": "88fef634aaf1aeef3ddac0745a2f9b0c61a82a4303a0833f50a98f1ec6e53644",
+          "bytes": 101166
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.2692215272727542,
+            0.01449185454549883
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 84,
+            "positionRmseM": 56.78824237664048,
+            "speedRmseMps": 11.61002591977068,
+            "constantVelocityRmseM": 8.83061994429503,
+            "rigidSpacingRmseM": 51.85327800707116,
+            "initialBumperGapM": 196.15373520000003,
+            "constrainedSteps": 0
+          }
+        ],
+        "meanPositionRmseM": 56.78824237664048,
+        "meanConstantVelocityRmseM": 8.83061994429503,
+        "meanRigidSpacingRmseM": 51.85327800707116,
+        "minimumPredictedGapM": 188.43683086868703,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "development-following-1-87",
+        "kind": "following",
+        "block": 1,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2886%2C87%29+and+global_time%3E%3D1118935770200+and+global_time%3C%3D1118935781200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "development-following-1-87.json",
+          "sha256": "3af8ca9d700982d51c82c7dba1dc91ca3531c6b0becc6a55629884858f5a5fd0",
+          "bytes": 102347
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.7034229818181815,
+            0.7424373818181789
+          ],
+          "lane": "1"
+        },
+        "followers": [
+          {
+            "vehicle": 87,
+            "positionRmseM": 4.250976493532035,
+            "speedRmseMps": 2.149294034762563,
+            "constantVelocityRmseM": 28.83352980731112,
+            "rigidSpacingRmseM": 9.138572904258243,
+            "initialBumperGapM": 6.8016119999999916,
+            "constrainedSteps": 42
+          }
+        ],
+        "meanPositionRmseM": 4.250976493532035,
+        "meanConstantVelocityRmseM": 28.83352980731112,
+        "meanRigidSpacingRmseM": 9.138572904258243,
+        "minimumPredictedGapM": 6.8016119999999916,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "development-following-2-209",
+        "kind": "following",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28208%2C209%29+and+global_time%3E%3D1118935830200+and+global_time%3C%3D1118935841200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "development-following-2-209.json",
+          "sha256": "2dec3c3303da8b6ed23c0d77d0ab83381cf1158771b6aabe8cbb951712c2697e",
+          "bytes": 103893
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.033500290909119074,
+            0.1275172363636172
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 209,
+            "positionRmseM": 4.396870397949947,
+            "speedRmseMps": 0.9791950942786066,
+            "constantVelocityRmseM": 11.148188935163777,
+            "rigidSpacingRmseM": 10.79180185668602,
+            "initialBumperGapM": 19.786701599999958,
+            "constrainedSteps": 89
+          }
+        ],
+        "meanPositionRmseM": 4.396870397949947,
+        "meanConstantVelocityRmseM": 11.148188935163777,
+        "meanRigidSpacingRmseM": 10.79180185668602,
+        "minimumPredictedGapM": 2.006191669275651,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "development-queue-2-219",
+        "kind": "queue",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28214%2C216%2C219%29+and+global_time%3E%3D1118935830200+and+global_time%3C%3D1118935851200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "development-queue-2-219.json",
+          "sha256": "5cdd72d562fd71dac4c973fb0c686eeafa5e4d5605e4cdc2daaa78a45581abd7",
+          "bytes": 294179
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 211,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.09371874285715104,
+            0.11148422857142914,
+            0.05677988571428807
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 216,
+            "positionRmseM": 0.5794392841670258,
+            "speedRmseMps": 0.7413049699683651,
+            "constantVelocityRmseM": 22.26116429883415,
+            "rigidSpacingRmseM": 5.524959315262657,
+            "initialBumperGapM": 2.0162520000000086,
+            "constrainedSteps": 152
+          },
+          {
+            "vehicle": 219,
+            "positionRmseM": 4.987239177812642,
+            "speedRmseMps": 1.4779797843114055,
+            "constantVelocityRmseM": 13.8182503585153,
+            "rigidSpacingRmseM": 14.057827488389899,
+            "initialBumperGapM": 3.2958023999999853,
+            "constrainedSteps": 197
+          }
+        ],
+        "meanPositionRmseM": 2.7833392309898337,
+        "meanConstantVelocityRmseM": 18.039707328674723,
+        "meanRigidSpacingRmseM": 9.791393401826278,
+        "minimumPredictedGapM": 1.99570260461185,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          12.72338087716496,
+          14.638615226777635,
+          16.847221316682546
+        ],
+        "predictedCrossingsSeconds": [
+          12.72338087716496,
+          14.621229392293394,
+          15.985282187298267
+        ],
+        "rigidCrossingsSeconds": [
+          12.72338087716496,
+          13.825872170771403,
+          14.668843416700097
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.43096956469213943,
+        "rigidHeadwayMaeSeconds": 1.0891889499912244
+      }
+    ],
+    "licenseId": "CC_30_BY_SA",
+    "attribution": "U.S. Department of Transportation Intelligent Transportation Systems Joint Program Office (JPO) -- Recommended citation: \"U.S. Department of Transportation Federal Highway Administration. (2016). Next Generation Simulation (NGSIM) Vehicle Trajectories and Supporting Data. [Dataset]. Provided by ITS DataHub through Data.transportation.gov. Accessed YYYY-MM-DD from http://doi.org/10.21949/1504477\"",
+    "limitations": "Conditional longitudinal component assessment, not a full actor-runtime experiment, traffic-signal reconstruction, junction validation or independent network replication. The earlier US-101 isolated-cruising pilot is disjoint. Observed leader motion is supplied at every step, so this is not an autonomous forecast of the whole platoon. Both comparative skill and absolute adequacy must remain explicit."
+  },
+  "reserved": {
+    "stage": "reserved",
+    "protocolSha256": "e79261f236740ef2e84599a4098b73c9185da7d83fe458c8b6f24750e059407d",
+    "jarSha256": "62a3fa70bb8b36c302afa22eb5d086f0277a1f45f1dda1af3ef0b602a4d5ff59",
+    "selectionSha256": "5ad94c78c6bf3d6d9dd538460742cf83c310d4e47eea5368eac43894ab5fb927",
+    "inputSha256": "48ec717969245cf7f72d23324d222b817d2df534f67a5f5afbaa014bd54a4b42",
+    "predictionsSha256": "ccb20c22c5e070370af04d6c65e9982c112998883408ed64308c5ea23bf8af6f",
+    "measurementValid": true,
+    "dataGate": "inconclusive-insufficient-eligible-episodes",
+    "scientificGate": "not-established",
+    "empiricalNetworkValidityEstablished": false,
+    "assessment": {
+      "checks": {
+        "selectionCoverage": false,
+        "predictionCoverage": true,
+        "nonoverlappingPredictedBumpers": true,
+        "queueCrossingCoverage": true,
+        "followingBeatsConstantVelocity": true,
+        "followingBeatsRigidSpacing": false,
+        "queueHeadwaysBeatRigidSpacing": true
+      },
+      "passed": false,
+      "followingVsConstantVelocity": {
+        "mean": -10.16129666114443,
+        "lower95": -16.073826412345205,
+        "upper95": -5.489174627927371,
+        "episodes": 10,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "followingVsRigidSpacing": {
+        "mean": -1.0787832793622087,
+        "lower95": -2.985533077689505,
+        "upper95": 0.5620558925461203,
+        "episodes": 10,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      },
+      "queueHeadwaysVsRigidSpacing": {
+        "mean": -0.53358373261128,
+        "lower95": -0.7467465125248469,
+        "upper95": -0.3204209526977131,
+        "episodes": 2,
+        "interpretation": "Exploratory conditional episode bootstrap; temporal dependence remains."
+      }
+    },
+    "results": [
+      {
+        "id": "reserved-following-0-1259",
+        "kind": "following",
+        "block": 0,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281435%2C1259%29+and+global_time%3E%3D1118936610200+and+global_time%3C%3D1118936621200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-0-1259.json",
+          "sha256": "4e7fa4e0c7d21db47f28e2521a26c5d3a485a17392f242de6c18b0df369e7fb3",
+          "bytes": 104337,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-0-1259.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.012358254545477461,
+            0.050735345454523864
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1259,
+            "positionRmseM": 0.22144530103704574,
+            "speedRmseMps": 0.27367837163792386,
+            "constantVelocityRmseM": 7.439930897649434,
+            "rigidSpacingRmseM": 1.9814940923530773,
+            "initialBumperGapM": 4.174235999999951,
+            "constrainedSteps": 99
+          }
+        ],
+        "meanPositionRmseM": 0.22144530103704574,
+        "meanConstantVelocityRmseM": 7.439930897649434,
+        "meanRigidSpacingRmseM": 1.9814940923530773,
+        "minimumPredictedGapM": 2.000114107426313,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-1-1289",
+        "kind": "following",
+        "block": 1,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281286%2C1289%29+and+global_time%3E%3D1118936670200+and+global_time%3C%3D1118936681200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-1-1289.json",
+          "sha256": "79abc64fc39507511314ea374b69cc231fc9ae129f55fbf5ad7071b2fb31cb3b",
+          "bytes": 103731,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-1-1289.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.2939380363636345,
+            0.17121447272726206
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 1289,
+            "positionRmseM": 6.966406516815739,
+            "speedRmseMps": 1.7029460193379815,
+            "constantVelocityRmseM": 18.104025542220008,
+            "rigidSpacingRmseM": 8.573494510131276,
+            "initialBumperGapM": 17.31934559999999,
+            "constrainedSteps": 35
+          }
+        ],
+        "meanPositionRmseM": 6.966406516815739,
+        "meanConstantVelocityRmseM": 18.104025542220008,
+        "meanRigidSpacingRmseM": 8.573494510131276,
+        "minimumPredictedGapM": 16.194818202786024,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-2-37",
+        "kind": "following",
+        "block": 2,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2830%2C37%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936741200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-2-37.json",
+          "sha256": "92bfa84ad7c9902072552f465faa20762842488d356e6d558923a007dfbad8cd",
+          "bytes": 102812,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-2-37.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.04724400000000389,
+            0.024799636363640114
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 37,
+            "positionRmseM": 0.5491829204262728,
+            "speedRmseMps": 0.15050585905234648,
+            "constantVelocityRmseM": 4.8916743670122615,
+            "rigidSpacingRmseM": 0.3854994772839008,
+            "initialBumperGapM": 2.8087320000000062,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 0.5491829204262728,
+        "meanConstantVelocityRmseM": 4.8916743670122615,
+        "meanRigidSpacingRmseM": 0.3854994772839008,
+        "minimumPredictedGapM": 1.9945488822232562,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-4-283",
+        "kind": "following",
+        "block": 4,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28271%2C283%29+and+global_time%3E%3D1118936850200+and+global_time%3C%3D1118936861200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-4-283.json",
+          "sha256": "ea7ff53d34e0cb133389f9420d31c5d24edef4b6c490bda0bd7a3bc0cd9212df",
+          "bytes": 103259,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-4-283.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.004378036363636836,
+            0.018177163636364433
+          ],
+          "lane": "2"
+        },
+        "followers": [
+          {
+            "vehicle": 283,
+            "positionRmseM": 0.29767011575851604,
+            "speedRmseMps": 0.09837310754486586,
+            "constantVelocityRmseM": 9.525338395272575,
+            "rigidSpacingRmseM": 1.9111876305516566,
+            "initialBumperGapM": 4.391863200000003,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 0.29767011575851604,
+        "meanConstantVelocityRmseM": 9.525338395272575,
+        "meanRigidSpacingRmseM": 1.9111876305516566,
+        "minimumPredictedGapM": 2.000082641794421,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-5-210",
+        "kind": "following",
+        "block": 5,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28197%2C210%29+and+global_time%3E%3D1118936910200+and+global_time%3C%3D1118936921200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-5-210.json",
+          "sha256": "6d60ebf5c99bdf36f23b746a5919c1daa77ed166b5deabf5a0c526981de60841",
+          "bytes": 104156,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-5-210.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.004516581818319745,
+            0.03477490909091248
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 210,
+            "positionRmseM": 2.512374250340406,
+            "speedRmseMps": 0.4760371805358613,
+            "constantVelocityRmseM": 4.18210545775306,
+            "rigidSpacingRmseM": 0.7196866227495882,
+            "initialBumperGapM": 5.6092343999999486,
+            "constrainedSteps": 95
+          }
+        ],
+        "meanPositionRmseM": 2.512374250340406,
+        "meanConstantVelocityRmseM": 4.18210545775306,
+        "meanRigidSpacingRmseM": 0.7196866227495882,
+        "minimumPredictedGapM": 2.019585405817409,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-6-349",
+        "kind": "following",
+        "block": 6,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28344%2C349%29+and+global_time%3E%3D1118936970200+and+global_time%3C%3D1118936981200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-6-349.json",
+          "sha256": "4e5ad30ffdc7193ab6f5d27093706cede99cca5367732f4282da8f46edb88a7b",
+          "bytes": 103897,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-6-349.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.4029733090909332,
+            0.18445941818182748
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 349,
+            "positionRmseM": 4.702451499268495,
+            "speedRmseMps": 1.6212529747507225,
+            "constantVelocityRmseM": 37.42553432093147,
+            "rigidSpacingRmseM": 12.315755405293174,
+            "initialBumperGapM": 5.341010400000002,
+            "constrainedSteps": 69
+          }
+        ],
+        "meanPositionRmseM": 4.702451499268495,
+        "meanConstantVelocityRmseM": 37.42553432093147,
+        "meanRigidSpacingRmseM": 12.315755405293174,
+        "minimumPredictedGapM": 5.341010400000002,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-7-622",
+        "kind": "following",
+        "block": 7,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28616%2C622%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937041200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-7-622.json",
+          "sha256": "5750de0118ce5e74c5b7efc153032284285e2151173fa71b654cfc5eb087a2ac",
+          "bytes": 103918,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-7-622.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.012552218181831,
+            0.019340945454549268
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 622,
+            "positionRmseM": 1.8693283737083544,
+            "speedRmseMps": 0.27426285285704477,
+            "constantVelocityRmseM": 12.931044932368899,
+            "rigidSpacingRmseM": 0.3916655331284181,
+            "initialBumperGapM": 4.333036800000002,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 1.8693283737083544,
+        "meanConstantVelocityRmseM": 12.931044932368899,
+        "meanRigidSpacingRmseM": 0.3916655331284181,
+        "minimumPredictedGapM": 1.989096747028043,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-8-571",
+        "kind": "following",
+        "block": 8,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28628%2C571%29+and+global_time%3E%3D1118937090200+and+global_time%3C%3D1118937101200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-8-571.json",
+          "sha256": "282ba3cf96062d655410d78a7cd612911654d4562ec7ce0f51b137243d154990",
+          "bytes": 104039,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-8-571.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.19349258181818293,
+            0.13516494545454202
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 571,
+            "positionRmseM": 3.782484174660924,
+            "speedRmseMps": 1.2513819674815174,
+            "constantVelocityRmseM": 4.336245241401129,
+            "rigidSpacingRmseM": 1.2339538852573784,
+            "initialBumperGapM": 15.872764800000013,
+            "constrainedSteps": 83
+          }
+        ],
+        "meanPositionRmseM": 3.782484174660924,
+        "meanConstantVelocityRmseM": 4.336245241401129,
+        "meanRigidSpacingRmseM": 1.2339538852573784,
+        "minimumPredictedGapM": 10.585221482961373,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-9-819",
+        "kind": "following",
+        "block": 9,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28818%2C819%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-9-819.json",
+          "sha256": "c8e14d73f63225695c8d9bad655822e3c7eda6470e505fcc1a813805a77d557a",
+          "bytes": 103609,
+          "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-819.json",
+          "provenance": "cached frozen query; raw contents revalidated"
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.07872152727274037,
+            0.084956072727271
+          ],
+          "lane": "4"
+        },
+        "followers": [
+          {
+            "vehicle": 819,
+            "positionRmseM": 0.40842812510041687,
+            "speedRmseMps": 0.567752936843929,
+            "constantVelocityRmseM": 16.333878456739733,
+            "rigidSpacingRmseM": 4.286615300644623,
+            "initialBumperGapM": 9.472269600000004,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 0.40842812510041687,
+        "meanConstantVelocityRmseM": 16.333878456739733,
+        "meanRigidSpacingRmseM": 4.286615300644623,
+        "minimumPredictedGapM": 2.428161324461854,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-following-10-794",
+        "kind": "following",
+        "block": 10,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28785%2C794%29+and+global_time%3E%3D1118937210200+and+global_time%3C%3D1118937221200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-following-10-794.json",
+          "sha256": "a1843ce5ef1e552cfaf41c0aa02d25993b969cf1e31989099db04d667ca33635",
+          "bytes": 104234,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 111,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.007980218181857941,
+            0.02892829090915373
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 794,
+            "positionRmseM": 0.9173311138996686,
+            "speedRmseMps": 0.3354189352101137,
+            "constantVelocityRmseM": 8.670291391111563,
+            "rigidSpacingRmseM": 1.2155827272448325,
+            "initialBumperGapM": 2.3417784000000523,
+            "constrainedSteps": 100
+          }
+        ],
+        "meanPositionRmseM": 0.9173311138996686,
+        "meanConstantVelocityRmseM": 8.670291391111563,
+        "meanRigidSpacingRmseM": 1.2155827272448325,
+        "minimumPredictedGapM": 2.0008031920070835,
+        "sampleCoverage": 1
+      },
+      {
+        "id": "reserved-queue-10-887",
+        "kind": "queue",
+        "block": 10,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28792%2C875%2C887%29+and+global_time%3E%3D1118937210200+and+global_time%3C%3D1118937231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-queue-10-887.json",
+          "sha256": "5567eee1e8c73d4640107a14a92f27eaada024747a3a9cc1decffb1240dc5c26",
+          "bytes": 297415,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 211,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1869004571428718,
+            0.20354834285711884,
+            0.1941430857142916
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 875,
+            "positionRmseM": 3.3517553558201443,
+            "speedRmseMps": 1.9236387775070685,
+            "constantVelocityRmseM": 74.9268012353315,
+            "rigidSpacingRmseM": 2.947143219114916,
+            "initialBumperGapM": 8.998000800000014,
+            "constrainedSteps": 157
+          },
+          {
+            "vehicle": 887,
+            "positionRmseM": 8.580133307983376,
+            "speedRmseMps": 2.204913289747375,
+            "constantVelocityRmseM": 66.64331227817709,
+            "rigidSpacingRmseM": 14.774394826236998,
+            "initialBumperGapM": 2.8142183999999872,
+            "constrainedSteps": 198
+          }
+        ],
+        "meanPositionRmseM": 5.96594433190176,
+        "meanConstantVelocityRmseM": 70.7850567567543,
+        "meanRigidSpacingRmseM": 8.860769022675957,
+        "minimumPredictedGapM": 2.808416116363631,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          3.5345380630523033,
+          5.819033499132155,
+          8.448406853319826
+        ],
+        "predictedCrossingsSeconds": [
+          3.5345380630523033,
+          5.473456568216202,
+          7.115191778064383
+        ],
+        "rigidCrossingsSeconds": [
+          3.5345380630523033,
+          5.6170155856024095,
+          6.474349872668957
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.6666075376277214,
+        "rigidHeadwayMaeSeconds": 0.9870284903254345
+      },
+      {
+        "id": "reserved-queue-11-958",
+        "kind": "queue",
+        "block": 11,
+        "source": {
+          "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28945%2C955%2C958%29+and+global_time%3E%3D1118937270200+and+global_time%3C%3D1118937291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+          "file": "reserved-queue-11-958.json",
+          "sha256": "39c579093da151eac9a0981066a1b51783d8c4a60c63b63c95fa4d8226711027",
+          "bytes": 297329,
+          "provenance": "https-fetch",
+          "attempts": 1
+        },
+        "quality": {
+          "exactDuplicatesRemoved": 0,
+          "framesPerVehicle": 211,
+          "annotatedSpeedDerivativeMaeMps": [
+            0.1531982857142994,
+            0.10837817142859053,
+            0.11273245714285875
+          ],
+          "lane": "3"
+        },
+        "followers": [
+          {
+            "vehicle": 955,
+            "positionRmseM": 5.171012900282156,
+            "speedRmseMps": 1.2309986931244972,
+            "constantVelocityRmseM": 55.036020148716794,
+            "rigidSpacingRmseM": 11.834736406836457,
+            "initialBumperGapM": 2.423464800000005,
+            "constrainedSteps": 169
+          },
+          {
+            "vehicle": 958,
+            "positionRmseM": 7.193870892241344,
+            "speedRmseMps": 1.4195500806528658,
+            "constantVelocityRmseM": 49.133894034506326,
+            "rigidSpacingRmseM": 19.43006268839517,
+            "initialBumperGapM": 2.782824000000005,
+            "constrainedSteps": 198
+          }
+        ],
+        "meanPositionRmseM": 6.18244189626175,
+        "meanConstantVelocityRmseM": 52.08495709161156,
+        "meanRigidSpacingRmseM": 15.632399547615815,
+        "minimumPredictedGapM": 2.190221369915051,
+        "sampleCoverage": 1,
+        "observedCrossingsSeconds": [
+          3.9101638934477467,
+          6.397545823849818,
+          8.721557305336832
+        ],
+        "predictedCrossingsSeconds": [
+          3.9101638934477467,
+          5.77417846401751,
+          7.554155679217463
+        ],
+        "rigidCrossingsSeconds": [
+          3.9101638934477467,
+          5.092673061671973,
+          6.0606626541677695
+        ],
+        "crossingCoverage": 1.0,
+        "headwayMaeSeconds": 0.5837008130596844,
+        "rigidHeadwayMaeSeconds": 1.3304473255845313
+      }
+    ],
+    "licenseId": "CC_30_BY_SA",
+    "attribution": "U.S. Department of Transportation Intelligent Transportation Systems Joint Program Office (JPO) -- Recommended citation: \"U.S. Department of Transportation Federal Highway Administration. (2016). Next Generation Simulation (NGSIM) Vehicle Trajectories and Supporting Data. [Dataset]. Provided by ITS DataHub through Data.transportation.gov. Accessed YYYY-MM-DD from http://doi.org/10.21949/1504477\"",
+    "limitations": "Conditional longitudinal component assessment, not a full actor-runtime experiment, traffic-signal reconstruction, junction validation or independent network replication. The earlier US-101 isolated-cruising pilot is disjoint. Observed leader motion is supplied at every step, so this is not an autonomous forecast of the whole platoon. Both comparative skill and absolute adequacy must remain explicit."
+  },
+  "selectionCounts": {
+    "following": 10,
+    "queue": 2
+  },
+  "targets": {
+    "following": 10,
+    "queue": 5
+  },
+  "qualityRejections": {
+    "total": 62,
+    "byReason": {
+      "missing contiguous subject observations": 24,
+      "initial gap outside supported scope": 4,
+      "no complete observed queue discharge in fixed window": 16,
+      "reversed longitudinal motion": 6,
+      "initial speed outside component scope": 3,
+      "lane change": 5,
+      "immediate leader identity change": 3,
+      "queue not stopped through initialization": 1
+    }
+  },
+  "fieldSources": [
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936610200&%24limit=500&%24order=vehicle_id",
+      "file": "block-0.json",
+      "sha256": "411c14547ff1f2a08b5a83a8a3282340f69c932b53b2e2b5c749ae00e8d5d8bf",
+      "bytes": 24486,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-0.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281435%2C1259%29+and+global_time%3E%3D1118936610200+and+global_time%3C%3D1118936621200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-0-1259.json",
+      "sha256": "4e7fa4e0c7d21db47f28e2521a26c5d3a485a17392f242de6c18b0df369e7fb3",
+      "bytes": 104337,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-0-1259.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936670200&%24limit=500&%24order=vehicle_id",
+      "file": "block-1.json",
+      "sha256": "4008114e9ad2a26e75c60452d7c228c433c42c249621c041d4cf1af20020d2f7",
+      "bytes": 34645,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-1.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281320%2C1286%29+and+global_time%3E%3D1118936670200+and+global_time%3C%3D1118936681200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-1-1286.json",
+      "sha256": "3ea015a09932379b7cbd40588500cd07f5a9347ea7ff18fecf6eafd68e28d152",
+      "bytes": 63279,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-1-1286.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281348%2C1287%29+and+global_time%3E%3D1118936670200+and+global_time%3C%3D1118936681200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-1-1287.json",
+      "sha256": "2a236eb94b4f81f03fcfa92f7346f76db341b1cfcbba6ce4e97a67a3366660cc",
+      "bytes": 92912,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-1-1287.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281286%2C1289%29+and+global_time%3E%3D1118936670200+and+global_time%3C%3D1118936681200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-1-1289.json",
+      "sha256": "79abc64fc39507511314ea374b69cc231fc9ae129f55fbf5ad7071b2fb31cb3b",
+      "bytes": 103731,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-1-1289.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936730200&%24limit=500&%24order=vehicle_id",
+      "file": "block-2.json",
+      "sha256": "0b5867ddd5a8094c7e49d66a9fc713cceeec587453cd69541add9f744cb164e6",
+      "bytes": 39457,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-2.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2830%2C37%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936741200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-2-37.json",
+      "sha256": "92bfa84ad7c9902072552f465faa20762842488d356e6d558923a007dfbad8cd",
+      "bytes": 102812,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-2-37.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%282%2C9%2C14%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-14.json",
+      "sha256": "aab69ee317009d8bff5340f73b03e12cae0d0399e1725b68acdb73f942b26e37",
+      "bytes": 289227,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-14.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%289%2C14%2C19%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-19.json",
+      "sha256": "3170b06d0859fa49daa22b734b3f878d67ccbb1f335faa55b9fa5ce067ad8332",
+      "bytes": 292015,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-19.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%285%2C10%2C23%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-23.json",
+      "sha256": "b19b86fe3dc55f8cf0a9918002628eed0c249eddae5afd54c571af1cb7002f26",
+      "bytes": 289382,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-23.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2810%2C23%2C27%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-27.json",
+      "sha256": "65772a11657abacbdee06a3522b872187b8b6576adb79de8e037028c0dfdd418",
+      "bytes": 291533,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-27.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2823%2C27%2C34%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-34.json",
+      "sha256": "d6519c3fac09e4469b8836dc05b08c2f92b0c0d98b2420592c6d4e9fdd4e5d36",
+      "bytes": 292322,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-34.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281438%2C1417%2C1421%29+and+global_time%3E%3D1118936730200+and+global_time%3C%3D1118936751200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-2-1421.json",
+      "sha256": "3419293bc23c3a31f99502049d9599205db9b653221b2d67b89963c76eb720d7",
+      "bytes": 292597,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-2-1421.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936790200&%24limit=500&%24order=vehicle_id",
+      "file": "block-3.json",
+      "sha256": "2ba0d02fb9cd74d8c769e10c8afe6ddcfcc69e4e69ef342f924eebc3ba4373eb",
+      "bytes": 32987,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-3.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%285%2C2%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-2.json",
+      "sha256": "6c67ff4e1d64ee9d0adf35e8f5623ce76fc2dbdb42e26944d492514b53af75ae",
+      "bytes": 39893,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-2.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%289%2C10%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-10.json",
+      "sha256": "1c3ebaba54a0f81a8dc00c5373400082e7d112c1a79229c4a832e6bb0ef22381",
+      "bytes": 59843,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-10.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%282%2C14%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-14.json",
+      "sha256": "f5bec844258e65e8ef1c0bcb71b07829fc03bafde38dce169b31f0d65b661138",
+      "bytes": 80707,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-14.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2814%2C19%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-19.json",
+      "sha256": "ed9637e25ee2ad9cffac1a2059b1badb3bc83a570e55986a23fe315f4d9f66f7",
+      "bytes": 103707,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-19.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2823%2C20%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-20.json",
+      "sha256": "56c60444cb9bfff12efd725cc709fcbf3becd055299f2c92645f487a61701965",
+      "bytes": 84358,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-20.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2810%2C23%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-23.json",
+      "sha256": "30ae3f4b55d79c02c3c7b6582c77e45633f6837a1fd075cb19adde75230fd16b",
+      "bytes": 68944,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-23.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2827%2C24%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-24.json",
+      "sha256": "590214cb4d20466017d8a697de4263be27c7a42920ada16c86a2a5dc8969ca13",
+      "bytes": 81443,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-24.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%2819%2C27%29+and+global_time%3E%3D1118936790200+and+global_time%3C%3D1118936801200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-3-27.json",
+      "sha256": "7e77a7c13672792ea2e424d052a4b37797e0c24ddc18b0782fca88fd53cd2527",
+      "bytes": 81420,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-3-27.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936850200&%24limit=500&%24order=vehicle_id",
+      "file": "block-4.json",
+      "sha256": "a8945c6143eb450822406e8ca645364293ece6527fbafa39be9757b282675708",
+      "bytes": 43838,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-4.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28271%2C283%29+and+global_time%3E%3D1118936850200+and+global_time%3C%3D1118936861200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-4-283.json",
+      "sha256": "ea7ff53d34e0cb133389f9420d31c5d24edef4b6c490bda0bd7a3bc0cd9212df",
+      "bytes": 103259,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-4-283.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28197%2C204%2C220%29+and+global_time%3E%3D1118936850200+and+global_time%3C%3D1118936871200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-4-220.json",
+      "sha256": "e6d0b72f4763124960e692a154a7570de00c2b9cec372de0ddc33172208ac9f8",
+      "bytes": 294992,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-4-220.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28204%2C220%2C227%29+and+global_time%3E%3D1118936850200+and+global_time%3C%3D1118936871200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-4-227.json",
+      "sha256": "41aad59696229be88c20c9f6d76731f686cb18d4c3517fa11a42a403547f74be",
+      "bytes": 294459,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-4-227.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936910200&%24limit=500&%24order=vehicle_id",
+      "file": "block-5.json",
+      "sha256": "fe5b37145cdf6644b2fe253b01f18fdbbd37ac6fd2cda3385fc593a170fdfc94",
+      "bytes": 44159,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-5.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28197%2C210%29+and+global_time%3E%3D1118936910200+and+global_time%3C%3D1118936921200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-5-210.json",
+      "sha256": "6d60ebf5c99bdf36f23b746a5919c1daa77ed166b5deabf5a0c526981de60841",
+      "bytes": 104156,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-5-210.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118936970200&%24limit=500&%24order=vehicle_id",
+      "file": "block-6.json",
+      "sha256": "c1fa951c6a9a9cc8f012b184a6590c77ced45767833330190d40ca4759df3fc0",
+      "bytes": 45707,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-6.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28344%2C349%29+and+global_time%3E%3D1118936970200+and+global_time%3C%3D1118936981200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-6-349.json",
+      "sha256": "4e5ad30ffdc7193ab6f5d27093706cede99cca5367732f4282da8f46edb88a7b",
+      "bytes": 103897,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-6-349.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937030200&%24limit=500&%24order=vehicle_id",
+      "file": "block-7.json",
+      "sha256": "21490f9f3231ec15c77a3e04d1826a88d55b1dded0e0f2ac830682e20c592559",
+      "bytes": 61725,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-7.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28492%2C508%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937041200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-7-508.json",
+      "sha256": "88118f11c8cd006663c362791bb504410a5c9842c78f365c595195de4d5d9dd3",
+      "bytes": 103920,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-7-508.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28530%2C618%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937041200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-7-618.json",
+      "sha256": "196081f9a4e80884053dec26df3a2d92f0695cf2959ba4a938bb2b6c0a5e2b2a",
+      "bytes": 103710,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-7-618.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28588%2C621%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937041200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-7-621.json",
+      "sha256": "80a83d464bb9edcc57af705dbee30da81db1caa0c7f2f25fe45c23a7fb850e70",
+      "bytes": 103657,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-7-621.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28616%2C622%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937041200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-7-622.json",
+      "sha256": "5750de0118ce5e74c5b7efc153032284285e2151173fa71b654cfc5eb087a2ac",
+      "bytes": 103918,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-7-622.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28433%2C503%2C530%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-530.json",
+      "sha256": "f04e5ab939b2b9c7981b1f00dd64e85da4c76d9f6b34ac2d311c38f8123c2171",
+      "bytes": 294927,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-530.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28551%2C574%2C575%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-575.json",
+      "sha256": "5f3afeb881f83576f3e209478ea1e3a99c3c6218805d32779621a26ca190f53e",
+      "bytes": 292772,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-575.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28487%2C489%2C577%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-577.json",
+      "sha256": "d5a111d311821c7a31b174e26afb214e615fb2d0138a11166b962cc9c19bd121",
+      "bytes": 293704,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-577.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28532%2C570%2C580%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-580.json",
+      "sha256": "ce98d1d6ff5e3e3188b04ba380f12a38ce341c808680626f201cb477c44b44e5",
+      "bytes": 292630,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-580.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28574%2C575%2C583%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-583.json",
+      "sha256": "c6ef71298919480c2fce8657c72142f339dfd2ca6d9d9ef2f291bf5dc653e0ba",
+      "bytes": 295136,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-583.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28570%2C580%2C586%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-586.json",
+      "sha256": "b9c3392cc88a66cb077efe16593b81d472fa930d7b3617cbdc0d61838e44a206",
+      "bytes": 295117,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-586.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28575%2C583%2C587%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-587.json",
+      "sha256": "4075269226d5aa01938a77928d18d1001e4be79d6321db398ba2b648d628fa0e",
+      "bytes": 295122,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-587.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28489%2C577%2C600%29+and+global_time%3E%3D1118937030200+and+global_time%3C%3D1118937051200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-7-600.json",
+      "sha256": "8cbe1937697332da56dac825b38925a42084cc3244b5b07afaa58c728f6e870a",
+      "bytes": 295689,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-7-600.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937090200&%24limit=500&%24order=vehicle_id",
+      "file": "block-8.json",
+      "sha256": "a07e7b0534b8399af05dda980a66bd80087c1f5a26a866c9871158fe399e2532",
+      "bytes": 45387,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-8.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28487%2C489%29+and+global_time%3E%3D1118937090200+and+global_time%3C%3D1118937101200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-8-489.json",
+      "sha256": "8c643b28911f700fd8f85d92b9eeb8f5033ae2b8bca830becda6aa1153acf3ee",
+      "bytes": 57684,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-8-489.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28734%2C551%29+and+global_time%3E%3D1118937090200+and+global_time%3C%3D1118937101200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-8-551.json",
+      "sha256": "aef6a37cbbeaa757633ba54f835f93822e6f1072f8bace42f68e21ca5c5e9d12",
+      "bytes": 34169,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-8-551.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28575%2C570%29+and+global_time%3E%3D1118937090200+and+global_time%3C%3D1118937101200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-8-570.json",
+      "sha256": "f1311d7876566f8367f286c542ba4dbad88c0b1614363cb57caa0e5ca54bfffe",
+      "bytes": 79670,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-8-570.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28628%2C571%29+and+global_time%3E%3D1118937090200+and+global_time%3C%3D1118937101200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-8-571.json",
+      "sha256": "282ba3cf96062d655410d78a7cd612911654d4562ec7ce0f51b137243d154990",
+      "bytes": 104039,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-8-571.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937150200&%24limit=500&%24order=vehicle_id",
+      "file": "block-9.json",
+      "sha256": "f855715c10c1e2b8b0de5031b89ef38d1b2eb43de5bf470181e5a2eaab92792c",
+      "bytes": 50242,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/block-9.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28650%2C799%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-9-799.json",
+      "sha256": "9d9332096707564330737a34e72a50e2a896be730486aa39c9d0c4ba04bd20c5",
+      "bytes": 103745,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-799.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28799%2C807%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-9-807.json",
+      "sha256": "9f8e2d15df77a621f13f584b501b985a2d98f931d603f040c86fc071e8f8dc1c",
+      "bytes": 103720,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-807.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28814%2C816%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-9-816.json",
+      "sha256": "130af46589dce00669ea818e8dafd23c33de2cb103de16ccf1accade71b3a466",
+      "bytes": 85792,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-816.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28816%2C818%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-9-818.json",
+      "sha256": "c485db92e60156220ef4ad859ac17db6954689dbf79390d6e0d9b8e364c1ef75",
+      "bytes": 102676,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-818.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28818%2C819%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937161200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-9-819.json",
+      "sha256": "c8e14d73f63225695c8d9bad655822e3c7eda6470e505fcc1a813805a77d557a",
+      "bytes": 103609,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-following-9-819.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28604%2C609%2C612%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-612.json",
+      "sha256": "72821ae7091951f8e92c4ed673487e4a3e5fd3985bb43d82d0abbb410c509dba",
+      "bytes": 198729,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-612.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28609%2C612%2C654%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-654.json",
+      "sha256": "764a9dc6ac4b22794f02fe43ab315cdf8c407f9c97bc04f22900871ee5bbf6c6",
+      "bytes": 227617,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-654.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28624%2C572%2C726%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-726.json",
+      "sha256": "e23e5334c39fd1368976fc8ca8418fd484ef48340aa7b7d4e6119b58918ca466",
+      "bytes": 198816,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-726.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28572%2C726%2C747%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-747.json",
+      "sha256": "67520e19ca6b5e5ae9598e0c224d7ff99de0307b532115db5ed22db1dbdc4e75",
+      "bytes": 225499,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-747.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28792%2C797%2C755%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-755.json",
+      "sha256": "b8208ef4478c85a26852a3743edb66fe12d4af7579749d0fb861ffba2db41cb9",
+      "bytes": 295179,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-755.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28664%2C761%2C764%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-764.json",
+      "sha256": "41d41910887747376ff7823825c63a7db3d8efb77c7787ad46685f01c5e10c00",
+      "bytes": 293291,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-764.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28761%2C764%2C765%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-765.json",
+      "sha256": "a9ca04f789ee3cc844877b4ab0aea8113f0582231983e2202c0c71221ada05b5",
+      "bytes": 295199,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-765.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28726%2C747%2C768%29+and+global_time%3E%3D1118937150200+and+global_time%3C%3D1118937171200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-9-768.json",
+      "sha256": "7e41d73a6cc829a1e69d48c05b4766271c821bd74913cfbd1a24170e8a26e8cb",
+      "bytes": 254128,
+      "recoveredFrom": "/tmp/htc-field-20261026/reserved/reserved-queue-9-768.json",
+      "provenance": "cached frozen query; raw contents revalidated"
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937210200&%24limit=500&%24order=vehicle_id",
+      "file": "block-10.json",
+      "sha256": "5c11e51dba0f3659f9d9e9794ef94a2fada39270228ed76ae9a496ae3f8a7edd",
+      "bytes": 43292,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28785%2C794%29+and+global_time%3E%3D1118937210200+and+global_time%3C%3D1118937221200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-following-10-794.json",
+      "sha256": "a1843ce5ef1e552cfaf41c0aa02d25993b969cf1e31989099db04d667ca33635",
+      "bytes": 104234,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28773%2C784%2C797%29+and+global_time%3E%3D1118937210200+and+global_time%3C%3D1118937231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-10-797.json",
+      "sha256": "6ca12bd179c5048197530a9c0b2c5b16037f08ff49732676692403ac669c58f0",
+      "bytes": 295082,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28792%2C875%2C887%29+and+global_time%3E%3D1118937210200+and+global_time%3C%3D1118937231200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-10-887.json",
+      "sha256": "5567eee1e8c73d4640107a14a92f27eaada024747a3a9cc1decffb1240dc5c26",
+      "bytes": 297415,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937270200&%24limit=500&%24order=vehicle_id",
+      "file": "block-11.json",
+      "sha256": "e8414bcb54bb99624926b4d1d095e5f689fc5f848c9aefaf7204eaa3dc7fa074",
+      "bytes": 51058,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28939%2C945%2C955%29+and+global_time%3E%3D1118937270200+and+global_time%3C%3D1118937291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-11-955.json",
+      "sha256": "47e77b5bdf72ae0bc02050bf6f351c5e8aa6bce2b7cd5ccdb738504551a97812",
+      "bytes": 297103,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28945%2C955%2C958%29+and+global_time%3E%3D1118937270200+and+global_time%3C%3D1118937291200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-11-958.json",
+      "sha256": "39c579093da151eac9a0981066a1b51783d8c4a60c63b63c95fa4d8226711027",
+      "bytes": 297329,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937330200&%24limit=500&%24order=vehicle_id",
+      "file": "block-12.json",
+      "sha256": "53389a2d914b52d8fe4b8b6773d509b835143b0dc3f5f9b732399a69bdb9623a",
+      "bytes": 59391,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28937%2C939%2C971%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-971.json",
+      "sha256": "9da4e8b4c15bc773dcbec856966e2b8ddbbbf9833791fe4795777ef57d91c6c6",
+      "bytes": 277242,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281096%2C1083%2C1003%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1003.json",
+      "sha256": "1bb4c359d4be04bc1657d8d9cc7696b7d0de02ff9c8aa41af7c23bd5f40e8cce",
+      "bytes": 295190,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%28939%2C971%2C1063%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1063.json",
+      "sha256": "7591bdebb02d70ff2f37ffe05c1fc25f7bb690c85186625fafc38d8310e2a1c3",
+      "bytes": 294796,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281069%2C1096%2C1083%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1083.json",
+      "sha256": "c3f4859dab8d0ea1126dfab0b24d9f28b0818a4b5bffda77134b74aad254a691",
+      "bytes": 295349,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281094%2C1069%2C1096%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1096.json",
+      "sha256": "e6c8494935d6c54c88114ea8962ca782694eb2672f44dd2c4295d1599ddfb738",
+      "bytes": 295461,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281083%2C1003%2C1105%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1105.json",
+      "sha256": "8aa845240b389e202b2d3d593509e44567a8afefad09d03429f4423820c05e5e",
+      "bytes": 297596,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281003%2C1105%2C1116%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1116.json",
+      "sha256": "8197d7195fe25e050b43bcf43f33dd9eb438b6af330c9cd703a14c92b66a5e5c",
+      "bytes": 297591,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281105%2C1116%2C1119%29+and+global_time%3E%3D1118937330200+and+global_time%3C%3D1118937351200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-12-1119.json",
+      "sha256": "16c9ddcfdc644ca84e2e70dbd891b851614bfcd024a531b8de491bb376c3cdd2",
+      "bytes": 297591,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937390200&%24limit=500&%24order=vehicle_id",
+      "file": "block-13.json",
+      "sha256": "17ff56b921aa640df3eeecda2934ff8a51ee1458670db1f0563a3c457b9f9422",
+      "bytes": 45102,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+global_time%3D1118937450200&%24limit=500&%24order=vehicle_id",
+      "file": "block-14.json",
+      "sha256": "446d03adc9c8267b175b2abad6db4dbfc6c5d397a16d29fcca32b5b3e73ef6fb",
+      "bytes": 47795,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281254%2C1219%2C1155%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1155.json",
+      "sha256": "882eff42e9b06dafaefe10ead142f354a636e4e0f487bc54c0096b014db806f2",
+      "bytes": 135055,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281128%2C1137%2C1164%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1164.json",
+      "sha256": "614428b4636fc7d68807b4fe406531572a230ac26548efeacf923fd1ab3bf54b",
+      "bytes": 136201,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281185%2C1144%2C1205%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1205.json",
+      "sha256": "41f32d326712356ed1810f2a22db667387e0af49fe6e9fb648de252a3d5db6c9",
+      "bytes": 114889,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281205%2C1283%2C1261%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1261.json",
+      "sha256": "45f60e717d7a913f46db1eda5a194dd47b06193daa5a6a56b656730b36e041ae",
+      "bytes": 200260,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281283%2C1261%2C1265%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1265.json",
+      "sha256": "7a2787113867477d6e09c5054c74cfdfbcd57bd727757e3f091059f3a985c8ac",
+      "bytes": 252914,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281261%2C1265%2C1270%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1270.json",
+      "sha256": "d727db76a50455d0bd78a842c8f07a17424d9140352bea111b18fa0057a3ad65",
+      "bytes": 295119,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281323%2C1324%2C1271%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1271.json",
+      "sha256": "9e39631dc47668f344573581edd97b637165791a1459bbedf0b00e398b703f45",
+      "bytes": 296565,
+      "provenance": "https-fetch",
+      "attempts": 1
+    },
+    {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json?%24where=location%3D%27lankershim%27+and+vehicle_id+in+%281270%2C1275%2C1272%29+and+global_time%3E%3D1118937450200+and+global_time%3C%3D1118937471200&%24order=global_time%2Cvehicle_id&%24limit=2000",
+      "file": "reserved-queue-14-1272.json",
+      "sha256": "0038158a5e5a6e68012c9fd0bc1e3604a500fa761fb9211295c7124e5a517912",
+      "bytes": 297406,
+      "provenance": "https-fetch",
+      "attempts": 1
+    }
+  ],
+  "metadataSource": {
+    "url": "https://data.transportation.gov/api/views/8ect-6jqj.json",
+    "file": "metadata.json",
+    "sha256": "f10e580a2bebecdcada445e55d3234a5bc56a24ce8782e83ea827bf6921bef54",
+    "bytes": 56656,
+    "recoveredFrom": "/tmp/htc-field-20261026/reserved/metadata.json",
+    "provenance": "cached frozen query; raw contents revalidated"
+  },
+  "fieldSelectionSha256": "5ad94c78c6bf3d6d9dd538460742cf83c310d4e47eea5368eac43894ab5fb927",
+  "rawSnapshot": {
+    "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/ngsim-following-discharge-snapshot-2026-10-26.zip",
+    "sha256": "4dda769b8b322c48e563ec78b25a49b71db275f82b383bee30e00df264f233aa"
+  },
+  "rawArtifacts": "/tmp/htc-field-20261026",
+  "offlineReplay": {
+    "developmentExact": true,
+    "reservedExact": true,
+    "developmentPredictionSha256": "25fbdc7a64f23911df2eee862e77060f213669a0413663b09a235c4898c517dd",
+    "reservedPredictionSha256": "ccb20c22c5e070370af04d6c65e9982c112998883408ed64308c5ea23bf8af6f",
+    "repositoryArchiveExact": true,
+    "repositoryArchivePredictionSha256": "ccb20c22c5e070370af04d6c65e9982c112998883408ed64308c5ea23bf8af6f"
+  },
+  "excludedInterruptedRun": {
+    "path": "/tmp/htc-field-20261026/reserved",
+    "failure": {
+      "measurementValid": false,
+      "stage": "reserved",
+      "errorType": "TimeoutError",
+      "message": "The read operation timed out",
+      "protocolSha256": "e79261f236740ef2e84599a4098b73c9185da7d83fe458c8b6f24750e059407d"
+    },
+    "reason": "Network read timeout before selection sealing or prediction; identical queries recovered with bounded retries, without scientific rule or physics changes."
+  },
+  "contextDiagnostics": [
+    {
+      "id": "reserved-following-0-1259",
+      "sections": [
+        "4"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118936610200,
+        1118936621200
+      ]
+    },
+    {
+      "id": "reserved-following-1-1289",
+      "sections": [
+        "0",
+        "3"
+      ],
+      "intersections": [
+        "0",
+        "2"
+      ],
+      "timeWindowMilliseconds": [
+        1118936670200,
+        1118936681200
+      ]
+    },
+    {
+      "id": "reserved-following-2-37",
+      "sections": [
+        "2"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118936730200,
+        1118936741200
+      ]
+    },
+    {
+      "id": "reserved-following-4-283",
+      "sections": [
+        "0",
+        "2"
+      ],
+      "intersections": [
+        "0",
+        "1"
+      ],
+      "timeWindowMilliseconds": [
+        1118936850200,
+        1118936861200
+      ]
+    },
+    {
+      "id": "reserved-following-5-210",
+      "sections": [
+        "4"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118936910200,
+        1118936921200
+      ]
+    },
+    {
+      "id": "reserved-following-6-349",
+      "sections": [
+        "0",
+        "2",
+        "3"
+      ],
+      "intersections": [
+        "0",
+        "2"
+      ],
+      "timeWindowMilliseconds": [
+        1118936970200,
+        1118936981200
+      ]
+    },
+    {
+      "id": "reserved-following-7-622",
+      "sections": [
+        "2"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118937030200,
+        1118937041200
+      ]
+    },
+    {
+      "id": "reserved-following-8-571",
+      "sections": [
+        "0",
+        "2",
+        "3"
+      ],
+      "intersections": [
+        "0",
+        "2"
+      ],
+      "timeWindowMilliseconds": [
+        1118937090200,
+        1118937101200
+      ]
+    },
+    {
+      "id": "reserved-following-9-819",
+      "sections": [
+        "2"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118937150200,
+        1118937161200
+      ]
+    },
+    {
+      "id": "reserved-following-10-794",
+      "sections": [
+        "4"
+      ],
+      "intersections": [
+        "0"
+      ],
+      "timeWindowMilliseconds": [
+        1118937210200,
+        1118937221200
+      ]
+    },
+    {
+      "id": "reserved-queue-10-887",
+      "sections": [
+        "0",
+        "3",
+        "4"
+      ],
+      "intersections": [
+        "0",
+        "3"
+      ],
+      "timeWindowMilliseconds": [
+        1118937210200,
+        1118937231200
+      ]
+    },
+    {
+      "id": "reserved-queue-11-958",
+      "sections": [
+        "0",
+        "2",
+        "3"
+      ],
+      "intersections": [
+        "0",
+        "2"
+      ],
+      "timeWindowMilliseconds": [
+        1118937270200,
+        1118937291200
+      ]
+    }
+  ],
+  "descriptiveSummaries": {
+    "following": {
+      "episodes": 10,
+      "positionRmseM": {
+        "minimum": 0.22144530103704574,
+        "maximum": 6.966406516815739,
+        "mean": 2.2227102391015836
+      },
+      "constantVelocityRmseM": {
+        "minimum": 4.18210545775306,
+        "maximum": 37.42553432093147,
+        "mean": 12.384006900246012
+      },
+      "rigidSpacingRmseM": {
+        "minimum": 0.3854994772839008,
+        "maximum": 12.315755405293174,
+        "mean": 3.3014935184637926
+      },
+      "headwayMaeSeconds": null,
+      "rigidHeadwayMaeSeconds": null,
+      "constrainedSteps": 881,
+      "minimumPredictedGapM": 1.989096747028043
+    },
+    "queue": {
+      "episodes": 2,
+      "positionRmseM": {
+        "minimum": 5.96594433190176,
+        "maximum": 6.18244189626175,
+        "mean": 6.074193114081755
+      },
+      "constantVelocityRmseM": {
+        "minimum": 52.08495709161156,
+        "maximum": 70.7850567567543,
+        "mean": 61.43500692418293
+      },
+      "rigidSpacingRmseM": {
+        "minimum": 8.860769022675957,
+        "maximum": 15.632399547615815,
+        "mean": 12.246584285145886
+      },
+      "headwayMaeSeconds": {
+        "minimum": 0.5837008130596844,
+        "maximum": 0.6666075376277214,
+        "mean": 0.6251541753437029
+      },
+      "rigidHeadwayMaeSeconds": {
+        "minimum": 0.9870284903254345,
+        "maximum": 1.3304473255845313,
+        "mean": 1.1587379079549829
+      },
+      "constrainedSteps": 722,
+      "minimumPredictedGapM": 2.190221369915051
+    }
+  },
+  "empiricalNetworkValidityEstablished": false,
+  "interpretation": "Evaluate the explicit frozen comparative gates; no tuning or relaxed selection after held-out results. Conditional leader-forced component evidence, not general empirical network validation.",
+  "sources": [
+    {
+      "title": "Official NGSIM dataset",
+      "url": "https://data.transportation.gov/d/8ect-6jqj"
+    },
+    {
+      "title": "FHWA data assessment",
+      "url": "https://ops.fhwa.dot.gov/publications/fhwahop20057/ch3.htm"
+    },
+    {
+      "title": "FHWA trajectory calibration research",
+      "url": "https://www.fhwa.dot.gov/publications/research/operations/21071/index.cfm"
+    }
+  ],
+  "figures": [
+    {
+      "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/figures/micro-field-2026-10-26.png",
+      "sha256": "45e1a5c472fcc94ec4481b0de4f1694fa5e020b0595d4b6a21068c0ef74d58dd"
+    },
+    {
+      "path": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/docs/validation/figures/micro-field-2026-10-26.svg",
+      "sha256": "1269f0ac1db84e8f543e18b4b84ec80d181e4fe0de8653a1ce3d0dcb898bfcae"
+    }
+  ],
+  "limitations": [
+    "Single urban source and correlated traffic sessions; episode bootstrap is exploratory.",
+    "Stable lane/leader and complete observed discharge are eligibility conditions, not population frequencies.",
+    "No control/signal reconstruction or inferred individual desired-speed calibration; omitted context can explain errors.",
+    "No physical parameter changes; inspected v1 results must become development data before further revisions."
+  ],
+  "figuresVisuallyInspected": true
+}

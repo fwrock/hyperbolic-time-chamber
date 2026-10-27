@@ -1,0 +1,290 @@
+{
+  "free": {
+    "passed": true,
+    "criteriaVersion": 2,
+    "checks": {
+      "completionCoverage": true,
+      "meanAbsoluteTripTime": true,
+      "p95AbsoluteTripTime": true,
+      "routeDistanceRmse": true,
+      "speedRmse": true,
+      "queueCountRmse": true,
+      "completedCohortThroughput": true
+    },
+    "completionCoverage": 1.0,
+    "signedDurationBiasSeconds": 0.0,
+    "meanAbsoluteDurationErrorSeconds": 0.0,
+    "p95AbsoluteDurationErrorSeconds": 0.0,
+    "htcTripTimeDistributionSeconds": {
+      "count": 1,
+      "mean": 24.3,
+      "median": 24.3,
+      "p95": 24.3,
+      "minimum": 24.3,
+      "maximum": 24.3
+    },
+    "sumoTripTimeDistributionSeconds": {
+      "count": 1,
+      "mean": 24.3,
+      "median": 24.3,
+      "p95": 24.3,
+      "minimum": 24.3,
+      "maximum": 24.3
+    },
+    "queue": {
+      "definition": "Vehicles on the approach with speed below 0.1 m/s, sampled at equal times; this is the halted queue, not every vehicle slowed by congestion.",
+      "sampleStepSeconds": 0.1,
+      "samples": 1801,
+      "rmseVehicles": 0.0,
+      "htcMaximumVehicles": 1,
+      "sumoMaximumVehicles": 1,
+      "htcVehicleSeconds": 0.1,
+      "sumoVehicleSeconds": 0.1
+    },
+    "dischargeHeadways": {
+      "definition": "Consecutive first-road exit event times within the same green interval; report count and match by vehicle pair.",
+      "matchedPairs": 0,
+      "maeSeconds": null,
+      "pairs": []
+    },
+    "completedCohortThroughput": {
+      "observationSeconds": 180.0,
+      "htcVehiclesPerHour": 20.0,
+      "sumoVehiclesPerHour": 20.0,
+      "relativeError": 0.0,
+      "limitation": "Cohort completion rate over the fixed horizon; does not estimate saturated capacity."
+    },
+    "routeDistanceRmseM": 2.530111332502013e-07,
+    "speedRmseMps": 9.799078957348544e-08
+  },
+  "following": {
+    "passed": true,
+    "criteriaVersion": 2,
+    "checks": {
+      "completionCoverage": true,
+      "meanAbsoluteTripTime": true,
+      "p95AbsoluteTripTime": true,
+      "routeDistanceRmse": true,
+      "speedRmse": true,
+      "queueCountRmse": true,
+      "completedCohortThroughput": true
+    },
+    "completionCoverage": 1.0,
+    "signedDurationBiasSeconds": 1.7763568394002505e-15,
+    "meanAbsoluteDurationErrorSeconds": 1.7763568394002505e-15,
+    "p95AbsoluteDurationErrorSeconds": 3.552713678800501e-15,
+    "htcTripTimeDistributionSeconds": {
+      "count": 4,
+      "mean": 24.300000000000004,
+      "median": 24.300000000000004,
+      "p95": 24.300000000000004,
+      "minimum": 24.3,
+      "maximum": 24.300000000000004
+    },
+    "sumoTripTimeDistributionSeconds": {
+      "count": 4,
+      "mean": 24.3,
+      "median": 24.3,
+      "p95": 24.3,
+      "minimum": 24.3,
+      "maximum": 24.3
+    },
+    "queue": {
+      "definition": "Vehicles on the approach with speed below 0.1 m/s, sampled at equal times; this is the halted queue, not every vehicle slowed by congestion.",
+      "sampleStepSeconds": 0.1,
+      "samples": 1801,
+      "rmseVehicles": 0.0,
+      "htcMaximumVehicles": 1,
+      "sumoMaximumVehicles": 1,
+      "htcVehicleSeconds": 0.4,
+      "sumoVehicleSeconds": 0.4
+    },
+    "dischargeHeadways": {
+      "definition": "Consecutive first-road exit event times within the same green interval; report count and match by vehicle pair.",
+      "matchedPairs": 0,
+      "maeSeconds": null,
+      "pairs": []
+    },
+    "completedCohortThroughput": {
+      "observationSeconds": 180.0,
+      "htcVehiclesPerHour": 80.0,
+      "sumoVehiclesPerHour": 80.0,
+      "relativeError": 0.0,
+      "limitation": "Cohort completion rate over the fixed horizon; does not estimate saturated capacity."
+    },
+    "routeDistanceRmseM": 2.530111332502013e-07,
+    "speedRmseMps": 9.799078957348544e-08
+  },
+  "signal": {
+    "passed": true,
+    "criteriaVersion": 2,
+    "checks": {
+      "completionCoverage": true,
+      "meanAbsoluteTripTime": true,
+      "p95AbsoluteTripTime": true,
+      "routeDistanceRmse": true,
+      "speedRmse": true,
+      "queueCountRmse": true,
+      "completedCohortThroughput": true,
+      "dischargeHeadway": true
+    },
+    "completionCoverage": 1.0,
+    "signedDurationBiasSeconds": 0.06111111111111435,
+    "meanAbsoluteDurationErrorSeconds": 0.061111111111114745,
+    "p95AbsoluteDurationErrorSeconds": 0.1000000000000096,
+    "htcTripTimeDistributionSeconds": {
+      "count": 18,
+      "mean": 41.272222222222226,
+      "median": 42.7,
+      "p95": 54.36999999999999,
+      "minimum": 27.6,
+      "maximum": 55.900000000000006
+    },
+    "sumoTripTimeDistributionSeconds": {
+      "count": 18,
+      "mean": 41.21111111111111,
+      "median": 42.65,
+      "p95": 54.269999999999996,
+      "minimum": 27.5,
+      "maximum": 55.8
+    },
+    "queue": {
+      "definition": "Vehicles on the approach with speed below 0.1 m/s, sampled at equal times; this is the halted queue, not every vehicle slowed by congestion.",
+      "sampleStepSeconds": 0.1,
+      "samples": 1801,
+      "rmseVehicles": 0.1914322533088013,
+      "htcMaximumVehicles": 8,
+      "sumoMaximumVehicles": 8,
+      "htcVehicleSeconds": 106.2,
+      "sumoVehicleSeconds": 112.60000000000001
+    },
+    "dischargeHeadways": {
+      "definition": "Consecutive first-road exit event times within the same green interval; report count and match by vehicle pair.",
+      "matchedPairs": 16,
+      "maeSeconds": 0.018750000000005596,
+      "pairs": [
+        {
+          "previousVehicle": "8",
+          "vehicle": "9",
+          "htcSeconds": 3.5,
+          "sumoSeconds": 3.5,
+          "errorSeconds": 0.0
+        },
+        {
+          "previousVehicle": "9",
+          "vehicle": "10",
+          "htcSeconds": 3.3999999999999986,
+          "sumoSeconds": 3.3999999999999986,
+          "errorSeconds": 0.0
+        },
+        {
+          "previousVehicle": "10",
+          "vehicle": "11",
+          "htcSeconds": 3.400000000000002,
+          "sumoSeconds": 3.3999999999999986,
+          "errorSeconds": 3.552713678800501e-15
+        },
+        {
+          "previousVehicle": "11",
+          "vehicle": "12",
+          "htcSeconds": 3.5,
+          "sumoSeconds": 3.400000000000002,
+          "errorSeconds": 0.09999999999999787
+        },
+        {
+          "previousVehicle": "13",
+          "vehicle": "14",
+          "htcSeconds": 2.0999999999999943,
+          "sumoSeconds": 2.1000000000000014,
+          "errorSeconds": -7.105427357601002e-15
+        },
+        {
+          "previousVehicle": "14",
+          "vehicle": "15",
+          "htcSeconds": 1.7999999999999972,
+          "sumoSeconds": 1.8000000000000043,
+          "errorSeconds": -7.105427357601002e-15
+        },
+        {
+          "previousVehicle": "15",
+          "vehicle": "16",
+          "htcSeconds": 1.8000000000000114,
+          "sumoSeconds": 1.7999999999999972,
+          "errorSeconds": 1.4210854715202004e-14
+        },
+        {
+          "previousVehicle": "16",
+          "vehicle": "17",
+          "htcSeconds": 1.8999999999999915,
+          "sumoSeconds": 1.9000000000000057,
+          "errorSeconds": -1.4210854715202004e-14
+        },
+        {
+          "previousVehicle": "17",
+          "vehicle": "18",
+          "htcSeconds": 1.9000000000000057,
+          "sumoSeconds": 1.8999999999999915,
+          "errorSeconds": 1.4210854715202004e-14
+        },
+        {
+          "previousVehicle": "18",
+          "vehicle": "19",
+          "htcSeconds": 1.8999999999999915,
+          "sumoSeconds": 1.9000000000000057,
+          "errorSeconds": -1.4210854715202004e-14
+        },
+        {
+          "previousVehicle": "19",
+          "vehicle": "20",
+          "htcSeconds": 1.9000000000000057,
+          "sumoSeconds": 1.8999999999999915,
+          "errorSeconds": 1.4210854715202004e-14
+        },
+        {
+          "previousVehicle": "20",
+          "vehicle": "21",
+          "htcSeconds": 2.0,
+          "sumoSeconds": 2.0,
+          "errorSeconds": 0.0
+        },
+        {
+          "previousVehicle": "21",
+          "vehicle": "22",
+          "htcSeconds": 1.9000000000000057,
+          "sumoSeconds": 1.9000000000000057,
+          "errorSeconds": 0.0
+        },
+        {
+          "previousVehicle": "22",
+          "vehicle": "23",
+          "htcSeconds": 2.0,
+          "sumoSeconds": 2.0,
+          "errorSeconds": 0.0
+        },
+        {
+          "previousVehicle": "23",
+          "vehicle": "24",
+          "htcSeconds": 1.8999999999999915,
+          "sumoSeconds": 2.0,
+          "errorSeconds": -0.10000000000000853
+        },
+        {
+          "previousVehicle": "24",
+          "vehicle": "25",
+          "htcSeconds": 2.0,
+          "sumoSeconds": 1.9000000000000057,
+          "errorSeconds": 0.09999999999999432
+        }
+      ]
+    },
+    "completedCohortThroughput": {
+      "observationSeconds": 180.0,
+      "htcVehiclesPerHour": 360.0,
+      "sumoVehiclesPerHour": 360.0,
+      "relativeError": 0.0,
+      "limitation": "Cohort completion rate over the fixed horizon; does not estimate saturated capacity."
+    },
+    "routeDistanceRmseM": 0.4934668792000485,
+    "speedRmseMps": 0.10557096489268042
+  }
+}

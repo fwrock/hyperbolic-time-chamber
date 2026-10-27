@@ -110,6 +110,8 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - Boundary remainder transfer requires one physics step per runtime tick and links longer than a speed-limit step. Keep the remainder and exit tick checkpointed. Only an immediate same-tick continuation can consume it; a real stop or delayed grant clears its use. Entry ACKs must report actual position/velocity after downstream spacing and speed limits.
 - Preserve raw `tick` fields for ordering; physical duration/arrival/summary fields use seconds. Sort vehicle IDs before floating summary reductions so replay cannot change committed output. Accounted horizon updates execute before runtime-owned censored finalization.
 - Both `scripts/scenario/sumo_scientific_protocol_v1.json` and `sumo_scientific_protocol_v2.json` are frozen. Keep scientific failures and engine/measurement failures distinct; do not tune thresholds on evaluated cases. V1's five failed demand cases became development data; v2's four physical cases and five fresh demand seeds pass after the cross-link following correction. Further traffic revisions require a new protocol and reserved validation set. See `docs/MICRO_VALIDATION_STATUS.md`; independent empirical following/discharge validity remains open.
+- `micro_field_protocol_v1.json` freezes conditional Lankershim following/discharge assessment using the real Link physics with observed head-leader motion. Keep data adequacy, measurement failures and comparative scientific skill separate; this is not actor-runtime or autonomous network validation. Sealed raw snapshots and source/executable hashes support offline replay. Do not tune on inspected field episodes; see `docs/MICRO_FIELD_VALIDATION.md` before further field-model changes.
+- `micro_field_protocol_v2.json` is also frozen. It uses the documented 35 mph cap, recording-origin/vehicle identities, same-section following and observed head-release alignment. Its qualified eight-pair/four-queue subset passes comparative checks but misses fixed ten/five cohort targets; do not lower targets or pool favorable inspected cases. The retrieved signal-support attachment is invalid, so observed head release must not be called a measured green phase. See `docs/MICRO_FIELD_INPUT_AUDIT.md`; new field-model or sampling revisions need a fresh preregistered cohort.
 
 ### Cross-link MICRO following
 
@@ -117,7 +119,7 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 - Subscriptions and immutable occupancy publications use ordinary `sendMessageTo` transport without awaiting a reply. Receiving an observation must not republish or schedule work. Keep subscription IDs, requested IDs, publication sequence and observation history in `LinkState`.
 - Physics at tick t uses a snapshot strictly before t. Retain two distinct tick cohorts and the latest publication sequence within each; current-tick arrivals must not replace the start-of-step view.
 - A positive publication may arrive after rollback undoes its subscription and before its anti-message. Consume and ignore it when no boundary is requested; do not abort, introduce a timeout or create a wait obligation. Retain source/capability/timestep validation for applicable observations.
-- Observations cover lane-owned vehicles through one optional connector and the next road. Node-resident waiting vehicles, blocked handoff/spillback, competing movements, multi-lane selection and very short road chains need separate representation/validation. See `docs/MICRO_CROSS_LINK_FOLLOWING.md` and the next acceptance gates in `docs/MICRO_VALIDATION_STATUS.md`.
+- Observations cover lane-owned vehicles through one optional connector and the next road. Opt-in `downstreamSpillback` retains a stopped `VehicleInLane.pendingExitTick` footprint until Car cleanup after Node admission; do not send a second leave or integrate that footprint. Preserve its cancellation identity and capacity-wait start in `CarJourneyState`. The Link continues its own ticks without waiting for admission. This bounded single-lane Car scope requires downstream lookahead and rejects entries without physical room; competing movements, multi-lane selection, origin-injection queues and very short road chains remain open. See `docs/MICRO_SPILLBACK.md`, `docs/MICRO_CROSS_LINK_FOLLOWING.md` and the next acceptance gates in `docs/MICRO_VALIDATION_STATUS.md`.
 
 ### Actor State
 - State (`T <: BaseState`) is reconstructed from JSON on load via Kryo/Jackson
@@ -301,7 +303,8 @@ pool broadcast reaches remote routees that have not been created yet. See
   identity and Bus cursor, and use stop-line road lengths to avoid counting junction distance
   twice. Turn limits live on the approach road. See `docs/JUNCTION_GEOMETRY.md`.
   Fractional clocks/remainder transfer and cross-link following are implemented in the
-  supported opt-in Car scope; competing movement priority and general spillback remain open.
+  supported opt-in Car scope. Bounded retained-footprint spillback is opt-in; competing
+  movement priority and general network spillback remain open. See `docs/MICRO_SPILLBACK.md`.
 
 ## Key Utilities
 

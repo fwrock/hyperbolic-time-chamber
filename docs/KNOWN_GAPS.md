@@ -8,6 +8,88 @@ Start with [MICRO implementation and validation status](MICRO_VALIDATION_STATUS.
 for the consolidated current scope, evidence, scientific interpretation and next
 acceptance gates. The dated sections below retain milestone history.
 
+## Field input audit and fresh v2 — sample gate still open (2026-10-26)
+
+The released v1 audit identifies the independently documented 35 mph site cap
+(v1 used 50 km/h), mixed road/control contexts and sparse observed queue releases.
+The cap correction alone does not resolve v1 error: former reserved following
+RMSE rises from 2.223 to 2.363 m, while queue headway MAE stays 0.625 s. No
+behavioral coefficient is tuned. The original 50 km/h predictions remain exact
+after exposing the cap as an optional validation-adapter input.
+
+A new frozen protocol uses fresh, session/vehicle-disjoint first-recording
+episodes, same-section following and stopped prefixes aligned to observed head
+release. Eight following episodes and four queues qualify after 135 exclusions.
+All comparative and physical checks pass on that subset: following position
+RMSE is 1.980 m versus rigid spacing 9.228 m, and queue headway MAE is 0.463 s
+versus 0.999 s. The unchanged ten/five episode targets are not met, so the overall
+gate remains inconclusive. The 50/56.32704/65 km/h trajectories coincide on this
+restricted cohort; this is not evidence of each driver's desired speed.
+
+The supporting attachment retrieved for signals is not a valid ZIP; no actual
+phase state or clock alignment is inferred from it. Observed queue release is
+not labeled as measured green. All 780 Scala tests in 154 suites and 49 Python
+tests pass, with exact v2 replay from the repository snapshot. Broader empirical
+adequacy, actual signal validation and independent network replication remain
+open. See [audit and fresh v2 results](MICRO_FIELD_INPUT_AUDIT.md) and the
+[machine record](validation/micro-field-v2-2026-10-26.json). Further sampling needs
+a new preregistered cohort, not reduced targets or retrospective favorable pooling.
+
+## Conditional urban field assessment — adequacy still open (2026-10-26)
+
+A frozen new study uses official Lankershim NGSIM observations with disjoint
+initialization/prediction intervals and reserved later time blocks. The Scala
+adapter calls actual production Link physics with observed head-leader motion;
+it changes no traffic parameters. Ten qualifying reserved following episodes
+yield mean position RMSE 2.223 m versus 12.384 m for constant velocity. The mean
+improvement against rigid spacing is 1.079 m, but its exploratory paired interval
+includes zero, so that frozen comparative gate does not pass.
+
+Only two of the required five queue episodes qualify after 62 trajectory
+exclusions. Both discharge completely, with mean headway MAE 0.625 s, but the
+declared data gate remains inconclusive. There are no predicted bumper overlaps.
+The full engineering suite passes 779 Scala tests in 154 suites and 44 Python
+tests; development/reserved predictions reproduce exactly offline. Raw responses,
+exclusions, query/source/executable hashes, license and outcomes survive in the
+repository [snapshot](validation/ngsim-following-discharge-snapshot-2026-10-26.zip)
+and [machine record](validation/micro-field-2026-10-26.json).
+
+This supplies conditional interacting-traffic evidence beyond the isolated
+cruising pilot. It does not establish empirical adequacy or autonomous network
+prediction. Observed leader motion omits controls and driver desired-speed
+heterogeneity; some episodes traverse intersections. Do not attribute failures
+to following coefficients alone or tune on the reserved outcomes. The next
+scientific work is a development audit of these contexts and cohort availability,
+then a new protocol and fresh field observations. See [methods and results](MICRO_FIELD_VALIDATION.md).
+
+## Bounded single-lane MICRO spillback (2026-10-26)
+
+Opt-in `LinkState.downstreamSpillback` retains a stopped lane footprint after
+proactive MICRO exit until the Car's cleanup releases it. Followers and boundary
+snapshots continue to see its rear bumper while Node capacity is full. The Link
+keeps resolving its own ticks; admission retains the existing correlated Node
+grant. Pending exit identity, cancellation cleanup identity and capacity-wait
+timing are checkpointed. A geometric spacing cap handles abrupt count-gate stops;
+unsupported vehicle entry or an entry without physical room fails explicitly.
+
+The frozen new protocol passes reserved short-road, connector and blocked-horizon
+fixtures under both policies. All ten report comparisons pass, including 9,291
+connector rows across one/two JVMs and 4,468 delayed distributed Time Warp
+rollbacks. Nine accepted executions contain 68 completed and 16 correctly censored
+journeys, including repeated policies/layouts. The final suite passes 775 Scala
+tests in 153 suites and 34 Python tests; assembly passes. Representative unchanged
+SUMO, coarse-clock Car and cyclic transit regressions also pass. See
+[the contract and acceptance](MICRO_SPILLBACK.md) and
+[retained machine record](validation/micro-spillback-2026-10-26.json).
+
+This is bounded engineering acceptance for static single-lane Cars, not general
+network spillback or empirical traffic validity. Competing movements, multi-lane
+behavior, arbitrary short-road chains and physical origin-injection queues remain
+open. The hard safety clamp is not calibrated emergency braking. Car capacity
+waiting time is now reported, but idle emissions during this post-exit dwell are
+not integrated. Additional ticking/reporting/checkpoint costs remain unmeasured
+at city scale. Earlier dated sections retain the pre-extension gap and evidence.
+
 ## Custom conservative load balancing (2026-10-26)
 
 The production conservative runtime now supports the custom migration protocol:
