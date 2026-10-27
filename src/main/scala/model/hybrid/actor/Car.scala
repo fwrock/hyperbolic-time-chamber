@@ -494,6 +494,7 @@ class Car(
   }
 
   private def finishAndCleanup(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit = {
+    signalHandler.cancelPendingCapacityRequest(state)
     finishJourney(reason, finalNode)
     onFinishPrivateVehicle(finalNode, wasTeleported)
     onFinishSpontaneous(None)
@@ -515,6 +516,7 @@ class Car(
     signalWaitNeedsReverify = false
     state.status = Ready
     super.leavingLink()
+    state.journey.retainedMicroExitLinkId = None
   }
 
   override protected def onFinish(nodeId: Long): Unit = {

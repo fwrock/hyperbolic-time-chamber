@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-25",
+  "base_commit": "cb1c221",
+  "worktree": "Step 8 and Step 9 changes; executable identity is the per-run classpath content hash",
+  "focused_tests": {
+    "passed": 34,
+    "suites": 4
+  },
+  "full_scala_tests": {
+    "passed": 745,
+    "suites": 147
+  },
+  "runs": [
+    {
+      "case": "spatial",
+      "artifact_directory": "/tmp/htc-spatial-directory-20261025-1",
+      "result": {
+        "restored_value": 23,
+        "window_closed_on_both_nodes": true,
+        "epoch": "2b057fd9-bd38-431a-a869-919267f5ad02",
+        "local_allocator_absent": true,
+        "worker_spatial_entries": 1,
+        "controller_pid": 1453603,
+        "directory_revision": 1,
+        "controller_address": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:36775",
+        "worker_pid": 1453123,
+        "time_manager": "explicit conservative pause probe",
+        "controller_incarnation": "29feed2a-f134-4f7e-8419-4887d3a61649",
+        "restored_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:44407",
+        "worker_allocator_absent": true,
+        "passed": true,
+        "routing_scope": "published spatial IDs; routing from both independent JVMs",
+        "shard_id": "dynamic-qt-shard-0-0",
+        "publication_scope": "all Up replicas installed before creation; fixed creation cohort",
+        "callback_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:44407"
+      },
+      "classpath_contents_sha256": "c35aec5708d4179e933383d0560a76d8a09b1960db7ebac904d84af8e23243c6",
+      "launcher_sha256": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+      "scope": "allocator authority, acknowledged directory publication and restore over independent JVMs; explicit pause probe",
+      "engine_errors": {
+        "worker": 0,
+        "controller": 0
+      }
+    },
+    {
+      "case": "published_hash",
+      "artifact_directory": "/tmp/htc-published-hash-directory-20261025-1",
+      "result": {
+        "restored_value": 23,
+        "window_closed_on_both_nodes": true,
+        "epoch": "cefa7ba2-5258-4dd0-9ca0-7d7907d870c0",
+        "local_allocator_absent": true,
+        "worker_spatial_entries": 1,
+        "controller_pid": 1455065,
+        "directory_revision": 1,
+        "controller_address": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:40519",
+        "worker_pid": 1454806,
+        "time_manager": "explicit conservative pause probe",
+        "controller_incarnation": "33c2a9e9-a09b-4ec6-abf5-396fc2b7c562",
+        "restored_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:36585",
+        "worker_allocator_absent": true,
+        "passed": true,
+        "routing_scope": "published hash IDs",
+        "shard_id": "353",
+        "publication_scope": "all Up replicas installed before creation; fixed creation cohort",
+        "callback_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:36585"
+      },
+      "classpath_contents_sha256": "c35aec5708d4179e933383d0560a76d8a09b1960db7ebac904d84af8e23243c6",
+      "launcher_sha256": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+      "scope": "allocator authority, acknowledged directory publication and restore over independent JVMs; explicit pause probe",
+      "engine_errors": {
+        "worker": 0,
+        "controller": 0
+      }
+    }
+  ],
+  "scope": "Immutable creation-directory publication, allocation and restore on two independent loopback JVMs; explicit pause probe; no lifecycle-complete live membership or full traffic acceptance"
+}

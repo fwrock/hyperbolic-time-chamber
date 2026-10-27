@@ -23,5 +23,7 @@ import org.apache.pekko.actor.ActorRef
   */
 case class RequestMigrationPauseEvent(
   shardIds: Set[String],
-  requester: ActorRef
+  requester: ActorRef,
+  targetNodes: Map[String, String] = Map.empty,
+  requestId: String = ""
 ) extends BaseEvent[DefaultBaseEventData]

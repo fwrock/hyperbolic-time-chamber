@@ -17,7 +17,8 @@ import org.interscity.htc.core.entity.actor.properties.Properties
 import org.interscity.htc.core.entity.event.control.load.PostLoadRegistrationEvent
 import org.interscity.htc.core.entity.event.control.load.InitializeEvent
 import org.interscity.htc.core.entity.event.control.loadbalance.PrepareForMigrationEvent
-import core.entity.event.control.migration.SaveMigrationSnapshotEvent
+import core.entity.event.control.migration.{ AbortMigrationPreparationEvent, FinalMigrationSnapshotSavedEvent, MigrationHandoffStopEvent, MigrationPreparationFailedEvent, SaveFinalMigrationSnapshotEvent, SaveMigrationSnapshotEvent }
+import scala.collection.mutable
 import org.interscity.htc.core.metrics.core.ActorMetrics
 
 import java.util.UUID
@@ -57,6 +58,43 @@ abstract class BaseActor[T <: BaseState](
     }
   protected var shardId: String = getShardId
   protected var state: T = uninitialized
+
+  private case class MigrationFreeze(batchId: String, lbmRef: ActorRef, snapshot: MigrationSnapshot)
+  private var migrationFreeze: Option[MigrationFreeze] = None
+  private val frozenMigrationInputs = mutable.Queue.empty[(AnyRef, ActorRef)]
+  private case class DrainMigrationInput(batchId: String, message: AnyRef)
+  private case class FinishMigrationDrain(batchId: String)
+  private var migrationHandoffStarted = false
+  private var finalMigrationRevision = 0L
+  private var waitingForFinalMigrationSave = false
+
+  override def aroundReceive(receive: Receive, message: Any): Unit = {
+    message match {
+      case DrainMigrationInput(batchId, input) =>
+        if (migrationHandoffStarted && migrationFreeze.exists(_.batchId == batchId))
+          super.aroundReceive(receive, input)
+        return
+      case FinishMigrationDrain(batchId) =>
+        if (migrationHandoffStarted && migrationFreeze.exists(_.batchId == batchId))
+          finishMigrationDrain()
+        return
+      case _ => ()
+    }
+    val payload = message match {
+      case EntityEnvelopeEvent(_, event) => event
+      case event => event
+    }
+    val preparationControl = payload match {
+      case _: PrepareForMigrationEvent | _: MigrationHandoffStopEvent |
+          _: AbortMigrationPreparationEvent | _: MigrationPreparationFailedEvent |
+          _: FinalMigrationSnapshotSavedEvent => true
+      case _: core.runtime.conservative.ConservativeSourceStopAuthorized => true
+      case _ => false
+    }
+    if (migrationFreeze.isDefined && !preparationControl) {
+      frozenMigrationInputs.enqueue(message.asInstanceOf[AnyRef] -> sender())
+    } else super.aroundReceive(receive, message)
+  }
 
   override def persistenceId: String = s"${getClass.getName}-${self.path.name}"
 
@@ -148,6 +186,11 @@ abstract class BaseActor[T <: BaseState](
     log.error(s"$entityId: $eventInfo")
 
   override def receive: Receive = {
+    case _: MigrationHandoffStopEvent         => stopForMigration()
+    case event: FinalMigrationSnapshotSavedEvent => handleFinalMigrationSaved(event)
+    case event: AbortMigrationPreparationEvent => abortMigrationPreparation(event)
+    case event: MigrationPreparationFailedEvent if migrationFreeze.exists(_.batchId == event.batchId) =>
+      handleMigrationSaveFailure(event)
     case event: DestructEvent                 => destruct(event)
     case event: EntityEnvelopeEvent           => handleEnvelopeEvent(event)
     case event: PostLoadRegistrationEvent     => onPostLoadRegistration(event)
@@ -177,6 +220,11 @@ abstract class BaseActor[T <: BaseState](
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =
     entityEnvelopeEvent.event match {
+      case _: MigrationHandoffStopEvent         => stopForMigration()
+      case event: FinalMigrationSnapshotSavedEvent => handleFinalMigrationSaved(event)
+      case event: AbortMigrationPreparationEvent => abortMigrationPreparation(event)
+      case event: MigrationPreparationFailedEvent if migrationFreeze.exists(_.batchId == event.batchId) =>
+        handleMigrationSaveFailure(event)
       case event: InitializeEvent           => onInitialize(event)
       case event: DestructEvent             => destruct(event)
       case event: PrepareForMigrationEvent  => handlePrepareForMigration(event)
@@ -241,40 +289,97 @@ abstract class BaseActor[T <: BaseState](
     */
   protected def onDestruct(event: DestructEvent): Unit = {}
 
-  /** Handles the PrepareForMigrationEvent by building a snapshot and sending it to the
-    * SnapshotManager (cluster singleton), so it is accessible from all nodes.
-    *
-    * The event now carries a batchId and lbmRef — these are forwarded in the snapshot save event so
-    * the SM can track which migration batch this entity belongs to.
-    *
-    * @param event
-    *   The prepare-for-migration event
+  /** Capture once per batch and freeze subsequent input until the shard region owns buffering.
+    * A duplicate prepare must resend the same immutable snapshot rather than advance the cut.
     */
   private def handlePrepareForMigration(event: PrepareForMigrationEvent): Unit = {
-    if (state == null) {
-      logWarn(s"PrepareForMigrationEvent for $entityId but state is null — skipping snapshot")
-      return
-    }
     try {
-      val snapshot = buildMigrationSnapshot()
-      MigrationStateStoreRegistry.getSnapshotManager match {
-        case Some(smRef) =>
-          smRef ! SaveMigrationSnapshotEvent(
-            entityId = entityId,
-            batchId = event.batchId,
-            snapshot = snapshot
-          )
-          logDebug(s"Migration snapshot sent to SM for '$entityId' (batch=${event.batchId})")
+      require(state != null, "source state is not initialized")
+      require(event.batchId.nonEmpty && event.lbmRef != null, "missing migration batch/controller")
+      require(properties.actorType == core.enumeration.CreationTypeEnum.LoadBalancedDistributed,
+        "migration preparation requires a sharded source")
+      val smRef = MigrationStateStoreRegistry.getSnapshotManager.getOrElse(
+        throw new IllegalStateException("SnapshotManager proxy is not registered"))
+      val frozen = migrationFreeze match {
+        case Some(existing) =>
+          require(existing.batchId == event.batchId && existing.lbmRef == event.lbmRef,
+            "source is already frozen for another migration")
+          if (migrationHandoffStarted) return
+          existing
         case None =>
-          logWarn(
-            s"PrepareForMigrationEvent for '$entityId' but SnapshotManager proxy is not registered — " +
-              s"snapshot will be lost. Entity may not restore correctly after migration."
-          )
+          val captured = MigrationFreeze(event.batchId, event.lbmRef, buildMigrationSnapshot())
+          migrationFreeze = Some(captured)
+          captured
       }
+      smRef ! SaveMigrationSnapshotEvent(entityId, event.batchId, frozen.snapshot)
     } catch {
       case e: Exception =>
-        logError(s"Failed to build migration snapshot for '$entityId': ${e.getMessage}", e)
+        logError(s"Failed migration preparation for '$entityId': ${e.getMessage}", e)
+        Option(event.lbmRef).foreach(_ ! MigrationPreparationFailedEvent(event.batchId, entityId, e.getMessage))
     }
+  }
+
+  private def abortMigrationPreparation(event: AbortMigrationPreparationEvent): Unit =
+    if (migrationFreeze.exists(_.batchId == event.batchId)) {
+      migrationFreeze = None
+      if (migrationHandoffStarted) context.stop(self)
+      else frozenMigrationInputs.dequeueAll(_ => true).foreach { case (message, originalSender) =>
+        self.tell(message, originalSender)
+      }
+    }
+
+  private def stopForMigration(): Unit = migrationFreeze match {
+    case None => context.stop(self)
+    case Some(_) if migrationHandoffStarted => ()
+    case Some(_) =>
+      migrationHandoffStarted = true
+      drainMigrationInputs()
+  }
+
+  private def drainMigrationInputs(): Unit = {
+    val batchId = migrationFreeze.get.batchId
+    // Keep the pre-handoff tail ahead of inputs already buffered at the region.
+    frozenMigrationInputs.dequeueAll(_ => true).foreach { case (message, originalSender) =>
+      self.tell(DrainMigrationInput(batchId, message), originalSender)
+    }
+    self ! FinishMigrationDrain(batchId)
+  }
+
+  private def finishMigrationDrain(): Unit = {
+    if (frozenMigrationInputs.nonEmpty) drainMigrationInputs()
+    else {
+      val frozen = migrationFreeze.get
+      try {
+        val snapshot = buildMigrationSnapshot()
+        val smRef = MigrationStateStoreRegistry.getSnapshotManager.getOrElse(
+          throw new IllegalStateException("SnapshotManager proxy is not registered"))
+        finalMigrationRevision = Math.addExact(finalMigrationRevision, 1L)
+        waitingForFinalMigrationSave = true
+        smRef ! SaveFinalMigrationSnapshotEvent(entityId, frozen.batchId, snapshot, finalMigrationRevision)
+      } catch {
+        case e: Exception =>
+          handleMigrationSaveFailure(MigrationPreparationFailedEvent(frozen.batchId, entityId, e.getMessage))
+      }
+    }
+  }
+
+  private def handleFinalMigrationSaved(event: FinalMigrationSnapshotSavedEvent): Unit =
+    if (waitingForFinalMigrationSave && migrationFreeze.exists(_.batchId == event.batchId) &&
+        event.entityId == entityId && event.revision == finalMigrationRevision) {
+      waitingForFinalMigrationSave = false
+      if (frozenMigrationInputs.nonEmpty) drainMigrationInputs()
+      else stopAfterMigrationSnapshot()
+    }
+
+  protected def stopAfterMigrationSnapshot(): Unit = completeAuthorizedMigrationStop()
+
+  protected final def completeAuthorizedMigrationStop(): Unit =
+    if (frozenMigrationInputs.nonEmpty) drainMigrationInputs() else context.stop(self)
+
+  private def handleMigrationSaveFailure(event: MigrationPreparationFailedEvent): Unit = {
+    migrationFreeze.get.lbmRef ! event
+    // Region-routed shutdown cannot reach a source once the region has entered handoff buffering.
+    if (migrationHandoffStarted) context.stop(self)
   }
 
   /** Serializes the current actor state to the [[MigrationStateStoreRegistry]] store.

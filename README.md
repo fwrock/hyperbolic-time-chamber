@@ -581,6 +581,9 @@ src/main/scala/
 
 | Document | Description |
 |---|---|
+| [Load Balancing and Attribution](docs/LOAD_BALANCING.md) | Distribution with/without runtime rebalancing, conservative migration scope, snapshots, review findings and research contribution assessment |
+| [Applied Load-Balancing Literature](docs/LOAD_BALANCING_LITERATURE.md) | Mobility, spatial simulation and PDES papers mapped to HTC strategies, with matching limits and source-access notes |
+| [Distributed Allocation Validation](docs/DISTRIBUTED_ALLOCATION_VALIDATION_2026_10_25.md) | Separate-JVM allocation ownership, migration and restore evidence, reproduction commands and remaining limits |
 | [MICRO Validation Status](docs/MICRO_VALIDATION_STATUS.md) | Consolidated implementation, four scientific priorities, current results, configuration, limits and next acceptance gates |
 | [MICRO Cross-Link Following](docs/MICRO_CROSS_LINK_FOLLOWING.md) | Leader observations, checkpoint/replay contract, v2 ablations, fresh demand results and reproduction |
 | [MICRO Scientific Validation](docs/MICRO_SCIENTIFIC_VALIDATION.md) | Original v1 clock/convergence study, measurement definitions and retained field pilot |

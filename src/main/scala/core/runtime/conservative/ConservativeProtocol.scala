@@ -25,3 +25,21 @@ final case class StopConservativeRuntime(round: Long, truncated: Boolean, finalH
 final case class RetireConservativeProcess(round: Long, truncated: Boolean, finalHorizon: Option[Long] = None) extends ConservativeCommand
 final case class ConservativeProcessRetired(round: Long) extends ConservativeCommand
 final case class ConservativeRuntimeStopped(round: Long, sinks: Set[ActorRef]) extends ConservativeCommand
+
+final case class ConservativeMigrationMember(id: LogicalProcessId, ref: ActorRef, owner: ActorRef) extends ConservativeCommand
+final case class FreezeConservativeMigration(epoch: String, requestId: String, targets: Map[String, String], round: Long) extends ConservativeCommand
+final case class FreezeConservativeProcess(epoch: String, requestId: String) extends ConservativeCommand
+final case class ConservativeProcessFrozen(epoch: String, requestId: String) extends ConservativeCommand
+final case class ConservativeMigrationFrozen(epoch: String, requestId: String,
+  members: Vector[ConservativeMigrationMember]) extends ConservativeCommand
+final case class RebindConservativeProcess(epoch: String, requestId: String, id: LogicalProcessId,
+  incarnation: String, oldPath: String) extends ConservativeCommand
+final case class ConservativeProcessRebound(epoch: String, requestId: String, coordinator: ActorRef,
+  owner: ActorRef, incarnation: String) extends ConservativeCommand
+final case class AuthorizeConservativeSourceStop(epoch: String, requestId: String) extends ConservativeCommand
+final case class ConservativeSourceStopAuthorized(epoch: String, requestId: String) extends ConservativeCommand
+final case class ResumeConservativeMigration(epoch: String, requestId: String) extends ConservativeCommand
+final case class EndConservativeProcessMigration(epoch: String, requestId: String) extends ConservativeCommand
+final case class ConservativeMigrationResumed(epoch: String, requestId: String) extends ConservativeCommand
+final case class ConservativeMigrationDeclined(requestId: String) extends ConservativeCommand
+final case class ConservativeQueuedInput(event: AnyRef) extends ConservativeCommand

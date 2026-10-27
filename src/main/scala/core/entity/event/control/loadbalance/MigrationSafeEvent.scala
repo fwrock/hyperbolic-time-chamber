@@ -11,5 +11,7 @@ import core.entity.event.data.DefaultBaseEventData
   *   The tick at which the TimeManager paused
   */
 case class MigrationSafeEvent(
-  currentTick: Long
+  currentTick: Long,
+  liveMembers: Option[Vector[core.runtime.conservative.ConservativeMigrationMember]] = None,
+  requestId: String = ""
 ) extends BaseEvent[DefaultBaseEventData]

@@ -1,0 +1,901 @@
+{
+  "version": 1,
+  "status": "frozen-before-campaign",
+  "date": "2026-10-26T23:19:30.068399+00:00",
+  "purpose": "Descriptive local-host performance and correctness comparisons; no new empirical validation",
+  "jar": "/tmp/htc-comparison-20261027.jar",
+  "jarSha256": "bfab98fde9dce619f753304876fc2a367655bb84e5826784714fc72c36a1ae1f",
+  "sourceSha256": {
+    "scripts/scenario/validate_micro_spillback.py": "593cbf33aa4c41b58d74ecdbb7856a331fdd5e259220e0bbac569a867678bb97",
+    "scripts/scenario/test_validate_sumo_micro.py": "2a572d204917fb6b2c1e3f059b8732bb32aeda40ac4970ef5e444b88b68f74a0",
+    "scripts/scenario/generate_horizon_vehicle_validation_scenario.py": "9288b9e30be64fbac8e38fd57925451cefe5ebe4f301c8ef2e72527d7c2beb23",
+    "scripts/scenario/test_sumo_scientific_metrics.py": "187e185feebe97ba75c018c6b9b4e481f32144212a72907d00e7cd5be6107560",
+    "scripts/scenario/validate_micro_field.py": "94e2eace79cc7ba6d4fb38265e62de705eae92a4b80f077ade39c6371149bdb9",
+    "scripts/scenario/generate_transit_reporting_validation_scenario.py": "d1184be32e4a2f017d97996ce03d2a5d41d39d32872f9fc8bb36db883ce604bb",
+    "scripts/scenario/validate_dynamic_routing_reports.py": "2e89ac2764f3f91a7b6aa66c3652439f6cfa7e8c3cb3fb26e035a2632397a619",
+    "scripts/scenario/run_cluster_validation.py": "8fa6de372204fae4941e6f6324736dd8689ff2b80ddb6d7f42245d092a4292a5",
+    "scripts/scenario/test_run_cluster_validation.py": "899bd7c2d913aa3764b8f84e0b1cae51c3e92b6d72701335e74490edd7dedec4",
+    "scripts/scenario/validate_walking_reports.py": "6b7ecb889c4d277b3b97ef75a2d26b70cfb22201f5e6d8c6b977b499e5284242",
+    "scripts/scenario/generate_balancing_validation_scenario.py": "b6895cb1fd12ff7e09b118b0ca52380ce56680f9cb7eead376e0436fbf930a4c",
+    "scripts/scenario/plot_micro_field_validation.py": "cb6294e5ff4ff40cf5decb8a7795cbacd7d48e14303f425371925a04272b08a1",
+    "scripts/scenario/plot_micro_scientific_validation.py": "ae093c794995bcd59060ab73ee894949bb76dfd6cbbddc0471a1a265e471d332",
+    "scripts/scenario/validate_transit_birth_reports.py": "5ef010af8d2a4a8faf88854aace0dbaaf89799e87e08e7154e0837ed880e3676",
+    "scripts/scenario/test_validate_balancing_traffic.py": "a7fad9b2732361d823663cee19dec42c3dfb0a756e8526b470a95625925e83b3",
+    "scripts/scenario/validate_horizon_vehicle_reports.py": "e7739be5e5842d994eb92a0f2a195931f8ff4397c2d499f70d5e2a1ec82dd4e9",
+    "scripts/scenario/generate_tiny_validation_scenario.py": "4701f154edeab757f5bfb9a92e142ea78ec9d592147a957fe26511621bf1baac",
+    "scripts/scenario/validate_meso_reports.py": "20d655747fe4de8eead0602052003bb187ad2c0bee5dc76b5420d01be1ab04a7",
+    "scripts/scenario/run_comparison_study.py": "c3598661c55dd5a9f73d881ce88e7622ea8ee5d49cc0b998391be9f1fd6d087b",
+    "scripts/scenario/test_validate_micro_spillback.py": "a8f55c955912a86a1af6d95a5fb86b3b633a0c0100d3e3de34a28dce6ca9a3ab",
+    "scripts/scenario/ngsim_field_pilot.py": "9def0d3bbafcdb1aacdcc32fb8d005f4312a9ed3266f62311a6123855599a402",
+    "scripts/scenario/audit_micro_field_inputs.py": "e4c63fdd9bc53e97b756590ab05ba15c93a177cecb48067df55044cfeef5e813",
+    "scripts/scenario/generate_dynamic_routing_validation_scenario.py": "cdb6ca3f3e217cc1b8933b81fab72da0a90a6ff1c0395f3121672415c53bde7d",
+    "scripts/scenario/test_micro_field_input_audit.py": "bfba74702edf115c489ae6caed67a5352f081ac584e12da1a1fef9cf5ab5e035",
+    "scripts/scenario/repair_parquet.py": "5e669ae459f8cb775cdbd6ae9a28ca32eec10b70c115789208883f72035b67a7",
+    "scripts/scenario/test_validate_micro_field.py": "458ab88b52e619f9511354a5ac79f062c679036a39331d61091a2ad5dfa87c88",
+    "scripts/scenario/generate_walking_validation_scenario.py": "88ab5b0a2c229676c586dcd6e527a7ee0ef5f36a4319e62de3753bc1a1582421",
+    "scripts/scenario/generate_hybrid_scenario.py": "cb8f0ddde09b396fc1ab0fcfc47557bafbaf0f185e7cdfa36054f308d87ae255",
+    "scripts/scenario/sumo_scientific_metrics.py": "b0d3e77433587518d175ddc04e161255e4f0517aa71638d0be0bc243a81faf89",
+    "scripts/scenario/test_ngsim_field_pilot.py": "eb2c8fcbf17caa9a2a1ff3e5d972e09a0d91353a98a510b305506061e0810444",
+    "scripts/scenario/test_benchmark_metrics.py": "4c3844f8af888bd7310f15fde1fffd2b1916e4b7f77aacf4c99a30ff5761c6e6",
+    "scripts/scenario/plot_micro_discharge_validation.py": "73846352d3c5a8f90c55a278980e144e9153817c02ea113c13023108641487cd",
+    "scripts/scenario/validate_balancing_traffic.py": "648612865c3d7cbf5cce567fdd2dd0ade0cdd40d357267aaf96814bb928c11c6",
+    "scripts/scenario/validate_sumo_micro.py": "02d5604503c0feab93dc1b8977d65a714839277d69953817dad1e0698ffb223c",
+    "scripts/scenario/repair_generated_scenario_routes.py": "1c6031a931e60f710a16bd15d1f79e8ae50b3098aa29b8ec9bda747280050149",
+    "scripts/scenario/run_allocation_authority_validation.py": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+    "scripts/scenario/validate_micro_field_v2.py": "e7f008016256287e7204526b3578ba3856763976d623ad0f2bf5f58303a1665e",
+    "scripts/scenario/run_sumo_scientific_campaign.py": "918e394aa06525c797fdb6bfbeadb2f33ffaae2ea897d69d533807fdda0bc60e",
+    "scripts/scenario/compare_policy_reports.py": "be906a70437014f77fc940a4c62ff3acb988cd3f70924473e9536a6b1e204f18",
+    "scripts/scenario/benchmark_metrics.py": "bd4a77847382e7d8bac2295f5265875bb3fbcd5720d4b9f58397e039588a6366",
+    "src/main/scala/core/actor/manager/time/ChannelClosedGlobalTimeManager.scala": "c38c009495c31a345aa55b57704d24e004cab277468e030febe09c3011db7b9f"
+  },
+  "inputs": {
+    "inputs/initial/migration.conf": "c472c347eb849f5428b7b9536188b3939572827da7ca1f11f19b3e7a69d2a441",
+    "inputs/initial/simulation.json": "adfc1d93256ddf3e44e9ae96813663b8fea22f71060a3745f11c6d014fada5d4",
+    "inputs/initial/reference.conf": "46f2b7a153b60cf06ef0ffbbaceecb5d1f2a0343359f53c3083646c66ba148d8",
+    "inputs/signal/canonical.json": "6a0252db7649be1481a8d300900713730d184c2d02e64e82e62402006c6bada5",
+    "inputs/signal/time-warp.json": "60bc42538c1d85f6dedcb2cbc885f1885d1eeabd1b86fd07cedc5537b448de70",
+    "inputs/signal/experiment.json": "9e917ce683a776d5a01420923a90381d7e026d178615d3d9cdb6faed62275c70",
+    "inputs/signal/discrete-event.json": "df86870a6d66146e70a10fefaa9059aea5f65db68ca3a440643ac09d2d7acc8c",
+    "inputs/signal/simulation.json": "39c29bb25394c5bf210b5bec2783689f6f0bfb6fc5ea3ba6913c4a845a60c35e",
+    "inputs/free/canonical.json": "ab4174e8cbb849c7c73831720954877dcb4a50bb14df716db017f3bc2c32f8ff",
+    "inputs/free/time-warp.json": "af99ce8097a43ea69864ad8448900a3ff57593d61534081ddd469ec76163ab01",
+    "inputs/free/experiment.json": "ce479c61f1a9341146df518a2c10d16b4691e283216410c886a2b4429df53a11",
+    "inputs/free/discrete-event.json": "e49fcde4c39be8a0699df41132bf300dc497f11daf151f75e1ea6463d595ec3e",
+    "inputs/free/simulation.json": "e23ed47a76e3fc7026dd62dda828b944419d502a97ad931811ce277bde3866dd",
+    "inputs/progressive/migration.conf": "c472c347eb849f5428b7b9536188b3939572827da7ca1f11f19b3e7a69d2a441",
+    "inputs/progressive/simulation.json": "a3a3744b09c0873b08579dcc61c61571be951a94796ba9210fba5b467817bf58",
+    "inputs/progressive/reference.conf": "46f2b7a153b60cf06ef0ffbbaceecb5d1f2a0343359f53c3083646c66ba148d8",
+    "inputs/following/canonical.json": "6a3bc706d22c3ce4a6497e7cc040db030ee9f6506bdb904065bd8a58d2ee4713",
+    "inputs/following/time-warp.json": "1e6e3ee88bbfda75450103493c549e1a613419df9f7eabdde40b9a5f478f1d01",
+    "inputs/following/experiment.json": "19365c50b0b841b1ad651bff56095a0e964d7a3038cda54c961ef25cc444edc0",
+    "inputs/following/discrete-event.json": "d80d720ed1c0319a212168e3be7621bc019419985090a53091bff084b4b9b36e",
+    "inputs/following/simulation.json": "238a87682574bb380378766f1be8718978a6a500d160cb3a50ced017e04bc759",
+    "inputs/initial/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+    "inputs/initial/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/initial/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/initial/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+    "inputs/initial/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/initial/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/initial/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+    "inputs/initial/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+    "inputs/initial/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/initial/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+    "inputs/initial/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/cars_0.json": "e674e8e618ca2f727bd07ff00a88e7d52924fca62f60bbf636287342293e72fe",
+    "inputs/signal/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/links_0.json": "a2637314dd5ddf5ce5a7ae39788369958fef1e123b15d8b9ce2ff8d218ac2114",
+    "inputs/signal/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/traffic_signals_0.json": "bc770daa4d90b005b56a944e434a8f1429426438b6b309b138ecfd4d64e4c31b",
+    "inputs/signal/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/nodes_0.json": "49dcf2f80f88a797c0f8341222214eee2264b0539bedbd9fe9580d1c439f7717",
+    "inputs/signal/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/data/city_map.json": "50385047837fa3cbddfc8321d707a2bab892a471947e063fbcccdf46967f6aed",
+    "inputs/signal/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/signal/sumo/net.xml": "aa2bee42e92654e75c20ebf9b96de285829770265c580b603d5d8b1470266009",
+    "inputs/signal/sumo/scenario.sumocfg": "1ae759b5404c5cc2c5180e1efe6320bcd27abc580b290e18c13a549509c22a51",
+    "inputs/signal/sumo/nodes.xml": "cb451979413d558021d6408dcc5a5f9ecbf2b08cfdf8e73b929d6f130cbccfd1",
+    "inputs/signal/sumo/edges.xml": "e455bea2c0af9e9faf460d45cf537c8d1160f4bd2ae4d1985d458cf06bf3bc80",
+    "inputs/signal/sumo/netconvert.log": "c5b6fd8211edd733614c0fcc956b64ff288d5876926ffe7291fcfa8bf3dbb887",
+    "inputs/signal/sumo/routes.xml": "bd06d5989440929a3c8496acaa00590016a94084ba5aa69929a7c5c70b285adb",
+    "inputs/free/data/cars_0.json": "ea0f538de1db3e0087183320a62513f8c5a74a9e4c55bc0d804677e890fd954c",
+    "inputs/free/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/links_0.json": "ab286d0b259450de1c3fb18f965112644f64acaf5b6a675ccd0c7d00c03e0205",
+    "inputs/free/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+    "inputs/free/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+    "inputs/free/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/free/sumo/net.xml": "93a195d318ca5941be1ee1b1ee22b1511a10b9dbe60706a029603858e360e59f",
+    "inputs/free/sumo/scenario.sumocfg": "543ba02a453973c621fc3db9f5003ac07c3d0a5fb78b5b02c446cb3d44dba3b4",
+    "inputs/free/sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+    "inputs/free/sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+    "inputs/free/sumo/netconvert.log": "c5b6fd8211edd733614c0fcc956b64ff288d5876926ffe7291fcfa8bf3dbb887",
+    "inputs/free/sumo/routes.xml": "ec1e739c800911e3340c77632c2d1b048c79b88fe573401fe69fa56722d959fd",
+    "inputs/progressive/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+    "inputs/progressive/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/progressive/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/progressive/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+    "inputs/progressive/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/progressive/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/progressive/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+    "inputs/progressive/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+    "inputs/progressive/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/progressive/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+    "inputs/progressive/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/cars_0.json": "d46852342e101451d5b20db2cef6dc7ba9784c256fd4ba9bf23c1db4c096e53c",
+    "inputs/following/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/links_0.json": "ab286d0b259450de1c3fb18f965112644f64acaf5b6a675ccd0c7d00c03e0205",
+    "inputs/following/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/persons_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/nodes_0.json": "1e0483e71b602bdf1ad772f31539a96d4ba6239a55163986b6696af6c5403d8c",
+    "inputs/following/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/data/city_map.json": "cea147286e9fc2b8b2eb47f1fce1e41ea16360630d565636d26d551f0df22648",
+    "inputs/following/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "inputs/following/sumo/net.xml": "b15ae840b7f0f8aefb698ef63d8e40022b0b73c3e1388215721feea7a3787f5d",
+    "inputs/following/sumo/scenario.sumocfg": "543ba02a453973c621fc3db9f5003ac07c3d0a5fb78b5b02c446cb3d44dba3b4",
+    "inputs/following/sumo/nodes.xml": "2667e97c48302c4c8106476ccfb79507dc0d2e45086845eaa05ed3734a253946",
+    "inputs/following/sumo/edges.xml": "38297cceaf892fe78fb272e29888914afdb06d5696752e35f50743217384667a",
+    "inputs/following/sumo/netconvert.log": "c5b6fd8211edd733614c0fcc956b64ff288d5876926ffe7291fcfa8bf3dbb887",
+    "inputs/following/sumo/routes.xml": "0bf14c87a943f58904acf31095e65a44c1265188766fb59635d205b479813d33"
+  },
+  "cpuIds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "totalMaxHeapGiB": 4,
+  "timeoutSeconds": 300,
+  "sampleIntervalSeconds": 0.25,
+  "repetitions": 5,
+  "warmups": 1,
+  "orderSeed": 20261027,
+  "configurations": [
+    {
+      "id": "free-sumo",
+      "kind": "sumo",
+      "case": "free",
+      "nodes": 0,
+      "policy": "sumo"
+    },
+    {
+      "id": "free-discrete-event-1",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 1,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "free-time-warp-1",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 1,
+      "policy": "time-warp"
+    },
+    {
+      "id": "free-discrete-event-2",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 2,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "free-time-warp-2",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 2,
+      "policy": "time-warp"
+    },
+    {
+      "id": "following-sumo",
+      "kind": "sumo",
+      "case": "following",
+      "nodes": 0,
+      "policy": "sumo"
+    },
+    {
+      "id": "following-discrete-event-1",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 1,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "following-time-warp-1",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 1,
+      "policy": "time-warp"
+    },
+    {
+      "id": "following-discrete-event-2",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 2,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "following-time-warp-2",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 2,
+      "policy": "time-warp"
+    },
+    {
+      "id": "signal-sumo",
+      "kind": "sumo",
+      "case": "signal",
+      "nodes": 0,
+      "policy": "sumo"
+    },
+    {
+      "id": "signal-discrete-event-1",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 1,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "signal-time-warp-1",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 1,
+      "policy": "time-warp"
+    },
+    {
+      "id": "signal-discrete-event-2",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 2,
+      "policy": "discrete-event"
+    },
+    {
+      "id": "signal-time-warp-2",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 2,
+      "policy": "time-warp"
+    },
+    {
+      "id": "initial-reference",
+      "kind": "balance",
+      "case": "initial",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "reference"
+    },
+    {
+      "id": "initial-migration",
+      "kind": "balance",
+      "case": "initial",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "migration"
+    },
+    {
+      "id": "progressive-reference",
+      "kind": "balance",
+      "case": "progressive",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "reference"
+    },
+    {
+      "id": "progressive-migration",
+      "kind": "balance",
+      "case": "progressive",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "migration"
+    }
+  ],
+  "order": [
+    {
+      "config": "free-time-warp-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 0,
+      "warmup": true
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 1,
+      "warmup": false
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 2,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 3,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 4,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "following-time-warp-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "free-sumo",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "free-time-warp-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "initial-migration",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "initial-reference",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "free-discrete-event-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "following-sumo",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-2",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "signal-discrete-event-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "following-discrete-event-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "signal-time-warp-1",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "progressive-migration",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "signal-sumo",
+      "repeat": 5,
+      "warmup": false
+    },
+    {
+      "config": "progressive-reference",
+      "repeat": 5,
+      "warmup": false
+    }
+  ],
+  "host": {
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "cpu": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1132.934\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 0\ncpu cores\t: 10\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1894.831\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 0\ncpu cores\t: 10\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1403.508\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 4\ncpu cores\t: 10\napicid\t\t: 8\ninitial apicid\t: 8\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 2100.108\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 4\ncpu cores\t: 10\napicid\t\t: 9\ninitial apicid\t: 9\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 4\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1495.735\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 8\ncpu cores\t: 10\napicid\t\t: 16\ninitial apicid\t: 16\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 5\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 407.624\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 9\ncpu cores\t: 10\napicid\t\t: 18\ninitial apicid\t: 18\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 6\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 893.917\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 10\ncpu cores\t: 10\napicid\t\t: 20\ninitial apicid\t: 20\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 7\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1441.520\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 11\ncpu cores\t: 10\napicid\t\t: 22\ninitial apicid\t: 22\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 8\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1799.915\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 12\ncpu cores\t: 10\napicid\t\t: 24\ninitial apicid\t: 24\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 9\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1690.814\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 13\ncpu cores\t: 10\napicid\t\t: 26\ninitial apicid\t: 26\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 10\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 1800.007\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 14\ncpu cores\t: 10\napicid\t\t: 28\ninitial apicid\t: 28\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 11\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 186\nmodel name\t: Intel(R) Core(TM) 7 150U\nstepping\t: 3\nmicrocode\t: 0x6134\ncpu MHz\t\t: 497.634\ncache size\t: 12288 KB\nphysical id\t: 0\nsiblings\t: 12\ncore id\t\t: 15\ncpu cores\t: 10\napicid\t\t: 30\ninitial apicid\t: 30\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 5222.40\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\n",
+    "memory": "MemTotal:       32539788 kB\nMemFree:         1090348 kB\nMemAvailable:   11255720 kB\nBuffers:          681992 kB\nCached:          9773692 kB\nSwapCached:       137596 kB\nActive:          6146360 kB\nInactive:       23137752 kB\nActive(anon):    5135756 kB\nInactive(anon): 14456884 kB\nActive(file):    1010604 kB\nInactive(file):  8680868 kB\nUnevictable:      161048 kB\nMlocked:              88 kB\nSwapTotal:       8388604 kB\nSwapFree:        7741196 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            313640 kB\nWriteback:             0 kB\nAnonPages:      18983564 kB\nMapped:          1716208 kB\nShmem:            764104 kB\nKReclaimable:     929948 kB\nSlab:            1367300 kB\nSReclaimable:     929948 kB\nSUnreclaim:       437352 kB\nKernelStack:       57360 kB\nPageTables:       129856 kB\nSecPageTables:     12852 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    24658496 kB\nCommitted_AS:   58890688 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      114204 kB\nVmallocChunk:          0 kB\nPercpu:            17904 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:   434176 kB\nShmemPmdMapped:        0 kB\nFileHugePages:   1228800 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:          164280 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      349272 kB\nDirectMap2M:     9814016 kB\nDirectMap1G:    24117248 kB\n",
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "java": "openjdk version \"21.0.8\" 2025-07-15 LTS\nIBM Semeru Runtime Open Edition 21.0.8.0 (build 21.0.8+9-LTS)\nEclipse OpenJ9 VM 21.0.8.0 (build openj9-0.53.0, JRE 21 Linux amd64-64-Bit Compressed References 20250715_547 (JIT enabled, AOT enabled)\nOpenJ9   - 017819f167\nOMR      - 266a8c6f5\nJCL      - d5f1e70d135 based on jdk-21.0.8+9)\n",
+    "sumo": "Eclipse SUMO sumo 1.27.1\n Build features: Linux-6.8.0-117-generic x86_64 GNU 13.3.0 Release FMI Proj GUI Intl SWIG Eigen GDAL GL2PS\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later\n"
+  },
+  "definitions": {
+    "wall": "monotonic launch to acknowledged runtime completion plus stop notification, before cleanup",
+    "cpu": "HTC final live proc counters before teardown; SUMO wait4 user plus system",
+    "rss": "HTC simultaneous sampled sum; SUMO wait4 process high-water RSS",
+    "pair": "same repeat, case and output settings",
+    "ratios": "descriptive, conditional on acceptance; individual values, median and range",
+    "failures": "retained; no automatic replacement; 300 second limit each",
+    "migration": "fixed placement and rebalance enabled differ only in rebalance interval"
+  }
+}

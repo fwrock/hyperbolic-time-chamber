@@ -5,8 +5,9 @@ import org.apache.pekko.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Prop
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.pubsub.DistributedPubSub
 import org.apache.pekko.cluster.pubsub.DistributedPubSubMediator.{ Subscribe, SubscribeAck }
+import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 import core.entity.event.control.migration.{ MigrationWindowAckEvent, MigrationWindowCloseEvent, MigrationWindowOpenEvent }
-import core.util.{ DistributedUtil, ManagerConstantsUtil }
+import core.util.ManagerConstantsUtil
 
 /** Per-node actor that participates in the distributed migration window protocol.
   *
@@ -34,10 +35,9 @@ class MigrationWindowSubscriber extends Actor with ActorLogging {
   private val nodeAddr = cluster.selfAddress.toString
 
   override def preStart(): Unit = {
-    val smProxy = DistributedUtil.createSingletonProxy(
-      context.system,
-      ManagerConstantsUtil.SNAPSHOT_MANAGER_ACTOR_NAME
-    )
+    val smProxy = context.actorOf(ClusterSingletonProxy.props(
+      s"/user/${ManagerConstantsUtil.SNAPSHOT_MANAGER_ACTOR_NAME}", ClusterSingletonProxySettings(context.system)),
+      "snapshot-manager-proxy")
     MigrationStateStoreRegistry.registerSnapshotManager(smProxy)
     log.info("MigrationWindowSubscriber: SM proxy registered in MigrationStateStoreRegistry")
 

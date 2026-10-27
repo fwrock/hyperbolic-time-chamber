@@ -3,8 +3,6 @@ package core.actor.manager.loadbalance.migration
 
 import core.entity.control.loadbalance.MigrationPlan
 
-import org.apache.pekko.actor.{ ActorRef, Address }
-
 import scala.collection.mutable
 
 /** Coordinates shard migration between cluster nodes.
@@ -28,55 +26,56 @@ import scala.collection.mutable
   * into the message path — `buffer()`, the only method that would enqueue a real message, had no
   * callers anywhere in the codebase — so it provided no protection despite the docs/KNOWN_GAPS.md
   * write-up describing it as a lossy-at-capacity safety net. Removed 2026-08-05 as dead code,
-  * not a working mechanism that regressed; see docs/KNOWN_GAPS.md's Gap C entry for the real
-  * remaining risk this investigation found (a lost-update window between a source entity's
-  * `PrepareForMigrationEvent` snapshot and its actual Pekko-triggered stop), which is a distinct,
-  * still-open architectural question this removal does not address.
+  * not a working mechanism that regressed. Source freezing and save acknowledgements were added
+  * separately on 2026-10-25; BaseActor drains retained source input at handoff and awaits final
+  * snapshot acceptance before stopping. See docs/LOAD_BALANCING.md for tested scope and gaps.
   */
 class ShardMigrationCoordinator(
   val maxConcurrentMigrations: Int = 3
 ) {
+  require(maxConcurrentMigrations > 0, "maxConcurrentMigrations must be positive")
 
   /** Currently executing migrations */
   private val activeMigrations: mutable.Map[String, MigrationState] = mutable.Map.empty
 
   /** Migration queue for when we exceed concurrent limit */
   private val pendingMigrations: mutable.Queue[MigrationPlan] = mutable.Queue.empty
+  private val pendingShardIds: mutable.Set[String] = mutable.Set.empty
 
   /** Completed migration count */
   private var completedCount: Long = 0L
   private var failedCount: Long = 0L
   private var totalMigrationTimeNanos: Long = 0L
 
-  /** Attempts to start a migration. Returns true if started, false if queued or rejected. */
+  /** Admits each shard once across both active and waiting migrations. */
   def requestMigration(plan: MigrationPlan): MigrationRequestResult =
-    if (activeMigrations.contains(plan.shardId)) {
+    if (activeMigrations.contains(plan.shardId) || pendingShardIds.contains(plan.shardId)) {
       MigrationRequestResult.AlreadyMigrating
     } else if (activeMigrations.size >= maxConcurrentMigrations) {
       pendingMigrations.enqueue(plan)
+      pendingShardIds.add(plan.shardId)
       MigrationRequestResult.Queued(pendingMigrations.size)
     } else {
       startMigration(plan)
       MigrationRequestResult.Started
     }
 
-  /** Marks a migration as complete. Returns the next pending migration if available. */
-  def completeMigration(shardId: String, success: Boolean): Option[MigrationPlan] = {
-    activeMigrations.remove(shardId).foreach {
-      state =>
+  /** Returns an already-admitted successor; callers must execute it without requesting admission again. */
+  def completeMigration(shardId: String, success: Boolean): Option[MigrationPlan] =
+    activeMigrations.remove(shardId) match {
+      case None => None
+      case Some(state) =>
         val duration = System.nanoTime() - state.startedAt
         totalMigrationTimeNanos += duration
         if (success) completedCount += 1
         else failedCount += 1
+        if (pendingMigrations.nonEmpty) {
+          val next = pendingMigrations.dequeue()
+          pendingShardIds.remove(next.shardId)
+          startMigration(next)
+          Some(next)
+        } else None
     }
-
-    // Start next pending migration if any
-    if (pendingMigrations.nonEmpty && activeMigrations.size < maxConcurrentMigrations) {
-      val next = pendingMigrations.dequeue()
-      startMigration(next)
-      Some(next)
-    } else None
-  }
 
   /** Gets the current state of a migration. */
   def getMigrationState(shardId: String): Option[MigrationState] =
@@ -107,6 +106,7 @@ class ShardMigrationCoordinator(
   def abortAll(): Unit = {
     activeMigrations.clear()
     pendingMigrations.clear()
+    pendingShardIds.clear()
   }
 
   // ── Internal ───────────────────────────────────────────────────────────────

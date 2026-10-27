@@ -5,6 +5,7 @@ import core.api.SimulatorSettingsRegistry
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.load.*
+import core.entity.event.control.loadbalance.{ RequestMigrationPauseEvent, MigrationSafeEvent, MigrationCompleteNotifyEvent }
 import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
@@ -34,7 +35,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var lastStage: Option[(Long, Long)] = None
   private var horizon = Long.MaxValue - 1L
   private var truncated = false
-  private enum Phase { case Loading, Collecting, Executing, WaitingInput, Paused, Stopping, Draining, Failed, Finished }
+  private enum Phase { case Loading, Collecting, Executing, WaitingInput, Paused, FreezingMigration, Migrating, ResumingMigration, Stopping, Draining, Failed, Finished }
   import Phase.*
   private var phase = Loading
   private var producer: Option[ActorRef] = None
@@ -42,6 +43,12 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var inputClosed = true
   private var lookAhead = 1000L
   private var loadingRequested = false
+  private var pendingMigration: Option[RequestMigrationPauseEvent] = None
+  private var migration: Option[(String, RequestMigrationPauseEvent)] = None
+  private val migrationMembers = mutable.Map.empty[ActorRef, Vector[ConservativeMigrationMember]]
+  private var migrationFreezeNanos = 0L
+  private var migrationFrozenNanos = 0L
+  private var migrationResumeNanos = 0L
 
   protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
@@ -117,6 +124,58 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     case _: ProgressiveLoadingCompleteEvent =>
       self ! TickWindowReady(Long.MaxValue, 0L)
     case event: StartSimulationTimeEvent => startSimulation(event)
+    case event: RequestMigrationPauseEvent => protect {
+      require((started || pendingStart.nonEmpty) && event.requester == sender() && event.shardIds.nonEmpty &&
+        event.targetNodes.keySet == event.shardIds && event.requestId.nonEmpty, "invalid conservative migration pause request")
+      if (Set(Stopping, Draining).contains(phase)) event.requester ! ConservativeMigrationDeclined(event.requestId)
+      else {
+        require(pendingMigration.isEmpty, "overlapping migration request")
+        pendingMigration = Some(event)
+        if (phase == Migrating) {
+          require(migration.exists(_._2.requester == sender()), "migration controller changed")
+          resumeMigration()
+        } else if (phase == ResumingMigration)
+          require(migration.exists(_._2.requester == sender()), "migration controller changed")
+        else if (phase == Paused) freezeMigration()
+        else require(Set(Collecting, Executing, WaitingInput).contains(phase), "migration outside a live conservative run")
+      }
+    }
+    case event: ConservativeMigrationFrozen => protect {
+      require(workers.contains(sender()), "migration cohort from unknown worker")
+      if (phase == FreezingMigration && migration.exists(_._1 == event.requestId) && event.epoch == epoch &&
+        pending.contains(sender())) {
+        require(event.members.forall(_.owner == sender()), "migration cohort owner mismatch")
+        migrationMembers(sender()) = event.members
+        pending -= sender()
+        if (pending.isEmpty) {
+          val cohort = migrationMembers.valuesIterator.flatten.toVector.sortBy(m => (m.id.model, m.id.id))
+          require(cohort.map(_.id).distinct.size == cohort.size, "duplicate live migration LP")
+          phase = Migrating
+          val (id, request) = migration.get
+          migrationFrozenNanos = System.nanoTime()
+          logInfo(s"[MIGRATION-TIMING] request=$id phase=frozen elapsedNanos=${migrationFrozenNanos - migrationFreezeNanos}")
+          request.requester ! MigrationSafeEvent(localTickOffset, Some(cohort), id)
+        }
+      }
+    }
+    case event: MigrationCompleteNotifyEvent => protect {
+      if (phase == Migrating && migration.exists { case (id, request) => id == event.requestId && request.requester == sender() })
+        resumeMigration()
+    }
+    case event: ConservativeMigrationResumed => protect {
+      require(workers.contains(sender()), "migration resume from unknown worker")
+      if (phase == ResumingMigration && event.epoch == epoch && migration.exists(_._1 == event.requestId)) {
+        pending -= sender()
+        if (pending.isEmpty) {
+          val now = System.nanoTime()
+          logInfo(s"[MIGRATION-TIMING] request=${event.requestId} phase=resumed totalNanos=${now - migrationFreezeNanos} freezeNanos=${migrationFrozenNanos - migrationFreezeNanos} relocationNanos=${migrationResumeNanos - migrationFrozenNanos} resumeNanos=${now - migrationResumeNanos}")
+          migration = None
+          migrationMembers.clear()
+          if (pendingMigration.nonEmpty) freezeMigration()
+          else if (isPaused) phase = Paused else collect()
+        }
+      }
+    }
     case event: ConservativeReady => protect {
       require(workers.contains(sender()), "frontier from unregistered worker")
       if (phase == Collecting && event.round == round) {
@@ -129,7 +188,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       if (phase == Executing && id == round) {
         pending -= sender()
         if (pending.isEmpty) {
-          if (isPaused) phase = Paused else collect()
+          if (pendingMigration.nonEmpty) freezeMigration() else if (isPaused) phase = Paused else collect()
         }
       }
     }
@@ -184,6 +243,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     workers.foreach(_ ! CollectConservativeReady(round))
   }
   private def chooseBatch(): Unit = {
+    if (pendingMigration.nonEmpty) { freezeMigration(); return }
     if (isPaused) { phase = Paused; return }
     val next = ready.valuesIterator.flatMap(_.next).minOption
     if (!inputClosed && (next.isEmpty || next.exists(_.tick > loadedThrough))) {
@@ -204,6 +264,26 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       pending = workers.toSet
       workers.foreach(_ ! ExecuteConservativeBatch(round, order.tick, order.microstep))
     }
+  }
+
+  private def freezeMigration(): Unit = {
+    val request = pendingMigration.get
+    pendingMigration = None
+    val id = request.requestId
+    migrationFreezeNanos = System.nanoTime()
+    migration = Some(id -> request)
+    migrationMembers.clear()
+    phase = FreezingMigration
+    pending = workers.toSet
+    workers.foreach(_ ! FreezeConservativeMigration(epoch, id, request.targetNodes, round))
+    logInfo(s"[MIGRATION-FREEZE] request=$id round=$round tick=$localTickOffset shards=${request.shardIds.size}")
+  }
+
+  private def resumeMigration(): Unit = {
+    migrationResumeNanos = System.nanoTime()
+    phase = ResumingMigration
+    pending = workers.toSet
+    workers.foreach(_ ! ResumeConservativeMigration(epoch, migration.get._1))
   }
 
   override protected def pauseSimulation(): Unit = { isPaused = true; if (phase == Collecting) phase = Paused }

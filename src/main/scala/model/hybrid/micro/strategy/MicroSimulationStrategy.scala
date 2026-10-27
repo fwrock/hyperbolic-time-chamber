@@ -50,7 +50,8 @@ trait MicroSimulationStrategy {
     vehicleWaitingSeconds: mutable.Map[Long, Double],
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
-    stopLineGapM: Double = 0.0
+    stopLineGapM: Double = 0.0,
+    retainExits: Boolean = false
   ): Seq[MicroVehicleUpdate]
 
   /** Initializes the strategy with link-specific parameters. Called once when the link enters MICRO

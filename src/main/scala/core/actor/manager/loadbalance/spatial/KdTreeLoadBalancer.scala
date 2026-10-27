@@ -7,14 +7,8 @@ import org.apache.pekko.actor.Address
 
 import scala.collection.mutable
 
-/** kd-tree based dynamic load balancer.
-  *
-  * Level 2 of the hybrid partitioning: decides which cluster node each quadtree shard should live
-  * on. Uses median-based splitting on workload dimensions to ensure all cluster nodes process
-  * roughly equal amounts of work.
-  *
-  * The kd-tree partitions the "load space" (not the geographic space) so that each cluster node
-  * gets a balanced share of the total computational load.
+/** Deterministic projected-load planner. The historical class name is retained for callers.
+  * Plans do not change observed ownership; every accepted move strictly reduces squared node load.
   */
 class KdTreeLoadBalancer {
 
@@ -29,7 +23,22 @@ class KdTreeLoadBalancer {
 
   /** Updates metrics for a shard. */
   def updateMetrics(metrics: ShardMetrics): Unit =
-    shardMetricsMap.put(metrics.shardId, metrics)
+    {
+      require(metrics.totalWeight.isFinite && metrics.totalWeight >= 0.0 && metrics.entityCount >= 0, "invalid shard metrics")
+      shardMetricsMap.put(metrics.shardId, metrics)
+    }
+
+  def replaceSnapshot(metrics: Seq[ShardMetrics], assignments: Map[String, Address], nodes: Set[Address]): Unit = {
+    require(assignments.values.forall(nodes.contains) && metrics.map(_.shardId).toSet == assignments.keySet,
+      "incomplete load/placement snapshot")
+    require(metrics.forall(m => m.totalWeight.isFinite && m.totalWeight >= 0.0 && m.entityCount >= 0), "invalid load snapshot")
+    shardMetricsMap.clear()
+    metrics.foreach(updateMetrics)
+    shardAssignment.clear()
+    shardAssignment ++= assignments
+    clusterNodes.clear()
+    nodes.foreach(registerNode)
+  }
 
   /** Registers a cluster node. */
   def registerNode(address: Address): Unit =
@@ -39,8 +48,10 @@ class KdTreeLoadBalancer {
     )
 
   /** Removes a cluster node. */
-  def removeNode(address: Address): Unit =
+  def removeNode(address: Address): Unit = {
     clusterNodes.remove(address)
+    shardAssignment.filterInPlace((_, node) => node != address)
+  }
 
   /** Records where a shard currently lives (from external discovery, e.g. allocator index). */
   def recordNodeAssignment(shardId: String, address: Address): Unit =
@@ -53,45 +64,29 @@ class KdTreeLoadBalancer {
   /** Gets all shard assignments. */
   def getAllAssignments: Map[String, Address] = shardAssignment.toMap
 
-  /** Rebalances shard assignments across cluster nodes using a kd-tree partition.
-    *
-    * Steps:
-    *   1. Collect all shards with their weights 2. Sort by weight (median split dimension) 3.
-    *      Partition into N groups (one per cluster node) using recursive median splitting 4. Assign
-    *      each group to the least-loaded node
-    *
-    * @return
-    *   List of (shardId, oldNode, newNode) for shards that need to migrate
-    */
-  def rebalance(): List[(String, Option[Address], Address)] = {
-    val nodes = clusterNodes.keys.toList
-    if (nodes.isEmpty) return Nil
-
-    val shards = shardMetricsMap.toList.sortBy(_._2.totalWeight)
-    if (shards.isEmpty) return Nil
-
-    // Partition shards into groups, one per node
-    val groups = partitionByMedian(shards, nodes.size)
-
-    val migrations = mutable.ListBuffer[(String, Option[Address], Address)]()
-
-    // Assign each group to a node
-    groups.zip(nodes).foreach {
-      case (shardGroup, nodeAddress) =>
-        shardGroup.foreach {
-          case (shardId, _) =>
-            val currentAssignment = shardAssignment.get(shardId)
-            if (!currentAssignment.contains(nodeAddress)) {
-              migrations += ((shardId, currentAssignment, nodeAddress))
-              shardAssignment.put(shardId, nodeAddress)
-            }
+  def rebalance(eligible: String => Boolean = _ => true,
+    score: (String, Address, Map[Address, Double]) => Double = (_, node, loads) => -loads(node)
+  ): List[(String, Option[Address], Address)] = {
+    val loads = mutable.Map.from(getNodeLoads)
+    val moves = mutable.ListBuffer.empty[(String, Option[Address], Address)]
+    shardMetricsMap.values.toVector.sortBy(m => (-m.totalWeight, m.shardId)).foreach { metric =>
+      shardAssignment.get(metric.shardId).filter(loads.contains).filter(_ => eligible(metric.shardId)).foreach { source =>
+        val candidates = loads.iterator.filter { case (node, load) => node != source && metric.totalWeight > 0.0 &&
+          loads(source) - load > metric.totalWeight + 1e-9 }.toMap
+        candidates.keys.toVector.sortBy(node => (-score(metric.shardId, node, candidates), node.toString)).headOption.foreach { target =>
+            moves += ((metric.shardId, Some(source), target))
+            loads(source) -= metric.totalWeight
+            loads(target) += metric.totalWeight
         }
+      }
     }
+    moves.toList
+  }
 
-    // Update cluster node loads
-    updateNodeLoads()
-
-    migrations.toList
+  def improvesPlacement(shardId: String, target: Address): Boolean = {
+    val loads = getNodeLoads
+    shardAssignment.get(shardId).exists(source => source != target && loads.contains(target) &&
+      loads.getOrElse(source, 0.0) - loads(target) > shardMetricsMap.get(shardId).fold(0.0)(_.totalWeight) + 1e-9)
   }
 
   /** Get the load imbalance ratio across cluster nodes.
@@ -113,7 +108,7 @@ class KdTreeLoadBalancer {
 
   /** Gets the total load per cluster node. */
   def getNodeLoads: Map[Address, Double] = {
-    val loads = mutable.Map[Address, Double]()
+    val loads = mutable.Map.from(clusterNodes.keysIterator.map(_ -> 0.0))
     shardAssignment.foreach {
       case (shardId, address) =>
         val weight = shardMetricsMap.get(shardId).map(_.totalWeight).getOrElse(0.0)
@@ -125,67 +120,4 @@ class KdTreeLoadBalancer {
   /** Get the number of registered cluster nodes. */
   def nodeCount: Int = clusterNodes.size
 
-  // ── Internal kd-tree partition ─────────────────────────────────────────────
-
-  /** Recursively partition shards into `n` groups using median splitting on weight.
-    *
-    * This is a simplified 1D kd-tree split: we sort by weight and split at the median, recurse on
-    * each half until we have `n` groups.
-    */
-  private def partitionByMedian(
-    shards: List[(String, ShardMetrics)],
-    n: Int
-  ): List[List[(String, ShardMetrics)]] = {
-    if (n <= 1 || shards.size <= 1) return List(shards)
-
-    // Split into two halves by weight (median split)
-    val sorted = shards.sortBy(_._2.totalWeight)
-    val totalWeight = sorted.map(_._2.totalWeight).sum
-    val targetWeight = totalWeight / 2.0
-
-    var accumulated = 0.0
-    var splitIndex = sorted.size / 2
-
-    // Find split point closest to balanced weight
-    for (i <- sorted.indices) {
-      accumulated += sorted(i)._2.totalWeight
-      if (accumulated <= targetWeight) {
-        splitIndex = i + 1
-      }
-    }
-
-    // Ensure non-empty splits
-    splitIndex = math.max(1, math.min(splitIndex, sorted.size - 1))
-
-    val (left, right) = sorted.splitAt(splitIndex)
-    val leftGroups = n / 2
-    val rightGroups = n - leftGroups
-
-    partitionByMedian(left, leftGroups) ++ partitionByMedian(right, rightGroups)
-  }
-
-  /** Update cluster node load info based on current assignments. */
-  private def updateNodeLoads(): Unit = {
-    val nodeLoads = getNodeLoads
-    val nodeCounts = mutable.Map[Address, Int]()
-
-    shardAssignment.foreach {
-      case (_, address) =>
-        nodeCounts.update(address, nodeCounts.getOrElse(address, 0) + 1)
-    }
-
-    clusterNodes.foreach {
-      case (address, _) =>
-        clusterNodes.update(
-          address,
-          ClusterNodeLoad(
-            address = address,
-            shardIds = shardAssignment.filter(_._2 == address).keys.toSet,
-            totalWeight = nodeLoads.getOrElse(address, 0.0),
-            entityCount = nodeCounts.getOrElse(address, 0),
-            timestamp = System.nanoTime()
-          )
-        )
-    }
-  }
 }

@@ -163,7 +163,7 @@ class KryoEventDataSerializationSpec extends AnyFlatSpec with Matchers with Befo
         model.hybrid.entity.state.enumeration.SimulationModeEnum.MICRO, 0, 200.0, 50.0, 1, 0.1, 1, Some(12.5),
         initialPosition = 0.5),
       model.hybrid.entity.event.data.MicroLeaveLinkData(7L, 200.0, 12.5, 15.1, 200.0, 12.0,
-        remainingStepSeconds = 0.04),
+        remainingStepSeconds = 0.04, retainedInLane = true),
       model.hybrid.entity.event.data.person.PassengerBoardedVehicleData(77L, "hybrid.actor.Bus", 1200.0),
       LinkCostChangedData(7L, 123.0, 12L),
       RouteQueryData(1L, 4L, 500000),

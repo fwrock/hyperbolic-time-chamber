@@ -8,4 +8,5 @@ import core.entity.event.data.DefaultBaseEventData
   * indicating that the TimeManager can resume advancing ticks.
   */
 case class MigrationCompleteNotifyEvent(
+  requestId: String = ""
 ) extends BaseEvent[DefaultBaseEventData]

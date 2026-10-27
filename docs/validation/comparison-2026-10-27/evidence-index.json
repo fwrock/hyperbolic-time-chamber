@@ -1,0 +1,177 @@
+{
+  "date": "2026-10-27T06:53:34.918480+00:00",
+  "allAttemptsAccountedFor": true,
+  "attempts": 114,
+  "manifestSha256": "a4b118520b10fee5ba69e626305e40dcdfd952d841b3a33d292397aec01317b5",
+  "archives": {
+    "raw-evidence.zip": {
+      "path": "docs/validation/comparison-2026-10-27/raw-evidence.zip",
+      "sha256": "f6899b4f57a8a28bbfdf33610cb8f56842510ed51f90832b2085b4ff4e772ad2",
+      "bytes": 46228884
+    },
+    "source-snapshot.zip": {
+      "path": "docs/validation/comparison-2026-10-27/source-snapshot.zip",
+      "sha256": "b101ab55a55c31ddce58f6c7ecc1fa3ad586553e1024eb1867de884fa4e40316",
+      "bytes": 2285849
+    }
+  },
+  "durableExecutable": {
+    "path": "artifacts/htc-comparison-2026-10-27/htc-comparison.jar",
+    "sha256": "bfab98fde9dce619f753304876fc2a367655bb84e5826784714fc72c36a1ae1f",
+    "bytes": 171374147
+  },
+  "reportArtifacts": {
+    "docs/reports/htc-comparison-2026-10-27/all-attempts.csv": {
+      "sha256": "f06da3ec68d18fcd56fbd8c8f0087c4a230dafe73a437c36efeeed2b6b26c332",
+      "bytes": 33777
+    },
+    "docs/reports/htc-comparison-2026-10-27/all-attempts.json": {
+      "sha256": "7127d8aa2550bd2e295c7c2d78f6939e0985d27b493c1f8dabe9899b14faf74d",
+      "bytes": 113628
+    },
+    "docs/reports/htc-comparison-2026-10-27/configuration-summary.csv": {
+      "sha256": "9a213068855c83a56738e38a1cef064a970f74dd442fc85f2333e0a82e8c9261",
+      "bytes": 2168
+    },
+    "docs/reports/htc-comparison-2026-10-27/figure-index.json": {
+      "sha256": "c719618f8e76e8b9e37caa4290ff171e3f228bb6d04c8dd1c3a03bd09ef1c25b",
+      "bytes": 2388
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/balancing-times.png": {
+      "sha256": "019450a1848826c47b8217f7181d7863a4d52d28e59368c0eec0b14b8272f195",
+      "bytes": 49314
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/balancing-times.svg": {
+      "sha256": "9c81bcdb9a49ca17bffe2b9aec929223fe2b2b653bbc6140d8b88993c588592c",
+      "bytes": 39867
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/cpu-imbalance.png": {
+      "sha256": "1ab1a42cb7646dfec2b828c6531ff7f9968b0aa3b57e2ad6684d8c532ca03059",
+      "bytes": 277337
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/cpu-imbalance.svg": {
+      "sha256": "41d734c61c1802e9df44471e4c0a327a28e4305a54741450c5a61e4cd414c085",
+      "bytes": 71450
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/execution-intervals.png": {
+      "sha256": "4664bbda70e9fc8571f133aa6bb0df3f920aec3d79c6b591f0a95921651f6d55",
+      "bytes": 84523
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/execution-intervals.svg": {
+      "sha256": "732b1262b875290b51f51d59ccf9031624e38502d0f22654e3bb311c6849e5f1",
+      "bytes": 56619
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/execution-times.png": {
+      "sha256": "0e44d8c8dde53c916be0c845fcfdda25af79fcde29f225e5242df2d60a6a7f7e",
+      "bytes": 82449
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/execution-times.svg": {
+      "sha256": "6058b3d14a950b6599ce950fd36761146a230868e642c11251e4f0f721a78e61",
+      "bytes": 81934
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/live-loads.png": {
+      "sha256": "83d587ba285517a800991237fcb381261aa4c4b012413cd1cc9d1fc5b83085d4",
+      "bytes": 130877
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/live-loads.svg": {
+      "sha256": "15e19117ba6d051f79426a9a9a2ecdb40d97236b7a82ec7331cc4fd1b704af84",
+      "bytes": 99047
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/migration-phases.png": {
+      "sha256": "c606c47e8a013691882bdd1555c33fb9b4ca20331cce3598a1c7c8a5d1af121d",
+      "bytes": 49789
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/migration-phases.svg": {
+      "sha256": "f57e14e44e971799e79351a43ac3a45201002595d544bbfbef2bbba783a364c1",
+      "bytes": 51743
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/paired-ratios.png": {
+      "sha256": "78507d7449c10d4c1fdb177585675866f1e028366b10629551e70b313d9ddf70",
+      "bytes": 129590
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/paired-ratios.svg": {
+      "sha256": "d21a5dc96770701cbf8a703cdc287d4ba2e8668e5ce5897ba7408682b6e428a4",
+      "bytes": 84527
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/queues-headways.png": {
+      "sha256": "c616abba66019767a17dbb1f24741515460c88f6ecf3efe88d23c7e7ae9b5e15",
+      "bytes": 78257
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/queues-headways.svg": {
+      "sha256": "d564bf6b432f1722b44c2ca4751e6371e0d979d31a0c8220506eded6261956d9",
+      "bytes": 58489
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/rebalancing-costs.png": {
+      "sha256": "6cdf41421f4d54c02626e854e686675face3bcd5a8702fbc557f9ff5dfed4351",
+      "bytes": 60536
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/rebalancing-costs.svg": {
+      "sha256": "d699cc4a1629e0890a7ccfb75066dae6b935a2ccf7a8a6d1f5d2568217db48d4",
+      "bytes": 68020
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/resources.png": {
+      "sha256": "e519e4381f8596a03d6372630f7824ba42957f34b2fa9d0ca935d9df85c5bcd6",
+      "bytes": 117257
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/resources.svg": {
+      "sha256": "4e50fe455ac6c916e814a730f09ecb67899720a744057180b9608e5b342076a6",
+      "bytes": 119178
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/rollbacks.png": {
+      "sha256": "ff9132b48126b5185626e95d91ba2e078d1a84e16a3247de0c45c103faf1679c",
+      "bytes": 75936
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/rollbacks.svg": {
+      "sha256": "26591078a2255f4601c66d28a2f8a0627340852d04bdbf08e628a4303de2caa0",
+      "bytes": 63481
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/trajectories.png": {
+      "sha256": "3a30c7eb3b8ce7f4d956c49185f23b7c597b2dc8dbba00241f00c71e19038d88",
+      "bytes": 149973
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/trajectories.svg": {
+      "sha256": "6529ab191bafe3a514fe7f0de24c6efdb4ee7cba1bcb9c9769d02bb1fdb690ab",
+      "bytes": 72730
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/travel-times.png": {
+      "sha256": "303e38f0baf58b2dc64d4d597b80524cfbb756a7877335581746a5a51c6d5bee",
+      "bytes": 79489
+    },
+    "docs/reports/htc-comparison-2026-10-27/figures/travel-times.svg": {
+      "sha256": "fe30819258b27de26ad5d8b9762c5facdf26fa08b9335fd7a8656a69d962e4af",
+      "bytes": 47606
+    },
+    "docs/reports/htc-comparison-2026-10-27/htc-comparison-report-2026-10-27.docx": {
+      "sha256": "06154b6c8039515c2438b9ba99c05397f47f62e2f1548ecd08754ca630cd5cd5",
+      "bytes": 1475242
+    },
+    "docs/reports/htc-comparison-2026-10-27/htc-comparison-report-2026-10-27.pdf": {
+      "sha256": "c51f718ecc04e4b5a8cf3d9f237b2f9ed31ba3364e72af39237cdf5856166266",
+      "bytes": 1911346
+    },
+    "docs/reports/htc-comparison-2026-10-27/representative-physical.json": {
+      "sha256": "6e330e5cf8fddcb1aa0ea8a2c1a5d34cb156bc7bbc4f33ac0221182eb4bc820e",
+      "bytes": 23266
+    },
+    "docs/reports/htc-comparison-2026-10-27/representative-scientific.json": {
+      "sha256": "e3ad5404b0aef9d9495bdd0bf6179c778ac8ac12f2c9d2f77e380711f12d03d2",
+      "bytes": 9094
+    },
+    "docs/reports/htc-comparison-2026-10-27/summary.json": {
+      "sha256": "b509fc1e515ef8b81e42aec491873d9932095cfc62ab2a3135fde0471cda409d",
+      "bytes": 74357
+    },
+    "docs/reports/htc-comparison-2026-10-27/verification.json": {
+      "sha256": "ae9ee336fc2f0c2350eb75e5dbf831851206c3dbb695dc6873a9891fe63ba535",
+      "bytes": 725
+    }
+  },
+  "testEvidence": {
+    "/tmp/htc-comparison-build-20261027.log": "e68cc2536b8455b928b307061f005b528310bc3baba45166eabce40605d56ecd",
+    "/tmp/htc-comparison-python-tests.log": "527794b0c0db323649dae8f498d121748666ed93cb382b0bf6b43e9faf266369"
+  },
+  "reportSources": {
+    "scripts/scenario/build_comparison_report.py": "3e36ebd6cd0cc60f23d98667df46710e5fac14655f6f08c2bea3d325d0be7d94",
+    "scripts/scenario/archive_comparison_study.py": "645e6465c1fae0ceda126be6a76c3ad704697e0e5ed8685bb53a788ee6495f96"
+  }
+}

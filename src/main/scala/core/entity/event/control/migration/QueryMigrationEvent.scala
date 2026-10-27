@@ -12,6 +12,8 @@ import org.apache.pekko.actor.ActorRef
   * entity stashes all incoming messages and waits for either:
   *   - [[MigrationContextEvent]] — snapshot found, entity restores and joins
   *   - [[NoPendingMigrationEvent]] — no snapshot found, entity does normal initialization
+  *   - [[MigrationRestoreAlreadyAcceptedEvent]] — confirmation is already recorded for this target
+  *   - [[MigrationPreparationFailedEvent]] — state cannot be safely restored; the target stops
   *
   * @param entityId
   *   The ID of the entity requesting its snapshot

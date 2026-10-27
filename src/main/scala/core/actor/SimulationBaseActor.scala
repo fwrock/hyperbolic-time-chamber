@@ -5,9 +5,10 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{MigrationSnapshot, MigrationStateStoreRegistry}
+import core.actor.manager.loadbalance.migration.{ConservativeMigrationCheckpoint, ConservativeMigrationCodec}
 import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
-import core.entity.event.control.migration.{MigrationContextEvent, MigrationRestoredAckEvent, NoPendingMigrationEvent, QueryMigrationEvent}
+import core.entity.event.control.migration.{MigrationContextEvent, MigrationPreparationFailedEvent, MigrationRestoredAckEvent, MigrationRestoreAlreadyAcceptedEvent, MigrationRestoreFailedEvent, NoPendingMigrationEvent, QueryMigrationEvent}
 import core.runtime.{EventOrder, OrderedInputQueue}
 import core.runtime.accounting.*
 import core.runtime.conservative.*
@@ -97,7 +98,9 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var scheduleRevision = 0L
   private var accountedCoordinator: Option[ActorRef] = Option(properties).flatMap(_.runtimeCoordinator)
   private var runtimeEpoch: Option[String] = None
-  private val runtimeIncarnation = java.util.UUID.randomUUID().toString
+  private var runtimeIncarnation = java.util.UUID.randomUUID().toString
+  private var runtimeMigrationRequest: Option[String] = None
+  private var conservativeRestore: Option[MigrationContextEvent] = None
   private var runtimeFrozen = false
   private var distributedRuntime = false
   private var runtimeHorizon = Long.MaxValue
@@ -676,7 +679,20 @@ abstract class SimulationBaseActor[T <: BaseState](
       modelSnapshot = captureModelSnapshot(),
       awaitedReplies = outstandingAwaitedReplies.iterator.map {
         case (key, r) => key -> s"${r.kind}|${r.sentAtTick}|${r.sendSeq}"
-      }.toMap
+      }.toMap,
+      conservativeRuntime = Option.when(usesConservativeRuntime) {
+        require(runtimeMigrationRequest.nonEmpty && runtimeEpoch.nonEmpty && runtimeFrozen && !runtimeFailed,
+          "conservative snapshot outside an authorized migration freeze")
+        require(initializationAcks.isEmpty && pendingCreationCallbacks.isEmpty && pendingDynamicInits.isEmpty,
+          "conservative migration while initialization is pending")
+        ConservativeMigrationCheckpoint(runtimeEpoch.get, runtimeIncarnation, runtimeMigrationRequest.get,
+          org.apache.pekko.serialization.Serialization.serializedActorPath(currentTimeManager),
+          org.apache.pekko.serialization.Serialization.serializedActorPath(accountedCoordinator.get),
+          org.apache.pekko.serialization.Serialization.serializedActorPath(self),
+          inputQueue.snapshot.map(ConservativeMigrationCodec.encode(context.system, _)),
+          currentGeneration, scheduleRevision, _spontaneousFinishSent, effectOrdinal,
+          runtimeHorizon, retirementFence, finalizedHorizon, runtimeBirth)
+      }
     )
   }
 
@@ -700,6 +716,23 @@ abstract class SimulationBaseActor[T <: BaseState](
     terminalIntent = snapshot.terminalIntent
     runtimeBorn = snapshot.runtimeBorn
     pendingSelf = snapshot.pendingSelf
+    snapshot.conservativeRuntime.foreach { checkpoint =>
+      require(!isTimeWarp && checkpoint.epoch.nonEmpty && checkpoint.incarnation.nonEmpty && checkpoint.requestId.nonEmpty,
+        "invalid conservative migration checkpoint")
+      inputQueue.restore(checkpoint.inputs.map(ConservativeMigrationCodec.decode(context.system, _)))
+      runtimeEpoch = Some(checkpoint.epoch)
+      runtimeIncarnation = checkpoint.incarnation
+      runtimeMigrationRequest = Some(checkpoint.requestId)
+      currentGeneration = checkpoint.generation
+      scheduleRevision = checkpoint.scheduleRevision
+      _spontaneousFinishSent = checkpoint.spontaneousFinishSent
+      effectOrdinal = checkpoint.effectOrdinal
+      runtimeHorizon = checkpoint.horizon
+      retirementFence = checkpoint.retirementFence
+      finalizedHorizon = checkpoint.finalizedHorizon
+      runtimeBirth = checkpoint.birth
+      runtimeFrozen = true
+    }
     startTick = snapshot.startTick
     lamportClock.update(snapshot.lamportClock)
     currentTimeManagerType = snapshot.currentTimeManagerType
@@ -734,6 +767,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     * incoming messages are stashed until MigrationContextEvent or NoPendingMigrationEvent arrives.
     */
   private var awaitingMigration: Boolean = false
+  private case class AppliedMigration(batchId: String, token: String, revision: Long, store: ActorRef)
+  private var appliedMigration: Option[AppliedMigration] = None
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
     accountedCoordinator.foreach(_ ! RuntimeFailure(s"LP restart requires coordinated recovery: $getEntityId (${reason.getMessage})"))
@@ -754,12 +789,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         case Some(smRef) =>
           smRef ! QueryMigrationEvent(entityId = entityId, actorRef = self)
         case None =>
-          logWarn(
-            s"Entity '$entityId': migration window active but SM proxy not registered — " +
-              s"proceeding with normal initialization."
-          )
-          awaitingMigration = false
-          proceedNormalInit()
+          logError(s"Entity '$entityId': migration window active but SnapshotManager is not registered")
+          context.stop(self)
       }
       return
     }
@@ -1452,6 +1483,40 @@ abstract class SimulationBaseActor[T <: BaseState](
       require(distributedRuntime && runtimeAuthority.contains(sender()) && runtimeFrozen && runtimeCommitRound == 0L,
         "execution horizon outside runtime startup")
       runtimeHorizon = horizon
+    case FreezeConservativeProcess(epoch, requestId) =>
+      try {
+        require(usesConservativeRuntime && sender() == currentTimeManager && runtimeEpoch.contains(epoch) &&
+          runtimeFrozen && !runtimeFailed && initializationAcks.isEmpty && runtimeMigrationRequest.forall(_ == requestId),
+          "invalid conservative migration freeze")
+        runtimeMigrationRequest = Some(requestId)
+        sender() ! ConservativeProcessFrozen(epoch, requestId)
+      } catch { case scala.util.control.NonFatal(error) => failRuntime(error) }
+    case ConservativeSourceStopAuthorized(epoch, requestId) =>
+      require(usesConservativeRuntime && sender() == currentTimeManager && runtimeEpoch.contains(epoch) &&
+        runtimeMigrationRequest.contains(requestId), "unauthorized conservative source stop")
+      completeAuthorizedMigrationStop()
+    case e: ConservativeProcessRebound if conservativeRestore.nonEmpty =>
+      val event = conservativeRestore.get
+      try {
+        val checkpoint = event.snapshot.conservativeRuntime.get
+        require(sender() == e.owner && e.epoch == checkpoint.epoch && e.requestId == checkpoint.requestId &&
+          e.incarnation == checkpoint.incarnation &&
+          org.apache.pekko.serialization.Serialization.serializedActorPath(e.owner) == checkpoint.ownerPath &&
+          org.apache.pekko.serialization.Serialization.serializedActorPath(e.coordinator) == checkpoint.coordinatorPath,
+          "conservative restore owner/epoch/incarnation changed")
+        accountedCoordinator = Some(e.coordinator)
+        currentTimeManager = e.owner
+        distributedRuntime = false
+        appliedMigration = Some(AppliedMigration(event.batchId, event.restoreToken, event.snapshotRevision, event.snapshotManagerRef))
+        conservativeRestore = None
+        event.snapshotManagerRef ! MigrationRestoredAckEvent(entityId, event.batchId, event.restoreToken, event.snapshotRevision)
+        awaitingMigration = false
+        unstashAll()
+      } catch { case scala.util.control.NonFatal(error) => failMigrationRestore(event, error) }
+    case EndConservativeProcessMigration(epoch, requestId) =>
+      require(usesConservativeRuntime && sender() == currentTimeManager && runtimeEpoch.contains(epoch) &&
+        runtimeMigrationRequest.contains(requestId), "invalid conservative migration resume")
+      runtimeMigrationRequest = None
     case RuntimeJoined(epoch, coordinator, owner, distributed) =>
       require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
       runtimeEpoch = Some(epoch)
@@ -1596,15 +1661,29 @@ abstract class SimulationBaseActor[T <: BaseState](
         sender() ! RuntimeProcessRetired(round)
         physicallyRetire()
       }
+    case event: MigrationPreparationFailedEvent if awaitingMigration =>
+      logError(s"Cannot restore migration '${event.batchId}': ${event.reason}")
+      context.stop(self)
+
     case event: MigrationContextEvent if awaitingMigration =>
-      awaitingMigration = false
-      handleMigrationContext(event)
-      unstashAll()
+      if (handleMigrationContext(event)) {
+        awaitingMigration = false
+        unstashAll()
+      }
 
     case _: NoPendingMigrationEvent if awaitingMigration =>
       awaitingMigration = false
       unstashAll()
       proceedNormalInit()
+
+    case event: MigrationRestoreAlreadyAcceptedEvent =>
+      val applied = appliedMigration.exists(a => a.batchId == event.batchId && a.token == event.restoreToken &&
+        a.revision == event.snapshotRevision && a.store == sender())
+      if (!applied) {
+        sender() ! MigrationRestoreFailedEvent(entityId, event.batchId, event.restoreToken,
+          event.snapshotRevision, "completed restore has no matching application in this actor; independent recovery is unsupported")
+        context.stop(self)
+      }
 
     case _ if awaitingMigration =>
       stash()
@@ -1738,6 +1817,12 @@ abstract class SimulationBaseActor[T <: BaseState](
       context.parent ! ShardRegion.Passivate(PoisonPill)
     else context.stop(self)
 
+  override protected def stopAfterMigrationSnapshot(): Unit =
+    if (usesConservativeRuntime) {
+      require(runtimeMigrationRequest.nonEmpty && runtimeEpoch.nonEmpty, "source stop outside conservative migration")
+      currentTimeManager ! AuthorizeConservativeSourceStop(runtimeEpoch.get, runtimeMigrationRequest.get)
+    } else super.stopAfterMigrationSnapshot()
+
   override protected def onDestruct(event: DestructEvent): Unit = {
     if (usesAccountedRuntime) {
       accountedCoordinator.foreach(_ ! RuntimeFailure(s"uncommitted destruction of $getEntityId"))
@@ -1747,32 +1832,47 @@ abstract class SimulationBaseActor[T <: BaseState](
     }
   }
 
-  private def handleMigrationContext(event: MigrationContextEvent): Unit = {
-    logInfo(
-      s"Entity '$entityId' received MigrationContextEvent: " +
-        s"timeManagers=${event.timeManagers.keys.mkString(",")}, " +
-        s"reporters=${event.reporters.size}, batchId=${event.batchId}"
-    )
-    applyMigrationSnapshot(event.snapshot)
-
-    if (event.snapshot.entityId.nonEmpty) {
-      entityId = event.snapshot.entityId
+  private def handleMigrationContext(event: MigrationContextEvent): Boolean = {
+    try {
+      require(event.snapshotManagerRef != null && event.restoreToken.nonEmpty &&
+        event.batchId.nonEmpty && event.snapshotRevision > 0L, "missing restore confirmation identity")
+      require(event.snapshot != null && event.snapshot.entityId == entityId, "restore entity mismatch")
+      val identity = AppliedMigration(event.batchId, event.restoreToken, event.snapshotRevision, event.snapshotManagerRef)
+      appliedMigration match {
+        case Some(existing) => require(existing == identity, "a different restore was already applied to this actor")
+        case None =>
+          applyMigrationSnapshot(event.snapshot)
+          if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
+          if (event.reporters.nonEmpty) reporters = event.reporters
+          creatorManager = null
+          if (event.snapshot.conservativeRuntime.isEmpty && shouldRegisterOnTimeManagerAfterMigration()) registerOnTimeManager()
+          onFinishInitialize()
+          onMigrationRestore()
+          event.snapshot.conservativeRuntime.foreach { checkpoint =>
+            conservativeRestore = Some(event)
+            context.actorSelection(checkpoint.ownerPath) ! RebindConservativeProcess(checkpoint.epoch, checkpoint.requestId,
+              LogicalProcessId(getClass.getName, entityId.toLong), checkpoint.incarnation, checkpoint.sourcePath)
+          }
+          if (conservativeRestore.nonEmpty) return false
+          appliedMigration = Some(identity)
+      }
+      event.snapshotManagerRef ! MigrationRestoredAckEvent(entityId, event.batchId,
+        event.restoreToken, event.snapshotRevision)
+      true
+    } catch {
+      case scala.util.control.NonFatal(error) =>
+        failMigrationRestore(event, error)
+        false
     }
+  }
 
-    if (event.timeManagers.nonEmpty) timeManagers = event.timeManagers
-    if (event.reporters.nonEmpty) reporters = event.reporters
-    creatorManager = null
-
-    if (shouldRegisterOnTimeManagerAfterMigration()) {
-      registerOnTimeManager()
-    }
-    onFinishInitialize()
-
-    if (event.lbmRef != null) {
-      event.lbmRef ! MigrationRestoredAckEvent(entityId = entityId, batchId = event.batchId)
-    }
-
-    onMigrationRestore()
+  private def failMigrationRestore(event: MigrationContextEvent, error: Throwable): Unit = {
+    val reason = Option(error.getMessage).getOrElse(error.getClass.getName)
+    logError(s"Migration restore '${event.batchId}' failed: $reason", error)
+    Option(event.snapshotManagerRef).foreach(_ ! MigrationRestoreFailedEvent(entityId,
+      event.batchId, event.restoreToken, event.snapshotRevision, reason))
+    Option(event.lbmRef).foreach(_ ! MigrationPreparationFailedEvent(event.batchId, entityId, reason))
+    context.stop(self)
   }
 
   /** Finishes processing a spontaneous event and optionally schedules the next tick.

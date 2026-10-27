@@ -96,6 +96,10 @@ Percentiles use linear interpolation between ordered observations.
 
 ## Empirical pilot
 
+The later [conditional Lankershim field study](MICRO_FIELD_VALIDATION.md) adds
+actual leader/follower and two-follower queue replay. Its frozen field gate is
+not established; it is separate from the historical isolated-cruising pilot below.
+
 The official [USDOT/FHWA NGSIM dataset](https://data.transportation.gov/d/8ect-6jqj)
 provides a bounded exploratory free-flow forecast. Metadata documents feet,
 feet/second and 100 ms observations. The fetcher retains query URLs, raw hashes,

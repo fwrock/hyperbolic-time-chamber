@@ -16,20 +16,15 @@ import scala.collection.mutable
   * — entities are grouped purely by their actor class.
   *
   * '''Shard assignment (creation time)''':
-  *   - The type is extracted from the entity ID convention `htcaid:{type};{id}`.
+  *   - Class metadata determines the type; legacy entity IDs are a fallback.
   *   - A counter per type tracks the current open bucket.
   *   - When the current bucket reaches `maxEntitiesPerShard` (from [[StrategyConfig]]), the next
   *     bucket is opened: `{type}-shard-{N+1}`.
   *   - This naturally handles large populations (e.g. 20M persons → ~400 buckets of 50K each).
   *
-  * '''Runtime load balancing''':
-  *   - The kd-tree component monitors CPU load metrics per shard and per pod.
-  *   - When the imbalance ratio exceeds 1.5 (50% difference between busiest and idlest pod), the
-  *     kd-tree triggers migrations of whole type-shards to less-loaded pods.
-  *   - Predictive analysis (optional) detects shards trending toward overload and migrates them
-  *     pre-emptively.
-  *   - All shards in this strategy are migratable (no Static pinning needed since type-shards do
-  *     not mix infrastructure with vehicles).
+  * Runtime planning uses live entity counts as a load proxy and pins infrastructure. It
+  * evaluates beneficial projected-load moves when max/min load exceeds 1.5 or a prediction
+  * reaches its configured threshold. Neither count nor prediction measures CPU utilization.
   *
   * '''Shard ID format''': `{entityType}-shard-{bucket}`
   *
@@ -55,11 +50,19 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   /** All known shard IDs (for getAllShardIds). */
   private val knownShards: mutable.Set[String] = mutable.Set.empty
+  private val entityAssignments = mutable.Map.empty[String, (String, String)]
+  private val shardTypes = mutable.Map.empty[String, ShardTypeEnum]
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   override def initialize(worldBounds: SpatialBounds, cfg: StrategyConfig): Unit = {
     config = cfg
+    require(cfg.maxEntitiesPerShard > 0, "type-aware shard capacity must be positive")
+    typeBucket.clear()
+    shardCount.clear()
+    knownShards.clear()
+    entityAssignments.clear()
+    shardTypes.clear()
     kdTree = new KdTreeLoadBalancer()
     predictor = new core.actor.manager.loadbalance.prediction.PredictiveBalancer(
       loadThreshold = cfg.loadThreshold,
@@ -79,11 +82,17 @@ class TypeAwareStrategy extends BalancingStrategy {
     */
   override def assignShard(entity: SpatialEntity): String = {
     val entityType = extractType(entity)
+    entityAssignments.get(entity.spatialEntityId) match {
+      case Some((kind, shard)) =>
+        require(kind == entityType, "registered entity actor type changed")
+        return shard
+      case None => ()
+    }
     val bucket = typeBucket.getOrElse(entityType, 0)
     val shardId = s"$entityType-shard-$bucket"
 
     val count = shardCount.getOrElse(shardId, 0)
-    if (count >= config.maxEntitiesPerShard) {
+    val assigned = if (count >= config.maxEntitiesPerShard) {
       // Current bucket full — open the next one
       val nextBucket = bucket + 1
       typeBucket.put(entityType, nextBucket)
@@ -96,6 +105,9 @@ class TypeAwareStrategy extends BalancingStrategy {
       knownShards.add(shardId)
       shardId
     }
+    entityAssignments(entity.spatialEntityId) = entityType -> assigned
+    shardTypes(assigned) = SpatialEntityClassification.classify(entity)
+    assigned
   }
 
   /** Returns a type-aware shard for the given position. Since this strategy has no geographic
@@ -116,58 +128,27 @@ class TypeAwareStrategy extends BalancingStrategy {
     if (config.enablePrediction) predictor.recordMetrics(metrics)
   }
 
-  /** Evaluates migration need purely by CPU load imbalance across pods.
+  /** Evaluates migration need from the supplied scalar load snapshot.
     *
-    *   1. Predictive: shards trending toward overload are moved pre-emptively. 2. Reactive: kd-tree
-    *      rebalance fires when max/min pod load ratio > 1.5.
+    *   1. Predictive: shards trending toward overload are moved pre-emptively. 2. Reactive: projected-load
+    *      planning runs when max/min pod load ratio > 1.5.
     *
     * Target pod selection is purely load-based (lowest available load). There is no geographic
     * component in this strategy.
     */
   override def evaluate(): List[MigrationPlan] = {
-    val migrations = mutable.ListBuffer[MigrationPlan]()
-
-    // 1. Predictive overload detection
-    if (config.enablePrediction) {
-      predictor.predictOverloadedShards(maxShardWeight).foreach {
-        result =>
-          val currentNode = kdTree.getAssignment(result.shardId)
-          currentNode.foreach {
-            source =>
-              val reason =
-                if (result.isAlreadyOverloaded) MigrationReason.ReactiveOverload
-                else MigrationReason.PredictiveOverload
-              selectLeastLoaded(source).foreach {
-                target =>
-                  migrations += MigrationPlan(
-                    shardId = result.shardId,
-                    sourceNode = source,
-                    targetNode = target,
-                    reason = reason,
-                    predictedLoadAtTarget = result.predictedLoad,
-                    priority = if (result.isAlreadyOverloaded) 10 else 5
-                  )
-              }
-          }
-      }
-    }
-
-    // 2. Periodic kd-tree rebalance
-    if (kdTree.getImbalanceRatio > 1.5) {
-      kdTree.rebalance().foreach {
-        case (shardId, oldNode, newNode) if !migrations.exists(_.shardId == shardId) =>
-          migrations += MigrationPlan(
-            shardId = shardId,
-            sourceNode = oldNode.getOrElse(newNode),
-            targetNode = newNode,
-            reason = MigrationReason.Rebalance,
-            priority = 1
-          )
-        case _ => ()
-      }
-    }
-
-    migrations.toList.sortBy(-_.priority)
+    val predictions = if (config.enablePrediction)
+      predictor.predictOverloadedShards(maxShardWeight).map(p => p.shardId -> p).toMap
+    else Map.empty[String, core.actor.manager.loadbalance.prediction.PredictionResult]
+    if (kdTree.getImbalanceRatio <= 1.5 && predictions.isEmpty) return Nil
+    kdTree.rebalance(isMigratable).map { case (shard, source, target) =>
+      val prediction = predictions.get(shard)
+      val reason = prediction.fold(MigrationReason.Rebalance)(p =>
+        if (p.isAlreadyOverloaded) MigrationReason.ReactiveOverload else MigrationReason.PredictiveOverload)
+      MigrationPlan(shard, source.get, target, reason,
+        predictedLoadAtTarget = prediction.fold(0.0)(_.predictedLoad),
+        priority = prediction.fold(1)(p => if (p.isAlreadyOverloaded) 10 else 5))
+    }.sortBy(p => (-p.priority, p.shardId))
   }
 
   override def getAssignments: Map[String, Address] = kdTree.getAllAssignments
@@ -176,13 +157,17 @@ class TypeAwareStrategy extends BalancingStrategy {
 
   override def recordShardLocation(shardId: String, address: Address): Unit =
     kdTree.recordNodeAssignment(shardId, address)
+  override def replaceLoadSnapshot(metrics: Seq[ShardMetrics], assignments: Map[String, Address], nodes: Set[Address]): Unit = {
+    kdTree.replaceSnapshot(metrics, assignments, nodes)
+    if (config.enablePrediction) metrics.foreach(predictor.recordMetrics)
+  }
 
   override def getShardEntityCounts: Map[String, Int] = shardCount.toMap
 
-  /** All type-aware shards are migratable — there are no mixed static/dynamic buckets. */
-  override def getShardType(shardId: String): ShardTypeEnum = ShardTypeEnum.Dynamic
+  /** Type buckets retain their shared infrastructure classification. */
+  override def getShardType(shardId: String): ShardTypeEnum = shardTypes.getOrElse(shardId, ShardTypeEnum.Dynamic)
 
-  override def isMigratable(shardId: String): Boolean = true
+  override def isMigratable(shardId: String): Boolean = getShardType(shardId) == ShardTypeEnum.Dynamic
 
   override def getStats: Map[String, Any] = {
     val perType = shardCount.keys
@@ -255,6 +240,6 @@ class TypeAwareStrategy extends BalancingStrategy {
   private def selectLeastLoaded(sourceNode: Address): Option[Address] =
     kdTree.getNodeLoads
       .filter(_._1 != sourceNode)
-      .minByOption(_._2)
+      .toVector.sortBy { case (node, load) => (load, node.toString) }.headOption
       .map(_._1)
 }

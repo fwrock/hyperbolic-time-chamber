@@ -1,0 +1,235 @@
+% Attribution boundaries and source verification are documented in ../LOAD_BALANCING.md.
+% These references support components/background, not authorship of complete HTC strategies.
+% Applied studies A1--A14 are mapped and access-qualified in ../LOAD_BALANCING_LITERATURE.md.
+
+@misc{apachePekko15ClusterSharding,
+  author       = {{Apache Software Foundation}},
+  title        = {{Apache Pekko} 1.5: Cluster Sharding},
+  howpublished = {Official software documentation},
+  url          = {https://pekko.apache.org/docs/pekko/1.5/cluster-sharding.html},
+  urldate      = {2026-10-25},
+  note         = {Classic API; general allocation documentation linked from this page}
+}
+
+@article{finkelBentley1974QuadTrees,
+  author  = {Finkel, R. A. and Bentley, J. L.},
+  title   = {Quad trees a data structure for retrieval on composite keys},
+  journal = {Acta Informatica},
+  year    = {1974},
+  volume  = {4},
+  number  = {1},
+  pages   = {1--9},
+  doi     = {10.1007/BF00288933},
+  url     = {https://doi.org/10.1007/BF00288933}
+}
+
+@article{sundarSampathBiros2008Octrees,
+  author  = {Sundar, Hari and Sampath, Rahul S. and Biros, George},
+  title   = {Bottom-Up Construction and {2:1} Balance Refinement of Linear Octrees in Parallel},
+  journal = {SIAM Journal on Scientific Computing},
+  year    = {2008},
+  volume  = {30},
+  number  = {5},
+  pages   = {2675--2708},
+  doi     = {10.1137/070681727},
+  url     = {https://doi.org/10.1137/070681727}
+}
+
+@article{bentley1975Multidimensional,
+  author  = {Bentley, Jon Louis},
+  title   = {Multidimensional Binary Search Trees Used for Associative Searching},
+  journal = {Communications of the ACM},
+  year    = {1975},
+  volume  = {18},
+  number  = {9},
+  pages   = {509--517},
+  doi     = {10.1145/361002.361007},
+  url     = {https://doi.org/10.1145/361002.361007}
+}
+
+@techreport{bergerBokhari1985Partitioning,
+  author      = {Berger, Marsha J. and Bokhari, Shahid H.},
+  title       = {A Partitioning Strategy for Non-Uniform Problems on Multiprocessors},
+  institution = {Institute for Computer Applications in Science and Engineering, NASA Langley Research Center},
+  year        = {1985},
+  month       = nov,
+  number      = {ICASE Report 85-55; NASA Contractor Report 178024},
+  url         = {https://ntrs.nasa.gov/api/citations/19860010476/downloads/19860010476.pdf},
+  urldate     = {2026-10-25}
+}
+
+@misc{nistLinearLeastSquares,
+  author       = {{NIST/SEMATECH}},
+  title        = {e-Handbook of Statistical Methods: Linear Least Squares Regression},
+  howpublished = {Section 4.1.4.1, online handbook},
+  url          = {https://www.itl.nist.gov/div898/handbook/pmd/section1/pmd141.htm},
+  urldate      = {2026-10-25}
+}
+
+% A1: geographic partitioning and conservative dynamic balancing in traffic simulation.
+@article{bragardVentresqueMurphy2017DSUMO,
+  author  = {Bragard, Quentin and Ventresque, Anthony and Murphy, Liam},
+  title   = {Self-Balancing Decentralized Distributed Platform for Urban Traffic Simulation},
+  journal = {IEEE Transactions on Intelligent Transportation Systems},
+  year    = {2017},
+  volume  = {18},
+  number  = {5},
+  doi     = {10.1109/TITS.2016.2603171},
+  url     = {https://researchrepository.ucd.ie/bitstreams/46718144-aed9-443e-ab31-7e40505bf554/download}
+}
+
+% A2: quadtree-based hierarchical balancing in spatial multi-agent simulation.
+@inproceedings{wangEtAl2018DistributedMASON,
+  author    = {Wang, Haoliang and Wei, Ermo and Simon, Robert and Luke, Sean and Crooks, Andrew and Freelan, David and Spagnuolo, Carmine},
+  title     = {Scalability in the {MASON} Multi-Agent Simulation System},
+  booktitle = {2018 IEEE/ACM 22nd International Symposium on Distributed Simulation and Real Time Applications (DS-RT)},
+  year      = {2018},
+  pages     = {1--10},
+  doi       = {10.1109/DISTRA.2018.8601006},
+  url       = {https://people.cs.gmu.edu/~sean/papers/dsrt18.pdf}
+}
+
+% A3: Section 7 adapts partitions between runs, not during a run.
+@article{nagelRickert2001TRANSIMS,
+  author  = {Nagel, Kai and Rickert, Marcus},
+  title   = {Parallel implementation of the {TRANSIMS} micro-simulation},
+  journal = {Parallel Computing},
+  year    = {2001},
+  volume  = {27},
+  number  = {12},
+  pages   = {1611--1639},
+  doi     = {10.1016/S0167-8191(01)00106-5},
+  url     = {https://svn.vsp.tu-berlin.de/repos/public-svn/publications/kn-old/parallel/parallel.pdf}
+}
+
+% A4: agent-based versus environment-based distribution; diffusive balancing.
+@article{mastioEtAl2018DistributedTraffic,
+  author  = {Mastio, Matthieu and Zargayouna, Mahdi and Scemama, Gerard and Rana, Omer},
+  title   = {Distributed agent-based traffic simulations},
+  journal = {IEEE Intelligent Transportation Systems Magazine},
+  year    = {2018},
+  volume  = {10},
+  number  = {1},
+  pages   = {145--156},
+  doi     = {10.1109/MITS.2017.2776162},
+  url     = {https://orca.cardiff.ac.uk/id/eprint/108450/}
+}
+
+% A5: graph-based balancing and communication cost in SEMSim Traffic.
+@inproceedings{xuEtAl2014GraphTrafficBalancing,
+  author    = {Xu, Yadong and Cai, Wentong and Aydt, Heiko and Lees, Michael},
+  title     = {Efficient graph-based dynamic load-balancing for parallel large-scale agent-based traffic simulation},
+  booktitle = {Proceedings of the Winter Simulation Conference 2014},
+  year      = {2014},
+  pages     = {3483--3494},
+  doi       = {10.1109/WSC.2014.7020180},
+  url       = {https://mediatum.ub.tum.de/doc/1281606/631471.pdf}
+}
+
+% A6: traffic-cluster-based adaptive parallelization, not HTC's affinity formula.
+@article{wanEtAl2023PATRIC,
+  author  = {Wan, Lin and Yin, Ganmin and Wang, Jiahao and Ben-Dor, Golan and Ogulenko, Aleksey and Huang, Zhou},
+  title   = {{PATRIC}: A high performance parallel urban transport simulation framework based on traffic clustering},
+  journal = {Simulation Modelling Practice and Theory},
+  year    = {2023},
+  volume  = {126},
+  pages   = {102775},
+  doi     = {10.1016/j.simpat.2023.102775},
+  url     = {https://doi.org/10.1016/j.simpat.2023.102775}
+}
+
+% A7: predictive traffic weighting and periodic graph repartitioning; issue year.
+@article{gehlotEtAl2019ARESCUE,
+  author  = {Gehlot, Hemant and Zhan, Xianyuan and Qian, Xinwu and Thompson, Christopher and Kulkarni, Milind and Ukkusuri, Satish V.},
+  title   = {{A-RESCUE 2.0}: A High-Fidelity, Parallel, Agent-Based Evacuation Simulator},
+  journal = {Journal of Computing in Civil Engineering},
+  year    = {2019},
+  volume  = {33},
+  number  = {2},
+  pages   = {04018059},
+  doi     = {10.1061/(ASCE)CP.1943-5487.0000802},
+  url     = {https://doi.org/10.1061/(ASCE)CP.1943-5487.0000802},
+  note    = {Article 04018059; published online November 2018}
+}
+
+% A8: geometric cell-based k-d-tree balancing in molecular dynamics.
+@article{jungTanSugita2024CGDYN,
+  author  = {Jung, Jaewoon and Tan, Cheng and Sugita, Yuji},
+  title   = {{GENESIS CGDYN}: large-scale coarse-grained {MD} simulation with dynamic load balancing for heterogeneous biomolecular systems},
+  journal = {Nature Communications},
+  year    = {2024},
+  volume  = {15},
+  pages   = {3370},
+  doi     = {10.1038/s41467-024-47654-1},
+  url     = {https://doi.org/10.1038/s41467-024-47654-1},
+  note    = {Article 3370}
+}
+
+% A9: conservative synchronization methods; PeerSim evaluation.
+@inproceedings{bragardVentresqueMurphy2014Synchronization,
+  author    = {Bragard, Quentin and Ventresque, Anthony and Murphy, Liam},
+  title     = {Synchronisation for dynamic load balancing of decentralised conservative distributed simulation},
+  booktitle = {Proceedings of the 2nd ACM SIGSIM/PADS Conference on Principles of Advanced Discrete Simulation},
+  year      = {2014},
+  pages     = {117--126},
+  doi       = {10.1145/2601381.2601386},
+  url       = {https://researchrepository.ucd.ie/server/api/core/bitstreams/9e7233a6-3920-4667-a0cb-bc0229b6e7da/content}
+}
+
+% A10: class-informed static placement; not sequential same-class bucket assignment.
+@article{carlisleMerkle2004DomainKnowledge,
+  author  = {Carlisle, Martin C. and Merkle, Laurence D.},
+  title   = {Automated Load Balancing of a Missile Defense Simulation Using Domain Knowledge},
+  journal = {The Journal of Defense Modeling and Simulation: Applications, Methodology, Technology},
+  year    = {2004},
+  volume  = {1},
+  number  = {1},
+  pages   = {59--68},
+  doi     = {10.1177/154851290400100105},
+  url     = {https://doi.org/10.1177/154851290400100105}
+}
+
+% A11: future-event load estimates and GVT-coordinated spatial migration.
+@inproceedings{deelmanSzymanski1998SpatialPDES,
+  author    = {Deelman, Ewa and Szymanski, Boleslaw K.},
+  title     = {Dynamic Load Balancing in Parallel Discrete Event Simulation for Spatially Explicit Problems},
+  booktitle = {Proceedings of the Twelfth Workshop on Parallel and Distributed Simulation},
+  year      = {1998},
+  pages     = {46--53},
+  url       = {https://www.cs.rpi.edu/~szymansk/papers/pads98.pdf}
+}
+
+% A12: shared-memory conservative LP scheduling, not distributed shard migration.
+@inproceedings{tangEtAl2017WorkStealing,
+  author    = {Tang, Wenjie and Yao, Yiping and Zhu, Feng and Li, Tianlin and Song, Xiao},
+  title     = {A work-stealing based dynamic load balancing algorithm for conservative parallel discrete event simulation},
+  booktitle = {2017 Winter Simulation Conference (WSC)},
+  year      = {2017},
+  pages     = {798--809},
+  doi       = {10.1109/WSC.2017.8247833},
+  url       = {https://www.informs-sim.org/wsc17papers/includes/files/059.pdf}
+}
+
+% A13: road-network-guided spatial partitioning in distributed SUMO.
+@inproceedings{ventresqueEtAl2012SParTSim,
+  author    = {Ventresque, Anthony and Bragard, Quentin and Liu, Elvis S. and Nowak, Dawid and Murphy, Liam and Theodoropoulos, Georgios and Liu, Qi},
+  title     = {{SParTSim}: A Space Partitioning Guided by Road Network for Distributed Traffic Simulations},
+  booktitle = {2012 IEEE/ACM 16th International Symposium on Distributed Simulation and Real Time Applications},
+  year      = {2012},
+  pages     = {202--209},
+  doi       = {10.1109/DS-RT.2012.37},
+  url       = {https://research.ibm.com/publications/spartsim-a-space-partitioning-guided-by-road-network-for-distributed-traffic-simulations}
+}
+
+% A14: broader cost/benefit-aware parallel adaptation, not a traffic or PDES protocol.
+@article{weissman2002AdaptationCostBenefit,
+  author  = {Weissman, Jon B.},
+  title   = {Predicting the Cost and Benefit of Adapting Data Parallel Applications in Clusters},
+  journal = {Journal of Parallel and Distributed Computing},
+  year    = {2002},
+  volume  = {62},
+  number  = {8},
+  pages   = {1248--1271},
+  doi     = {10.1006/jpdc.2002.1838},
+  url     = {https://doi.org/10.1006/jpdc.2002.1838}
+}

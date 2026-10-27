@@ -102,6 +102,11 @@ object HyperbolicTimeChamber {
           s"startShards deferred: no scenario configured yet at boot (${e.getMessage}). " +
             "Shard regions will be registered when a scenario is started via the API."
         )
+      case scala.util.control.NonFatal(error) =>
+        system.log.error(error, "[SIMULATION-FAILED] Shard startup rejected: {}", error.getMessage)
+        MetricsServer.stop()
+        system.terminate()
+        throw error
     }
 
     actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)

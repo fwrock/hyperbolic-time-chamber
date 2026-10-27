@@ -1,0 +1,1558 @@
+{
+  "schemaVersion": 1,
+  "validationDate": "2026-10-26",
+  "passed": true,
+  "baseCommit": "cb1c22135cff762b3f9bf85f3cec9ca1fe01d937",
+  "scope": "Fixed-cohort, production conservative custom balancing; eager/progressive JSON, active MESO Car relocation and station-created transit/MICRO Bus acceptance.",
+  "defaultCustomBalancingEnabled": false,
+  "finalExecutable": {
+    "path": "/tmp/htc-load-balancing-final-20261026.jar",
+    "sha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791"
+  },
+  "tests": {
+    "scala": {
+      "passed": true,
+      "tests": 769,
+      "suites": 152,
+      "command": "sbt -J-XX:ActiveProcessorCount=4 test assembly",
+      "log": "/tmp/htc-balancing-startup-settings-final.log",
+      "logSha256": "739d5f60f5838453f53012a6fe817e87881a91a3652add132aa797b726222a88"
+    },
+    "python": {
+      "passed": true,
+      "tests": 28,
+      "command": "python3 -m unittest discover -s scripts/scenario -p 'test_*.py'",
+      "log": "/tmp/htc-balancing-python-tests-final.log",
+      "logSha256": "b806cd08061696929984f795341590cab8934fdaac9406b6da8f041841e73a71"
+    },
+    "diffCheck": true
+  },
+  "cases": {
+    "initialCohort": {
+      "migration": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/initial-migration-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "87057e577668e675fd1f28b93feae7113559ce6b3f6352a22eedb8287e351e9e",
+          "simulationFile": "/tmp/htc-balancing-initial-v1-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            19000,
+            19001
+          ],
+          "bindPorts": [
+            19000,
+            19001
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 105.07,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "905a1e5807d8c7df3ad09fd585a78729e18894692af015fa28e90d64845af172",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/initial-migration-1/node-0/run.conf": "f7eca6604390704e56bede0cc53b0dc8db780946cfe1b2fb61de87c53bea4699",
+          "/tmp/htc-balancing-traffic-validation-20261025/initial-migration-1/node-1/run.conf": "ddcd10420d6c23331157e966cbebf14fc143d2679f9b1c52c859e77c86b9821c"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/initial-migration-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/initial-migration-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+          "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+          "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+          "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+          "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/simulation.json": "366443f36145835def73a3fafcb398aa78d3316977bf76975b58c844fb8febd1"
+        }
+      },
+      "reference": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/initial-reference-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "87057e577668e675fd1f28b93feae7113559ce6b3f6352a22eedb8287e351e9e",
+          "simulationFile": "/tmp/htc-balancing-initial-v1-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            19100,
+            19101
+          ],
+          "bindPorts": [
+            19100,
+            19101
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 129.2,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "09a20f996f18f5a5dd568ae34790bdd7bf870b556b06ebd243183349cfcd2c88",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/initial-reference-1/node-0/run.conf": "c223b0148b1e916c3a68c8db698e74cc6a9c8b262c5452a7b02e63e252b57bf5",
+          "/tmp/htc-balancing-traffic-validation-20261025/initial-reference-1/node-1/run.conf": "66e34908034876e0c26abb9caa2ac6d6536f5af35e3065cefa346b5c78c8e325"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/initial-reference-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/initial-reference-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+          "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+          "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+          "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+          "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/simulation.json": "366443f36145835def73a3fafcb398aa78d3316977bf76975b58c844fb8febd1"
+        }
+      },
+      "physical": {
+        "passed": true,
+        "persons": 60,
+        "trips": 120,
+        "completedVehicleJourneys": 120,
+        "vehicleDistance": 68800.0,
+        "reportRows": 2008,
+        "verifiedMigrations": [
+          "dynamic-qt-shard-2-7",
+          "dynamic-qt-shard-2-1",
+          "dynamic-qt-shard-2-6",
+          "dynamic-qt-shard-2-7"
+        ],
+        "activeCarRestores": [],
+        "inputs": {
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+          "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+          "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+          "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+          "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-initial-v1-20261026/simulation.json": "366443f36145835def73a3fafcb398aa78d3316977bf76975b58c844fb8febd1"
+        }
+      },
+      "parity": {
+        "passed": true,
+        "conservativeRows": 2008,
+        "optimisticRows": 2008,
+        "differentConservativeRows": 0,
+        "differentOptimisticRows": 0,
+        "conservativeExamples": [],
+        "optimisticExamples": []
+      }
+    },
+    "progressiveCohort": {
+      "migration": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/progressive-migration-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "87057e577668e675fd1f28b93feae7113559ce6b3f6352a22eedb8287e351e9e",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            18800,
+            18801
+          ],
+          "bindPorts": [
+            18800,
+            18801
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 232.19,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "60947076040b9d26ac7ad932c54f6bea32c3f5b970dc08fce5bc0c103f5a7f41",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/progressive-migration-1/node-0/run.conf": "dc50bb8afc6fc7d0df87604d0ddb02ca95b9b72691afd388f8e243f47e924ae6",
+          "/tmp/htc-balancing-traffic-validation-20261025/progressive-migration-1/node-1/run.conf": "a97aeae0dfe2d175500d36267c1cb890a087b38c481b45da89c9047a3de256ec"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/progressive-migration-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/progressive-migration-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "reference": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/progressive-reference-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "87057e577668e675fd1f28b93feae7113559ce6b3f6352a22eedb8287e351e9e",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            18900,
+            18901
+          ],
+          "bindPorts": [
+            18900,
+            18901
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 223.15,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "aa5fb93efc2c45f9fe79a5aed989957b0b8e9fa462ada5c8b5baabde52c14250",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/progressive-reference-1/node-0/run.conf": "58b94e8b9292d0ea0fe2832a483005436e92e59a9bb2a3659ebb0abc66e1c595",
+          "/tmp/htc-balancing-traffic-validation-20261025/progressive-reference-1/node-1/run.conf": "b83b40ecc7cfae3f93404f687a175a3886d64311f38c633038647a2d209cefc9"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/progressive-reference-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/progressive-reference-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "physical": {
+        "passed": true,
+        "persons": 60,
+        "trips": 120,
+        "completedVehicleJourneys": 120,
+        "vehicleDistance": 19840000.0,
+        "reportRows": 2312,
+        "verifiedMigrations": [
+          "dynamic-qt-shard-2-6",
+          "dynamic-qt-shard-2-10",
+          "dynamic-qt-shard-2-1"
+        ],
+        "activeCarRestores": [
+          {
+            "vehicle": "101",
+            "batch": "e53d6129-b65",
+            "tick": 7377
+          },
+          {
+            "vehicle": "81",
+            "batch": "e53d6129-b65",
+            "tick": 7377
+          },
+          {
+            "vehicle": "123",
+            "batch": "e53d6129-b65",
+            "tick": 7377
+          },
+          {
+            "vehicle": "91",
+            "batch": "e53d6129-b65",
+            "tick": 7377
+          },
+          {
+            "vehicle": "85",
+            "batch": "e53d6129-b65",
+            "tick": 7377
+          }
+        ],
+        "inputs": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "parity": {
+        "passed": true,
+        "conservativeRows": 2312,
+        "optimisticRows": 2312,
+        "differentConservativeRows": 0,
+        "differentOptimisticRows": 0,
+        "conservativeExamples": [],
+        "optimisticExamples": []
+      }
+    },
+    "delayed5ms": {
+      "migration": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-migration",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "12ae4b4abf2d2910b2f97d690ccf0a602a539e470729bb949d2a23c28d0cc518",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            19300,
+            19301
+          ],
+          "bindPorts": [
+            19400,
+            19401
+          ],
+          "engineReportedStop": true,
+          "engineCompleted": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 5.0,
+          "elapsedSeconds": 184.18,
+          "returncodes": [
+            -9,
+            143
+          ],
+          "relay": {
+            "connections": 4,
+            "chunks": 18962,
+            "bytes": 14838961
+          }
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "1361511f41ec06a39bc7fbbbcfbae8eba49051636af76bafd6f6661f121b5bc1",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-migration/node-0/run.conf": "cdf7d380562de0927cfb030a02925d8723564b4f9a3c5a260751f603a5151408",
+          "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-migration/node-1/run.conf": "b31137796a1e000b7df78cb56a06c2869b64fc050932b5280fded13d6ca7f45e"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/final-progressive-migration/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/final-progressive-migration/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "reference": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-reference",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "12ae4b4abf2d2910b2f97d690ccf0a602a539e470729bb949d2a23c28d0cc518",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            19500,
+            19501
+          ],
+          "bindPorts": [
+            19500,
+            19501
+          ],
+          "engineReportedStop": true,
+          "engineCompleted": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 133.24,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "a4d902c9cfad7bfa23891d470d3ac259e02d10bb6a614b1bf604595ab2c63cfb",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-reference/node-0/run.conf": "664ecf04d099c18af8b5b293cb948a29638d0cdeb303613101218d9150c1225c",
+          "/tmp/htc-balancing-traffic-validation-20261025/final-progressive-reference/node-1/run.conf": "f9148dac0e9093e45c94235415c1962eeb5c72f9cd6d1b8ffc4f85c0afd632bd"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/final-progressive-reference/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/final-progressive-reference/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "physical": {
+        "passed": true,
+        "persons": 60,
+        "trips": 120,
+        "completedVehicleJourneys": 120,
+        "vehicleDistance": 19840000.0,
+        "reportRows": 2312,
+        "verifiedMigrations": [
+          "dynamic-qt-shard-2-6",
+          "dynamic-qt-shard-2-13"
+        ],
+        "activeCarRestores": [
+          {
+            "vehicle": "101",
+            "batch": "5739d2e2-d0b",
+            "tick": 10050
+          },
+          {
+            "vehicle": "81",
+            "batch": "5739d2e2-d0b",
+            "tick": 10050
+          },
+          {
+            "vehicle": "91",
+            "batch": "5739d2e2-d0b",
+            "tick": 10050
+          },
+          {
+            "vehicle": "85",
+            "batch": "5739d2e2-d0b",
+            "tick": 10050
+          },
+          {
+            "vehicle": "123",
+            "batch": "5739d2e2-d0b",
+            "tick": 10050
+          }
+        ],
+        "inputs": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "parity": {
+        "passed": true,
+        "conservativeRows": 2312,
+        "optimisticRows": 2312,
+        "differentConservativeRows": 0,
+        "differentOptimisticRows": 0,
+        "conservativeExamples": [],
+        "optimisticExamples": []
+      }
+    },
+    "finalBinaryDelayed1ms": {
+      "migration": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-migration",
+        "launcherResult": {
+          "jar": "/tmp/htc-load-balancing-final-20261026.jar",
+          "jarSha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            20200,
+            20201
+          ],
+          "bindPorts": [
+            20300,
+            20301
+          ],
+          "engineReportedStop": true,
+          "engineCompleted": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 1.0,
+          "elapsedSeconds": 171.48,
+          "returncodes": [
+            -9,
+            143
+          ],
+          "relay": {
+            "connections": 4,
+            "chunks": 19030,
+            "bytes": 13840649
+          }
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "fb0ba3aeae53420bac42a648fa421ab6163bb04cf7f378bd41deac08d2bef699",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-migration/node-0/run.conf": "5c14342ca3ea13714e7a9a042d5a3376fe7aaace4ab742bc7796950f388e1bd8",
+          "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-migration/node-1/run.conf": "8717dbc7270ff36900e4235a3d9fa29a997d0638ccd2e8fc70f18429814445da"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-migration/node-0/run.conf",
+            "-jar",
+            "/tmp/htc-load-balancing-final-20261026.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-migration/node-1/run.conf",
+            "-jar",
+            "/tmp/htc-load-balancing-final-20261026.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "reference": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-reference",
+        "launcherResult": {
+          "jar": "/tmp/htc-load-balancing-final-20261026.jar",
+          "jarSha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791",
+          "simulationFile": "/tmp/htc-balancing-progressive-v2-20261026/simulation.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            20400,
+            20401
+          ],
+          "bindPorts": [
+            20400,
+            20401
+          ],
+          "engineReportedStop": true,
+          "engineCompleted": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 65.67,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "cbd2d5bc108284704114c3200d35112480e91223d212e6e52aacb74dc98c4167",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-reference/node-0/run.conf": "456a1e6d0f9df7dead977752327da361c6d87f0c1cec6d94a861fcbd12bbe36b",
+          "/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-reference/node-1/run.conf": "916ee41bf3a610ee639d9e8c6ca5a4bb89060a7c0f457c935be3e81aa38e9859"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-reference/node-0/run.conf",
+            "-jar",
+            "/tmp/htc-load-balancing-final-20261026.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-progressive-reference/node-1/run.conf",
+            "-jar",
+            "/tmp/htc-load-balancing-final-20261026.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "physical": {
+        "passed": true,
+        "persons": 60,
+        "trips": 120,
+        "completedVehicleJourneys": 120,
+        "vehicleDistance": 19840000.0,
+        "reportRows": 2312,
+        "verifiedMigrations": [
+          "dynamic-qt-shard-2-6",
+          "dynamic-qt-shard-2-13"
+        ],
+        "activeCarRestores": [
+          {
+            "vehicle": "81",
+            "batch": "65d056d5-f97",
+            "tick": 7377
+          },
+          {
+            "vehicle": "123",
+            "batch": "65d056d5-f97",
+            "tick": 7377
+          },
+          {
+            "vehicle": "91",
+            "batch": "65d056d5-f97",
+            "tick": 7377
+          },
+          {
+            "vehicle": "85",
+            "batch": "65d056d5-f97",
+            "tick": 7377
+          },
+          {
+            "vehicle": "101",
+            "batch": "65d056d5-f97",
+            "tick": 7377
+          }
+        ],
+        "inputs": {
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/cars_0.json": "445a380f51237399d7dd4476491e4e91bdb8928d89a3de97db3cd187427422a5",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/city_map.json": "ba7818ca69c7b033e86e23845c4a351346cdb48384e94a944f7942a302711a62",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/links_0.json": "b9aea3c1770555769a78b3de7418ddf2616a84b081fca18fd60b0bb1fd96df78",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/persons_0.json": "570d9581d8ce73fb092f4d15a3ada1504c3a34e642795eae3dca4fa2aa9df80f",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-progressive-v2-20261026/simulation.json": "4e6f356c130825e0839fde097ad837ca0d16294f7d77f4589a312e63b149c2be"
+        }
+      },
+      "parity": {
+        "passed": true,
+        "conservativeRows": 2312,
+        "optimisticRows": 2312,
+        "differentConservativeRows": 0,
+        "differentOptimisticRows": 0,
+        "conservativeExamples": [],
+        "optimisticExamples": []
+      }
+    },
+    "transitBirthAndMicroBus": {
+      "enabled": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/transit-birth-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "cd49eab988018ff3431d1b2e0407b5416e3b2f88a9ed3153520cf0642c2ccf0a",
+          "simulationFile": "/tmp/htc-balancing-transit-report-v1-20261026/discrete-event.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            18400,
+            18401
+          ],
+          "bindPorts": [
+            18400,
+            18401
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 117.86,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "1c75c6fb729d4e5bc8c71442a8634acdd3849c8c12f8b7f937e6cd37250184c5",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/transit-birth-1/node-0/run.conf": "75f786668efff183cb2b42058526cf89ada1febe861f452468f52f593f310f43",
+          "/tmp/htc-balancing-traffic-validation-20261025/transit-birth-1/node-1/run.conf": "50fa69a68d88bf37868747f7fed442500707cc1f4e2a69c5cd55e5b52f4d02bc"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/transit-birth-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/transit-birth-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/bus_stations_0.json": "c64a5e2456195c3ed163f755a82eccfd6606c076d1fdfedd6c6407bb00506ecc",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/bus_stops_0.json": "9758960b58f76dfa95a71aab1548d8db97e64cbce165f8184ff688052879f181",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/city_map.json": "47bef05521d18526745f32844eeb1e5009af3b4c5a8eea8b8e7b9a1326cc0160",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/links_0.json": "c2b5dc0c6fac955a3c2bfcdda599eabb09d7fe42016fac1b2b0e1e56a8f5e1e4",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/nodes_0.json": "a00dd8e96398fd7dc5bf0fc7989d125a9815e45f9d63249db2a8d2f69dc0cac3",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/persons_0.json": "671aa339994e417c9e19ba6b80b5b38591df16ce558cb9dc47c02c90c3413e53",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/rail_links_0.json": "6799b3aef11127fa6999ac22b54ac3ac3c01b5a51bbc8f4807d5aefe6e4222f4",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/subway_stations_0.json": "44a0fd01badbb07e9e92f8eae5e66628027a1586270404d45814e953f8695f89",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/transit_map.json": "efb652552ff900c71be84f48fc37429ed632035a9f9de676130a4a6d2943c331",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/transit_routes.json": "6e1952e14cf91e1c384b680edb903ec614c316cbfe5e5e024ede83490043202d",
+          "/tmp/htc-balancing-transit-report-v1-20261026/discrete-event.json": "276be7875b0866881f349d44de75a49bca4b57be62866c35c5f6f46b655a6438"
+        }
+      },
+      "normalHash": {
+        "directory": "/tmp/htc-balancing-traffic-validation-20261025/transit-reference-1",
+        "launcherResult": {
+          "jar": "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar",
+          "jarSha256": "cd49eab988018ff3431d1b2e0407b5416e3b2f88a9ed3153520cf0642c2ccf0a",
+          "simulationFile": "/tmp/htc-balancing-transit-report-v1-20261026/discrete-event.json",
+          "executableUnchanged": true,
+          "engineErrors": [
+            0,
+            0
+          ],
+          "policy": "discrete-event",
+          "nodes": 2,
+          "localTimeManagersPerNode": 1,
+          "advertisedPorts": [
+            18700,
+            18701
+          ],
+          "bindPorts": [
+            18700,
+            18701
+          ],
+          "engineReportedStop": true,
+          "runtimeFailed": false,
+          "faultInjected": false,
+          "killNode": null,
+          "killAfter": "[ACCOUNTED-GVT] round=1 ",
+          "killElapsedSeconds": null,
+          "delayMsPerRead": 0,
+          "elapsedSeconds": 118.75,
+          "returncodes": [
+            -9,
+            143
+          ]
+        },
+        "observedOutcome": {
+          "reportersStopped": true,
+          "runtimeCompleted": true,
+          "runtimeFailed": false
+        },
+        "runtimeLogSha256": "05bf7f2ef5f61680cd1c1e36aa80c4885ce9b674c347aa81d972659d5efd9324",
+        "configurationSha256": {
+          "/tmp/htc-balancing-traffic-validation-20261025/transit-reference-1/node-0/run.conf": "dc53963c26a3ed32248790dc01ba9736982dd0dd468a9671c5bdc41ce1dc9986",
+          "/tmp/htc-balancing-traffic-validation-20261025/transit-reference-1/node-1/run.conf": "fd23e5321c141d2dffd3cb0d6ee32494c4801545d9306107834cc3db0474f713"
+        },
+        "commands": [
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/transit-reference-1/node-0/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ],
+          [
+            "java",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Xms128m",
+            "-Xmx2g",
+            "-XX:ActiveProcessorCount=4",
+            "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/transit-reference-1/node-1/run.conf",
+            "-jar",
+            "/home/dean/workspace/phd/htc-platform/hyperbolic-time-chamber/target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar"
+          ]
+        ],
+        "inputsSha256": {
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/bus_stations_0.json": "c64a5e2456195c3ed163f755a82eccfd6606c076d1fdfedd6c6407bb00506ecc",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/bus_stops_0.json": "9758960b58f76dfa95a71aab1548d8db97e64cbce165f8184ff688052879f181",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/cars_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/city_map.json": "47bef05521d18526745f32844eeb1e5009af3b4c5a8eea8b8e7b9a1326cc0160",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/links_0.json": "c2b5dc0c6fac955a3c2bfcdda599eabb09d7fe42016fac1b2b0e1e56a8f5e1e4",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/nodes_0.json": "a00dd8e96398fd7dc5bf0fc7989d125a9815e45f9d63249db2a8d2f69dc0cac3",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/persons_0.json": "671aa339994e417c9e19ba6b80b5b38591df16ce558cb9dc47c02c90c3413e53",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/rail_links_0.json": "6799b3aef11127fa6999ac22b54ac3ac3c01b5a51bbc8f4807d5aefe6e4222f4",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/subway_stations_0.json": "44a0fd01badbb07e9e92f8eae5e66628027a1586270404d45814e953f8695f89",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/transit_map.json": "efb652552ff900c71be84f48fc37429ed632035a9f9de676130a4a6d2943c331",
+          "/tmp/htc-balancing-transit-report-v1-20261026/data/transit_routes.json": "6e1952e14cf91e1c384b680edb903ec614c316cbfe5e5e024ede83490043202d",
+          "/tmp/htc-balancing-transit-report-v1-20261026/discrete-event.json": "276be7875b0866881f349d44de75a49bca4b57be62866c35c5f6f46b655a6438"
+        }
+      },
+      "physical": {
+        "passed": true,
+        "policy": "discrete-event",
+        "seed": 42,
+        "persons": 2,
+        "expectedTrips": 2,
+        "completedPTTrips": 2,
+        "dailySummaries": 2,
+        "expectedDailySummaries": 2,
+        "personDistances": {
+          "22": 400.0,
+          "23": 1400.0
+        },
+        "busBirths": 2,
+        "subwayBirths": 2,
+        "boardings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "alightings": {
+          "Bus": 1,
+          "Subway": 1
+        },
+        "completionTicks": {
+          "22": 106,
+          "23": 151
+        },
+        "traversals": {
+          "16": {
+            "entries": 47,
+            "exits": 46,
+            "completedLinkDistance": 9200.0
+          },
+          "1001": {
+            "entries": 46,
+            "exits": 45,
+            "completedLinkDistance": 9000.0
+          },
+          "21": {
+            "entries": 14,
+            "exits": 13,
+            "completedLinkDistance": 15400.0
+          },
+          "1002": {
+            "entries": 13,
+            "exits": 12,
+            "completedLinkDistance": 15400.0
+          }
+        },
+        "horizonCensoredEntries": {
+          "16": 1,
+          "1001": 1,
+          "21": 1,
+          "1002": 1
+        },
+        "missingHorizonJourneyReports": [],
+        "rollbacks": 0,
+        "errors": 0,
+        "nullStateDiscards": 0,
+        "stalls": 0,
+        "physicalRows": 1886,
+        "engineStopped": true
+      },
+      "parity": {
+        "passed": true,
+        "conservativeRows": 1886,
+        "optimisticRows": 1886,
+        "differentConservativeRows": 0,
+        "differentOptimisticRows": 0,
+        "conservativeExamples": [],
+        "optimisticExamples": []
+      },
+      "relocatesTransitVehicles": false
+    },
+    "workerLossDuringFreeze": {
+      "passed": true,
+      "directory": "/tmp/htc-balancing-traffic-validation-20261025/accepted-worker-loss",
+      "launcherResult": {
+        "jar": "/tmp/htc-load-balancing-final-20261026.jar",
+        "jarSha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791",
+        "simulationFile": "/tmp/htc-balancing-initial-v1-20261026/simulation.json",
+        "executableUnchanged": true,
+        "engineErrors": [
+          2,
+          0
+        ],
+        "policy": "discrete-event",
+        "nodes": 2,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          20800,
+          20801
+        ],
+        "bindPorts": [
+          20800,
+          20801
+        ],
+        "engineReportedStop": true,
+        "engineCompleted": false,
+        "runtimeFailed": true,
+        "faultInjected": true,
+        "killNode": 1,
+        "killAfter": "[MIGRATION-FREEZE]",
+        "killElapsedSeconds": 45.888,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 60.52,
+        "returncodes": [
+          -9,
+          -9
+        ]
+      },
+      "observedOutcome": {
+        "reportersStopped": true,
+        "runtimeCompleted": false,
+        "runtimeFailed": true
+      },
+      "runtimeLogSha256": "6546507d1c10899f86b3a903d6d772947df3acd2744293efe115e54a76a9f2de",
+      "configurationSha256": {
+        "/tmp/htc-balancing-traffic-validation-20261025/accepted-worker-loss/node-0/run.conf": "9fc99059093b6eeaae734b2120f273fe49518e2141eb7546324e7c2c5018e5fc",
+        "/tmp/htc-balancing-traffic-validation-20261025/accepted-worker-loss/node-1/run.conf": "3fecc1d1afad29be5fb5c10abfc25d2ce076e39549a2228d4c8a43f080eaca35"
+      },
+      "commands": [
+        [
+          "java",
+          "--add-opens=java.base/java.lang=ALL-UNNAMED",
+          "-Xms128m",
+          "-Xmx2g",
+          "-XX:ActiveProcessorCount=4",
+          "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-worker-loss/node-0/run.conf",
+          "-jar",
+          "/tmp/htc-load-balancing-final-20261026.jar"
+        ],
+        [
+          "java",
+          "--add-opens=java.base/java.lang=ALL-UNNAMED",
+          "-Xms128m",
+          "-Xmx2g",
+          "-XX:ActiveProcessorCount=4",
+          "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-worker-loss/node-1/run.conf",
+          "-jar",
+          "/tmp/htc-load-balancing-final-20261026.jar"
+        ]
+      ],
+      "inputsSha256": {
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+        "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+        "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+        "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+        "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+        "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/simulation.json": "366443f36145835def73a3fafcb398aa78d3316977bf76975b58c844fb8febd1"
+      }
+    },
+    "rejectOptimisticMigration": {
+      "passed": true,
+      "directory": "/tmp/htc-balancing-traffic-validation-20261025/accepted-unsupported-time-warp",
+      "launcherResult": {
+        "jar": "/tmp/htc-load-balancing-final-20261026.jar",
+        "jarSha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791",
+        "simulationFile": "/tmp/htc-balancing-traffic-validation-20261025/unsupported-time-warp.json",
+        "executableUnchanged": true,
+        "engineErrors": [
+          1
+        ],
+        "policy": "time-warp",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          20700
+        ],
+        "bindPorts": [
+          20700
+        ],
+        "engineReportedStop": false,
+        "engineCompleted": false,
+        "runtimeFailed": true,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 23.92,
+        "returncodes": [
+          1
+        ]
+      },
+      "observedOutcome": {
+        "reportersStopped": false,
+        "runtimeCompleted": false,
+        "runtimeFailed": true
+      },
+      "runtimeLogSha256": "f5a4ac0f7cdd8abf8f31e6f74657808b4c9675ec536e1496abc922778cec2cba",
+      "configurationSha256": {
+        "/tmp/htc-balancing-traffic-validation-20261025/accepted-unsupported-time-warp/node-0/run.conf": "3025a1d7ee9d14f51f2c3e77a76bf26535029b9a6428fc63fa02d4fbf243fb19"
+      },
+      "commands": [
+        [
+          "java",
+          "--add-opens=java.base/java.lang=ALL-UNNAMED",
+          "-Xms128m",
+          "-Xmx2g",
+          "-XX:ActiveProcessorCount=4",
+          "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/accepted-unsupported-time-warp/node-0/run.conf",
+          "-jar",
+          "/tmp/htc-load-balancing-final-20261026.jar"
+        ]
+      ],
+      "inputsSha256": {
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+        "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+        "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+        "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+        "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+        "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-traffic-validation-20261025/unsupported-time-warp.json": "e9fd3f5ff948ea2417784e6c75c8f84f98e03fec7fdc3ebd1830604a5cef2642"
+      }
+    },
+    "rejectInvalidSettings": {
+      "passed": true,
+      "directory": "/tmp/htc-balancing-traffic-validation-20261025/invalid-depth",
+      "launcherResult": {
+        "jar": "/tmp/htc-load-balancing-final-20261026.jar",
+        "jarSha256": "8e66d7a3c81dd2d96e091890248be2c54542179951e44e19383783c055929791",
+        "simulationFile": "/tmp/htc-balancing-initial-v1-20261026/simulation.json",
+        "executableUnchanged": true,
+        "engineErrors": [
+          1
+        ],
+        "policy": "discrete-event",
+        "nodes": 1,
+        "localTimeManagersPerNode": 1,
+        "advertisedPorts": [
+          20600
+        ],
+        "bindPorts": [
+          20600
+        ],
+        "engineReportedStop": false,
+        "engineCompleted": false,
+        "runtimeFailed": true,
+        "faultInjected": false,
+        "killNode": null,
+        "killAfter": "[ACCOUNTED-GVT] round=1 ",
+        "killElapsedSeconds": null,
+        "delayMsPerRead": 0,
+        "elapsedSeconds": 27.17,
+        "returncodes": [
+          1
+        ]
+      },
+      "observedOutcome": {
+        "reportersStopped": false,
+        "runtimeCompleted": false,
+        "runtimeFailed": true
+      },
+      "runtimeLogSha256": "a58373e5ce85d321ae8d45dbf436ad18f441c249c9a5fd645752ca93b1e28a59",
+      "configurationSha256": {
+        "/tmp/htc-balancing-traffic-validation-20261025/invalid-depth/node-0/run.conf": "b256ac674c688cbd8175b3aaa3d22db6361112be9b1e0dd6839d539c6f4508bc"
+      },
+      "commands": [
+        [
+          "java",
+          "--add-opens=java.base/java.lang=ALL-UNNAMED",
+          "-Xms128m",
+          "-Xmx2g",
+          "-XX:ActiveProcessorCount=4",
+          "-Dconfig.file=/tmp/htc-balancing-traffic-validation-20261025/invalid-depth/node-0/run.conf",
+          "-jar",
+          "/tmp/htc-load-balancing-final-20261026.jar"
+        ]
+      ],
+      "inputsSha256": {
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/bus_stops_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/cars_0.json": "df79c35575f47385220ca5839f10aa171f0f8133a47091fb2a7f762536488371",
+        "/tmp/htc-balancing-initial-v1-20261026/data/city_map.json": "c5ed8e17b50dadf020cce38014b2278503734087515c77a7c5bbe3561dfe0556",
+        "/tmp/htc-balancing-initial-v1-20261026/data/links_0.json": "ba02240057273c3c3dba8e58ca40a6cb5a1b2a76a12f9013a809cfdb1a7fa476",
+        "/tmp/htc-balancing-initial-v1-20261026/data/nodes_0.json": "b84b9dfba493470dd85ed19414163b2d7772048068f685ecfa2b11cb00aa11a4",
+        "/tmp/htc-balancing-initial-v1-20261026/data/persons_0.json": "22aabfaa8d478a7480a9e5aa44c45b1bd07a1fb9cdcf0c63d414017b95c5c03c",
+        "/tmp/htc-balancing-initial-v1-20261026/data/rail_links_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/subway_stations_0.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_map.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/data/transit_routes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "/tmp/htc-balancing-initial-v1-20261026/simulation.json": "366443f36145835def73a3fafcb398aa78d3316977bf76975b58c844fb8febd1"
+      }
+    }
+  },
+  "independentAllocationDirectoryProbes": {
+    "publishedSpatial": {
+      "result": {
+        "restored_value": 23,
+        "window_closed_on_both_nodes": true,
+        "epoch": "31e2e578-113b-48f8-a4c1-3439d60e8b61",
+        "local_allocator_absent": true,
+        "worker_spatial_entries": 1,
+        "controller_pid": 2006925,
+        "directory_revision": 1,
+        "controller_address": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:44593",
+        "worker_pid": 2006108,
+        "time_manager": "explicit conservative pause probe",
+        "controller_incarnation": "95ba355d-5b46-4029-9fb9-1d01876e76d9",
+        "restored_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:39149",
+        "worker_allocator_absent": true,
+        "passed": true,
+        "routing_scope": "published spatial IDs; routing from both independent JVMs",
+        "shard_id": "dynamic-qt-shard-2-3",
+        "publication_scope": "all Up replicas installed before creation; fixed creation cohort",
+        "callback_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:39149"
+      },
+      "classpath_contents_sha256": "343a8702f2effc9ad056bd6ae1d597eae0800ac47e03b8f22a1ccbd981aa9b03",
+      "launcher_sha256": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+      "scope": "allocator authority, acknowledged directory publication and restore over independent JVMs; explicit pause probe",
+      "engine_errors": {
+        "worker": 0,
+        "controller": 0
+      },
+      "directory": "/tmp/htc-spatial-completion-20261026"
+    },
+    "publishedHash": {
+      "result": {
+        "restored_value": 23,
+        "window_closed_on_both_nodes": true,
+        "epoch": "27bf16c8-81f3-4eea-bbfd-7156254eac96",
+        "local_allocator_absent": true,
+        "worker_spatial_entries": 1,
+        "controller_pid": 2007053,
+        "directory_revision": 1,
+        "controller_address": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:40769",
+        "worker_pid": 2006187,
+        "time_manager": "explicit conservative pause probe",
+        "controller_incarnation": "c5f11dec-5f04-46ff-8bd6-b592ea1b49e7",
+        "restored_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:41485",
+        "worker_allocator_absent": true,
+        "passed": true,
+        "routing_scope": "published hash IDs",
+        "shard_id": "353",
+        "publication_scope": "all Up replicas installed before creation; fixed creation cohort",
+        "callback_owner": "pekko://AllocationAuthorityJvmProbe@127.0.0.1:41485"
+      },
+      "classpath_contents_sha256": "343a8702f2effc9ad056bd6ae1d597eae0800ac47e03b8f22a1ccbd981aa9b03",
+      "launcher_sha256": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+      "scope": "allocator authority, acknowledged directory publication and restore over independent JVMs; explicit pause probe",
+      "engine_errors": {
+        "worker": 0,
+        "controller": 0
+      },
+      "directory": "/tmp/htc-hash-completion-20261026"
+    }
+  },
+  "excludedEvidence": [
+    {
+      "case": "skew-migration-1",
+      "reason": "Real startup pause rejected the singleton proxy/sender mismatch; also exposed first-window timing."
+    },
+    {
+      "case": "skew-v2-migration-1",
+      "reason": "All 2008 report rows matched but a late migration request failed after terminal retirement began; report parity alone is rejected."
+    },
+    {
+      "case": "final-worker-loss",
+      "reason": "A one-second failure detector observed an unreachable member before injection; faultInjected=false does not establish the requested fault test."
+    },
+    {
+      "case": "unsupported-time-warp",
+      "reason": "The short harness deadline elapsed before startup reached policy validation; not rejection evidence."
+    },
+    {
+      "log": "/tmp/htc-balancing-completion-final-full.log",
+      "reason": "Concurrent JVM workload hit logger initialization, membership and handoff fixture timeouts; isolated full suites provide acceptance."
+    },
+    {
+      "cases": [
+        "reference-1",
+        "migration-1",
+        "migration-2",
+        "type-reference-1",
+        "type-migration-1",
+        "skew-migration-2"
+      ],
+      "reason": "No verified migration; useful initial-placement/development evidence only."
+    }
+  ],
+  "currentChangedSourceSha256": {
+    ".gitignore": "ac6b09063820cecd0b3696d12ade7363ee8a5ae236a6fd2ff77bc446e23c990e",
+    "AGENTS.md": "a6b69bc12a9a7926fd9f0cadd78408a68f7a42308f84e34bdc6c12bccefe1a86",
+    "scripts/scenario/generate_balancing_validation_scenario.py": "b6895cb1fd12ff7e09b118b0ca52380ce56680f9cb7eead376e0436fbf930a4c",
+    "scripts/scenario/run_allocation_authority_validation.py": "e1f63e25718e88f8cdad838cbe5ab302413649815780af6c94a98aab729706bc",
+    "scripts/scenario/run_cluster_validation.py": "940cff2c267e59076b1fc18159b0d1c2e009cfd200e314a3c6d520dc527c8e07",
+    "scripts/scenario/test_run_cluster_validation.py": "899bd7c2d913aa3764b8f84e0b1cae51c3e92b6d72701335e74490edd7dedec4",
+    "scripts/scenario/test_validate_balancing_traffic.py": "a7fad9b2732361d823663cee19dec42c3dfb0a756e8526b470a95625925e83b3",
+    "scripts/scenario/validate_balancing_traffic.py": "648612865c3d7cbf5cce567fdd2dd0ade0cdd40d357267aaf96814bb928c11c6",
+    "src/main/resources/application.conf": "4f2f1c9c3cb3fb7161d0e0d9d92289f8b81101bfae200af8216408e2d610e52c",
+    "src/main/scala/core/HyperbolicTimeChamber.scala": "ec67b6b827648cd23050c7e74d284024c2dd39e3acb8179298438f130aa853e8",
+    "src/main/scala/core/actor/BaseActor.scala": "adb53b9aea8fd767a532c709a66370e67508b82d07e8e16df78e169e0491bf93",
+    "src/main/scala/core/actor/SimulationBaseActor.scala": "10d90bb1d14e00d59b7967607f61f820bd3fd05a23c583c2c48faa28eb89e24c",
+    "src/main/scala/core/actor/manager/SimulationManager.scala": "c8e631525ffb787f559a5661790e364d118631e249b469824e92ce61f83a78e5",
+    "src/main/scala/core/actor/manager/load/CreatorLoadData.scala": "0e5f3319e46fed515e2beefbe4892c0c5f65bcffbf2e4c00611901b61ffcecff",
+    "src/main/scala/core/actor/manager/load/RuntimeBirthInitializer.scala": "334b06370bb9654af1367411aa2565677364d4a9c778e49728a4db8498ee41d3",
+    "src/main/scala/core/actor/manager/loadbalance/LoadBalanceManager.scala": "e6152ed0b0507b42037a7847b5f059a5aa4246bb95ef228df8ab740b49168836",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/AllocationAuthority.scala": "0e0cf55adc33dd526388e03906cfba5d9dcb5f7552a97a99e754044819aae19a",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/AllocationProtocol.scala": "7e8d275b12a3f4e721d03072d9f79adbb4218f8e5c22c0c3097ee4330aef7268",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/AllocationRuntime.scala": "d938b8d3366d0cf0e48da691a966038dca293593f763db0ae346b094dead3f44",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/SpatialDirectoryAuthority.scala": "9755fe1f9011fb65959e657b04ae1c63df3c4191f693b359aeef9b5f78c890c2",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/SpatialDirectoryProtocol.scala": "528b1da88aaedda92f84f49553f91cc8110009c35d92ddcf0793bb7c7c09885e",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/SpatialDirectoryRuntime.scala": "2fe19d1cfa084d6fc1363d3d83332a185d6823ef0b0bfc31cd8d80998fd3980c",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/SpatialPositionUtil.scala": "738cf9abbfa19ef53a955a72cc57cc782d41756729f64f07b7fef5df0bed9548",
+    "src/main/scala/core/actor/manager/loadbalance/allocation/SpatialShardIdRegistry.scala": "126acd481ac72941c63f9da9403892419a35bbde7207d2fbdf3c50ee5a89c526",
+    "src/main/scala/core/actor/manager/loadbalance/migration/ConservativeMigrationCheckpoint.scala": "8e4f0e7df0ef7c7bfab89c251bd623a146da812d5f0b57a237b99c276824adfd",
+    "src/main/scala/core/actor/manager/loadbalance/migration/ConservativeMigrationCodec.scala": "6e08c0bfbe0476fa05c8b0e19513b1dd577e592864f98f267928b67d11ceb720",
+    "src/main/scala/core/actor/manager/loadbalance/migration/MigrationSnapshot.scala": "e1f80c3c9db4559c73ed3718d6ce3ba321508ecd2f884f435bb1e5534214d142",
+    "src/main/scala/core/actor/manager/loadbalance/spatial/KdTreeLoadBalancer.scala": "6cb71072c5f321000f7f5ce65ba5d233fa0e0b7923640b6f39fe916ffdde00ee",
+    "src/main/scala/core/actor/manager/loadbalance/spatial/QuadtreePartitioner.scala": "79e031e219dcb269e46bef9d0eaaca1b0ace46b5876854ecdabbb5c8fba5dec8",
+    "src/main/scala/core/actor/manager/loadbalance/spatial/ShardLoadObservation.scala": "db1c11756bab01a8ab8e9489fc35a2595ad05fda5d0d6dd00a5f3750d768a418",
+    "src/main/scala/core/actor/manager/loadbalance/spatial/SpatialShardBuckets.scala": "df10244b6b40de3a36d512289a0c45945c3252eef7e6b2fbd2692efb9654683a",
+    "src/main/scala/core/actor/manager/loadbalance/strategy/BalancingStrategy.scala": "6c999fe58c0090227de1367fc3724535ccc820fde1199e9a5e62dc8622f787ad",
+    "src/main/scala/core/actor/manager/loadbalance/strategy/GeoAffinityStrategy.scala": "d8fcd2cec35f7b2bc854836fc88719f76504358ac2e13fd9ff72e56d3c667e06",
+    "src/main/scala/core/actor/manager/loadbalance/strategy/HybridStrategy.scala": "403ee0247341e8a15b5f629f5620b58715b933e3e87ea442b0e6bc11ee80ec31",
+    "src/main/scala/core/actor/manager/loadbalance/strategy/LoadBalanceSettings.scala": "caf896e4777e235fc5f792b7825b6c47562b70400b9504531feaa6b8b133812f",
+    "src/main/scala/core/actor/manager/loadbalance/strategy/TypeAwareStrategy.scala": "2b56095521de54f454c31654dadcbccb3991012eb26bc2c641780eb71692c3d2",
+    "src/main/scala/core/actor/manager/time/ChannelAwareLocalTimeManager.scala": "1923df20bc279613c582701bbad57de523ea3bbb2ad8d19ae165af0dc42b7408",
+    "src/main/scala/core/actor/manager/time/ChannelClosedGlobalTimeManager.scala": "3b4a34e1a260b43ac32c7037f364c4e81d151c9debcf735ae79279dcf253087b",
+    "src/main/scala/core/entity/control/loadbalance/SpatialEntityClassification.scala": "8d9a393bea0c37cc9836b3dcbf70120f0cbe0bd4c8afe5bbcc11fa8bd10348b8",
+    "src/main/scala/core/entity/event/control/loadbalance/MigrationCompleteNotifyEvent.scala": "aa4c4dd81cdbf03c91b7dc334f3d481d1613d9393ae97ea8bbef03890409d261",
+    "src/main/scala/core/entity/event/control/loadbalance/MigrationSafeEvent.scala": "4b0e7519d5cb025b6f534043d181c2b933a4ad317be7e8a192db9b790ce73480",
+    "src/main/scala/core/entity/event/control/loadbalance/RequestMigrationPauseEvent.scala": "0b47a03b82b6f0060291e9bf92b62f0c9a2b92d62cb758d99ca098a3a1fd8bba",
+    "src/main/scala/core/enumeration/LoadBalanceStrategyEnum.scala": "989962a2a133323542eb59a0693a71dfecf4b539b0304e34d7c0c6c196615565",
+    "src/main/scala/core/runtime/OrderedInputQueue.scala": "bb525642165965e22fb70ed43c6decb1efbe1fe2c31b4d8b0970602b1091ef68",
+    "src/main/scala/core/runtime/conservative/ConservativeProtocol.scala": "a6584d4cb61e6846e03d6feb5901ec7983fd6a2c90767c4fded43661f9ded1cc",
+    "src/main/scala/core/util/ActorCreatorUtil.scala": "7b397c447e3debb5584b93b5d3348e8669be70531b7b4949b2e4232459f03edc",
+    "src/main/scala/core/util/DistributedUtil.scala": "46a33bc8b9168ab9177c829a597549b394f3eb32b511d700b35b51cb78a08aae",
+    "src/main/scala/core/util/SimulationUtil.scala": "5ab08b5d8a453eaae144fc07a2a0fd7fc22992ee60410957b5c882877f61cd86",
+    "src/test/scala/core/actor/manager/load/CreatorLoadDataCorrelationSpec.scala": "c82cbfca38ec2e296e9d261c40794b3e5e57de260787721cbe60a8a42680da19",
+    "src/test/scala/core/actor/manager/loadbalance/LoadBalanceManagerMigrationQueueSpec.scala": "9a58c692d2492d255159f10aff23d502e4f57595057ed78c5d905d4278408190",
+    "src/test/scala/core/actor/manager/loadbalance/allocation/AllocationAuthoritySpec.scala": "38fc6e717172aa25556517e69f7907f186a66a925806f3e92c0819c1633113c0",
+    "src/test/scala/core/actor/manager/loadbalance/allocation/SpatialDirectorySpec.scala": "66bb60a5cd78831b39b8df9f9fe0592f7da4229c39e5d29b7fb3eb2858ff5b54",
+    "src/test/scala/core/actor/manager/loadbalance/allocation/SpatialPositionUtilSpec.scala": "0c8efbfa53d67cfa81f9d2243c6313548421ee67ad387a054bf943a6d3923dda",
+    "src/test/scala/core/actor/manager/loadbalance/spatial/QuadtreePartitionerSpec.scala": "ca7e553ebd340bb21bf60d9af5b03d0418b86678f2dfdd30a70e57a6c08e8d83",
+    "src/test/scala/core/actor/manager/loadbalance/spatial/ShardLoadObservationSpec.scala": "b7a284c18754e2b79cbed885532b5f71e14e0f088e504c398830f628ca8f4388",
+    "src/test/scala/core/actor/manager/loadbalance/spatial/ShardLoadPlanningSpec.scala": "a99f27afd26ee66e89335c23ed154caf4e0f015b9a628f947dc7fbae556b87de",
+    "src/test/scala/core/actor/manager/loadbalance/strategy/LoadBalanceSettingsSpec.scala": "3d0b5928370f442c6ae7c4c5d7056af529af9b39140bb5c96f071ede67d22048",
+    "src/test/scala/core/actor/manager/loadbalance/strategy/SpatialStrategySpec.scala": "6b09c9b520c1f205cba549b9ffbfeca9a50b174af351832f5226cd363f0b04eb",
+    "src/test/scala/core/runtime/conservative/ConservativeMigrationRuntimeSpec.scala": "877b6f752320b1e2cdced6bfd4900b4ad2bf2d95408993da30ccb0fba24e520b",
+    "src/test/scala/core/serializer/IndependentRuntimeCodecSpec.scala": "d378825ebb963dad491cc38f38ddc7df4ba59996a74434edc5385e84dc0cf8b1",
+    "src/test/scala/model/test/AllocationAuthorityJvmProbe.scala": "e2fa2aa8b1fa9662a46f1353eda6b0d1855e139e34ec8d219e3ea07c73b55df0"
+  },
+  "unsupported": [
+    "independent JVM restart and singleton failover",
+    "routing membership changes",
+    "optimistic migration",
+    "live entity-to-shard geographic repartition"
+  ],
+  "unestablished": [
+    "city-scale speedup and memory cost",
+    "CPU-cost measurement",
+    "empirical load-prediction quality",
+    "scientific algorithm novelty"
+  ]
+}

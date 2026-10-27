@@ -111,6 +111,9 @@ class LinkVehicleFlowHandler(
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    require(!getLinkStateFn().downstreamSpillback || data.actorType ==
+      model.hybrid.entity.state.enumeration.ActorTypeEnum.Car,
+      "downstream spillback currently supports Car entry only")
     require(data.initialVelocity.isFinite && data.initialVelocity >= 0.0, "invalid MICRO entry velocity")
     require(data.initialRemainderSeconds.isFinite && data.initialRemainderSeconds >= 0.0,
       "invalid MICRO boundary remainder")
@@ -147,6 +150,8 @@ class LinkVehicleFlowHandler(
     val requestedPosition = entryVelocity * data.initialRemainderSeconds
     val availablePosition = getLinkStateFn().vehiclesByLane.get(assignedLane).toSeq.flatMap(_.iterator)
       .map(v => v.position - v.vehicleLength - 2.0).minOption.getOrElse(state.length)
+    require(!state.downstreamSpillback || availablePosition >= -1e-9,
+      "MICRO spillback entry has no physical room; origin injection or handoff requires admission")
     val entryPosition = math.max(0.0, math.min(requestedPosition, availablePosition))
     val vehicle = VehicleInLane(
       actorId         = event.actorRefId,
@@ -230,6 +235,13 @@ class LinkVehicleFlowHandler(
     entryTick: Long
   ): Unit = {
     val state = getLinkStateFn()
+    val pendingExit = state.vehiclesByLane.valuesIterator.flatMap(_.iterator)
+      .exists(v => v.actorId == event.actorRefId && v.pendingExitTick.nonEmpty)
+    if (pendingExit) {
+      state.vehiclesByLane.valuesIterator.foreach(_.dequeueAll(_.actorId == event.actorRefId))
+      if (state.totalVehiclesInMicro == 0 && isMicroScheduledFn()) setMicroScheduledFn(false)
+      return
+    }
     val stillInLanes = state.vehiclesByLane.values.exists(_.exists(_.actorId == event.actorRefId))
     if (!stillInLanes) {
       logDebugFn(s"${event.actorRefId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")

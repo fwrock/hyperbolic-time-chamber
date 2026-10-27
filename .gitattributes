@@ -1,0 +1,6 @@
+# Preserve the exact bytes of checksummed research artifacts across checkouts.
+docs/reports/**/*.csv -text whitespace=trailing-space,space-before-tab,cr-at-eol
+docs/reports/**/*.pdf binary
+docs/reports/**/*.docx binary
+docs/reports/**/figures/*.svg -text -diff linguist-generated=true
+docs/validation/figures/*.svg -text -diff linguist-generated=true

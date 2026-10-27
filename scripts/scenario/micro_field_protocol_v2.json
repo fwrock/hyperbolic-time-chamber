@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "status": "frozen-before-access-to-fresh-reserved-episodes-and-error-evaluation",
+  "purpose": "Input-corrected conditional following on one road section and observed queue release; v1 observations are released development evidence.",
+  "source": "https://data.transportation.gov/resource/8ect-6jqj.json",
+  "metadata": "https://data.transportation.gov/api/views/8ect-6jqj.json",
+  "location": "lankershim",
+  "license": "CC_30_BY_SA",
+  "metresPerFoot": 0.3048,
+  "samplingFrameOriginMilliseconds": 1118935680200,
+  "developmentOffsetsSeconds": [],
+  "reservedOffsetsSeconds": [
+    330,
+    360,
+    390,
+    420,
+    450,
+    480,
+    510,
+    540,
+    570,
+    600,
+    630,
+    660,
+    690,
+    720,
+    750,
+    780,
+    810,
+    840,
+    870
+  ],
+  "initializationSeconds": 1,
+  "stepSeconds": 0.1,
+  "followingPredictionSeconds": 10,
+  "queuePredictionSeconds": 20,
+  "queueFollowers": 2,
+  "maximumCandidatesPerKindAndBlock": 8,
+  "targets": {
+    "reservedFollowing": 10,
+    "reservedQueue": 5
+  },
+  "selection": "Fixed fresh first-session blocks, numeric vehicle identity order, at most one per kind/block. Exclude every (global_time-100*frame_id, vehicle_id) identity exposed in either v1 stage, including candidate snapshots and rejected trajectories. No model error enters eligibility.",
+  "quality": {
+    "exactSampleMilliseconds": 100,
+    "maximumReverseStepM": 0.05,
+    "maximumPrefixSpeedMps": 15.6464,
+    "maximumAbsolutePrefixStopSpeedMps": 0.2,
+    "minimumVehicleLengthM": 2,
+    "maximumVehicleLengthM": 8,
+    "minimumInitialBumperGapM": 2,
+    "minimumObservedBumperGapM": 0,
+    "maximumRowsPerQuery": 2000,
+    "maximumBytesPerQuery": 2000000,
+    "rules": [
+      "Remove exact duplicates, reject conflicting subject/time rows, truncation, missing 100 ms samples and nonconsecutive frame IDs.",
+      "Every subject remains a northbound through passenger Car in one unchanged lane; every follower retains its recorded immediate leader throughout initialization and prediction.",
+      "Use front-center local_y and measured lengths, converted from feet. Reject nonfinite data, negative annotated speeds, reversed steps beyond tolerance or overlapping observed bumpers.",
+      "Initialize speed by least-squares position slope over the disjoint one-second prefix; head-leader velocity at each boundary uses only its previous one-second positions, floored at zero.",
+      "Queue prefix fitted speed must remain within the stop threshold for all three Cars. The fixed virtual discharge station is 5 m beyond the head leader's initial front. All observed subjects must cross within 20 seconds; missing predicted crossings fail coverage, never exclude the case.",
+      "Retain all raw responses, query URLs, SHA256, license and every rejection. No fitted time shifts, post-outcome filtering or traffic-coefficient calibration."
+    ]
+  },
+  "physics": {
+    "speedLimitKmh": 56.327040000000004,
+    "maxAccelerationMps2": 2.6,
+    "maxDecelerationMps2": 4.5,
+    "reactionSeconds": 1,
+    "minGapM": 2,
+    "retainExits": true,
+    "linkLengthM": 100000
+  },
+  "baselines": [
+    "Constant velocity from the initialization prefix",
+    "Rigid initial bumper spacing behind observed head leader motion"
+  ],
+  "metrics": [
+    "per-episode mean follower position RMSE",
+    "speed RMSE versus backward position slopes",
+    "minimum predicted bumper gap",
+    "discharge crossing coverage",
+    "per-platoon discharge-headway MAE",
+    "annotated-speed versus position-derivative inconsistency"
+  ],
+  "acceptance": {
+    "requiredReservedFollowingEpisodes": 10,
+    "requiredReservedQueueEpisodes": 5,
+    "requiredPredictionSampleCoverage": 1,
+    "requiredPredictedQueueCrossingCoverage": 1,
+    "minimumPredictedBumperGapM": 0,
+    "followingSkill": "The upper 95% percentile-bootstrap bound on mean paired per-episode position-RMSE difference must be strictly below zero against each baseline.",
+    "queueSkill": "The upper 95% percentile-bootstrap bound on mean paired per-platoon headway-MAE difference against the rigid-spacing baseline must be strictly below zero.",
+    "uncertainty": "10000 resamples with seed 20261026. Episode/platoon, never time samples or individual followers, is the resampling unit. Dependence within the same observed road/session limits interpretation; intervals are exploratory conditional summaries.",
+    "rationale": "Zero paired loss improvement is a comparative predictive-skill null, avoiding invented absolute field-accuracy tolerances. Report absolute errors regardless. Passing supports only this conditional comparison, not broad empirical adequacy."
+  },
+  "execution": [
+    "Retain v1 outcomes unchanged as released development evidence. Keep physical acceleration, deceleration, reaction time and gap coefficients unchanged.",
+    "The site cap is 35 mph from independent FHWA documentation. Sensitivities are predeclared diagnostics, never a basis for selecting the best holdout cap.",
+    "Freeze protocol, executable and selection source before fresh API access. Seal raw responses, identity exclusions and selected episodes before any model predictions.",
+    "Following requires unchanged common section and no recorded intersection for the entire observation interval. Queue release is selected using observed head motion independently of follower prediction errors.",
+    "Do not widen sample-count or skill targets after execution. Record missing eligible cases as a data gate and numerical/engine failures separately.",
+    "Retain all raw queries, hashes, exclusions, profiles, baseline comparisons and offline replay. Inspected v2 outcomes become development data before another model revision.",
+    "A secondary sensitivity with an initial speed above that cap is explicitly outside its domain and not executed; retain the primary episode and its unchanged cohort. Primary initial speeds must satisfy the documented site cap."
+  ],
+  "claimBoundary": "New, identity-disjoint observations in previously unopened first-session time windows. Conditional active-Link-physics component assessment with a documented site cap and restricted context; no autonomous network, signal-state or general empirical adequacy claim.",
+  "expectedSessionOriginMilliseconds": 1118935679900,
+  "postedSpeedSource": "https://ops.fhwa.dot.gov/publications/fhwahop08054/sect7.htm",
+  "speedSensitivityKmh": [
+    50,
+    56.327040000000004,
+    65
+  ],
+  "followingContext": {
+    "sameNonzeroRoadSectionThroughout": true,
+    "noRecordedIntersectionThroughout": true,
+    "maximumInitialBumperGapM": 30,
+    "maximumInitialSafeSpeedFractionOfCap": 0.9,
+    "interpretation": "Leader-dominated midblock component scope. Does not infer signals or exclude indirect upstream/downstream traffic effects."
+  },
+  "queueRelease": {
+    "maximumSearchSeconds": 20,
+    "maximumFetchSeconds": 41,
+    "releaseDefinition": "First annotated head-leader speed >0.2 m/s after a one-second stopped initialization prefix, with >=0.3 m observed head displacement during the next second. All three prefix fitted speeds remain <=0.2 m/s in absolute value.",
+    "maximumPredictionSeconds": 20,
+    "minimumPredictionSeconds": 5,
+    "afterLastObservedCrossingSeconds": 1,
+    "endpoint": "Ceil the last observed station crossing plus one second to the 0.1 s grid, with a minimum five seconds and maximum twenty. Require complete common coverage through that endpoint. Missing predicted crossings fail coverage. Do not extend a failed prediction horizon.",
+    "station": "5 m beyond the observed head front at the last initialization sample; physical station and identities shared by all comparisons.",
+    "interpretation": "Conditional queue-release response to observed head motion, not reconstruction of the green phase or saturated signal capacity."
+  }
+}

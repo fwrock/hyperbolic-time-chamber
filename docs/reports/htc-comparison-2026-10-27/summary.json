@@ -1,0 +1,3289 @@
+{
+  "campaignAttemptSeconds": 3805.711189303969,
+  "warmupAttemptSeconds": 568.9396148900014,
+  "measuredAttemptSeconds": 3236.7715744139678,
+  "date": "2026-10-27",
+  "manifestSha256": "a4b118520b10fee5ba69e626305e40dcdfd952d841b3a33d292397aec01317b5",
+  "attempts": 114,
+  "measuredAttempts": 95,
+  "warmupAttempts": 19,
+  "acceptedMeasured": 95,
+  "failedMeasured": [],
+  "groups": [
+    {
+      "id": "free-sumo",
+      "kind": "sumo",
+      "case": "free",
+      "nodes": 0,
+      "policy": "sumo",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 0.13141992300006677,
+          "minimum": 0.11908721500003594,
+          "maximum": 0.15935217500009458
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 0.121656,
+          "minimum": 0.11550099999999999,
+          "maximum": 0.148449
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 33.3125,
+          "minimum": 33.15234375,
+          "maximum": 33.71875
+        },
+        "requestToCompletionSeconds": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "free-discrete-event-1",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 1,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 13.668545449003432,
+          "minimum": 12.735537249998742,
+          "maximum": 14.370637403000728
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 32.73,
+          "minimum": 31.02,
+          "maximum": 35.62
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 516.09765625,
+          "minimum": 362.375,
+          "maximum": 722.73046875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 3.255,
+          "minimum": 3.233,
+          "maximum": 3.464
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "free-time-warp-1",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 1,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 14.378491953000776,
+          "minimum": 13.257329394000408,
+          "maximum": 14.879422377998708
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 31.76,
+          "minimum": 30.43,
+          "maximum": 35.13
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 399.0390625,
+          "minimum": 370.86328125,
+          "maximum": 668.08203125
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 4.043,
+          "minimum": 3.984,
+          "maximum": 4.12
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 1,
+          "minimum": 0,
+          "maximum": 1
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "free-discrete-event-2",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 26.72031497200078,
+          "minimum": 24.825086669003213,
+          "maximum": 27.353657204999763
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 76.25,
+          "minimum": 71.38,
+          "maximum": 77.47
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 634.85546875,
+          "minimum": 613.87890625,
+          "maximum": 662.87109375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 12.128,
+          "minimum": 10.055,
+          "maximum": 12.739
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.06701639344262295,
+          "minimum": 0.04539086578873637,
+          "maximum": 0.0814755838641189
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "free-time-warp-2",
+      "kind": "traffic",
+      "case": "free",
+      "nodes": 2,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 22.416049545001442,
+          "minimum": 21.133385105000343,
+          "maximum": 78.95613461700123
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 67.77,
+          "minimum": 63.94,
+          "maximum": 93.38
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 621.06640625,
+          "minimum": 604.86328125,
+          "maximum": 660.71875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 7.179,
+          "minimum": 5.128,
+          "maximum": 7.866
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.03833797387020774,
+          "minimum": 0.017516421645292476,
+          "maximum": 0.05917072450936996
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "following-sumo",
+      "kind": "sumo",
+      "case": "following",
+      "nodes": 0,
+      "policy": "sumo",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 0.1264694400015287,
+          "minimum": 0.11662945399802993,
+          "maximum": 0.14694397000130266
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 0.114754,
+          "minimum": 0.108844,
+          "maximum": 0.12657
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 33.44921875,
+          "minimum": 33.26953125,
+          "maximum": 33.50390625
+        },
+        "requestToCompletionSeconds": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "following-discrete-event-1",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 1,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 13.349489430001995,
+          "minimum": 12.915993943999638,
+          "maximum": 14.840696938998008
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 34.91,
+          "minimum": 34.57,
+          "maximum": 37.2
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 388.53125,
+          "minimum": 374.2890625,
+          "maximum": 491.62109375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 4.118,
+          "minimum": 3.827,
+          "maximum": 4.231
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "following-time-warp-1",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 1,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 16.076849337998283,
+          "minimum": 15.438483933001407,
+          "maximum": 16.489694817999407
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 35.8,
+          "minimum": 34.75,
+          "maximum": 43.89
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 401.6015625,
+          "minimum": 345.03125,
+          "maximum": 758.68359375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 6.114,
+          "minimum": 5.076,
+          "maximum": 6.214
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 25,
+          "minimum": 11,
+          "maximum": 54
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "following-discrete-event-2",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 31.755863954000233,
+          "minimum": 30.175041995000356,
+          "maximum": 86.63359631099956
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 85.78,
+          "minimum": 82.55,
+          "maximum": 114.48
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 649.85546875,
+          "minimum": 598.46875,
+          "maximum": 664.35546875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 16.036,
+          "minimum": 13.473,
+          "maximum": 18.353
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.05968757286080677,
+          "minimum": 0.0255066387141859,
+          "maximum": 0.09972198718723559
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "following-time-warp-2",
+      "kind": "traffic",
+      "case": "following",
+      "nodes": 2,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 25.531572536001477,
+          "minimum": 23.826448091000202,
+          "maximum": 26.640389219999633
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 75.81,
+          "minimum": 73.0,
+          "maximum": 76.48
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 643.921875,
+          "minimum": 613.55859375,
+          "maximum": 707.6640625
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 10.499,
+          "minimum": 8.915,
+          "maximum": 11.583
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 17,
+          "minimum": 13,
+          "maximum": 68
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.031903765690376534,
+          "minimum": 0.01669403393541323,
+          "maximum": 0.06432595309838854
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "signal-sumo",
+      "kind": "sumo",
+      "case": "signal",
+      "nodes": 0,
+      "policy": "sumo",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 0.20069153899748926,
+          "minimum": 0.16303155800051172,
+          "maximum": 0.21295183099937276
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 0.19267499999999999,
+          "minimum": 0.154478,
+          "maximum": 0.19649
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 33.48828125,
+          "minimum": 33.41015625,
+          "maximum": 33.62890625
+        },
+        "requestToCompletionSeconds": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "signal-discrete-event-1",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 1,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 16.36077391299841,
+          "minimum": 15.913953037997999,
+          "maximum": 16.79298701800144
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 43.19,
+          "minimum": 42.42,
+          "maximum": 44.51
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 363.2265625,
+          "minimum": 353.92578125,
+          "maximum": 381.2421875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 6.551,
+          "minimum": 5.702,
+          "maximum": 6.876
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "signal-time-warp-1",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 1,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 24.14430881699809,
+          "minimum": 23.313043988000572,
+          "maximum": 24.361561002002418
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 59.3,
+          "minimum": 57.28,
+          "maximum": 65.94
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 407.8984375,
+          "minimum": 380.09765625,
+          "maximum": 524.7734375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 14.052,
+          "minimum": 13.576,
+          "maximum": 14.589
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 2929,
+          "minimum": 2652,
+          "maximum": 3777
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.0,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "signal-discrete-event-2",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 48.917975881999155,
+          "minimum": 45.60946056800094,
+          "maximum": 104.33520597700044
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 130.35,
+          "minimum": 119.78,
+          "maximum": 148.31
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 674.8203125,
+          "minimum": 596.92578125,
+          "maximum": 719.09375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 34.282,
+          "minimum": 29.429,
+          "maximum": 35.933
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.06479670959476772,
+          "minimum": 0.012522958757722491,
+          "maximum": 0.10248901903367497
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "signal-time-warp-2",
+      "kind": "traffic",
+      "case": "signal",
+      "nodes": 2,
+      "policy": "time-warp",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 39.54763814300168,
+          "minimum": 38.51160731900018,
+          "maximum": 63.475762658999884
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 120.4,
+          "minimum": 116.01,
+          "maximum": 205.98
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 638.734375,
+          "minimum": 606.828125,
+          "maximum": 700.13671875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 25.26,
+          "minimum": 23.618,
+          "maximum": 47.747
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 3930,
+          "minimum": 2660,
+          "maximum": 40124
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "lastLoadCv": {
+          "n": 0,
+          "median": null,
+          "minimum": null,
+          "maximum": null
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.03578663065496288,
+          "minimum": 0.018705284027239043,
+          "maximum": 0.06659505907626209
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "initial-reference",
+      "kind": "balance",
+      "case": "initial",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "reference",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 28.244331076999515,
+          "minimum": 26.615871063000668,
+          "maximum": 84.18230014499932
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 87.05,
+          "minimum": 82.00999999999999,
+          "maximum": 118.08
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 641.68359375,
+          "minimum": 589.0703125,
+          "maximum": 675.22265625
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 12.264,
+          "minimum": 9.808,
+          "maximum": 13.12
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 5,
+          "median": 1.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "lastLoadCv": {
+          "n": 5,
+          "median": 0.20967741935483872,
+          "minimum": 0.021739130434782608,
+          "maximum": 0.3005464480874317
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.054539295392953914,
+          "minimum": 0.005487135715156637,
+          "maximum": 0.06276930243391173
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "initial-migration",
+      "kind": "balance",
+      "case": "initial",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "migration",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 30.214924617997895,
+          "minimum": 28.768764775999443,
+          "maximum": 31.280482984999253
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 91.44,
+          "minimum": 87.32,
+          "maximum": 94.95
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 679.8125,
+          "minimum": 626.29296875,
+          "maximum": 736.8671875
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 13.375,
+          "minimum": 12.381,
+          "maximum": 14.797
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 9
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 2.6114029629999997,
+          "minimum": 2.205532698,
+          "maximum": 5.049766614
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 5
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 5
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 5
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 20,
+          "minimum": 18,
+          "maximum": 64
+        },
+        "firstLoadCv": {
+          "n": 5,
+          "median": 0.90625,
+          "minimum": 0.75,
+          "maximum": 1.0
+        },
+        "lastLoadCv": {
+          "n": 5,
+          "median": 0.010869565217391304,
+          "minimum": 0.0,
+          "maximum": 0.24193548387096775
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.044971037388098954,
+          "minimum": 0.011452130096197893,
+          "maximum": 0.060546874999999986
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "progressive-reference",
+      "kind": "balance",
+      "case": "progressive",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "reference",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 46.53794837100213,
+          "minimum": 45.63812516699909,
+          "maximum": 100.84644639700127
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 129.71,
+          "minimum": 126.56,
+          "maximum": 154.41
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 674.40234375,
+          "minimum": 663.3203125,
+          "maximum": 712.14453125
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 29.906,
+          "minimum": 26.165,
+          "maximum": 31.123
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "firstLoadCv": {
+          "n": 5,
+          "median": 1.0,
+          "minimum": 0.84375,
+          "maximum": 1.0
+        },
+        "lastLoadCv": {
+          "n": 5,
+          "median": 0.16129032258064516,
+          "minimum": 0.03225806451612903,
+          "maximum": 1.0
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.06510745891276871,
+          "minimum": 0.026233417796989088,
+          "maximum": 0.07308602999210738
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "id": "progressive-migration",
+      "kind": "balance",
+      "case": "progressive",
+      "nodes": 2,
+      "policy": "discrete-event",
+      "placement": "migration",
+      "attempts": 5,
+      "accepted": 5,
+      "metrics": {
+        "wallSeconds": {
+          "n": 5,
+          "median": 47.385315468000044,
+          "minimum": 47.04578711100112,
+          "maximum": 103.7181883489975
+        },
+        "cpuSeconds": {
+          "n": 5,
+          "median": 134.14999999999998,
+          "minimum": 127.16,
+          "maximum": 161.19
+        },
+        "peakRssMiB": {
+          "n": 5,
+          "median": 732.46875,
+          "minimum": 655.015625,
+          "maximum": 971.609375
+        },
+        "requestToCompletionSeconds": {
+          "n": 5,
+          "median": 31.76,
+          "minimum": 28.939,
+          "maximum": 33.762
+        },
+        "rollbacks": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "verifiedShardMoves": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 3
+        },
+        "pauseSeconds": {
+          "n": 5,
+          "median": 2.5832789629999997,
+          "minimum": 2.348168245,
+          "maximum": 3.21646419
+        },
+        "pauseRequests": {
+          "n": 5,
+          "median": 3,
+          "minimum": 2,
+          "maximum": 3
+        },
+        "freezeDispatches": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 3
+        },
+        "declinedRequests": {
+          "n": 5,
+          "median": 0,
+          "minimum": 0,
+          "maximum": 1
+        },
+        "migrationWaves": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 3
+        },
+        "restoredEntities": {
+          "n": 5,
+          "median": 22,
+          "minimum": 22,
+          "maximum": 28
+        },
+        "firstLoadCv": {
+          "n": 5,
+          "median": 1.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "lastLoadCv": {
+          "n": 5,
+          "median": 0.24193548387096775,
+          "minimum": 0.012195121951219513,
+          "maximum": 0.2713178294573643
+        },
+        "cpuWorkCv": {
+          "n": 5,
+          "median": 0.030336869532849437,
+          "minimum": 0.017815877748788678,
+          "maximum": 0.07247203021449443
+        },
+        "activeCarRestores": {
+          "n": 5,
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5
+        }
+      }
+    }
+  ],
+  "ratios": [
+    {
+      "case": "free",
+      "numerator": "time-warp-1",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.0885885724646407
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.0005465693538693
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.037583841952771
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.1033353616053434
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.040971349206467
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.040971349206467,
+        "minimum": 1.0005465693538693,
+        "maximum": 1.1033353616053434
+      }
+    },
+    {
+      "case": "free",
+      "numerator": "time-warp-2",
+      "denominator": "discrete-event-2",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 0.8501974164853651
+        },
+        {
+          "repeat": 2,
+          "ratio": 0.8512914934306209
+        },
+        {
+          "repeat": 3,
+          "ratio": 2.9549103257104723
+        },
+        {
+          "repeat": 4,
+          "ratio": 0.8194900366340844
+        },
+        {
+          "repeat": 5,
+          "ratio": 0.8247070505312886
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 0.8501974164853651,
+        "minimum": 0.8194900366340844,
+        "maximum": 2.9549103257104723
+      }
+    },
+    {
+      "case": "free",
+      "numerator": "discrete-event-2",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.9749176171460159
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.7274868172388438
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.9053331689192112
+        },
+        {
+          "repeat": 4,
+          "ratio": 2.130806477309988
+        },
+        {
+          "repeat": 5,
+          "ratio": 2.0630806566095266
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.9749176171460159,
+        "minimum": 1.7274868172388438,
+        "maximum": 2.130806477309988
+      }
+    },
+    {
+      "case": "free",
+      "numerator": "time-warp-2",
+      "denominator": "time-warp-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.5424283318236975
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.4697914895442028
+        },
+        {
+          "repeat": 3,
+          "ratio": 5.426152978791573
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.5826327505811446
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.634470693758866
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.5826327505811446,
+        "minimum": 1.4697914895442028,
+        "maximum": 5.426152978791573
+      }
+    },
+    {
+      "case": "free",
+      "numerator": "discrete-event-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 104.00664630580012
+        },
+        {
+          "repeat": 2,
+          "ratio": 90.53047214128019
+        },
+        {
+          "repeat": 3,
+          "ratio": 88.00607448871718
+        },
+        {
+          "repeat": 4,
+          "ratio": 107.79689533418839
+        },
+        {
+          "repeat": 5,
+          "ratio": 103.58587499215645
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 103.58587499215645,
+        "minimum": 88.00607448871718,
+        "maximum": 107.79689533418839
+      }
+    },
+    {
+      "case": "free",
+      "numerator": "time-warp-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 113.22044662886576
+        },
+        {
+          "repeat": 2,
+          "ratio": 90.57995332294392
+        },
+        {
+          "repeat": 3,
+          "ratio": 91.31368088318492
+        },
+        {
+          "repeat": 4,
+          "ratio": 118.93612649348012
+        },
+        {
+          "repeat": 5,
+          "ratio": 107.82992804931752
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 107.82992804931752,
+        "minimum": 90.57995332294392,
+        "maximum": 118.93612649348012
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "time-warp-1",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.2290013643614304
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.195299719087716
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.2408389034829248
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.137614128138189
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.0716072975797473
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.195299719087716,
+        "minimum": 1.0716072975797473,
+        "maximum": 1.2408389034829248
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "time-warp-2",
+      "denominator": "discrete-event-2",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 0.2947075225221814
+        },
+        {
+          "repeat": 2,
+          "ratio": 0.7791631702870498
+        },
+        {
+          "repeat": 3,
+          "ratio": 0.80894824619512
+        },
+        {
+          "repeat": 4,
+          "ratio": 0.832126227011571
+        },
+        {
+          "repeat": 5,
+          "ratio": 0.814044007198688
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 0.80894824619512,
+        "minimum": 0.2947075225221814,
+        "maximum": 0.832126227011571
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "discrete-event-2",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 6.489656159905032
+        },
+        {
+          "repeat": 2,
+          "ratio": 2.3675712432650555
+        },
+        {
+          "repeat": 3,
+          "ratio": 2.3896082882518273
+        },
+        {
+          "repeat": 4,
+          "ratio": 2.265402578094207
+        },
+        {
+          "repeat": 5,
+          "ratio": 2.033263135756593
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 2.3675712432650555,
+        "minimum": 2.033263135756593,
+        "maximum": 6.489656159905032
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "time-warp-2",
+      "denominator": "time-warp-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.5561825595695384
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.5433152759299522
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.557873007083098
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.6570653030276272
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.544563642351915
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.5561825595695384,
+        "minimum": 1.5433152759299522,
+        "maximum": 1.6570653030276272
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "discrete-event-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 98.15332080685089
+        },
+        {
+          "repeat": 2,
+          "ratio": 103.46897977023269
+        },
+        {
+          "repeat": 3,
+          "ratio": 90.43685430495137
+        },
+        {
+          "repeat": 4,
+          "ratio": 111.74301094262731
+        },
+        {
+          "repeat": 5,
+          "ratio": 127.24656105522617
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 103.46897977023269,
+        "minimum": 90.43685430495137,
+        "maximum": 127.24656105522617
+      }
+    },
+    {
+      "case": "following",
+      "numerator": "time-warp-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 120.63056518822489
+        },
+        {
+          "repeat": 2,
+          "ratio": 123.6764424536517
+        },
+        {
+          "repeat": 3,
+          "ratio": 112.21756713020089
+        },
+        {
+          "repeat": 4,
+          "ratio": 127.12042796903309
+        },
+        {
+          "repeat": 5,
+          "ratio": 136.35834341870722
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 123.6764424536517,
+        "minimum": 112.21756713020089,
+        "maximum": 136.35834341870722
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "time-warp-1",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.3883567868177629
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.5036302609704282
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.4890225322805477
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.5171785890877232
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.4418306458551364
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.4890225322805477,
+        "minimum": 1.3883567868177629,
+        "maximum": 1.5171785890877232
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "time-warp-2",
+      "denominator": "discrete-event-2",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 0.8217876087072519
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.2068247310802138
+        },
+        {
+          "repeat": 3,
+          "ratio": 0.37743441033395925
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.2975958533549568
+        },
+        {
+          "repeat": 5,
+          "ratio": 0.8443776102456135
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 0.8443776102456135,
+        "minimum": 0.37743441033395925,
+        "maximum": 1.2975958533549568
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "discrete-event-2",
+      "denominator": "discrete-event-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 2.865913430871628
+        },
+        {
+          "repeat": 2,
+          "ratio": 3.1772917360345194
+        },
+        {
+          "repeat": 3,
+          "ratio": 6.377155905449408
+        },
+        {
+          "repeat": 4,
+          "ratio": 3.0739047529672185
+        },
+        {
+          "repeat": 5,
+          "ratio": 2.7159826014936677
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 3.0739047529672185,
+        "minimum": 2.7159826014936677,
+        "maximum": 6.377155905449408
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "time-warp-2",
+      "denominator": "time-warp-1",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.6963738481923336
+        },
+        {
+          "repeat": 2,
+          "ratio": 2.550117767933547
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.6164685399989145
+        },
+        {
+          "repeat": 4,
+          "ratio": 2.629015522461825
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.590557743456579
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.6963738481923336,
+        "minimum": 1.590557743456579,
+        "maximum": 2.629015522461825
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "discrete-event-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 79.703988894943
+        },
+        {
+          "repeat": 2,
+          "ratio": 79.85862315899706
+        },
+        {
+          "repeat": 3,
+          "ratio": 82.34828809739682
+        },
+        {
+          "repeat": 4,
+          "ratio": 97.61271518946073
+        },
+        {
+          "repeat": 5,
+          "ratio": 78.85814805720503
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 79.85862315899706,
+        "minimum": 78.85814805720503,
+        "maximum": 97.61271518946073
+      }
+    },
+    {
+      "case": "signal",
+      "numerator": "time-warp-1",
+      "denominator": "sumo",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 110.6575739187417
+        },
+        {
+          "repeat": 2,
+          "ratio": 120.07784238130182
+        },
+        {
+          "repeat": 3,
+          "ratio": 122.61845647175389
+        },
+        {
+          "repeat": 4,
+          "ratio": 148.0959215081678
+        },
+        {
+          "repeat": 5,
+          "ratio": 113.7000945442599
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 120.07784238130182,
+        "minimum": 110.6575739187417,
+        "maximum": 148.0959215081678
+      }
+    },
+    {
+      "case": "initial",
+      "numerator": "migration",
+      "denominator": "reference",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 0.3417436293193088
+        },
+        {
+          "repeat": 2,
+          "ratio": 1.0194256291909969
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.1495829609925705
+        },
+        {
+          "repeat": 4,
+          "ratio": 1.107495975023186
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.0706784712868647
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.0706784712868647,
+        "minimum": 0.3417436293193088,
+        "maximum": 1.1495829609925705
+      }
+    },
+    {
+      "case": "progressive",
+      "numerator": "migration",
+      "denominator": "reference",
+      "pairs": [
+        {
+          "repeat": 1,
+          "ratio": 1.0544429530863886
+        },
+        {
+          "repeat": 2,
+          "ratio": 0.466509121459733
+        },
+        {
+          "repeat": 3,
+          "ratio": 1.015100853853561
+        },
+        {
+          "repeat": 4,
+          "ratio": 2.2683048207181162
+        },
+        {
+          "repeat": 5,
+          "ratio": 1.0382835687182073
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "median": 1.0382835687182073,
+        "minimum": 0.466509121459733,
+        "maximum": 2.2683048207181162
+      }
+    }
+  ],
+  "allAttemptsAccountedFor": true,
+  "rssAudit": {
+    "attempts": 18,
+    "measuredAttempts": 15,
+    "allTripRecordsExact": true,
+    "manifestSha256": "1f61b77b83724ab1757d1641ef5fa1e4dcd1bfc23435a4e82fff456ad75a9c79"
+  },
+  "measuredParityChecks": [
+    {
+      "repeat": 1,
+      "case": "free",
+      "config": "free-discrete-event-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "free",
+      "config": "free-time-warp-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "free",
+      "config": "free-discrete-event-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "free",
+      "config": "free-time-warp-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "following",
+      "config": "following-time-warp-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "following",
+      "config": "following-discrete-event-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "following",
+      "config": "following-discrete-event-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "following",
+      "config": "following-time-warp-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "signal",
+      "config": "signal-discrete-event-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "signal",
+      "config": "signal-time-warp-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "signal",
+      "config": "signal-time-warp-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "signal",
+      "config": "signal-discrete-event-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "initial",
+      "config": "initial-migration",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "initial",
+      "config": "initial-reference",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "progressive",
+      "config": "progressive-reference",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 1,
+      "case": "progressive",
+      "config": "progressive-migration",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "free",
+      "config": "free-discrete-event-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "free",
+      "config": "free-time-warp-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "free",
+      "config": "free-discrete-event-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "free",
+      "config": "free-time-warp-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "following",
+      "config": "following-time-warp-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "following",
+      "config": "following-time-warp-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "following",
+      "config": "following-discrete-event-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "following",
+      "config": "following-discrete-event-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "signal",
+      "config": "signal-discrete-event-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "signal",
+      "config": "signal-discrete-event-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "signal",
+      "config": "signal-time-warp-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "signal",
+      "config": "signal-time-warp-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "initial",
+      "config": "initial-migration",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "initial",
+      "config": "initial-reference",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "progressive",
+      "config": "progressive-reference",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 2,
+      "case": "progressive",
+      "config": "progressive-migration",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "free",
+      "config": "free-discrete-event-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "free",
+      "config": "free-time-warp-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "free",
+      "config": "free-discrete-event-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "free",
+      "config": "free-time-warp-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "following",
+      "config": "following-time-warp-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "following",
+      "config": "following-discrete-event-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "following",
+      "config": "following-discrete-event-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "following",
+      "config": "following-time-warp-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "signal",
+      "config": "signal-time-warp-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "signal",
+      "config": "signal-time-warp-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "signal",
+      "config": "signal-discrete-event-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "signal",
+      "config": "signal-discrete-event-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "initial",
+      "config": "initial-migration",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "initial",
+      "config": "initial-reference",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "progressive",
+      "config": "progressive-reference",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 3,
+      "case": "progressive",
+      "config": "progressive-migration",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "free",
+      "config": "free-discrete-event-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "free",
+      "config": "free-discrete-event-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "free",
+      "config": "free-time-warp-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "free",
+      "config": "free-time-warp-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "following",
+      "config": "following-discrete-event-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "following",
+      "config": "following-time-warp-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "following",
+      "config": "following-discrete-event-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "following",
+      "config": "following-time-warp-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "signal",
+      "config": "signal-time-warp-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "signal",
+      "config": "signal-discrete-event-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "signal",
+      "config": "signal-discrete-event-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "signal",
+      "config": "signal-time-warp-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "initial",
+      "config": "initial-migration",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "initial",
+      "config": "initial-reference",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "progressive",
+      "config": "progressive-reference",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 4,
+      "case": "progressive",
+      "config": "progressive-migration",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "free",
+      "config": "free-time-warp-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "free",
+      "config": "free-discrete-event-2",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "free",
+      "config": "free-time-warp-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "free",
+      "config": "free-discrete-event-1",
+      "reference": "free-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "following",
+      "config": "following-time-warp-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "following",
+      "config": "following-discrete-event-2",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "following",
+      "config": "following-time-warp-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "following",
+      "config": "following-discrete-event-1",
+      "reference": "following-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "signal",
+      "config": "signal-discrete-event-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "signal",
+      "config": "signal-time-warp-2",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "signal",
+      "config": "signal-discrete-event-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "signal",
+      "config": "signal-time-warp-1",
+      "reference": "signal-discrete-event-1",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "initial",
+      "config": "initial-migration",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "initial",
+      "config": "initial-reference",
+      "reference": "initial-reference",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "progressive",
+      "config": "progressive-migration",
+      "reference": "progressive-reference",
+      "passed": true
+    },
+    {
+      "repeat": 5,
+      "case": "progressive",
+      "config": "progressive-reference",
+      "reference": "progressive-reference",
+      "passed": true
+    }
+  ],
+  "sourceRecords": {
+    "docs/validation/micro-discharge-2026-10-25.json": "b211432266c673422283f2b5290123b1931d18843637401587e35c7069aa4103",
+    "docs/validation/micro-scientific-2026-10-25.json": "c9bde10c6523d75483a503aaede2422248cff234d4850766e4e52f36cb4d1360",
+    "docs/validation/micro-field-v2-2026-10-26.json": "262ceaeba054dc1cd8413be5bac54f5ccdb387999a25079ff206c47b482e1094",
+    "docs/validation/load-balancing-completion-2026-10-26.json": "528bfc04f064fbd1034a3137c64ef24a398f4909d96326318786d79259a83d60",
+    "docs/validation/micro-spillback-2026-10-26.json": "a32370b5e34f7abb2e9297543c3fab607786bfdff40e9a8d37a1370e6e3e9e57"
+  }
+}

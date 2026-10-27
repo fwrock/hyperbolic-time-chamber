@@ -5,7 +5,7 @@ import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.entity.event.BaseEvent
 import core.entity.event.data.DefaultBaseEventData
 
-/** Sent by a simulation entity to the SnapshotManager to persist its migration snapshot.
+/** Sent by a frozen simulation entity to the SnapshotManager to store its migration snapshot.
   *
   * The entity sends this event BEFORE Pekko hands off the shard, while the actor is still alive and
   * has valid state. The SnapshotManager stores the snapshot keyed by entityId and associates it

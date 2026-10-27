@@ -41,8 +41,13 @@ build/
 scripts/*
 !scripts/scenario/
 scripts/scenario/*
+!scripts/scenario/validate_balancing_traffic.py
+!scripts/scenario/test_validate_balancing_traffic.py
+!scripts/scenario/generate_balancing_validation_scenario.py
+!scripts/scenario/test_run_cluster_validation.py
 !scripts/scenario/compare_policy_reports.py
 !scripts/scenario/run_cluster_validation.py
+!scripts/scenario/run_allocation_authority_validation.py
 !scripts/scenario/validate_meso_reports.py
 !scripts/scenario/validate_transit_birth_reports.py
 !scripts/scenario/generate_hybrid_scenario.py
@@ -56,6 +61,17 @@ scripts/scenario/*
 !scripts/scenario/validate_walking_reports.py
 !scripts/scenario/validate_sumo_micro.py
 !scripts/scenario/test_validate_sumo_micro.py
+!scripts/scenario/validate_micro_spillback.py
+!scripts/scenario/test_validate_micro_spillback.py
+!scripts/scenario/micro_spillback_protocol_v1.json
+!scripts/scenario/validate_micro_field.py
+!scripts/scenario/test_validate_micro_field.py
+!scripts/scenario/micro_field_protocol_v1.json
+!scripts/scenario/plot_micro_field_validation.py
+!scripts/scenario/audit_micro_field_inputs.py
+!scripts/scenario/validate_micro_field_v2.py
+!scripts/scenario/test_micro_field_input_audit.py
+!scripts/scenario/micro_field_protocol_v2.json
 
 ### VS Code ###
 .vscode/
@@ -203,3 +219,26 @@ k8s/generated/
 .claude/agents/
 CLAUDE.md
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+
+!scripts/scenario/benchmark_metrics.py
+!scripts/scenario/test_benchmark_metrics.py
+!scripts/scenario/run_comparison_study.py
+!scripts/scenario/build_comparison_report.py
+!scripts/scenario/test_comparison_report.py
+!scripts/scenario/archive_comparison_study.py
+/artifacts/
+!scripts/scenario/audit_sumo_memory.py
+!scripts/scenario/build_outcome_report.py
+
+# Retain the reviewed research reports without checking in temporary analysis views.
+!/docs/reports/
+/docs/reports/*
+!/docs/reports/htc-comparison-2026-10-27/
+!/docs/reports/htc-sumo-outcomes-2026-10-27/
+/docs/reports/htc-comparison-2026-10-27/analysis-views/

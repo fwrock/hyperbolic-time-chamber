@@ -59,7 +59,8 @@ class DefaultMicroSimulationStrategy(
     vehicleWaitingSeconds: mutable.Map[Long, Double],
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
-    stopLineGapM: Double = 0.0
+    stopLineGapM: Double = 0.0,
+    retainExits: Boolean = false
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
@@ -80,13 +81,14 @@ class DefaultMicroSimulationStrategy(
               vehicleWaitingSeconds = vehicleWaitingSeconds,
               signalAtExit = signalAtExit,
               downstreamLeaders = downstreamLeaders,
-              stopLineGapM = stopLineGapM
+              stopLineGapM = stopLineGapM,
+              retainExits = retainExits
             )
             laneUpdates.foreach(
               u => lastUpdateByVehicle.put(u.vehicleId, u)
             )
             val departed = laneUpdates.iterator.filter(_.reachedEnd).map(_.vehicleId).toSet
-            if (departed.nonEmpty) vehicles.filterInPlace(v => !departed.contains(v.actorId))
+            if (departed.nonEmpty && !retainExits) vehicles.filterInPlace(v => !departed.contains(v.actorId))
           }
       }
 
@@ -134,7 +136,8 @@ class DefaultMicroSimulationStrategy(
     vehicleWaitingSeconds: mutable.Map[Long, Double],
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
-    stopLineGapM: Double = 0.0
+    stopLineGapM: Double = 0.0,
+    retainExits: Boolean = false
   ): Seq[MicroVehicleUpdate] = {
     VehicleInLane.sortFrontToBack(vehicles)
 
@@ -173,7 +176,10 @@ class DefaultMicroSimulationStrategy(
 
     for (i <- vehicles.indices) {
       val vehicle = previous(i)
-      if (vehicle.entryTick < tick) {
+      if (vehicle.pendingExitTick.nonEmpty) {
+        vehicleWaitingSeconds.update(vehicle.actorId,
+          vehicleWaitingSeconds.getOrElse(vehicle.actorId, 0.0) + microTimeStep)
+      } else if (vehicle.entryTick < tick) {
         val leader = if (i > 0) Some(previous(i - 1))
           // A nearer moving vehicle must not hide the stricter stopped signal constraint.
           else (signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId))
@@ -213,13 +219,26 @@ class DefaultMicroSimulationStrategy(
         )
 
         val rawNewPosition = vehicle.position + cappedVelocity * microTimeStep
-        val newPosition = if (math.abs(rawNewPosition - linkLength) < 1e-10) linkLength
+        val boundaryPosition = if (math.abs(rawNewPosition - linkLength) < 1e-10) linkLength
           else math.min(rawNewPosition, linkLength)
+        // A count-based admission stop can remove the leader's speed within one step.
+        // Preserve geometric spacing even when bounded car-following deceleration cannot do so.
+        val positionLimit = if (retainExits) {
+          val obstacles = if (i > 0) List(previous(i - 1))
+            else signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId)
+          obstacles.map(_.rearPosition - 2.0).minOption
+            .fold(linkLength)(limit => math.max(vehicle.position, limit))
+        } else linkLength
+        val newPosition = math.min(boundaryPosition, positionLimit)
 
         val exitBlocked = signalAtExit.contains(Red)
         val reachedEnd = newPosition >= linkLength && !exitBlocked
-        val actualVelocity = if (newPosition >= linkLength && exitBlocked) 0.0 else cappedVelocity
-        val newAcceleration = velChange / microTimeStep
+        val actualVelocity = if (newPosition >= linkLength && exitBlocked) 0.0
+          else if (newPosition + 1e-10 < boundaryPosition)
+            math.max(0.0, (newPosition - vehicle.position) / microTimeStep)
+          else cappedVelocity
+        val newAcceleration = if (retainExits) (actualVelocity - vehicle.velocity) / microTimeStep
+          else velChange / microTimeStep
 
         if (actualVelocity < 0.1) {
           vehicleWaitingSeconds.update(
@@ -230,8 +249,10 @@ class DefaultMicroSimulationStrategy(
 
         vehicles(i) = vehicle.copy(
           position = newPosition,
-          velocity = actualVelocity,
-          acceleration = newAcceleration
+          // Admission may outlive this tick. Keep its rear bumper visible until LeaveLink cleanup.
+          velocity = if (retainExits && reachedEnd) 0.0 else actualVelocity,
+          acceleration = if (retainExits && reachedEnd) 0.0 else newAcceleration,
+          pendingExitTick = Option.when(retainExits && reachedEnd)(tick)
         )
 
         if (reachedEnd || subTick >= microTicksPerGlobalTick - 1) {
