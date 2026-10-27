@@ -1,0 +1,4 @@
+# Preserve the exact bytes of checksummed research artifacts across checkouts.
+docs/reports/**/*.csv -text
+docs/reports/**/figures/*.svg -text -diff linguist-generated=true
+docs/validation/figures/*.svg -text -diff linguist-generated=true
