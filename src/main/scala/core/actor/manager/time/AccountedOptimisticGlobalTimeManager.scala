@@ -68,6 +68,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
   override def postStop(): Unit = { heartbeat.foreach(_.cancel()); super.postStop() }
   private def key(ref: ActorRef): String = ref.path.toStringWithAddress(self.path.address)
   private def fail(error: Throwable): Unit = if (phase != Failed && phase != Finished) {
+    finishExecutionTiming(failed = true)
     phase = Failed
     heartbeat.foreach(_.cancel())
     workers.foreach(_ ! RuntimeFailure(error.getMessage))
@@ -242,6 +243,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     started = true
     phase = Running
     startTime = System.currentTimeMillis()
+    beginExecutionTiming()
     pendingStart = None
     logInfo(s"[OPTIMISTIC-LIMITS] maxAheadTicks=${executionLimits.maxAheadTicks} maxUncommittedEvents=${executionLimits.maxUncommittedEvents} maxEventsPerTurn=${executionLimits.maxEventsPerTurn} fossilCollection=${executionLimits.fossilCollection}")
     workers.foreach(_ ! StartLocalRuntime(initialTick, horizon, executionLimits, loadedThrough))
@@ -274,6 +276,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     }
   }
   private def beginRound(): Unit = {
+    beginSynchronizationTiming()
     roundId = Math.addExact(roundId, 1L)
     rounds += 1L
     round = Some(new QuiescentRound(roundId, workers.map(key).toSet))
@@ -301,9 +304,11 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     workers.foreach(_ ! CommitRuntime(roundId, gvt, Option.when(truncated)(horizon)))
   }
   private def afterRetire(): Unit = if (phase == Retiring && pending.isEmpty && flushed) {
+    finishSynchronizationTiming()
     val retireNanos = System.nanoTime() - phaseStartedAt
     logInfo(s"[ACCOUNTED-ROUND] round=$roundId freezeNanos=$freezeNanos snapshotNanos=$snapshotNanos commitNanos=$commitNanos retireNanos=$retireNanos")
     if (finalCut) {
+      finishExecutionTiming()
       phase = Finished
       heartbeat.foreach(_.cancel())
       logInfo(s"[ACCOUNTED-COMPLETE] frontier=$gvt status=${if (truncated) "horizon-truncated" else "completed"} coordinator=gtm workers=${workers.size} rounds=$rounds")

@@ -12,6 +12,8 @@ import core.entity.state.BaseState
 import core.enumeration.{CreationTypeEnum, ReportTypeEnum, TimeManagerTypeEnum}
 import core.runtime.accounting.*
 import core.runtime.conservative.*
+import core.metrics.core.SimulationMetricSet
+import io.prometheus.client.CollectorRegistry
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.{ActorRef, ActorSystem, Terminated}
 import org.apache.pekko.testkit.{TestActorRef, TestProbe}
@@ -54,6 +56,9 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
   }
 
   private class GTM(manager: ActorRef, sink: ActorRef) extends ChannelClosedGlobalTimeManager(1000L, false, manager) {
+    val progressRegistry = new CollectorRegistry()
+    val progressMetrics = new SimulationMetricSet(progressRegistry)
+    override protected def simulationMetrics: SimulationMetricSet = progressMetrics
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 2
     override protected lazy val reportManagerRef: ActorRef = sink
@@ -178,6 +183,13 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     manager.expectNoMessage(100.millis)
     reports.send(gtm, RuntimeReportsFlushed(drain.round))
     manager.expectMsg(StopSimulationEvent())
+    val metrics = gtm.underlyingActor.progressMetrics
+    metrics.configuredDuration.get shouldBe 1000.0
+    metrics.currentTick.get shouldBe 20.0
+    metrics.simulationProgress.get shouldBe 0.02
+    // Ticks 0, 10 and 20; reversed same-tick deliveries create extra causal batches, not ticks.
+    metrics.simulationTicks.get shouldBe 3.0
+    gtm.underlyingActor.progressRegistry.getSampleValue("htc_tick_duration_seconds_count").doubleValue shouldBe 2.0
   }
 
   "conservative channel closure" should "hold the frontier after a fire-and-forget sender finishes until its delivery is accepted" in {

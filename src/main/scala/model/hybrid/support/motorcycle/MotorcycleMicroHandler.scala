@@ -87,7 +87,7 @@ class MotorcycleMicroHandler(
         "link_length"     -> data.linkLength,
         "initial_velocity" -> initialMicroState.velocity,
         "tick"            -> currentTickFn()
-      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+      ) ++ model.hybrid.support.MicroObservationFields.event(currentTickFn()) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -127,7 +127,7 @@ class MotorcycleMicroHandler(
             "lane"          -> data.currentLane,
             "sub_tick"      -> data.subTick,
             "tick"          -> currentTickFn()
-          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+          ) ++ model.hybrid.support.MicroObservationFields.update(data, currentTickFn(), microUpdateReportEvery) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -156,7 +156,7 @@ class MotorcycleMicroHandler(
         "average_speed"     -> data.averageSpeed,
         "total_distance"    -> state.distance,
         "tick"              -> currentTickFn()
-      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+      ) ++ model.hybrid.support.MicroObservationFields.event(currentTickFn()) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

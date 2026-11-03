@@ -329,7 +329,7 @@ class Bicycle(
       return
     }
 
-    logInfo(s"[BICYCLE] actSpontaneous tick=$currentTick id=$getEntityId status=${state.status} isMicro=${state.isMicroMode}")
+    logDebug(s"[BICYCLE] actSpontaneous tick=$currentTick id=$getEntityId status=${state.status} isMicro=${state.isMicroMode}")
     state.status match {
       case Start =>
         requestRoute()

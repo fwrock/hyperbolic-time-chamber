@@ -92,8 +92,10 @@ object ScenarioPreflightValidator {
         try {
           while (actorIterator.hasNext && result.isRight) {
             val actor = actorIterator.next()
-            val personState = JsonUtil.convertValue[PersonState](actor.data.content)
-            val decisionIterator = personState.originalPlan.iterator.collect {
+            val filtered = core.modifications.ScenarioModifications.transform(actor)
+              .flatMap(ActorLoadFilter.transform(_))
+            val personState = filtered.map(a => JsonUtil.convertValue[PersonState](a.data.content))
+            val decisionIterator = personState.iterator.flatMap(_.originalPlan.iterator).collect {
               case p: PendingDecision => p
             }
             while (decisionIterator.hasNext && result.isRight) {

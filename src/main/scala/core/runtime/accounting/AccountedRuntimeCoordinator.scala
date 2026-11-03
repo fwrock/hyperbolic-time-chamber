@@ -1,6 +1,8 @@
 package org.interscity.htc
 package core.runtime.accounting
 
+import org.interscity.htc.core.metrics.core.{ExecutionTimingMetrics, TimedOperation}
+
 import core.entity.event.{ FinishEvent, SpontaneousEvent }
 import core.entity.event.control.execution.ReplaceScheduleEvent
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
@@ -57,6 +59,7 @@ final class AccountedRuntimeCoordinator(expectedManagers: Int, duration: Long, r
   private def checkEpoch(value: String): Unit = require(value == epoch, "wrong runtime epoch")
 
   private def fail(reason: String): Unit = if (phase != Failed && phase != Finished) {
+    synchronizationTiming.foreach(_.stop(failed = true)); synchronizationTiming = None
     phase = Failed
     log.error("[RUNTIME-FAILED] {}", reason)
     members.foreach(_ ! FreezeRuntime(roundId))
@@ -253,7 +256,15 @@ final class AccountedRuntimeCoordinator(expectedManagers: Int, duration: Long, r
     case _ => ()
   }
 
+  private var synchronizationTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+  override def postStop(): Unit = {
+    synchronizationTiming.foreach(_.stop(failed = true)); synchronizationTiming = None
+    super.postStop()
+  }
+
   private def beginRound(): Unit = {
+    if (synchronizationTiming.isEmpty) synchronizationTiming = Some(
+      ExecutionTimingMetrics.timers.start(TimedOperation.TimeManagerSynchronization))
     roundId = Math.addExact(roundId, 1L)
     round = Some(new QuiescentRound(roundId, members.map(key)))
     phase = Freezing
@@ -302,6 +313,7 @@ final class AccountedRuntimeCoordinator(expectedManagers: Int, duration: Long, r
   }
 
   private def afterRetire(): Unit = if (phase == Retiring && pendingRetire.isEmpty && sinksDrained) {
+    synchronizationTiming.foreach(_.stop()); synchronizationTiming = None
     if (finalCut) {
       phase = Finished
       context.parent ! RuntimeFinished(gvt, truncated)

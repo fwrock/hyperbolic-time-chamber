@@ -27,7 +27,8 @@ class PersonWalkingTripHandler(
   reportFn: (Map[String, Any], String) => Unit,
   logDebug: String => Unit,
   logError: String => Unit,
-  linkLengthFn: Long => Option[Double] = id => CityMapUtil.edgeLabelsById.get(id).map(_.length),
+  linkLengthFn: Long => Option[Double] = id => CityMapUtil.edgeLabelsById.get(id)
+    .filter(_.sidewalk.enabled).map(_.length),
   routeFn: (Long, Long) => Option[(Double, mutable.Queue[(Long, Long)])] =
     (origin, destination) => GPSUtil.calcRouteCompactWalking(origin, destination, maxExpansions = Int.MaxValue)
 ) {
@@ -53,7 +54,7 @@ class PersonWalkingTripHandler(
             return None
           }
         case None =>
-          logWarn(s"Walking link $linkId has no valid length")
+          logWarn(s"Walking link $linkId has no accessible sidewalk or valid length")
           return None
       }
     }

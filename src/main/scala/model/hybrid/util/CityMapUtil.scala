@@ -220,7 +220,8 @@ object CityMapUtil {
         if (_pedestrianCityMap == null) {
           println(s"[CityMapUtil] Building pedestrian Graph (objects)...")
           val t0 = System.currentTimeMillis()
-          _pedestrianCityMap = cityMap.edges.foldLeft(cityMap) { (g, e) =>
+          val walkable = cityMap.filterEdgeLabels(_.sidewalk.enabled)
+          _pedestrianCityMap = walkable.edges.foldLeft(walkable) { (g, e) =>
             g.addEdge(e.target, e.source, e.weight, e.label)
           }
           println(s"[CityMapUtil] Pedestrian Graph ready in ${System.currentTimeMillis() - t0}ms")

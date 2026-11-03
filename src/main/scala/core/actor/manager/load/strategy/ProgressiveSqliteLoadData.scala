@@ -6,6 +6,8 @@ import org.apache.pekko.pattern.pipe
 import core.util.{ IdUtil, SqliteActorSimulationUtil, TickIndexUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.modifications.ScenarioModifications
+import org.interscity.htc.core.partial.PartialFilter
 import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
@@ -72,6 +74,7 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
 
   private var activeRequest: LoadActorsForTickRange = _
   private var pendingActorsSent = 0
+  private var pendingActorsRead = 0 // before the partial filter; the tick index counts these
   private var failed = false
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
@@ -190,6 +193,7 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
     require(activeRequest == null, "overlapping SQLite input ranges")
     activeRequest = request
     pendingActorsSent = 0
+    pendingActorsRead = 0
     streamExhausted = false
     val path = sourceDbPath
     val id = sourceId
@@ -240,7 +244,14 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
     }
   }
 
-  private def sendActorsToCreators(actors: List[ActorSimulation]): Unit = {
+  private def sendActorsToCreators(read: List[ActorSimulation]): Unit = {
+    pendingActorsRead += read.size
+    val actors = scala.util.Try(PartialFilter.filter(core.actor.manager.load.ActorLoadFilter(ScenarioModifications(read)))) match {
+      case scala.util.Success(records) => records
+      case scala.util.Failure(error) =>
+        self ! ProgressiveSourceFailed(sourceId, s"load filter: ${error.getMessage}")
+        return
+    }
     totalLoadedActors += actors.size
     pendingActorsSent += actors.size
 
@@ -312,8 +323,8 @@ class ProgressiveSqliteLoadData(private val properties: Properties)
 
     if (activeRequest != null) {
       val expected = TickIndexUtil.countActorsInRange(lightIndex.tickCounts, activeRequest.fromTick, activeRequest.toTick)
-      if (pendingActorsSent != expected) {
-        self ! ProgressiveSourceFailed(sourceId, s"index/range count mismatch: expected=$expected actual=$pendingActorsSent")
+      if (pendingActorsRead != expected) {
+        self ! ProgressiveSourceFailed(sourceId, s"index/range count mismatch: expected=$expected actual=$pendingActorsRead")
         return
       }
       logInfo(

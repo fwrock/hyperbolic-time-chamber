@@ -5,6 +5,8 @@ import org.apache.pekko.actor.ActorRef
 import core.util.{ IdUtil, JsonStreamingUtil }
 
 import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.modifications.ScenarioModifications
+import org.interscity.htc.core.partial.PartialFilter
 import org.interscity.htc.core.entity.actor.{ ActorSimulation, ActorSimulationCreation }
 import org.interscity.htc.core.entity.configuration.ActorDataSource
 import org.interscity.htc.core.entity.event.control.load.*
@@ -105,7 +107,15 @@ class JsonLoadData(private val properties: Properties)
         self ! CloseAndFinish
     }
 
-  private def sendBatch(actors: List[ActorSimulation]): Unit = {
+  private def sendBatch(read: List[ActorSimulation]): Unit = {
+    val actors = scala.util.Try(PartialFilter.filter(core.actor.manager.load.ActorLoadFilter(ScenarioModifications(read)))) match {
+      case scala.util.Success(records) => records
+      case scala.util.Failure(error) =>
+        managerRef ! ScenarioPreflightValidationFailedEvent(model.hybrid.decision.ScenarioLoadError(
+          s"Load filter ($sourceId): ${error.getMessage}"))
+        selfDestruct()
+        return
+    }
     totalLoadedActors += actors.size
 
     val actorsToCreate = actors.map(

@@ -18,11 +18,17 @@ import com.fasterxml.jackson.annotation.{ JsonAlias, JsonCreator, JsonProperty }
   *   The shard bucket assigned by the LoadBalanceManager. Empty string = fall back to hash-based
   *   routing in [[core.util.ActorCreatorUtil.extractShardId]]. Accepted in JSON as `"shardBucket"`
   *   or legacy `"resourceId"`.
+  * @param relation
+  *   How this actor relates to the referenced one, used only by the partial-simulation filter
+  *   ([[core.partial.PartialClosure]]): `"reference"` (default, plain pointer such as
+  *   `from_node`), `"part_of"` (the owner of this entry is a part of the referenced actor) or
+  *   `"contains"` (the owner of this entry is a whole that contains the referenced actor).
   */
 case class ShardActorId @JsonCreator() (
   @JsonAlias(Array("entityId")) @JsonProperty("id") entityId: Long,
   @JsonProperty("classType") classType: String,
-  @JsonAlias(Array("shardBucket")) @JsonProperty("resourceId") shardBucket: String = ""
+  @JsonAlias(Array("shardBucket")) @JsonProperty("resourceId") shardBucket: String = "",
+  @JsonProperty("relation") relation: String = ShardActorId.Reference
 ) {
 
   /** Backward-compat alias for [[entityId]].
@@ -46,4 +52,10 @@ case class ShardActorId @JsonCreator() (
     */
   @deprecated("actorType is not part of ShardActorId", "2.8.0")
   def actorType: String = ""
+}
+
+object ShardActorId {
+  val Reference = "reference"
+  val PartOf = "part_of"
+  val Contains = "contains"
 }

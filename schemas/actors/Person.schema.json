@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "htc:actor/Person",
+  "title": "Pessoa",
+  "description": "Agente com plano de atividades e viagens; é o todo dos seus veículos privados.",
+  "x-htc-class": "hybrid.actor.Person",
+  "x-htc-version": 1,
+  "x-htc-filterable": true,
+  "x-htc-dependencies": [],
+  "type": "object",
+  "required": [
+    "id",
+    "typeActor",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "typeActor": {
+      "const": "hybrid.actor.Person"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "dataType",
+        "content"
+      ],
+      "properties": {
+        "dataType": {
+          "const": "model.hybrid.entity.state.PersonState"
+        },
+        "content": {
+          "type": "object",
+          "required": [
+            "startTick",
+            "originalPlan"
+          ],
+          "properties": {
+            "startTick": {
+              "type": "integer",
+              "x-htc-label": "Tick inicial",
+              "x-htc-group": "Tempo",
+              "x-htc-unit": "ticks",
+              "minimum": 0,
+              "x-htc-help": "Quando o ator entra na simulação."
+            },
+            "scheduleOnTimeManager": {
+              "type": "boolean",
+              "x-htc-label": "Agendar no gerenciador de tempo",
+              "x-htc-group": "Tempo"
+            },
+            "originalPlan": {
+              "type": "array",
+              "x-htc-label": "Plano do dia",
+              "x-htc-group": "Plano",
+              "x-htc-widget": "json",
+              "x-htc-help": "Lista de elementos (Activity, WalkLeg, PrivateVehicleLeg, TransitLeg, PendingDecision); edite como JSON."
+            },
+            "ownedVehicles": {
+              "type": "object",
+              "x-htc-label": "Veículos que possui",
+              "x-htc-group": "Veículos",
+              "x-htc-widget": "json",
+              "x-htc-help": "modo → id do veículo."
+            },
+            "vehicleCurrentNode": {
+              "type": "object",
+              "x-htc-label": "Nó atual de cada veículo",
+              "x-htc-group": "Veículos",
+              "x-htc-widget": "json"
+            },
+            "totalDistanceTraveled": {
+              "type": "number",
+              "x-htc-label": "Distância total",
+              "x-htc-group": "Estatísticas",
+              "x-htc-unit": "m",
+              "minimum": 0
+            },
+            "completedTrips": {
+              "type": "integer",
+              "x-htc-label": "Viagens concluídas",
+              "x-htc-group": "Estatísticas",
+              "minimum": 0
+            },
+            "ptWaitTimeoutTicks": {
+              "type": "integer",
+              "x-htc-label": "Espera máxima no transporte público",
+              "x-htc-group": "Transporte",
+              "x-htc-unit": "ticks",
+              "minimum": 0
+            },
+            "modeChoiceWeights": {
+              "type": "object",
+              "x-htc-label": "Escolha de modo",
+              "x-htc-group": "Escolha de modo",
+              "properties": {
+                "includedModes": {
+                  "type": "array",
+                  "x-htc-label": "Modos permitidos",
+                  "x-htc-group": "Escolha de modo",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "car",
+                      "bicycle",
+                      "motorcycle",
+                      "bus",
+                      "subway",
+                      "walk"
+                    ]
+                  },
+                  "x-htc-widget": "multiselect"
+                },
+                "betaMode": {
+                  "type": "number",
+                  "x-htc-label": "betaMode",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "betaAccess": {
+                  "type": "number",
+                  "x-htc-label": "betaAccess",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "betaEgress": {
+                  "type": "number",
+                  "x-htc-label": "betaEgress",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "betaPrivateVehicle": {
+                  "type": "number",
+                  "x-htc-label": "betaPrivateVehicle",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "betaTravelTime": {
+                  "type": "number",
+                  "x-htc-label": "betaTravelTime",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefSubway": {
+                  "type": "number",
+                  "x-htc-label": "modePrefSubway",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefBus": {
+                  "type": "number",
+                  "x-htc-label": "modePrefBus",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefWalk": {
+                  "type": "number",
+                  "x-htc-label": "modePrefWalk",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefCar": {
+                  "type": "number",
+                  "x-htc-label": "modePrefCar",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefBicycle": {
+                  "type": "number",
+                  "x-htc-label": "modePrefBicycle",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "modePrefMotorcycle": {
+                  "type": "number",
+                  "x-htc-label": "modePrefMotorcycle",
+                  "x-htc-group": "Escolha de modo"
+                },
+                "maxAccessDistanceM": {
+                  "type": "number",
+                  "x-htc-label": "maxAccessDistanceM",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m",
+                  "minimum": 0
+                },
+                "maxWalkDistanceM": {
+                  "type": "number",
+                  "x-htc-label": "maxWalkDistanceM",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m",
+                  "minimum": 0
+                },
+                "walkingSpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "walkingSpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                },
+                "avgBusSpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "avgBusSpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                },
+                "avgSubwaySpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "avgSubwaySpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                },
+                "avgBicycleSpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "avgBicycleSpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                },
+                "avgMotorcycleSpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "avgMotorcycleSpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                },
+                "avgCarSpeedMs": {
+                  "type": "number",
+                  "x-htc-label": "avgCarSpeedMs",
+                  "x-htc-group": "Escolha de modo",
+                  "x-htc-unit": "m/s",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

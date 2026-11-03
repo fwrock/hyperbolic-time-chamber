@@ -63,11 +63,12 @@ object SimulationUtil {
     val path = if (configuration == null || configuration.isEmpty) null else configuration
     if (path != null) {
       val content = readJsonFile(path)
-      try
-        fromJson[SimulationWrapper](content).simulation
-      catch {
-        case _: Exception => fromJson[Simulation](content)
-      }
+      // A flat simulation.json parses "successfully" as a wrapper with a null `simulation`; fall back to the flat shape
+      // (without this, starting through the REST API with a configFile failed with an NPE on `configuration`).
+      val wrapped =
+        try Option(fromJson[SimulationWrapper](content).simulation)
+        catch { case _: Exception => None }
+      wrapped.getOrElse(fromJson[Simulation](content))
     } else {
       ApiConfigRegistry.get match {
         case Some(config) => config

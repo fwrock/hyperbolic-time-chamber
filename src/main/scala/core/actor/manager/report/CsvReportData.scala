@@ -94,14 +94,14 @@ class CsvReportData(
       val writer = new FileWriter(filePath, true)
 
       if (!fileExists || Files.size(Paths.get(filePath)) == 0) {
-        writer.write("entity_id,tick,real_time,lamport_tick,event_type,simulation_id,data\n")
+        writer.write("entity_id,tick,real_time,lamport_tick,event_type,simulation_id,data,node,from_node,message_type,from_type\n")
       }
 
       for (report <- buffer) {
         val cleanData =
           report.data.toString.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ")
         writer.write(
-          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\"\n"
+          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\",${core.cluster.NodeIdentity.originLabel(report.node)},${core.cluster.NodeIdentity.originLabel(report.fromNode)},${report.messageType},${report.fromType}\n"
         )
       }
       writer.close()

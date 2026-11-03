@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.api.SimulatorSettingsRegistry
+import core.metrics.core.{SimulationMetricSet, SimulationMetrics}
 import core.entity.event.{FinishEvent, SpontaneousEvent}
 import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.entity.event.control.load.*
@@ -49,7 +50,10 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var migrationFreezeNanos = 0L
   private var migrationFrozenNanos = 0L
   private var migrationResumeNanos = 0L
+  private var lastMetricTick: Option[Tick] = None
+  private var lastTickBroadcastNanos = 0L
 
+  protected def simulationMetrics: SimulationMetricSet = SimulationMetrics
   protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
   override protected def runtimeCoordinatorForActors: Option[ActorRef] = Some(self)
@@ -70,6 +74,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     owner ! RegisterConservativeProcess(epoch, self, event)
   }
   private def fail(error: Throwable): Unit = if (phase != Failed && phase != Finished) {
+    finishExecutionTiming(failed = true)
+    finishRebalanceTiming(failed = true)
     phase = Failed
     logError(s"[CONSERVATIVE-FAILED] ${error.getMessage}")
     workers.foreach(_ ! RuntimeFailure(error.getMessage))
@@ -152,6 +158,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
           require(cohort.map(_.id).distinct.size == cohort.size, "duplicate live migration LP")
           phase = Migrating
           val (id, request) = migration.get
+          finishSynchronizationTiming()
           migrationFrozenNanos = System.nanoTime()
           logInfo(s"[MIGRATION-TIMING] request=$id phase=frozen elapsedNanos=${migrationFrozenNanos - migrationFreezeNanos}")
           request.requester ! MigrationSafeEvent(localTickOffset, Some(cohort), id)
@@ -169,6 +176,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
         if (pending.isEmpty) {
           val now = System.nanoTime()
           logInfo(s"[MIGRATION-TIMING] request=${event.requestId} phase=resumed totalNanos=${now - migrationFreezeNanos} freezeNanos=${migrationFrozenNanos - migrationFreezeNanos} relocationNanos=${migrationResumeNanos - migrationFrozenNanos} resumeNanos=${now - migrationResumeNanos}")
+          finishSynchronizationTiming()
+          finishRebalanceTiming()
           migration = None
           migrationMembers.clear()
           if (pendingMigration.nonEmpty) freezeMigration()
@@ -180,7 +189,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       require(workers.contains(sender()), "frontier from unregistered worker")
       if (phase == Collecting && event.round == round) {
         ready(sender()) = event
-        if (ready.size == workers.size) chooseBatch()
+        if (ready.size == workers.size) { finishSynchronizationTiming(); chooseBatch() }
       }
     }
     case ConservativeBatchComplete(id) => protect {
@@ -198,6 +207,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
         pending -= sender()
         usedSinks ++= sinks
         if (pending.isEmpty) {
+          finishSynchronizationTiming()
           phase = Draining
           reportManagerRef ! DrainRuntimeReports(round, self, usedSinks)
         }
@@ -205,6 +215,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     }
     case RuntimeReportsFlushed(id, error) if phase == Draining && id == round => protect {
       error.foreach(e => throw new IllegalStateException(e))
+      finishExecutionTiming()
       phase = Finished
       logInfo(s"[CONSERVATIVE-COMPLETE] tick=$localTickOffset status=${if (truncated) "horizon-truncated" else "completed"}")
       manager ! StopSimulationEvent()
@@ -233,10 +244,15 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     (inputClosed || loadedThrough >= initialTick)) {
     started = true
     startTime = System.currentTimeMillis()
+    simulationMetrics.configuredDuration.set(duration.toDouble)
+    simulationMetrics.currentTick.set(initialTick.toDouble)
+    simulationMetrics.simulationProgress.set(0.0)
+    beginExecutionTiming()
     pendingStart = None
     collect()
   }
   private def collect(): Unit = {
+    beginSynchronizationTiming()
     phase = Collecting
     round = Math.addExact(round, 1L)
     ready.clear()
@@ -251,6 +267,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     } else if (next.isEmpty || next.exists(_.tick > horizon)) {
       truncated = next.nonEmpty
       require(truncated || ready.valuesIterator.forall(_.blocked == 0), "unresolved replies without future work")
+      beginSynchronizationTiming()
       phase = Stopping
       pending = workers.toSet
       workers.foreach(_ ! StopConservativeRuntime(round, truncated, Option.when(truncated)(horizon)))
@@ -260,6 +277,19 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       require(lastStage.forall(s => Ordering.Tuple2[Long, Long].lt(s, stage)), s"conservative frontier regression: $lastStage -> $stage")
       lastStage = Some(stage)
       localTickOffset = order.tick
+      // Causal microsteps share one simulation tick; counting each batch inflates tick rates.
+      if (!lastMetricTick.contains(order.tick)) {
+        simulationMetrics.simulationTicks.inc()
+        simulationMetrics.currentTick.set(order.tick.toDouble)
+        if (duration > 0)
+          simulationMetrics.simulationProgress.set(math.max(0.0, math.min(1.0,
+            (order.tick - initialTick).toDouble / duration.toDouble)))
+        val now = System.nanoTime()
+        if (lastTickBroadcastNanos > 0)
+          simulationMetrics.tickDuration.observe((now - lastTickBroadcastNanos) / 1e9)
+        lastTickBroadcastNanos = now
+        lastMetricTick = Some(order.tick)
+      }
       phase = Executing
       pending = workers.toSet
       workers.foreach(_ ! ExecuteConservativeBatch(round, order.tick, order.microstep))
@@ -270,6 +300,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     val request = pendingMigration.get
     pendingMigration = None
     val id = request.requestId
+    beginRebalanceTiming()
+    beginSynchronizationTiming()
     migrationFreezeNanos = System.nanoTime()
     migration = Some(id -> request)
     migrationMembers.clear()
@@ -280,13 +312,14 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   }
 
   private def resumeMigration(): Unit = {
+    beginSynchronizationTiming()
     migrationResumeNanos = System.nanoTime()
     phase = ResumingMigration
     pending = workers.toSet
     workers.foreach(_ ! ResumeConservativeMigration(epoch, migration.get._1))
   }
 
-  override protected def pauseSimulation(): Unit = { isPaused = true; if (phase == Collecting) phase = Paused }
+  override protected def pauseSimulation(): Unit = { isPaused = true; if (phase == Collecting) { finishSynchronizationTiming(failed = true); phase = Paused } }
   override protected def resumeSimulation(): Unit = { isPaused = false; if (phase == Paused) collect() }
   override protected def stopSimulation(): Unit = fail(new IllegalStateException("simulation cancelled externally"))
   protected def registerActor(event: org.htc.protobuf.core.entity.event.control.execution.RegisterActorEvent): Unit = ()

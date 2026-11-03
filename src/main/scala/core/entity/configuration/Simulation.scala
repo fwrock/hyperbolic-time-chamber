@@ -60,5 +60,9 @@ case class Simulation(
     * values are free-form string params consumed by each model's factory.
     * Example: {"emission": {"model": "vt_micro", "co2_per_ml": "2.35"}}
     */
-  modelPlugins: Map[String, Map[String, String]] = Map.empty
+  modelPlugins: Map[String, Map[String, String]] = Map.empty,
+  /** Optional partial simulation: load only a selection of the units. Absent = full simulation. */
+  partial: Option[PartialSimulation] = None,
+  /** Optional what-if modifications applied while loading (before the partial filter). */
+  modifications: Option[ModificationsSimulation] = None
 )

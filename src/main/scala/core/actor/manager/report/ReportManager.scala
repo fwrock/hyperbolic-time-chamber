@@ -3,6 +3,14 @@ package core.actor.manager.report
 
 import core.actor.manager.BaseManager
 import core.runtime.accounting.*
+import core.metrics.ExecutionTimingCollector
+import core.entity.event.control.report.ReportEvent
+import org.apache.pekko.Done
+import org.apache.pekko.actor.{CoordinatedShutdown, RootActorPath}
+import org.apache.pekko.cluster.{Cluster, MemberStatus}
+import org.apache.pekko.cluster.ClusterEvent.{CurrentClusterState, MemberRemoved, UnreachableMember}
+import org.apache.pekko.routing.{GetRoutees, Routees, ActorRefRoutee}
+import scala.concurrent.Promise
 import core.entity.event.control.report.RegisterReportersEvent
 import core.entity.state.DefaultState
 import core.enumeration.ReportTypeEnum
@@ -30,8 +38,86 @@ class ReportManager(
   private var drain: Option[(Long, ActorRef, Set[ActorRef], Vector[String])] = None
   private val reporters = mutable.Map[ReportTypeEnum, ActorRef]()
 
+  private val shutdown = Promise[Done]()
+  private var stopping = false
+  private var pendingNodes = Set.empty[String]
+  private var captured = Vector.empty[ExecutionTimingCollector.Captured]
+  private var pendingRouters = Set.empty[ActorRef]
+  private var reportSinks = Set.empty[ActorRef]
+  private var timingSinks = Vector.empty[ActorRef]
+  private var timingDeliveries = Set.empty[Long]
+  private var timingFlushes = Set.empty[ActorRef]
+  private val timingEpoch = java.util.UUID.randomUUID().toString
+  private val TimingFlushRound = -1L
+
+  private def beginStop(): Unit = if (!stopping) {
+    stopping = true
+    if (reporters.isEmpty) { finishStop(); return }
+    captured = Vector(ExecutionTimingCollector.snapshot)
+    val cluster = scala.util.Try(Cluster(context.system)).toOption
+    val remoteMembers = cluster.toVector.flatMap(c => c.state.members.filter(m =>
+      m.status == MemberStatus.Up && m.address != c.selfAddress))
+    pendingNodes = remoteMembers.map(_.address.toString).toSet
+    cluster.foreach(_.subscribe(self, classOf[MemberRemoved], classOf[UnreachableMember]))
+    remoteMembers.foreach { member =>
+      context.actorSelection(RootActorPath(member.address) / "user" / ExecutionTimingCollector.Name) !
+        ExecutionTimingCollector.Capture(self)
+    }
+    collectReportSinks()
+  }
+
+  private def collectReportSinks(): Unit = if (pendingNodes.isEmpty) {
+    pendingRouters = reporters.values.toSet
+    if (pendingRouters.isEmpty) finishStop()
+    else pendingRouters.foreach(_ ! GetRoutees)
+  }
+
+  private def publishTimingReports(): Unit = {
+    val reports = captured.flatMap(ReportManager.timingReports)
+    var token = 0L
+    timingSinks.foreach { sink =>
+      reports.foreach { report =>
+        token += 1
+        timingDeliveries += token
+        sink ! CommittedReportDelivery(timingEpoch, token, report, self)
+      }
+    }
+    if (timingDeliveries.isEmpty) flushTimingReports()
+  }
+
+  private def flushTimingReports(): Unit = {
+    timingFlushes = reportSinks
+    if (timingFlushes.isEmpty) finishStop()
+    else timingFlushes.foreach(_ ! FlushRuntimeReports(TimingFlushRound, self))
+  }
+
+  private def finishStop(): Unit = {
+    logInfo("Received StopSimulationEvent. Flushing/stopping reporters")
+    reportSinks.foreach(_ ! DestructEvent(actorRef = getPath))
+    core.api.SimulationController.markCompleted()
+    shutdown.trySuccess(Done)
+    selfDestruct()
+  }
+
+  private def failStop(reason: String): Unit = {
+    logError(s"[TIMING-REPORT-FAILED] $reason")
+    core.api.SimulationController.markFailed()
+    shutdown.tryFailure(new IllegalStateException(reason))
+    selfDestruct()
+  }
+
+  override def postStop(): Unit = {
+    shutdown.tryFailure(new IllegalStateException("ReportManager stopped before acknowledged flush"))
+    super.postStop()
+  }
+
   override def onStart(): Unit = {
     super.onStart()
+    ExecutionTimingCollector(context.system)
+    CoordinatedShutdown(context.system).addTask(CoordinatedShutdown.PhaseBeforeActorSystemTerminate, "htc-report-flush") { () =>
+      if (!shutdown.isCompleted) self ! StopSimulationEvent()
+      shutdown.future
+    }
     createReporters()
     simulationManager ! RegisterReportersEvent(
       reporters = reporters
@@ -59,7 +145,7 @@ class ReportManager(
     }
   }
 
-  private def createReportData(reportType: ReportTypeEnum): ActorRef = {
+  protected def createReportData(reportType: ReportTypeEnum): ActorRef = {
     val totalInstances =
       Some(config.getInt(s"htc.report-manager.$reportType.number-of-instances")).getOrElse(8)
     val maxInstancesPerNode = Some(
@@ -98,6 +184,41 @@ class ReportManager(
   }
 
   override def handleEvent: Receive = {
+    // subscribe() sends this snapshot before membership events. It must not restart the
+    // manager and lose the in-flight final-flush state on a real cluster provider.
+    case _: CurrentClusterState => ()
+    case _: StopSimulationEvent => beginStop()
+    case snapshot: ExecutionTimingCollector.Captured if stopping && pendingNodes.contains(sender().path.address.toString) =>
+      pendingNodes -= sender().path.address.toString
+      captured :+= snapshot
+      collectReportSinks()
+    case Routees(routes) if stopping && pendingRouters.contains(sender()) =>
+      val sinks = routes.collect { case ActorRefRoutee(ref) => ref }.toVector
+      if (sinks.isEmpty) failStop("enabled reporter pool has no report sinks")
+      else {
+        sinks.foreach(context.watch)
+        reportSinks ++= sinks
+        timingSinks :+= sinks.head
+        pendingRouters -= sender()
+        if (pendingRouters.isEmpty) publishTimingReports()
+      }
+    case DeliveryAccepted(epoch, token) if stopping && epoch == timingEpoch =>
+      if (timingDeliveries.contains(token)) {
+        timingDeliveries -= token
+        if (timingDeliveries.isEmpty) flushTimingReports()
+      }
+    case RuntimeReportsFlushed(round, error) if stopping && round == TimingFlushRound && timingFlushes.contains(sender()) =>
+      error match {
+        case Some(reason) => failStop(reason)
+        case None =>
+          timingFlushes -= sender()
+          if (timingFlushes.isEmpty) finishStop()
+      }
+    case RuntimeFailure(reason) if stopping => failStop(reason)
+    case MemberRemoved(member, _) if stopping && pendingNodes.contains(member.address.toString) =>
+      failStop(s"node removed during timing collection: ${member.address}")
+    case UnreachableMember(member) if stopping && pendingNodes.contains(member.address.toString) =>
+      failStop(s"node unreachable during timing collection: ${member.address}")
     case DrainRuntimeReports(round, replyTo, targets) =>
       require(drain.isEmpty, "overlapping report drains")
       if (targets.isEmpty) replyTo ! RuntimeReportsFlushed(round)
@@ -116,23 +237,27 @@ class ReportManager(
           } else drain = Some((round, replyTo, remaining, failures))
         }
       }
+    case org.apache.pekko.actor.Terminated(ref) if stopping && reportSinks.contains(ref) =>
+      failStop(s"report sink lost during final timing flush: $ref")
     case org.apache.pekko.actor.Terminated(ref) =>
       drain.foreach { case (round, replyTo, pending, _) =>
         if (pending.contains(ref)) { drain = None; replyTo ! RuntimeReportsFlushed(round, Some(s"report sink lost: $ref")) }
       }
-    case _: StopSimulationEvent =>
-      logInfo("Received StopSimulationEvent. Flushing/stopping reporters")
-      val destructEvent = DestructEvent(actorRef = getPath)
-      reporters.foreach {
-        case (_, actorRef) =>
-          actorRef ! destructEvent
-      }
-      selfDestruct()
+    case _ => () // Late/duplicate guarded acknowledgements do not belong to an active drain.
+
   }
 
 }
 
 object ReportManager {
+  private[report] def timingReports(snapshot: ExecutionTimingCollector.Captured): Vector[ReportEvent] =
+    snapshot.rows.map { row => ReportEvent(
+      entityId = s"execution-timing:${snapshot.processId}:${row.operation}", tick = 0L, lamportTick = 0L,
+      data = row.reportData ++ Map("process_id" -> snapshot.processId, "snapshot_timestamp_ms" -> System.currentTimeMillis()),
+      label = "execution_timing_summary", node = snapshot.node, timestamp = System.nanoTime(),
+      fromNode = 0, messageType = "", fromType = ""
+    ) }
+
   def props(
     simulationManager: ActorRef,
     timeManager: ActorRef,

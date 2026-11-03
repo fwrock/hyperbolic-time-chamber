@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "htc:actor/Link",
+  "title": "Via (Link)",
+  "description": "Trecho de via entre dois nós.",
+  "x-htc-class": "hybrid.actor.Link",
+  "x-htc-version": 1,
+  "x-htc-filterable": false,
+  "x-htc-dependencies": [
+    {
+      "name": "from_node",
+      "class": "Node",
+      "required": true,
+      "relation": "reference"
+    },
+    {
+      "name": "to_node",
+      "class": "Node",
+      "required": true,
+      "relation": "reference"
+    }
+  ],
+  "type": "object",
+  "required": [
+    "id",
+    "typeActor",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "typeActor": {
+      "const": "hybrid.actor.Link"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "dataType",
+        "content"
+      ],
+      "properties": {
+        "dataType": {
+          "const": "model.hybrid.entity.state.LinkState"
+        },
+        "content": {
+          "type": "object",
+          "required": [
+            "startTick",
+            "from",
+            "to",
+            "length",
+            "lanes",
+            "speedLimit",
+            "capacity",
+            "freeSpeed"
+          ],
+          "properties": {
+            "startTick": {
+              "type": "integer",
+              "x-htc-label": "Tick inicial",
+              "x-htc-group": "Tempo",
+              "x-htc-unit": "ticks",
+              "minimum": 0,
+              "x-htc-help": "Quando o ator entra na simulação."
+            },
+            "scheduleOnTimeManager": {
+              "type": "boolean",
+              "x-htc-label": "Agendar no gerenciador de tempo",
+              "x-htc-group": "Tempo"
+            },
+            "from": {
+              "type": "integer",
+              "x-htc-label": "Nó de origem",
+              "x-htc-group": "Rede",
+              "x-htc-ref": "Node"
+            },
+            "to": {
+              "type": "integer",
+              "x-htc-label": "Nó de destino",
+              "x-htc-group": "Rede",
+              "x-htc-ref": "Node"
+            },
+            "length": {
+              "type": "number",
+              "x-htc-label": "Comprimento",
+              "x-htc-group": "Geometria",
+              "x-htc-unit": "m",
+              "exclusiveMinimum": 0
+            },
+            "lanes": {
+              "type": "integer",
+              "x-htc-label": "Faixas",
+              "x-htc-group": "Geometria",
+              "minimum": 1
+            },
+            "speedLimit": {
+              "type": "number",
+              "x-htc-label": "Limite de velocidade",
+              "x-htc-group": "Velocidade",
+              "x-htc-unit": "km/h",
+              "exclusiveMinimum": 0
+            },
+            "freeSpeed": {
+              "type": "number",
+              "x-htc-label": "Velocidade livre",
+              "x-htc-group": "Velocidade",
+              "x-htc-unit": "km/h",
+              "exclusiveMinimum": 0
+            },
+            "capacity": {
+              "type": "number",
+              "x-htc-label": "Capacidade",
+              "x-htc-group": "Velocidade",
+              "x-htc-unit": "veículos",
+              "exclusiveMinimum": 0,
+              "x-htc-help": "Quantos veículos cabem fisicamente na via (não é vazão por hora)."
+            },
+            "currentSpeed": {
+              "type": "number",
+              "x-htc-label": "Velocidade atual",
+              "x-htc-group": "Velocidade",
+              "x-htc-unit": "km/h",
+              "minimum": 0
+            },
+            "congestionFactor": {
+              "type": "number",
+              "x-htc-label": "Fator de congestionamento",
+              "x-htc-group": "Velocidade",
+              "minimum": 0,
+              "x-htc-help": "1.0 = sem viés."
+            },
+            "simulationMode": {
+              "type": "string",
+              "x-htc-label": "Modo de simulação",
+              "x-htc-group": "Simulação",
+              "enum": [
+                "MESO",
+                "MICRO"
+              ]
+            },
+            "microTimeStep": {
+              "type": "number",
+              "x-htc-label": "Passo micro",
+              "x-htc-group": "Simulação",
+              "x-htc-unit": "s",
+              "exclusiveMinimum": 0
+            },
+            "microTicksPerGlobalTick": {
+              "type": "integer",
+              "x-htc-label": "Sub-ticks por tick",
+              "x-htc-group": "Simulação",
+              "minimum": 1
+            },
+            "laneConfigurations": {
+              "type": "array",
+              "x-htc-label": "Configuração das faixas",
+              "x-htc-group": "Geometria",
+              "x-htc-widget": "table",
+              "x-htc-help": "Uma linha por faixa. Velocidade vazia = usa o limite da via.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "laneId"
+                ],
+                "properties": {
+                  "laneId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "x-htc-label": "Faixa"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "bus_lane",
+                      "bike_lane"
+                    ],
+                    "x-htc-label": "Tipo"
+                  },
+                  "width": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "x-htc-label": "Largura",
+                    "x-htc-unit": "m"
+                  },
+                  "speedLimit": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "x-htc-label": "Velocidade",
+                    "x-htc-unit": "km/h"
+                  }
+                }
+              }
+            },
+            "registered": {
+              "type": "array",
+              "x-htc-label": "Registrados",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "vehiclesByLane": {
+              "type": "object",
+              "x-htc-label": "Veículos por faixa",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "sidewalk": {
+              "type": "object",
+              "x-htc-label": "Calçada",
+              "x-htc-group": "Geometria",
+              "description": "Espaço para pedestres em ambos os lados da via, independente das faixas de veículos.",
+              "default": {
+                "enabled": true,
+                "width": 1.8,
+                "gap": 0.3
+              },
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "x-htc-label": "Permitir caminhada"
+                },
+                "width": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "default": 1.8,
+                  "x-htc-label": "Largura de cada calçada",
+                  "x-htc-unit": "m"
+                },
+                "gap": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0.3,
+                  "x-htc-label": "Separação da pista",
+                  "x-htc-unit": "m"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

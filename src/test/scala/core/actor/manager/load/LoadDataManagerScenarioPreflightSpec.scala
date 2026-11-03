@@ -107,6 +107,16 @@ class LoadDataManagerScenarioPreflightSpec
     simulationManager.expectNoMessage(500.millis)
   }
 
+  it should "forward a loader filter failure rather than wait for a successful source completion" in {
+    val simulationManager = TestProbe()
+    val loadDataManager = newLoadDataManager(simulationManager)
+    val failure = ScenarioPreflightValidationFailedEvent(
+      model.hybrid.decision.ScenarioLoadError("Load filter: retained dependency was excluded"))
+    loadDataManager ! failure
+    simulationManager.expectMsg(failure)
+    simulationManager.expectNoMessage(100.millis)
+  }
+
   it should "abort scenario load when a Person source references 'raptor' with no transit route data configured" in {
     val simulationManager = TestProbe()
     val loadDataManager = newLoadDataManager(simulationManager)

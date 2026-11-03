@@ -101,3 +101,9 @@ The harness terminates JVMs after acknowledged engine stop, so process return
 codes are not evidence of clean application shutdown. These bounded loopback
 cases establish no city-scale memory or throughput result. Replicated maps,
 checkpoint cost, external feedback, recovery and migration remain separate work.
+
+## Link sidewalk access
+
+Road Links now expose static sidewalk access and geometry. Walking graphs and precomputed
+route measurement honor disabled sidewalks; the measured-distance and checkpoint contracts
+above remain in effect. See [SIDEWALKS.md](SIDEWALKS.md) for the scenario/map contract.

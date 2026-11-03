@@ -49,6 +49,27 @@ object ActorMetrics {
     .labelNames("event_type")
     .register()
 
+  /** Messages received by this node, by the node that sent them: the raw material for comparing where
+    * actors talk to each other in a distributed run (see core.cluster.NodeIdentity). `locality` is
+    * `local` (sender and receiver on the same node), `remote`, or `unknown` (unstamped/legacy sender).
+    */
+  val messagesByNode: Counter = Counter
+    .build()
+    .name("htc_messages_by_node_total")
+    .help("Interactions received, by sender node, receiver node, locality (local/remote/unknown) and message (event) type")
+    .labelNames("from_node", "to_node", "locality", "event_type")
+    .register()
+
+  /** Same traffic seen by actor class instead of node: which kinds of actors talk to which (Car -> Link, ...),
+    * and how much of it crosses nodes. Bounded by the number of actor classes squared.
+    */
+  val messagesByClass: Counter = Counter
+    .build()
+    .name("htc_messages_by_class_total")
+    .help("Interactions received, by sender actor class, receiver actor class and locality (local/remote/unknown)")
+    .labelNames("from_type", "to_type", "locality")
+    .register()
+
   val messagesSent: Counter = Counter
     .build()
     .name("htc_messages_sent_total")

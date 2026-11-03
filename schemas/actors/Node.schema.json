@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "htc:actor/Node",
+  "title": "Nó (cruzamento/ponto)",
+  "description": "Vértice do grafo da cidade.",
+  "x-htc-class": "hybrid.actor.Node",
+  "x-htc-version": 1,
+  "x-htc-filterable": false,
+  "x-htc-dependencies": [],
+  "type": "object",
+  "required": [
+    "id",
+    "typeActor",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "typeActor": {
+      "const": "hybrid.actor.Node"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "dataType",
+        "content"
+      ],
+      "properties": {
+        "dataType": {
+          "const": "model.hybrid.entity.state.NodeState"
+        },
+        "content": {
+          "type": "object",
+          "required": [
+            "startTick",
+            "latitude",
+            "longitude",
+            "links"
+          ],
+          "properties": {
+            "startTick": {
+              "type": "integer",
+              "x-htc-label": "Tick inicial",
+              "x-htc-group": "Tempo",
+              "x-htc-unit": "ticks",
+              "minimum": 0,
+              "x-htc-help": "Quando o ator entra na simulação."
+            },
+            "scheduleOnTimeManager": {
+              "type": "boolean",
+              "x-htc-label": "Agendar no gerenciador de tempo",
+              "x-htc-group": "Tempo"
+            },
+            "latitude": {
+              "type": "number",
+              "x-htc-label": "Latitude / Y",
+              "x-htc-group": "Posição"
+            },
+            "longitude": {
+              "type": "number",
+              "x-htc-label": "Longitude / X",
+              "x-htc-group": "Posição"
+            },
+            "links": {
+              "type": "array",
+              "x-htc-label": "Vias ligadas",
+              "x-htc-group": "Rede",
+              "items": {
+                "type": "integer",
+                "x-htc-ref": "Link"
+              },
+              "x-htc-widget": "ids",
+              "x-htc-ref": "Link"
+            },
+            "connections": {
+              "type": "object",
+              "x-htc-label": "Conexões",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "approachConnections": {
+              "type": "object",
+              "x-htc-label": "Aproximações",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "signals": {
+              "type": "object",
+              "x-htc-label": "Semáforos registrados",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "busStops": {
+              "type": "object",
+              "x-htc-label": "Pontos de ônibus",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "subwayStations": {
+              "type": "object",
+              "x-htc-label": "Estações de metrô",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            },
+            "junctionMovements": {
+              "type": "array",
+              "x-htc-label": "Movimentos do cruzamento",
+              "x-htc-group": "Rede",
+              "x-htc-widget": "json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

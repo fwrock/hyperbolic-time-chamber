@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.loadbalance
 
 import core.actor.manager.BaseManager
+import core.metrics.core.{ManagerMetrics, ExecutionTimingMetrics, TimedOperation}
 import core.actor.manager.loadbalance.allocation.{ LoadBalanceShardAllocator, ShardAllocatorRegistry, SpatialShardIdRegistry }
 import core.actor.manager.loadbalance.allocation.*
 import core.actor.manager.loadbalance.migration.{ MigrationRequestResult, MigrationStateStoreRegistry, MigrationWindowSubscriber, ShardMigrationCoordinator }
@@ -176,7 +177,10 @@ class LoadBalanceManager(
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+  private var initializationTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+
   override def onStart(): Unit = {
+    initializationTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.LoadBalance))
     logInfo(s"LoadBalanceManager starting with strategy: $strategyType")
 
     // Initialize strategy
@@ -212,7 +216,10 @@ class LoadBalanceManager(
       val request = BindAllocationController(java.util.UUID.randomUUID().toString, "", self, allocationControllerId)
       allocationRuntime.bind(request).map(e => AllocationBound(e.epoch))
         .recover { case scala.util.control.NonFatal(error) => AllocationStartupFailed(error.getMessage) }.pipeTo(self)
-    } else simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
+    } else {
+      initializationTiming.foreach(_.stop()); initializationTiming = None
+      simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
+    }
 
     logInfo(
       s"LoadBalanceManager ready. Strategy: ${strategy.map(_.name).getOrElse("disabled")}, " +
@@ -242,6 +249,7 @@ class LoadBalanceManager(
       metricsScheduler.foreach(_.cancel())
     case _: core.runtime.conservative.ConservativeMigrationDeclined => ()
     case AllocationBound(epoch) =>
+      initializationTiming.foreach(_.stop()); initializationTiming = None
       allocationEpoch = Some(epoch)
       simulationManager ! LoadBalanceReadyEvent(getSelfProxy)
       startupMigrations.dequeueAll(_ => true).foreach(plan => self ! RequestMigrationEvent(plan))
@@ -316,7 +324,7 @@ class LoadBalanceManager(
     try {
       require(!allocationRuntime.enabled || activeWave.isEmpty,
         "spatial enrollment during migration is unsupported")
-      registration
+      ExecutionTimingMetrics.timers.measure(TimedOperation.LoadBalance) { registration }
     }
     catch {
       // Restarting would erase already published assignments while creation is still in progress.
@@ -772,6 +780,9 @@ class LoadBalanceManager(
     if (!attempt.get.skipped) strategy.foreach(_.recordShardLocation(event.shardId, attempt.get.plan.targetNode))
     val nextPlan = migrationCoordinator.completeMigration(event.shardId, event.success)
     logInfo(s"Migration '${event.shardId}' ${if (attempt.get.skipped) "skipped (static)" else "placement and restore verified"}: ${event.durationMs}ms")
+    ManagerMetrics.migrationsCompleted.labels(core.cluster.NodeIdentity.labelOfAddress(attempt.get.plan.sourceNode),
+      core.cluster.NodeIdentity.labelOfAddress(attempt.get.plan.targetNode), if (attempt.get.skipped) "skipped" else "completed").inc()
+    if (!attempt.get.skipped) ManagerMetrics.migrationSeconds.observe(event.durationMs / 1000.0)
     activeWave.filter(_.batchId == event.batchId).foreach { wave =>
       wave.pendingPlacementShards -= event.shardId
       maybeCloseMigrationWindow(wave)
@@ -796,7 +807,12 @@ class LoadBalanceManager(
     if ((!allocationRuntime.enabled || balancingStarted) && activeWave.isEmpty && !awaitingMigrationPause) strategy.foreach {
       s =>
         logDebug(s"Evaluating rebalance (reason: ${event.reason})")
-        val migrations = s.evaluate()
+        val migrations = ExecutionTimingMetrics.timers.measure(TimedOperation.RebalanceEvaluation) { s.evaluate() }
+        ManagerMetrics.rebalanceEvaluations.labels(event.reason.toString, if (migrations.nonEmpty) "migrations" else "none").inc()
+        migrations.foreach { plan =>
+          ManagerMetrics.migrationsPlanned.labels(plan.reason.toString,
+            core.cluster.NodeIdentity.labelOfAddress(plan.sourceNode), core.cluster.NodeIdentity.labelOfAddress(plan.targetNode)).inc()
+        }
 
         if (migrations.nonEmpty) {
           logInfo(s"Rebalance generated ${migrations.size} migration(s)")
@@ -1230,6 +1246,7 @@ class LoadBalanceManager(
     }
 
   override def postStop(): Unit = {
+    initializationTiming.foreach(_.stop(failed = true)); initializationTiming = None
     clearPlacementAttempts()
     super.postStop()
   }

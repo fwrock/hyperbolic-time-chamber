@@ -64,6 +64,7 @@ class OptimisticGlobalTimeManager(
       localTickOffset = gvt
       logInfo(s"[ACCOUNTED-GVT] round=$round frontier=$gvt")
     case RuntimeFinished(gvt, truncated) if sender() == accountedCoordinator =>
+      finishExecutionTiming()
       finished = true
       heartbeat.foreach(_.cancel())
       logInfo(s"[ACCOUNTED-COMPLETE] frontier=$gvt status=${if (truncated) "horizon-truncated" else "completed"}")
@@ -93,6 +94,7 @@ class OptimisticGlobalTimeManager(
     pendingStart = None
     started = true
     startTime = System.currentTimeMillis()
+    beginExecutionTiming()
     accountedCoordinator ! StartRuntime(event.startTick)
     val interval = SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", config).millis
     heartbeat = Some(context.system.scheduler.scheduleWithFixedDelay(interval, interval, self,

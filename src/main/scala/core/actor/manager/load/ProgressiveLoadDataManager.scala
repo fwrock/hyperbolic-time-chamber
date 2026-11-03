@@ -20,7 +20,7 @@ import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.remote.RemoteScope
 import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
-import org.interscity.htc.core.metrics.core.ProgressiveLoadingMetrics
+import org.interscity.htc.core.metrics.core.{ProgressiveLoadingMetrics, ExecutionTimingMetrics, TimedOperation}
 import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
 
 import scala.collection.immutable.TreeMap
@@ -70,6 +70,9 @@ class ProgressiveLoadDataManager(
   private var aggregatedTickCounts: TreeMap[Tick, Int] = TreeMap.empty
   private val TARGET_ACTORS_PER_WINDOW: Int = 50_000
   private val MIN_LOOK_AHEAD_TICKS: Tick = 100
+
+  private var indexTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+  private var windowTiming: Option[ExecutionTimingMetrics.timers.Span] = None
 
   private var pendingWindowRequest: Option[TickWindowRequest] = None
   private var optimisticWindow: Option[LoadOptimisticInputWindow] = None
@@ -153,6 +156,7 @@ class ProgressiveLoadDataManager(
     case Terminated(ref) if loaders.valuesIterator.contains(ref) && !allSourcesFullyLoaded =>
       self ! ProgressiveSourceFailed(loaders.find(_._2 == ref).get._1, "loader lost before input closure")
     case event: ProgressiveSourceFailed =>
+      windowTiming.foreach(_.stop(failed = true)); windowTiming = None
       sourceFailed = true
       val failure = RuntimeFailure(s"progressive source ${event.sourceId}: ${event.reason}")
       optimisticRequester.orElse(Option(globalTimeManagerRef)).orElse(runtimeCoordinator).foreach(_ ! failure)
@@ -182,6 +186,7 @@ class ProgressiveLoadDataManager(
       return
     }
 
+    indexTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.ProgressiveIndex))
     val personSources = event.progressiveSources.filter(ScenarioPreflightValidator.isPersonSource)
     if (personSources.isEmpty) {
       proceedWithProgressiveLoading(event)
@@ -358,6 +363,7 @@ class ProgressiveLoadDataManager(
     }
 
     if (indexedSources.size == loaders.size) {
+      indexTiming.foreach(_.stop()); indexTiming = None
       fullyIndexed = true
       val globalMaxTick = sourceMaxTicks.values.maxOption.getOrElse(0L)
       val totalAggregated = aggregatedTickCounts.values.sum
@@ -418,6 +424,8 @@ class ProgressiveLoadDataManager(
       return
     }
 
+    require(windowTiming.isEmpty, "overlapping progressive load stopwatches")
+    windowTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.ProgressiveLoad))
     val toTick = calculateAdaptiveHorizon(fromTick, maxHorizon)
 
     logDebug(
@@ -602,6 +610,7 @@ class ProgressiveLoadDataManager(
   /** Notify the GlobalTimeManager that actors up to the given tick are ready.
     */
   private def notifyTimeManagerReady(readyUpToTick: Tick, actorsCreated: Long): Unit = {
+    windowTiming.foreach(_.stop()); windowTiming = None
     ProgressiveLoadingMetrics.progressiveLoadedUpToTick.set(readyUpToTick.toDouble)
     ProgressiveLoadingMetrics.progressiveWindowsLoaded.inc()
     optimisticWindow match {
@@ -627,6 +636,12 @@ class ProgressiveLoadDataManager(
     if (creatorRef != null) creatorRef ! DestructEvent(actorRef = getPath)
     if (creatorPoolRef != null) creatorPoolRef ! DestructEvent(actorRef = getPath)
     selfDestruct()
+  }
+
+  override def postStop(): Unit = {
+    indexTiming.foreach(_.stop(failed = true)); indexTiming = None
+    windowTiming.foreach(_.stop(failed = true)); windowTiming = None
+    super.postStop()
   }
 
   /** Create an independent CreatorLoadData pool for progressive actor creation. These are children

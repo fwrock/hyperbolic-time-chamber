@@ -237,6 +237,8 @@ class ConservativeGlobalTimeManager(
       return
     }
 
+    beginExecutionTiming()
+    beginSynchronizationTiming()
     PhaseMetrics.recordPhaseStart("simulation")
     logInfo("[StartupPhase] simulation_clock_released_no_progressive")
     notifyLocalManagers(event)
@@ -325,6 +327,7 @@ class ConservativeGlobalTimeManager(
     val totalCount = localTimeManagers.size
 
     if (localTimeManagers.values.forall(_.isProcessed)) {
+      finishSynchronizationTiming()
       if (metricsLogInterval > 0 && tickOffset % metricsLogInterval == 0L)
         logDebug(s"All $totalCount managers reported, calculating next tick")
       // If migration pause is pending, signal the requester that it's now safe
@@ -462,6 +465,7 @@ class ConservativeGlobalTimeManager(
       }
     }
 
+    beginSynchronizationTiming()
     var activeCount = 0
     localTimeManagers.foreach { case (tm, info) =>
       if (info.hasSchedule && info.tick <= nextTick) {
@@ -481,6 +485,7 @@ class ConservativeGlobalTimeManager(
       lastGTMBroadcastTick = nextTick
     }
     if (activeCount == 0) {
+      finishSynchronizationTiming()
       calculateAndBroadcastNextGlobalTick()
     }
   }
@@ -571,6 +576,8 @@ class ConservativeGlobalTimeManager(
       pendingStartEvent.foreach {
         startEvent =>
           pendingStartEvent = None
+          beginExecutionTiming()
+          beginSynchronizationTiming()
           PhaseMetrics.recordPhaseStart("simulation")
           logInfo(
             s"[StartupPhase] simulation_clock_released_after_first_window: readyUpTo=${event.readyUpToTick}, actorsCreated=${event.actorsCreated}"
@@ -649,6 +656,7 @@ class ConservativeGlobalTimeManager(
 
   private def terminateSimulation(): Unit = synchronized {
     if (!isTerminated) {
+      finishExecutionTiming()
       isTerminated = true
       printSimulationDuration()
       logInfo("Global simulation terminated")

@@ -170,9 +170,10 @@ class Bus(
       if (state.currentPathPosition >= restored.size) {
         state.currentPathPosition = 0
       }
-      logWarn(
-        s"Bus ${getEntityId} restored route from storedBestRoute during $context (${restored.size} segments)"
-      )
+      if (context == "Start")
+        logDebug(s"Bus ${getEntityId} restored route from storedBestRoute during $context (${restored.size} segments)")
+      else
+        logWarn(s"Bus ${getEntityId} restored route from storedBestRoute during $context (${restored.size} segments)")
     }
   }
 

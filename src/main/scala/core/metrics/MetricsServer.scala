@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory
   *   - [[TimeManagerMetrics]] — time manager state
   *   - [[ProgressiveLoadingMetrics]] — progressive loading
   *   - [[PhaseMetrics]] — simulation phase timing
+  *   - [[core.metrics.core.ExecutionTimingMetrics]] — monotonic execution and synchronization stopwatches
   *   - [[InfrastructureMetrics]] — dead letters, Kafka
   *   - [[core.metrics.model.hybrid.MovableMetrics]] — vehicle journey outcomes
   *   - [[core.metrics.model.hybrid.GPSMetrics]] — GPS routing failures

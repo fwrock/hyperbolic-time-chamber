@@ -114,7 +114,12 @@ class JsonReportData(
             "real_time" -> System.currentTimeMillis(),
             "simulation_id" -> simulationId,
             "event_type" -> report.label,
-            "data" -> report.data
+            "data" -> report.data,
+            // Distributed-run context: node that reported, and node that sent the message being handled ("" = none).
+            "node" -> core.cluster.NodeIdentity.originLabel(report.node),
+            "from_node" -> core.cluster.NodeIdentity.originLabel(report.fromNode),
+            "message_type" -> report.messageType,
+            "from_type" -> report.fromType
           )
           writer.write(JsonUtil.toJson(jsonData))
           writer.newLine()
